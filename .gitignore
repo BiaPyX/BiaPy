@@ -5,3 +5,5 @@ keras_experimentos/U-Net_UltrasoundNerveSegmentation/ultrasound-nerve-segmentati
 keras_experimentos/U-Net_UltrasoundNerveSegmentation/raw
 keras_experimentos/CNN_cats_and_dogs/data
 keras_experimentos/CNN_cats_and_dogs/images
+FIBSEM_EPFL/data
+FIBSEM_EPFL/results
