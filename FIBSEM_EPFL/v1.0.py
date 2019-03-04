@@ -171,3 +171,29 @@ earlystopper = EarlyStopping(patience=5, verbose=1)
 checkpointer = ModelCheckpoint('model-v.1.0.fibsem.h5', verbose=1, save_best_only=True)
 results = model.fit(X_train, Y_train, validation_split=0.1, batch_size=8, epochs=50, 
                     callbacks=[earlystopper, checkpointer])
+
+#####################
+#####################
+
+# Load the model saved
+#model = load_model('model-v.1.0.fibsem.h5', custom_objects={'mean_iou': mean_iou})
+
+# Predict on train, val and test
+preds_train = model.predict(X_train[:int(X_train.shape[0]*0.9)], verbose=1)
+preds_val = model.predict(X_train[int(X_train.shape[0]*0.9):], verbose=1)
+preds_test = model.predict(X_test, verbose=1)
+
+# Threshold predictions
+preds_train_t = (preds_train > 0.5).astype(np.uint8)
+preds_val_t = (preds_val > 0.5).astype(np.uint8)
+preds_test_t = (preds_test > 0.5).astype(np.uint8)
+
+# Save results as image
+from PIL import Image
+outputDir='results'
+
+for i in range(0,len(preds_train)):
+    im = Image.fromarray(preds_train[i,:,:,0])
+    im = im.convert('RGB')
+    im.save(os.path.join(outputDir,"out" + str(i) + ".png"))
+
