@@ -193,7 +193,7 @@ from PIL import Image
 outputDir='results'
 
 for i in range(0,len(preds_train)):
-    im = Image.fromarray(preds_train[i,:,:,0])
+    im = Image.fromarray(preds_train[i,:,:,0]*255)
     im = im.convert('RGB')
     im.save(os.path.join(outputDir,"out" + str(i) + ".png"))
 
