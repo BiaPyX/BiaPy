@@ -31,10 +31,10 @@ from tensorflow.python.client import device_lib
 print(device_lib.list_local_devices())
 
 # Set some parameters
-#IMG_WIDTH = 1024
-#IMG_HEIGHT = 768
-IMG_WIDTH = 512
-IMG_HEIGHT = 384
+IMG_WIDTH = 1024
+IMG_HEIGHT = 768
+#IMG_WIDTH = 512
+#IMG_HEIGHT = 384
 IMG_CHANNELS = 1
 TRAIN_PATH = 'data/train/x/'
 TRAIN_MASK_PATH = 'data/train/y/'
@@ -47,46 +47,50 @@ seed = 42
 random.seed = seed
 np.random.seed = seed
 
-train_ids = next(os.walk(TRAIN_PATH))[2]
-train_mask_ids = next(os.walk(TRAIN_MASK_PATH))[2]
+train_ids = sorted(next(os.walk(TRAIN_PATH))[2])
+train_mask_ids = sorted(next(os.walk(TRAIN_MASK_PATH))[2])
 
-test_ids = next(os.walk(TEST_PATH))[2]
-test_mask_ids = next(os.walk(TEST_MASK_PATH))[2]
+test_ids = sorted(next(os.walk(TEST_PATH))[2])
+test_mask_ids = sorted(next(os.walk(TEST_MASK_PATH))[2])
 
 # Get and resize train images and masks
-X_train = np.zeros((len(next(os.walk(TRAIN_PATH))[2]), IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS), dtype=np.uint8)
-Y_train = np.zeros((len(next(os.walk(TRAIN_MASK_PATH))[2]), IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS), dtype=np.uint8)
+X_train = np.zeros((len(train_ids), IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS), dtype=np.uint8)
+Y_train = np.zeros((len(train_mask_ids), IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS), dtype=np.uint8)
 
 print('Getting and resizing train images... ')
 sys.stdout.flush()
 for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
+    print(TRAIN_PATH + id_)
     img = imread(TRAIN_PATH + id_)
-    img = np.expand_dims(resize(img, (IMG_HEIGHT, IMG_WIDTH), mode='constant', preserve_range=True), axis=-1)
+    img = np.expand_dims(img, axis=-1)
     X_train[n] = img
 
 print('Getting and resizing train masks... ')
 for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids)):
+    print(TRAIN_MASK_PATH + id_)
     mask = imread(TRAIN_MASK_PATH + id_)
-    mask = np.expand_dims(resize(mask, (IMG_HEIGHT, IMG_WIDTH), mode='constant', preserve_range=True), axis=-1)
+    mask = np.expand_dims(mask, axis=-1)
     Y_train[n] = mask
+
 Y_train = Y_train/255
 
 # Get and resize test images and masks
-X_test = np.zeros((len(next(os.walk(TEST_PATH))[2]), IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS), dtype=np.uint8)
-Y_test = np.zeros((len(next(os.walk(TEST_MASK_PATH))[2]), IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS), dtype=np.uint8)
+X_test = np.zeros((len(test_ids), IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS), dtype=np.uint8)
+Y_test = np.zeros((len(test_mask_ids), IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS), dtype=np.uint8)
 
 print('Getting and resizing test images... ')
 sys.stdout.flush()
 for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):
     img = imread(TEST_PATH + id_)
-    img = np.expand_dims(resize(img, (IMG_HEIGHT, IMG_WIDTH), mode='constant', preserve_range=True), axis=-1)
+    img = np.expand_dims(img, axis=-1)
     X_test[n] = img
 
 print('Getting and resizing test masks... ')
 for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids)):
     mask = imread(TEST_MASK_PATH + id_)
-    mask = np.expand_dims(resize(mask, (IMG_HEIGHT, IMG_WIDTH), mode='constant',preserve_range=True), axis=-1)
+    mask = np.expand_dims(mask, axis=-1)
     Y_test[n] = mask
+
 Y_test = Y_test/255
 
 # Check if training data looks all right
@@ -169,7 +173,7 @@ model.summary()
 # Fit model
 earlystopper = EarlyStopping(patience=5, verbose=1)
 checkpointer = ModelCheckpoint('model-v.1.0.fibsem.h5', verbose=1, save_best_only=True)
-results = model.fit(X_train, Y_train, validation_split=0.1, batch_size=8, epochs=50, 
+results = model.fit(X_train, Y_train, validation_split=0.1, batch_size=1, epochs=50, 
                     callbacks=[earlystopper, checkpointer])
 
 #####################
