@@ -48,8 +48,6 @@ from PIL import Image
 #    INITIAL VARIABLES   #
 ##########################
 
-# Limit the number of threads
-
 # Take arguments
 if len(sys.argv) > 1:
     GPU_SELECTED=str(sys.argv[1])
