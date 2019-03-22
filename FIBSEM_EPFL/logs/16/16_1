@@ -1,0 +1,830 @@
+JOBID : 16
+GPU selected : 0
+Python       : 3.6.3 |Anaconda, Inc.| (default, Nov 20 2017, 20:41:42) 
+Numpy        : 1.16.2
+Keras        : 2.2.4
+Tensorflow   : 1.12.0
+Getting and resizing train images... 
+Using TensorFlow backend.
+  0%|          | 0/165 [00:00<?, ?it/s] 33%|███▎      | 54/165 [00:00<00:00, 539.38it/s] 64%|██████▍   | 106/165 [00:00<00:00, 532.67it/s]100%|██████████| 165/165 [00:00<00:00, 561.03it/s]
+  0%|          | 0/165 [00:00<?, ?it/s] 33%|███▎      | 54/165 [00:00<00:00, 536.84it/s] 67%|██████▋   | 111/165 [00:00<00:00, 545.60it/s]100%|██████████| 165/165 [00:00<00:00, 583.63it/s]Getting and resizing train masks... 
+Getting and resizing test images... 
+
+  0%|          | 0/165 [00:00<?, ?it/s] 35%|███▌      | 58/165 [00:00<00:00, 572.59it/s] 72%|███████▏  | 119/165 [00:00<00:00, 583.09it/s]100%|██████████| 165/165 [00:00<00:00, 598.79it/s]
+  0%|          | 0/165 [00:00<?, ?it/s] 41%|████      | 67/165 [00:00<00:00, 660.49it/s] 81%|████████  | 133/165 [00:00<00:00, 659.79it/s]100%|██████████| 165/165 [00:00<00:00, 661.35it/s]2019-03-20 02:49:21.118440: I tensorflow/core/platform/cpu_feature_guard.cc:141] Your CPU supports instructions that this TensorFlow binary was not compiled to use: SSE4.1 SSE4.2 AVX AVX2 FMA
+2019-03-20 02:49:21.421389: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1432] Found device 0 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:05:00.0
+totalMemory: 10.92GiB freeMemory: 10.76GiB
+2019-03-20 02:49:21.421457: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1511] Adding visible gpu devices: 0
+2019-03-20 02:49:21.990538: I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] Device interconnect StreamExecutor with strength 1 edge matrix:
+2019-03-20 02:49:21.990630: I tensorflow/core/common_runtime/gpu/gpu_device.cc:988]      0 
+2019-03-20 02:49:21.990647: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1001] 0:   N 
+2019-03-20 02:49:21.992676: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1115] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 10407 MB memory) -> physical GPU (device: 0, name: GeForce GTX 1080 Ti, pci bus id: 0000:05:00.0, compute capability: 6.1)
+Getting and resizing test masks... 
+__________________________________________________________________________________________________
+Layer (type)                    Output Shape         Param #     Connected to                     
+==================================================================================================
+input_1 (InputLayer)            (None, 768, 1024, 1) 0                                            
+__________________________________________________________________________________________________
+lambda_1 (Lambda)               (None, 768, 1024, 1) 0           input_1[0][0]                    
+__________________________________________________________________________________________________
+conv2d_1 (Conv2D)               (None, 768, 1024, 16 160         lambda_1[0][0]                   
+__________________________________________________________________________________________________
+dropout_1 (Dropout)             (None, 768, 1024, 16 0           conv2d_1[0][0]                   
+__________________________________________________________________________________________________
+conv2d_2 (Conv2D)               (None, 768, 1024, 16 2320        dropout_1[0][0]                  
+__________________________________________________________________________________________________
+max_pooling2d_1 (MaxPooling2D)  (None, 384, 512, 16) 0           conv2d_2[0][0]                   
+__________________________________________________________________________________________________
+conv2d_3 (Conv2D)               (None, 384, 512, 32) 4640        max_pooling2d_1[0][0]            
+__________________________________________________________________________________________________
+dropout_2 (Dropout)             (None, 384, 512, 32) 0           conv2d_3[0][0]                   
+__________________________________________________________________________________________________
+conv2d_4 (Conv2D)               (None, 384, 512, 32) 9248        dropout_2[0][0]                  
+__________________________________________________________________________________________________
+max_pooling2d_2 (MaxPooling2D)  (None, 192, 256, 32) 0           conv2d_4[0][0]                   
+__________________________________________________________________________________________________
+conv2d_5 (Conv2D)               (None, 192, 256, 64) 18496       max_pooling2d_2[0][0]            
+__________________________________________________________________________________________________
+dropout_3 (Dropout)             (None, 192, 256, 64) 0           conv2d_5[0][0]                   
+__________________________________________________________________________________________________
+conv2d_6 (Conv2D)               (None, 192, 256, 64) 36928       dropout_3[0][0]                  
+__________________________________________________________________________________________________
+max_pooling2d_3 (MaxPooling2D)  (None, 96, 128, 64)  0           conv2d_6[0][0]                   
+__________________________________________________________________________________________________
+conv2d_7 (Conv2D)               (None, 96, 128, 128) 73856       max_pooling2d_3[0][0]            
+__________________________________________________________________________________________________
+dropout_4 (Dropout)             (None, 96, 128, 128) 0           conv2d_7[0][0]                   
+__________________________________________________________________________________________________
+conv2d_8 (Conv2D)               (None, 96, 128, 128) 147584      dropout_4[0][0]                  
+__________________________________________________________________________________________________
+max_pooling2d_4 (MaxPooling2D)  (None, 48, 64, 128)  0           conv2d_8[0][0]                   
+__________________________________________________________________________________________________
+conv2d_9 (Conv2D)               (None, 48, 64, 256)  295168      max_pooling2d_4[0][0]            
+__________________________________________________________________________________________________
+dropout_5 (Dropout)             (None, 48, 64, 256)  0           conv2d_9[0][0]                   
+__________________________________________________________________________________________________
+conv2d_10 (Conv2D)              (None, 48, 64, 256)  590080      dropout_5[0][0]                  
+__________________________________________________________________________________________________
+conv2d_transpose_1 (Conv2DTrans (None, 96, 128, 128) 131200      conv2d_10[0][0]                  
+__________________________________________________________________________________________________
+concatenate_1 (Concatenate)     (None, 96, 128, 256) 0           conv2d_transpose_1[0][0]         
+                                                                 conv2d_8[0][0]                   
+__________________________________________________________________________________________________
+conv2d_11 (Conv2D)              (None, 96, 128, 128) 295040      concatenate_1[0][0]              
+__________________________________________________________________________________________________
+dropout_6 (Dropout)             (None, 96, 128, 128) 0           conv2d_11[0][0]                  
+__________________________________________________________________________________________________
+conv2d_12 (Conv2D)              (None, 96, 128, 128) 147584      dropout_6[0][0]                  
+__________________________________________________________________________________________________
+conv2d_transpose_2 (Conv2DTrans (None, 192, 256, 64) 32832       conv2d_12[0][0]                  
+__________________________________________________________________________________________________
+concatenate_2 (Concatenate)     (None, 192, 256, 128 0           conv2d_transpose_2[0][0]         
+                                                                 conv2d_6[0][0]                   
+__________________________________________________________________________________________________
+conv2d_13 (Conv2D)              (None, 192, 256, 64) 73792       concatenate_2[0][0]              
+__________________________________________________________________________________________________
+dropout_7 (Dropout)             (None, 192, 256, 64) 0           conv2d_13[0][0]                  
+__________________________________________________________________________________________________
+conv2d_14 (Conv2D)              (None, 192, 256, 64) 36928       dropout_7[0][0]                  
+__________________________________________________________________________________________________
+conv2d_transpose_3 (Conv2DTrans (None, 384, 512, 32) 8224        conv2d_14[0][0]                  
+__________________________________________________________________________________________________
+concatenate_3 (Concatenate)     (None, 384, 512, 64) 0           conv2d_transpose_3[0][0]         
+                                                                 conv2d_4[0][0]                   
+__________________________________________________________________________________________________
+conv2d_15 (Conv2D)              (None, 384, 512, 32) 18464       concatenate_3[0][0]              
+__________________________________________________________________________________________________
+dropout_8 (Dropout)             (None, 384, 512, 32) 0           conv2d_15[0][0]                  
+__________________________________________________________________________________________________
+conv2d_16 (Conv2D)              (None, 384, 512, 32) 9248        dropout_8[0][0]                  
+__________________________________________________________________________________________________
+conv2d_transpose_4 (Conv2DTrans (None, 768, 1024, 16 2064        conv2d_16[0][0]                  
+__________________________________________________________________________________________________
+concatenate_4 (Concatenate)     (None, 768, 1024, 32 0           conv2d_transpose_4[0][0]         
+                                                                 conv2d_2[0][0]                   
+__________________________________________________________________________________________________2019-03-20 02:49:36.495947: W tensorflow/core/common_runtime/bfc_allocator.cc:211] Allocator (GPU_0_bfc) ran out of memory trying to allocate 205.62MiB. The caller indicates that this is not a failure, but may mean that there could be performance gains if more memory were available.
+2019-03-20 02:49:36.567104: W tensorflow/core/common_runtime/bfc_allocator.cc:211] Allocator (GPU_0_bfc) ran out of memory trying to allocate 1.69GiB. The caller indicates that this is not a failure, but may mean that there could be performance gains if more memory were available.
+2019-03-20 02:49:36.700504: W tensorflow/core/common_runtime/bfc_allocator.cc:211] Allocator (GPU_0_bfc) ran out of memory trying to allocate 3.38GiB. The caller indicates that this is not a failure, but may mean that there could be performance gains if more memory were available.
+2019-03-20 02:49:36.829871: W tensorflow/core/common_runtime/bfc_allocator.cc:211] Allocator (GPU_0_bfc) ran out of memory trying to allocate 2.53GiB. The caller indicates that this is not a failure, but may mean that there could be performance gains if more memory were available.
+
+conv2d_17 (Conv2D)              (None, 768, 1024, 16 4624        concatenate_4[0][0]              
+__________________________________________________________________________________________________
+dropout_9 (Dropout)             (None, 768, 1024, 16 0           conv2d_17[0][0]                  
+__________________________________________________________________________________________________
+conv2d_18 (Conv2D)              (None, 768, 1024, 16 2320        dropout_9[0][0]                  
+__________________________________________________________________________________________________
+conv2d_19 (Conv2D)              (None, 768, 1024, 1) 17          conv2d_18[0][0]                  
+==================================================================================================
+Total params: 1,940,817
+Trainable params: 1,940,817
+Non-trainable params: 0
+__________________________________________________________________________________________________
+Epoch 1/50
+
+ 1/19 [>.............................] - ETA: 3:11 - loss: 0.3407 - mean_iou: 0.0000e+00
+ 2/19 [==>...........................] - ETA: 1:40 - loss: 0.2748 - mean_iou: 0.2359    
+ 3/19 [===>..........................] - ETA: 1:09 - loss: 0.2557 - mean_iou: 0.31612019-03-20 02:49:51.334994: W tensorflow/core/common_runtime/bfc_allocator.cc:267] Allocator (GPU_0_bfc) ran out of memory trying to allocate 384.00MiB.  Current allocation summary follows.
+2019-03-20 02:49:51.335156: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (256): 	Total Chunks: 369, Chunks in use: 359. 92.2KiB allocated for chunks. 89.8KiB in use in bin. 15.0KiB client-requested in use in bin.
+2019-03-20 02:49:51.335178: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (512): 	Total Chunks: 35, Chunks in use: 33. 19.0KiB allocated for chunks. 18.0KiB in use in bin. 16.9KiB client-requested in use in bin.
+2019-03-20 02:49:51.335196: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (1024): 	Total Chunks: 15, Chunks in use: 13. 16.0KiB allocated for chunks. 13.2KiB in use in bin. 13.0KiB client-requested in use in bin.
+2019-03-20 02:49:51.335212: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (2048): 	Total Chunks: 0, Chunks in use: 0. 0B allocated for chunks. 0B in use in bin. 0B client-requested in use in bin.
+2019-03-20 02:49:51.335226: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (4096): 	Total Chunks: 0, Chunks in use: 0. 0B allocated for chunks. 0B in use in bin. 0B client-requested in use in bin.
+2019-03-20 02:49:51.335244: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (8192): 	Total Chunks: 17, Chunks in use: 17. 147.0KiB allocated for chunks. 147.0KiB in use in bin. 147.0KiB client-requested in use in bin.
+2019-03-20 02:49:51.335261: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (16384): 	Total Chunks: 12, Chunks in use: 12. 216.0KiB allocated for chunks. 216.0KiB in use in bin. 216.0KiB client-requested in use in bin.
+2019-03-20 02:49:51.335278: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (32768): 	Total Chunks: 17, Chunks in use: 17. 588.0KiB allocated for chunks. 588.0KiB in use in bin. 588.0KiB client-requested in use in bin.
+2019-03-20 02:49:51.335294: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (65536): 	Total Chunks: 12, Chunks in use: 12. 864.0KiB allocated for chunks. 864.0KiB in use in bin. 864.0KiB client-requested in use in bin.
+2019-03-20 02:49:51.335310: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (131072): 	Total Chunks: 17, Chunks in use: 17. 2.30MiB allocated for chunks. 2.30MiB in use in bin. 2.30MiB client-requested in use in bin.
+2019-03-20 02:49:51.335326: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (262144): 	Total Chunks: 12, Chunks in use: 12. 3.38MiB allocated for chunks. 3.38MiB in use in bin. 3.38MiB client-requested in use in bin.
+2019-03-20 02:49:51.335342: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (524288): 	Total Chunks: 17, Chunks in use: 17. 9.19MiB allocated for chunks. 9.19MiB in use in bin. 9.19MiB client-requested in use in bin.
+2019-03-20 02:49:51.335359: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (1048576): 	Total Chunks: 12, Chunks in use: 12. 13.50MiB allocated for chunks. 13.50MiB in use in bin. 13.50MiB client-requested in use in bin.
+2019-03-20 02:49:51.335376: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (2097152): 	Total Chunks: 6, Chunks in use: 6. 14.87MiB allocated for chunks. 14.87MiB in use in bin. 13.50MiB client-requested in use in bin.
+2019-03-20 02:49:51.335410: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (4194304): 	Total Chunks: 10, Chunks in use: 0. 58.85MiB allocated for chunks. 0B in use in bin. 0B client-requested in use in bin.
+2019-03-20 02:49:51.335427: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (8388608): 	Total Chunks: 1, Chunks in use: 1. 12.00MiB allocated for chunks. 12.00MiB in use in bin. 12.00MiB client-requested in use in bin.
+2019-03-20 02:49:51.335443: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (16777216): 	Total Chunks: 10, Chunks in use: 7. 240.00MiB allocated for chunks. 168.00MiB in use in bin. 168.00MiB client-requested in use in bin.
+2019-03-20 02:49:51.335460: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (33554432): 	Total Chunks: 12, Chunks in use: 11. 564.00MiB allocated for chunks. 516.00MiB in use in bin. 504.00MiB client-requested in use in bin.
+2019-03-20 02:49:51.335476: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (67108864): 	Total Chunks: 13, Chunks in use: 12. 1.20GiB allocated for chunks. 1.10GiB in use in bin. 1.08GiB client-requested in use in bin.
+2019-03-20 02:49:51.335491: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (134217728): 	Total Chunks: 12, Chunks in use: 11. 2.20GiB allocated for chunks. 2.02GiB in use in bin. 1.97GiB client-requested in use in bin.
+2019-03-20 02:49:51.335505: I tensorflow/core/common_runtime/bfc_allocator.cc:597] Bin (268435456): 	Total Chunks: 15, Chunks in use: 14. 5.87GiB allocated for chunks. 5.53GiB in use in bin. 5.44GiB client-requested in use in bin.
+2019-03-20 02:49:51.335520: I tensorflow/core/common_runtime/bfc_allocator.cc:613] Bin for 384.00MiB was 256.00MiB, Chunk State: 
+2019-03-20 02:49:51.335544: I tensorflow/core/common_runtime/bfc_allocator.cc:619]   Size: 343.81MiB | Requested Size: 48.00MiB | in_use: 0, prev:   Size: 384.00MiB | Requested Size: 384.00MiB | in_use: 1
+2019-03-20 02:49:51.335561: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4000000 of size 1280
+2019-03-20 02:49:51.335573: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4000500 of size 256
+2019-03-20 02:49:51.335584: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4000600 of size 256
+2019-03-20 02:49:51.335595: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4000700 of size 256
+2019-03-20 02:49:51.335606: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4000800 of size 256
+2019-03-20 02:49:51.335617: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4000900 of size 256
+2019-03-20 02:49:51.335628: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4000a00 of size 256
+2019-03-20 02:49:51.335639: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4000b00 of size 256
+2019-03-20 02:49:51.335651: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4000c00 of size 256
+2019-03-20 02:49:51.335662: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4000d00 of size 256
+2019-03-20 02:49:51.335673: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4000e00 of size 256
+2019-03-20 02:49:51.335684: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4000f00 of size 256
+2019-03-20 02:49:51.335695: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4001000 of size 256
+2019-03-20 02:49:51.335706: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4001100 of size 256
+2019-03-20 02:49:51.335719: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4001200 of size 1024
+2019-03-20 02:49:51.335748: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4001600 of size 256
+2019-03-20 02:49:51.335760: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4001700 of size 512
+2019-03-20 02:49:51.335771: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4001900 of size 256
+2019-03-20 02:49:51.335788: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4001a00 of size 256
+2019-03-20 02:49:51.335800: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4001b00 of size 256
+2019-03-20 02:49:51.335811: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4001c00 of size 256
+2019-03-20 02:49:51.335822: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4001d00 of size 256
+2019-03-20 02:49:51.335833: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4001e00 of size 256
+2019-03-20 02:49:51.335844: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4001f00 of size 256
+2019-03-20 02:49:51.335855: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4002000 of size 256
+2019-03-20 02:49:51.335866: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4002100 of size 256
+2019-03-20 02:49:51.335887: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4002200 of size 256
+2019-03-20 02:49:51.335897: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4002300 of size 256
+2019-03-20 02:49:51.335907: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4002400 of size 256
+2019-03-20 02:49:51.335917: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4002500 of size 256
+2019-03-20 02:49:51.335927: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4002600 of size 256
+2019-03-20 02:49:51.335937: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4002700 of size 256
+2019-03-20 02:49:51.335948: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4002800 of size 256
+2019-03-20 02:49:51.335958: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4002900 of size 768
+2019-03-20 02:49:51.335969: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4002c00 of size 2359296
+2019-03-20 02:49:51.335980: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4242c00 of size 1179648
+2019-03-20 02:49:51.335991: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4362c00 of size 294912
+2019-03-20 02:49:51.336002: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f43aac00 of size 73728
+2019-03-20 02:49:51.336013: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f43bcc00 of size 18432
+2019-03-20 02:49:51.336023: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f43c1400 of size 256
+2019-03-20 02:49:51.336034: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f43c1500 of size 256
+2019-03-20 02:49:51.336044: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f43c1600 of size 9216
+2019-03-20 02:49:51.336055: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f43c3a00 of size 9216
+2019-03-20 02:49:51.336065: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f43c5e00 of size 18432
+2019-03-20 02:49:51.336076: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f43ca600 of size 36864
+2019-03-20 02:49:51.336086: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f43d3600 of size 36864
+2019-03-20 02:49:51.336096: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f43dc600 of size 73728
+2019-03-20 02:49:51.336107: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f43ee600 of size 147456
+2019-03-20 02:49:51.336118: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4412600 of size 147456
+2019-03-20 02:49:51.336128: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4436600 of size 294912
+2019-03-20 02:49:51.336139: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f447e600 of size 589824
+2019-03-20 02:49:51.336149: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f450e600 of size 589824
+2019-03-20 02:49:51.336165: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f459e600 of size 1024
+2019-03-20 02:49:51.336175: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f459ea00 of size 1024
+2019-03-20 02:49:51.336186: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f459ee00 of size 1179648
+2019-03-20 02:49:51.336196: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f46bee00 of size 512
+2019-03-20 02:49:51.336207: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f46bf000 of size 512
+2019-03-20 02:49:51.336217: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f46bf200 of size 512
+2019-03-20 02:49:51.336227: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f46bf400 of size 512
+2019-03-20 02:49:51.336237: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f46bf600 of size 512
+2019-03-20 02:49:51.336248: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f46bf800 of size 524288
+2019-03-20 02:49:51.336259: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f473f800 of size 256
+2019-03-20 02:49:51.336269: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f473f900 of size 256
+2019-03-20 02:49:51.336279: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f473fa00 of size 256
+2019-03-20 02:49:51.336289: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f473fb00 of size 256
+2019-03-20 02:49:51.336299: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f473fc00 of size 256
+2019-03-20 02:49:51.336309: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f473fd00 of size 131072
+2019-03-20 02:49:51.336320: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f475fd00 of size 256
+2019-03-20 02:49:51.336330: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f475fe00 of size 256
+2019-03-20 02:49:51.336340: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f475ff00 of size 256
+2019-03-20 02:49:51.336350: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4760000 of size 256
+2019-03-20 02:49:51.336360: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4760100 of size 256
+2019-03-20 02:49:51.336371: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4760200 of size 32768
+2019-03-20 02:49:51.336381: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4768200 of size 256
+2019-03-20 02:49:51.336391: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4768300 of size 256
+2019-03-20 02:49:51.336401: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4768400 of size 256
+2019-03-20 02:49:51.336411: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4768500 of size 256
+2019-03-20 02:49:51.336421: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4768600 of size 256
+2019-03-20 02:49:51.336432: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4768700 of size 8192
+2019-03-20 02:49:51.336442: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476a700 of size 256
+2019-03-20 02:49:51.336452: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476a800 of size 256
+2019-03-20 02:49:51.336462: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476a900 of size 256
+2019-03-20 02:49:51.336472: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476aa00 of size 256
+2019-03-20 02:49:51.336482: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476ab00 of size 256
+2019-03-20 02:49:51.336493: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476ac00 of size 256
+2019-03-20 02:49:51.336503: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476ad00 of size 256
+2019-03-20 02:49:51.336513: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476ae00 of size 256
+2019-03-20 02:49:51.336529: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476af00 of size 256
+2019-03-20 02:49:51.336540: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476b000 of size 256
+2019-03-20 02:49:51.336550: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476b100 of size 256
+2019-03-20 02:49:51.336560: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476b200 of size 256
+2019-03-20 02:49:51.336570: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476b300 of size 256
+2019-03-20 02:49:51.336580: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476b400 of size 256
+2019-03-20 02:49:51.336590: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476b500 of size 256
+2019-03-20 02:49:51.336600: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476b600 of size 256
+2019-03-20 02:49:51.336610: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476b700 of size 256
+2019-03-20 02:49:51.336620: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476b800 of size 256
+2019-03-20 02:49:51.336631: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476b900 of size 256
+2019-03-20 02:49:51.336641: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476ba00 of size 256
+2019-03-20 02:49:51.336651: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476bb00 of size 256
+2019-03-20 02:49:51.336661: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476bc00 of size 256
+2019-03-20 02:49:51.336671: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476bd00 of size 256
+2019-03-20 02:49:51.336681: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476be00 of size 256
+2019-03-20 02:49:51.336691: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476bf00 of size 256
+2019-03-20 02:49:51.336701: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476c000 of size 256
+2019-03-20 02:49:51.336711: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476c100 of size 256
+2019-03-20 02:49:51.336721: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476c200 of size 256
+2019-03-20 02:49:51.336732: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476c300 of size 256
+2019-03-20 02:49:51.336742: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476c400 of size 256
+2019-03-20 02:49:51.336752: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476c500 of size 256
+2019-03-20 02:49:51.336762: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476c600 of size 256
+2019-03-20 02:49:51.336772: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476c700 of size 256
+2019-03-20 02:49:51.336782: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476c800 of size 256
+2019-03-20 02:49:51.336792: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476c900 of size 256
+2019-03-20 02:49:51.336802: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476ca00 of size 256
+2019-03-20 02:49:51.336813: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476cb00 of size 256
+2019-03-20 02:49:51.336823: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476cc00 of size 256
+2019-03-20 02:49:51.336833: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476cd00 of size 256
+2019-03-20 02:49:51.336843: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476ce00 of size 256
+2019-03-20 02:49:51.336853: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476cf00 of size 256
+2019-03-20 02:49:51.336863: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476d000 of size 256
+2019-03-20 02:49:51.336878: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476d100 of size 256
+2019-03-20 02:49:51.336889: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476d200 of size 256
+2019-03-20 02:49:51.336899: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476d300 of size 256
+2019-03-20 02:49:51.336909: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476d400 of size 256
+2019-03-20 02:49:51.336920: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476d500 of size 256
+2019-03-20 02:49:51.336930: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476d600 of size 256
+2019-03-20 02:49:51.336940: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476d700 of size 256
+2019-03-20 02:49:51.336950: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476d800 of size 256
+2019-03-20 02:49:51.336960: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476d900 of size 256
+2019-03-20 02:49:51.336970: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476da00 of size 256
+2019-03-20 02:49:51.336981: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476db00 of size 256
+2019-03-20 02:49:51.336991: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476dc00 of size 256
+2019-03-20 02:49:51.337001: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476dd00 of size 256
+2019-03-20 02:49:51.337011: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476de00 of size 256
+2019-03-20 02:49:51.337021: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476df00 of size 256
+2019-03-20 02:49:51.337032: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476e000 of size 256
+2019-03-20 02:49:51.337042: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476e100 of size 256
+2019-03-20 02:49:51.337052: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476e200 of size 256
+2019-03-20 02:49:51.337062: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476e300 of size 256
+2019-03-20 02:49:51.337072: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476e400 of size 256
+2019-03-20 02:49:51.337082: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476e500 of size 256
+2019-03-20 02:49:51.337093: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476e600 of size 256
+2019-03-20 02:49:51.337103: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476e700 of size 256
+2019-03-20 02:49:51.337113: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476e800 of size 768
+2019-03-20 02:49:51.337123: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f476eb00 of size 18432
+2019-03-20 02:49:51.337134: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4773300 of size 294912
+2019-03-20 02:49:51.337144: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f47bb300 of size 1179648
+2019-03-20 02:49:51.337155: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f48db300 of size 2359296
+2019-03-20 02:49:51.337165: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4b1b300 of size 1024
+2019-03-20 02:49:51.337175: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4b1b700 of size 524288
+2019-03-20 02:49:51.337186: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4b9b700 of size 1179648
+2019-03-20 02:49:51.337196: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4cbb700 of size 589824
+2019-03-20 02:49:51.337206: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4d4b700 of size 512
+2019-03-20 02:49:51.337217: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4d4b900 of size 131072
+2019-03-20 02:49:51.337232: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4d6b900 of size 294912
+2019-03-20 02:49:51.337243: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4db3900 of size 147456
+2019-03-20 02:49:51.337253: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4dd7900 of size 32768
+2019-03-20 02:49:51.337264: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4ddf900 of size 73728
+2019-03-20 02:49:51.337274: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4df1900 of size 73728
+2019-03-20 02:49:51.337285: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e03900 of size 36864
+2019-03-20 02:49:51.337295: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e0c900 of size 256
+2019-03-20 02:49:51.337305: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e0ca00 of size 8192
+2019-03-20 02:49:51.337315: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e0ea00 of size 18432
+2019-03-20 02:49:51.337326: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e13200 of size 9216
+2019-03-20 02:49:51.337336: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e15600 of size 256
+2019-03-20 02:49:51.337346: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e15700 of size 256
+2019-03-20 02:49:51.337356: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e15800 of size 256
+2019-03-20 02:49:51.337366: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e15900 of size 256
+2019-03-20 02:49:51.337376: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e15a00 of size 768
+2019-03-20 02:49:51.337386: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e15d00 of size 768
+2019-03-20 02:49:51.337396: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e16000 of size 18432
+2019-03-20 02:49:51.337407: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e1a800 of size 18432
+2019-03-20 02:49:51.337417: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e1f000 of size 294912
+2019-03-20 02:49:51.337427: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4e67000 of size 294912
+2019-03-20 02:49:51.337438: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4eaf000 of size 1179648
+2019-03-20 02:49:51.337448: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f4fcf000 of size 1179648
+2019-03-20 02:49:51.337459: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f50ef000 of size 2359296
+2019-03-20 02:49:51.337469: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f532f000 of size 2359296
+2019-03-20 02:49:51.337479: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f556f000 of size 1024
+2019-03-20 02:49:51.337489: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f556f400 of size 1024
+2019-03-20 02:49:51.337499: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f556f800 of size 1024
+2019-03-20 02:49:51.337510: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f556fc00 of size 1024
+2019-03-20 02:49:51.337520: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5570000 of size 524288
+2019-03-20 02:49:51.337530: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f55f0000 of size 524288
+2019-03-20 02:49:51.337541: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5670000 of size 1179648
+2019-03-20 02:49:51.337551: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5790000 of size 1179648
+2019-03-20 02:49:51.337561: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f58b0000 of size 589824
+2019-03-20 02:49:51.337572: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5940000 of size 589824
+2019-03-20 02:49:51.337587: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f59d0000 of size 589824
+2019-03-20 02:49:51.337597: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5a60000 of size 589824
+2019-03-20 02:49:51.337608: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5af0000 of size 512
+2019-03-20 02:49:51.337618: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5af0200 of size 512
+2019-03-20 02:49:51.337628: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5af0400 of size 512
+2019-03-20 02:49:51.337639: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5af0600 of size 512
+2019-03-20 02:49:51.337649: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5af0800 of size 512
+2019-03-20 02:49:51.337659: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5af0a00 of size 512
+2019-03-20 02:49:51.337669: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5af0c00 of size 512
+2019-03-20 02:49:51.337679: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5af0e00 of size 512
+2019-03-20 02:49:51.337689: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5af1000 of size 512
+2019-03-20 02:49:51.337700: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5af1200 of size 512
+2019-03-20 02:49:51.337710: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5af1400 of size 131072
+2019-03-20 02:49:51.337720: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5b11400 of size 131072
+2019-03-20 02:49:51.337731: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5b31400 of size 294912
+2019-03-20 02:49:51.337741: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5b79400 of size 294912
+2019-03-20 02:49:51.337751: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5bc1400 of size 147456
+2019-03-20 02:49:51.337762: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5be5400 of size 147456
+2019-03-20 02:49:51.337772: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5c09400 of size 147456
+2019-03-20 02:49:51.337782: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5c2d400 of size 147456
+2019-03-20 02:49:51.337793: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5c51400 of size 32768
+2019-03-20 02:49:51.337803: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5c59400 of size 32768
+2019-03-20 02:49:51.337813: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5c61400 of size 73728
+2019-03-20 02:49:51.337824: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5c73400 of size 73728
+2019-03-20 02:49:51.337834: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5c85400 of size 73728
+2019-03-20 02:49:51.337844: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5c97400 of size 73728
+2019-03-20 02:49:51.337854: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ca9400 of size 36864
+2019-03-20 02:49:51.337865: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cb2400 of size 36864
+2019-03-20 02:49:51.337875: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cbb400 of size 36864
+2019-03-20 02:49:51.337885: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cc4400 of size 36864
+2019-03-20 02:49:51.337895: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ccd400 of size 256
+2019-03-20 02:49:51.337906: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ccd500 of size 256
+2019-03-20 02:49:51.337916: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ccd600 of size 256
+2019-03-20 02:49:51.337926: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ccd700 of size 256
+2019-03-20 02:49:51.337941: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ccd800 of size 256
+2019-03-20 02:49:51.337952: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ccd900 of size 256
+2019-03-20 02:49:51.337962: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ccda00 of size 256
+2019-03-20 02:49:51.337972: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ccdb00 of size 256
+2019-03-20 02:49:51.337982: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ccdc00 of size 256
+2019-03-20 02:49:51.337993: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ccdd00 of size 256
+2019-03-20 02:49:51.338003: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ccde00 of size 8192
+2019-03-20 02:49:51.338013: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ccfe00 of size 8192
+2019-03-20 02:49:51.338024: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cd1e00 of size 18432
+2019-03-20 02:49:51.338034: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cd6600 of size 18432
+2019-03-20 02:49:51.338044: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cdae00 of size 9216
+2019-03-20 02:49:51.338055: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cdd200 of size 9216
+2019-03-20 02:49:51.338065: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cdf600 of size 9216
+2019-03-20 02:49:51.338075: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce1a00 of size 9216
+2019-03-20 02:49:51.338086: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce3e00 of size 256
+2019-03-20 02:49:51.338096: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce3f00 of size 256
+2019-03-20 02:49:51.338106: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4000 of size 256
+2019-03-20 02:49:51.338116: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4100 of size 256
+2019-03-20 02:49:51.338126: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4200 of size 256
+2019-03-20 02:49:51.338137: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4300 of size 256
+2019-03-20 02:49:51.338147: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4400 of size 256
+2019-03-20 02:49:51.338157: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4500 of size 256
+2019-03-20 02:49:51.338167: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4600 of size 256
+2019-03-20 02:49:51.338177: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4700 of size 256
+2019-03-20 02:49:51.338188: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4800 of size 256
+2019-03-20 02:49:51.338198: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4900 of size 256
+2019-03-20 02:49:51.338208: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4a00 of size 256
+2019-03-20 02:49:51.338218: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4b00 of size 256
+2019-03-20 02:49:51.338228: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4c00 of size 256
+2019-03-20 02:49:51.338238: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4d00 of size 256
+2019-03-20 02:49:51.338249: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4e00 of size 256
+2019-03-20 02:49:51.338259: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce4f00 of size 256
+2019-03-20 02:49:51.338269: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5000 of size 256
+2019-03-20 02:49:51.338279: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5100 of size 256
+2019-03-20 02:49:51.338289: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5200 of size 256
+2019-03-20 02:49:51.338304: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5300 of size 256
+2019-03-20 02:49:51.338315: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5400 of size 256
+2019-03-20 02:49:51.338325: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5500 of size 256
+2019-03-20 02:49:51.338336: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5600 of size 256
+2019-03-20 02:49:51.338346: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5700 of size 256
+2019-03-20 02:49:51.338356: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5800 of size 256
+2019-03-20 02:49:51.338366: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5900 of size 256
+2019-03-20 02:49:51.338376: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5a00 of size 256
+2019-03-20 02:49:51.338387: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5b00 of size 256
+2019-03-20 02:49:51.338397: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5c00 of size 256
+2019-03-20 02:49:51.338407: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5d00 of size 256
+2019-03-20 02:49:51.338417: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5e00 of size 256
+2019-03-20 02:49:51.338427: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce5f00 of size 256
+2019-03-20 02:49:51.338437: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6000 of size 256
+2019-03-20 02:49:51.338447: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6100 of size 256
+2019-03-20 02:49:51.338457: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6200 of size 256
+2019-03-20 02:49:51.338467: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6300 of size 256
+2019-03-20 02:49:51.338477: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6400 of size 256
+2019-03-20 02:49:51.338487: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6500 of size 256
+2019-03-20 02:49:51.338498: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6600 of size 256
+2019-03-20 02:49:51.338508: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6700 of size 256
+2019-03-20 02:49:51.338518: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6800 of size 256
+2019-03-20 02:49:51.338528: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6900 of size 256
+2019-03-20 02:49:51.338538: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6a00 of size 256
+2019-03-20 02:49:51.338548: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6b00 of size 256
+2019-03-20 02:49:51.338558: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6c00 of size 256
+2019-03-20 02:49:51.338569: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6d00 of size 256
+2019-03-20 02:49:51.338579: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6e00 of size 256
+2019-03-20 02:49:51.338589: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce6f00 of size 256
+2019-03-20 02:49:51.338599: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7000 of size 256
+2019-03-20 02:49:51.338609: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7100 of size 256
+2019-03-20 02:49:51.338619: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7200 of size 256
+2019-03-20 02:49:51.338630: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7300 of size 256
+2019-03-20 02:49:51.338640: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7400 of size 256
+2019-03-20 02:49:51.338655: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7500 of size 256
+2019-03-20 02:49:51.338665: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7600 of size 256
+2019-03-20 02:49:51.338676: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7700 of size 256
+2019-03-20 02:49:51.338686: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7800 of size 256
+2019-03-20 02:49:51.338696: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7900 of size 256
+2019-03-20 02:49:51.338706: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7a00 of size 256
+2019-03-20 02:49:51.338717: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7b00 of size 256
+2019-03-20 02:49:51.338727: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7c00 of size 256
+2019-03-20 02:49:51.338737: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7d00 of size 256
+2019-03-20 02:49:51.338747: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7e00 of size 256
+2019-03-20 02:49:51.338757: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce7f00 of size 256
+2019-03-20 02:49:51.338767: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8000 of size 256
+2019-03-20 02:49:51.338777: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8100 of size 256
+2019-03-20 02:49:51.338788: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8200 of size 256
+2019-03-20 02:49:51.338798: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8300 of size 256
+2019-03-20 02:49:51.338808: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8400 of size 256
+2019-03-20 02:49:51.338818: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8500 of size 256
+2019-03-20 02:49:51.338828: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8600 of size 256
+2019-03-20 02:49:51.338839: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8700 of size 256
+2019-03-20 02:49:51.338849: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8800 of size 256
+2019-03-20 02:49:51.338859: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8900 of size 256
+2019-03-20 02:49:51.338869: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8a00 of size 256
+2019-03-20 02:49:51.338879: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8b00 of size 256
+2019-03-20 02:49:51.338889: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8c00 of size 256
+2019-03-20 02:49:51.338900: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8d00 of size 256
+2019-03-20 02:49:51.338910: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8e00 of size 256
+2019-03-20 02:49:51.338920: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce8f00 of size 256
+2019-03-20 02:49:51.338930: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9000 of size 256
+2019-03-20 02:49:51.338940: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9100 of size 256
+2019-03-20 02:49:51.338951: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9200 of size 256
+2019-03-20 02:49:51.338961: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9300 of size 256
+2019-03-20 02:49:51.338971: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9400 of size 256
+2019-03-20 02:49:51.338981: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9500 of size 256
+2019-03-20 02:49:51.338991: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9600 of size 256
+2019-03-20 02:49:51.339009: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9700 of size 256
+2019-03-20 02:49:51.339019: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9800 of size 256
+2019-03-20 02:49:51.339030: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9900 of size 256
+2019-03-20 02:49:51.339040: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9a00 of size 256
+2019-03-20 02:49:51.339050: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9b00 of size 256
+2019-03-20 02:49:51.339060: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9c00 of size 256
+2019-03-20 02:49:51.339070: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9d00 of size 256
+2019-03-20 02:49:51.339080: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9e00 of size 256
+2019-03-20 02:49:51.339090: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ce9f00 of size 256
+2019-03-20 02:49:51.339100: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cea000 of size 256
+2019-03-20 02:49:51.339110: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cea100 of size 256
+2019-03-20 02:49:51.339120: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cea200 of size 256
+2019-03-20 02:49:51.339131: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cea300 of size 256
+2019-03-20 02:49:51.339141: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cea400 of size 256
+2019-03-20 02:49:51.339151: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cea500 of size 256
+2019-03-20 02:49:51.339161: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cea600 of size 256
+2019-03-20 02:49:51.339171: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cea700 of size 256
+2019-03-20 02:49:51.339181: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cea800 of size 256
+2019-03-20 02:49:51.339191: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cea900 of size 256
+2019-03-20 02:49:51.339201: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceaa00 of size 256
+2019-03-20 02:49:51.339211: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceab00 of size 256
+2019-03-20 02:49:51.339221: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceac00 of size 256
+2019-03-20 02:49:51.339231: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cead00 of size 256
+2019-03-20 02:49:51.339241: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceae00 of size 256
+2019-03-20 02:49:51.339252: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceaf00 of size 256
+2019-03-20 02:49:51.339262: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceb000 of size 256
+2019-03-20 02:49:51.339272: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceb100 of size 256
+2019-03-20 02:49:51.339282: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceb200 of size 256
+2019-03-20 02:49:51.339292: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceb300 of size 256
+2019-03-20 02:49:51.339302: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceb400 of size 256
+2019-03-20 02:49:51.339312: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceb500 of size 256
+2019-03-20 02:49:51.339322: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceb600 of size 256
+2019-03-20 02:49:51.339332: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceb700 of size 256
+2019-03-20 02:49:51.339342: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceb800 of size 256
+2019-03-20 02:49:51.339352: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceb900 of size 256
+2019-03-20 02:49:51.339367: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceba00 of size 256
+2019-03-20 02:49:51.339378: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cebb00 of size 256
+2019-03-20 02:49:51.339388: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cebc00 of size 256
+2019-03-20 02:49:51.339398: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cebd00 of size 256
+2019-03-20 02:49:51.339408: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cebe00 of size 256
+2019-03-20 02:49:51.339419: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cebf00 of size 256
+2019-03-20 02:49:51.339429: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cec000 of size 256
+2019-03-20 02:49:51.339439: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cec100 of size 256
+2019-03-20 02:49:51.339449: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cec200 of size 256
+2019-03-20 02:49:51.339459: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cec300 of size 256
+2019-03-20 02:49:51.339470: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cec400 of size 256
+2019-03-20 02:49:51.339480: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cec500 of size 256
+2019-03-20 02:49:51.339490: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cec600 of size 256
+2019-03-20 02:49:51.339500: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cec700 of size 256
+2019-03-20 02:49:51.339510: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cec800 of size 256
+2019-03-20 02:49:51.339520: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cec900 of size 256
+2019-03-20 02:49:51.339531: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceca00 of size 256
+2019-03-20 02:49:51.339541: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cecb00 of size 256
+2019-03-20 02:49:51.339551: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cecc00 of size 256
+2019-03-20 02:49:51.339561: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cecd00 of size 256
+2019-03-20 02:49:51.339571: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cece00 of size 256
+2019-03-20 02:49:51.339581: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cecf00 of size 256
+2019-03-20 02:49:51.339592: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ced000 of size 256
+2019-03-20 02:49:51.339602: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ced100 of size 256
+2019-03-20 02:49:51.339612: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ced200 of size 256
+2019-03-20 02:49:51.339622: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ced300 of size 256
+2019-03-20 02:49:51.339632: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ced400 of size 256
+2019-03-20 02:49:51.339642: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ced500 of size 256
+2019-03-20 02:49:51.339653: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ced600 of size 256
+2019-03-20 02:49:51.339663: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ced700 of size 256
+2019-03-20 02:49:51.339673: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ced800 of size 256
+2019-03-20 02:49:51.339683: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ced900 of size 256
+2019-03-20 02:49:51.339693: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceda00 of size 256
+2019-03-20 02:49:51.339703: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cedb00 of size 256
+2019-03-20 02:49:51.339721: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cedc00 of size 256
+2019-03-20 02:49:51.339742: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cedd00 of size 256
+2019-03-20 02:49:51.339752: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cede00 of size 256
+2019-03-20 02:49:51.339762: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cedf00 of size 256
+2019-03-20 02:49:51.339772: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cee000 of size 256
+2019-03-20 02:49:51.339783: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cee100 of size 256
+2019-03-20 02:49:51.339793: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cee200 of size 256
+2019-03-20 02:49:51.339803: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cee300 of size 256
+2019-03-20 02:49:51.339813: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cee400 of size 256
+2019-03-20 02:49:51.339823: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cee500 of size 256
+2019-03-20 02:49:51.339833: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cee600 of size 256
+2019-03-20 02:49:51.339843: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cee700 of size 256
+2019-03-20 02:49:51.339853: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cee800 of size 256
+2019-03-20 02:49:51.339863: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cee900 of size 256
+2019-03-20 02:49:51.339873: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceea00 of size 256
+2019-03-20 02:49:51.339883: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceeb00 of size 256
+2019-03-20 02:49:51.339893: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceec00 of size 256
+2019-03-20 02:49:51.339904: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceed00 of size 256
+2019-03-20 02:49:51.339913: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceee00 of size 256
+2019-03-20 02:49:51.339924: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5ceef00 of size 256
+2019-03-20 02:49:51.339934: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cef000 of size 256
+2019-03-20 02:49:51.339944: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cef100 of size 256
+2019-03-20 02:49:51.339954: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cef200 of size 256
+2019-03-20 02:49:51.339964: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cef300 of size 256
+2019-03-20 02:49:51.339974: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cef400 of size 256
+2019-03-20 02:49:51.339984: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cef500 of size 256
+2019-03-20 02:49:51.339994: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cef600 of size 256
+2019-03-20 02:49:51.340004: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cef700 of size 256
+2019-03-20 02:49:51.340014: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cef800 of size 256
+2019-03-20 02:49:51.340024: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cef900 of size 256
+2019-03-20 02:49:51.340034: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cefa00 of size 256
+2019-03-20 02:49:51.340044: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cefb00 of size 256
+2019-03-20 02:49:51.340054: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cefc00 of size 256
+2019-03-20 02:49:51.340064: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cefd00 of size 256
+2019-03-20 02:49:51.340075: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f5cefe00 of size 25165824
+2019-03-20 02:49:51.340091: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9f74efe00 of size 25166592
+2019-03-20 02:49:51.340102: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9f8cf0100 of size 256
+2019-03-20 02:49:51.340112: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9f8cf0200 of size 50336256
+2019-03-20 02:49:51.340122: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbcf1400 of size 256
+2019-03-20 02:49:51.340133: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fbcf1500 of size 512
+2019-03-20 02:49:51.340143: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbcf1700 of size 256
+2019-03-20 02:49:51.340153: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fbcf1800 of size 1280
+2019-03-20 02:49:51.340163: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbcf1d00 of size 256
+2019-03-20 02:49:51.340173: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fbcf1e00 of size 512
+2019-03-20 02:49:51.340183: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbcf2000 of size 256
+2019-03-20 02:49:51.340194: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbcf2100 of size 73728
+2019-03-20 02:49:51.340204: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd04100 of size 256
+2019-03-20 02:49:51.340214: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd04200 of size 256
+2019-03-20 02:49:51.340224: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd04300 of size 36864
+2019-03-20 02:49:51.340234: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd0d300 of size 256
+2019-03-20 02:49:51.340245: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd0d400 of size 8192
+2019-03-20 02:49:51.340255: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd0f400 of size 256
+2019-03-20 02:49:51.340265: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd0f500 of size 18432
+2019-03-20 02:49:51.340275: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd13d00 of size 256
+2019-03-20 02:49:51.340285: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd13e00 of size 9216
+2019-03-20 02:49:51.340296: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd16200 of size 256
+2019-03-20 02:49:51.340306: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd16300 of size 256
+2019-03-20 02:49:51.340316: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd16400 of size 256
+2019-03-20 02:49:51.340326: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd16500 of size 18432
+2019-03-20 02:49:51.340336: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd1ad00 of size 256
+2019-03-20 02:49:51.340346: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd1ae00 of size 768
+2019-03-20 02:49:51.340357: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd1b100 of size 36864
+2019-03-20 02:49:51.340367: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd24100 of size 256
+2019-03-20 02:49:51.340377: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd24200 of size 73728
+2019-03-20 02:49:51.340387: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd36200 of size 256
+2019-03-20 02:49:51.340398: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd36300 of size 147456
+2019-03-20 02:49:51.340408: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd5a300 of size 256
+2019-03-20 02:49:51.340418: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbd5a400 of size 294912
+2019-03-20 02:49:51.340428: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbda2400 of size 512
+2019-03-20 02:49:51.340443: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbda2600 of size 589824
+2019-03-20 02:49:51.340454: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbe32600 of size 512
+2019-03-20 02:49:51.340464: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbe32800 of size 256
+2019-03-20 02:49:51.340475: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbe32900 of size 1179648
+2019-03-20 02:49:51.340485: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbf52900 of size 1024
+2019-03-20 02:49:51.340496: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fbf52d00 of size 3793664
+2019-03-20 02:49:51.340506: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fc2f1000 of size 256
+2019-03-20 02:49:51.340516: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc2f1100 of size 1024
+2019-03-20 02:49:51.340526: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc2f1500 of size 524288
+2019-03-20 02:49:51.340537: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc371500 of size 512
+2019-03-20 02:49:51.340547: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc371700 of size 1179648
+2019-03-20 02:49:51.340557: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc491700 of size 512
+2019-03-20 02:49:51.340568: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc491900 of size 589824
+2019-03-20 02:49:51.340578: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc521900 of size 512
+2019-03-20 02:49:51.340588: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc521b00 of size 9216
+2019-03-20 02:49:51.340598: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc523f00 of size 131072
+2019-03-20 02:49:51.340609: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc543f00 of size 256
+2019-03-20 02:49:51.340619: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc544000 of size 294912
+2019-03-20 02:49:51.340629: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc58c000 of size 256
+2019-03-20 02:49:51.340640: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc58c100 of size 147456
+2019-03-20 02:49:51.340650: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5b0100 of size 256
+2019-03-20 02:49:51.340660: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5b0200 of size 32768
+2019-03-20 02:49:51.340670: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5b8200 of size 256
+2019-03-20 02:49:51.340681: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5b8300 of size 73728
+2019-03-20 02:49:51.340691: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5ca300 of size 256
+2019-03-20 02:49:51.340701: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5ca400 of size 36864
+2019-03-20 02:49:51.340712: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5d3400 of size 256
+2019-03-20 02:49:51.340722: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5d3500 of size 8192
+2019-03-20 02:49:51.340732: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5d5500 of size 256
+2019-03-20 02:49:51.340742: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5d5600 of size 18432
+2019-03-20 02:49:51.340753: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5d9e00 of size 256
+2019-03-20 02:49:51.340763: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5d9f00 of size 9216
+2019-03-20 02:49:51.340773: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5dc300 of size 256
+2019-03-20 02:49:51.340783: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5dc400 of size 256
+2019-03-20 02:49:51.340799: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5dc500 of size 256
+2019-03-20 02:49:51.340809: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5dc600 of size 18432
+2019-03-20 02:49:51.340820: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5e0e00 of size 256
+2019-03-20 02:49:51.340830: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5e0f00 of size 768
+2019-03-20 02:49:51.340840: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5e1200 of size 36864
+2019-03-20 02:49:51.340850: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5ea200 of size 256
+2019-03-20 02:49:51.340861: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc5ea300 of size 589824
+2019-03-20 02:49:51.340871: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fc67a300 of size 256
+2019-03-20 02:49:51.340881: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc67a400 of size 256
+2019-03-20 02:49:51.340891: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fc67a500 of size 256
+2019-03-20 02:49:51.340901: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc67a600 of size 256
+2019-03-20 02:49:51.340912: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fc67a700 of size 256
+2019-03-20 02:49:51.340922: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc67a800 of size 256
+2019-03-20 02:49:51.340932: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc67a900 of size 9216
+2019-03-20 02:49:51.340943: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc67cd00 of size 131072
+2019-03-20 02:49:51.340953: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fc69cd00 of size 256
+2019-03-20 02:49:51.340963: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc69ce00 of size 256
+2019-03-20 02:49:51.340973: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc69cf00 of size 256
+2019-03-20 02:49:51.340983: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fc69d000 of size 256
+2019-03-20 02:49:51.340993: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc69d100 of size 256
+2019-03-20 02:49:51.341004: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fc69d200 of size 256
+2019-03-20 02:49:51.341014: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc69d300 of size 294912
+2019-03-20 02:49:51.341025: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc6e5300 of size 147456
+2019-03-20 02:49:51.341035: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fc709300 of size 1536
+2019-03-20 02:49:51.341045: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fc709900 of size 32768
+2019-03-20 02:49:51.341056: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fc711900 of size 5081600
+2019-03-20 02:49:51.341066: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fcbea300 of size 73728
+2019-03-20 02:49:51.341076: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fcbfc300 of size 256
+2019-03-20 02:49:51.341087: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fcbfc400 of size 6291456
+2019-03-20 02:49:51.341097: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fd1fc400 of size 147456
+2019-03-20 02:49:51.341107: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fd220400 of size 6291456
+2019-03-20 02:49:51.341117: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fd820400 of size 256
+2019-03-20 02:49:51.341128: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fd820500 of size 6291456
+2019-03-20 02:49:51.341138: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fde20500 of size 294912
+2019-03-20 02:49:51.341153: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fde68500 of size 6291456
+2019-03-20 02:49:51.341164: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fe468500 of size 512
+2019-03-20 02:49:51.341174: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9fe468700 of size 6291456
+2019-03-20 02:49:51.341184: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9fea68700 of size 589824
+2019-03-20 02:49:51.341195: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9feaf8700 of size 6291456
+2019-03-20 02:49:51.341205: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9ff0f8700 of size 512
+2019-03-20 02:49:51.341216: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9ff0f8900 of size 256
+2019-03-20 02:49:51.341226: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9ff0f8a00 of size 6291456
+2019-03-20 02:49:51.341236: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9ff6f8a00 of size 1179648
+2019-03-20 02:49:51.341247: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9ff818a00 of size 1024
+2019-03-20 02:49:51.341257: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7ef9ff818e00 of size 6291456
+2019-03-20 02:49:51.341267: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7ef9ffe18e00 of size 2359296
+2019-03-20 02:49:51.341278: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7efa00058e00 of size 6291456
+2019-03-20 02:49:51.341288: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa00658e00 of size 1024
+2019-03-20 02:49:51.341298: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7efa00659200 of size 256
+2019-03-20 02:49:51.341309: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa00659300 of size 524288
+2019-03-20 02:49:51.341319: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa006d9300 of size 512
+2019-03-20 02:49:51.341329: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7efa006d9500 of size 256
+2019-03-20 02:49:51.341340: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa006d9600 of size 512
+2019-03-20 02:49:51.341350: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7efa006d9800 of size 256
+2019-03-20 02:49:51.341360: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa006d9900 of size 512
+2019-03-20 02:49:51.341370: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa006d9b00 of size 1179648
+2019-03-20 02:49:51.341381: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa007f9b00 of size 402653184
+2019-03-20 02:49:51.341392: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa187f9b00 of size 402653184
+2019-03-20 02:49:51.341403: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa307f9b00 of size 402653184
+2019-03-20 02:49:51.341413: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa487f9b00 of size 402653184
+2019-03-20 02:49:51.341424: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa607f9b00 of size 100663296
+2019-03-20 02:49:51.341435: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa667f9b00 of size 301989888
+2019-03-20 02:49:51.341446: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa787f9b00 of size 402653184
+2019-03-20 02:49:51.341457: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa907f9b00 of size 201326592
+2019-03-20 02:49:51.341467: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efa9c7f9b00 of size 201326592
+2019-03-20 02:49:51.341478: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efaa87f9b00 of size 201326592
+2019-03-20 02:49:51.341488: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efab47f9b00 of size 50331648
+2019-03-20 02:49:51.341504: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efab77f9b00 of size 150994944
+2019-03-20 02:49:51.341515: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efac07f9b00 of size 201326592
+2019-03-20 02:49:51.341526: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efacc7f9b00 of size 100663296
+2019-03-20 02:49:51.341536: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efad27f9b00 of size 100663296
+2019-03-20 02:49:51.341547: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efad87f9b00 of size 100663296
+2019-03-20 02:49:51.341557: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efade7f9b00 of size 25165824
+2019-03-20 02:49:51.341568: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efadfff9b00 of size 75497472
+2019-03-20 02:49:51.341579: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efae47f9b00 of size 100663296
+2019-03-20 02:49:51.341589: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efaea7f9b00 of size 50331648
+2019-03-20 02:49:51.341600: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efaed7f9b00 of size 50331648
+2019-03-20 02:49:51.341610: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efaf07f9b00 of size 50331648
+2019-03-20 02:49:51.341621: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efaf37f9b00 of size 12582912
+2019-03-20 02:49:51.341632: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efaf43f9b00 of size 37748736
+2019-03-20 02:49:51.341642: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efaf67f9b00 of size 50331648
+2019-03-20 02:49:51.341653: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efaf97f9b00 of size 25165824
+2019-03-20 02:49:51.341663: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efafaff9b00 of size 25165824
+2019-03-20 02:49:51.341673: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efafc7f9b00 of size 25165824
+2019-03-20 02:49:51.341684: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7efafdff9b00 of size 25165824
+2019-03-20 02:49:51.341694: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efaff7f9b00 of size 25165824
+2019-03-20 02:49:51.341705: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb00ff9b00 of size 50331648
+2019-03-20 02:49:51.341715: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb03ff9b00 of size 50331648
+2019-03-20 02:49:51.341725: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb06ff9b00 of size 100663296
+2019-03-20 02:49:51.341736: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb0cff9b00 of size 50331648
+2019-03-20 02:49:51.341746: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb0fff9b00 of size 50331648
+2019-03-20 02:49:51.341756: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb12ff9b00 of size 25165824
+2019-03-20 02:49:51.341767: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7efb147f9b00 of size 25165824
+2019-03-20 02:49:51.341777: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb15ff9b00 of size 50331648
+2019-03-20 02:49:51.341788: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb18ff9b00 of size 100663296
+2019-03-20 02:49:51.341798: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb1eff9b00 of size 100663296
+2019-03-20 02:49:51.341809: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb24ff9b00 of size 201326592
+2019-03-20 02:49:51.341819: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb30ff9b00 of size 100663296
+2019-03-20 02:49:51.341830: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb36ff9b00 of size 100663296
+2019-03-20 02:49:51.341840: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7efb3cff9b00 of size 100663296
+2019-03-20 02:49:51.341855: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb42ff9b00 of size 100663296
+2019-03-20 02:49:51.341866: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb48ff9b00 of size 201326592
+2019-03-20 02:49:51.341877: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb54ff9b00 of size 201326592
+2019-03-20 02:49:51.341887: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb60ff9b00 of size 402653184
+2019-03-20 02:49:51.341897: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb78ff9b00 of size 201326592
+2019-03-20 02:49:51.341908: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7efb84ff9b00 of size 201326592
+2019-03-20 02:49:51.341918: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb90ff9b00 of size 201326592
+2019-03-20 02:49:51.341928: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efb9cff9b00 of size 201326592
+2019-03-20 02:49:51.341938: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efba8ff9b00 of size 402653184
+2019-03-20 02:49:51.341949: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efbc0ff9b00 of size 402653184
+2019-03-20 02:49:51.341959: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efbd8ff9b00 of size 805306368
+2019-03-20 02:49:51.341970: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efc08ff9b00 of size 402653184
+2019-03-20 02:49:51.341980: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efc20ff9b00 of size 402653184
+2019-03-20 02:49:51.341991: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efc38ff9b00 of size 402653184
+2019-03-20 02:49:51.342001: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Chunk at 0x7efc50ff9b00 of size 402653184
+2019-03-20 02:49:51.342011: I tensorflow/core/common_runtime/bfc_allocator.cc:632] Free  at 0x7efc68ff9b00 of size 360509696
+2019-03-20 02:49:51.342021: I tensorflow/core/common_runtime/bfc_allocator.cc:638]      Summary of in-use Chunks by size: 
+2019-03-20 02:49:51.342036: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 359 Chunks of size 256 totalling 89.8KiB
+2019-03-20 02:49:51.342049: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 27 Chunks of size 512 totalling 13.5KiB
+2019-03-20 02:49:51.342061: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 6 Chunks of size 768 totalling 4.5KiB
+2019-03-20 02:49:51.342073: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 12 Chunks of size 1024 totalling 12.0KiB
+2019-03-20 02:49:51.342085: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 1 Chunks of size 1280 totalling 1.2KiB
+2019-03-20 02:49:51.342097: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 6 Chunks of size 8192 totalling 48.0KiB
+2019-03-20 02:49:51.342109: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 11 Chunks of size 9216 totalling 99.0KiB
+2019-03-20 02:49:51.342121: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 12 Chunks of size 18432 totalling 216.0KiB
+2019-03-20 02:49:51.342134: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 6 Chunks of size 32768 totalling 192.0KiB
+2019-03-20 02:49:51.342146: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 11 Chunks of size 36864 totalling 396.0KiB
+2019-03-20 02:49:51.342158: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 12 Chunks of size 73728 totalling 864.0KiB
+2019-03-20 02:49:51.342170: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 6 Chunks of size 131072 totalling 768.0KiB
+2019-03-20 02:49:51.342182: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 11 Chunks of size 147456 totalling 1.55MiB
+2019-03-20 02:49:51.342193: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 12 Chunks of size 294912 totalling 3.38MiB
+2019-03-20 02:49:51.342205: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 6 Chunks of size 524288 totalling 3.00MiB
+2019-03-20 02:49:51.342216: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 11 Chunks of size 589824 totalling 6.19MiB
+2019-03-20 02:49:51.342234: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 12 Chunks of size 1179648 totalling 13.50MiB
+2019-03-20 02:49:51.342247: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 5 Chunks of size 2359296 totalling 11.25MiB
+2019-03-20 02:49:51.342259: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 1 Chunks of size 3793664 totalling 3.62MiB
+2019-03-20 02:49:51.342271: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 1 Chunks of size 12582912 totalling 12.00MiB
+2019-03-20 02:49:51.342283: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 7 Chunks of size 25165824 totalling 168.00MiB
+2019-03-20 02:49:51.342295: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 1 Chunks of size 37748736 totalling 36.00MiB
+2019-03-20 02:49:51.342307: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 10 Chunks of size 50331648 totalling 480.00MiB
+2019-03-20 02:49:51.342320: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 1 Chunks of size 75497472 totalling 72.00MiB
+2019-03-20 02:49:51.342331: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 11 Chunks of size 100663296 totalling 1.03GiB
+2019-03-20 02:49:51.342344: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 1 Chunks of size 150994944 totalling 144.00MiB
+2019-03-20 02:49:51.342355: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 10 Chunks of size 201326592 totalling 1.88GiB
+2019-03-20 02:49:51.342368: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 1 Chunks of size 301989888 totalling 288.00MiB
+2019-03-20 02:49:51.342379: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 12 Chunks of size 402653184 totalling 4.50GiB
+2019-03-20 02:49:51.342391: I tensorflow/core/common_runtime/bfc_allocator.cc:641] 1 Chunks of size 805306368 totalling 768.00MiB
+2019-03-20 02:49:51.342403: I tensorflow/core/common_runtime/bfc_allocator.cc:645] Sum Total of in-use chunks: 9.37GiB
+2019-03-20 02:49:51.342420: I tensorflow/core/common_runtime/bfc_allocator.cc:647] Stats: 
+Limit:                 10913352909
+InUse:                 10063307520
+MaxInUse:              10833261824
+NumAllocs:                    3740
+MaxAllocSize:           3623915520
+
+2019-03-20 02:49:51.342494: W tensorflow/core/common_runtime/bfc_allocator.cc:271] **************************************************************_**********************************___
+2019-03-20 02:49:51.342535: W tensorflow/core/framework/op_kernel.cc:1273] OP_REQUIRES failed at conv_grad_input_ops.cc:938 : Resource exhausted: OOM when allocating tensor with shape[8,16,768,1024] and type float on /job:localhost/replica:0/task:0/device:GPU:0 by allocator GPU_0_bfc
+
+Traceback (most recent call last):
+  File "/data2/dfranco/experimentosTFM/FIBSEM_EPFL/scripts/script_id_16.py", line 311, in <module>
+    epochs=50, callbacks=[earlystopper, checkpointer, time_callback])
+  File "/home/dfranco/anaconda3/envs/baseTFM/lib/python3.6/site-packages/keras/legacy/interfaces.py", line 91, in wrapper
+    return func(*args, **kwargs)
+  File "/home/dfranco/anaconda3/envs/baseTFM/lib/python3.6/site-packages/keras/engine/training.py", line 1418, in fit_generator
+    initial_epoch=initial_epoch)
+  File "/home/dfranco/anaconda3/envs/baseTFM/lib/python3.6/site-packages/keras/engine/training_generator.py", line 217, in fit_generator
+    class_weight=class_weight)
+  File "/home/dfranco/anaconda3/envs/baseTFM/lib/python3.6/site-packages/keras/engine/training.py", line 1217, in train_on_batch
+    outputs = self.train_function(ins)
+  File "/home/dfranco/anaconda3/envs/baseTFM/lib/python3.6/site-packages/keras/backend/tensorflow_backend.py", line 2715, in __call__
+    return self._call(inputs)
+  File "/home/dfranco/anaconda3/envs/baseTFM/lib/python3.6/site-packages/keras/backend/tensorflow_backend.py", line 2675, in _call
+    fetched = self._callable_fn(*array_vals)
+  File "/home/dfranco/anaconda3/envs/baseTFM/lib/python3.6/site-packages/tensorflow/python/client/session.py", line 1439, in __call__
+    run_metadata_ptr)
+  File "/home/dfranco/anaconda3/envs/baseTFM/lib/python3.6/site-packages/tensorflow/python/framework/errors_impl.py", line 528, in __exit__
+    c_api.TF_GetCode(self.status.status))
+tensorflow.python.framework.errors_impl.ResourceExhaustedError: OOM when allocating tensor with shape[8,16,768,1024] and type float on /job:localhost/replica:0/task:0/device:GPU:0 by allocator GPU_0_bfc
+	 [[{{node training/Adam/gradients/conv2d_19/convolution_grad/Conv2DBackpropInput}} = Conv2DBackpropInput[T=DT_FLOAT, data_format="NCHW", dilations=[1, 1, 1, 1], padding="VALID", strides=[1, 1, 1, 1], use_cudnn_on_gpu=true, _device="/job:localhost/replica:0/task:0/device:GPU:0"](training/Adam/gradients/conv2d_19/convolution_grad/ShapeN, conv2d_19/kernel/read, training/Adam/gradients/conv2d_19/Sigmoid_grad/SigmoidGrad)]]
+Hint: If you want to see a list of allocated tensors when OOM happens, add report_tensor_allocations_upon_oom to RunOptions for current allocation info.
+
