@@ -1,9 +1,10 @@
 achucarro/data
-keras_experiments/U-Net_DataScienceBowl/data-science-bowl-2018 
+keras_experiments/U-Net_DataScienceBowl/data-science-bowl-2018
 keras_experiments/U-Net_UltrasoundNerveSegmentation/ultrasound-nerve-segmentation
 keras_experiments/U-Net_UltrasoundNerveSegmentation/raw
 keras_experiments/CNN_cats_and_dogs/data
 keras_experiments/CNN_cats_and_dogs/images
 FIBSEM_EPFL/data
 FIBSEM_EPFL/results
+FIBSEM_EPFL/scripts/__pycache__
 TEM/data
