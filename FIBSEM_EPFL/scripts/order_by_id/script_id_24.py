@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, '/data2/dfranco/experimentosTFM/FIBSEM_EPFL/scripts/')
 
 # Limit the number of threads
-from aux import *
+from util import *
 limit_threads()
 
 # Try to generate the results as reproducible as possible

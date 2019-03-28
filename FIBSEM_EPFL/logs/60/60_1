@@ -1,0 +1,22 @@
+Python process limited to 1 thread
+job_id : 60
+GPU selected : 3
+Python       : 3.6.3 |Anaconda, Inc.| (default, Nov 20 2017, 20:41:42) 
+Numpy        : 1.16.2
+Keras        : 2.2.4
+Tensorflow   : 1.12.0
+Loading train images . . .
+Using TensorFlow backend.
+  0%|          | 0/165 [00:00<?, ?it/s] 39%|███▉      | 65/165 [00:00<00:00, 643.82it/s] 79%|███████▉  | 131/165 [00:00<00:00, 646.00it/s]100%|██████████| 165/165 [00:00<00:00, 651.91it/s]
+  0%|          | 0/165 [00:00<?, ?it/s] 41%|████      | 67/165 [00:00<00:00, 666.85it/s] 83%|████████▎ | 137/165 [00:00<00:00, 673.68it/s]100%|██████████| 165/165 [00:00<00:00, 677.46it/s]
+  0%|          | 0/165 [00:00<?, ?it/s] 41%|████      | 68/165 [00:00<00:00, 679.10it/s] 84%|████████▎ | 138/165 [00:00<00:00, 683.79it/s]100%|██████████| 165/165 [00:00<00:00, 688.29it/s]
+  0%|          | 0/165 [00:00<?, ?it/s] 42%|████▏     | 69/165 [00:00<00:00, 682.64it/s] 84%|████████▎ | 138/165 [00:00<00:00, 682.76it/s]100%|██████████| 165/165 [00:00<00:00, 681.32it/s]2019-03-28 19:42:26.687549: I tensorflow/core/platform/cpu_feature_guard.cc:141] Your CPU supports instructions that this TensorFlow binary was not compiled to use: SSE4.1 SSE4.2 AVX AVX2 FMA
+2019-03-28 19:42:27.064976: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1432] Found device 0 with properties: 
+name: GeForce RTX 2080 Ti major: 7 minor: 5 memoryClockRate(GHz): 1.545
+pciBusID: 0000:83:00.0
+totalMemory: 10.73GiB freeMemory: 10.53GiB
+2019-03-28 19:42:27.065036: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1511] Adding visible gpu devices: 0
+2019-03-28 19:42:27.727661: I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] Device interconnect StreamExecutor with strength 1 edge matrix:
+2019-03-28 19:42:27.727719: I tensorflow/core/common_runtime/gpu/gpu_device.cc:988]      0 
+2019-03-28 19:42:27.727738: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1001] 0:   N 
+2019-03-28 19:42:27.728746: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1115] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 10167 MB memory) -> physical GPU (device: 0, name: GeForce RTX 2080 Ti, pci bus id: 0000:83:00.0, compute capability: 7.5)

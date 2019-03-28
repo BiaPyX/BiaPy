@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, '/data2/dfranco/experimentosTFM/FIBSEM_EPFL/scripts/')
 
 # Limit the number of threads
-from aux import *
+from util import *
 limit_threads()
 
 # Try to generate the results as reproducible as possible
@@ -141,8 +141,11 @@ if len(sys.argv) > 1 and test_id == "1":
 
 
 #####################
-#      RESULTS      #
+#  SCORES OBTAINED  #
 #####################
+
+#VOC
+voc = voc_calculation(preds_test_t, Y_test, score[1])
 
 # Time
 print("Epoch average time: ", np.mean(time_callback.times))
@@ -155,12 +158,13 @@ print("Test loss:", score[0])
 print("Train mean_iou:", np.max(results.history['mean_iou']))
 print("Validation mean_iou:", np.max(results.history['val_mean_iou']))
 print("Test mean_iou:", score[1])
+print("VOC: ", voc)
 print("Epoch number:", len(results.history['val_loss']))
 
 # If we are running multiple tests store the results
 if len(sys.argv) > 1:
 
-    store_history(results, score, time_callback, log_file, history_file)
+    store_history(results, score, voc, time_callback, log_file, history_file)
 
     if test_id == "1":
         create_plots(results, job_id, CHAR_DIR)

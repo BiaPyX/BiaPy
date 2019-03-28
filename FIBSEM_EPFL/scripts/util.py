@@ -58,8 +58,8 @@ def mean_iou(y_true, y_pred):
     """Define IoU metric 
 
        Args:
-            y_true (array): ground truth masks
-            y_pred (array): predicted masks
+            y_true (array): ground truth masks.
+            y_pred (array): predicted masks.
     """
 
     prec = []
@@ -71,6 +71,42 @@ def mean_iou(y_true, y_pred):
             score = tf.identity(score)
         prec.append(score)
     return K.mean(K.stack(prec), axis=0)
+
+def voc_calculation(y_pred, y_true, foreground_iou):
+    """Calculate VOC metric value
+
+        Args:
+            y_pred (array): predicted masks.
+            y_true (array): ground truth masks.
+    
+        Return:
+            voc (int): VOC score value
+    """
+    
+    # Invert the arrays
+    y_pred[y_pred == 0] = 2
+    y_pred[y_pred == 1] = 0
+    y_pred[y_pred == 2] = 1
+
+    y_true[y_true == 0] = 2
+    y_true[y_true == 1] = 0
+    y_true[y_true == 2] = 1
+    
+    with tf.Session() as sess:
+        ypredT = tf.constant(np.argmax(y_pred, axis=-1))
+        ytrueT = tf.constant(np.argmax(y_true, axis=-1))
+        iou,conf_mat = tf.metrics.mean_iou(ytrueT, ypredT, num_classes=3)
+        sess.run(tf.local_variables_initializer())
+        sess.run([conf_mat])
+        background_iou = sess.run([iou])
+
+    voc = (float)(foreground_iou + background_iou)/2
+
+    print("Foreground IoU: " + str(foreground_iou))
+    print("Background IoU: " + str(background_iou))
+    print("VOC: " + str(voc))
+        
+    return voc
 
 
 def create_plots(results, job_id, chartOutDir):
@@ -112,7 +148,7 @@ def create_plots(results, job_id, chartOutDir):
     plt.clf()
 
 
-def store_history(results, test_score, time_callback, csv_file,
+def store_history(results, test_score, voc, time_callback, csv_file,
                   history_file, metric='mean_iou'):
     """Stores the results obtained as csv to manipulate them later 
        and labeled in another file as historic results.
@@ -122,6 +158,7 @@ def store_history(results, test_score, time_callback, csv_file,
             and metrics values at successive epochs.
             test_score (array of 2 int): loss and mean_iou obtained with
             the test data.
+            voc (float): VOC score obtained.
             time_callback: time structure with the time of each epoch.
             csv_file (str): path where the csv file will be stored.
             history_file (str): path where the historic results will be
@@ -140,6 +177,7 @@ def store_history(results, test_score, time_callback, csv_file,
             + str(np.max(results.history[metric])) + ',' 
             + str(np.max(results.history['val_' + metric])) + ',' 
             + str(test_score[1]) + ',' 
+            + str(voc) + ','
             + str(len(results.history['val_loss'])) + ',' 
             + str(np.mean(time_callback.times)) + ','
             + str(np.sum(time_callback.times)) + '\n')
@@ -166,5 +204,8 @@ def store_history(results, test_score, time_callback, csv_file,
     f.write('############## TEST ' + metric.upper()
             + ' ############## \n')
     f.write(str(test_score[1]) + '\n')
+    f.write('############## VOC ############## \n')
+    f.write(str(voc) + '\n')
+    f.close()
 
 

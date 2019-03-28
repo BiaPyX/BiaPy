@@ -5,6 +5,8 @@ keras_experiments/U-Net_UltrasoundNerveSegmentation/raw
 keras_experiments/CNN_cats_and_dogs/data
 keras_experiments/CNN_cats_and_dogs/images
 FIBSEM_EPFL/data
+FIBSEM_EPFL/aug_x
+FIBSEM_EPFL/aug_y
 FIBSEM_EPFL/results
 FIBSEM_EPFL/scripts/__pycache__
 TEM/data
