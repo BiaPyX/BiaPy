@@ -55,14 +55,14 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     print('Loading train images . . .')
     sys.stdout.flush()
     for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
-        img = imread(train_path + id_)
+        img = imread(os.path.join(train_path, id_))
         img = np.expand_dims(img, axis=-1)
         X_train[n] = img
     
     print('Loading train masks . . .')
     for n, id_ in tqdm(enumerate(train_mask_ids),
                        total=len(train_mask_ids)):
-        mask = imread(train_mask_path + id_)
+        mask = imread(os.path.join(train_mask_path, id_))
         mask = np.expand_dims(mask, axis=-1)
         Y_train[n] = mask
     
@@ -76,14 +76,14 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     
     print('Loading test images . . .')
     for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):
-        img = imread(test_path + id_)
+        img = imread(os.path.join(test_path, id_))
         img = np.expand_dims(img, axis=-1)
         X_test[n] = img
     
     print('Loading test masks . . .')
     for n, id_ in tqdm(enumerate(test_mask_ids), 
                        total=len(test_mask_ids)):
-        mask = imread(test_mask_path + id_)
+        mask = imread(os.path.join(test_mask_path, id_))
         mask = np.expand_dims(mask, axis=-1)
         Y_test[n] = mask
     

@@ -1,8 +1,6 @@
 import os
 import mkl
 import numpy as np
-from keras import backend as K
-import tensorflow as tf
 from tensorflow import set_random_seed
 import time
 import keras
@@ -54,63 +52,8 @@ class TimeHistory(keras.callbacks.Callback):
         self.times.append(time.time() - self.epoch_time_start)
 
 
-def mean_iou(y_true, y_pred):
-    """Define IoU metric 
-
-       Args:
-            y_true (array): ground truth masks.
-            y_pred (array): predicted masks.
-    """
-
-    prec = []
-    for t in np.arange(0.5, 1.0, 0.05):
-        y_pred_ = tf.to_int32(y_pred > t)
-        score, up_opt = tf.metrics.mean_iou(y_true, y_pred_, 2)
-        K.get_session().run(tf.local_variables_initializer())
-        with tf.control_dependencies([up_opt]):
-            score = tf.identity(score)
-        prec.append(score)
-    return K.mean(K.stack(prec), axis=0)
-
-def voc_calculation(y_pred, y_true, foreground_iou):
-    """Calculate VOC metric value
-
-        Args:
-            y_pred (array): predicted masks.
-            y_true (array): ground truth masks.
-    
-        Return:
-            voc (int): VOC score value
-    """
-    
-    # Invert the arrays
-    y_pred[y_pred == 0] = 2
-    y_pred[y_pred == 1] = 0
-    y_pred[y_pred == 2] = 1
-
-    y_true[y_true == 0] = 2
-    y_true[y_true == 1] = 0
-    y_true[y_true == 2] = 1
-    
-    with tf.Session() as sess:
-        ypredT = tf.constant(np.argmax(y_pred, axis=-1))
-        ytrueT = tf.constant(np.argmax(y_true, axis=-1))
-        iou,conf_mat = tf.metrics.mean_iou(ytrueT, ypredT, num_classes=3)
-        sess.run(tf.local_variables_initializer())
-        sess.run([conf_mat])
-        background_iou = sess.run([iou])
-
-    voc = (float)(foreground_iou + background_iou)/2
-
-    print("Foreground IoU: " + str(foreground_iou))
-    print("Background IoU: " + str(background_iou))
-    print("VOC: " + str(voc))
-        
-    return voc
-
-
 def create_plots(results, job_id, chartOutDir):
-    """Create loss and mean_iou plots with the given matrix results
+    """Create loss and jaccard_index plots with the given matrix results
 
        Args:
             results (history object): record of training loss values 
@@ -135,36 +78,45 @@ def create_plots(results, job_id, chartOutDir):
     plt.savefig(os.path.join(chartOutDir , str(job_id) + '_loss.png'))
     plt.clf()
 
-    # Mean_iou
-    plt.plot(results.history['mean_iou'])
-    plt.plot(results.history['val_mean_iou'])
-    plt.title('Model JOBID=' + job_id + ' mean_iou')
+    # Jaccard index
+    plt.plot(results.history['jaccard_index'])
+    plt.plot(results.history['val_jaccard_index'])
+    plt.title('Model JOBID=' + job_id + ' jaccard_index')
     plt.ylabel('Value')
     plt.xlabel('Epoch')
-    plt.legend(['Train mean_iou', 'Val. mean_iou'], loc='upper left')
+    plt.legend(['Train jaccard_index', 'Val. jaccard_index'], 
+               loc='upper left')
     plt.savefig(os.path.join(chartOutDir , str(job_id) 
-                + '_meanIOU.png'))
+                + '_jaccard_index.png'))
     plt.clf()
     plt.clf()
 
 
-def store_history(results, test_score, voc, time_callback, csv_file,
-                  history_file, metric='mean_iou'):
+def store_history(results, test_score, voc, time_callback, log_dir, 
+                  job_file, metric='jaccard_index'):
     """Stores the results obtained as csv to manipulate them later 
        and labeled in another file as historic results.
 
        Args:
             results (history object): record of training loss values
             and metrics values at successive epochs.
-            test_score (array of 2 int): loss and mean_iou obtained with
-            the test data.
+            test_score (array of 2 int): loss and jaccard_index obtained
+            with the test data.
             voc (float): VOC score obtained.
             time_callback: time structure with the time of each epoch.
             csv_file (str): path where the csv file will be stored.
             history_file (str): path where the historic results will be
             stored.
-            metric (str, optional): metric used (e.g. mean_iou).
+            metric (str, optional): metric used (e.g. jaccard_index).
     """
+
+    # Create folders and construct file names
+    if not os.path.exists(log_dir):                                      
+        os.makedirs(log_dir)
+    csv_file = os.path.join(log_dir, 'formatted', job_file)          
+    history_file = os.path.join(log_folder, 'history_of_values',        
+                                job_file)
+
     # Store the results as csv
     try:
         os.remove(csv_file)
@@ -207,5 +159,4 @@ def store_history(results, test_score, voc, time_callback, csv_file,
     f.write('############## VOC ############## \n')
     f.write(str(voc) + '\n')
     f.close()
-
 
