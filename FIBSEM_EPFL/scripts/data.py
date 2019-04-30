@@ -181,6 +181,12 @@ def da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
     
     # Check a few of generated images
     if (save_examples == True):
+
+        if not os.path.exists('aug_x'):          
+            os.makedirs('aug_x')                 
+        if not os.path.exists('aug_y'):          
+            os.makedirs('aug_y')                 
+     
         i=0
         for batch in X_datagen_train.flow(X_train, save_to_dir="aug_x",\
                                           batch_size=batch_size_value,
