@@ -12,4 +12,5 @@ FIBSEM_EPFL/scripts/__pycache__
 FIBSEM_EPFL/logs
 FIBSEM_EPFL/charts
 FIBSEM_EPFL/h5_files
+FIBSEM_EPFL/jupyterNotebooks
 TEM/data

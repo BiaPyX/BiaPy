@@ -79,6 +79,7 @@ TEST_PATH = os.path.join('data', 'test', 'x')
 TEST_MASK_PATH = os.path.join('data', 'test', 'y')                      
 RESULT_DIR = os.path.join('results', 'results_', job_id)
 CHAR_DIR='charts'
+H5_DIR='h5_files'
 
 # Define time callback
 time_callback = TimeHistory()
@@ -135,8 +136,12 @@ model.summary()
 # Fit model
 earlystopper = EarlyStopping(patience=50, verbose=1,
                              restore_best_weights=True)
-checkpointer = ModelCheckpoint('model.fibsem.h5', verbose=1,
-                               save_best_only=True)
+
+if not os.path.exists(H5_DIR):                                      
+    os.makedirs(H5_DIR)
+checkpointer = ModelCheckpoint(os.path.join(H5_DIR, 'model.fibsem_'     
+                                                    + job_file +'.h5'), 
+                               verbose=1, save_best_only=True)
 
 results = model.fit_generator(train_generator, 
                               validation_data=val_generator,

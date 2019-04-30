@@ -1,39 +1,0 @@
-Python process limited to 1 thread
-job_id : 43
-GPU selected : 0
-Python       : 3.6.3 |Anaconda, Inc.| (default, Nov 20 2017, 20:41:42) 
-Numpy        : 1.16.2
-Keras        : 2.2.4
-Tensorflow   : 1.12.0
-Loading train images . . .
-Using TensorFlow backend.
-  0%|          | 0/165 [00:00<?, ?it/s] 40%|████      | 66/165 [00:00<00:00, 652.01it/s] 81%|████████  | 134/165 [00:00<00:00, 658.61it/s]100%|██████████| 165/165 [00:00<00:00, 664.54it/s]
-  0%|          | 0/165 [00:00<?, ?it/s] 39%|███▉      | 64/165 [00:00<00:00, 632.46it/s] 80%|████████  | 132/165 [00:00<00:00, 643.62it/s]100%|██████████| 165/165 [00:00<00:00, 645.88it/s]
-  0%|          | 0/165 [00:00<?, ?it/s] 36%|███▌      | 59/165 [00:00<00:00, 583.66it/s] 72%|███████▏  | 118/165 [00:00<00:00, 583.10it/s]100%|██████████| 165/165 [00:00<00:00, 581.18it/s]
-  0%|          | 0/165 [00:00<?, ?it/s] 37%|███▋      | 61/165 [00:00<00:00, 604.57it/s] 76%|███████▌  | 125/165 [00:00<00:00, 612.90it/s]100%|██████████| 165/165 [00:00<00:00, 625.65it/s]
-Loading train masks . . .
-Loading test images . . .
-Loading test masks . . .
-####################
-####################
-<class 'tuple'>
-####################
-(<tf.Tensor 'metrics/jaccard_distance2/false_negatives/Identity:0' shape=() dtype=float32>, <tf.Tensor 'metrics/jaccard_distance2/false_negatives/AssignAdd:0' shape=() dtype=float32_ref>)
-This is a tuple (<tf.Tensor 'metrics/jaccard_distance2/false_negatives/Identity:0' shape=() dtype=float32>, <tf.Tensor 'metrics/jaccard_distance2/false_negatives/AssignAdd:0' shape=() dtype=float32_ref>)
-####################
-Tensor("metrics/jaccard_distance2/Shape:0", shape=(1,), dtype=int32)
-Tensor("metrics/jaccard_distance2/Shape_1:0", shape=(1,), dtype=int32)
-Tensor("metrics/jaccard_distance2/Shape_2:0", shape=(1,), dtype=int32)
-####################
-Traceback (most recent call last):
-  File "/data2/dfranco/experimentosTFM/FIBSEM_EPFL/scripts/order_by_id/script_id_43.py", line 114, in <module>
-    metrics=[jaccard_distance2])
-  File "/home/dfranco/anaconda3/envs/baseTFM/lib/python3.6/site-packages/keras/engine/training.py", line 451, in compile
-    handle_metrics(output_metrics)
-  File "/home/dfranco/anaconda3/envs/baseTFM/lib/python3.6/site-packages/keras/engine/training.py", line 420, in handle_metrics
-    mask=masks[i])
-  File "/home/dfranco/anaconda3/envs/baseTFM/lib/python3.6/site-packages/keras/engine/training_utils.py", line 404, in weighted
-    score_array = fn(y_true, y_pred)
-  File "/data2/dfranco/experimentosTFM/FIBSEM_EPFL/scripts/jaccard.py", line 56, in jaccard_distance2
-    jac = TP / (TP + FP + FN)
-TypeError: unsupported operand type(s) for /: 'tuple' and 'tuple'
