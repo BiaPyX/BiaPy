@@ -44,7 +44,7 @@ if len(sys.argv) > 1:
     job_id = str(sys.argv[2])                                             
     test_id = str(sys.argv[3])                                            
     job_file = job_id + '_' + test_id                                     
-    log_folder = os.path.join(str(sys.argv[4]), job_id)                   
+    log_dir = os.path.join(str(sys.argv[4]), job_id)                   
 
 # Checks
 print('job_id :', job_id)
@@ -74,6 +74,7 @@ TEST_PATH = os.path.join('data', 'test', 'x')
 TEST_MASK_PATH = os.path.join('data', 'test', 'y')                      
 RESULT_DIR = os.path.join('results', 'results_', job_id)
 CHAR_DIR = 'charts'
+H5_DIR='h5_files'
 
 # Define time callback
 time_callback = TimeHistory()
@@ -120,8 +121,12 @@ model.summary()
 # Fit model
 earlystopper = EarlyStopping(patience=50, verbose=1, 
                              restore_best_weights=True)
-checkpointer = ModelCheckpoint('model.fibsem.h5', verbose=1,
-                               save_best_only=True)
+
+if not os.path.exists(H5_DIR):                                          
+    os.makedirs(H5_DIR)                                                 
+checkpointer = ModelCheckpoint(os.path.join(H5_DIR, 'model.fibsem_'
+                                                    + job_file +'.h5'),       
+                               verbose=1, save_best_only=True)
 
 results = model.fit_generator(train_generator, 
                               validation_data=val_generator,
@@ -136,13 +141,13 @@ results = model.fit_generator(train_generator,
 #    PREDICTION     #
 #####################
 
-print("Making the predictions on the new data . . .")
-
 # Evaluate to obtain the loss and jaccard index                         
+print("Evaluating test data . . .")
 score = model.evaluate(X_test, Y_test, batch_size=batch_size_value,      
-                       verbose=0)                                       
-                                                                        
+                       verbose=1)                                       
+
 # Predict on test                                                       
+print("Making the predictions on test data . . .")
 preds_test = model.predict(X_test, batch_size=batch_size_value,         
                            verbose=1)
 
@@ -150,10 +155,10 @@ preds_test = model.predict(X_test, batch_size=batch_size_value,
 preds_test_t = (preds_test > 0.5).astype(np.uint8)
 
 # Save the resulting images 
-print("Saving the resulting images . . .")
 if not os.path.exists(RESULT_DIR):
     os.makedirs(RESULT_DIR)
 if len(sys.argv) > 1 and test_id == "1":
+    print("Saving predicted images . . .")
     for i in range(0,len(preds_test)):
         im = Image.fromarray(preds_test[i,:,:,0]*255)
         im = im.convert('L')

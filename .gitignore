@@ -9,5 +9,7 @@ FIBSEM_EPFL/aug_x
 FIBSEM_EPFL/aug_y
 FIBSEM_EPFL/results
 FIBSEM_EPFL/scripts/__pycache__
-FIBSEM_EPFL/log/
+FIBSEM_EPFL/logs
+FIBSEM_EPFL/charts
+FIBSEM_EPFL/h5_files
 TEM/data

@@ -1,8 +1,10 @@
 ##########################
 #        PREAMBLE        #
 ##########################
-import sys
-sys.path.insert(0, '/data2/dfranco/experimentosTFM/FIBSEM_EPFL/scripts/')
+import os                                                               
+import sys                                                              
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                '..'))
 
 # Limit the number of threads
 from util import *
@@ -38,11 +40,11 @@ import math
 
 # Take arguments
 if len(sys.argv) > 1:
-    gpu_selected=str(sys.argv[1])
-    job_id=str(sys.argv[2])
-    test_id=str(sys.argv[3])
-    log_file=str(sys.argv[4])
-    history_file=str(sys.argv[5])
+    gpu_selected = str(sys.argv[1])                                       
+    job_id = str(sys.argv[2])                                             
+    test_id = str(sys.argv[3])                                            
+    job_file = job_id + '_' + test_id                                     
+    log_dir = os.path.join(str(sys.argv[4]), job_id)                   
 
 # Checks
 print('job_id :', job_id)
@@ -51,11 +53,11 @@ print('Python       :', sys.version.split('\n')[0])
 print('Numpy        :', np.__version__)
 print('Keras        :', keras.__version__)
 print('Tensorflow   :', tf.__version__)
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID";
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
 if len(sys.argv) > 1:
-    os.environ["CUDA_VISIBLE_DEVICES"]=gpu_selected;
+    os.environ["CUDA_VISIBLE_DEVICES"] = gpu_selected;
 else:
-    os.environ["CUDA_VISIBLE_DEVICES"]="3";
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3";
 
 # Go to the experiments base dir
 os.chdir("/data2/dfranco/experimentosTFM/FIBSEM_EPFL")
@@ -65,22 +67,23 @@ img_width = 1024
 img_height = 768
 img_channels = 1
 
-# Paths to put data and results 
-TRAIN_PATH = 'data/train/x/'
-TRAIN_MASK_PATH = 'data/train/y/'
-TEST_PATH = 'data/test/x/'
-TEST_MASK_PATH = 'data/test/y/'
-RESULT_DIR='results/results_' + str(job_id)
-CHAR_DIR='charts'
+# Paths to data and results                                             
+TRAIN_PATH = os.path.join('data', 'train', 'x')                         
+TRAIN_MASK_PATH = os.path.join('data', 'train', 'y')                    
+TEST_PATH = os.path.join('data', 'test', 'x')                           
+TEST_MASK_PATH = os.path.join('data', 'test', 'y')                      
+RESULT_DIR = os.path.join('results', 'results_', job_id)
+CHAR_DIR = 'charts'
+H5_DIR='h5_files'
 
 # Define time callback
 time_callback = TimeHistory()
 
 # Additional variables
-batch_size_value=1
-momentum_value=0.99
-learning_rate_value=0.01
-epochs_value=360
+batch_size_value = 1
+momentum_value = 0.99
+learning_rate_value = 0.01
+epochs_value = 360
 
 ##########################
 #       LOAD DATA        #
@@ -91,7 +94,7 @@ X_train, Y_train, X_val, Y_val, X_test, Y_test = load_data(TRAIN_PATH,
                                              TEST_PATH,
                                              TEST_MASK_PATH,
                                              [img_height, img_width,
-                                             img_channels])
+                                              img_channels])
 
 
 ##########################
@@ -118,37 +121,44 @@ model.summary()
 # Fit model
 earlystopper = EarlyStopping(patience=50, verbose=1, 
                              restore_best_weights=True)
-checkpointer = ModelCheckpoint('model.fibsem.h5', verbose=1,
-                               save_best_only=True)
+
+if not os.path.exists(H5_DIR):                                          
+    os.makedirs(H5_DIR)                                                 
+checkpointer = ModelCheckpoint(os.path.join(H5_DIR, 'model.fibsem_'
+                                                    + job_file +'.h5'),       
+                               verbose=1, save_best_only=True)
 
 results = model.fit_generator(train_generator, 
                               validation_data=val_generator,
                               validation_steps=math.ceil(len(X_val)/batch_size_value),
                               steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
-                              epochs=epochs_value, callbacks=[earlystopper, 
-                              checkpointer, time_callback])
+                              epochs=epochs_value, 
+                              callbacks=[earlystopper, checkpointer,
+                              time_callback])
 
 
 #####################
 #    PREDICTION     #
 #####################
 
-print("Making the predictions on the new data . . .")
+# Evaluate to obtain the loss and jaccard index                         
+print("Evaluating test data . . .")
+score = model.evaluate(X_test, Y_test, batch_size=batch_size_value,      
+                       verbose=1)                                       
 
-# Evaluate to obtain the loss and jaccard index
-score = model.evaluate(X_test,Y_test, verbose=0)
-
-# Predict on test
-preds_test = model.predict(X_test, verbose=1)
+# Predict on test                                                       
+print("Making the predictions on test data . . .")
+preds_test = model.predict(X_test, batch_size=batch_size_value,         
+                           verbose=1)
 
 # Threshold predictions
 preds_test_t = (preds_test > 0.5).astype(np.uint8)
 
 # Save the resulting images 
-print("Saving the resulting images . . .")
 if not os.path.exists(RESULT_DIR):
     os.makedirs(RESULT_DIR)
 if len(sys.argv) > 1 and test_id == "1":
+    print("Saving predicted images . . .")
     for i in range(0,len(preds_test)):
         im = Image.fromarray(preds_test[i,:,:,0]*255)
         im = im.convert('L')
@@ -181,8 +191,7 @@ print("Epoch number:", len(results.history['val_loss']))
 # If we are running multiple tests store the results
 if len(sys.argv) > 1:
 
-    store_history(results, score, voc, time_callback, log_file,
-                  history_file)
+    store_history(results, score, voc, time_callback, log_dir, job_file)
 
     if test_id == "1":
         create_plots(results, job_id, CHAR_DIR)

@@ -111,11 +111,12 @@ def store_history(results, test_score, voc, time_callback, log_dir,
     """
 
     # Create folders and construct file names
-    if not os.path.exists(log_dir):                                      
-        os.makedirs(log_dir)
     csv_file = os.path.join(log_dir, 'formatted', job_file)          
-    history_file = os.path.join(log_folder, 'history_of_values',        
-                                job_file)
+    history_file = os.path.join(log_dir, 'history_of_values', job_file)
+    if not os.path.exists(os.path.join(log_dir, 'formatted')):
+        os.makedirs(os.path.join(log_dir, 'formatted'))
+    if not os.path.exists(os.path.join(log_dir, 'history_of_values')):
+        os.makedirs(os.path.join(log_dir, 'history_of_values'))
 
     # Store the results as csv
     try:

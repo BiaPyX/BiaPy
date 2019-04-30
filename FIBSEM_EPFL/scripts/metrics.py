@@ -1,3 +1,4 @@
+import time
 from keras import backend as K
 import tensorflow as tf
 
@@ -145,12 +146,13 @@ def voc_calculation(y_true, y_pred, foreground):
     y_true[y_true == 1] = 0
     y_true[y_true == 2] = 1
     elapsed_time = time.time() - start_time                             
-    print("Time inverting arrays: " + elapsed_time)
+    print("Time inverting arrays: " + str(elapsed_time))
 
     start_time = time.time()
     background = jaccard_index(y_true, y_pred)
     elapsed_time = time.time() - start_time                             
-    print("Time calculating jaccard of the background: " + elapsed_time)
+    print("Time calculating jaccard of the background: "
+          + str(elapsed_time))
 
     sess = tf.InteractiveSession()
     background = background.eval(session=sess)
