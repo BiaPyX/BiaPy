@@ -1,9 +1,9 @@
 ##########################
 #        PREAMBLE        #
 ##########################
-import os                                                               
-import sys                                                              
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+import os
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 
                                 '..'))
 
 # Limit the number of threads
@@ -67,23 +67,28 @@ img_width = 1024
 img_height = 768
 img_channels = 1
 
+# Dimension to obtain in the crop
+img_width_crop = 256
+img_height_crop = 256
+img_channels_crop = 1
+
 # Paths to data and results                                             
 TRAIN_PATH = os.path.join('data', 'train', 'x')                         
 TRAIN_MASK_PATH = os.path.join('data', 'train', 'y')                    
 TEST_PATH = os.path.join('data', 'test', 'x')                           
 TEST_MASK_PATH = os.path.join('data', 'test', 'y')                      
 RESULT_DIR = os.path.join('results', 'results_', job_id)
-CHAR_DIR = 'charts'
+CHAR_DIR='charts'
 H5_DIR='h5_files'
 
 # Define time callback
 time_callback = TimeHistory()
 
 # Additional variables
-batch_size_value = 1
+batch_size_value = 4
 momentum_value = 0.99
-learning_rate_value = 0.01
-epochs_value = 150
+learning_rate_value = 0.01                                                
+epochs_value = 360
 
 ##########################
 #       LOAD DATA        #
@@ -96,15 +101,24 @@ X_train, Y_train, X_val, Y_val, X_test, Y_test = load_data(TRAIN_PATH,
                                              [img_height, img_width,
                                               img_channels])
 
+# Crop the data to the desired size
+X_train, Y_train = crop_data(X_train, Y_train, img_width_crop,
+                             img_height_crop)
+X_val, Y_val = crop_data(X_val, Y_val, img_width_crop, img_height_crop)
+X_test, Y_test = crop_data(X_test, Y_test, img_width_crop,
+                             img_height_crop)
+img_width = img_width_crop
+img_height = img_height_crop
+img_channels = img_channels_crop
+
 
 ##########################
 #    DATA AUGMENTATION   #
 ##########################
 
-train_generator, val_generator = da_generator(X_train, Y_train, X_val,  
-                                              Y_val, batch_size_value,  
-                                              job_id)                                    
-
+train_generator, val_generator = da_generator(X_train, Y_train, X_val,
+                                              Y_val, batch_size_value)
+                                              
 
 ##########################
 #    BUILD THE NETWORK   #
@@ -120,13 +134,13 @@ model.compile(optimizer=sdg, loss='binary_crossentropy',
 model.summary()
 
 # Fit model
-earlystopper = EarlyStopping(patience=50, verbose=1, 
+earlystopper = EarlyStopping(patience=50, verbose=1,
                              restore_best_weights=True)
 
-if not os.path.exists(H5_DIR):                                          
-    os.makedirs(H5_DIR)                                                 
-checkpointer = ModelCheckpoint(os.path.join(H5_DIR, 'model.fibsem_'
-                                                    + job_file +'.h5'),       
+if not os.path.exists(H5_DIR):                                      
+    os.makedirs(H5_DIR)
+checkpointer = ModelCheckpoint(os.path.join(H5_DIR, 'model.fibsem_'     
+                                                    + job_file +'.h5'), 
                                verbose=1, save_best_only=True)
 
 results = model.fit_generator(train_generator, 
@@ -135,7 +149,7 @@ results = model.fit_generator(train_generator,
                               steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
                               epochs=epochs_value, 
                               callbacks=[earlystopper, checkpointer,
-                              time_callback])
+                                         time_callback])
 
 
 #####################
@@ -143,14 +157,14 @@ results = model.fit_generator(train_generator,
 #####################
 
 # Evaluate to obtain the loss and jaccard index                         
-print("Evaluating test data . . .")
-score = model.evaluate(X_test, Y_test, batch_size=batch_size_value,      
+print("Evaluating test data . . .")                                     
+score = model.evaluate(X_test, Y_test, batch_size=batch_size_value,     
                        verbose=1)                                       
-
+                                                                        
 # Predict on test                                                       
-print("Making the predictions on test data . . .")
+print("Making the predictions on test data . . .")                      
 preds_test = model.predict(X_test, batch_size=batch_size_value,         
-                           verbose=1)
+                           verbose=1) 
 
 # Threshold predictions
 preds_test_t = (preds_test > 0.5).astype(np.uint8)
@@ -183,7 +197,7 @@ print("Train loss:", np.min(results.history['loss']))
 print("Validation loss:", np.min(results.history['val_loss']))
 print("Test loss:", score[0])
 print("Train jaccard_index:", np.max(results.history['jaccard_index']))
-print("Validation jaccard_index:", 
+print("Validation jaccard_index:",
       np.max(results.history['val_jaccard_index']))
 print("Test jaccard_index:", score[1])
 print("VOC: ", voc)

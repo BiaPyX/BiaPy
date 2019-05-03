@@ -96,6 +96,26 @@ X_train, Y_train, X_val, Y_val, X_test, Y_test = load_data(TRAIN_PATH,
                                              [img_height, img_width,
                                               img_channels])
 
+print(X_train.shape)
+print(Y_train.shape)
+print(X_val.shape)
+print(Y_val.shape)
+print(X_test.shape)
+print(Y_test.shape)
+
+
+for i in range(0,len(X_train)):                                  
+    im = Image.fromarray(X_train[i,:,:,0])                   
+    im = im.convert('L')                                            
+    im.save(os.path.join("/data2/dfranco/150/","xtrain_" + str(i) + ".png"))
+for i in range(0,len(X_val)):                                  
+    im = Image.fromarray(X_val[i,:,:,0])                   
+    im = im.convert('L')                                            
+    im.save(os.path.join("/data2/dfranco/150/","xval_" + str(i) + ".png"))
+for i in range(0,len(X_test)):                                  
+    im = Image.fromarray(X_test[i,:,:,0])                   
+    im = im.convert('L')                                            
+    im.save(os.path.join("/data2/dfranco/150/","xtest_" + str(i) + ".png"))
 
 ##########################
 #    DATA AUGMENTATION   #
@@ -105,6 +125,25 @@ train_generator, val_generator = da_generator(X_train, Y_train, X_val,
                                               Y_val, batch_size_value,  
                                               job_id)                                    
 
+print(X_train.shape)                                                    
+print(Y_train.shape)                                                    
+print(X_val.shape)                                                      
+print(Y_val.shape)                                                      
+print(X_test.shape)                                                     
+print(Y_test.shape)
+for i in range(0,len(X_train)):                                         
+    im = Image.fromarray(X_train[i,:,:,0])                          
+    im = im.convert('L')                                                
+    im.save(os.path.join("/data2/dfranco/150/","da_xtrain_" + str(i) + ".png"))
+for i in range(0,len(X_val)):                                           
+    im = Image.fromarray(X_val[i,:,:,0])                          
+    im = im.convert('L')                                                
+    im.save(os.path.join("/data2/dfranco/150/","da_xval_" + str(i) + ".png"))
+for i in range(0,len(X_test)):                                          
+    im = Image.fromarray(X_test[i,:,:,0])                          
+    im = im.convert('L')                                                
+    im.save(os.path.join("/data2/dfranco/150/","da_xtest_" + str(i) + ".png"))
+sys.exit(0)
 
 ##########################
 #    BUILD THE NETWORK   #

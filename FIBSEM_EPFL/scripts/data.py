@@ -103,7 +103,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
 
 # Custom function to rotate the images with a fixed degree
-def fixed_dregee(image):
+def fixed_degree_rotation(image):
     """Rotate given image with a fixed degree
 
        Args:
@@ -126,9 +126,9 @@ def fixed_dregee(image):
 
 
 def da_generator(X_train, Y_train, X_val, Y_val, batch_size_value, 
-                 save_examples=True, hflip=True, vflip=True, 
-                 seedValue=42, fill_mode='reflect', 
-                 preproc_function=True):
+                 job_id, save_examples=True, aug_base_dir='aug', 
+                 hflip=True, vflip=True, seedValue=42, 
+                 fill_mode='reflect', preproc_function=True):
     """Makes data augmentation of the given input data.
 
        Args:
@@ -137,8 +137,11 @@ def da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             X_val (numpy array): validation data.
             Y_val (numpy array): validation mask data.
             batch_size_value (int): batch size.
+            job_id (str): job identifier. 
             save_examples (bool, optional): if true 5 examples of DA 
             are stored.
+            aug_base_dir (str): data augmentation base directory to
+            store generated files.
             hflip (bool, optional): if true horizontal flips are made.
             vflip (bool, optional): if true vertical flip are made.
             seedValue (int, optional): seed value.
@@ -158,7 +161,7 @@ def da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
         data_gen_args = dict(horizontal_flip=hflip,
                              vertical_flip=vflip,
                              fill_mode=fill_mode,
-                             preprocessing_function=fixed_dregee)
+                             preprocessing_function=fixed_degree_rotation)
     else:
         data_gen_args = dict(horizontal_flip=hflip,
                              vertical_flip=vflip,
@@ -181,14 +184,15 @@ def da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
     
     # Check a few of generated images
     if (save_examples == True):
-
-        if not os.path.exists('aug_x'):          
-            os.makedirs('aug_x')                 
-        if not os.path.exists('aug_y'):          
-            os.makedirs('aug_y')                 
+        aug_x = os.path.join('aug', job_id, 'x')
+        aug_y = os.path.join('aug', job_id, 'y')
+        if not os.path.exists(aug_x):          
+            os.makedirs(aug_x)                 
+        if not os.path.exists(aug_y):          
+            os.makedirs(aug_y)
      
         i=0
-        for batch in X_datagen_train.flow(X_train, save_to_dir="aug_x",\
+        for batch in X_datagen_train.flow(X_train, save_to_dir=aug_x,\
                                           batch_size=batch_size_value,
                                           shuffle=True, seed=seedValue,
                                           save_prefix='x',
@@ -197,7 +201,7 @@ def da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             if i > 5:
                 break
         i=0
-        for batch in Y_datagen_train.flow(Y_train, save_to_dir="aug_y",\
+        for batch in Y_datagen_train.flow(Y_train, save_to_dir=aug_y,\
                                           batch_size=batch_size_value,
                                           shuffle=True, seed=seedValue,
                                           save_prefix='y',

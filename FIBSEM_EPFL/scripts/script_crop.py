@@ -85,7 +85,7 @@ H5_DIR='h5_files'
 time_callback = TimeHistory()
 
 # Additional variables
-batch_size_value = 1
+batch_size_value = 6
 momentum_value = 0.99
 learning_rate_value = 0.01                                                
 epochs_value = 360
@@ -117,7 +117,8 @@ img_channels = img_channels_crop
 ##########################
 
 train_generator, val_generator = da_generator(X_train, Y_train, X_val,
-                                              Y_val, batch_size_value)
+                                              Y_val, batch_size_value, 
+                                              job_id)
                                               
 
 ##########################
