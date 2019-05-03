@@ -88,7 +88,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         Y_test[n] = mask
     
     Y_test = Y_test/255
-
+    
     if (create_val == True):    
         X_train, X_val, \
         Y_train, Y_val = train_test_split(X_train,
@@ -260,8 +260,9 @@ def crop_data(data, data_mask, width, height):
     for img_num in range(0, data.shape[0]):
         for i in range(0, h_num):
             for j in range(0, v_num):
-                cropped_data[cont]= data[img_num, (i*256):((i+1)*256),
-                                         (j*256):((j+1)*256)]
+                cropped_data[cont]= data[img_num,
+                                         (i*width):((i+1)*height),
+                                         (j*width):((j+1)*height)]
                 cont=cont+1
 
     # Crop mask data
@@ -272,8 +273,8 @@ def crop_data(data, data_mask, width, height):
         for i in range(0, h_num):
             for j in range(0, v_num):
                 cropped_data_mask[cont]= data_mask[img_num,
-                                                  (i*256):((i+1)*256),
-                                                  (j*256):((j+1)*256)]
+                                                  (i*width):((i+1)*height),
+                                                  (j*width):((j+1)*height)]
                 cont=cont+1
 
     return cropped_data, cropped_data_mask
