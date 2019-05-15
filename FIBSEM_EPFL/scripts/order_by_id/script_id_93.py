@@ -77,7 +77,7 @@ TRAIN_PATH = os.path.join('data', 'train', 'x')
 TRAIN_MASK_PATH = os.path.join('data', 'train', 'y')                    
 TEST_PATH = os.path.join('data', 'test', 'x')                           
 TEST_MASK_PATH = os.path.join('data', 'test', 'y')                      
-RESULT_DIR = os.path.join('results', 'results_', job_id)
+RESULT_DIR = os.path.join('results', 'results_' + job_id)
 CHAR_DIR='charts'
 H5_DIR='h5_files'
 
@@ -85,9 +85,9 @@ H5_DIR='h5_files'
 time_callback = TimeHistory()
 
 # Additional variables
-batch_size_value = 3
+batch_size_value = 5
 momentum_value = 0.99
-learning_rate_value = 0.01                                                
+learning_rate_value = 0.001
 epochs_value = 360
 
 ##########################

@@ -255,7 +255,7 @@ def crop_data(data, data_mask, width, height):
 
     # Crop data
     cropped_data = np.zeros((total_cropped, width, height, 
-                            data.shape[3]), dtype=np.uint8)
+                             data.shape[3]), dtype=np.uint8)
     cont=0
     for img_num in range(0, data.shape[0]):
         for i in range(0, h_num):
@@ -267,7 +267,7 @@ def crop_data(data, data_mask, width, height):
 
     # Crop mask data
     cropped_data_mask = np.zeros((total_cropped, width, height, 
-                            data.shape[3]), dtype=np.uint8)
+                                  data.shape[3]), dtype=np.uint8)
     cont=0
     for img_num in range(0, data.shape[0]):
         for i in range(0, h_num):

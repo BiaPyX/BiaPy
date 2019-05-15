@@ -87,7 +87,7 @@ time_callback = TimeHistory()
 # Additional variables
 batch_size_value = 3
 momentum_value = 0.99
-learning_rate_value = 0.01                                                
+learning_rate_value = 0.001
 epochs_value = 360
 
 ##########################
