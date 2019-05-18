@@ -18,7 +18,7 @@ set_seed(42)
 #        IMPORTS         #
 ##########################
 
-from data_da import *
+from data import *
 from unet import *
 from metrics import *
 import random
@@ -85,25 +85,28 @@ H5_DIR='h5_files'
 time_callback = TimeHistory()
 
 # Additional variables
-batch_size_value = 3
+batch_size_value = 4
 momentum_value = 0.99
 learning_rate_value = 0.001
-epochs_value = 360
+epochs_value = 240
 
 ##########################
 #       LOAD DATA        #
 ##########################
 
 X_train, Y_train, X_val, Y_val, X_test, Y_test = load_data(TRAIN_PATH,
-                                             TRAIN_MASK_PATH, TEST_PATH,
-                                             TEST_MASK_PATH, [img_height,
-                                                              img_width,
-                                                              img_channels])
+                                             TRAIN_MASK_PATH,
+                                             TEST_PATH,
+                                             TEST_MASK_PATH,
+                                             [img_height, img_width,
+                                              img_channels])
 
 # Crop the data to the desired size
-X_train, Y_train = crop_data(X_train, Y_train, img_width_crop, img_height_crop)
+X_train, Y_train = crop_data(X_train, Y_train, img_width_crop,
+                             img_height_crop)
 X_val, Y_val = crop_data(X_val, Y_val, img_width_crop, img_height_crop)
-X_test, Y_test = crop_data(X_test, Y_test, img_width_crop, img_height_crop)
+X_test, Y_test = crop_data(X_test, Y_test, img_width_crop,
+                             img_height_crop)
 img_width = img_width_crop
 img_height = img_height_crop
 img_channels = img_channels_crop
@@ -113,14 +116,9 @@ img_channels = img_channels_crop
 #    DATA AUGMENTATION   #
 ##########################
 
-train_generator, val_generator = da_generator(job_id, X_train, Y_train, X_val,
-                                              Y_val, batch_size=batch_size_value,
-                                              transform_prob=0.9,
-                                              dim=(img_width_crop,img_height_crop),
-                                              n_channels=1, shuffle=False,
-                                              elastic_transform=False, 
-                                              vflip=False, hflip=False,
-                                              rotation=False, seedValue=42)
+train_generator, val_generator = da_generator(X_train, Y_train, X_val,
+                                              Y_val, batch_size_value, 
+                                              job_id)
                                               
 
 ##########################
@@ -128,27 +126,31 @@ train_generator, val_generator = da_generator(job_id, X_train, Y_train, X_val,
 ##########################
 
 model = U_Net([img_height, img_width, img_channels])
-sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
-                           decay=0.0, nesterov=False)
+sdg = keras.optimizers.SGD(lr=learning_rate_value,
+                           momentum=momentum_value, decay=0.0,
+                           nesterov=False)
 
-model.compile(optimizer=sdg, loss='binary_crossentropy', metrics=[jaccard_index])
+model.compile(optimizer=sdg, loss='binary_crossentropy',
+              metrics=[jaccard_index])
 model.summary()
 
 # Fit model
-earlystopper = EarlyStopping(patience=50, verbose=1, restore_best_weights=True)
+earlystopper = EarlyStopping(patience=epochs_value, verbose=1,
+                             restore_best_weights=True)
 
 if not os.path.exists(H5_DIR):                                      
     os.makedirs(H5_DIR)
-checkpointer = ModelCheckpoint(os.path.join(H5_DIR, 'model.fibsem_' + job_file 
-                                                    +'.h5'),
+checkpointer = ModelCheckpoint(os.path.join(H5_DIR, 'model.fibsem_'     
+                                                    + job_file +'.h5'), 
                                verbose=1, save_best_only=True)
 
-results = model.fit_generator(train_generator, validation_data=val_generator,
+results = model.fit_generator(train_generator, 
+                              validation_data=val_generator,
                               validation_steps=math.ceil(len(X_val)/batch_size_value),
                               steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
-                              epochs=epochs_value, callbacks=[earlystopper, 
-                                                              checkpointer,
-                                                              time_callback])
+                              epochs=epochs_value, 
+                              callbacks=[earlystopper, checkpointer,
+                                         time_callback])
 
 
 #####################
@@ -157,11 +159,13 @@ results = model.fit_generator(train_generator, validation_data=val_generator,
 
 # Evaluate to obtain the loss and jaccard index                         
 print("Evaluating test data . . .")                                     
-score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)                                       
+score = model.evaluate(X_test, Y_test, batch_size=batch_size_value,     
+                       verbose=1)                                       
                                                                         
 # Predict on test                                                       
 print("Making the predictions on test data . . .")                      
-preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1) 
+preds_test = model.predict(X_test, batch_size=batch_size_value,         
+                           verbose=1) 
 
 # Threshold predictions
 preds_test_t = (preds_test > 0.5).astype(np.uint8)
@@ -194,7 +198,8 @@ print("Train loss:", np.min(results.history['loss']))
 print("Validation loss:", np.min(results.history['val_loss']))
 print("Test loss:", score[0])
 print("Train jaccard_index:", np.max(results.history['jaccard_index']))
-print("Validation jaccard_index:", np.max(results.history['val_jaccard_index']))
+print("Validation jaccard_index:",
+      np.max(results.history['val_jaccard_index']))
 print("Test jaccard_index:", score[1])
 print("VOC: ", voc)
 print("Epoch number:", len(results.history['val_loss']))

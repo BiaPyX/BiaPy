@@ -85,10 +85,10 @@ H5_DIR='h5_files'
 time_callback = TimeHistory()
 
 # Additional variables
-batch_size_value = 6
+batch_size_value = 4
 momentum_value = 0.99
 learning_rate_value = 0.001
-epochs_value = 360
+epochs_value = 200
 
 ##########################
 #       LOAD DATA        #
@@ -135,7 +135,7 @@ model.compile(optimizer=sdg, loss='binary_crossentropy',
 model.summary()
 
 # Fit model
-earlystopper = EarlyStopping(patience=50, verbose=1,
+earlystopper = EarlyStopping(patience=epochs_value, verbose=1,
                              restore_best_weights=True)
 
 if not os.path.exists(H5_DIR):                                      

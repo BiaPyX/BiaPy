@@ -113,15 +113,21 @@ img_channels = img_channels_crop
 #    DATA AUGMENTATION   #
 ##########################
 
-train_generator, val_generator = da_generator(job_id, X_train, Y_train, X_val,
-                                              Y_val, batch_size=batch_size_value,
-                                              transform_prob=0.9,
-                                              dim=(img_width_crop,img_height_crop),
-                                              n_channels=1, shuffle=False,
-                                              elastic_transform=False, 
-                                              vflip=False, hflip=False,
-                                              rotation=False, seedValue=42)
-                                              
+data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value, 
+                     dim=(img_width_crop,img_height_crop), n_channels=1,
+                     shuffle=False, seedValue=42, transform_prob=0.9,
+                     elastic_transform=False, vflip=True, hflip=True,
+                     rotation=True)
+
+data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
+                         dim=(img_width_crop,img_height_crop), n_channels=1,
+                         shuffle=False, seedValue=42, transform_prob=0,
+                         elastic_transform=False, vflip=False, hflip=False,
+                         rotation=False)
+
+train_generator = ImageDataGenerator(**data_gen_args)
+val_generator = ImageDataGenerator(**data_gen_val_args)
+
 
 ##########################
 #    BUILD THE NETWORK   #
