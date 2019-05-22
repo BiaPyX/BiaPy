@@ -18,7 +18,7 @@ set_seed(42)
 #        IMPORTS         #
 ##########################
 
-from data import *
+from data_overfitting import *
 from unet import *
 from metrics import *
 import random
