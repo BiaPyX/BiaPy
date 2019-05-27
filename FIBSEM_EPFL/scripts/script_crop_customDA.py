@@ -115,15 +115,12 @@ img_channels = img_channels_crop
 
 data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                      dim=(img_width_crop,img_height_crop), n_channels=1,
-                     shuffle=True, transform_prob=0.9,
-                     elastic_transform=True, vflip=True, hflip=True,
-                     rotation=True)
+                     shuffle=True, da=True, e_prob=0.9, elastic=False, 
+                     vflip=True, hflip=True, rotation=True)
 
 data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
                          dim=(img_width_crop,img_height_crop), n_channels=1,
-                         shuffle=False, transform_prob=0,
-                         elastic_transform=False, vflip=False, hflip=False,
-                         rotation=False)
+                         shuffle=False, da=False)
 
 train_generator = ImageDataGenerator(**data_gen_args)
 val_generator = ImageDataGenerator(**data_gen_val_args)
@@ -187,6 +184,12 @@ if len(sys.argv) > 1 and test_id == "1":
 #####################
 #  SCORES OBTAINED  #
 #####################
+
+# Data augmentation statistics
+print("Training generator statistics . . .") 
+train_generator.print_da_stats()
+print("Validation generator statistics . . .")
+val_generator.print_da_stats()
 
 # VOC
 print("Calculating VOC . . .")

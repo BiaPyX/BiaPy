@@ -88,7 +88,7 @@ time_callback = TimeHistory()
 batch_size_value = 6
 momentum_value = 0.99
 learning_rate_value = 0.005
-epochs_value = 370
+epochs_value = 10
 
 ##########################
 #       LOAD DATA        #

@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 from scipy.ndimage.interpolation import map_coordinates
 from scipy.ndimage.filters import gaussian_filter
 from PIL import Image
-
+from texttable import Texttable
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_shape, create_val=True, val_split=0.1, seedValue=42):                                            
@@ -147,7 +147,6 @@ def crop_data(data, data_mask, width, height):
     return cropped_data, cropped_data_mask                              
 
                           
-# Function to distort image
 def elastic_transform(image, alpha, sigma, alpha_affine, seed=None):
     """ Elastic deformation of images as described in [Simard2003]_ (with i
         modifications).
@@ -155,7 +154,6 @@ def elastic_transform(image, alpha, sigma, alpha_affine, seed=None):
         Convolutional Neural Networks applied to Visual Document Analysis", in
         Proc. of the International Conference on Document Analysis and
         Recognition, 2003.
-
         Based on:
             https://gist.github.com/erniejunior/601cdf56d2b424757de5
         Code obtained from:
@@ -196,15 +194,14 @@ def elastic_transform(image, alpha, sigma, alpha_affine, seed=None):
 
 class ImageDataGenerator(keras.utils.Sequence):
     """ Custom ImageDataGenerator.
-
         Based on:
             https://github.com/czbiohub/microDL 
             https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly
     """
 
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
-                 shuffle=False, transform_prob=0.9, elastic_transform=False,
-                 vflip=False, hflip=False, rotation=False):
+                 shuffle=False, da=True, e_prob=0.9, elastic=False, vflip=False,
+                 hflip=False, rotation=False):
         """ ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
@@ -215,9 +212,10 @@ class ImageDataGenerator(keras.utils.Sequence):
             n_channels (int, optional): number of channels of the input images.
             shuffle (bool, optional): to decide if the indexes will be shuffled
             after every epoch. 
-            transform_prob (float, optional): value between 0 and 1 to determine 
-            the probability of doing transformations to the original images. 
-            elastic_transform (bool, optional): to make elastic transformations.
+            da (bool, optional): to activate the data augmentation. 
+            e_prob (float, optional): probability of making elastic
+            transformations. 
+            elastic (bool, optional): to make elastic transformations.
             vflip (bool, optional): if true vertical flip are made.
             hflip (bool, optional): if true horizontal flips are made.          
             rotation (bool, optional): to make rotations of 90º, 180º or 270º.
@@ -229,24 +227,17 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.X = X
         self.n_channels = n_channels
         self.shuffle = shuffle
-        self.transform_prob = transform_prob
-        self.elastic_transform = elastic_transform
+        self.da = da
+        self.e_prob = e_prob
+        self.elastic = elastic
         self.vflip = vflip
         self.hflip = hflip
         self.rotation = rotation
         self.on_epoch_end()
-    
-        self.choices = []                                                       
-        if self.elastic_transform == True:                                           
-            self.choices.append(0)                                              
-        if self.vflip == True:                                                       
-            self.choices.append(1)                                              
-        if self.hflip == True:                                                       
-            self.choices.append(2)                                              
-        if self.rotation == True:                                                    
-            self.choices.append(3)                                              
-            self.choices.append(4)                                              
-            self.choices.append(5)
+            
+        # Create a list which will hold a counter of the number of times a 
+        # transformation is performed. 
+        self.t_counter = [0 ,0 ,0 ,0 ,0 ,0] 
 
     def __len__(self):
         """ Defines the number of batches per epoch. """
@@ -254,7 +245,6 @@ class ImageDataGenerator(keras.utils.Sequence):
 
     def __getitem__(self, index):
         """ Generation of one batch data. 
-
             Arg:
                 index (int): batch index counter.
             
@@ -270,13 +260,22 @@ class ImageDataGenerator(keras.utils.Sequence):
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         
         for i, j in zip( range(0,self.batch_size), indexes ):
-            if len(self.choices) == 0: 
+            if self.da == False: 
                  batch_x[i], batch_y[i] = self.X[j], self.Y[j]
             else:
                 batch_x[i], batch_y[i], _ = self.apply_transform(self.X[j],
                                                               self.Y[j])
  
         return batch_x, batch_y
+
+    def print_da_stats(self):
+        """ Print the counter of the transformations made in a table. """
+        t = Texttable()
+        t.add_rows([['Elastic', 'V. flip', 'H. flip', '90º rot.', '180º rot.',
+                     '270º rot.'], [self.t_counter[0], self.t_counter[1],
+                     self.t_counter[2], self.t_counter[3], self.t_counter[4], 
+                     self.t_counter[5]] ])
+        print(t.draw())
 
     def on_epoch_end(self):
         """ Updates indexes after each epoch. """
@@ -285,7 +284,7 @@ class ImageDataGenerator(keras.utils.Sequence):
             np.random.shuffle(self.indexes)
 
     def __draw_grid(self, im, grid_width=50, m=False):
-        """ Draw grid of the specified size on a image. 
+        """ Draw grid of the specified size on an image. 
            
             Arg:                                                                
                 im (2D numpy array): image to be modified.
@@ -316,61 +315,92 @@ class ImageDataGenerator(keras.utils.Sequence):
                 elastic transfomations to visualize it clearly. Do not set this 
                 option to train the network!
         """
+        trans_image = image
+        trans_mask = mask
+        transform_string = '' 
+        transformed = False
 
+        # Elastic transformation
         prob = random.uniform(0, 1)
-        transform_string = 'none'
+        if (self.elastic == True or flow == True) and prob < self.e_prob:
 
-        if prob < self.transform_prob or flow == True:
-            # Select one of the transformations randomly
-            transform_id = np.random.choice(self.choices, 1)
+            if flow == True:
+                self.__draw_grid(trans_image)
+                self.__draw_grid(trans_mask, m=True)
 
-            # Elastic transformation
-            if transform_id == 0:
-                
-                if flow == True:
-                    self.__draw_grid(image)
-                    self.__draw_grid(mask, m=True)
+            im_concat = np.concatenate((trans_image, trans_mask), axis=2)            
 
-                im_concat = np.concatenate((image, mask), axis=2)            
+            im_concat_r = elastic_transform(im_concat, im_concat.shape[1]*2,
+                                            im_concat.shape[1]*0.08,
+                                            im_concat.shape[1]*0.08)
 
-                im_concat_r = elastic_transform(im_concat, im_concat.shape[1]*2,
-                                                im_concat.shape[1]*0.08,
-                                                im_concat.shape[1]*0.08)
+            trans_image = np.expand_dims(im_concat_r[...,0], axis=-1)
+            trans_mask = np.expand_dims(im_concat_r[...,1], axis=-1)
+            transform_string = '_e'
+            transformed = True
+            self.t_counter[0] = self.t_counter[0] + 1
+     
+ 
+        # [0-0.25) : vertical flip
+        # [0.25-0.5): horizontal flip
+        # [0.5-0.75): vertical + horizontal flip
+        # [0.75-1]: nothing
+        #
+        # Vertical flip
+        prob = random.uniform(0, 1)
+        if (self.vflip == True or flow == True) and 0 <= prob < 0.25:
+            trans_image = np.flip(trans_image, 0)
+            trans_mask = np.flip(trans_mask, 0)
+            transform_string = transform_string + '_vf'
+            transformed = True 
+            self.t_counter[1] = self.t_counter[1] + 1
+        # Horizontal flip
+        elif (self.hflip == True or flow == True) and 0.25 <= prob < 0.5:
+            trans_image = np.flip(trans_image, 1)
+            trans_mask = np.flip(trans_mask, 1)
+            transform_string = transform_string + '_hf'
+            transformed = True
+            self.t_counter[2] = self.t_counter[2] + 1 
+        # Vertical and horizontal flip
+        elif (self.hflip == True or flow == True) and 0.5 <= prob < 0.75:
+            trans_image = np.flip(trans_image, 0)                               
+            trans_mask = np.flip(trans_mask, 0)
+            trans_image = np.flip(trans_image, 1)                               
+            trans_mask = np.flip(trans_mask, 1)
+            
+        
+        # [0-0.25) : 90º rotation
+        # [0.25-0.5): 180º rotation
+        # [0.5-0.75): 270º rotation
+        # [0.75-1]: nothing
+        #
+        # 90 degree rotation
+        prob = random.uniform(0, 1)
+        if (self.rotation == True or flow == True) and 0 <= prob < 0.25:
+            trans_image = np.rot90(trans_image)
+            trans_mask = np.rot90(trans_mask)
+            transform_string = transform_string + '_r90'
+            transformed = True 
+            self.t_counter[3] = self.t_counter[3] + 1
+        # 180 degree rotation
+        elif (self.rotation == True or flow == True) and 0.25 <= prob < 0.5:
+            trans_image = np.rot90(trans_image, 2)
+            trans_mask = np.rot90(trans_mask, 2)
+            transform_string = transform_string + '_r180'
+            transformed = True 
+            self.t_counter[4] = self.t_counter[4] + 1
+        # 270 degree rotation
+        if (self.rotation == True or flow == True) and 0.5 <= prob < 0.75:
+            trans_image = np.rot90(trans_image, 3)
+            trans_mask = np.rot90(trans_mask, 3)
+            transform_string = transform_string + '_r270'
+            transformed = True 
+            self.t_counter[5] = self.t_counter[5] + 1
 
-                trans_image = np.expand_dims(im_concat_r[...,0], axis=-1)
-                trans_mask = np.expand_dims(im_concat_r[...,1], axis=-1)
-                transform_string = 'elastic'
-            # Vertical flip
-            elif transform_id == 1:
-                trans_image = np.flip(image, 0)
-                trans_mask = np.flip(mask, 0)
-                transform_string = 'vflip'
-            # Horizontal flip
-            elif transform_id == 2:
-                trans_image = np.flip(image, 1)
-                trans_mask = np.flip(mask, 1)
-                transform_string = 'hflip'
-            # 90 degree rotation
-            elif transform_id == 3:
-                trans_image = np.rot90(image)
-                trans_mask = np.rot90(mask)
-                transform_string = 'r90'
-            # 180 degree rotation
-            elif transform_id == 4:
-                trans_image = np.rot90(image, 2)
-                trans_mask = np.rot90(mask, 2)
-                transform_string = 'r180'
-            # 270 degree rotation
-            elif transform_id == 5:
-                trans_image = np.rot90(image, 3)
-                trans_mask = np.rot90(mask, 3)
-                transform_string = 'r270'
-            else:
-                msg = str(transform_id) + " not in allowed aug_idx: 0-5"
-                raise ValueError(msg)
-            return trans_image, trans_mask, transform_string
-        else:
-            return image, mask, transform_string
+        if transformed == False:
+            transform_string = '_none'         
+
+        return trans_image, trans_mask, transform_string
 
 
     def flow_on_examples(self, num_examples, job_id="none_job_id", 
@@ -395,6 +425,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                 dataset. If False the examples will be generated from the start
                 of the dataset. 
         """
+        print("Creating the examples of data augmentation . . .")
 
         prefix = ""
         if save_prefix != None: 
@@ -414,26 +445,26 @@ class ImageDataGenerator(keras.utils.Sequence):
             im = self.X[pos]
             mask = self.Y[pos]
 
-            out_im, out_mask, t_st = self.apply_transform(im, mask, flow=True)
+            out_im, out_mask, t_str = self.apply_transform(im, mask, flow=True)
 
             out_im = Image.fromarray(out_im[:,:,0])                           
             out_im = out_im.convert('L')                                                    
-            out_im.save(os.path.join(save_dir, prefix + 'x_' + str(pos) + '_' 
-                                     + t_st + ".png"))          
+            out_im.save(os.path.join(save_dir, prefix + 'x_' + str(pos) + t_str 
+                                     + ".png"))          
                  
             out_mask = Image.fromarray(out_mask[:,:,0]*255)                           
             out_mask = out_mask.convert('L')                                                    
-            out_mask.save(os.path.join(save_dir, prefix + 'y_' + str(pos) + '_' 
-                                       + t_st + ".png"))          
-                 
-            if original_elastic == True and t_st == 'elastic': 
+            out_mask.save(os.path.join(save_dir, prefix + 'y_' + str(pos) + t_str
+                                       + ".png"))          
+                
+            # Save also the original images if an elastic transformation was made
+            if original_elastic == True and '_e' in t_str: 
                 im = Image.fromarray(im[:,:,0])
                 im = im.convert('L')
-                im.save(os.path.join(save_dir, prefix + 'x_' + str(pos) + '_'
-                                     + t_st + '_original.png'))
+                im.save(os.path.join(save_dir, prefix + 'x_' + str(pos) + t_str 
+                                     + '_original.png'))
 
                 mask = Image.fromarray(mask[:,:,0]*255)
                 mask = mask.convert('L')
-                mask.save(os.path.join(save_dir, prefix + 'y_' + str(pos) + '_'
-                                       + t_st + '_original.png'))
-
+                mask.save(os.path.join(save_dir, prefix + 'y_' + str(pos) + t_str
+                                       + '_original.png'))

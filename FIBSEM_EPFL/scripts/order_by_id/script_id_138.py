@@ -85,10 +85,10 @@ H5_DIR='h5_files'
 time_callback = TimeHistory()
 
 # Additional variables
-batch_size_value = 4
+batch_size_value = 6
 momentum_value = 0.99
-learning_rate_value = 0.001
-epochs_value = 10
+learning_rate_value = 0.005
+epochs_value = 400
 
 ##########################
 #       LOAD DATA        #
