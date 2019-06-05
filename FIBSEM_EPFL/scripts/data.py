@@ -390,7 +390,7 @@ class ImageDataGenerator(keras.utils.Sequence):
             transformed = True 
             self.t_counter[4] = self.t_counter[4] + 1
         # 270 degree rotation
-        if (self.rotation == True or flow == True) and 0.5 <= prob < 0.75:
+        elif (self.rotation == True or flow == True) and 0.5 <= prob < 0.75:
             trans_image = np.rot90(trans_image, 3)
             trans_mask = np.rot90(trans_mask, 3)
             transform_string = transform_string + '_r270'
@@ -438,7 +438,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         # Generate the examples 
         for i in range(0,num_examples):
             if random_images == True:
-                pos = random.randint(1,self.X.shape[0]) 
+                pos = random.randint(1,self.X.shape[0]-1) 
             else:
                 pos = cont 
 

@@ -85,7 +85,7 @@ H5_DIR='h5_files'
 time_callback = TimeHistory()
 
 # Additional variables
-batch_size_value = 4
+batch_size_value = 6
 momentum_value = 0.99
 learning_rate_value = 0.001
 epochs_value = 360
@@ -115,7 +115,7 @@ img_channels = img_channels_crop
 
 data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                      dim=(img_width_crop,img_height_crop), n_channels=1,
-                     shuffle=True, da=True, e_prob=0.9, elastic=False, 
+                     shuffle=True, da=True, e_prob=0.4, elastic=False, 
                      vflip=True, hflip=True, rotation=True)
 
 data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,

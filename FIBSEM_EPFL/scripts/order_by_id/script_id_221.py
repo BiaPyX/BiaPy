@@ -18,7 +18,7 @@ set_seed(42)
 #        IMPORTS         #
 ##########################
 
-from data_2 import *
+from data import *
 from unet import *
 from metrics import *
 import random
@@ -115,9 +115,8 @@ img_channels = img_channels_crop
 
 data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                      dim=(img_width_crop,img_height_crop), n_channels=1,
-                     shuffle=True, da=True, e_prob=0.9, flip_prob=0.5, 
-                     rot_prob=0.25, elastic=True, vflip=True, hflip=True,
-                     rotation=True)
+                     shuffle=True, da=True, e_prob=0.4, elastic=False, 
+                     vflip=True, hflip=True, rotation=True)
 
 data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
                          dim=(img_width_crop,img_height_crop), n_channels=1,
@@ -132,7 +131,7 @@ train_generator.flow_on_examples(10, job_id=job_id)
 #    BUILD THE NETWORK   #
 ##########################
 
-model = U_Net([img_height, img_width, img_channels])
+model = U_Net([img_height, img_width, img_channels], activation="relu")
 sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)
 

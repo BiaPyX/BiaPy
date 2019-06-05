@@ -18,7 +18,7 @@ set_seed(42)
 #        IMPORTS         #
 ##########################
 
-from data_2 import *
+from data_fullimage import *
 from unet import *
 from metrics import *
 import random
@@ -67,11 +67,6 @@ img_width = 1024
 img_height = 768
 img_channels = 1
 
-# Dimension to obtain in the crop
-img_width_crop = 256
-img_height_crop = 256
-img_channels_crop = 1
-
 # Paths to data and results                                             
 TRAIN_PATH = os.path.join('data', 'train', 'x')                         
 TRAIN_MASK_PATH = os.path.join('data', 'train', 'y')                    
@@ -85,7 +80,7 @@ H5_DIR='h5_files'
 time_callback = TimeHistory()
 
 # Additional variables
-batch_size_value = 6
+batch_size_value = 1
 momentum_value = 0.99
 learning_rate_value = 0.001
 epochs_value = 360
@@ -99,28 +94,18 @@ X_train, Y_train, \
 X_val, Y_val, \
 X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
                            TEST_MASK_PATH, [img_height, img_width, img_channels])
-
-# Crop the data to the desired size
-X_train, Y_train = crop_data(X_train, Y_train, img_width_crop, img_height_crop)
-X_val, Y_val = crop_data(X_val, Y_val, img_width_crop, img_height_crop)
-X_test, Y_test = crop_data(X_test, Y_test, img_width_crop, img_height_crop)
-img_width = img_width_crop
-img_height = img_height_crop
-img_channels = img_channels_crop
-
-
+print(X_train.shape)
 ##########################
 #    DATA AUGMENTATION   #
 ##########################
 
 data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
-                     dim=(img_width_crop,img_height_crop), n_channels=1,
-                     shuffle=True, da=True, e_prob=0.9, flip_prob=0.5, 
-                     rot_prob=0.25, elastic=True, vflip=True, hflip=True,
-                     rotation=True)
+                     dim=(img_height,img_width), n_channels=1,
+                     shuffle=True, da=True, e_prob=0.7, elastic=True, 
+                     vflip=False, hflip=False, rotation=True)
 
 data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
-                         dim=(img_width_crop,img_height_crop), n_channels=1,
+                         dim=(img_height,img_width), n_channels=1,
                          shuffle=False, da=False)
 
 train_generator = ImageDataGenerator(**data_gen_args)

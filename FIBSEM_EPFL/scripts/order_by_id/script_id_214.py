@@ -104,26 +104,18 @@ time_callback = TimeHistory()
 #       LOAD DATA        #
 ##########################
 
-if discard_cropped_images == True and os.path.exists(TRAIN_CROP_DISCARD_PATH):
+if discard_cropped_images == True \
+   and not os.path.exists(TRAIN_CROP_DISCARD_PATH):
     X_train, Y_train, \
-    X_val, Y_val, \
-    X_test, Y_test = load_data(TRAIN_CROP_DISCARD_PATH, 
-                               TRAIN_CROP_DISCARD_MASK_PATH, 
-                               TEST_CROP_DISCARD_PATH,              
-                               TEST_CROP_DISCARD_MASK_PATH, 
-                               [img_height_crop, img_width_crop,
-                                img_channels_crop])
-else:
-    X_train, Y_train, \
-    X_val, Y_val, \
     X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
                                TEST_MASK_PATH, 
-                               [img_height, img_width, img_channels])
+                               [img_height, img_width, img_channels],
+                               create_val=False)
 
     # Crop the data to the desired size
-    X_train, Y_train = crop_data(X_train, Y_train, img_width_crop, img_height_crop,
-                                 discard=True, d_percentage=d_percentage_value)
-    X_val, Y_val = crop_data(X_val, Y_val, img_width_crop, img_height_crop)
+    X_train, Y_train = crop_data(X_train, Y_train, img_width_crop, 
+                                 img_height_crop, discard=True,     
+                                 d_percentage=d_percentage_value)
     X_test, Y_test = crop_data(X_test, Y_test, img_width_crop, img_height_crop)
     
     # Save cropped and discarded images for future runs
@@ -154,10 +146,17 @@ else:
         im = im.convert('L')                                                    
         im.save(os.path.join(TEST_CROP_DISCARD_MASK_PATH,                      
                              "y_test_" + str(i) + ".png"))
+    del X_train, Y_train, X_test, Y_test
+    
 img_width = img_width_crop
 img_height = img_height_crop
 img_channels = img_channels_crop
 
+X_train, Y_train, \
+X_val, Y_val, \
+X_test, Y_test = load_data(TRAIN_CROP_DISCARD_PATH, TRAIN_CROP_DISCARD_MASK_PATH,                    
+                           TEST_CROP_DISCARD_PATH, TEST_CROP_DISCARD_MASK_PATH,                     
+                           [img_height, img_width, img_channels])
 
 ##########################
 #    DATA AUGMENTATION   #

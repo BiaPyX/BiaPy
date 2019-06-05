@@ -468,7 +468,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         # Generate the examples
         for i in range(0,num_examples):
             if random_images == True:
-                pos = random.randint(1,self.X.shape[0])
+                pos = random.randint(1,self.X.shape[0]-1)
             else:
                 pos = cont
 

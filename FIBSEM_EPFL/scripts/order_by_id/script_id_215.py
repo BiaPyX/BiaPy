@@ -18,7 +18,7 @@ set_seed(42)
 #        IMPORTS         #
 ##########################
 
-from data_2 import *
+from data_discard import *
 from unet import *
 from metrics import *
 import random
@@ -72,11 +72,27 @@ img_width_crop = 256
 img_height_crop = 256
 img_channels_crop = 1
 
+# Additional variables                                                          
+batch_size_value = 6                                                            
+momentum_value = 0.99                                                           
+learning_rate_value = 0.001                                                     
+epochs_value = 360                                                              
+d_percentage_value = 0.10                                                       
+discard_cropped_images = True
+
 # Paths to data and results                                             
 TRAIN_PATH = os.path.join('data', 'train', 'x')                         
 TRAIN_MASK_PATH = os.path.join('data', 'train', 'y')                    
 TEST_PATH = os.path.join('data', 'test', 'x')                           
 TEST_MASK_PATH = os.path.join('data', 'test', 'y')                      
+TRAIN_CROP_DISCARD_PATH = os.path.join('data_d', str(d_percentage_value),
+                                       'train', 'x')                                 
+TRAIN_CROP_DISCARD_MASK_PATH = os.path.join('data_d', str(d_percentage_value),
+                                            'train', 'y')
+TEST_CROP_DISCARD_PATH = os.path.join('data_d', str(d_percentage_value), 
+                                      'test', 'x')                                   
+TEST_CROP_DISCARD_MASK_PATH = os.path.join('data_d', str(d_percentage_value), 
+                                           'test', 'y')
 RESULT_DIR = os.path.join('results', 'results_' + job_id)
 CHAR_DIR='charts'
 H5_DIR='h5_files'
@@ -84,44 +100,76 @@ H5_DIR='h5_files'
 # Define time callback
 time_callback = TimeHistory()
 
-# Additional variables
-batch_size_value = 6
-momentum_value = 0.99
-learning_rate_value = 0.001
-epochs_value = 360
-
-
 ##########################
 #       LOAD DATA        #
 ##########################
 
-X_train, Y_train, \
-X_val, Y_val, \
-X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
-                           TEST_MASK_PATH, [img_height, img_width, img_channels])
+if discard_cropped_images == True \
+   and not os.path.exists(TRAIN_CROP_DISCARD_PATH):
+    X_train, Y_train, \
+    X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
+                               TEST_MASK_PATH, 
+                               [img_height, img_width, img_channels],
+                               create_val=False)
 
-# Crop the data to the desired size
-X_train, Y_train = crop_data(X_train, Y_train, img_width_crop, img_height_crop)
-X_val, Y_val = crop_data(X_val, Y_val, img_width_crop, img_height_crop)
-X_test, Y_test = crop_data(X_test, Y_test, img_width_crop, img_height_crop)
+    # Crop the data to the desired size
+    X_train, Y_train = crop_data(X_train, Y_train, img_width_crop, 
+                                 img_height_crop, discard=True,     
+                                 d_percentage=d_percentage_value)
+    X_test, Y_test = crop_data(X_test, Y_test, img_width_crop, img_height_crop)
+    
+    # Save cropped and discarded images for future runs
+    os.makedirs(TRAIN_CROP_DISCARD_PATH)                                                     
+    os.makedirs(TRAIN_CROP_DISCARD_MASK_PATH)                                                     
+    os.makedirs(TEST_CROP_DISCARD_PATH)                                                     
+    os.makedirs(TEST_CROP_DISCARD_MASK_PATH)                                                     
+
+    print("\nSaving cropped images for future runs . . .")
+    for i in tqdm(range(0,X_train.shape[0])):                                          
+        im = Image.fromarray(X_train[i,:,:,0])                           
+        im = im.convert('L')                                                    
+        im.save(os.path.join(TRAIN_CROP_DISCARD_PATH,
+                             "x_train_" + str(i) + ".png")) 
+
+        im = Image.fromarray(Y_train[i,:,:,0]*255)                                  
+        im = im.convert('L')                                                    
+        im.save(os.path.join(TRAIN_CROP_DISCARD_MASK_PATH,                           
+                             "y_train_" + str(i) + ".png"))
+
+    for i in tqdm(range(0,X_test.shape[0])):                                         
+        im = Image.fromarray(X_test[i,:,:,0])                                  
+        im = im.convert('L')                                                    
+        im.save(os.path.join(TEST_CROP_DISCARD_PATH,                           
+                             "x_test_" + str(i) + ".png"))                     
+                                                                                
+        im = Image.fromarray(Y_test[i,:,:,0]*255)                             
+        im = im.convert('L')                                                    
+        im.save(os.path.join(TEST_CROP_DISCARD_MASK_PATH,                      
+                             "y_test_" + str(i) + ".png"))
+    del X_train, Y_train, X_test, Y_test
+    
 img_width = img_width_crop
 img_height = img_height_crop
 img_channels = img_channels_crop
 
+X_train, Y_train, \
+X_val, Y_val, \
+X_test, Y_test = load_data(TRAIN_CROP_DISCARD_PATH, TRAIN_CROP_DISCARD_MASK_PATH,                    
+                           TEST_CROP_DISCARD_PATH, TEST_CROP_DISCARD_MASK_PATH,                     
+                           [img_height, img_width, img_channels])
 
 ##########################
 #    DATA AUGMENTATION   #
 ##########################
 
 data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
-                     dim=(img_width_crop,img_height_crop), n_channels=1,
-                     shuffle=True, da=True, e_prob=0.9, flip_prob=0.5, 
-                     rot_prob=0.25, elastic=True, vflip=True, hflip=True,
+                     dim=(img_width,img_height), n_channels=1, shuffle=True, 
+                     da=True, e_prob=0.9, elastic=False, vflip=True, hflip=True,
                      rotation=True)
 
 data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
-                         dim=(img_width_crop,img_height_crop), n_channels=1,
-                         shuffle=False, da=False)
+                         dim=(img_width,img_height), n_channels=1, shuffle=False,
+                         da=False)
 
 train_generator = ImageDataGenerator(**data_gen_args)
 val_generator = ImageDataGenerator(**data_gen_val_args)
@@ -151,9 +199,9 @@ checkpointer = ModelCheckpoint(os.path.join(H5_DIR, 'model.fibsem_' + job_file
 results = model.fit_generator(train_generator, validation_data=val_generator,
                               validation_steps=math.ceil(len(X_val)/batch_size_value),
                               steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
-                              epochs=epochs_value, callbacks=[earlystopper, 
-                                                              checkpointer,
-                                                              time_callback])
+                              epochs=epochs_value, 
+                              callbacks=[earlystopper, checkpointer,
+                                         time_callback])
 
 
 #####################
