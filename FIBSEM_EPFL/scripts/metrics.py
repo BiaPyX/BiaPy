@@ -62,6 +62,26 @@ def jaccard_index(y_true, y_pred, t=0.5):
     return jac
 
 
+def dice_loss(y_true, y_pred):
+    """Define Dice loss.
+
+       Args:
+            y_true (tensor): ground truth masks.
+            y_pred (tensor): predicted masks.
+
+        Return:
+            dice (tensor): Dice loss score
+    """
+
+    numerator = 2 * tf.reduce_sum(y_true * y_pred)
+    # some implementations don't square y_pred
+    denominator = tf.reduce_sum(y_true + tf.square(y_pred))
+
+    dice = numerator / (denominator + tf.keras.backend.epsilon())
+
+    return dice
+
+
 def mean_iou(y_true, y_pred):
     """Define IoU metric.
 

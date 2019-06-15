@@ -3,8 +3,7 @@
 ##########################
 import os
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 
-                                '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 # Limit the number of threads
 from util import *
@@ -126,6 +125,7 @@ train_generator = ImageDataGenerator(**data_gen_args)
 val_generator = ImageDataGenerator(**data_gen_val_args)
 
 train_generator.flow_on_examples(10, job_id=job_id)
+
 
 ##########################
 #    BUILD THE NETWORK   #

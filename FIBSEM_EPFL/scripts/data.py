@@ -40,7 +40,9 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                 Y_train (numpy array): train images' mask.              
                 X_test (numpy array): test images.                      
                 Y_test (numpy array): test images' mask.                
-    """                                                                 
+    """      
+    
+    print("\nLoading images . . .")                                                           
                                                                         
     train_ids = sorted(next(os.walk(train_path))[2])                    
     train_mask_ids = sorted(next(os.walk(train_mask_path))[2])          
@@ -54,13 +56,13 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     Y_train = np.zeros((len(train_mask_ids), image_shape[0], image_shape[1],
                         image_shape[2]), dtype=np.uint8) 
                                                                         
-    print('Loading train images . . .')                                 
+    print("\n[LOAD] Loading train images . . .")                                 
     for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):     
         img = imread(os.path.join(train_path, id_))                     
         img = np.expand_dims(img, axis=-1)                              
         X_train[n] = img                                                
                                                                         
-    print('Loading train masks . . .')                                  
+    print('\n[LOAD] Loading train masks . . .')                                  
     for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids)):                      
         mask = imread(os.path.join(train_mask_path, id_))               
         mask = np.expand_dims(mask, axis=-1)                            
@@ -74,13 +76,13 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     Y_test = np.zeros((len(test_mask_ids), image_shape[0], image_shape[1],
                        image_shape[2]), dtype=np.uint8) 
                                                                         
-    print('Loading test images . . .')                                  
+    print("\n[LOAD] Loading test images . . .")                                  
     for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):       
         img = imread(os.path.join(test_path, id_))                      
         img = np.expand_dims(img, axis=-1)                              
         X_test[n] = img                                                 
                                                                         
-    print('Loading test masks . . .')                                   
+    print("\n[LOAD] Loading test masks . . .")                                   
     for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids)):                       
         mask = imread(os.path.join(test_mask_path, id_))                
         mask = np.expand_dims(mask, axis=-1)                            
@@ -113,7 +115,7 @@ def crop_data(data, data_mask, width, height):
             cropped_data_mask (4D numpy array): cropped data masks.     
     """                                                                 
                                                                         
-    print("Cropping [" + str(data.shape[1]) + ', ' + str(data.shape[2]) 
+    print("\nCropping [" + str(data.shape[1]) + ', ' + str(data.shape[2]) 
           + "] images into [" + str(width) + ', ' + str(height) + "] . . .")                                                  
                                                                         
     # Calculate the number of images to be generated                    
@@ -124,25 +126,23 @@ def crop_data(data, data_mask, width, height):
     # Crop data                                                         
     cropped_data = np.zeros((total_cropped, width, height, data.shape[3]),
                             dtype=np.uint8)            
-    cont=0                                                              
-    for img_num in range(0, data.shape[0]):                             
+    
+    # Crop mask data
+    cropped_data_mask = np.zeros((total_cropped, width, height, data.shape[3]),
+                                 dtype=np.uint8)    
+
+    print("\n[CROP] Cropping . . .")
+    cont = 0                                                              
+    for img_num in tqdm(range(0, data.shape[0])): 
         for i in range(0, h_num):                                       
             for j in range(0, v_num):                                   
                 cropped_data[cont]= data[img_num, (i*width):((i+1)*height),      
                                          (j*width):((j+1)*height)]      
-                cont=cont+1                                             
                                                                         
-    # Crop mask data                                                    
-    cropped_data_mask = np.zeros((total_cropped, width, height, data.shape[3]),
-                                 dtype=np.uint8)       
-    cont=0                                                              
-    for img_num in range(0, data.shape[0]):                             
-        for i in range(0, h_num):                                       
-            for j in range(0, v_num):                                   
                 cropped_data_mask[cont]= data_mask[img_num,             
                                                   (i*width):((i+1)*height),
                                                   (j*width):((j+1)*height)]
-                cont=cont+1                                             
+                cont= cont + 1                                             
                                                                         
     return cropped_data, cropped_data_mask                              
 
@@ -425,7 +425,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                 dataset. If False the examples will be generated from the start
                 of the dataset. 
         """
-        print("Creating the examples of data augmentation . . .")
+        print("\n[FLOW] Creating the examples of data augmentation . . .")
 
         prefix = ""
         if save_prefix != None: 
