@@ -45,7 +45,7 @@ def jaccard_index(y_true, y_pred, t=0.5):
             y_pred (tensor): predicted masks.
             t (float, optional): threshold to be applied.
 
-        Return:
+       Return:
             jac (tensor): Jaccard index value
     """
 
@@ -65,17 +65,36 @@ def jaccard_index(y_true, y_pred, t=0.5):
 def dice_loss(y_true, y_pred):
     """Define Dice loss.
 
+       
        Args:
             y_true (tensor): ground truth masks.
             y_pred (tensor): predicted masks.
 
         Return:
-            dice (tensor): Dice loss score
+            dice (tensor): Dice loss score.
     """
 
     numerator = 2 * tf.reduce_sum(y_true * y_pred)
-    # some implementations don't square y_pred
     denominator = tf.reduce_sum(y_true + tf.square(y_pred))
+
+    dice = numerator / (denominator + tf.keras.backend.epsilon())
+
+    return dice
+
+
+def dice_loss2(y_true, y_pred):
+    """Define Dice loss without squaring y_pred.
+
+       Args:
+            y_true (tensor): ground truth masks.
+            y_pred (tensor): predicted masks.
+
+       Return:
+            dice (tensor): Dice loss score.
+    """
+
+    numerator = 2 * tf.reduce_sum(y_true * y_pred)
+    denominator = tf.reduce_sum(y_true + y_pred)
 
     dice = numerator / (denominator + tf.keras.backend.epsilon())
 

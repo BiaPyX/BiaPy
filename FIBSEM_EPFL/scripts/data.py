@@ -14,7 +14,7 @@ from texttable import Texttable
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_shape, create_val=True, val_split=0.1, seedValue=42):                                            
-    """ Load train, validation and test data from the given paths.       
+    """Load train, validation and test data from the given paths.       
                                                                         
        Args:                                                            
             train_path (str): path to the training data.                
@@ -102,7 +102,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
    
 
 def crop_data(data, data_mask, width, height):                          
-    """ Crop data into smaller pieces                                    
+    """Crop data into smaller pieces                                    
                                                                         
        Args:                                                            
             data (4D numpy array): data to crop.                        
@@ -148,16 +148,16 @@ def crop_data(data, data_mask, width, height):
 
                           
 def elastic_transform(image, alpha, sigma, alpha_affine, seed=None):
-    """ Elastic deformation of images as described in [Simard2003]_ (with i
-        modifications).
-        [Simard2003] Simard, Steinkraus and Platt, "Best Practices for 
-        Convolutional Neural Networks applied to Visual Document Analysis", in
-        Proc. of the International Conference on Document Analysis and
-        Recognition, 2003.
-        Based on:
-            https://gist.github.com/erniejunior/601cdf56d2b424757de5
-        Code obtained from:
-            https://www.kaggle.com/bguberfain/elastic-transform-for-data-augmentation
+    """Elastic deformation of images as described in [Simard2003]_ (with i
+       modifications).
+       [Simard2003] Simard, Steinkraus and Platt, "Best Practices for 
+       Convolutional Neural Networks applied to Visual Document Analysis", in
+       Proc. of the International Conference on Document Analysis and
+       Recognition, 2003.
+       Based on:
+           https://gist.github.com/erniejunior/601cdf56d2b424757de5
+       Code obtained from:
+           https://www.kaggle.com/bguberfain/elastic-transform-for-data-augmentation
     """
     if seed is None:
         random_state = np.random.RandomState(None)
@@ -193,10 +193,10 @@ def elastic_transform(image, alpha, sigma, alpha_affine, seed=None):
 
 
 class ImageDataGenerator(keras.utils.Sequence):
-    """ Custom ImageDataGenerator.
-        Based on:
-            https://github.com/czbiohub/microDL 
-            https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly
+    """Custom ImageDataGenerator.
+       Based on:
+           https://github.com/czbiohub/microDL 
+           https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly
     """
 
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
@@ -240,17 +240,17 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.t_counter = [0 ,0 ,0 ,0 ,0 ,0] 
 
     def __len__(self):
-        """ Defines the number of batches per epoch. """
+        """Defines the number of batches per epoch."""
         return int(np.floor(len(self.X) / self.batch_size))
 
     def __getitem__(self, index):
-        """ Generation of one batch data. 
-            Arg:
-                index (int): batch index counter.
+        """Generation of one batch data. 
+           Arg:
+               index (int): batch index counter.
             
-            Return:
-                batch_x (numpy array): corresponding X elements of the batch.
-                batch_y (numpy array): corresponding Y elements of the batch.
+           Return:
+               batch_x (numpy array): corresponding X elements of the batch.
+               batch_y (numpy array): corresponding Y elements of the batch.
         """
 
         batch_x = np.empty((self.batch_size, *self.dim, self.n_channels))
@@ -269,7 +269,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         return batch_x, batch_y
 
     def print_da_stats(self):
-        """ Print the counter of the transformations made in a table. """
+        """Print the counter of the transformations made in a table."""
         t = Texttable()
         t.add_rows([['Elastic', 'V. flip', 'H. flip', '90º rot.', '180º rot.',
                      '270º rot.'], [self.t_counter[0], self.t_counter[1],
@@ -278,19 +278,19 @@ class ImageDataGenerator(keras.utils.Sequence):
         print(t.draw())
 
     def on_epoch_end(self):
-        """ Updates indexes after each epoch. """
+        """Updates indexes after each epoch."""
         self.indexes = np.arange(len(self.X))
         if self.shuffle == True:
             np.random.shuffle(self.indexes)
 
     def __draw_grid(self, im, grid_width=50, m=False):
-        """ Draw grid of the specified size on an image. 
+        """Draw grid of the specified size on an image. 
            
-            Arg:                                                                
-                im (2D numpy array): image to be modified.
-                grid_width (int, optional): grid's width. 
-                m (bool, optional): advice the method to change the grid value
-                if the input image is a mask.
+           Args:                                                                
+               im (2D numpy array): image to be modified.
+               grid_width (int, optional): grid's width. 
+               m (bool, optional): advice the method to change the grid value
+               if the input image is a mask.
         """
 
         if m == True:
@@ -304,16 +304,16 @@ class ImageDataGenerator(keras.utils.Sequence):
             im[j, :] = v
 
     def apply_transform(self, image, mask, flow=False):
-        """ Transform the input image and its mask at the same time with one of
-            the selected choices based on a probability. 
+        """Transform the input image and its mask at the same time with one of
+           the selected choices based on a probability. 
                 
-            Args:
-                image (2D numpy array): image to be transformed.
-                mask (2D numpy array): image's mask.
-                flow (bool, optional): forces the transform independetly of the
-                previously selected probability. Also draws a grid in to the 
-                elastic transfomations to visualize it clearly. Do not set this 
-                option to train the network!
+           Args:
+               image (2D numpy array): image to be transformed.
+               mask (2D numpy array): image's mask.
+               flow (bool, optional): forces the transform independetly of the
+               previously selected probability. Also draws a grid in to the 
+               elastic transfomations to visualize it clearly. Do not set this 
+               option to train the network!
         """
         trans_image = image
         trans_mask = mask
@@ -406,24 +406,24 @@ class ImageDataGenerator(keras.utils.Sequence):
     def flow_on_examples(self, num_examples, job_id="none_job_id", 
                          save_to_dir='aug', save_prefix=None,
                          original_elastic=True, random_images=True):
-        """ Apply selected transformations to a defined number of images from
-            the dataset. The purpose of this method is to check the images 
-            generated by data augmentation. 
+        """Apply selected transformations to a defined number of images from
+           the dataset. The purpose of this method is to check the images 
+           generated by data augmentation. 
             
-            Args:
-                num_examples (int): number of examples to generate.
-                job_id (str, optional): job identifier. If any provided the
-                examples will be generated under a folder called 'aug/none_job_id'.
-                save_to_dir (str, optional): name of the folder where the 
-                examples will be stored. If any provided the examples will be 
-                generated under a folder called 'aug/none_job_id'.
-                save_prefix (str, optional): prefix to add to the generated 
-                examples' name. 
-                original_elastic (bool, optional): to save also the original
-                images when an elastic transformation is performed.
-                random_images (bool, optional): randomly select images from the
-                dataset. If False the examples will be generated from the start
-                of the dataset. 
+           Args:
+               num_examples (int): number of examples to generate.
+               job_id (str, optional): job identifier. If any provided the
+               examples will be generated under a folder called 'aug/none_job_id'.
+               save_to_dir (str, optional): name of the folder where the 
+               examples will be stored. If any provided the examples will be 
+               generated under a folder called 'aug/none_job_id'.
+               save_prefix (str, optional): prefix to add to the generated 
+               examples' name. 
+               original_elastic (bool, optional): to save also the original
+               images when an elastic transformation is performed.
+               random_images (bool, optional): randomly select images from the
+               dataset. If False the examples will be generated from the start
+               of the dataset. 
         """
         print("\n[FLOW] Creating the examples of data augmentation . . .")
 
