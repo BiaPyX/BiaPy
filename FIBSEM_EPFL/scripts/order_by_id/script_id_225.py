@@ -135,7 +135,7 @@ model = U_Net([img_height, img_width, img_channels])
 sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)
 
-model.compile(optimizer=sdg, loss=dice_loss2, metrics=[jaccard_index])
+model.compile(optimizer=sdg, loss=dice_loss, metrics=[jaccard_index])
 model.summary()
 
 # Fit model

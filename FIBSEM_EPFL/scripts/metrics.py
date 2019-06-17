@@ -37,7 +37,7 @@ def jaccard_distance(y_true, y_pred, smooth=100):
     return (1 - jac) * smooth
 
 
-def jaccard_index(y_true, y_pred, t=0.5):
+def jaccard_index(y_true, y_pred):
     """Define Jaccard index.
 
        Args:
@@ -48,6 +48,8 @@ def jaccard_index(y_true, y_pred, t=0.5):
        Return:
             jac (tensor): Jaccard index value
     """
+
+    t = 0.5
 
     y_pred_ = tf.to_int32(y_pred > t)
     y_true = tf.cast(y_true, dtype=tf.int32)
@@ -64,7 +66,6 @@ def jaccard_index(y_true, y_pred, t=0.5):
 
 def dice_loss(y_true, y_pred):
     """Define Dice loss.
-
        
        Args:
             y_true (tensor): ground truth masks.
@@ -72,6 +73,9 @@ def dice_loss(y_true, y_pred):
 
         Return:
             dice (tensor): Dice loss score.
+
+        Based on:
+        https://lars76.github.io/neural-networks/object-detection/losses-for-segmentation
     """
 
     numerator = 2 * tf.reduce_sum(y_true * y_pred)
@@ -79,18 +83,21 @@ def dice_loss(y_true, y_pred):
 
     dice = numerator / (denominator + tf.keras.backend.epsilon())
 
-    return dice
+    return (1 - dice)
 
 
 def dice_loss2(y_true, y_pred):
-    """Define Dice loss without squaring y_pred.
+    """Define Dice loss.
 
        Args:
             y_true (tensor): ground truth masks.
             y_pred (tensor): predicted masks.
 
-       Return:
+        Return:
             dice (tensor): Dice loss score.
+
+        Based on:
+        https://lars76.github.io/neural-networks/object-detection/losses-for-segmentation
     """
 
     numerator = 2 * tf.reduce_sum(y_true * y_pred)
@@ -98,7 +105,7 @@ def dice_loss2(y_true, y_pred):
 
     dice = numerator / (denominator + tf.keras.backend.epsilon())
 
-    return dice
+    return (1 - dice)
 
 
 def mean_iou(y_true, y_pred):
