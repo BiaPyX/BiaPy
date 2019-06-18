@@ -18,7 +18,7 @@ set_seed(42)
 ##########################
 
 from data import *
-from unet import *
+from resunet import *
 from metrics import *
 import random
 import numpy as np
@@ -131,11 +131,12 @@ train_generator.flow_on_examples(10, job_id=job_id)
 #    BUILD THE NETWORK   #
 ##########################
 
-model = U_Net([img_height, img_width, img_channels])
+model = ResUNet([img_height, img_width, img_channels], numInitChannels=32)
+
 sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)
 
-model.compile(optimizer=sdg, loss=dice_loss, metrics=[jaccard_index])
+model.compile(optimizer=sdg, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
 # Fit model

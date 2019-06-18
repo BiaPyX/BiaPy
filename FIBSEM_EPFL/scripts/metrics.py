@@ -2,42 +2,8 @@ import time
 from keras import backend as K
 import tensorflow as tf
 
-def jaccard_distance(y_true, y_pred, smooth=100):
-    """Jaccard distance for semantic segmentation.
-    Also known as the intersection-over-union loss.
-    This loss is useful when you have unbalanced numbers of pixels 
-    within an image because it gives all classes equal weight. However,
-    it is not the defacto standard for image segmentation.
-    For example, assume you are trying to predict if
-    each pixel is cat, dog, or background.
-    You have 80% background pixels, 10% dog, and 10% cat.
-    If the model predicts 100% background
-    should it be be 80% right (as with categorical cross entropy)
-    or 30% (with this loss)?
-    The loss has been modified to have a smooth gradient as it converges
-    on zero.  This has been shifted so it converges on 0 and is smoothed
-    to avoid exploding or disappearing gradient.
-    Jaccard = (|X & Y|)/ (|X|+ |Y| - |X & Y|)
-            = sum(|A*B|)/(sum(|A|)+sum(|B|)-sum(|A*B|))
-    # Arguments
-        y_true: The ground truth tensor.
-        y_pred: The predicted tensor
-        smooth: Smoothing factor. Default is 100.
-    # Returns
-        The Jaccard distance between the two tensors.
-    # References
-        - [What is a good evaluation measure for semantic segmentation?](
-           http://www.bmva.org/bmvc/2013/Papers/paper0032/paper0032.pdf)
-    # Source code obtained from:
-        https://github.com/keras-team/keras-contrib/blob/master/keras_contrib/losses/jaccard.py
-    """
-    intersection = K.sum(K.abs(y_true * y_pred), axis=-1)
-    sum_ = K.sum(K.abs(y_true) + K.abs(y_pred), axis=-1)
-    jac = (intersection + smooth) / (sum_ - intersection + smooth)
-    return (1 - jac) * smooth
 
-
-def jaccard_index(y_true, y_pred):
+def jaccard_index(y_true, y_pred, t=0.5):
     """Define Jaccard index.
 
        Args:
@@ -48,8 +14,6 @@ def jaccard_index(y_true, y_pred):
        Return:
             jac (tensor): Jaccard index value
     """
-
-    t = 0.5
 
     y_pred_ = tf.to_int32(y_pred > t)
     y_true = tf.cast(y_true, dtype=tf.int32)
@@ -64,6 +28,25 @@ def jaccard_index(y_true, y_pred):
     return jac
 
 
+def jaccard_loss(y_true, y_pred):
+    """Define Jaccard index.
+
+       Args:
+            y_true (tensor): ground truth masks.
+            y_pred (tensor): predicted masks.
+
+       Return:
+            jac (float): Jaccard loss score.
+    """
+
+    numerator = tf.reduce_sum(y_true * y_pred)
+    denominator = tf.reduce_sum(y_true + y_pred) - numerator 
+
+    jac =  numerator / (denominator + tf.keras.backend.epsilon())
+
+    return 1 - jac
+
+
 def dice_loss(y_true, y_pred):
     """Define Dice loss.
        
@@ -72,7 +55,7 @@ def dice_loss(y_true, y_pred):
             y_pred (tensor): predicted masks.
 
         Return:
-            dice (tensor): Dice loss score.
+            dice (float): Dice loss score.
 
         Based on:
         https://lars76.github.io/neural-networks/object-detection/losses-for-segmentation
@@ -87,14 +70,14 @@ def dice_loss(y_true, y_pred):
 
 
 def dice_loss2(y_true, y_pred):
-    """Define Dice loss.
+    """Define Dice loss without squaring y_predi in the formula.
 
        Args:
             y_true (tensor): ground truth masks.
             y_pred (tensor): predicted masks.
 
         Return:
-            dice (tensor): Dice loss score.
+            dice (float): Dice loss score.
 
         Based on:
         https://lars76.github.io/neural-networks/object-detection/losses-for-segmentation

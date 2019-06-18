@@ -468,3 +468,127 @@ class ImageDataGenerator(keras.utils.Sequence):
                 mask = mask.convert('L')
                 mask.save(os.path.join(save_dir, prefix + 'y_' + str(pos) + t_str
                                        + '_original.png'))
+
+
+def fixed_dregee(image):
+    """Rotate given image with a fixed degree
+
+       Args:
+            image (img): image to be rotated.
+
+       Returns:
+            out_image (numpy array): image rotated.
+    """
+    img = np.array(image)
+
+    # get image height, width
+    (h, w) = img.shape[:2]
+    # calculate the center of the image
+    center = (w / 2, h / 2)
+
+    M = cv2.getRotationMatrix2D(center, 180, 1.0)
+    out_image = cv2.warpAffine(img, M, (w, h))
+    out_image = np.expand_dims(out_image, axis=-1)
+    return out_image
+
+
+def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value, 
+                 save_examples=True, hflip=True, vflip=True, 
+                 seedValue=42, fill_mode='reflect', 
+                 preproc_function=True):
+    """Makes data augmentation of the given input data.
+
+       Args:
+            X_train (numpy array): train data.
+            Y_train (numpy array): train mask data.
+            X_val (numpy array): validation data.
+            Y_val (numpy array): validation mask data.
+            batch_size_value (int): batch size.
+            save_examples (bool, optional): if true 5 examples of DA 
+            are stored.
+            hflip (bool, optional): if true horizontal flips are made.
+            vflip (bool, optional): if true vertical flip are made.
+            seedValue (int, optional): seed value.
+            fill_mode (str, optional): ImageDataGenerator of Keras fill
+            mode values.
+            preproc_function (bool, optional): if true preprocess 
+            function to make random 180 degrees rotations are performed. 
+
+       Returns:
+            train_generator (Keras iterable of flow_from_directory): 
+            train data iterator.
+            val_generator (Keras iterable of flow_from_directory):
+            validation data iterator.
+    """
+    
+    if (preproc_function == True):
+        data_gen_args = dict(horizontal_flip=hflip,
+                             vertical_flip=vflip,
+                             fill_mode=fill_mode,
+                             preprocessing_function=fixed_dregee)
+    else:
+        data_gen_args = dict(horizontal_flip=hflip,
+                             vertical_flip=vflip,
+                             fill_mode=fill_mode,
+                             rotation_range=180)
+                             
+    
+    # Train data, provide the same seed and keyword arguments to 
+    # the fit and flow methods
+    X_datagen_train = ImageDataGenerator(**data_gen_args)
+    Y_datagen_train = ImageDataGenerator(**data_gen_args)
+    X_datagen_train.fit(X_train, augment=True, seed=seedValue)
+    Y_datagen_train.fit(Y_train, augment=True, seed=seedValue)
+    
+    # Validation data, no data augmentation, but we create a generator 
+    # anyway
+    X_datagen_val = ImageDataGenerator()
+    Y_datagen_val = ImageDataGenerator()
+    X_datagen_val.fit(X_val, augment=False, seed=seedValue)
+    Y_datagen_val.fit(Y_val, augment=False, seed=seedValue)
+    
+    # Check a few of generated images
+    if (save_examples == True):
+
+        if not os.path.exists('aug_x'):          
+            os.makedirs('aug_x')                 
+        if not os.path.exists('aug_y'):          
+            os.makedirs('aug_y')                 
+     
+        i=0
+        for batch in X_datagen_train.flow(X_train, save_to_dir="aug_x",\
+                                          batch_size=batch_size_value,
+                                          shuffle=True, seed=seedValue,
+                                          save_prefix='x',
+                                          save_format='jpeg'):
+            i += 1
+            if i > 5:
+                break
+        i=0
+        for batch in Y_datagen_train.flow(Y_train, save_to_dir="aug_y",\
+                                          batch_size=batch_size_value,
+                                          shuffle=True, seed=seedValue,
+                                          save_prefix='y',
+                                          save_format='jpeg'):
+            i += 1
+            if i > 5:
+                break
+    
+    X_train_augmented = X_datagen_train.flow(X_train, 
+                                             batch_size=batch_size_value,
+                                             shuffle=False,
+                                             seed=seedValue)
+    Y_train_augmented = Y_datagen_train.flow(Y_train, 
+                                             batch_size=batch_size_value,
+                                             shuffle=False,
+                                             seed=seedValue)
+    X_val_flow = X_datagen_val.flow(X_val, batch_size=batch_size_value,
+                                    shuffle=False, seed=seedValue)
+    Y_val_flow = Y_datagen_val.flow(Y_val, batch_size=batch_size_value,
+                                    shuffle=False, seed=seedValue)
+    
+    # Combine generators into one which yields image and masks
+    train_generator = zip(X_train_augmented, Y_train_augmented)
+    val_generator = zip(X_val_flow, Y_val_flow)
+    
+    return train_generator, val_generator
