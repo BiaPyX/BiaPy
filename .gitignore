@@ -6,6 +6,8 @@ keras_experiments/CNN_cats_and_dogs/data
 keras_experiments/CNN_cats_and_dogs/images
 FIBSEM_EPFL/data
 FIBSEM_EPFL/data_d
+FIBSEM_EPFL/lucchi_pp
+FIBSEM_EPFL/kasthuri_pp
 FIBSEM_EPFL/aug
 FIBSEM_EPFL/results
 FIBSEM_EPFL/scripts/__pycache__

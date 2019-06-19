@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import cv2
 import keras
+import sys
 from tqdm import tqdm
 from skimage.io import imread, imshow
 from sklearn.model_selection import train_test_split
@@ -11,6 +12,7 @@ from scipy.ndimage.interpolation import map_coordinates
 from scipy.ndimage.filters import gaussian_filter
 from PIL import Image
 from texttable import Texttable
+from keras.preprocessing.image import ImageDataGenerator as kerasDA
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_shape, create_val=True, val_split=0.1, seedValue=42):                                            
@@ -42,7 +44,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                 Y_test (numpy array): test images' mask.                
     """      
     
-    print("\nLoading images . . .")                                                           
+    print("\nLoading images . . .")
+    sys.stdout.flush()
                                                                         
     train_ids = sorted(next(os.walk(train_path))[2])                    
     train_mask_ids = sorted(next(os.walk(train_mask_path))[2])          
@@ -57,12 +60,14 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                         image_shape[2]), dtype=np.uint8) 
                                                                         
     print("\n[LOAD] Loading train images . . .")                                 
+    sys.stdout.flush()
     for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):     
         img = imread(os.path.join(train_path, id_))                     
         img = np.expand_dims(img, axis=-1)                              
         X_train[n] = img                                                
                                                                         
     print('\n[LOAD] Loading train masks . . .')                                  
+    sys.stdout.flush()
     for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids)):                      
         mask = imread(os.path.join(train_mask_path, id_))               
         mask = np.expand_dims(mask, axis=-1)                            
@@ -77,12 +82,14 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                        image_shape[2]), dtype=np.uint8) 
                                                                         
     print("\n[LOAD] Loading test images . . .")                                  
+    sys.stdout.flush() 
     for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):       
         img = imread(os.path.join(test_path, id_))                      
         img = np.expand_dims(img, axis=-1)                              
         X_test[n] = img                                                 
                                                                         
     print("\n[LOAD] Loading test masks . . .")                                   
+    sys.stdout.flush()
     for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids)):                       
         mask = imread(os.path.join(test_mask_path, id_))                
         mask = np.expand_dims(mask, axis=-1)                            
@@ -117,6 +124,7 @@ def crop_data(data, data_mask, width, height):
                                                                         
     print("\nCropping [" + str(data.shape[1]) + ', ' + str(data.shape[2]) 
           + "] images into [" + str(width) + ', ' + str(height) + "] . . .")                                                  
+    sys.stdout.flush()
                                                                         
     # Calculate the number of images to be generated                    
     h_num = int(data.shape[1] / width) + (data.shape[1] % width > 0)    
@@ -132,6 +140,7 @@ def crop_data(data, data_mask, width, height):
                                  dtype=np.uint8)    
 
     print("\n[CROP] Cropping . . .")
+    sys.stdout.flush()
     cont = 0                                                              
     for img_num in tqdm(range(0, data.shape[0])): 
         for i in range(0, h_num):                                       
@@ -426,6 +435,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                of the dataset. 
         """
         print("\n[FLOW] Creating the examples of data augmentation . . .")
+        sys.stdout.flush()
 
         prefix = ""
         if save_prefix != None: 
@@ -535,15 +545,15 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
     
     # Train data, provide the same seed and keyword arguments to 
     # the fit and flow methods
-    X_datagen_train = ImageDataGenerator(**data_gen_args)
-    Y_datagen_train = ImageDataGenerator(**data_gen_args)
+    X_datagen_train = kerasDA(**data_gen_args)
+    Y_datagen_train = kerasDA(**data_gen_args)
     X_datagen_train.fit(X_train, augment=True, seed=seedValue)
     Y_datagen_train.fit(Y_train, augment=True, seed=seedValue)
     
     # Validation data, no data augmentation, but we create a generator 
     # anyway
-    X_datagen_val = ImageDataGenerator()
-    Y_datagen_val = ImageDataGenerator()
+    X_datagen_val = kerasDA()
+    Y_datagen_val = kerasDA()
     X_datagen_val.fit(X_val, augment=False, seed=seedValue)
     Y_datagen_val.fit(Y_val, augment=False, seed=seedValue)
     
