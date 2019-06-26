@@ -18,7 +18,7 @@ set_seed(42)
 ##########################
 
 from data import *
-from resunet import *
+from unet import *
 from metrics import *
 import random
 import numpy as np
@@ -122,7 +122,7 @@ train_generator, val_generator = keras_da_generator(X_train, Y_train, X_val,
 #    BUILD THE NETWORK   #
 ##########################
 
-model = ResUNet([img_height, img_width, img_channels], numInitChannels=32)
+model = U_Net([img_height, img_width, img_channels], numInitChannels=48)
 
 sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)

@@ -15,7 +15,8 @@ from texttable import Texttable
 from keras.preprocessing.image import ImageDataGenerator as kerasDA
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
-              image_shape, create_val=True, val_split=0.1, seedValue=42):                                            
+              image_train_shape, image_test_shape, create_val=True, 
+              val_split=0.1, seedValue=42):                                            
     """Load train, validation and test data from the given paths.       
                                                                         
        Args:                                                            
@@ -23,7 +24,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             train_mask_path (str): path to the training data masks.     
             test_path (str): path to the test data.                     
             test_mask_path (str): path to the test data masks.          
-            image_shape (array of 3 int): dimensions of the images.     
+            image_train_shape (array of 3 int): dimensions of the images.     
+            image_test_shape (array of 3 int): dimensions of the images.     
             create_val (bool, optional): if true validation data is created.                                                    
             val_split (float, optional): % of the train data used as    
             validation (value between o and 1).                         
@@ -54,17 +56,20 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     test_mask_ids = sorted(next(os.walk(test_mask_path))[2])            
                                                                         
     # Get and resize train images and masks                             
-    X_train = np.zeros((len(train_ids), image_shape[0], image_shape[1], 
-                        image_shape[2]), dtype=np.uint8)                
-    Y_train = np.zeros((len(train_mask_ids), image_shape[0], image_shape[1],
-                        image_shape[2]), dtype=np.uint8) 
+    X_train = np.zeros((len(train_ids), image_train_shape[0], 
+                        image_train_shape[1], image_train_shape[2]),
+                        dtype=np.uint8)                
+    Y_train = np.zeros((len(train_mask_ids), image_train_shape[0], 
+                        image_train_shape[1], image_train_shape[2]),
+                        dtype=np.uint8) 
                                                                         
     print("\n[LOAD] Loading train images . . .")                                 
     sys.stdout.flush()
     for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):     
         img = imread(os.path.join(train_path, id_))                     
         if len(img.shape) == 3:
-            img = img[:,:,0]
+            img = img[:,:,0]    
+        img = img[0:image_train_shape[0],0:image_train_shape[1]]
         img = np.expand_dims(img, axis=-1)                              
         X_train[n] = img                                                
                                                                         
@@ -72,18 +77,19 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     sys.stdout.flush()
     for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids)):                      
         mask = imread(os.path.join(train_mask_path, id_))               
-        if len(mask.shape) == 3:                                                
+        if len(mask.shape) == 3:
             mask = mask[:,:,0]
+        mask = mask[0:image_train_shape[0],0:image_train_shape[1]]
         mask = np.expand_dims(mask, axis=-1)                            
         Y_train[n] = mask                                               
                                                                         
     Y_train = Y_train/255                                               
                                                                         
     # Get and resize test images and masks                              
-    X_test = np.zeros((len(test_ids), image_shape[0], image_shape[1],   
-                       image_shape[2]), dtype=np.uint8)                 
-    Y_test = np.zeros((len(test_mask_ids), image_shape[0], image_shape[1],
-                       image_shape[2]), dtype=np.uint8) 
+    X_test = np.zeros((len(test_ids), image_test_shape[0], image_test_shape[1],   
+                       image_test_shape[2]), dtype=np.uint8)                 
+    Y_test = np.zeros((len(test_mask_ids), image_test_shape[0], 
+                       image_test_shape[1], image_test_shape[2]), dtype=np.uint8) 
                                                                         
     print("\n[LOAD] Loading test images . . .")                                  
     sys.stdout.flush() 

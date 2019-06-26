@@ -17,8 +17,8 @@ set_seed(42)
 #        IMPORTS         #
 ##########################
 
-from data import *
-from resunet import *
+from data_kasthuri import *
+from unet import *
 from metrics import *
 import random
 import numpy as np
@@ -62,20 +62,21 @@ else:
 os.chdir("/data2/dfranco/experimentosTFM/FIBSEM_EPFL")
 
 # Image dimensions
-img_width = 1024
-img_height = 768
-img_channels = 1
-
-# Dimension to obtain in the crop
-img_width_crop = 256
-img_height_crop = 256
-img_channels_crop = 1
+#img_train_width = 1463
+#img_train_height = 1613
+#img_train_channels = 1
+img_train_width = 1456
+img_train_height = 1600
+img_train_channels = 1
+img_test_width = 1334 
+img_test_height = 1553
+img_test_channels = 1
 
 # Paths to data and results                                             
-TRAIN_PATH = os.path.join('data', 'train', 'x')                         
-TRAIN_MASK_PATH = os.path.join('data', 'train', 'y')                    
-TEST_PATH = os.path.join('data', 'test', 'x')                           
-TEST_MASK_PATH = os.path.join('data', 'test', 'y')                      
+TRAIN_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'x')                         
+TRAIN_MASK_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'y')                    
+TEST_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'x')                           
+TEST_MASK_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'y')                      
 RESULT_DIR = os.path.join('results', 'results_' + job_id)
 CHAR_DIR='charts'
 H5_DIR='h5_files'
@@ -84,7 +85,7 @@ H5_DIR='h5_files'
 time_callback = TimeHistory()
 
 # Additional variables
-batch_size_value = 6
+batch_size_value = 1
 momentum_value = 0.99
 learning_rate_value = 0.001
 epochs_value = 360
@@ -96,16 +97,9 @@ epochs_value = 360
 
 X_train, Y_train, \
 X_val, Y_val, \
-X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
-                           TEST_MASK_PATH, [img_height, img_width, img_channels])
-
-# Crop the data to the desired size
-X_train, Y_train = crop_data(X_train, Y_train, img_width_crop, img_height_crop)
-X_val, Y_val = crop_data(X_val, Y_val, img_width_crop, img_height_crop)
-X_test, Y_test = crop_data(X_test, Y_test, img_width_crop, img_height_crop)
-img_width = img_width_crop
-img_height = img_height_crop
-img_channels = img_channels_crop
+X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH, TEST_MASK_PATH, 
+                           [img_train_height, img_train_width, img_train_channels],
+                           [img_test_height, img_test_width, img_test_channels])
 
 
 ##########################
@@ -122,7 +116,8 @@ train_generator, val_generator = keras_da_generator(X_train, Y_train, X_val,
 #    BUILD THE NETWORK   #
 ##########################
 
-model = ResUNet([img_height, img_width, img_channels])
+model = U_Net([img_train_height, img_train_width, img_train_channels],
+              numInitChannels=32)
 
 sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)
