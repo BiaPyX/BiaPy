@@ -17,7 +17,7 @@ set_seed(42)
 #        IMPORTS         #
 ##########################
 
-from data_kasthuri import *
+from data import *
 from unet import *
 from metrics import *
 import random
