@@ -18,7 +18,7 @@ set_seed(42)
 #        IMPORTS         #
 ##########################
 
-from data_fullimage import *
+from data_kasthuri import *
 from unet import *
 from metrics import *
 import random
@@ -82,7 +82,7 @@ time_callback = TimeHistory()
 # Additional variables
 batch_size_value = 1
 momentum_value = 0.99
-learning_rate_value = 0.001
+learning_rate_value = 0.01
 epochs_value = 360
 
 
@@ -93,8 +93,9 @@ epochs_value = 360
 X_train, Y_train, \
 X_val, Y_val, \
 X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
-                           TEST_MASK_PATH, [img_height, img_width, img_channels])
-print(X_train.shape)
+                           TEST_MASK_PATH, [img_width, img_height, img_channels],
+                           [img_width, img_height, img_channels])
+
 ##########################
 #    DATA AUGMENTATION   #
 ##########################

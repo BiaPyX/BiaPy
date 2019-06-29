@@ -17,7 +17,7 @@ set_seed(42)
 #        IMPORTS         #
 ##########################
 
-from data import *
+from data_kasthuri import *
 from unet import *
 from metrics import *
 import random
@@ -76,7 +76,7 @@ TRAIN_PATH = os.path.join('lucchi_pp', 'Lucchi++', 'train', 'x')
 TRAIN_MASK_PATH = os.path.join('lucchi_pp', 'Lucchi++', 'train', 'y')                    
 TEST_PATH = os.path.join('lucchi_pp', 'Lucchi++', 'test', 'x')                           
 TEST_MASK_PATH = os.path.join('lucchi_pp', 'Lucchi++', 'test', 'y')                      
-RESULT_DIR = os.path.join('results', 'results' + job_id)
+RESULT_DIR = os.path.join('results', 'results_' + job_id)
 CHAR_DIR='charts'
 H5_DIR='h5_files'
 
@@ -97,12 +97,13 @@ epochs_value = 360
 X_train, Y_train, \
 X_val, Y_val, \
 X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
-                           TEST_MASK_PATH, [img_height, img_width, img_channels])
+                           TEST_MASK_PATH, [img_width, img_height, img_channels],
+                           [img_width, img_height, img_channels])
 
 # Crop the data to the desired size
-X_train, Y_train = crop_data(X_train, Y_train, img_width_crop, img_height_crop)
-X_val, Y_val = crop_data(X_val, Y_val, img_width_crop, img_height_crop)
-X_test, Y_test = crop_data(X_test, Y_test, img_width_crop, img_height_crop)
+X_train, Y_train, _ = crop_data(X_train, Y_train, img_height_crop, img_width_crop)
+X_val, Y_val, _ = crop_data(X_val, Y_val, img_height_crop, img_width_crop)
+X_test, Y_test, _ = crop_data(X_test, Y_test, img_height_crop, img_width_crop)
 img_width = img_width_crop
 img_height = img_height_crop
 img_channels = img_channels_crop

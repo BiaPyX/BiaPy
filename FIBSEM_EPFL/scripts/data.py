@@ -610,3 +610,4 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
     val_generator = zip(X_val_flow, Y_val_flow)
     
     return train_generator, val_generator
+

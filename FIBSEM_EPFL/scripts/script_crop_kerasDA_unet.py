@@ -122,7 +122,7 @@ train_generator, val_generator = keras_da_generator(X_train, Y_train, X_val,
 #    BUILD THE NETWORK   #
 ##########################
 
-model = U_Net([img_height, img_width, img_channels], numInitChannels=48)
+model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
 
 sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)

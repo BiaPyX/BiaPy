@@ -62,15 +62,15 @@ else:
 os.chdir("/data2/dfranco/experimentosTFM/FIBSEM_EPFL")
 
 # Image dimensions
-#img_train_width = 1463
-#img_train_height = 1613
-#img_train_channels = 1
-img_train_width = 1456
-img_train_height = 1600
+img_train_width = 1463
+img_train_height = 1613
 img_train_channels = 1
 img_test_width = 1334 
 img_test_height = 1553
 img_test_channels = 1
+img_width_crop = 256                                                            
+img_height_crop = 256                                                           
+img_channels_crop = 1 
 
 # Paths to data and results                                             
 TRAIN_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'x')                         
@@ -101,6 +101,18 @@ X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH, TEST_MASK_PAT
                            [img_train_height, img_train_width, img_train_channels],
                            [img_test_height, img_test_width, img_test_channels])
 
+# Crop the data to the desired size                                             
+X_train, Y_train, f_shape = crop_data(X_train, Y_train, img_height_crop,
+                                      img_width_crop, discard=True, 
+                                      d_percentage=0.05) 
+X_val, Y_val, _ = crop_data(X_val, Y_val, img_height_crop, img_width_crop, 
+                            f_shape, discard=True, d_percentage=0.05)         
+X_test, Y_test, _ = crop_data(X_test, Y_test, img_height_crop, img_width_crop,
+                              f_shape, discard=True, d_percentage=0.05)     
+img_width = img_width_crop                                                      
+img_height = img_height_crop                                                    
+img_channels = img_channels_crop
+
 
 ##########################
 #    DATA AUGMENTATION   #
@@ -116,7 +128,7 @@ train_generator, val_generator = keras_da_generator(X_train, Y_train, X_val,
 #    BUILD THE NETWORK   #
 ##########################
 
-model = U_Net([img_train_height, img_train_width, img_train_channels],
+model = U_Net([img_height, img_width, img_channels],
               numInitChannels=32)
 
 sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
