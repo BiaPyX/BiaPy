@@ -93,7 +93,7 @@ custom_da = False
 aug_examples = True
 
 # General parameters
-batch_size_value = 1
+batch_size_value = 6
 momentum_value = 0.99
 learning_rate_value = 0.001
 epochs_value = 360
@@ -107,7 +107,7 @@ TRAIN_MASK_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'y')
 TEST_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'x')                           
 TEST_MASK_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'y')                      
 
-if make_crops == True:
+if make_crops == True and discard_cropped_images == True:
     TRAIN_CROP_DISCARD_PATH = os.path.join('data_d', 'kas_'
                               + str(d_percentage_value), 'train', 'x')
     TRAIN_CROP_DISCARD_MASK_PATH = os.path.join('data_d', 'kas_'
@@ -147,9 +147,10 @@ if discard_cropped_images == True and make_crops == True \
     X_test, Y_test, _ = crop_data(X_test, Y_test, img_width_crop, img_height_crop,
                                   force_shape=f_shape)
     if check_crop == True:
-        check_crops(X_train, Y_train, [img_train_width, img_train_height],
-                    num_examples=3, out_dir="check_crops", job_id=job_id, 
-                    grid=True)
+        check_crops(X_train, [img_train_width, img_train_height], num_examples=3,
+                    out_dir="check_crops", job_id=job_id, suffix="_x_", grid=True)
+        check_crops(Y_train, [img_train_width, img_train_height], num_examples=3,
+                    out_dir="check_crops", job_id=job_id, suffix="_y_", grid=True)
    
     # Create folders and save the images for future runs 
     print("\nSaving cropped images for future runs . . .", flush=True)
@@ -223,9 +224,10 @@ if make_crops == True and crops_made == False:
     X_test, Y_test, _ = crop_data(X_test, Y_test, img_width_crop, img_height_crop)
 
     if check_crop == True:
-        check_crops(X_train, Y_train, [img_train_width, img_train_height], 
-                    num_examples=3, out_dir="check_crops", job_id=job_id, 
-                    grid=True)
+        check_crops(X_train, [img_train_width, img_train_height], num_examples=3,
+                    out_dir="check_crops", job_id=job_id, suffix="_x_", grid=True)
+        check_crops(Y_train, [img_train_width, img_train_height], num_examples=3,
+                    out_dir="check_crops", job_id=job_id, suffix="_y_", grid=True)
     
     img_width = img_width_crop
     img_height = img_height_crop
@@ -298,18 +300,30 @@ results = model.fit_generator(train_generator, validation_data=val_generator,
 #    PREDICTION     #
 #####################
 
-# Evaluate to obtain the loss and jaccard index                         
-print("Evaluating test data . . .")                                     
-score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)                                       
-                                                                        
-# Predict on test                                                       
-print("Making the predictions on test data . . .")                      
-preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1) 
+# Evaluate to obtain the loss
+print("Evaluating test data . . .")
+score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
+
+# Predict on test
+print("Making the predictions on test data . . .")
+preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
 # Threshold predictions
 preds_test_t = (preds_test > 0.5).astype(np.uint8)
 
-# Save the resulting images 
+# Reconstruct the data to the original shape and calculate Jaccard
+del preds_test
+h_num = int(original_shape[0] / preds_test_t.shape[1]) + (original_shape[0] % preds_test_t.shape[1] > 0)
+v_num = int(original_shape[1] / preds_test_t.shape[2]) + (original_shape[1] % preds_test_t.shape[2] > 0)
+
+recons_test_data = mix_data(preds_test_t,
+                            math.ceil(preds_test_t.shape[0]/(h_num*v_num)),
+                            out_shape=[h_num, v_num], grid=False)
+print("The shape of the test data reconstructed is " + str(recons_test_data),
+      flush=True)
+score[1] = jaccard_index_numpy(Y_test, recons_test_data)
+
+# Save the resulting images
 if not os.path.exists(RESULT_DIR):
     os.makedirs(RESULT_DIR)
 if len(sys.argv) > 1 and test_id == "1":

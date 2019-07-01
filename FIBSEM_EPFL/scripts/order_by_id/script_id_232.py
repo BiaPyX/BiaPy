@@ -37,6 +37,7 @@ import math
 #    INITIAL VARIABLES   #
 ##########################
 
+#### VARAIBLES THAT SHOULD NOT BE MODIFIED ####
 # Take arguments
 if len(sys.argv) > 1:
     gpu_selected = str(sys.argv[1])                                       
@@ -58,71 +59,220 @@ if len(sys.argv) > 1:
 else:
     os.environ["CUDA_VISIBLE_DEVICES"] = "3";
 
-# Go to the experiments base dir
+# Control variables 
+crops_made = False
+###############################################
+
+# Working dir
 os.chdir("/data2/dfranco/experimentosTFM/FIBSEM_EPFL")
 
 # Image dimensions
-img_width = 1024
-img_height = 768
-img_channels = 1
+# Note: train and test dimensions must be the same when training the network and
+# making the predictions. If you do not use crop_data() with the arg force_shape
+# be sure to take care of this.
+img_train_width = 1024
+img_train_height = 768
+img_train_channels = 1
+img_test_width = img_train_width
+img_test_height = img_train_height
+img_test_channels = img_train_channels
 
-# Dimension to obtain in the crop
-img_width_crop = 256
-img_height_crop = 256
-img_channels_crop = 1
+# Crop variables
+img_width_crop = 256                                                            
+img_height_crop = 256                                                           
+img_channels_crop = 1 
+make_crops = True                                                               
+check_crop = True
+original_shape=[img_train_width,img_train_height]
+
+# Discard variables
+discard_cropped_images = False
+d_percentage_value = 0.05
+
+# Data augmentation variables
+custom_da = False
+aug_examples = True
+
+# General parameters
+batch_size_value = 6
+momentum_value = 0.99
+learning_rate_value = 0.001
+epochs_value = 360
+
+# Define time callback                                                          
+time_callback = TimeHistory()
 
 # Paths to data and results                                             
 TRAIN_PATH = os.path.join('data', 'train', 'x')                         
 TRAIN_MASK_PATH = os.path.join('data', 'train', 'y')                    
 TEST_PATH = os.path.join('data', 'test', 'x')                           
 TEST_MASK_PATH = os.path.join('data', 'test', 'y')                      
+
+if make_crops == True and discard_cropped_images == True:
+    TRAIN_CROP_DISCARD_PATH = os.path.join('data_d', 'kas_'
+                              + str(d_percentage_value), 'train', 'x')
+    TRAIN_CROP_DISCARD_MASK_PATH = os.path.join('data_d', 'kas_'
+                                   + str(d_percentage_value), 'train', 'y')
+    TEST_CROP_DISCARD_PATH = os.path.join('data_d', 'kas_'
+                             + str(d_percentage_value), 'test', 'x')
+    TEST_CROP_DISCARD_MASK_PATH = os.path.join('data_d', 'kas_'
+                                  + str(d_percentage_value), 'test', 'y')
 RESULT_DIR = os.path.join('results', 'results_' + job_id)
 CHAR_DIR='charts'
 H5_DIR='h5_files'
 
-# Define time callback
-time_callback = TimeHistory()
 
-# Additional variables
-batch_size_value = 6
-momentum_value = 0.99
-learning_rate_value = 0.001
-epochs_value = 360
+#############################################
+#    PREPARE DATASET IF DISCARD IS ACTIVE   #
+#############################################
+
+# The first time the dataset will be prepared for future runs if it is not 
+# created yet
+if discard_cropped_images == True and make_crops == True \
+   and not os.path.exists(TRAIN_CROP_DISCARD_PATH):
+
+    crops_made = True
+
+    # Load data
+    X_train, Y_train, \
+    X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
+                               TEST_MASK_PATH, 
+                               [img_train_width, img_train_height, img_train_channels],
+                               [img_test_width, img_test_height, img_test_channels],
+                               create_val=False)
+
+    # Crop the data to the desired size
+    X_train, Y_train, f_shape = crop_data(X_train, Y_train, img_width_crop, 
+                                          img_height_crop, discard=True,     
+                                          d_percentage=d_percentage_value)
+    X_test, Y_test, _ = crop_data(X_test, Y_test, img_width_crop, img_height_crop,
+                                  force_shape=f_shape)
+    if check_crop == True:
+        check_crops(X_train, [img_train_width, img_train_height], num_examples=3,
+                    out_dir="check_crops", job_id=job_id, suffix="_x_", grid=True)
+        check_crops(Y_train, [img_train_width, img_train_height], num_examples=3,
+                    out_dir="check_crops", job_id=job_id, suffix="_y_", grid=True)
+   
+    # Create folders and save the images for future runs 
+    print("\nSaving cropped images for future runs . . .", flush=True)
+    os.makedirs(TRAIN_CROP_DISCARD_PATH)
+    os.makedirs(TRAIN_CROP_DISCARD_MASK_PATH)
+    os.makedirs(TEST_CROP_DISCARD_PATH)
+    os.makedirs(TEST_CROP_DISCARD_MASK_PATH)
+    for i in tqdm(range(0,X_train.shape[0])):                                          
+        im = Image.fromarray(X_train[i,:,:,0])                           
+        im = im.convert('L')                                                    
+        im.save(os.path.join(TRAIN_CROP_DISCARD_PATH,
+                             "x_train_" + str(i) + ".png")) 
+
+        im = Image.fromarray(Y_train[i,:,:,0]*255)                                  
+        im = im.convert('L')                                                    
+        im.save(os.path.join(TRAIN_CROP_DISCARD_MASK_PATH,                           
+                             "y_train_" + str(i) + ".png"))
+
+    for i in tqdm(range(0,X_test.shape[0])):                                         
+        im = Image.fromarray(X_test[i,:,:,0])                                  
+        im = im.convert('L')                                                    
+        im.save(os.path.join(TEST_CROP_DISCARD_PATH,                           
+                             "x_test_" + str(i) + ".png"))                     
+
+        im = Image.fromarray(Y_test[i,:,:,0]*255)                             
+        im = im.convert('L')                                                    
+        im.save(os.path.join(TEST_CROP_DISCARD_MASK_PATH,                      
+                             "y_test_" + str(i) + ".png"))
+    del X_train, Y_train, X_test, Y_test
+   
+    # Update shapes 
+    img_train_width = img_width_crop
+    img_train_height = img_height_crop
+    img_train_channels = img_channels_crop
+    img_test_width = img_width_crop
+    img_test_height = img_height_crop
+    img_test_channels = img_channels_crop
+
+# For the rest of runs that are not the first that prepares the dataset when 
+# discard is active some varaibles must be set as if it would made the crops
+if make_crops == True and discard_cropped_images == True:
+    TRAIN_PATH = TRAIN_CROP_DISCARD_PATH
+    TRAIN_MASK_PATH = TRAIN_CROP_DISCARD_MASK_PATH
+    TEST_PATH = TEST_CROP_DISCARD_PATH
+    TEST_MASK_PATH = TEST_CROP_DISCARD_MASK_PATH
+    img_train_width = img_width_crop
+    img_train_height = img_height_crop
+    img_train_channels = img_channels_crop
+    img_test_width = img_width_crop
+    img_test_height = img_height_crop
+    img_test_channels = img_channels_crop
+    crops_made = True
 
 
-##########################
-#       LOAD DATA        #
+##########################                                                      
+#       LOAD DATA        #                                                      
 ##########################
 
 X_train, Y_train, \
 X_val, Y_val, \
-X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
-                           TEST_MASK_PATH, [img_height, img_width, img_channels])
+X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH, 
+                           TEST_MASK_PATH, [img_train_width, img_train_height,
+                           img_train_channels], [img_test_width, img_test_height,
+                           img_test_channels])
 
 # Crop the data to the desired size
-X_train, Y_train = crop_data(X_train, Y_train, img_width_crop, img_height_crop)
-X_val, Y_val = crop_data(X_val, Y_val, img_width_crop, img_height_crop)
-X_test, Y_test = crop_data(X_test, Y_test, img_width_crop, img_height_crop)
-img_width = img_width_crop
-img_height = img_height_crop
-img_channels = img_channels_crop
+if make_crops == True and crops_made == False:
+    X_train, Y_train, _ = crop_data(X_train, Y_train, img_width_crop,
+                                    img_height_crop)
+    X_val, Y_val, _ = crop_data(X_val, Y_val, img_width_crop, img_height_crop)
+    X_test, Y_test, _ = crop_data(X_test, Y_test, img_width_crop, img_height_crop)
+
+    if check_crop == True:
+        check_crops(X_train, [img_train_width, img_train_height], num_examples=3,
+                    out_dir="check_crops", job_id=job_id, suffix="_x_", grid=True)
+        check_crops(Y_train, [img_train_width, img_train_height], num_examples=3,
+                    out_dir="check_crops", job_id=job_id, suffix="_y_", grid=True)
+    
+    img_width = img_width_crop
+    img_height = img_height_crop
+    img_channels = img_channels_crop
+else:                                                                           
+    img_width = img_train_width                                                 
+    img_height = img_train_height                                               
+    img_channels = img_train_channels
 
 
 ##########################
 #    DATA AUGMENTATION   #
 ##########################
 
-train_generator, val_generator = keras_da_generator(X_train, Y_train, X_val,
-                                                    Y_val, batch_size_value, 
-                                                    preproc_function=False,
-                                                    save_examples=False)
+if custom_da == False:
+    train_generator, val_generator = keras_da_generator(X_train, Y_train, X_val,
+                                                        Y_val, batch_size_value,
+                                                        preproc_function=False,
+                                                        save_examples=aug_examples,
+                                                        job_id=job_id)
+else:
+    data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
+                         dim=(img_height,img_width), n_channels=1,
+                         shuffle=True, da=True, e_prob=0.7, elastic=True,
+                         vflip=False, hflip=False, rotation=True)
+
+    data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
+                             dim=(img_height,img_width), n_channels=1,
+                             shuffle=False, da=False)
+
+    train_generator = ImageDataGenerator(**data_gen_args)
+    val_generator = ImageDataGenerator(**data_gen_val_args)
+
+    # Generate examples of data augmentation
+    if aug_examples == True:
+        train_generator.flow_on_examples(10, job_id=job_id)
 
 
 ##########################
 #    BUILD THE NETWORK   #
 ##########################
 
-model = U_Net2([img_height, img_width, img_channels])
+print("\nCreating the newtwok . . .", flush=True)
+model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
 
 sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)
@@ -151,7 +301,7 @@ results = model.fit_generator(train_generator, validation_data=val_generator,
 #    PREDICTION     #
 #####################
 
-# Evaluate to obtain the loss and jaccard index                         
+# Evaluate to obtain the loss 
 print("Evaluating test data . . .")                                     
 score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)                                       
                                                                         
@@ -161,6 +311,18 @@ preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
 # Threshold predictions
 preds_test_t = (preds_test > 0.5).astype(np.uint8)
+
+# Reconstruct the data to the original shape and calculate Jaccard
+del preds_test
+h_num = int(original_shape[0] / preds_test_t.shape[1]) + (original_shape[0] % preds_test_t.shape[1] > 0)
+v_num = int(original_shape[1] / preds_test_t.shape[2]) + (original_shape[1] % preds_test_t.shape[2] > 0)
+
+recons_test_data = mix_data(preds_test_t, 
+                            math.ceil(preds_test_t.shape[0]/(h_num*v_num)),
+                            out_shape=[h_num, v_num], grid=False)
+print("The shape of the test data reconstructed is " + str(recons_test_data), 
+      flush=True)
+score[1] = jaccard_index_numpy(Y_test, recons_test_data)
 
 # Save the resulting images 
 if not os.path.exists(RESULT_DIR):

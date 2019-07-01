@@ -1,6 +1,30 @@
 import time
 from keras import backend as K
 import tensorflow as tf
+import numpy as np
+
+def jaccard_index_numpy(y_true, y_pred, t=0.5):
+    """Define Jaccard index.
+
+       Args:
+            y_true (numpy array): ground truth masks.
+            y_pred (numpy array): predicted masks.
+            t (float, optional): threshold to be applied.
+
+       Return:
+            jac (float): Jaccard index value
+    """
+
+    TP = np.count_nonzero(y_pred * y_true)
+    FP = np.count_nonzero(y_pred * (y_true - 1))
+    FN = np.count_nonzero((y_pred - 1) * y_true)
+
+    if (TP + FP + FN) == 0:
+        jac = 0
+    else:
+        jac = TP / (TP + FP + FN)
+
+    return jac
 
 
 def jaccard_index(y_true, y_pred, t=0.5):
