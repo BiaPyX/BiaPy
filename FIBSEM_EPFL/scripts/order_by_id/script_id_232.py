@@ -28,6 +28,7 @@ from skimage.io import imread, imshow, imread_collection, concatenate_images
 from skimage.transform import resize
 from skimage.morphology import label
 from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.models import load_model
 import tensorflow as tf
 from PIL import Image
 import math
@@ -76,14 +77,14 @@ img_train_channels = 1
 img_test_width = img_train_width
 img_test_height = img_train_height
 img_test_channels = img_train_channels
+original_test_shape=[img_test_width, img_test_height]
 
 # Crop variables
 img_width_crop = 256                                                            
 img_height_crop = 256                                                           
 img_channels_crop = 1 
 make_crops = True                                                               
-check_crop = True
-original_shape=[img_train_width,img_train_height]
+check_crop = False
 
 # Discard variables
 discard_cropped_images = False
@@ -271,7 +272,7 @@ else:
 #    BUILD THE NETWORK   #
 ##########################
 
-print("\nCreating the newtwok . . .", flush=True)
+#print("\nCreating the newtwok . . .", flush=True)
 model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
 
 sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
@@ -280,57 +281,68 @@ sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
 model.compile(optimizer=sdg, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
-# Fit model
-earlystopper = EarlyStopping(patience=50, verbose=1, restore_best_weights=True)
-
-if not os.path.exists(H5_DIR):                                      
-    os.makedirs(H5_DIR)
-checkpointer = ModelCheckpoint(os.path.join(H5_DIR, 'model.fibsem_' + job_file 
-                                                    +'.h5'),
-                               verbose=1, save_best_only=True)
-
-results = model.fit_generator(train_generator, validation_data=val_generator,
-                              validation_steps=math.ceil(len(X_val)/batch_size_value),
-                              steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
-                              epochs=epochs_value, callbacks=[earlystopper, 
-                                                              checkpointer,
-                                                              time_callback])
+## Fit model
+#earlystopper = EarlyStopping(patience=50, verbose=1, restore_best_weights=True)
+#
+#if not os.path.exists(H5_DIR):                                      
+#    os.makedirs(H5_DIR)
+#checkpointer = ModelCheckpoint(os.path.join(H5_DIR, 'model.fibsem_' + job_file 
+#                                                    +'.h5'),
+#                               verbose=1, save_best_only=True)
+#
+#results = model.fit_generator(train_generator, validation_data=val_generator,
+#                              validation_steps=math.ceil(len(X_val)/batch_size_value),
+#                              steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
+#                              epochs=epochs_value, callbacks=[earlystopper, 
+#                                                              checkpointer,
+#                                                              time_callback])
 
 
 #####################
 #    PREDICTION     #
 #####################
 
-# Evaluate to obtain the loss 
-print("Evaluating test data . . .")                                     
-score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)                                       
-                                                                        
-# Predict on test                                                       
-print("Making the predictions on test data . . .")                      
-preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1) 
+h5_dir="/data2/dfranco/experimentosTFM/FIBSEM_EPFL/h5_files/"
+model.load_weights(h5_dir + 'model.fibsem_' + job_id + '_' + test_id + '.h5')
+print("\nLoaded: /data2/dfranco/experimentosTFM/FIBSEM_EPFL/h5_files/" 
+      + 'model.fibsem_' + job_id + '_' + test_id + '.h5', flush=True)
+
+# Evaluate to obtain the loss
+print("Evaluating test data . . .")
+score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
+
+# Predict on test
+print("Making the predictions on test data . . .")
+preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
 # Threshold predictions
 preds_test_t = (preds_test > 0.5).astype(np.uint8)
 
 # Reconstruct the data to the original shape and calculate Jaccard
 del preds_test
-h_num = int(original_shape[0] / preds_test_t.shape[1]) + (original_shape[0] % preds_test_t.shape[1] > 0)
-v_num = int(original_shape[1] / preds_test_t.shape[2]) + (original_shape[1] % preds_test_t.shape[2] > 0)
+h_num = int(original_test_shape[0] / preds_test_t.shape[1]) + (original_test_shape[0] % preds_test_t.shape[1] > 0)
+v_num = int(original_test_shape[1] / preds_test_t.shape[2]) + (original_test_shape[1] % preds_test_t.shape[2] > 0)
 
-recons_test_data = mix_data(preds_test_t, 
+recons_test_data = mix_data(preds_test_t,
                             math.ceil(preds_test_t.shape[0]/(h_num*v_num)),
                             out_shape=[h_num, v_num], grid=False)
-print("The shape of the test data reconstructed is " + str(recons_test_data), 
-      flush=True)
+print("\nThe shape of the test data reconstructed is " 
+      + str(recons_test_data.shape), flush=True)
+
+Y_test = mix_data(Y_test, math.ceil(preds_test_t.shape[0]/(h_num*v_num)),     
+                 out_shape=[h_num, v_num], grid=False)
+print("\nThe shape of the ground truth data reconstructed is "
+      + str(Y_test.shape), flush=True)
+
 score[1] = jaccard_index_numpy(Y_test, recons_test_data)
 
-# Save the resulting images 
+# Save the resulting images
 if not os.path.exists(RESULT_DIR):
     os.makedirs(RESULT_DIR)
 if len(sys.argv) > 1 and test_id == "1":
     print("Saving predicted images . . .")
-    for i in range(0,len(preds_test)):
-        im = Image.fromarray(preds_test[i,:,:,0]*255)
+    for i in range(0,len(recons_test_data)):
+        im = Image.fromarray(recons_test_data[i,:,:,0]*255)
         im = im.convert('L')
         im.save(os.path.join(RESULT_DIR,"test_out" + str(i) + ".png"))
 
@@ -341,27 +353,27 @@ if len(sys.argv) > 1 and test_id == "1":
 
 # VOC
 print("Calculating VOC . . .")
-voc = voc_calculation(Y_test, preds_test_t, score[1])
+voc = voc_calculation(Y_test, recons_test_data, score[1])
 
 # Time
-print("Epoch average time: ", np.mean(time_callback.times))
-print("Train time (s):", np.sum(time_callback.times))
+#print("Epoch average time: ", np.mean(time_callback.times))
+#print("Train time (s):", np.sum(time_callback.times))
 
 # Loss and metric
-print("Train loss:", np.min(results.history['loss']))
-print("Validation loss:", np.min(results.history['val_loss']))
+#print("Train loss:", np.min(results.history['loss']))
+#print("Validation loss:", np.min(results.history['val_loss']))
 print("Test loss:", score[0])
-print("Train jaccard_index:", np.max(results.history['jaccard_index']))
-print("Validation jaccard_index:", np.max(results.history['val_jaccard_index']))
+#print("Train jaccard_index:", np.max(results.history['jaccard_index']))
+#print("Validation jaccard_index:", np.max(results.history['val_jaccard_index']))
 print("Test jaccard_index:", score[1])
 print("VOC: ", voc)
-print("Epoch number:", len(results.history['val_loss']))
-
+#print("Epoch number:", len(results.history['val_loss']))
+#
 # If we are running multiple tests store the results
-if len(sys.argv) > 1:
-
-    store_history(results, score, voc, time_callback, log_dir, job_file)
-
-    if test_id == "1":
-        create_plots(results, job_id, CHAR_DIR)
-
+#if len(sys.argv) > 1:
+#
+#    store_history(results, score, voc, time_callback, log_dir, job_file) 
+#
+#    if test_id == "1":
+#        create_plots(results, job_id, CHAR_DIR)
+#

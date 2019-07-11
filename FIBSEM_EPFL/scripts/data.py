@@ -18,7 +18,9 @@ from keras.preprocessing.image import ImageDataGenerator as kerasDA
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
               val_split=0.1, seedValue=42):                                            
-    """Load train, validation and test data from the given paths.       
+    """Load train, validation and test data from the given paths. If the images 
+       to be loaded are smaller than the given dimension it will be sticked in 
+       the (0, 0).
                                                                         
        Args:                                                            
             train_path (str): path to the training data.                
@@ -66,7 +68,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             img = img[:,:,0]    
         
         img = np.expand_dims(img, axis=-1)                              
-        X_train[n] = img                                                
+        X_train[n,:img.shape[0],:img.shape[1],:img.shape[2]] = img                                                
                                                                         
     print('\n[LOAD] Loading train masks . . .', flush=True)
     for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids)):                      
@@ -74,7 +76,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         if len(mask.shape) == 3:
             mask = mask[:,:,0]
         mask = np.expand_dims(mask, axis=-1)                            
-        Y_train[n] = mask                                               
+        Y_train[n,:mask.shape[0],:mask.shape[1],:mask.shape[2]] = mask
                                                                         
     Y_train = Y_train/255                                               
                                                                         
@@ -90,7 +92,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         if len(img.shape) == 3:                                                 
             img = img[:,:,0]
         img = np.expand_dims(img, axis=-1)                              
-        X_test[n] = img                                                 
+        X_test[n,:img.shape[0],:img.shape[1],:img.shape[2]] = img
                                                                         
     print("\n[LOAD] Loading test masks . . .", flush=True)
     for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids)):                       
@@ -98,16 +100,22 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         if len(mask.shape) == 3:
             mask = mask[:,:,0]
         mask = np.expand_dims(mask, axis=-1)                            
-        Y_test[n] = mask                                                
+        Y_test[n,:mask.shape[0],:mask.shape[1],:mask.shape[2]] = mask
                                                                         
     Y_test = Y_test/255                                                 
-                                                                        
+    
+    print("\n[LOAD] Loaded train data shape is: " + str(X_train.shape),
+          flush=True)
+    print("\n[LOAD] Loaded test data shape is: " + str(X_test.shape), flush=True)
+    
     if (create_val == True):                                            
         X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train,
                                                           train_size=1-val_split,
                                                           test_size=val_split,
                                                           random_state=seedValue)      
- 
+        print("\n[LOAD] Loaded validation data shape is: " + str(X_val.shape),
+              flush=True)
+
         return X_train, Y_train, X_val, Y_val, X_test, Y_test           
     else:                                                               
         return X_train, Y_train, X_test, Y_test                         
@@ -191,7 +199,7 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
 
     # Discard images from the data set
     if discard == True:
-        print("\n[CROP]: Selecting images to discard . . .", flush=True)
+        print("\n[CROP] Selecting images to discard . . .", flush=True)
         for img_num in tqdm(range(0, r_data.shape[0])):                             
             for i in range(0, h_num):                                       
                 for j in range(0, v_num):
@@ -213,7 +221,7 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
     
     cont = 0                                                              
     l_i = 0
-    print("\n[CROP]: Cropping images . . .", flush=True)
+    print("\n[CROP] Cropping images . . .", flush=True)
     for img_num in tqdm(range(0, r_data.shape[0])): 
         for i in range(0, h_num):                                       
             for j in range(0, v_num):                     
@@ -242,8 +250,11 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
                 cont = cont + 1                                             
                                                                         
     if discard == True:
-        print("\n" +str(discarded) + " images discarded. New shape after " 
+        print("\n[CROP] " +str(discarded) + " images discarded. New shape after " 
               + "cropping and discarding is " + str(cropped_data.shape),
+              flush=True)
+    else:
+        print("\n[CROP] New data shape is: " + str(cropped_data.shape),
               flush=True)
 
     return cropped_data, cropped_data_mask, force_shape
@@ -568,7 +579,7 @@ class ImageDataGenerator(keras.utils.Sequence):
             trans_mask = np.expand_dims(im_concat_r[...,1], axis=-1)
             transform_string = '_e'
             transformed = True
-            self.t_counter[0] = self.t_counter[0] + 1
+            self.t_counter[0] += 1
      
  
         # [0-0.25) : vertical flip
@@ -734,7 +745,8 @@ def fixed_dregee(image):
 def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value, 
                        save_examples=True, job_id="none_job_id", out_dir='aug', 
                        hflip=True, vflip=True, seedValue=42, fill_mode='reflect',
-                       preproc_function=True):
+                       preproc_function=True, featurewise_center=False,
+                       featurewise_std_normalization=False):
 
     """Makes data augmentation of the given input data.
 
@@ -755,6 +767,8 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             values.
             preproc_function (bool, optional): if true preprocess function to
             make random 180 degrees rotations are performed. 
+            featurewise_center (bool, optional):
+            featurewise_std_normalization (bool, optional):
 
        Returns:
             train_generator (Keras iterable of flow_from_directory): train data
@@ -764,18 +778,27 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
     """
     
     if (preproc_function == True):
-        data_gen_args = dict(horizontal_flip=hflip, vertical_flip=vflip,
-                             fill_mode=fill_mode,
-                             preprocessing_function=fixed_dregee)
+        data_gen_args1 = dict(horizontal_flip=hflip, vertical_flip=vflip,
+                              fill_mode=fill_mode,
+                              preprocessing_function=fixed_dregee,
+                              featurewise_center=featurewise_center,
+                              featurewise_std_normalization=featurewise_std_normalization)
+        data_gen_args2 = dict(horizontal_flip=hflip, vertical_flip=vflip,        
+                              fill_mode=fill_mode,                               
+                              preprocessing_function=fixed_dregee)
     else:
-        data_gen_args = dict(horizontal_flip=hflip, vertical_flip=vflip,
-                             fill_mode=fill_mode, rotation_range=180)
+        data_gen_args1 = dict(horizontal_flip=hflip, vertical_flip=vflip,
+                              fill_mode=fill_mode, rotation_range=180,
+                              featurewise_center=featurewise_center,
+                              featurewise_std_normalization=featurewise_std_normalization)
+        data_gen_args2 = dict(horizontal_flip=hflip, vertical_flip=vflip,        
+                              fill_mode=fill_mode, rotation_range=180)           
                              
     
     # Train data, provide the same seed and keyword arguments to the fit and 
     # flow methods
-    X_datagen_train = kerasDA(**data_gen_args)
-    Y_datagen_train = kerasDA(**data_gen_args)
+    X_datagen_train = kerasDA(**data_gen_args1)
+    Y_datagen_train = kerasDA(**data_gen_args2)
     X_datagen_train.fit(X_train, augment=True, seed=seedValue)
     Y_datagen_train.fit(Y_train, augment=True, seed=seedValue)
     
@@ -784,7 +807,12 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
     Y_datagen_val = kerasDA()
     X_datagen_val.fit(X_val, augment=False, seed=seedValue)
     Y_datagen_val.fit(Y_val, augment=False, seed=seedValue)
-    
+  
+    # Pruebas 
+    iterator = X_datagen_train.flow(X_train, Y_train)                           
+    batchX, batchy = iterator.next()                                            
+    print(batchX.shape, batchX.mean(), batchX.max(), batchX.min())              
+ 
     # Check a few of generated images
     if (save_examples == True):
         

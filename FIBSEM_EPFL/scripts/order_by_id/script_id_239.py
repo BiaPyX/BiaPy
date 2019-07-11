@@ -45,7 +45,9 @@ if len(sys.argv) > 1:
     job_id = str(sys.argv[2])                                             
     test_id = str(sys.argv[3])                                            
     job_file = job_id + '_' + test_id                                     
-    log_dir = os.path.join(str(sys.argv[4]), job_id)                   
+    base_work_dir = str(sys.argv[4])
+    log_dir = os.path.join(base_work_dir, 'logs', job_id)
+    h5_dir = os.path.join(base_work_dir, 'h5_files')
 
 # Checks
 print('job_id :', job_id)
@@ -65,7 +67,7 @@ crops_made = False
 ###############################################
 
 # Working dir
-os.chdir("/data2/dfranco/experimentosTFM/FIBSEM_EPFL")
+os.chdir(base_work_dir)
 
 # Image dimensions
 # Note: train and test dimensions must be the same when training the network and
@@ -93,6 +95,9 @@ d_percentage_value = 0.05
 # Data augmentation variables
 custom_da = False
 aug_examples = True
+
+# Load preoviously generated model weigths
+load_previous_weights = True
 
 # General parameters
 batch_size_value = 6
@@ -272,7 +277,7 @@ else:
 #    BUILD THE NETWORK   #
 ##########################
 
-#print("\nCreating the newtwok . . .", flush=True)
+print("\nCreating the newtwok . . .", flush=True)
 model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
 
 sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
@@ -281,97 +286,104 @@ sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
 model.compile(optimizer=sdg, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
-## Fit model
-#earlystopper = EarlyStopping(patience=50, verbose=1, restore_best_weights=True)
-#
-#if not os.path.exists(H5_DIR):                                      
-#    os.makedirs(H5_DIR)
-#checkpointer = ModelCheckpoint(os.path.join(H5_DIR, 'model.fibsem_' + job_file 
-#                                                    +'.h5'),
-#                               verbose=1, save_best_only=True)
-#
-#results = model.fit_generator(train_generator, validation_data=val_generator,
-#                              validation_steps=math.ceil(len(X_val)/batch_size_value),
-#                              steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
-#                              epochs=epochs_value, callbacks=[earlystopper, 
-#                                                              checkpointer,
-#                                                              time_callback])
+if load_previous_weights == False:
+    # Fit model
+    earlystopper = EarlyStopping(patience=50, verbose=1, restore_best_weights=True)
+    
+    if not os.path.exists(H5_DIR):                                      
+        os.makedirs(H5_DIR)
+    checkpointer = ModelCheckpoint(os.path.join(H5_DIR, 'model.fibsem_' + job_file 
+                                                        +'.h5'),
+                                   verbose=1, save_best_only=True)
+    
+    results = model.fit_generator(train_generator, validation_data=val_generator,
+                                  validation_steps=math.ceil(len(X_val)/batch_size_value),
+                                  steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
+                                  epochs=epochs_value, callbacks=[earlystopper, 
+                                                                  checkpointer,
+                                                                  time_callback])
+else:
+    h5_file=os.path.join(h5_dir, 'model.fibsem_232_' + test_id + '.h5')
+    print("Loading model weights from h5_file: " + h5_file , flush=True)
+    model.load_weights(h5_file)
 
 
 #####################
 #    PREDICTION     #
 #####################
 
-h5_dir="/data2/dfranco/experimentosTFM/FIBSEM_EPFL/h5_files/"
-model.load_weights(h5_dir + 'model.fibsem_' + job_id + '_' + test_id + '.h5')
-
 # Evaluate to obtain the loss
 print("Evaluating test data . . .")
 score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
-
+    
 # Predict on test
 print("Making the predictions on test data . . .")
 preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
-
+    
 # Threshold predictions
 preds_test_t = (preds_test > 0.5).astype(np.uint8)
 
-# Reconstruct the data to the original shape and calculate Jaccard
-del preds_test
-h_num = int(original_test_shape[0] / preds_test_t.shape[1]) + (original_test_shape[0] % preds_test_t.shape[1] > 0)
-v_num = int(original_test_shape[1] / preds_test_t.shape[2]) + (original_test_shape[1] % preds_test_t.shape[2] > 0)
-
-recons_test_data = mix_data(preds_test_t,
-                            math.ceil(preds_test_t.shape[0]/(h_num*v_num)),
-                            out_shape=[h_num, v_num], grid=False)
-print("\nThe shape of the test data reconstructed is " 
-      + str(recons_test_data.shape), flush=True)
-
-Y_test = mix_data(Y_test, math.ceil(preds_test_t.shape[0]/(h_num*v_num)),     
-                 out_shape=[h_num, v_num], grid=False)
-print("\nThe shape of the ground truth data reconstructed is "
-      + str(Y_test.shape), flush=True)
-
-score[1] = jaccard_index_numpy(Y_test, recons_test_data)
-
+if load_previous_weights == True:
+    # Reconstruct the data to the original shape and calculate Jaccard
+    del preds_test
+    h_num = int(original_test_shape[0] / preds_test_t.shape[1]) \
+            + (original_test_shape[0] % preds_test_t.shape[1] > 0)
+    v_num = int(original_test_shape[1] / preds_test_t.shape[2]) \
+            + (original_test_shape[1] % preds_test_t.shape[2] > 0)
+    
+    preds_test = mix_data(preds_test_t,
+                                math.ceil(preds_test_t.shape[0]/(h_num*v_num)),
+                                out_shape=[h_num, v_num], grid=False)
+    print("\nThe shape of the test data reconstructed is "
+          + str(preds_test.shape), flush=True)
+    
+    Y_test = mix_data(Y_test, math.ceil(preds_test_t.shape[0]/(h_num*v_num)),
+                     out_shape=[h_num, v_num], grid=False)
+    print("\nThe shape of the ground truth data reconstructed is "
+          + str(Y_test.shape), flush=True)
+    
+    score[1] = jaccard_index_numpy(Y_test, preds_test)
+    
 # Save the resulting images
 if not os.path.exists(RESULT_DIR):
     os.makedirs(RESULT_DIR)
 if len(sys.argv) > 1 and test_id == "1":
     print("Saving predicted images . . .")
-    for i in range(0,len(recons_test_data)):
-        im = Image.fromarray(recons_test_data[i,:,:,0]*255)
+    for i in range(0,len(preds_test)):
+        im = Image.fromarray(preds_test[i,:,:,0]*255)
         im = im.convert('L')
         im.save(os.path.join(RESULT_DIR,"test_out" + str(i) + ".png"))
-
-
+ 
+      
 #####################
 #  SCORES OBTAINED  #
 #####################
 
 # VOC
 print("Calculating VOC . . .")
-voc = voc_calculation(Y_test, recons_test_data, score[1])
+voc = voc_calculation(Y_test, preds_test, score[1])
 
-# Time
-#print("Epoch average time: ", np.mean(time_callback.times))
-#print("Train time (s):", np.sum(time_callback.times))
+if load_previous_weights == False:
+    # Time
+    print("Epoch average time: ", np.mean(time_callback.times))
+    print("Epoch number:", len(results.history['val_loss']))
+    print("Train time (s):", np.sum(time_callback.times))
+    
+    # Loss and metric
+    print("Train loss:", np.min(results.history['loss']))
+    print("Train jaccard_index:", np.max(results.history['jaccard_index']))
+    print("Validation loss:", np.min(results.history['val_loss']))
+    print("Validation jaccard_index:", np.max(results.history['val_jaccard_index']))
 
-# Loss and metric
-#print("Train loss:", np.min(results.history['loss']))
-#print("Validation loss:", np.min(results.history['val_loss']))
 print("Test loss:", score[0])
-#print("Train jaccard_index:", np.max(results.history['jaccard_index']))
-#print("Validation jaccard_index:", np.max(results.history['val_jaccard_index']))
 print("Test jaccard_index:", score[1])
 print("VOC: ", voc)
-#print("Epoch number:", len(results.history['val_loss']))
-#
-# If we are running multiple tests store the results
-#if len(sys.argv) > 1:
-#
-#    store_history(results, score, voc, time_callback, log_dir, job_file) 
-#
-#    if test_id == "1":
-#        create_plots(results, job_id, CHAR_DIR)
-#
+
+if load_previous_weights == False:    
+    # If we are running multiple tests store the results
+    if len(sys.argv) > 1:
+    
+        store_history(results, score, voc, time_callback, log_dir, job_file)
+    
+        if test_id == "1":
+            create_plots(results, job_id, CHAR_DIR)

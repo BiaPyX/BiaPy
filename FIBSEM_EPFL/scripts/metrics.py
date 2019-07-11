@@ -3,13 +3,12 @@ from keras import backend as K
 import tensorflow as tf
 import numpy as np
 
-def jaccard_index_numpy(y_true, y_pred, t=0.5):
+def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.
 
        Args:
             y_true (numpy array): ground truth masks.
             y_pred (numpy array): predicted masks.
-            t (float, optional): threshold to be applied.
 
        Return:
             jac (float): Jaccard index value
