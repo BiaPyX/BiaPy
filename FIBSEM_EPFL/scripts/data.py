@@ -56,10 +56,10 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     # Get and resize train images and masks                             
     X_train = np.zeros((len(train_ids), image_train_shape[1], 
                         image_train_shape[0], image_train_shape[2]),
-                        dtype=np.uint8)                
+                        dtype=np.int16)                
     Y_train = np.zeros((len(train_mask_ids), image_train_shape[1], 
                         image_train_shape[0], image_train_shape[2]),
-                        dtype=np.uint8) 
+                        dtype=np.int16) 
                                                                         
     print("\n[LOAD] Loading train images . . .", flush=True) 
     for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):     
@@ -69,7 +69,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         
         img = np.expand_dims(img, axis=-1)                              
         X_train[n,:img.shape[0],:img.shape[1],:img.shape[2]] = img                                                
-                                                                        
+
     print('\n[LOAD] Loading train masks . . .', flush=True)
     for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids)):                      
         mask = imread(os.path.join(train_mask_path, id_))               
@@ -82,9 +82,9 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                                                                         
     # Get and resize test images and masks                              
     X_test = np.zeros((len(test_ids), image_test_shape[1], image_test_shape[0],   
-                       image_test_shape[2]), dtype=np.uint8)                 
+                       image_test_shape[2]), dtype=np.int16)                 
     Y_test = np.zeros((len(test_mask_ids), image_test_shape[1], 
-                       image_test_shape[0], image_test_shape[2]), dtype=np.uint8) 
+                       image_test_shape[0], image_test_shape[2]), dtype=np.int16) 
                                                                         
     print("\n[LOAD] Loading test images . . .", flush=True)
     for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):       
@@ -93,7 +93,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             img = img[:,:,0]
         img = np.expand_dims(img, axis=-1)                              
         X_test[n,:img.shape[0],:img.shape[1],:img.shape[2]] = img
-                                                                        
+
     print("\n[LOAD] Loading test masks . . .", flush=True)
     for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids)):                       
         mask = imread(os.path.join(test_mask_path, id_))                
@@ -107,18 +107,21 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     print("\n[LOAD] Loaded train data shape is: " + str(X_train.shape),
           flush=True)
     print("\n[LOAD] Loaded test data shape is: " + str(X_test.shape), flush=True)
-    
-    if (create_val == True):                                            
+   
+    norm_value = np.mean(X_train)
+ 
+    if create_val == True:                                            
         X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train,
                                                           train_size=1-val_split,
                                                           test_size=val_split,
+                                                          shuffle=True,
                                                           random_state=seedValue)      
         print("\n[LOAD] Loaded validation data shape is: " + str(X_val.shape),
               flush=True)
 
-        return X_train, Y_train, X_val, Y_val, X_test, Y_test           
+        return X_train, Y_train, X_val, Y_val, X_test, Y_test, norm_value
     else:                                                               
-        return X_train, Y_train, X_test, Y_test                         
+        return X_train, Y_train, X_test, Y_test, norm_value                         
 
 
 def __foreground_percentage(mask, class_tag=1):
@@ -182,10 +185,10 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
 
     # Resize data to adjust to a value divisible by height x width
     r_data = np.zeros((data.shape[0], h_num*height, v_num*width, data.shape[3]),      
-                      dtype=np.uint8)    
+                      dtype=np.int16)    
     r_data[:data.shape[0],:data.shape[1],:data.shape[2]] = data                      
     r_data_mask = np.zeros((data.shape[0], h_num*height, v_num*width, 
-                            data.shape[3]), dtype=np.uint8)                                   
+                            data.shape[3]), dtype=np.int16)                                   
     r_data_mask[:data_mask.shape[0],:data_mask.shape[1],
                 :data_mask.shape[2]] = data_mask
     if data.shape != r_data.shape:
@@ -215,9 +218,9 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
 
     # Crop data                                                         
     cropped_data = np.zeros(((total_cropped-discarded), height, width,     
-                             r_data.shape[3]), dtype=np.uint8)
+                             r_data.shape[3]), dtype=np.int16)
     cropped_data_mask = np.zeros(((total_cropped-discarded), height, width, 
-                                  r_data.shape[3]), dtype=np.uint8)            
+                                  r_data.shape[3]), dtype=np.int16)            
     
     cont = 0                                                              
     l_i = 0
@@ -287,7 +290,7 @@ def mix_data(data, num, out_shape=[1, 1], grid=True):
 
     # Mix data
     mixed_data = np.zeros((num, out_shape[1]*width, out_shape[0]*height, 1),
-                          dtype=np.uint8)
+                          dtype=np.int16)
     cont = 0
     for img_num in tqdm(range(0, num)):
         for i in range(0, out_shape[1]):
@@ -746,7 +749,7 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
                        save_examples=True, job_id="none_job_id", out_dir='aug', 
                        hflip=True, vflip=True, seedValue=42, fill_mode='reflect',
                        preproc_function=True, featurewise_center=False,
-                       featurewise_std_normalization=False):
+                       featurewise_std_normalization=False, zoom=False):
 
     """Makes data augmentation of the given input data.
 
@@ -767,8 +770,11 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             values.
             preproc_function (bool, optional): if true preprocess function to
             make random 180 degrees rotations are performed. 
-            featurewise_center (bool, optional):
-            featurewise_std_normalization (bool, optional):
+            featurewise_center (bool, optional): set input mean to 0 over the 
+            dataset, feature-wise.
+            featurewise_std_normalization (bool, optional): divide inputs by std 
+            of the dataset, feature-wise.
+            zoom (bool, optional): make random zoom in the images.
 
        Returns:
             train_generator (Keras iterable of flow_from_directory): train data
@@ -776,23 +782,29 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             val_generator (Keras iterable of flow_from_directory): validation 
             data iterator.
     """
-    
-    if (preproc_function == True):
+  
+    zoom_val = 0.25 if zoom == True else 0 
+
+    if preproc_function == True:
         data_gen_args1 = dict(horizontal_flip=hflip, vertical_flip=vflip,
                               fill_mode=fill_mode,
                               preprocessing_function=fixed_dregee,
                               featurewise_center=featurewise_center,
-                              featurewise_std_normalization=featurewise_std_normalization)
+                              featurewise_std_normalization=featurewise_std_normalization,
+                              zoom_range=zoom_val)
         data_gen_args2 = dict(horizontal_flip=hflip, vertical_flip=vflip,        
                               fill_mode=fill_mode,                               
-                              preprocessing_function=fixed_dregee)
+                              preprocessing_function=fixed_dregee,
+                              zoom_range=zoom_val)
     else:
         data_gen_args1 = dict(horizontal_flip=hflip, vertical_flip=vflip,
                               fill_mode=fill_mode, rotation_range=180,
                               featurewise_center=featurewise_center,
-                              featurewise_std_normalization=featurewise_std_normalization)
+                              featurewise_std_normalization=featurewise_std_normalization,
+                              zoom_range=zoom_val)
         data_gen_args2 = dict(horizontal_flip=hflip, vertical_flip=vflip,        
-                              fill_mode=fill_mode, rotation_range=180)           
+                              fill_mode=fill_mode, rotation_range=180,
+                              zoom_range=zoom_val)           
                              
     
     # Train data, provide the same seed and keyword arguments to the fit and 
@@ -808,13 +820,8 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
     X_datagen_val.fit(X_val, augment=False, seed=seedValue)
     Y_datagen_val.fit(Y_val, augment=False, seed=seedValue)
   
-    # Pruebas 
-    iterator = X_datagen_train.flow(X_train, Y_train)                           
-    batchX, batchy = iterator.next()                                            
-    print(batchX.shape, batchX.mean(), batchX.max(), batchX.min())              
- 
     # Check a few of generated images
-    if (save_examples == True):
+    if save_examples == True:
         
         out_dir = os.path.join(out_dir, job_id)
         if not os.path.exists(out_dir):          

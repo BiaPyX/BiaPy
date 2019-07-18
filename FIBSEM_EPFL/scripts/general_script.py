@@ -93,11 +93,13 @@ discard_cropped_images = True
 d_percentage_value = 0.05
 
 # Data augmentation variables
+normalize_data = False
 custom_da = False
 aug_examples = True
+keras_zoom = False
 
 # Load preoviously generated model weigths
-load_previous_weights = True
+load_previous_weights = False
 
 # General parameters
 batch_size_value = 6
@@ -141,7 +143,7 @@ if discard_cropped_images == True and make_crops == True \
 
     # Load data
     X_train, Y_train, \
-    X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
+    X_test, Y_test, norm_value = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
                                TEST_MASK_PATH, 
                                [img_train_width, img_train_height, img_train_channels],
                                [img_test_width, img_test_height, img_test_channels],
@@ -218,11 +220,16 @@ if make_crops == True and discard_cropped_images == True:
 
 X_train, Y_train, \
 X_val, Y_val, \
-X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH, 
+X_test, Y_test, norm_value = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH, 
                            TEST_MASK_PATH, [img_train_width, img_train_height,
                            img_train_channels], [img_test_width, img_test_height,
                            img_test_channels])
-
+# Nomalize the data
+if normalize_data == True:
+    X_train -= int(norm_value)
+    X_val -= int(norm_value)
+    X_test -= int(norm_value)
+    
 # Crop the data to the desired size
 if make_crops == True and crops_made == False:
     X_train, Y_train, _ = crop_data(X_train, Y_train, img_width_crop,
@@ -254,7 +261,8 @@ if custom_da == False:
                                                         Y_val, batch_size_value,
                                                         preproc_function=False,
                                                         save_examples=aug_examples,
-                                                        job_id=job_id)
+                                                        job_id=job_id, 
+                                                        zoom=keras_zoom)
 else:
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                          dim=(img_height,img_width), n_channels=1,
@@ -320,27 +328,26 @@ score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
 print("Making the predictions on test data . . .")                              
 preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)      
                                                                                 
-# Threshold predictions                                                         
+no_bin_preds_test = preds_test                                                  
 preds_test_t = (preds_test > 0.5).astype(np.uint8)                              
                                                                                 
-if load_previous_weights == True:                                               
-    # Reconstruct the data to the original shape and calculate Jaccard          
-    del preds_test                                                              
-    h_num = int(original_test_shape[0] / preds_test_t.shape[1]) \               
-            + (original_test_shape[0] % preds_test_t.shape[1] > 0)              
-    v_num = int(original_test_shape[1] / preds_test_t.shape[2]) \               
-            + (original_test_shape[1] % preds_test_t.shape[2] > 0)              
-                                                                                
-    preds_test = mix_data(preds_test_t,                                         
-                                math.ceil(preds_test_t.shape[0]/(h_num*v_num)), 
-                                out_shape=[h_num, v_num], grid=False)           
-    print("\nThe shape of the test data reconstructed is "                      
-          + str(preds_test.shape), flush=True)                                  
-                                                                                
-    Y_test = mix_data(Y_test, math.ceil(preds_test_t.shape[0]/(h_num*v_num)),   
-                     out_shape=[h_num, v_num], grid=False)                      
-    print("\nThe shape of the ground truth data reconstructed is "              
-          + str(Y_test.shape), flush=True)                                      
+# Reconstruct the data to the original shape and calculate Jaccard          
+del preds_test                                                              
+h_num = int(original_test_shape[0] / preds_test_t.shape[1]) \
+        + (original_test_shape[0] % preds_test_t.shape[1] > 0)              
+v_num = int(original_test_shape[1] / preds_test_t.shape[2]) \
+        + (original_test_shape[1] % preds_test_t.shape[2] > 0)              
+                                                                            
+preds_test = mix_data(preds_test_t,                                         
+                            math.ceil(preds_test_t.shape[0]/(h_num*v_num)), 
+                            out_shape=[h_num, v_num], grid=False)           
+print("\nThe shape of the test data reconstructed is "                      
+      + str(preds_test.shape), flush=True)                                  
+                                                                            
+Y_test = mix_data(Y_test, math.ceil(preds_test_t.shape[0]/(h_num*v_num)),   
+                 out_shape=[h_num, v_num], grid=False)                      
+print("\nThe shape of the ground truth data reconstructed is "              
+      + str(Y_test.shape), flush=True)                                      
                                                                                 
 # Obtain the metric value                                                       
 score[1] = jaccard_index_numpy(Y_test, preds_test)
@@ -350,8 +357,8 @@ if not os.path.exists(RESULT_DIR):
     os.makedirs(RESULT_DIR)
 if len(sys.argv) > 1 and test_id == "1":
     print("Saving predicted images . . .")
-    for i in range(0,len(preds_test)):
-        im = Image.fromarray(preds_test[i,:,:,0]*255)
+    for i in range(0,len(no_bin_preds_test)):
+        im = Image.fromarray(no_bin_preds_test[i,:,:,0]*255)
         im = im.convert('L')
         im.save(os.path.join(RESULT_DIR,"test_out" + str(i) + ".png"))
  

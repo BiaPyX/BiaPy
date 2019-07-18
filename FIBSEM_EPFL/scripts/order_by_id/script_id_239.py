@@ -73,11 +73,11 @@ os.chdir(base_work_dir)
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
 # be sure to take care of this.
-img_train_width = 1463
-img_train_height = 1613
+img_train_width = 878
+img_train_height = 968
 img_train_channels = 1
-img_test_width = 1334 
-img_test_height = 1553
+img_test_width = 800
+img_test_height = 932
 img_test_channels = 1
 original_test_shape=[img_test_width, img_test_height]
 
@@ -89,7 +89,7 @@ make_crops = True
 check_crop = True
 
 # Discard variables
-discard_cropped_images = True
+discard_cropped_images = False
 d_percentage_value = 0.05
 
 # Data augmentation variables
@@ -109,10 +109,10 @@ epochs_value = 360
 time_callback = TimeHistory()
 
 # Paths to data and results                                             
-TRAIN_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'x')                         
-TRAIN_MASK_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'y')                    
-TEST_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'x')                           
-TEST_MASK_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'y')                      
+TRAIN_PATH = os.path.join('kasthuri_pp', 'reshaped', 'train', 'x')                         
+TRAIN_MASK_PATH = os.path.join('kasthuri_pp', 'reshaped', 'train', 'y')                    
+TEST_PATH = os.path.join('kasthuri_pp', 'reshaped', 'test', 'x')                           
+TEST_MASK_PATH = os.path.join('kasthuri_pp', 'reshaped', 'test', 'y')                      
 
 if make_crops == True and discard_cropped_images == True:
     TRAIN_CROP_DISCARD_PATH = os.path.join('data_d', 'kas_'
@@ -321,28 +321,28 @@ print("Making the predictions on test data . . .")
 preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
     
 # Threshold predictions
-preds_test_t = (preds_test > 0.5).astype(np.uint8)
+preds_test_t = preds_test
 
-if load_previous_weights == True:
-    # Reconstruct the data to the original shape and calculate Jaccard
-    del preds_test
-    h_num = int(original_test_shape[0] / preds_test_t.shape[1]) \
-            + (original_test_shape[0] % preds_test_t.shape[1] > 0)
-    v_num = int(original_test_shape[1] / preds_test_t.shape[2]) \
-            + (original_test_shape[1] % preds_test_t.shape[2] > 0)
-    
-    preds_test = mix_data(preds_test_t,
-                                math.ceil(preds_test_t.shape[0]/(h_num*v_num)),
-                                out_shape=[h_num, v_num], grid=False)
-    print("\nThe shape of the test data reconstructed is "
-          + str(preds_test.shape), flush=True)
-    
-    Y_test = mix_data(Y_test, math.ceil(preds_test_t.shape[0]/(h_num*v_num)),
-                     out_shape=[h_num, v_num], grid=False)
-    print("\nThe shape of the ground truth data reconstructed is "
-          + str(Y_test.shape), flush=True)
-    
-    score[1] = jaccard_index_numpy(Y_test, preds_test)
+# Reconstruct the data to the original shape and calculate Jaccard
+del preds_test
+h_num = int(original_test_shape[0] / preds_test_t.shape[1]) \
+        + (original_test_shape[0] % preds_test_t.shape[1] > 0)
+v_num = int(original_test_shape[1] / preds_test_t.shape[2]) \
+        + (original_test_shape[1] % preds_test_t.shape[2] > 0)
+
+preds_test = mix_data(preds_test_t,
+                            math.ceil(preds_test_t.shape[0]/(h_num*v_num)),
+                            out_shape=[h_num, v_num], grid=False)
+print("\nThe shape of the test data reconstructed is "
+      + str(preds_test.shape), flush=True)
+
+Y_test = mix_data(Y_test, math.ceil(preds_test_t.shape[0]/(h_num*v_num)),
+                 out_shape=[h_num, v_num], grid=False)
+print("\nThe shape of the ground truth data reconstructed is "
+      + str(Y_test.shape), flush=True)
+
+# Obtain the metric value
+score[1] = jaccard_index_numpy(Y_test, preds_test)
     
 # Save the resulting images
 if not os.path.exists(RESULT_DIR):

@@ -73,8 +73,8 @@ os.chdir(base_work_dir)
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
 # be sure to take care of this.
-img_train_width = 2048
-img_train_height = 2048
+img_train_width = 1024
+img_train_height = 768
 img_train_channels = 1
 img_test_width = img_train_width
 img_test_height = img_train_height
@@ -93,14 +93,16 @@ discard_cropped_images = False
 d_percentage_value = 0.05
 
 # Data augmentation variables
-custom_da = False
-aug_examples = True
+normalize_data = True
+custom_da = False                                                               
+aug_examples = True                                                             
+keras_zoom = False
 
 # Load preoviously generated model weigths
 load_previous_weights = False
 
 # General parameters
-batch_size_value = 1
+batch_size_value = 6
 momentum_value = 0.99
 learning_rate_value = 0.001
 epochs_value = 360
@@ -109,19 +111,19 @@ epochs_value = 360
 time_callback = TimeHistory()
 
 # Paths to data and results                                             
-TRAIN_PATH = os.path.join('achucarro', 'train', 'x')                         
-TRAIN_MASK_PATH = os.path.join('achucarro', 'train', 'y')                    
-TEST_PATH = os.path.join('achucarro', 'test', 'x')                           
-TEST_MASK_PATH = os.path.join('achucarro', 'test', 'y')                      
+TRAIN_PATH = os.path.join('data', 'train', 'x')                         
+TRAIN_MASK_PATH = os.path.join('data', 'train', 'y')                    
+TEST_PATH = os.path.join('data', 'test', 'x')                           
+TEST_MASK_PATH = os.path.join('data', 'test', 'y')                      
 
 if make_crops == True and discard_cropped_images == True:
-    TRAIN_CROP_DISCARD_PATH = os.path.join('data_d', 'kas_'
+    TRAIN_CROP_DISCARD_PATH = os.path.join('data_d', 'fib_'
                               + str(d_percentage_value), 'train', 'x')
-    TRAIN_CROP_DISCARD_MASK_PATH = os.path.join('data_d', 'kas_'
+    TRAIN_CROP_DISCARD_MASK_PATH = os.path.join('data_d', 'fib_'
                                    + str(d_percentage_value), 'train', 'y')
-    TEST_CROP_DISCARD_PATH = os.path.join('data_d', 'kas_'
+    TEST_CROP_DISCARD_PATH = os.path.join('data_d', 'fib_'
                              + str(d_percentage_value), 'test', 'x')
-    TEST_CROP_DISCARD_MASK_PATH = os.path.join('data_d', 'kas_'
+    TEST_CROP_DISCARD_MASK_PATH = os.path.join('data_d', 'fib_'
                                   + str(d_percentage_value), 'test', 'y')
 RESULT_DIR = os.path.join('results', 'results_' + job_id)
 CHAR_DIR='charts'
@@ -141,7 +143,7 @@ if discard_cropped_images == True and make_crops == True \
 
     # Load data
     X_train, Y_train, \
-    X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
+    X_test, Y_test, norm_value = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH,
                                TEST_MASK_PATH, 
                                [img_train_width, img_train_height, img_train_channels],
                                [img_test_width, img_test_height, img_test_channels],
@@ -218,10 +220,16 @@ if make_crops == True and discard_cropped_images == True:
 
 X_train, Y_train, \
 X_val, Y_val, \
-X_test, Y_test = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH, 
+X_test, Y_test, norm_value = load_data(TRAIN_PATH, TRAIN_MASK_PATH, TEST_PATH, 
                            TEST_MASK_PATH, [img_train_width, img_train_height,
                            img_train_channels], [img_test_width, img_test_height,
                            img_test_channels])
+
+# Nomalize the data                                                             
+if normalize_data == True:                                                     
+    X_train -= int(norm_value)
+    X_val -= int(norm_value)                                                         
+    X_test -= int(norm_value)
 
 # Crop the data to the desired size
 if make_crops == True and crops_made == False:
@@ -254,10 +262,8 @@ if custom_da == False:
                                                         Y_val, batch_size_value,
                                                         preproc_function=False,
                                                         save_examples=aug_examples,
-                                                        job_id=job_id,
-                                                        featurewise_center=True,
-                                                        featurewise_std_normalization=False)
-
+                                                        job_id=job_id, 
+                                                        zoom=keras_zoom)
 else:
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                          dim=(img_height,img_width), n_channels=1,
@@ -315,46 +321,45 @@ else:
 #    PREDICTION     #
 #####################
 
-# Evaluate to obtain the loss value (the metric value will be discarded)
-print("Evaluating test data . . .")
-score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
-    
-# Predict on test
-print("Making the predictions on test data . . .")
-preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
-    
-# Threshold predictions
+# Evaluate to obtain the loss value (the metric value will be discarded)        
+print("Evaluating test data . . .")                                             
+score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)  
+                                                                                
+# Predict on test                                                               
+print("Making the predictions on test data . . .")                              
+preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)      
+                                       
+no_bin_preds_test = preds_test                                         
 preds_test_t = (preds_test > 0.5).astype(np.uint8)
-
-if load_previous_weights == True:
-    # Reconstruct the data to the original shape and calculate Jaccard
-    del preds_test
-    h_num = int(original_test_shape[0] / preds_test_t.shape[1]) \
-            + (original_test_shape[0] % preds_test_t.shape[1] > 0)
-    v_num = int(original_test_shape[1] / preds_test_t.shape[2]) \
-            + (original_test_shape[1] % preds_test_t.shape[2] > 0)
-    
-    preds_test = mix_data(preds_test_t,
-                                math.ceil(preds_test_t.shape[0]/(h_num*v_num)),
-                                out_shape=[h_num, v_num], grid=False)
-    print("\nThe shape of the test data reconstructed is "
-          + str(preds_test.shape), flush=True)
-    
-    Y_test = mix_data(Y_test, math.ceil(preds_test_t.shape[0]/(h_num*v_num)),
-                     out_shape=[h_num, v_num], grid=False)
-    print("\nThe shape of the ground truth data reconstructed is "
-          + str(Y_test.shape), flush=True)
-
-# Obtain the metric value    
+                                                                                
+# Reconstruct the data to the original shape and calculate Jaccard          
+del preds_test                                                              
+h_num = int(original_test_shape[0] / preds_test_t.shape[1]) \
+        + (original_test_shape[0] % preds_test_t.shape[1] > 0)              
+v_num = int(original_test_shape[1] / preds_test_t.shape[2]) \
+        + (original_test_shape[1] % preds_test_t.shape[2] > 0)              
+                                                                            
+preds_test = mix_data(preds_test_t,                                         
+                            math.ceil(preds_test_t.shape[0]/(h_num*v_num)), 
+                            out_shape=[h_num, v_num], grid=False)           
+print("\nThe shape of the test data reconstructed is "                      
+      + str(preds_test.shape), flush=True)                                  
+                                                                            
+Y_test = mix_data(Y_test, math.ceil(preds_test_t.shape[0]/(h_num*v_num)),   
+                 out_shape=[h_num, v_num], grid=False)                      
+print("\nThe shape of the ground truth data reconstructed is "              
+      + str(Y_test.shape), flush=True)                                      
+                                                                                
+# Obtain the metric value                                                       
 score[1] = jaccard_index_numpy(Y_test, preds_test)
-    
+
 # Save the resulting images
 if not os.path.exists(RESULT_DIR):
     os.makedirs(RESULT_DIR)
 if len(sys.argv) > 1 and test_id == "1":
     print("Saving predicted images . . .")
-    for i in range(0,len(preds_test)):
-        im = Image.fromarray(preds_test[i,:,:,0]*255)
+    for i in range(0,len(no_bin_preds_test)):
+        im = Image.fromarray(no_bin_preds_test[i,:,:,0]*255)
         im = im.convert('L')
         im.save(os.path.join(RESULT_DIR,"test_out" + str(i) + ".png"))
  

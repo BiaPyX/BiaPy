@@ -110,19 +110,19 @@ epochs_value = 360
 time_callback = TimeHistory()
 
 # Paths to data and results                          
-TRAIN_PATH = os.path.join('achucarro', 'pruebas/2/train', 'x')                         
-TRAIN_MASK_PATH = os.path.join('achucarro', 'pruebas/2/train', 'y')                    
-TEST_PATH = os.path.join('achucarro', 'pruebas/2/test', 'x')                           
-TEST_MASK_PATH = os.path.join('achucarro', 'pruebas/2/test', 'y')                      
+TRAIN_PATH = os.path.join('achucarro', 'train', 'x')                         
+TRAIN_MASK_PATH = os.path.join('achucarro', 'train', 'y')                    
+TEST_PATH = os.path.join('achucarro', 'test', 'x')                           
+TEST_MASK_PATH = os.path.join('achucarro', 'test', 'y')                      
 
 if make_crops == True and discard_cropped_images == True:
-    TRAIN_CROP_DISCARD_PATH = os.path.join('data_d', 'achu_'
+    TRAIN_CROP_DISCARD_PATH = os.path.join('data_d', 'achu_241_'
                               + str(d_percentage_value), 'train', 'x')
-    TRAIN_CROP_DISCARD_MASK_PATH = os.path.join('data_d', 'achu_'
+    TRAIN_CROP_DISCARD_MASK_PATH = os.path.join('data_d', 'achu_241_'
                                    + str(d_percentage_value), 'train', 'y')
-    TEST_CROP_DISCARD_PATH = os.path.join('data_d', 'achu_'
+    TEST_CROP_DISCARD_PATH = os.path.join('data_d', 'achu_241_'
                              + str(d_percentage_value), 'test', 'x')
-    TEST_CROP_DISCARD_MASK_PATH = os.path.join('data_d', 'achu_'
+    TEST_CROP_DISCARD_MASK_PATH = os.path.join('data_d', 'achu_241_'
                                   + str(d_percentage_value), 'test', 'y')
 RESULT_DIR = os.path.join('results', 'results_' + job_id)
 CHAR_DIR='charts'
