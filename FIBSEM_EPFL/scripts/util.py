@@ -93,7 +93,7 @@ def create_plots(results, job_id, chartOutDir):
 
 
 def store_history(results, test_score, voc, time_callback, log_dir, 
-                  job_file, metric='jaccard_index'):
+                  job_file, metric='jaccard_index', smooth_score=0, smooth_voc=0):
     """Stores the results obtained as csv to manipulate them later 
        and labeled in another file as historic results.
 
@@ -130,7 +130,9 @@ def store_history(results, test_score, voc, time_callback, log_dir,
             + str(np.max(results.history[metric])) + ',' 
             + str(np.max(results.history['val_' + metric])) + ',' 
             + str(test_score[1]) + ',' 
+            + str(smooth_score) + ','
             + str(voc) + ','
+            + str(smooth_voc) + ','
             + str(len(results.history['val_loss'])) + ',' 
             + str(np.mean(time_callback.times)) + ','
             + str(np.sum(time_callback.times)) + '\n')

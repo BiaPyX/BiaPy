@@ -197,7 +197,15 @@ def voc_calculation(y_true, y_pred, foreground):
     y_true[y_true == 2] = 1
 
     background = jaccard_index_numpy(y_true, y_pred)
-
     voc = (float)(foreground + background)/2
+
+    # Revert the changes
+    y_pred[y_pred == 0] = 2
+    y_pred[y_pred == 1] = 0
+    y_pred[y_pred == 2] = 1
+
+    y_true[y_true == 0] = 2
+    y_true[y_true == 1] = 0
+    y_true[y_true == 2] = 1
 
     return voc

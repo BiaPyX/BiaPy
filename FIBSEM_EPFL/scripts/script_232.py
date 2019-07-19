@@ -73,12 +73,12 @@ os.chdir(base_work_dir)
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
 # be sure to take care of this.
-img_train_width = 1463
-img_train_height = 1613
+img_train_width = 1024
+img_train_height = 768
 img_train_channels = 1
-img_test_width = 1334 
-img_test_height = 1553
-img_test_channels = 1
+img_test_width = img_train_width
+img_test_height = img_train_height
+img_test_channels = img_train_channels
 original_test_shape=[img_test_width, img_test_height]
 
 # Crop variables
@@ -89,7 +89,7 @@ make_crops = True
 check_crop = True
 
 # Discard variables
-discard_cropped_images = True
+discard_cropped_images = False
 d_percentage_value = 0.05
 
 # Data augmentation variables
@@ -99,7 +99,7 @@ aug_examples = True
 keras_zoom = False
 
 # Load preoviously generated model weigths
-load_previous_weights = False
+load_previous_weights = True
 
 # General parameters
 batch_size_value = 6
@@ -115,10 +115,10 @@ post_process = True
 save_post_process_img = True
 
 # Paths to data and results                                             
-TRAIN_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'x')                         
-TRAIN_MASK_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'y')                    
-TEST_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'x')                           
-TEST_MASK_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'y')                      
+TRAIN_PATH = os.path.join('data', 'train', 'x')                         
+TRAIN_MASK_PATH = os.path.join('data', 'train', 'y')                    
+TEST_PATH = os.path.join('data', 'test', 'x')                           
+TEST_MASK_PATH = os.path.join('data', 'test', 'y')                      
 
 if make_crops == True and discard_cropped_images == True:
     TRAIN_CROP_DISCARD_PATH = os.path.join('data_d', 'kas_'
@@ -324,27 +324,27 @@ else:
 #    PREDICTION     #
 #####################
 
-# Evaluate to obtain the loss value (the metric value will be discarded)
-print("Evaluating test data . . .")
-score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
-
-# Predict on test
-print("Making the predictions on test data . . .")
-preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
+# Evaluate to obtain the loss value (the metric value will be discarded)        
+print("Evaluating test data . . .")                                             
+score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)  
+                                                                                
+# Predict on test                                                               
+print("Making the predictions on test data . . .")                              
+preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)      
 
 # Threshold images
-bin_preds_test = (preds_test > 0.5).astype(np.uint8)
-
-# Reconstruct the data to the original shape and calculate Jaccard
+bin_preds_test = (preds_test > 0.5).astype(np.uint8)                              
+                                                                                
+# Reconstruct the data to the original shape and calculate Jaccard          
 h_num = int(original_test_shape[0] / bin_preds_test.shape[1]) \
-        + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
+        + (original_test_shape[0] % bin_preds_test.shape[1] > 0)              
 v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
-        + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
+        + (original_test_shape[1] % bin_preds_test.shape[2] > 0)              
 
 # To calculate the jaccard (binarized)
-recons_preds_test = mix_data(bin_preds_test,
-                             math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
-                             out_shape=[h_num, v_num], grid=False)
+recons_preds_test = mix_data(bin_preds_test,                                         
+                             math.ceil(bin_preds_test.shape[0]/(h_num*v_num)), 
+                             out_shape=[h_num, v_num], grid=False)           
 
 # To save the probabilities (no binarized)
 recons_no_bin_preds_test = mix_data(preds_test*255,
@@ -352,8 +352,8 @@ recons_no_bin_preds_test = mix_data(preds_test*255,
                                     out_shape=[h_num, v_num], grid=False)
 recons_no_bin_preds_test = recons_no_bin_preds_test.astype(float)/255
 
-Y_test = mix_data(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
-                  out_shape=[h_num, v_num], grid=False)
+Y_test = mix_data(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),   
+                  out_shape=[h_num, v_num], grid=False)                      
 
 print("\nThe shape of the test data reconstructed is " + str(Y_test.shape),
       flush=True)
@@ -374,7 +374,7 @@ if len(sys.argv) > 1 and test_id == "1":
         im = im.convert('L')
         im.save(os.path.join(RESULT_DIR,"test_out" + str(i) + ".png"))
 
-
+ 
 ####################
 #  POST-PROCESING  #
 ####################
@@ -383,7 +383,7 @@ if post_process == True and make_crops == True:
     print("\nPost processing active . . ", flush=True)
     X_test = mix_data(X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
                   out_shape=[h_num, v_num], grid=False)
-
+     
     Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
 
     print("\n1-Smoothing crops", flush=True)
@@ -399,8 +399,8 @@ if post_process == True and make_crops == True:
             )
         )
         Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
-
-        if len(sys.argv) > 1 and test_id == "1":
+       
+        if len(sys.argv) > 1 and test_id == "1": 
             im = Image.fromarray(predictions_smooth[:,:,0]*255)
             im = im.convert('L')
             im.save(os.path.join(RESULT_DIR,"test_out_smooth_" + str(i) + ".png"))
@@ -435,7 +435,7 @@ print("VOC: ", voc, flush=True)
 if load_previous_weights == False:
     # If we are running multiple tests store the results
     if len(sys.argv) > 1:
-
+        
         if post_process == True:
             store_history(results, score, voc, time_callback, log_dir, job_file,
             smooth_score, smooth_voc)
@@ -446,7 +446,7 @@ if load_previous_weights == False:
             create_plots(results, job_id, CHAR_DIR)
 
 if post_process == True and make_crops == True:
-    print("Post-process: SMOOTH - Test jaccard_index: ", smooth_score,
+    print("Post-process: SMOOTH - Test jaccard_index: ", smooth_score, 
           flush=True)
     print("Post-process: SMOOTH - VOC: ", smooth_voc, flush=True)
 

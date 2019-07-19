@@ -301,7 +301,7 @@ def mix_data(data, num, out_shape=[1, 1], grid=True):
 
                 mixed_data[img_num, (i*width):((i+1)*height), 
                            (j*width):((j+1)*height)] = data[cont]
-    
+                
                 if grid == True:
                     mixed_data[img_num,(i*width):((i+1)*height)-1,
                               (j*width)] = v
@@ -311,7 +311,6 @@ def mix_data(data, num, out_shape=[1, 1], grid=True):
                               (j*width):((j+1)*height)-1] = v
                     mixed_data[img_num,((i+1)*height)-1,
                               (j*width):((j+1)*height)-1] = v
-
                 cont = cont + 1
 
     return mixed_data
