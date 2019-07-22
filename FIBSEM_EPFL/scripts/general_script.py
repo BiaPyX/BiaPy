@@ -35,7 +35,7 @@ import tensorflow as tf
 from PIL import Image
 import math
 import time
-import tqdm
+from tqdm import tqdm
 
 
 ##########################

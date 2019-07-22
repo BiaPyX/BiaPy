@@ -17,4 +17,6 @@ FIBSEM_EPFL/logs
 FIBSEM_EPFL/charts
 FIBSEM_EPFL/h5_files
 FIBSEM_EPFL/jupyterNotebooks
+FIBSEM_EPFL/cell_challenge_eval
 TEM/data
+FIBSEM_EPFL/scripts/cell_challenge_evaluation/testing_dataset
