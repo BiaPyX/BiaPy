@@ -360,8 +360,6 @@ print("\nThe shape of the test data reconstructed is " + str(Y_test.shape),
 
 # Metrics (jaccard + VOC)
 print("\nCalculating Jaccard . . .", flush=True)
-print("TIPO_recons_preds_test: " , recons_preds_test.dtype, flush=True)
-print("TIPO_y_test: " , Y_test.dtype, flush=True)
 score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
 print("\nCalculating VOC . . .", flush=True)
 voc = voc_calculation(Y_test, recons_preds_test, score[1])
@@ -407,16 +405,6 @@ if post_process == True and make_crops == True:
             im = im.convert('L')
             im.save(os.path.join(RESULT_DIR,"test_out_smooth_" + str(i) + ".png"))
 
-            print("TIPO_recons_preds_test: " , Y_test_smooth.dtype, flush=True)
-            print("TIPO_y_test: " , Y_test.dtype, flush=True)
-            im = Image.fromarray(Y_test_smooth[i,:,:,0]*255)
-            im = im.convert('L')
-            im.save(os.path.join(RESULT_DIR,"y_test_out_smooth_" + str(i) + ".png"))
-            im = Image.fromarray(Y_test[i,:,:,0]*255)
-            im = im.convert('L')
-            im.save(os.path.join(RESULT_DIR,"y_test_" + str(i) + ".png"))
-        
- 
     # Metrics (jaccard + VOC)
     smooth_score = jaccard_index_numpy(Y_test, Y_test_smooth)
     smooth_voc = voc_calculation(Y_test, Y_test_smooth, smooth_score)
@@ -447,8 +435,12 @@ print("VOC: ", voc, flush=True)
 if load_previous_weights == False:
     # If we are running multiple tests store the results
     if len(sys.argv) > 1:
-
-        store_history(results, score, voc, time_callback, log_dir, job_file)
+        
+        if post_process == True:
+            store_history(results, score, voc, time_callback, log_dir, job_file,
+            smooth_score, smooth_voc)
+        else:
+            store_history(results, score, voc, time_callback, log_dir, job_file)
 
         if test_id == "1":
             create_plots(results, job_id, CHAR_DIR)

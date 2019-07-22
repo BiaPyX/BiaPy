@@ -159,7 +159,12 @@ def store_history(results, test_score, voc, time_callback, log_dir,
     f.write('############## TEST ' + metric.upper()
             + ' ############## \n')
     f.write(str(test_score[1]) + '\n')
+    f.write('############## TEST ' + metric.upper()
+            + ' SMOOTH ############## \n')
+    f.write(str(smooth_score) + '\n')
     f.write('############## VOC ############## \n')
     f.write(str(voc) + '\n')
+    f.write('############## VOC SMOOTH ############## \n')
+    f.write(str(smooth_voc) + '\n')
     f.close()
 

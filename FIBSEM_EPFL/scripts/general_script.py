@@ -6,7 +6,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 # Limit the number of threads
-from util import *
+from util import limit_threads, set_seed, create_plots, store_history,\
+                 TimeHistory
 limit_threads()
 
 # Try to generate the results as reproducible as possible
@@ -17,9 +18,10 @@ set_seed(42)
 #        IMPORTS         #
 ##########################
 
-from data import *
-from unet import *
-from metrics import *
+from data import load_data, crop_data, mix_data, check_crops, \
+                 keras_da_generator, ImageDataGenerator
+from unet import U_Net
+from metrics import jaccard_index, jaccard_index_numpy, voc_calculation
 import random
 import numpy as np
 import keras
@@ -32,6 +34,8 @@ from keras.models import load_model
 import tensorflow as tf
 from PIL import Image
 import math
+import time
+import tqdm
 
 
 ##########################
@@ -112,7 +116,6 @@ time_callback = TimeHistory()
 
 # Post-processing
 post_process = True
-save_post_process_img = True
 
 # Paths to data and results                                             
 TRAIN_PATH = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'x')                         
@@ -387,6 +390,7 @@ if post_process == True and make_crops == True:
     Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
 
     print("\n1-Smoothing crops", flush=True)
+    start_time = time.time()
     for i in tqdm(range(0,len(X_test))):
         from smooth_tiled_predictions import predict_img_with_smooth_windowing
         predictions_smooth = predict_img_with_smooth_windowing(
@@ -405,10 +409,14 @@ if post_process == True and make_crops == True:
             im = im.convert('L')
             im.save(os.path.join(RESULT_DIR,"test_out_smooth_" + str(i) + ".png"))
 
+    elapsed_time = time.time() - start_time                             
+    print("Time smoothing crops: " + str(elapsed_time))
+
     # Metrics (jaccard + VOC)
     smooth_score = jaccard_index_numpy(Y_test, Y_test_smooth)
     smooth_voc = voc_calculation(Y_test, Y_test_smooth, smooth_score)
 
+    print("\nFinish post-processing", flush=True)
 
 #####################
 #  SCORES OBTAINED  #
@@ -430,7 +438,7 @@ if load_previous_weights == False:
 
 print("Test loss:", score[0], flush=True)
 print("Test jaccard_index:", score[1], flush=True)
-print("VOC: ", voc, flush=True)
+print("VOC:", voc, flush=True)
 
 if load_previous_weights == False:
     # If we are running multiple tests store the results
@@ -438,7 +446,7 @@ if load_previous_weights == False:
 
         if post_process == True:
             store_history(results, score, voc, time_callback, log_dir, job_file,
-            smooth_score, smooth_voc)
+            smooth_score=smooth_score, smooth_voc=smooth_voc)
         else:
             store_history(results, score, voc, time_callback, log_dir, job_file)
 
@@ -446,8 +454,8 @@ if load_previous_weights == False:
             create_plots(results, job_id, CHAR_DIR)
 
 if post_process == True and make_crops == True:
-    print("Post-process: SMOOTH - Test jaccard_index: ", smooth_score,
+    print("Post-process: SMOOTH - Test jaccard_index:", smooth_score,
           flush=True)
-    print("Post-process: SMOOTH - VOC: ", smooth_voc, flush=True)
+    print("Post-process: SMOOTH - VOC:", smooth_voc, flush=True)
 
 print("\nFINISHED JOB ", job_file, " !!", flush=True)
