@@ -18,7 +18,7 @@ def limit_threads(threads_number='1'):
             threads_number (int, optional): number of threads.
     """
 
-    print("Python process limited to " + threads_number + " thread")
+    Print("Python process limited to " + threads_number + " thread")
 
     os.environ['MKL_NUM_THREADS'] = '1'
     os.environ['OPENBLAS_NUM_THREADS'] = '1'

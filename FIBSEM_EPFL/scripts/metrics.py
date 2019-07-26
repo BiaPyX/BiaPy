@@ -173,9 +173,9 @@ def voc_calculation_meanIoU(y_true, y_pred, foreground_iou):
 
     voc = (float)(foreground_iou + background_iou)/2
 
-    print("Foreground IoU: " + str(foreground_iou))
-    print("Background IoU: " + str(background_iou))
-    print("VOC: " + str(voc))
+    Print("Foreground IoU: " + str(foreground_iou))
+    Print("Background IoU: " + str(background_iou))
+    Print("VOC: " + str(voc))
 
     return voc
 

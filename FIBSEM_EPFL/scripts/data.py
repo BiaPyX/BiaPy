@@ -14,6 +14,7 @@ from scipy.ndimage.filters import gaussian_filter
 from PIL import Image
 from texttable import Texttable
 from keras.preprocessing.image import ImageDataGenerator as kerasDA
+from util import Print
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
@@ -45,7 +46,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                 Y_test (numpy array): test images' mask.                
     """      
     
-    print("\nLoading images . . .", flush=True)
+    Print("Loading images . . .")
                                                                         
     train_ids = sorted(next(os.walk(train_path))[2])                    
     train_mask_ids = sorted(next(os.walk(train_mask_path))[2])          
@@ -61,7 +62,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                         image_train_shape[0], image_train_shape[2]),
                         dtype=np.int16) 
                                                                         
-    print("\n[LOAD] Loading train images . . .", flush=True) 
+    Print("[LOAD] Loading train images . . .") 
     for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):     
         img = imread(os.path.join(train_path, id_))                     
         if len(img.shape) == 3:
@@ -70,7 +71,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         img = np.expand_dims(img, axis=-1)                              
         X_train[n,:img.shape[0],:img.shape[1],:img.shape[2]] = img                                                
 
-    print('\n[LOAD] Loading train masks . . .', flush=True)
+    Print('[LOAD] Loading train masks . . .')
     for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids)):                      
         mask = imread(os.path.join(train_mask_path, id_))               
         if len(mask.shape) == 3:
@@ -86,7 +87,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     Y_test = np.zeros((len(test_mask_ids), image_test_shape[1], 
                        image_test_shape[0], image_test_shape[2]), dtype=np.int16) 
                                                                         
-    print("\n[LOAD] Loading test images . . .", flush=True)
+    Print("[LOAD] Loading test images . . .")
     for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):       
         img = imread(os.path.join(test_path, id_))                      
         if len(img.shape) == 3:                                                 
@@ -94,7 +95,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         img = np.expand_dims(img, axis=-1)                              
         X_test[n,:img.shape[0],:img.shape[1],:img.shape[2]] = img
 
-    print("\n[LOAD] Loading test masks . . .", flush=True)
+    Print("[LOAD] Loading test masks . . .")
     for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids)):                       
         mask = imread(os.path.join(test_mask_path, id_))                
         if len(mask.shape) == 3:
@@ -104,9 +105,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                                                                         
     Y_test = Y_test/255                                                 
     
-    print("\n[LOAD] Loaded train data shape is: " + str(X_train.shape),
-          flush=True)
-    print("[LOAD] Loaded test data shape is: " + str(X_test.shape), flush=True)
+    Print("[LOAD] Loaded train data shape is: " + str(X_train.shape))
+    Print("[LOAD] Loaded test data shape is: " + str(X_test.shape))
    
     norm_value = np.mean(X_train)
  
@@ -116,8 +116,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                                                           test_size=val_split,
                                                           shuffle=True,
                                                           random_state=seedValue)      
-        print("[LOAD] Loaded validation data shape is: " + str(X_val.shape),
-              flush=True)
+        Print("[LOAD] Loaded validation data shape is: " + str(X_val.shape))
 
         return X_train, Y_train, X_val, Y_val, X_test, Y_test, norm_value
     else:                                                               
@@ -166,9 +165,8 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
             made. Useful for future crop calls. 
     """                                                                 
                                                                         
-    print("\nCropping [" + str(data.shape[1]) + ', ' + str(data.shape[2]) 
-          + "] images into [" + str(width) + ', ' + str(height) + "] . . .", 
-          flush=True)                                                  
+    Print("Cropping [" + str(data.shape[1]) + ', ' + str(data.shape[2]) 
+          + "] images into [" + str(width) + ', ' + str(height) + "] . . .")
     
     # Calculate the number of images to be generated                    
     if force_shape == [0, 0]:
@@ -178,8 +176,7 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
     else:
         h_num = force_shape[0]
         v_num = force_shape[1]
-        print("\n[CROP] Force crops to [" + str(h_num) + ", " + str(v_num) + "]",
-              flush=True)
+        Print("[CROP] Force crops to [" + str(h_num) + ", " + str(v_num) + "]")
 
     total_cropped = data.shape[0]*h_num*v_num    
 
@@ -192,9 +189,8 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
     r_data_mask[:data_mask.shape[0],:data_mask.shape[1],
                 :data_mask.shape[2]] = data_mask
     if data.shape != r_data.shape:
-        print("\n[CROP] Resized data from " + str(data.shape) + " to " 
-              + str(r_data.shape) + " to be divisible by the shape provided",
-              flush=True)
+        Print("[CROP] Resized data from " + str(data.shape) + " to " 
+              + str(r_data.shape) + " to be divisible by the shape provided")
 
     discarded = 0                                                                    
     cont = 0
@@ -202,7 +198,7 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
 
     # Discard images from the data set
     if discard == True:
-        print("\n[CROP] Selecting images to discard . . .", flush=True)
+        Print("[CROP] Selecting images to discard . . .")
         for img_num in tqdm(range(0, r_data.shape[0])):                             
             for i in range(0, h_num):                                       
                 for j in range(0, v_num):
@@ -224,7 +220,7 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
     
     cont = 0                                                              
     l_i = 0
-    print("\n[CROP] Cropping images . . .", flush=True)
+    Print("[CROP] Cropping images . . .")
     for img_num in tqdm(range(0, r_data.shape[0])): 
         for i in range(0, h_num):                                       
             for j in range(0, v_num):                     
@@ -253,12 +249,10 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
                 cont = cont + 1                                             
                                                                         
     if discard == True:
-        print("\n[CROP] " +str(discarded) + " images discarded. New shape after " 
-              + "cropping and discarding is " + str(cropped_data.shape),
-              flush=True)
+        Print("[CROP] " +str(discarded) + " images discarded. New shape after " 
+              + "cropping and discarding is " + str(cropped_data.shape))
     else:
-        print("\n[CROP] New data shape is: " + str(cropped_data.shape),
-              flush=True)
+        Print("[CROP] New data shape is: " + str(cropped_data.shape))
 
     return cropped_data, cropped_data_mask, force_shape
 
@@ -337,8 +331,8 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
    
     # First checks
     if out_dim[0] < data.shape[1] or out_dim[1] < data.shape[2]:
-        print("\n[C_CROP] Aborting: out_dim must be equal or greater than" 
-              + "data.shape", flush=True)
+        Print("[C_CROP] Aborting: out_dim must be equal or greater than" 
+              + "data.shape")
         return
     out_dir = os.path.join(out_dir, job_id)
     if not os.path.exists(out_dir):
@@ -357,25 +351,24 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
     if total*num_examples > data.shape[0]:
         num_examples = math.ceil(data.shape[0]/total)
         total = num_examples
-        print("\n[C_CROP] Requested num_examples too high for data. Set " 
-              + "automatically to " + str(num_examples), flush=True)
+        Print("[CHECK_CROP] Requested num_examples too high for data. Set " 
+              + "automatically to " + str(num_examples))
     else:
         total = total*num_examples
 
     if include_crops == True:
-        print("\n[C_CROP] Saving cropped data images . . .", flush=True)
+        Print("[CHECK_CROP] Saving cropped data images . . .")
         for i in tqdm(range(0, total)):
                 im = Image.fromarray(data[i,:,:,0]*v)
                 im = im.convert('L')
                 im.save(os.path.join(out_dir,"c_" + suffix + str(i) + ".png"))
 
-    print("\n[C_CROP] Obtaining " + str(num_examples) + " images of ["
+    Print("[CHECK_CROP] Obtaining " + str(num_examples) + " images of ["
           + str(data.shape[1]*h_num) + "," + str(data.shape[2]*v_num) + "] from ["
-          + str(data.shape[1]) + "," + str(data.shape[2]) + "]",
-          flush=True)
+          + str(data.shape[1]) + "," + str(data.shape[2]) + "]")
     m_data = mix_data(data, num_examples, out_shape=[h_num, v_num], grid=grid) 
     
-    print("\n[C_CROP] Saving data mixed images . . .", flush=True)
+    Print("[CHECK_CROP] Saving data mixed images . . .")
     for i in tqdm(range(0, num_examples)):
         im = Image.fromarray(m_data[i,:,:,0]*v)
         im = im.convert('L')
@@ -475,8 +468,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         else:
             self.squared = False
             if rotation == True:
-                print("\n[AUG] Images not square, only 180 rotations will be" 
-                      + " done.", flush=True)
+                Print("[AUG] Images not square, only 180 rotations will be done.")
 
         # Create a list which will hold a counter of the number of times a 
         # transformation is performed. 
@@ -676,8 +668,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                dataset. If False the examples will be generated from the start
                of the dataset. 
         """
-        print("\n[FLOW] Creating the examples of data augmentation . . .", 
-              flush=True)
+        Print("[FLOW] Creating the examples of data augmentation . . .")
 
         prefix = ""
         if 'save_prefix' in locals():
