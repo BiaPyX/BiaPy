@@ -1,7 +1,12 @@
 import time
+import os
 from keras import backend as K
 import tensorflow as tf
 import numpy as np
+from util import Print
+from skimage import measure
+from shutil import copytree
+from PIL import Image
 
 def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.
@@ -209,3 +214,71 @@ def voc_calculation(y_true, y_pred, foreground):
     y_true[y_true == 2] = 1
 
     return voc
+
+def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig,
+                    job_id="0"):
+    """Cell tracking challenge detection accuracy (DET) calculation. This
+       function uses the binary provided by the challente to detect the cell
+       (det_bin is the path to such binary). To obtain more info please visit
+       the followin link:
+           http://celltrackingchallenge.net/evaluation-methodology/
+
+       The name of the folders that are here created follow the conventions listed
+       in the following link:
+           https://public.celltrackingchallenge.net/documents/Naming%20and%20file%20content%20conventions.pdf
+
+       Args:
+           Y_test (numpy array): ground truth mask.  
+           preds_test (numpy array): predicted mask.
+           ge_path (str): path where the ground truth is stored. If the folder
+           does not exist it will be created with the Y_test ground truth.
+           eval_path (str): path where the evaluation of the metric will be done.
+           det_bin (str): path to the DET binary provided by the cell tracking
+           challenge.      
+           n_dig (int): The number of digits used for encoding temporal indices
+           (e.g., 3). Used by the DET calculation binary, more info in: 
+               https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf
+           job_id (str, optional): id of the job. 
+           
+       Return:
+           det (float): DET accuracy.
+    """
+
+    # Create the ground truth directory to be reused in future runs if it is not
+    # created yet
+    if not os.path.exists(ge_path):
+        Print("No ground truth folder detected. Creating it . . .")
+        os.makedirs(ge_path)
+    
+        gt_labels = measure.label(Y_test[:,:,:,0])
+        for i in range(0,len(gt_labels)):
+            i_dig = "{:0" + n_dig + "d}"
+            i_dig  = i_dig.format(i)
+            im = Image.fromarray(gt_labels[i].astype('uint8'))
+            im = im.convert('I;16')
+            im.save(os.path.join(ge_path, "man_track" + str(i_dig) + ".tif"))
+   
+    # Copy ground truth folder
+    gt_eval_path = os.path.join(eval_path, job_id + '_GT', 'TRA')
+    if not os.path.exists(gt_eval_path):
+        copytree(ge_path, gt_eval_path)
+  
+    # Create results folder 
+    res_eval_path = os.path.join(eval_path, job_id + '_RES')
+    if not os.path.exists(res_eval_path):
+        os.makedirs(res_eval_path)
+    
+    res_labels = measure.label(preds_test[:,:,:,0])
+    for i in range(0,len(res_labels)):
+        i_dig = "{:0" + n_dig + "d}"
+        i_dig  = i_dig.format(i)
+        im = Image.fromarray(res_labels[i].astype('uint8'))
+        im = im.convert('I;16')
+        im.save(os.path.join(res_eval_path, "mask" + str(i_dig) + ".tif"))
+   
+    # Execute the metric with the given binary path 
+    det_cmd = det_bin + " " + eval_path +  " " + job_id + " " + n_dig
+    det_out = os.popen(det_cmd).read()
+
+    det = det_out.split()[2] 
+    return det

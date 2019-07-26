@@ -442,10 +442,12 @@ if load_previous_weights == False:
     if len(sys.argv) > 1:
 
         if post_process == True:
-            store_history(results, score, voc, time_callback, log_dir, job_file,
-            smooth_score=smooth_score, smooth_voc=smooth_voc)
+            store_history(results, score, voc, det, time_callback, log_dir,
+                          job_file, smooth_score=smooth_score,
+                          smooth_voc=smooth_voc, smooth_det=smooth_det)
         else:
-            store_history(results, score, voc, time_callback, log_dir, job_file)
+            store_history(results, score, voc, det, time_callback, log_dir,
+                          job_file)
 
         if test_id == "1":
             create_plots(results, job_id, char_dir)

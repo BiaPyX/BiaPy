@@ -7,6 +7,10 @@ import keras
 import random
 import matplotlib.pyplot as plt
 
+def Print(s):
+    """ Just a print """
+    print("\n" + s, flush=True)
+
 def limit_threads(threads_number='1'):
     """Limit the number of threads for a python process.
        
@@ -92,8 +96,9 @@ def create_plots(results, job_id, chartOutDir):
     plt.clf()
 
 
-def store_history(results, test_score, voc, time_callback, log_dir, 
-                  job_file, metric='jaccard_index', smooth_score=0, smooth_voc=0):
+def store_history(results, test_score, voc, det, time_callback, log_dir, 
+                  job_file, metric='jaccard_index', smooth_score=0, smooth_voc=0,   
+                  smooth_det=0):
     """Stores the results obtained as csv to manipulate them later 
        and labeled in another file as historic results.
 
@@ -102,12 +107,19 @@ def store_history(results, test_score, voc, time_callback, log_dir,
             and metrics values at successive epochs.
             test_score (array of 2 int): loss and jaccard_index obtained
             with the test data.
-            voc (float): VOC score obtained.
+            voc (float): VOC score value.
+            det (float): DET score value.
             time_callback: time structure with the time of each epoch.
             csv_file (str): path where the csv file will be stored.
             history_file (str): path where the historic results will be
             stored.
             metric (str, optional): metric used (e.g. jaccard_index).
+            smooth_score (float, optional): main metric obtained with smooth
+            results.
+            smooth_voc (float, optional): VOC metric obtained with smooth
+            results.
+            smooth_det (float, optional): DET metric obtained with smooth
+            results.
     """
 
     # Create folders and construct file names
@@ -133,6 +145,8 @@ def store_history(results, test_score, voc, time_callback, log_dir,
             + str(smooth_score) + ','
             + str(voc) + ','
             + str(smooth_voc) + ','
+            + str(det) + ','
+            + str(smooth_det) + ','
             + str(len(results.history['val_loss'])) + ',' 
             + str(np.mean(time_callback.times)) + ','
             + str(np.sum(time_callback.times)) + '\n')
@@ -166,5 +180,9 @@ def store_history(results, test_score, voc, time_callback, log_dir,
     f.write(str(voc) + '\n')
     f.write('############## VOC SMOOTH ############## \n')
     f.write(str(smooth_voc) + '\n')
+    f.write('############## DET ############## \n')
+    f.write(str(det) + '\n')
+    f.write('############## DET SMOOTH ############## \n')
+    f.write(str(smooth_det) + '\n')
     f.close()
 

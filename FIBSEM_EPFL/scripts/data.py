@@ -79,7 +79,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         Y_train[n,:mask.shape[0],:mask.shape[1],:mask.shape[2]] = mask
                                                                         
     Y_train = Y_train/255                                               
-                                                                        
+    
     # Get and resize test images and masks                              
     X_test = np.zeros((len(test_ids), image_test_shape[1], image_test_shape[0],   
                        image_test_shape[2]), dtype=np.int16)                 
@@ -106,7 +106,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     
     print("\n[LOAD] Loaded train data shape is: " + str(X_train.shape),
           flush=True)
-    print("\n[LOAD] Loaded test data shape is: " + str(X_test.shape), flush=True)
+    print("[LOAD] Loaded test data shape is: " + str(X_test.shape), flush=True)
    
     norm_value = np.mean(X_train)
  
@@ -116,7 +116,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                                                           test_size=val_split,
                                                           shuffle=True,
                                                           random_state=seedValue)      
-        print("\n[LOAD] Loaded validation data shape is: " + str(X_val.shape),
+        print("[LOAD] Loaded validation data shape is: " + str(X_val.shape),
               flush=True)
 
         return X_train, Y_train, X_val, Y_val, X_test, Y_test, norm_value
