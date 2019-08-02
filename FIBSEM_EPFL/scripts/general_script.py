@@ -103,6 +103,7 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 
 # Data augmentation variables
 normalize_data = False
+norm_value_forced = -1
 custom_da = False
 aug_examples = True
 keras_zoom = False
@@ -230,6 +231,9 @@ X_test, Y_test, norm_value = load_data(train_path, train_mask_path, test_path,
                            img_test_channels])
 # Nomalize the data
 if normalize_data == True:
+    if norm_value_forced != -1: 
+        Print("Forced normalization to " + str(norm_value_forced))
+        norm_value = norm_value_forced
     X_train -= int(norm_value)
     X_val -= int(norm_value)
     X_test -= int(norm_value)

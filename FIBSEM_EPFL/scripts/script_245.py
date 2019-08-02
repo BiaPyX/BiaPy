@@ -71,18 +71,18 @@ crops_made = False
 os.chdir(base_work_dir)
 
 # Dataset variables
-train_path = os.path.join('data', 'train', 'x')
-train_mask_path = os.path.join('data', 'train', 'y')
-test_path = os.path.join('data', 'test', 'x')
-test_mask_path = os.path.join('data', 'test', 'y')
+train_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'x')
+train_mask_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'y')
+test_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'test', 'x')
+test_mask_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'test', 'y')
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
 # be sure to take care of this.
-img_train_width = 1024
-img_train_height = 768
+img_train_width = 1463
+img_train_height = 1613
 img_train_channels = 1
-img_test_width = 1024
-img_test_height = 768
+img_test_width = 1334
+img_test_height = 1553
 img_test_channels = 1
 original_test_shape=[img_test_width, img_test_height]
 
@@ -102,7 +102,8 @@ test_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value)
 test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'y')
 
 # Data augmentation variables
-normalize_data = False
+normalize_data = True
+norm_value_forced = 140.48185582016453
 custom_da = False
 aug_examples = True
 keras_zoom = False
@@ -123,7 +124,7 @@ time_callback = TimeHistory()
 post_process = True
 
 # DET metric variables
-det_eval_ge_path = os.path.join('cell_challenge_eval', 'general')
+det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_kas')
 det_eval_path = os.path.join('cell_challenge_eval', job_id, job_file)
 det_eval_post_path = os.path.join('cell_challenge_eval', job_id, job_file + '_s')
 det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
@@ -230,6 +231,9 @@ X_test, Y_test, norm_value = load_data(train_path, train_mask_path, test_path,
                            img_test_channels])
 # Nomalize the data
 if normalize_data == True:
+    if norm_value_forced != -1:
+        Print("Forced normalization to " + str(norm_value_forced))
+        norm_value = norm_value_forced
     X_train -= int(norm_value)
     X_val -= int(norm_value)
     X_test -= int(norm_value)
@@ -305,7 +309,8 @@ if load_previous_weights == False:
     if not os.path.exists(h5_dir):                                      
         os.makedirs(h5_dir)
     checkpointer = ModelCheckpoint(os.path.join(h5_dir, 'model.fibsem_' + job_file 
-                                   +'.h5'), verbose=1, save_best_only=True)
+                                                        +'.h5'),
+                                   verbose=1, save_best_only=True)
     
     results = model.fit_generator(train_generator, validation_data=val_generator,
                                   validation_steps=math.ceil(len(X_val)/batch_size_value),
@@ -314,7 +319,7 @@ if load_previous_weights == False:
                                                                   checkpointer,
                                                                   time_callback])
 else:
-    h5_file=os.path.join(h5_dir, 'model.fibsem_232_1.h5')
+    h5_file=os.path.join(h5_dir, 'model.fibsem_232_' + test_id + '.h5')
     Print("Loading model weights from h5_file: " + h5_file)
     model.load_weights(h5_file)
 
@@ -442,10 +447,12 @@ if load_previous_weights == False:
     if len(sys.argv) > 1:
 
         if post_process == True:
-            store_history(results, score, voc, time_callback, log_dir, job_file,
-            smooth_score=smooth_score, smooth_voc=smooth_voc)
+            store_history(results, score, voc, det, time_callback, log_dir,
+                          job_file, smooth_score=smooth_score, 
+                          smooth_voc=smooth_voc, smooth_det=smooth_det)
         else:
-            store_history(results, score, voc, time_callback, log_dir, job_file)
+            store_history(results, score, voc, det, time_callback, log_dir,
+                          job_file)
 
         if test_id == "1":
             create_plots(results, job_id, char_dir)

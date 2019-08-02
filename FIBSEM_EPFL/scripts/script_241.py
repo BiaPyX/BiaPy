@@ -71,18 +71,18 @@ crops_made = False
 os.chdir(base_work_dir)
 
 # Dataset variables
-train_path = os.path.join('data', 'train', 'x')
-train_mask_path = os.path.join('data', 'train', 'y')
-test_path = os.path.join('data', 'test', 'x')
-test_mask_path = os.path.join('data', 'test', 'y')
+train_path = os.path.join('achucarro', 'retocadas', 'train', 'x')
+train_mask_path = os.path.join('achucarro', 'retocadas', 'train', 'y')
+test_path = os.path.join('achucarro', 'retocadas', 'test', 'x')
+test_mask_path = os.path.join('achucarro', 'retocadas', 'test', 'y')
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
 # be sure to take care of this.
-img_train_width = 1024
-img_train_height = 768
+img_train_width = 2048
+img_train_height = 2048
 img_train_channels = 1
-img_test_width = 1024
-img_test_height = 768
+img_test_width = 2048
+img_test_height = 2048
 img_test_channels = 1
 original_test_shape=[img_test_width, img_test_height]
 
@@ -94,15 +94,16 @@ make_crops = True
 check_crop = True
 
 # Discard variables
-discard_cropped_images = False
+discard_cropped_images = True
 d_percentage_value = 0.05
-train_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'train', 'x')
-train_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'train', 'y')
-test_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'x')
-test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'y')
+train_crop_discard_path = os.path.join('data_d', 'achu_retoc_' + str(d_percentage_value), 'train', 'x')
+train_crop_discard_mask_path = os.path.join('data_d', 'achu_retoc_' + str(d_percentage_value), 'train', 'y')
+test_crop_discard_path = os.path.join('data_d', 'achu_retoc_' + str(d_percentage_value), 'test', 'x')
+test_crop_discard_mask_path = os.path.join('data_d', 'achu_retoc_' + str(d_percentage_value), 'test', 'y')
 
 # Data augmentation variables
-normalize_data = False
+normalize_data = True
+norm_value_forced = 140.48185582016453
 custom_da = False
 aug_examples = True
 keras_zoom = False
@@ -123,7 +124,7 @@ time_callback = TimeHistory()
 post_process = True
 
 # DET metric variables
-det_eval_ge_path = os.path.join('cell_challenge_eval', 'general')
+det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_achu_retoc')
 det_eval_path = os.path.join('cell_challenge_eval', job_id, job_file)
 det_eval_post_path = os.path.join('cell_challenge_eval', job_id, job_file + '_s')
 det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
@@ -230,6 +231,9 @@ X_test, Y_test, norm_value = load_data(train_path, train_mask_path, test_path,
                            img_test_channels])
 # Nomalize the data
 if normalize_data == True:
+    if norm_value_forced != -1:
+        Print("Forced normalization to " + str(norm_value_forced))
+        norm_value = norm_value_forced
     X_train -= int(norm_value)
     X_val -= int(norm_value)
     X_test -= int(norm_value)
@@ -292,10 +296,10 @@ else:
 Print("Creating the network . . .")
 model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
 
-sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
+sgd = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)
 
-model.compile(optimizer=sdg, loss='binary_crossentropy', metrics=[jaccard_index])
+model.compile(optimizer=sgd, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
 if load_previous_weights == False:
@@ -305,7 +309,8 @@ if load_previous_weights == False:
     if not os.path.exists(h5_dir):                                      
         os.makedirs(h5_dir)
     checkpointer = ModelCheckpoint(os.path.join(h5_dir, 'model.fibsem_' + job_file 
-                                   +'.h5'), verbose=1, save_best_only=True)
+                                                        +'.h5'),
+                                   verbose=1, save_best_only=True)
     
     results = model.fit_generator(train_generator, validation_data=val_generator,
                                   validation_steps=math.ceil(len(X_val)/batch_size_value),
@@ -314,7 +319,7 @@ if load_previous_weights == False:
                                                                   checkpointer,
                                                                   time_callback])
 else:
-    h5_file=os.path.join(h5_dir, 'model.fibsem_232_1.h5')
+    h5_file=os.path.join(h5_dir, 'model.fibsem_232_' + test_id + '.h5')
     Print("Loading model weights from h5_file: " + h5_file)
     model.load_weights(h5_file)
 
@@ -443,7 +448,7 @@ if load_previous_weights == False:
 
         if post_process == True:
             store_history(results, score, voc, det, time_callback, log_dir,
-                          job_file, smooth_score=smooth_score,
+                          job_file, smooth_score=smooth_score, 
                           smooth_voc=smooth_voc, smooth_det=smooth_det)
         else:
             store_history(results, score, voc, det, time_callback, log_dir,
