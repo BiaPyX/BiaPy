@@ -71,18 +71,18 @@ crops_made = False
 os.chdir(base_work_dir)
 
 # Dataset variables
-train_path = os.path.join('achucarro', 'sin_retocar', 'train', 'x')
-train_mask_path = os.path.join('achucarro', 'sin_retocar', 'train', 'y')
-test_path = os.path.join('achucarro', 'sin_retocar', 'test', 'x')
-test_mask_path = os.path.join('achucarro', 'sin_retocar', 'test', 'y')
+train_path = os.path.join('achucarro', 'reshaped_fibsem', 'train', 'x')
+train_mask_path = os.path.join('achucarro', 'reshaped_fibsem', 'train', 'y')
+test_path = os.path.join('achucarro', 'reshaped_fibsem', 'test', 'x')
+test_mask_path = os.path.join('achucarro', 'reshaped_fibsem', 'test', 'y')
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
 # be sure to take care of this.
-img_train_width = 2048
-img_train_height = 2048
+img_train_width = 2806
+img_train_height = 2806
 img_train_channels = 1
-img_test_width = 2048
-img_test_height = 2048
+img_test_width = 2806
+img_test_height = 2806
 img_test_channels = 1
 original_test_shape=[img_test_width, img_test_height]
 
@@ -96,14 +96,14 @@ check_crop = True
 # Discard variables
 discard_cropped_images = True
 d_percentage_value = 0.05
-train_crop_discard_path = os.path.join('data_d', 'achu_no_retoc_' + str(d_percentage_value), 'train', 'x')
-train_crop_discard_mask_path = os.path.join('data_d', 'achu_no_retoc_' + str(d_percentage_value), 'train', 'y')
-test_crop_discard_path = os.path.join('data_d', 'achu_no_retoc_' + str(d_percentage_value), 'test', 'x')
-test_crop_discard_mask_path = os.path.join('data_d', 'achu_no_retoc_' + str(d_percentage_value), 'test', 'y')
+train_crop_discard_path = os.path.join('data_d', 'achu_r_fib_' + str(d_percentage_value), 'train', 'x')
+train_crop_discard_mask_path = os.path.join('data_d', 'achu_r_fib_' + str(d_percentage_value), 'train', 'y')
+test_crop_discard_path = os.path.join('data_d', 'achu_r_fib_' + str(d_percentage_value), 'test', 'x')
+test_crop_discard_mask_path = os.path.join('data_d', 'achu_r_fib_' + str(d_percentage_value), 'test', 'y')
 
 # Data augmentation variables
-normalize_data = True
-norm_value_forced = 140.48185582016453
+normalize_data = False
+norm_value_forced = -1
 custom_da = False
 aug_examples = True
 keras_zoom = False
@@ -124,7 +124,7 @@ time_callback = TimeHistory()
 post_process = True
 
 # DET metric variables
-det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_no_retoc')
+det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_achu_r_fib')
 det_eval_path = os.path.join('cell_challenge_eval', job_id, job_file)
 det_eval_post_path = os.path.join('cell_challenge_eval', job_id, job_file + '_s')
 det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')

@@ -71,24 +71,24 @@ crops_made = False
 os.chdir(base_work_dir)
 
 # Dataset variables
-train_path = os.path.join('lucchi_pp', 'Lucchi++', 'train', 'x')                
-train_mask_path = os.path.join('lucchi_pp', 'Lucchi++', 'train', 'y')           
-test_path = os.path.join('lucchi_pp', 'Lucchi++', 'test', 'x')                  
-test_mask_path = os.path.join('lucchi_pp', 'Lucchi++', 'test', 'y')             
+train_path = os.path.join('lucchi_pp', 'reshaped_achucarro', 'train', 'x')
+train_mask_path = os.path.join('lucchi_pp', 'reshaped_achucarro', 'train', 'y')
+test_path = os.path.join('lucchi_pp', 'reshaped_achucarro', 'test', 'x')
+test_mask_path = os.path.join('lucchi_pp', 'reshaped_achucarro', 'test', 'y')
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
-# be sure to take care of this.                                                 
-img_train_width = 1024                                                          
-img_train_height = 768                                                          
-img_train_channels = 1                                                          
-img_test_width = 1024                                                           
-img_test_height = 768                                                           
-img_test_channels = 1 
+# be sure to take care of this.
+img_train_width = 748
+img_train_height = 561
+img_train_channels = 1
+img_test_width = 748
+img_test_height = 561
+img_test_channels = 1
 original_test_shape=[img_test_width, img_test_height]
 
 # Crop variables
 img_width_crop = 256                                                            
-img_height_crop = 256                                                           
+img_height_crop = 256
 img_channels_crop = 1 
 make_crops = True                                                               
 check_crop = True
@@ -103,7 +103,7 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 
 # Data augmentation variables
 normalize_data = True
-norm_value_forced = 140.48185582016453
+norm_value_forced = 164.3687584870053
 custom_da = False
 aug_examples = True
 keras_zoom = True
@@ -114,7 +114,7 @@ load_previous_weights = True
 # General parameters
 batch_size_value = 6
 momentum_value = 0.99
-learning_rate_value = 0.001
+learning_rate_value = 0.0001
 epochs_value = 360
 
 # Define time callback                                                          
@@ -124,7 +124,7 @@ time_callback = TimeHistory()
 post_process = True
 
 # DET metric variables
-det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_luc')
+det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_luc_r_achu')
 det_eval_path = os.path.join('cell_challenge_eval', job_id, job_file)
 det_eval_post_path = os.path.join('cell_challenge_eval', job_id, job_file + '_s')
 det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
@@ -294,12 +294,13 @@ else:
 ##########################
 
 Print("Creating the network . . .")
-model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
+model = U_Net([img_height, img_width, img_channels], numInitChannels=16)
 
-sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
-                           decay=0.0, nesterov=False)
+adam = keras.optimizers.Adam(lr=learning_rate_value, beta_1=0.9,                
+                             beta_2=0.999, epsilon=None, decay=0.0,             
+                             amsgrad=False)
 
-model.compile(optimizer=sdg, loss='binary_crossentropy', metrics=[jaccard_index])
+model.compile(optimizer=adam, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
 if load_previous_weights == False:
@@ -319,7 +320,7 @@ if load_previous_weights == False:
                                                                   checkpointer,
                                                                   time_callback])
 else:
-    h5_file=os.path.join(h5_dir, 'model.fibsem_244_' + test_id + '.h5')
+    h5_file=os.path.join(h5_dir, 'model.fibsem_262_' + test_id + '.h5')
     Print("Loading model weights from h5_file: " + h5_file)
     model.load_weights(h5_file)
 

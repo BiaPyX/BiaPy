@@ -103,13 +103,13 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 
 # Data augmentation variables
 normalize_data = True
-norm_value_forced = 140.48185582016453
+norm_value_forced = -1
 custom_da = False
 aug_examples = True
 keras_zoom = True
 
 # Load preoviously generated model weigths
-load_previous_weights = True
+load_previous_weights = False
 
 # General parameters
 batch_size_value = 6
@@ -234,6 +234,8 @@ if normalize_data == True:
     if norm_value_forced != -1: 
         Print("Forced normalization to " + str(norm_value_forced))
         norm_value = norm_value_forced
+    else:
+        Print("norm_value_forced: " + str(norm_value))
     X_train -= int(norm_value)
     X_val -= int(norm_value)
     X_test -= int(norm_value)

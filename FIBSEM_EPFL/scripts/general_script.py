@@ -232,8 +232,10 @@ X_test, Y_test, norm_value = load_data(train_path, train_mask_path, test_path,
 # Nomalize the data
 if normalize_data == True:
     if norm_value_forced != -1: 
-        Print("Forced normalization to " + str(norm_value_forced))
+        Print("Forced normalization value to " + str(norm_value_forced))
         norm_value = norm_value_forced
+    else:
+        Print("Normalization value calculated: " + str(norm_value_forced))
     X_train -= int(norm_value)
     X_val -= int(norm_value)
     X_test -= int(norm_value)

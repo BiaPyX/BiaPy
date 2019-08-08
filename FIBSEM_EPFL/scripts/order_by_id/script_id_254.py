@@ -71,19 +71,19 @@ crops_made = False
 os.chdir(base_work_dir)
 
 # Dataset variables
-train_path = os.path.join('lucchi_pp', 'Lucchi++', 'train', 'x')                
-train_mask_path = os.path.join('lucchi_pp', 'Lucchi++', 'train', 'y')           
-test_path = os.path.join('lucchi_pp', 'Lucchi++', 'test', 'x')                  
-test_mask_path = os.path.join('lucchi_pp', 'Lucchi++', 'test', 'y')             
+train_path = os.path.join('achucarro', 'reshaped_fibsem', 'train', 'x')
+train_mask_path = os.path.join('achucarro', 'reshaped_fibsem', 'train', 'y')
+test_path = os.path.join('achucarro', 'reshaped_fibsem', 'test', 'x')
+test_mask_path = os.path.join('achucarro', 'reshaped_fibsem', 'test', 'y')
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
-# be sure to take care of this.                                                 
-img_train_width = 1024                                                          
-img_train_height = 768                                                          
-img_train_channels = 1                                                          
-img_test_width = 1024                                                           
-img_test_height = 768                                                           
-img_test_channels = 1 
+# be sure to take care of this.
+img_train_width = 2806
+img_train_height = 2806
+img_train_channels = 1
+img_test_width = 2806
+img_test_height = 2806
+img_test_channels = 1
 original_test_shape=[img_test_width, img_test_height]
 
 # Crop variables
@@ -94,12 +94,12 @@ make_crops = True
 check_crop = True
 
 # Discard variables
-discard_cropped_images = False
+discard_cropped_images = True
 d_percentage_value = 0.05
-train_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'train', 'x')
-train_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'train', 'y')
-test_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'x')
-test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'y')
+train_crop_discard_path = os.path.join('data_d', 'achu_r_luc_' + str(d_percentage_value), 'train', 'x')
+train_crop_discard_mask_path = os.path.join('data_d', 'achu_r_luc_' + str(d_percentage_value), 'train', 'y')
+test_crop_discard_path = os.path.join('data_d', 'achu_r_luc_' + str(d_percentage_value), 'test', 'x')
+test_crop_discard_mask_path = os.path.join('data_d', 'achu_r_luc_' + str(d_percentage_value), 'test', 'y')
 
 # Data augmentation variables
 normalize_data = True
@@ -124,7 +124,7 @@ time_callback = TimeHistory()
 post_process = True
 
 # DET metric variables
-det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_luc')
+det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_achu_r_luc')
 det_eval_path = os.path.join('cell_challenge_eval', job_id, job_file)
 det_eval_post_path = os.path.join('cell_challenge_eval', job_id, job_file + '_s')
 det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
@@ -231,7 +231,7 @@ X_test, Y_test, norm_value = load_data(train_path, train_mask_path, test_path,
                            img_test_channels])
 # Nomalize the data
 if normalize_data == True:
-    if norm_value_forced != -1: 
+    if norm_value_forced != -1:
         Print("Forced normalization to " + str(norm_value_forced))
         norm_value = norm_value_forced
     X_train -= int(norm_value)
@@ -296,10 +296,10 @@ else:
 Print("Creating the network . . .")
 model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
 
-sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
+sgd = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)
 
-model.compile(optimizer=sdg, loss='binary_crossentropy', metrics=[jaccard_index])
+model.compile(optimizer=sgd, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
 if load_previous_weights == False:
@@ -319,7 +319,7 @@ if load_previous_weights == False:
                                                                   checkpointer,
                                                                   time_callback])
 else:
-    h5_file=os.path.join(h5_dir, 'model.fibsem_244_' + test_id + '.h5')
+    h5_file=os.path.join(h5_dir, 'model.fibsem_248_' + test_id + '.h5')
     Print("Loading model weights from h5_file: " + h5_file)
     model.load_weights(h5_file)
 

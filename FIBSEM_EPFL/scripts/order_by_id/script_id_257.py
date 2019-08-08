@@ -71,18 +71,18 @@ crops_made = False
 os.chdir(base_work_dir)
 
 # Dataset variables
-train_path = os.path.join('lucchi_pp', 'Lucchi++', 'train', 'x')                
-train_mask_path = os.path.join('lucchi_pp', 'Lucchi++', 'train', 'y')           
-test_path = os.path.join('lucchi_pp', 'Lucchi++', 'test', 'x')                  
-test_mask_path = os.path.join('lucchi_pp', 'Lucchi++', 'test', 'y')             
+train_path = os.path.join('lucchi_pp', 'reshaped_kasthuri', 'train', 'x')                
+train_mask_path = os.path.join('lucchi_pp', 'reshaped_kasthuri', 'train', 'y')           
+test_path = os.path.join('lucchi_pp', 'reshaped_kasthuri', 'test', 'x')                  
+test_mask_path = os.path.join('lucchi_pp', 'reshaped_kasthuri', 'test', 'y')             
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
 # be sure to take care of this.                                                 
-img_train_width = 1024                                                          
-img_train_height = 768                                                          
+img_train_width = 1707
+img_train_height = 1280
 img_train_channels = 1                                                          
-img_test_width = 1024                                                           
-img_test_height = 768                                                           
+img_test_width = 1707
+img_test_height = 1280
 img_test_channels = 1 
 original_test_shape=[img_test_width, img_test_height]
 
@@ -102,11 +102,11 @@ test_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value)
 test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'y')
 
 # Data augmentation variables
-normalize_data = True
-norm_value_forced = 140.48185582016453
+normalize_data = False
+norm_value_forced = -1
 custom_da = False
 aug_examples = True
-keras_zoom = True
+keras_zoom = False
 
 # Load preoviously generated model weigths
 load_previous_weights = True
@@ -124,7 +124,7 @@ time_callback = TimeHistory()
 post_process = True
 
 # DET metric variables
-det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_luc')
+det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_luc_r_kas')
 det_eval_path = os.path.join('cell_challenge_eval', job_id, job_file)
 det_eval_post_path = os.path.join('cell_challenge_eval', job_id, job_file + '_s')
 det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
@@ -234,6 +234,8 @@ if normalize_data == True:
     if norm_value_forced != -1: 
         Print("Forced normalization to " + str(norm_value_forced))
         norm_value = norm_value_forced
+    else:
+        Print("norm_value_forced: " + str(norm_value))
     X_train -= int(norm_value)
     X_val -= int(norm_value)
     X_test -= int(norm_value)
@@ -319,7 +321,7 @@ if load_previous_weights == False:
                                                                   checkpointer,
                                                                   time_callback])
 else:
-    h5_file=os.path.join(h5_dir, 'model.fibsem_244_' + test_id + '.h5')
+    h5_file=os.path.join(h5_dir, 'model.fibsem_236_' + test_id + '.h5')
     Print("Loading model weights from h5_file: " + h5_file)
     model.load_weights(h5_file)
 

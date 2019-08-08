@@ -5,7 +5,8 @@ import tensorflow as tf
 import numpy as np
 from util import Print
 from skimage import measure
-from shutil import copytree
+import distutils
+from distutils import dir_util
 from PIL import Image
 
 def jaccard_index_numpy(y_true, y_pred):
@@ -260,8 +261,7 @@ def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig,
    
     # Copy ground truth folder
     gt_eval_path = os.path.join(eval_path, job_id + '_GT', 'TRA')
-    if not os.path.exists(gt_eval_path):
-        copytree(ge_path, gt_eval_path)
+    distutils.dir_util.copy_tree(ge_path, gt_eval_path)
   
     # Create results folder 
     res_eval_path = os.path.join(eval_path, job_id + '_RES')

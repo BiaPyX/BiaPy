@@ -71,19 +71,19 @@ crops_made = False
 os.chdir(base_work_dir)
 
 # Dataset variables
-train_path = os.path.join('lucchi_pp', 'Lucchi++', 'train', 'x')                
-train_mask_path = os.path.join('lucchi_pp', 'Lucchi++', 'train', 'y')           
-test_path = os.path.join('lucchi_pp', 'Lucchi++', 'test', 'x')                  
-test_mask_path = os.path.join('lucchi_pp', 'Lucchi++', 'test', 'y')             
+train_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'x')
+train_mask_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'y')
+test_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'test', 'x')
+test_mask_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'test', 'y')
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
-# be sure to take care of this.                                                 
-img_train_width = 1024                                                          
-img_train_height = 768                                                          
-img_train_channels = 1                                                          
-img_test_width = 1024                                                           
-img_test_height = 768                                                           
-img_test_channels = 1 
+# be sure to take care of this.
+img_train_width = 877
+img_train_height = 967
+img_train_channels = 1
+img_test_width = 800
+img_test_height = 931
+img_test_channels = 1
 original_test_shape=[img_test_width, img_test_height]
 
 # Crop variables
@@ -96,10 +96,10 @@ check_crop = True
 # Discard variables
 discard_cropped_images = False
 d_percentage_value = 0.05
-train_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'train', 'x')
-train_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'train', 'y')
-test_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'x')
-test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'y')
+train_crop_discard_path = os.path.join('data_d', 'kas_r_fib_' + str(d_percentage_value), 'train', 'x')
+train_crop_discard_mask_path = os.path.join('data_d', 'kas_r_fib_' + str(d_percentage_value), 'train', 'y')
+test_crop_discard_path = os.path.join('data_d', 'kas_r_fib_' + str(d_percentage_value), 'test', 'x')
+test_crop_discard_mask_path = os.path.join('data_d', 'kas_r_fib_' + str(d_percentage_value), 'test', 'y')
 
 # Data augmentation variables
 normalize_data = True
@@ -124,7 +124,7 @@ time_callback = TimeHistory()
 post_process = True
 
 # DET metric variables
-det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_luc')
+det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_kas_r_fib')
 det_eval_path = os.path.join('cell_challenge_eval', job_id, job_file)
 det_eval_post_path = os.path.join('cell_challenge_eval', job_id, job_file + '_s')
 det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
@@ -231,7 +231,7 @@ X_test, Y_test, norm_value = load_data(train_path, train_mask_path, test_path,
                            img_test_channels])
 # Nomalize the data
 if normalize_data == True:
-    if norm_value_forced != -1: 
+    if norm_value_forced != -1:
         Print("Forced normalization to " + str(norm_value_forced))
         norm_value = norm_value_forced
     X_train -= int(norm_value)
