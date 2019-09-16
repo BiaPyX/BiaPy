@@ -84,7 +84,7 @@ img_train_channels = 1
 img_test_width = 1334 
 img_test_height = 1553
 img_test_channels = 1
-original_test_shape=[img_test_width, img_test_height]
+original_test_shape=[img_test_height, img_test_width]
 
 # Crop variables
 img_width_crop = 256                                                            

@@ -71,27 +71,27 @@ crops_made = False
 os.chdir(base_work_dir)
 
 # Dataset variables
-train_path = os.path.join('lucchi_pp', 'reshaped_achucarro', 'train', 'x')
-train_mask_path = os.path.join('lucchi_pp', 'reshaped_achucarro', 'train', 'y')
-test_path = os.path.join('lucchi_pp', 'reshaped_achucarro', 'test', 'x')
-test_mask_path = os.path.join('lucchi_pp', 'reshaped_achucarro', 'test', 'y')
+train_path = os.path.join('data', 'train', 'x')
+train_mask_path = os.path.join('data', 'train', 'y')
+test_path = os.path.join('data', 'test', 'x')
+test_mask_path = os.path.join('data', 'test', 'y')
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
 # be sure to take care of this.
-img_train_width = 748
-img_train_height = 561
+img_train_width = 1024
+img_train_height = 768
 img_train_channels = 1
-img_test_width = 748
-img_test_height = 561
+img_test_width = 1024
+img_test_height = 768
 img_test_channels = 1
-original_test_shape=[img_test_width, img_test_height]
+original_test_shape=[img_test_height, img_test_width]
 
 # Crop variables
 img_width_crop = 256                                                            
-img_height_crop = 256
+img_height_crop = 256                                                           
 img_channels_crop = 1 
-make_crops = True                                                               
-check_crop = True
+make_crops = False
+check_crop = False
 
 # Discard variables
 discard_cropped_images = False
@@ -102,11 +102,11 @@ test_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value)
 test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'y')
 
 # Data augmentation variables
-normalize_data = True
-norm_value_forced = 164.3687584870053
+normalize_data = False
+norm_value_forced = -1
 custom_da = False
 aug_examples = True
-keras_zoom = True
+keras_zoom = False
 
 # Load preoviously generated model weigths
 load_previous_weights = True
@@ -114,8 +114,8 @@ load_previous_weights = True
 # General parameters
 batch_size_value = 1
 momentum_value = 0.99
-learning_rate_value = 0.0001
-epochs_value = 360
+learning_rate_value = 0.001
+epochs_value = 230
 
 # Define time callback                                                          
 time_callback = TimeHistory()
@@ -124,7 +124,7 @@ time_callback = TimeHistory()
 post_process = True
 
 # DET metric variables
-det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_luc_r_achu')
+det_eval_ge_path = os.path.join('cell_challenge_eval', 'general')
 det_eval_path = os.path.join('cell_challenge_eval', job_id, job_file)
 det_eval_post_path = os.path.join('cell_challenge_eval', job_id, job_file + '_s')
 det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
@@ -232,8 +232,10 @@ X_test, Y_test, norm_value = load_data(train_path, train_mask_path, test_path,
 # Nomalize the data
 if normalize_data == True:
     if norm_value_forced != -1: 
-        Print("Forced normalization to " + str(norm_value_forced))
+        Print("Forced normalization value to " + str(norm_value_forced))
         norm_value = norm_value_forced
+    else:
+        Print("Normalization value calculated: " + str(norm_value_forced))
     X_train -= int(norm_value)
     X_val -= int(norm_value)
     X_test -= int(norm_value)
@@ -267,7 +269,7 @@ else:
 if custom_da == False:
     train_generator, val_generator = keras_da_generator(X_train, Y_train, X_val,
                                                         Y_val, batch_size_value,
-                                                        preproc_function=False,
+                                                        preproc_function=True,
                                                         save_examples=aug_examples,
                                                         job_id=job_id, 
                                                         zoom=keras_zoom)
@@ -296,11 +298,10 @@ else:
 Print("Creating the network . . .")
 model = U_Net([img_height, img_width, img_channels], numInitChannels=16)
 
-adam = keras.optimizers.Adam(lr=learning_rate_value, beta_1=0.9,                
-                             beta_2=0.999, epsilon=None, decay=0.0,             
-                             amsgrad=False)
+sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
+                           decay=0.0, nesterov=False)
 
-model.compile(optimizer=adam, loss='binary_crossentropy', metrics=[jaccard_index])
+model.compile(optimizer=sdg, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
 if load_previous_weights == False:
@@ -320,7 +321,7 @@ if load_previous_weights == False:
                                                                   checkpointer,
                                                                   time_callback])
 else:
-    h5_file=os.path.join(h5_dir, 'model.fibsem_262_' + test_id + '.h5')
+    h5_file=os.path.join(h5_dir, 'model.fibsem_37_' + test_id + '.h5')
     Print("Loading model weights from h5_file: " + h5_file)
     model.load_weights(h5_file)
 

@@ -285,6 +285,7 @@ def mix_data(data, num, out_shape=[1, 1], grid=True):
     # Mix data
     mixed_data = np.zeros((num, out_shape[1]*width, out_shape[0]*height, 1),
                           dtype=np.int16)
+    
     cont = 0
     for img_num in tqdm(range(0, num)):
         for i in range(0, out_shape[1]):

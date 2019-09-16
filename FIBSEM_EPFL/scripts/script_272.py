@@ -27,7 +27,7 @@ import math
 import time
 import tensorflow as tf
 from data import load_data, crop_data, mix_data, check_crops, keras_da_generator, ImageDataGenerator
-from unet import U_Net
+from resunet import ResUNet
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation, DET_calculation
 from itertools import chain
 from skimage.io import imread, imshow, imread_collection, concatenate_images
@@ -71,18 +71,18 @@ crops_made = False
 os.chdir(base_work_dir)
 
 # Dataset variables
-train_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'x')
-train_mask_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'y')
-test_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'test', 'x')
-test_mask_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'test', 'y')
+train_path = os.path.join('data', 'train', 'x')
+train_mask_path = os.path.join('data', 'train', 'y')
+test_path = os.path.join('data','test', 'x')
+test_mask_path = os.path.join('data', 'test', 'y')
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
 # be sure to take care of this.
-img_train_width = 877
-img_train_height = 967
+img_train_width = 1024
+img_train_height = 768
 img_train_channels = 1
-img_test_width = 800
-img_test_height = 931
+img_test_width = 1024
+img_test_height = 768
 img_test_channels = 1
 original_test_shape=[img_test_width, img_test_height]
 
@@ -96,20 +96,20 @@ check_crop = True
 # Discard variables
 discard_cropped_images = False
 d_percentage_value = 0.05
-train_crop_discard_path = os.path.join('data_d', 'kas_r_fib_' + str(d_percentage_value), 'train', 'x')
-train_crop_discard_mask_path = os.path.join('data_d', 'kas_r_fib_' + str(d_percentage_value), 'train', 'y')
-test_crop_discard_path = os.path.join('data_d', 'kas_r_fib_' + str(d_percentage_value), 'test', 'x')
-test_crop_discard_mask_path = os.path.join('data_d', 'kas_r_fib_' + str(d_percentage_value), 'test', 'y')
+train_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'train', 'x')
+train_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'train', 'y')
+test_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'x')
+test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'y')
 
 # Data augmentation variables
-normalize_data = True
-norm_value_forced = 140.48185582016453
-custom_da = False
+normalize_data = False
+norm_value_forced = -1
+custom_da = True
 aug_examples = True
-keras_zoom = True
+keras_zoom = False
 
 # Load preoviously generated model weigths
-load_previous_weights = True
+load_previous_weights = False
 
 # General parameters
 batch_size_value = 6
@@ -124,7 +124,7 @@ time_callback = TimeHistory()
 post_process = True
 
 # DET metric variables
-det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_kas_r_luc')
+det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_fib')
 det_eval_path = os.path.join('cell_challenge_eval', job_id, job_file)
 det_eval_post_path = os.path.join('cell_challenge_eval', job_id, job_file + '_s')
 det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
@@ -231,9 +231,11 @@ X_test, Y_test, norm_value = load_data(train_path, train_mask_path, test_path,
                            img_test_channels])
 # Nomalize the data
 if normalize_data == True:
-    if norm_value_forced != -1:
-        Print("Forced normalization to " + str(norm_value_forced))
+    if norm_value_forced != -1: 
+        Print("Forced normalization value to " + str(norm_value_forced))
         norm_value = norm_value_forced
+    else:
+        Print("Normalization value calculated: " + str(norm_value_forced))
     X_train -= int(norm_value)
     X_val -= int(norm_value)
     X_test -= int(norm_value)
@@ -274,8 +276,8 @@ if custom_da == False:
 else:
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                          dim=(img_height,img_width), n_channels=1,
-                         shuffle=True, da=True, e_prob=0.7, elastic=True,
-                         vflip=False, hflip=False, rotation=True)
+                         shuffle=True, da=True, e_prob=0.4, elastic=False,
+                         vflip=True, hflip=True, rotation=True)
 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
                              dim=(img_height,img_width), n_channels=1,
@@ -294,7 +296,7 @@ else:
 ##########################
 
 Print("Creating the network . . .")
-model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
+model = ResUNet([img_height, img_width, img_channels], numInitChannels=32)
 
 sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)
@@ -319,7 +321,7 @@ if load_previous_weights == False:
                                                                   checkpointer,
                                                                   time_callback])
 else:
-    h5_file=os.path.join(h5_dir, 'model.fibsem_248_' + test_id + '.h5')
+    h5_file=os.path.join(h5_dir, 'model.fibsem_' + job_id + '_' + test_id + '.h5')
     Print("Loading model weights from h5_file: " + h5_file)
     model.load_weights(h5_file)
 
