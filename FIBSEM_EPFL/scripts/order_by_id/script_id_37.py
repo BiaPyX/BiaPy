@@ -109,7 +109,7 @@ aug_examples = True
 keras_zoom = False
 
 # Load preoviously generated model weigths
-load_previous_weights = True
+load_previous_weights = False
 
 # General parameters
 batch_size_value = 1
@@ -348,14 +348,6 @@ v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
         + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
 
 # To calculate the jaccard (binarized)
-Print("original_test_shape: " + str(original_test_shape))
-Print("bin_preds_test.shape: " + str(bin_preds_test.shape))
-Print("original_test_shape[0]: " + str(original_test_shape[0]))
-Print("original_test_shape[1]: " + str(original_test_shape[1]))
-Print("bin_preds_test.shape[1]: " + str(bin_preds_test.shape[1]))
-Print("bin_preds_test.shape[2]: " + str(bin_preds_test.shape[2]))
-
-Print("h_num: " + str(h_num) + ", " + str(v_num))
 recons_preds_test = mix_data(bin_preds_test,
                              math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
                              out_shape=[h_num, v_num], grid=False)
@@ -393,9 +385,11 @@ if len(sys.argv) > 1 and test_id == "1":
 ####################
 
 if post_process == True and make_crops == True:
+
     Print("Post processing active . . .")
+
     X_test = mix_data(X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
-                  out_shape=[h_num, v_num], grid=False)
+                      out_shape=[h_num, v_num], grid=False)
 
     Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
 
@@ -456,7 +450,7 @@ if load_previous_weights == False:
     # If we are running multiple tests store the results
     if len(sys.argv) > 1:
 
-        if post_process == True:
+        if post_process == True and make_crops == True:
             store_history(results, score, voc, det, time_callback, log_dir,
                           job_file, smooth_score=smooth_score, 
                           smooth_voc=smooth_voc, smooth_det=smooth_det)

@@ -386,8 +386,9 @@ if len(sys.argv) > 1 and test_id == "1":
 
 if post_process == True and make_crops == True:
     Print("Post processing active . . .")
+
     X_test = mix_data(X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
-                  out_shape=[h_num, v_num], grid=False)
+                      out_shape=[h_num, v_num], grid=False)
 
     Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
 
@@ -448,7 +449,7 @@ if load_previous_weights == False:
     # If we are running multiple tests store the results
     if len(sys.argv) > 1:
 
-        if post_process == True:
+        if post_process == True and make_crops == True:
             store_history(results, score, voc, det, time_callback, log_dir,
                           job_file, smooth_score=smooth_score, 
                           smooth_voc=smooth_voc, smooth_det=smooth_det)
