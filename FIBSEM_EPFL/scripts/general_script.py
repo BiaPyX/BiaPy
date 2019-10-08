@@ -361,28 +361,28 @@ if rd_crop_after_DA == False:
             + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
     v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
             + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
-    
+
+    Y_test = mix_data(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
+                      out_shape=[h_num, v_num], grid=False)    
+    Print("The shape of the test data reconstructed is " + str(Y_test.shape))
+
     # To calculate the jaccard (binarized)
     recons_preds_test = mix_data(bin_preds_test,
                                  math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
                                  out_shape=[h_num, v_num], grid=False)
     
+    # Metrics (Jaccard + VOC + DET)                                             
+    Print("Calculate metrics . . .")                                            
+    score[1] = jaccard_index_numpy(Y_test, recons_preds_test)                   
+    voc = voc_calculation(Y_test, recons_preds_test, score[1])                  
+    det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path,          
+                          det_eval_path, det_bin, n_dig, job_id)   
+
     # To save the probabilities (no binarized)
     recons_no_bin_preds_test = mix_data(preds_test*255,
                                         math.ceil(preds_test.shape[0]/(h_num*v_num)),
                                         out_shape=[h_num, v_num], grid=False)
     recons_no_bin_preds_test = recons_no_bin_preds_test.astype(float)/255
-    
-    Y_test = mix_data(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
-                      out_shape=[h_num, v_num], grid=False)
-    Print("The shape of the test data reconstructed is " + str(Y_test.shape))
-    
-    # Metrics (Jaccard + VOC + DET)
-    Print("Calculate metrics . . .")
-    score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
-    voc = voc_calculation(Y_test, recons_preds_test, score[1])
-    det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path, 
-                          det_eval_path, det_bin, n_dig, job_id)
     
     # Save output images
     if not os.path.exists(result_dir):

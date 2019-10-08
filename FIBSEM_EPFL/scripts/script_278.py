@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(script_dir, '..'))
 
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
-                 TimeHistory, Print
+                 TimeHistory, Print, threshold_plots 
 limit_threads()
 
 # Try to generate the results as reproducible as possible
@@ -121,6 +121,7 @@ batch_size_value = 6
 momentum_value = 0.99
 learning_rate_value = 0.001
 epochs_value = 360
+make_threshold_plots = True
 
 # Define time callback                                                          
 time_callback = TimeHistory()
@@ -354,92 +355,31 @@ if rd_crop_after_DA == False:
     Print("Making the predictions on test data . . .")
     preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
   
-    t_jac = np.zeros(9) 
-    t_voc = np.zeros(9) 
-    t_det = np.zeros(9) 
-    objects = []
-   
     # Threshold images                                                      
     bin_preds_test = (preds_test > 0.5).astype(np.uint8)                      
                                                                                 
     # Reconstruct the data to the original shape and calculate Jaccard      
     h_num = int(original_test_shape[0] / bin_preds_test.shape[1]) \
-                + (original_test_shape[0] % bin_preds_test.shape[1] > 0)        
+            + (original_test_shape[0] % bin_preds_test.shape[1] > 0)        
     v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
-                + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
- 
-    Y_test = mix_data(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),     
-                          out_shape=[h_num, v_num], grid=False)
+            + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
 
-    for i, t in enumerate(np.arange(0.1,1.0,0.1)): 
-        objects.append(str(t))
+    Y_test = mix_data(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),         
+                      out_shape=[h_num, v_num], grid=False)                     
+    Print("The shape of the test data reconstructed is " + str(Y_test.shape))
 
-        # Threshold images
-        bin_preds_test = (preds_test > t).astype(np.uint8)
-   
-        # Reconstruct the data to the original shape and calculate Jaccard
-        h_num = int(original_test_shape[0] / bin_preds_test.shape[1]) \
-                + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
-        v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
-                + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
-
-        # To calculate the Jaccard (binarized)
-        recons_preds_test = mix_data(bin_preds_test,
-                                     math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
-                                     out_shape=[h_num, v_num], grid=False)
-    
-        # Metrics (Jaccard + VOC + DET)                                             
+    # Metric calaculation
+    if make_threshold_plots == True: 
+        Print("Calculate metrics with different thresholds . . .")
+        score[1], voc, det = threshold_plots(preds_test, Y_test, original_test_shape,
+                                score, det_eval_ge_path, det_eval_path, det_bin,
+                                n_dig, job_id, job_file, char_dir)
+    else:
         Print("Calculate metrics . . .")                                            
-        t_jac[i] = jaccard_index_numpy(Y_test, recons_preds_test)                   
-        t_voc[i] = voc_calculation(Y_test, recons_preds_test, score[1])                  
-        t_det[i] = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path,          
-                                   det_eval_path, det_bin, n_dig, job_id)
-
-        Print("t_jac[" + str(i) + "]: " + str(t_jac[i]))
-        Print("t_voc[" + str(i) + "]: " + str(t_voc[i]))
-        Print("t_det[" + str(i) + "]: " + str(t_det[i]))
-        
-    # For matplotlib errors in display                                          
-    os.environ['QT_QPA_PLATFORM']='offscreen'                                   
-    y_pos = np.arange(len(objects))
-    Print("t_jac.shape: " + str(t_jac.shape))
-    Print("y_pos.shape: " + str(y_pos.shape))
-
-    # Plot Jaccard values
-    plt.bar(y_pos, t_jac, align='center')                                           
-    plt.xticks(y_pos, objects)
-    plt.title('Model JOBID=' + job_file + ' Jaccard')                                
-    plt.ylabel('Value')                                                         
-    plt.xlabel('Threshold')                                                         
-    if not os.path.exists(char_dir):
-        os.makedirs(char_dir)
-    plt.savefig(os.path.join(char_dir, job_file + '_threshold_Jaccard.png'))          
-    plt.clf()
-
-    # Plot VOC values
-    plt.bar(y_pos, t_voc, align='center')                     
-    plt.title('Model JOBID=' + job_file + ' VOC')                             
-    plt.ylabel('Value')                                                         
-    plt.xlabel('Threshold')                                                     
-    if not os.path.exists(char_dir):                                            
-        os.makedirs(char_dir)                                                   
-    plt.savefig(os.path.join(char_dir, job_file + '_threshold_VOC.png'))
-    plt.clf()
-
-    # Plot DET values
-    plt.bar(y_pos, t_det, align='center')                     
-    plt.title('Model JOBID=' + job_file + ' DET')                             
-    plt.ylabel('Value')                                                         
-    plt.xlabel('Threshold')                                                     
-    if not os.path.exists(char_dir):                                            
-        os.makedirs(char_dir)                                                   
-    plt.savefig(os.path.join(char_dir, job_file + '_threshold_DET.png'))
-    plt.clf()
-
-    # Save the original 0.5 threshold values
-    score[1] = t_jac[4] 
-    voc = t_voc[4]
-    det = t_det[4]
+        score[1] = jaccard_index_numpy(Y_test, recons_preds_test)                   
+        voc = voc_calculation(Y_test, recons_preds_test, score[1])                  
+        det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path,          
+                              det_eval_path, det_bin, n_dig, job_id) 
 
     # To save the probabilities (no binarized)
     recons_no_bin_preds_test = mix_data(preds_test*255,

@@ -1,4 +1,5 @@
 import os
+import math
 import mkl
 import numpy as np
 from tensorflow import set_random_seed
@@ -93,7 +94,6 @@ def create_plots(results, job_id, chartOutDir):
     plt.savefig(os.path.join(chartOutDir , str(job_id) 
                 + '_jaccard_index.png'))
     plt.clf()
-    plt.clf()
 
 
 def store_history(results, test_score, voc, det, time_callback, log_dir, 
@@ -186,3 +186,120 @@ def store_history(results, test_score, voc, det, time_callback, log_dir,
     f.write(str(smooth_det) + '\n')
     f.close()
 
+
+def threshold_plots(preds_test, Y_test, o_test_shape, j_score, det_eval_ge_path,
+                    det_eval_path, det_bin, n_dig, job_id, job_file, char_dir):
+    """Create a plot with the different metric values binarizing the prediction
+       with different thresholds, from 0.1 to 0.9.
+                                                                                
+       Args:                                                                    
+            preds_test (numpy array): predictions made by the model.
+            Y_test (numpy array): ground truth of the data.
+            o_test_shape (tuple): original shape of the data without crops, 
+            necessary to reconstruct the images. 
+            j_score (float): foreground jaccard score to calculate VOC.
+            det_eval_ge_path (str): path where the ground truth is stored for 
+            the DET calculation.
+            det_eval_path (str): path where the evaluation of the metric will be done.
+            det_bin (str): path to the DET binary.
+            n_dig (int): The number of digits used for encoding temporal indices
+            (e.g., 3). Used by the DET calculation binary.
+            job_id (str): id of the job.
+            job_file (str): id and run number of the job.
+            char_dir (str): path to store the charts generated.
+
+        Returns:
+            t_jac[4] (float): value of the Jaccard index when the threshold 
+            is 0.5.
+            t_voc[4] (float): value of VOC when the threshold is 0.5.
+            t_det[4] (float): value of DET when the threshold is 0.5.
+    """
+
+    from data import mix_data
+    from metrics import jaccard_index, jaccard_index_numpy, voc_calculation, DET_calculation
+
+    char_dir = os.path.join(char_dir, "t_" + job_file)
+
+    t_jac = np.zeros(9)                                                         
+    t_voc = np.zeros(9)                                                         
+    t_det = np.zeros(9)                                                         
+    objects = []                                                                
+                                                                                
+    for i, t in enumerate(np.arange(0.1,1.0,0.1)):                              
+        objects.append(str(t))                                                  
+                                                                                
+        # Threshold images                                                      
+        bin_preds_test = (preds_test > t).astype(np.uint8)                      
+                                                                                
+        # Reconstruct the data to the original shape and calculate Jaccard      
+        h_num = int(o_test_shape[0] / bin_preds_test.shape[1]) \
+                + (o_test_shape[0] % bin_preds_test.shape[1] > 0)        
+        v_num = int(o_test_shape[1] / bin_preds_test.shape[2]) \
+                + (o_test_shape[1] % bin_preds_test.shape[2] > 0)        
+                                                                                
+        # To calculate the Jaccard (binarized)                                  
+        recons_preds_test = mix_data(bin_preds_test,                            
+                                     math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
+                                     out_shape=[h_num, v_num], grid=False)      
+                                                                                
+        # Metrics (Jaccard + VOC + DET)                                             
+        Print("Calculate metrics . . .")                                        
+        t_jac[i] = jaccard_index_numpy(Y_test, recons_preds_test)               
+        t_voc[i] = voc_calculation(Y_test, recons_preds_test, j_score[1])         
+        t_det[i] = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path, 
+                                   det_eval_path, det_bin, n_dig, job_id)       
+                                                                                
+        Print("t_jac[" + str(i) + "]: " + str(t_jac[i]))                        
+        Print("t_voc[" + str(i) + "]: " + str(t_voc[i]))                        
+        Print("t_det[" + str(i) + "]: " + str(t_det[i]))
+
+    # For matplotlib errors in display                                          
+    os.environ['QT_QPA_PLATFORM']='offscreen'                                   
+    y_pos = np.arange(len(objects))                                             
+    Print("t_jac.shape: " + str(t_jac.shape))                                   
+    Print("y_pos.shape: " + str(y_pos.shape))                                   
+   
+                                                                             
+    # Plot Jaccard values   
+    fig, ax1 = plt.subplots()                                                    
+    p1 = ax1.bar(y_pos, t_jac, align='center')                                   
+    plt.title('Model JOBID=' + job_file + ' Jaccard', y=1.08)                 
+    plt.ylabel('Value')                                                         
+    plt.xlabel('Threshold')                                                     
+    if not os.path.exists(char_dir):                                            
+        os.makedirs(char_dir)                                                   
+    for p in p1:                                                                
+        ax1.text(p.get_x() + p.get_width()/2., 0.95*p.get_height(),              
+        '%.3f' % float(p.get_height()), ha='center', va='bottom')               
+    plt.savefig(os.path.join(char_dir, job_file + '_threshold_Jaccard.png'))    
+    plt.clf()                                                                   
+                                                                                
+    # Plot VOC values                                                           
+    fig, ax2 = plt.subplots()
+    p2 = ax2.bar(y_pos, t_voc, align='center') 
+    plt.title('Model JOBID=' + job_file + ' VOC', y=1.08)                               
+    plt.ylabel('Value')                                                         
+    plt.xlabel('Threshold')                                                     
+    if not os.path.exists(char_dir):                                            
+        os.makedirs(char_dir)                                                   
+    for p in p2:                                                                
+        ax2.text(p.get_x() + p.get_width()/2., 0.95*p.get_height(),              
+        '%.3f' % float(p.get_height()), ha='center', va='bottom')
+    plt.savefig(os.path.join(char_dir, job_file + '_threshold_VOC.png'))        
+    plt.clf()                                                                   
+                                                                                
+    # Plot DET values                                                           
+    fig, ax3 = plt.subplots()
+    p3 = ax3.bar(y_pos, t_det, align='center')
+    plt.title('Model JOBID=' + job_file + ' DET', y=1.08)                               
+    plt.ylabel('Value')                                                         
+    plt.xlabel('Threshold')                                                     
+    if not os.path.exists(char_dir):                                            
+        os.makedirs(char_dir)                                                   
+    for p in p3:                                                                
+        ax3.text(p.get_x() + p.get_width()/2., 0.95*p.get_height(),              
+        '%.3f' % float(p.get_height()), ha='center', va='bottom')
+    plt.savefig(os.path.join(char_dir, job_file + '_threshold_DET.png'))        
+    plt.clf()
+
+    return  t_jac[4], t_voc[4], t_det[4]
