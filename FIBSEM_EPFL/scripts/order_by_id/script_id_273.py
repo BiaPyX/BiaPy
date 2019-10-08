@@ -116,7 +116,7 @@ shear_range = 0.0
 load_previous_weights = False
 
 # General parameters
-batch_size_value = 6
+batch_size_value = 4
 momentum_value = 0.99
 learning_rate_value = 0.001
 epochs_value = 360

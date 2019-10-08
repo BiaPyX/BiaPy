@@ -84,7 +84,7 @@ img_train_channels = 1
 img_test_width = 1024
 img_test_height = 768
 img_test_channels = 1
-original_test_shape = [img_test_width, img_test_height]
+original_test_shape=[img_test_height, img_test_width]
 
 # Crop variables
 img_width_crop = 512
@@ -442,29 +442,28 @@ if (post_process == True and make_crops == True) or (rd_crop_after_DA == True):
 #  PRINT AND SAVE SCORES OBTAINED  #
 ####################################
 
-if load_previous_weights == False:
-    # Time
-    Print("Epoch average time: " + str(np.mean(time_callback.times)))
-    Print("Epoch number: " +  str(len(results.history['val_loss'])))
-    Print("Train time (s): " + str(np.sum(time_callback.times)))
-
-    # Loss and metric
-    Print("Train loss: " + str(np.min(results.history['loss'])))
-    Print("Train jaccard_index: " + str(np.max(results.history['jaccard_index'])))
-    Print("Validation loss: " + str(np.min(results.history['val_loss'])))
-    Print("Validation jaccard_index: " + str(np.max(results.history['val_jaccard_index'])))
-
-if rd_crop_after_DA == False:    
+if rd_crop_after_DA == False:
+    if load_previous_weights == False:
+        # Time
+        Print("Epoch average time: " + str(np.mean(time_callback.times)))
+        Print("Epoch number: " +  str(len(results.history['val_loss'])))
+        Print("Train time (s): " + str(np.sum(time_callback.times)))
+    
+        # Loss and metric
+        Print("Train loss: " + str(np.min(results.history['loss'])))
+        Print("Train jaccard_index: " + str(np.max(results.history['jaccard_index'])))
+        Print("Validation loss: " + str(np.min(results.history['val_loss'])))
+        Print("Validation jaccard_index: " + str(np.max(results.history['val_jaccard_index'])))
+    
     Print("Test loss: " + str(score[0]))
     Print("Test jaccard_index: " + str(score[1]))
     Print("VOC: " + str(voc))
     Print("DET: " + str(det))
     
-if load_previous_weights == False:
-    # If we are running multiple tests store the results
-    if len(sys.argv) > 1:
+    if load_previous_weights == False:
+        # If we are running multiple tests store the results
+        if len(sys.argv) > 1:
     
-        if rd_crop_after_DA == False:
             if post_process == True and make_crops == True:
                 store_history(results, score, voc, det, time_callback, log_dir,
                               job_file, smooth_score=smooth_score, 
@@ -473,8 +472,8 @@ if load_previous_weights == False:
                 store_history(results, score, voc, det, time_callback, log_dir,
                               job_file)
     
-        if test_id == "1":
-            create_plots(results, job_id, char_dir)
+            if test_id == "1":
+                create_plots(results, job_id, char_dir)
 
 if (post_process == True and make_crops == True) or (rd_crop_after_DA == True):
     Print("Post-process: SMOOTH - Test jaccard_index: " + str(smooth_score))

@@ -37,6 +37,7 @@ from keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing
+import matplotlib.pyplot as plt
 
 
 ##########################
@@ -73,7 +74,7 @@ os.chdir(base_work_dir)
 # Dataset variables
 train_path = os.path.join('data', 'train', 'x')
 train_mask_path = os.path.join('data', 'train', 'y')
-test_path = os.path.join('data','test', 'x')
+test_path = os.path.join('data', 'test', 'x')
 test_mask_path = os.path.join('data', 'test', 'y')
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. If you do not use crop_data() with the arg force_shape
@@ -84,14 +85,15 @@ img_train_channels = 1
 img_test_width = 1024
 img_test_height = 768
 img_test_channels = 1
-original_test_shape=[img_test_width, img_test_height]
+original_test_shape = [img_test_width, img_test_height]
 
 # Crop variables
-img_width_crop = 256                                                            
-img_height_crop = 256                                                           
+img_width_crop = 256
+img_height_crop = 256
 img_channels_crop = 1 
-make_crops = True                                                               
+make_crops = True
 check_crop = True
+rd_crop_after_DA = False # No compatible with make_crops                                                        
 
 # Discard variables
 discard_cropped_images = False
@@ -104,12 +106,15 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 # Data augmentation variables
 normalize_data = False
 norm_value_forced = -1
-custom_da = True
-aug_examples = True
+custom_da = False
+aug_examples = False
 keras_zoom = False
+w_shift_r = 0.0
+h_shift_r = 0.0
+shear_range = 0.0
 
 # Load preoviously generated model weigths
-load_previous_weights = False
+load_previous_weights = True
 
 # General parameters
 batch_size_value = 6
@@ -124,7 +129,7 @@ time_callback = TimeHistory()
 post_process = True
 
 # DET metric variables
-det_eval_ge_path = os.path.join('cell_challenge_eval', 'general_fib')
+det_eval_ge_path = os.path.join('cell_challenge_eval', 'general')
 det_eval_path = os.path.join('cell_challenge_eval', job_id, job_file)
 det_eval_post_path = os.path.join('cell_challenge_eval', job_id, job_file + '_s')
 det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
@@ -267,17 +272,26 @@ else:
 ##########################
 
 if custom_da == False:
-    train_generator, val_generator = keras_da_generator(X_train, Y_train, X_val,
-                                                        Y_val, batch_size_value,
-                                                        preproc_function=False,
-                                                        save_examples=aug_examples,
-                                                        job_id=job_id, 
-                                                        zoom=keras_zoom)
+    if rd_crop_after_DA == False:
+        train_generator, val_generator = keras_da_generator(X_train, Y_train, 
+            X_val, Y_val, batch_size_value, preproc_function=False, 
+            save_examples=aug_examples, job_id=job_id, zoom=keras_zoom,
+            w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
+    else:
+        train_generator, val_generator = keras_da_generator(X_train, Y_train, 
+            X_val, Y_val, batch_size_value, preproc_function=False, 
+            save_examples=aug_examples, job_id=job_id, zoom=keras_zoom, 
+            rd_crop_after_DA=rd_crop_after_DA, rd_crop_length=img_width_crop,
+            w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
+
+        img_width = img_width_crop
+        img_height = img_height_crop
+
 else:
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                          dim=(img_height,img_width), n_channels=1,
-                         shuffle=True, da=True, e_prob=0.4, elastic=True,
-                         vflip=True, hflip=True, rotation=True)
+                         shuffle=True, da=True, e_prob=0.7, elastic=True,
+                         vflip=False, hflip=False, rotation=True)
 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
                              dim=(img_height,img_width), n_channels=1,
@@ -311,17 +325,18 @@ if load_previous_weights == False:
     if not os.path.exists(h5_dir):                                      
         os.makedirs(h5_dir)
     checkpointer = ModelCheckpoint(os.path.join(h5_dir, 'model.fibsem_' + job_file 
-                                                        +'.h5'),
+                                                        + '.h5'),
                                    verbose=1, save_best_only=True)
-    
+   
     results = model.fit_generator(train_generator, validation_data=val_generator,
                                   validation_steps=math.ceil(len(X_val)/batch_size_value),
                                   steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
                                   epochs=epochs_value, callbacks=[earlystopper, 
                                                                   checkpointer,
                                                                   time_callback])
+    
 else:
-    h5_file=os.path.join(h5_dir, 'model.fibsem_' + job_id + '_' + test_id + '.h5')
+    h5_file=os.path.join(h5_dir, 'model.fibsem_232_' + test_id + '.h5')
     Print("Loading model weights from h5_file: " + h5_file)
     model.load_weights(h5_file)
 
@@ -330,69 +345,133 @@ else:
 #    PREDICTION     #
 #####################
 
-# Evaluate to obtain the loss value (the metric value will be discarded)
-Print("Evaluating test data . . .")
-score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
+if rd_crop_after_DA == False:
+    # Evaluate to obtain the loss value (the metric value will be discarded)
+    Print("Evaluating test data . . .")
+    score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
+    
+    # Predict on test
+    Print("Making the predictions on test data . . .")
+    preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
+  
+    t_jac = np.zeros(9) 
+    t_voc = np.zeros(9) 
+    t_det = np.zeros(9) 
+    objects = []
+   
+    # Threshold images                                                      
+    bin_preds_test = (preds_test > 0.5).astype(np.uint8)                      
+                                                                                
+    # Reconstruct the data to the original shape and calculate Jaccard      
+    h_num = int(original_test_shape[0] / bin_preds_test.shape[1]) \
+                + (original_test_shape[0] % bin_preds_test.shape[1] > 0)        
+    v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
+                + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
+ 
+    Y_test = mix_data(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),     
+                          out_shape=[h_num, v_num], grid=False)
 
-# Predict on test
-Print("Making the predictions on test data . . .")
-preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
+    for i, t in enumerate(np.arange(0.1,1.0,0.1)): 
+        objects.append(str(t))
 
-# Threshold images
-bin_preds_test = (preds_test > 0.5).astype(np.uint8)
+        # Threshold images
+        bin_preds_test = (preds_test > t).astype(np.uint8)
+   
+        # Reconstruct the data to the original shape and calculate Jaccard
+        h_num = int(original_test_shape[0] / bin_preds_test.shape[1]) \
+                + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
+        v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
+                + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
 
-# Reconstruct the data to the original shape and calculate Jaccard
-h_num = int(original_test_shape[0] / bin_preds_test.shape[1]) \
-        + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
-v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
-        + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
+        # To calculate the Jaccard (binarized)
+        recons_preds_test = mix_data(bin_preds_test,
+                                     math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
+                                     out_shape=[h_num, v_num], grid=False)
+    
+        # Metrics (Jaccard + VOC + DET)                                             
+        Print("Calculate metrics . . .")                                            
+        t_jac[i] = jaccard_index_numpy(Y_test, recons_preds_test)                   
+        t_voc[i] = voc_calculation(Y_test, recons_preds_test, score[1])                  
+        t_det[i] = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path,          
+                                   det_eval_path, det_bin, n_dig, job_id)
 
-# To calculate the jaccard (binarized)
-recons_preds_test = mix_data(bin_preds_test,
-                             math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
-                             out_shape=[h_num, v_num], grid=False)
+        Print("t_jac[" + str(i) + "]: " + str(t_jac[i]))
+        Print("t_voc[" + str(i) + "]: " + str(t_voc[i]))
+        Print("t_det[" + str(i) + "]: " + str(t_det[i]))
+        
+    # For matplotlib errors in display                                          
+    os.environ['QT_QPA_PLATFORM']='offscreen'                                   
+    y_pos = np.arange(len(objects))
+    Print("t_jac.shape: " + str(t_jac.shape))
+    Print("y_pos.shape: " + str(y_pos.shape))
 
-# To save the probabilities (no binarized)
-recons_no_bin_preds_test = mix_data(preds_test*255,
-                                    math.ceil(preds_test.shape[0]/(h_num*v_num)),
-                                    out_shape=[h_num, v_num], grid=False)
-recons_no_bin_preds_test = recons_no_bin_preds_test.astype(float)/255
+    # Plot Jaccard values
+    plt.bar(y_pos, t_jac, align='center')                                           
+    plt.xticks(y_pos, objects)
+    plt.title('Model JOBID=' + job_file + ' Jaccard')                                
+    plt.ylabel('Value')                                                         
+    plt.xlabel('Threshold')                                                         
+    if not os.path.exists(char_dir):
+        os.makedirs(char_dir)
+    plt.savefig(os.path.join(char_dir, job_file + '_threshold_Jaccard.png'))          
+    plt.clf()
 
-Y_test = mix_data(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
-                  out_shape=[h_num, v_num], grid=False)
-Print("The shape of the test data reconstructed is " + str(Y_test.shape))
+    # Plot VOC values
+    plt.bar(y_pos, t_voc, align='center')                     
+    plt.title('Model JOBID=' + job_file + ' VOC')                             
+    plt.ylabel('Value')                                                         
+    plt.xlabel('Threshold')                                                     
+    if not os.path.exists(char_dir):                                            
+        os.makedirs(char_dir)                                                   
+    plt.savefig(os.path.join(char_dir, job_file + '_threshold_VOC.png'))
+    plt.clf()
 
-# Metrics (jaccard + VOC + DET)
-Print("Calculate metrics . . .")
-score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
-voc = voc_calculation(Y_test, recons_preds_test, score[1])
-det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path, det_eval_path,
-                      det_bin, n_dig, job_id)
+    # Plot DET values
+    plt.bar(y_pos, t_det, align='center')                     
+    plt.title('Model JOBID=' + job_file + ' DET')                             
+    plt.ylabel('Value')                                                         
+    plt.xlabel('Threshold')                                                     
+    if not os.path.exists(char_dir):                                            
+        os.makedirs(char_dir)                                                   
+    plt.savefig(os.path.join(char_dir, job_file + '_threshold_DET.png'))
+    plt.clf()
 
-# Save output images
-if not os.path.exists(result_dir):
-    os.makedirs(result_dir)
-if len(sys.argv) > 1 and test_id == "1":
-    Print("Saving predicted images . . .")
-    for i in range(0,len(recons_no_bin_preds_test)):
-        im = Image.fromarray(recons_no_bin_preds_test[i,:,:,0]*255)
-        im = im.convert('L')
-        im.save(os.path.join(result_dir,"test_out" + str(i) + ".png"))
+    # Save the original 0.5 threshold values
+    score[1] = t_jac[4] 
+    voc = t_voc[4]
+    det = t_det[4]
+
+    # To save the probabilities (no binarized)
+    recons_no_bin_preds_test = mix_data(preds_test*255,
+                                        math.ceil(preds_test.shape[0]/(h_num*v_num)),
+                                        out_shape=[h_num, v_num], grid=False)
+    recons_no_bin_preds_test = recons_no_bin_preds_test.astype(float)/255
+    
+    # Save output images
+    if not os.path.exists(result_dir):
+        os.makedirs(result_dir)
+    if len(sys.argv) > 1 and test_id == "1":
+        Print("Saving predicted images . . .")
+        for i in range(0,len(recons_no_bin_preds_test)):
+            im = Image.fromarray(recons_no_bin_preds_test[i,:,:,0]*255)
+            im = im.convert('L')
+            im.save(os.path.join(result_dir,"test_out" + str(i) + ".png"))
 
 
 ####################
 #  POST-PROCESING  #
 ####################
 
-if post_process == True and make_crops == True:
+if (post_process == True and make_crops == True) or (rd_crop_after_DA == True):
     Print("Post processing active . . .")
-    X_test = mix_data(X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
-                  out_shape=[h_num, v_num], grid=False)
 
+    if rd_crop_after_DA == False:
+        X_test = mix_data(X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
+                          out_shape=[h_num, v_num], grid=False)
+    
     Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
 
     Print("1-Smoothing crops")
-    start_time = time.time()
     for i in tqdm(range(0,len(X_test))):
         predictions_smooth = predict_img_with_smooth_windowing(
             X_test[i,:,:,:],
@@ -405,15 +484,14 @@ if post_process == True and make_crops == True:
         )
         Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
 
+        if not os.path.exists(result_dir):
+            os.makedirs(result_dir)
         if len(sys.argv) > 1 and test_id == "1":
             im = Image.fromarray(predictions_smooth[:,:,0]*255)
             im = im.convert('L')
             im.save(os.path.join(result_dir,"test_out_smooth_" + str(i) + ".png"))
 
-    elapsed_time = time.time() - start_time                             
-    Print("Time smoothing crops: " + str(elapsed_time))
-
-    # Metrics (jaccard + VOC + DET)
+    # Metrics (Jaccard + VOC + DET)
     Print("Calculate metrics . . .")
     smooth_score = jaccard_index_numpy(Y_test, Y_test_smooth)
     smooth_voc = voc_calculation(Y_test, Y_test_smooth, smooth_score)
@@ -427,6 +505,7 @@ if post_process == True and make_crops == True:
 #  PRINT AND SAVE SCORES OBTAINED  #
 ####################################
 
+
 if load_previous_weights == False:
     # Time
     Print("Epoch average time: " + str(np.mean(time_callback.times)))
@@ -439,27 +518,29 @@ if load_previous_weights == False:
     Print("Validation loss: " + str(np.min(results.history['val_loss'])))
     Print("Validation jaccard_index: " + str(np.max(results.history['val_jaccard_index'])))
 
-Print("Test loss: " + str(score[0]))
-Print("Test jaccard_index: " + str(score[1]))
-Print("VOC: " + str(voc))
-Print("DET: " + str(det))
-
+if rd_crop_after_DA == False:    
+    Print("Test loss: " + str(score[0]))
+    Print("Test jaccard_index: " + str(score[1]))
+    Print("VOC: " + str(voc))
+    Print("DET: " + str(det))
+    
 if load_previous_weights == False:
     # If we are running multiple tests store the results
     if len(sys.argv) > 1:
-
-        if post_process == True:
-            store_history(results, score, voc, det, time_callback, log_dir,
-                          job_file, smooth_score=smooth_score, 
-                          smooth_voc=smooth_voc, smooth_det=smooth_det)
-        else:
-            store_history(results, score, voc, det, time_callback, log_dir,
-                          job_file)
-
+    
+        if rd_crop_after_DA == False:
+            if post_process == True and make_crops == True:
+                store_history(results, score, voc, det, time_callback, log_dir,
+                              job_file, smooth_score=smooth_score, 
+                              smooth_voc=smooth_voc, smooth_det=smooth_det)
+            else:
+                store_history(results, score, voc, det, time_callback, log_dir,
+                              job_file)
+    
         if test_id == "1":
             create_plots(results, job_id, char_dir)
 
-if post_process == True and make_crops == True:
+if (post_process == True and make_crops == True) or (rd_crop_after_DA == True):
     Print("Post-process: SMOOTH - Test jaccard_index: " + str(smooth_score))
     Print("Post-process: SMOOTH - VOC: " + str(smooth_voc))
     Print("Post-process: SMOOTH - DET: " + str(smooth_det))

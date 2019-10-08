@@ -122,7 +122,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     else:                                                               
         return X_train, Y_train, X_test, Y_test, norm_value                         
 
-
 def __foreground_percentage(mask, class_tag=1):
     """ Percentage of pixels that corresponds to the class in the given image.
         
@@ -285,7 +284,6 @@ def mix_data(data, num, out_shape=[1, 1], grid=True):
     # Mix data
     mixed_data = np.zeros((num, out_shape[1]*width, out_shape[0]*height, 1),
                           dtype=np.int16)
-    
     cont = 0
     for img_num in tqdm(range(0, num)):
         for i in range(0, out_shape[1]):
@@ -736,120 +734,149 @@ def fixed_dregee(image):
     return out_image
 
 
-def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value, 
+def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,        
                        save_examples=True, job_id="none_job_id", out_dir='aug', 
                        hflip=True, vflip=True, seedValue=42, fill_mode='reflect',
-                       preproc_function=True, featurewise_center=False,
-                       featurewise_std_normalization=False, zoom=False):
-
-    """Makes data augmentation of the given input data.
-
-       Args:
-            X_train (numpy array): train data.
-            Y_train (numpy array): train mask data.
-            X_val (numpy array): validation data.
-            Y_val (numpy array): validation mask data.
-            batch_size_value (int): batch size.
+                       preproc_function=True, featurewise_center=False,         
+                       featurewise_std_normalization=False, zoom=False,         
+                       w_shift_r=0.0, h_shift_r=0.0, shear_range=0,
+                       rd_crop_after_DA=False, rd_crop_length=0):             
+                                                                                
+    """Makes data augmentation of the given input data.                         
+                                                                                
+       Args:                                                                    
+            X_train_path (numpy array): train data.                                  
+            Y_train_path (numpy array): train mask data.                             
+            X_val_path (numpy array): validation data.                               
+            Y_val_path (numpy array): validation mask data.                          
+            batch_size_value (int): batch size.                                 
             save_examples (bool, optional): if true 5 examples of DA are stored.
-            job_id (str, optional): job identifier. If any provided the
-            examples will be generated under a folder 'aug/none_job_id'.
-            out_dir (string, optional): save directory suffix.
-            hflip (bool, optional): if true horizontal flips are made.
-            vflip (bool, optional): if true vertical flip are made.
-            seedValue (int, optional): seed value.
-            fill_mode (str, optional): ImageDataGenerator of Keras fill mode 
-            values.
-            preproc_function (bool, optional): if true preprocess function to
-            make random 180 degrees rotations are performed. 
-            featurewise_center (bool, optional): set input mean to 0 over the 
-            dataset, feature-wise.
+            job_id (str, optional): job identifier. If any provided the         
+            examples will be generated under a folder 'aug/none_job_id'.        
+            out_dir (string, optional): save directory suffix.                  
+            hflip (bool, optional): if true horizontal flips are made.          
+            vflip (bool, optional): if true vertical flip are made.             
+            seedValue (int, optional): seed value.                              
+            fill_mode (str, optional): ImageDataGenerator of Keras fill mode    
+            values.                                                             
+            preproc_function (bool, optional): if true preprocess function to   
+            make random 180 degrees rotations are performed.                    
+            featurewise_center (bool, optional): set input mean to 0 over the   
+            dataset, feature-wise.                                              
             featurewise_std_normalization (bool, optional): divide inputs by std 
-            of the dataset, feature-wise.
-            zoom (bool, optional): make random zoom in the images.
-
-       Returns:
-            train_generator (Keras iterable of flow_from_directory): train data
-            iterator.
-            val_generator (Keras iterable of flow_from_directory): validation 
-            data iterator.
-    """
-  
-    zoom_val = 0.25 if zoom == True else 0 
-
-    if preproc_function == True:
-        data_gen_args1 = dict(horizontal_flip=hflip, vertical_flip=vflip,
-                              fill_mode=fill_mode,
-                              preprocessing_function=fixed_dregee,
-                              featurewise_center=featurewise_center,
+            of the dataset, feature-wise.                                       
+            zoom (bool, optional): make random zoom in the images.              
+            w_shift_r (float, optional): width shift range.
+            h_shift_r (float, optional): height shift range.
+            shear_range (float, optional): range to apply shearing 
+            transformations. 
+            rd_crop_after_DA (bool, optional): decide to make random crops after
+            apply DA transformations.                                           
+            rd_crop_length (int, optional): length of the random crop after DA. 
+                                                                                
+       Returns:                                                                 
+            train_generator (Keras iterable of flow_from_directory): train data 
+            iterator.                                                           
+            val_generator (Keras iterable of flow_from_directory): validation   
+            data iterator.                                                      
+    """                                                                         
+                                                                                
+    zoom_val = 0.25 if zoom == True else 0                                      
+                                                                                
+    if preproc_function == True:                                                
+        data_gen_args1 = dict(horizontal_flip=hflip, vertical_flip=vflip,       
+                              fill_mode=fill_mode,                              
+                              preprocessing_function=fixed_dregee,              
+                              featurewise_center=featurewise_center,            
                               featurewise_std_normalization=featurewise_std_normalization,
-                              zoom_range=zoom_val)
-        data_gen_args2 = dict(horizontal_flip=hflip, vertical_flip=vflip,        
-                              fill_mode=fill_mode,                               
-                              preprocessing_function=fixed_dregee,
-                              zoom_range=zoom_val)
-    else:
-        data_gen_args1 = dict(horizontal_flip=hflip, vertical_flip=vflip,
-                              fill_mode=fill_mode, rotation_range=180,
-                              featurewise_center=featurewise_center,
+                              zoom_range=zoom_val, width_shift_range=w_shift_r,
+                              height_shift_range=h_shift_r, 
+                              shear_range=shear_range)                              
+        data_gen_args2 = dict(horizontal_flip=hflip, vertical_flip=vflip,       
+                              fill_mode=fill_mode,                              
+                              preprocessing_function=fixed_dregee,              
+                              zoom_range=zoom_val, width_shift_range=w_shift_r,
+                              height_shift_range=h_shift_r, 
+                              shear_range=shear_range)                              
+    else:                                                                       
+        data_gen_args1 = dict(horizontal_flip=hflip, vertical_flip=vflip,       
+                              fill_mode=fill_mode, rotation_range=180,          
+                              featurewise_center=featurewise_center,            
                               featurewise_std_normalization=featurewise_std_normalization,
-                              zoom_range=zoom_val)
-        data_gen_args2 = dict(horizontal_flip=hflip, vertical_flip=vflip,        
-                              fill_mode=fill_mode, rotation_range=180,
-                              zoom_range=zoom_val)           
-                             
-    
-    # Train data, provide the same seed and keyword arguments to the fit and 
-    # flow methods
-    X_datagen_train = kerasDA(**data_gen_args1)
-    Y_datagen_train = kerasDA(**data_gen_args2)
-    X_datagen_train.fit(X_train, augment=True, seed=seedValue)
-    Y_datagen_train.fit(Y_train, augment=True, seed=seedValue)
-    
-    # Validation data, no data augmentation, but we create a generator anyway
-    X_datagen_val = kerasDA()
-    Y_datagen_val = kerasDA()
-    X_datagen_val.fit(X_val, augment=False, seed=seedValue)
-    Y_datagen_val.fit(Y_val, augment=False, seed=seedValue)
-  
-    # Check a few of generated images
-    if save_examples == True:
-        
-        out_dir = os.path.join(out_dir, job_id)
-        if not os.path.exists(out_dir):          
-            os.makedirs(out_dir)
-     
-        i = 0
-        for batch in X_datagen_train.flow(X_train, 
-                                          save_to_dir=out_dir,
-                                          batch_size=batch_size_value,
-                                          shuffle=True, seed=seedValue,
-                                          save_prefix='x', save_format='jpeg'):
-            i = i + 1
-            if i > 5:
-                break
-        i = 0
-        for batch in Y_datagen_train.flow(Y_train, 
-                                          save_to_dir=out_dir,
-                                          batch_size=batch_size_value,
-                                          shuffle=True, seed=seedValue,
-                                          save_prefix='y', save_format='jpeg'):
-            i = i + 1
-            if i > 5:
-                break
-    
-    X_train_augmented = X_datagen_train.flow(X_train, 
-                                             batch_size=batch_size_value,
-                                             shuffle=False, seed=seedValue)
-    Y_train_augmented = Y_datagen_train.flow(Y_train, 
-                                             batch_size=batch_size_value,
-                                             shuffle=False, seed=seedValue)
-    X_val_flow = X_datagen_val.flow(X_val, batch_size=batch_size_value,
-                                    shuffle=False, seed=seedValue)
-    Y_val_flow = Y_datagen_val.flow(Y_val, batch_size=batch_size_value,
-                                    shuffle=False, seed=seedValue)
-    
-    # Combine generators into one which yields image and masks
-    train_generator = zip(X_train_augmented, Y_train_augmented)
+                              zoom_range=zoom_val,width_shift_range=w_shift_r,
+                              height_shift_range=h_shift_r, 
+                              shear_range=shear_range)                              
+        data_gen_args2 = dict(horizontal_flip=hflip, vertical_flip=vflip,       
+                              fill_mode=fill_mode, rotation_range=180,          
+                              zoom_range=zoom_val,width_shift_range=w_shift_r,
+                              height_shift_range=h_shift_r, 
+                              shear_range=shear_range)                              
+                                                                                
+                                                                                
+    # Train data, provide the same seed and keyword arguments to the fit and    
+    # flow methods                                                              
+    X_datagen_train = kerasDA(**data_gen_args1)                                 
+    Y_datagen_train = kerasDA(**data_gen_args2)                                 
+                                                                                
+    # Validation data, no data augmentation, but we create a generator anyway   
+    X_datagen_val = kerasDA()                                                   
+    Y_datagen_val = kerasDA()                                                   
+
+    X_train_augmented = X_datagen_train.flow(X_train,                           
+                                             batch_size=batch_size_value,       
+                                             shuffle=False, seed=seedValue)     
+    Y_train_augmented = Y_datagen_train.flow(Y_train,                           
+                                             batch_size=batch_size_value,       
+                                             shuffle=False, seed=seedValue)     
+    X_val_flow = X_datagen_val.flow(X_val, batch_size=batch_size_value,         
+                                    shuffle=False, seed=seedValue)              
+    Y_val_flow = Y_datagen_val.flow(Y_val, batch_size=batch_size_value,         
+                                    shuffle=False, seed=seedValue)              
+             
+    # Combine generators into one which yields image and masks                  
+    train_generator = zip(X_train_augmented, Y_train_augmented)                 
     val_generator = zip(X_val_flow, Y_val_flow)
-    
+                                                                   
+    if rd_crop_after_DA == True:                                                
+        train_generator = crop_generator(train_generator, rd_crop_length)
+        val_generator = crop_generator(val_generator, rd_crop_length, val=True)
+
     return train_generator, val_generator
+
+
+def crop_generator(batches, crop_length, val=False):
+    """Take as input a Keras ImageGen (Iterator) and generate random
+       crops from the image batches generated by the original iterator.
+        
+       Based on:                                                                
+           https://jkjung-avt.github.io/keras-image-cropping/  
+    """
+
+    while True:
+        batch_x, batch_y = next(batches)
+        batch_crops_x = np.zeros((batch_x.shape[0], crop_length, crop_length, 1))
+        batch_crops_y = np.zeros((batch_y.shape[0], crop_length, crop_length, 1))
+        for i in range(batch_x.shape[0]):
+            batch_crops_x[i], batch_crops_y[i] = random_crop(batch_x[i], batch_y[i], (crop_length, crop_length), val)
+        yield (batch_crops_x, batch_crops_y)
+
+
+def random_crop(img, mask, random_crop_size, val=False):
+    """Random crop.
+
+       Based on:                                                                
+           https://jkjung-avt.github.io/keras-image-cropping/
+    """
+
+    assert img.shape[2] == 1
+    height, width = img.shape[0], img.shape[1]
+    dy, dx = random_crop_size
+    if val == True:
+        x = 0
+        y = 0
+    else:
+        x = np.random.randint(0, width - dx + 1)                                
+        y = np.random.randint(0, height - dy + 1)
+    return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :]
+
+

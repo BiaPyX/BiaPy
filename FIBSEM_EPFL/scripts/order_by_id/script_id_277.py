@@ -463,7 +463,6 @@ if rd_crop_after_DA == False:
 if load_previous_weights == False:
     # If we are running multiple tests store the results
     if len(sys.argv) > 1:
-    
         if rd_crop_after_DA == False:
             if post_process == True and make_crops == True:
                 store_history(results, score, voc, det, time_callback, log_dir,
