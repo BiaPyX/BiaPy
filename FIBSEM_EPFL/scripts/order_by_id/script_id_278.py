@@ -368,10 +368,12 @@ if rd_crop_after_DA == False:
                       out_shape=[h_num, v_num], grid=False)                     
     Print("The shape of the test data reconstructed is " + str(Y_test.shape))
 
-    # Metrics (Jaccard + VOC + DET)
+    # Metric calculation
     if make_threshold_plots == True: 
         Print("Calculate metrics with different thresholds . . .")
-        score[1], voc, det = threshold_plots(preds_test, Y_test, original_test_shape, score, det_eval_ge_path, det_eval_path, det_bin, n_dig, job_id, job_file, char_dir)
+        score[1], voc, det = threshold_plots(preds_test, Y_test, original_test_shape,
+                                score, det_eval_ge_path, det_eval_path, det_bin,
+                                n_dig, job_id, job_file, char_dir)
     else:
         Print("Calculate metrics . . .")                                            
         score[1] = jaccard_index_numpy(Y_test, recons_preds_test)                   

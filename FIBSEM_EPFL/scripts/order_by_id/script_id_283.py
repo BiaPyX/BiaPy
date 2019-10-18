@@ -26,7 +26,7 @@ import keras
 import math
 import time
 import tensorflow as tf
-from data import load_data, crop_data, mix_data, check_crops, keras_da_generator, ImageDataGenerator, crop_data_with_overlap, merge_data_with_overlap
+from data import load_data, crop_data, mix_data, check_crops, keras_da_generator, ImageDataGenerator, crop_data_with_overlap
 from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation, DET_calculation
 from itertools import chain
@@ -93,6 +93,7 @@ img_channels_crop = 1
 make_crops = False
 check_crop = False
 rd_crop_after_DA = True # No compatible with make_crops                                                        
+num_c_after_DA = 2
 
 # Discard variables
 discard_cropped_images = False
@@ -106,7 +107,7 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 normalize_data = False
 norm_value_forced = -1
 custom_da = False
-aug_examples = False
+aug_examples = True
 keras_zoom = False
 w_shift_r = 0.0
 h_shift_r = 0.0
@@ -282,7 +283,8 @@ if custom_da == False:
             X_val, Y_val, batch_size_value, preproc_function=False, 
             save_examples=aug_examples, job_id=job_id, zoom=keras_zoom, 
             rd_crop_after_DA=rd_crop_after_DA, rd_crop_length=img_width_crop,
-            w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
+            w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range,
+            num_c=num_c_after_DA)
 
         img_width = img_width_crop
         img_height = img_height_crop
@@ -329,8 +331,8 @@ if load_previous_weights == False:
                                    verbose=1, save_best_only=True)
    
     results = model.fit_generator(train_generator, validation_data=val_generator,
-                                  validation_steps=math.ceil(len(X_val)/batch_size_value),
-                                  steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
+                                  validation_steps=math.ceil((len(X_val)/batch_size_value)*num_c_after_DA),
+                                  steps_per_epoch=math.ceil((len(X_train)/batch_size_value)*num_c_after_DA),
                                   epochs=epochs_value, callbacks=[earlystopper, 
                                                                   checkpointer,
                                                                   time_callback])
@@ -374,11 +376,6 @@ if rd_crop_after_DA == False:
                                 score, det_eval_ge_path, det_eval_path, det_bin,
                                 n_dig, job_id, job_file, char_dir)
     else:
-        # To calculate metrics (binarized)
-        recons_preds_test = mix_data(bin_preds_test,
-                                     math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
-                                     out_shape=[h_num, v_num], grid=False)
-
         Print("Calculate metrics . . .")
         score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
         voc = voc_calculation(Y_test, recons_preds_test, score[1])
@@ -403,36 +400,9 @@ if rd_crop_after_DA == False:
 else:
     ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, img_width_crop, 2)
 
-    Print("Evaluating overlapped test data . . .")
+    Print("Evaluating test data . . .")
     score = model.evaluate(ov_X_test, ov_Y_test, batch_size=batch_size_value, verbose=1)
-
-    Print("Making the predictions on overlapped test data . . .")
-    preds_test = model.predict(ov_X_test, batch_size=batch_size_value, verbose=1)
-
-    bin_preds_test = (preds_test > 0.5).astype(np.uint8)
- 
-    Print("Calculate Jaccard for test . . .")
-    jac_no_ov = jaccard_index_numpy(ov_Y_test, bin_preds_test)
     
-    # Save output images
-    if not os.path.exists(result_dir):
-        os.makedirs(result_dir)
-    if len(sys.argv) > 1 and test_id == "1":
-        Print("Saving predicted images . . .")
-        for i in range(0,len(preds_test)):
-            im = Image.fromarray(bin_preds_test[i,:,:,0]*255)
-            im = im.convert('L')
-            im.save(os.path.join(result_dir,"test_out_ov_bin_" + str(i) + ".png"))
-
-    Print("Merging the overlapped predictions . . .")
-    merged_preds_test = merge_data_with_overlap(ov_Y_test, original_test_shape, 
-                                                img_width_crop, 2, result_dir)
-    
-    bin_preds_test = (merged_preds_test > 0.5).astype(np.uint8)
-    
-    Print("Calculate Jaccard for test (with overlap calculated). . .")
-    jac_ov = jaccard_index_numpy(Y_test, bin_preds_test)
-
 
 ####################
 #  POST-PROCESING  #
@@ -498,9 +468,6 @@ if rd_crop_after_DA == False:
     Print("Test jaccard_index: " + str(score[1]))
     Print("VOC: " + str(voc))
     Print("DET: " + str(det))
-else:
-    Print("Test overlapped (without merge) jaccard_index: " + str(jac_no_ov))
-    Print("Test overlapped (with merge) jaccard_index: " + str(jac_ov))
     
 if load_previous_weights == False:
     # If we are running multiple tests store the results

@@ -108,8 +108,8 @@ norm_value_forced = -1
 custom_da = False
 aug_examples = False
 keras_zoom = False
-w_shift_r = 0.3
-h_shift_r = 0.3
+w_shift_r = 0.1
+h_shift_r = 0.1
 shear_range = 0.0
 
 # Load preoviously generated model weigths

@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(script_dir, '..'))
 
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
-                 TimeHistory, Print
+                 TimeHistory, Print, threshold_plots
 limit_threads()
 
 # Try to generate the results as reproducible as possible
@@ -26,7 +26,7 @@ import keras
 import math
 import time
 import tensorflow as tf
-from data import load_data, crop_data, mix_data, check_crops, keras_da_generator, ImageDataGenerator
+from data import load_data, crop_data, mix_data, check_crops, keras_da_generator, ImageDataGenerator, crop_data_with_overlap, merge_data_with_overlap
 from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation, DET_calculation
 from itertools import chain
@@ -87,8 +87,10 @@ img_test_channels = 1
 original_test_shape = [img_test_width, img_test_height]
 
 # Crop variables
-img_width_crop = 512
-img_height_crop = 512
+#img_width_crop = 512
+#img_height_crop = 512
+img_width_crop = 576
+img_height_crop = 576
 img_channels_crop = 1 
 make_crops = False
 check_crop = False
@@ -113,13 +115,14 @@ h_shift_r = 0.0
 shear_range = 0.0
 
 # Load preoviously generated model weigths
-load_previous_weights = False
+load_previous_weights = True
 
 # General parameters
-batch_size_value = 4
+batch_size_value = 6
 momentum_value = 0.99
 learning_rate_value = 0.001
 epochs_value = 360
+make_threshold_plots = False
 
 # Define time callback                                                          
 time_callback = TimeHistory()
@@ -348,42 +351,48 @@ if rd_crop_after_DA == False:
     # Evaluate to obtain the loss value (the metric value will be discarded)
     Print("Evaluating test data . . .")
     score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
-    
+
     # Predict on test
     Print("Making the predictions on test data . . .")
     preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
-    
+
     # Threshold images
     bin_preds_test = (preds_test > 0.5).astype(np.uint8)
-    
+
     # Reconstruct the data to the original shape and calculate Jaccard
     h_num = int(original_test_shape[0] / bin_preds_test.shape[1]) \
             + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
     v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
             + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
-    
-    # To calculate the jaccard (binarized)
-    recons_preds_test = mix_data(bin_preds_test,
-                                 math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
-                                 out_shape=[h_num, v_num], grid=False)
-    
+
+    Y_test = mix_data(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
+                      out_shape=[h_num, v_num], grid=False)
+    Print("The shape of the test data reconstructed is " + str(Y_test.shape))
+
+    # Metric calculation
+    if make_threshold_plots == True:
+        Print("Calculate metrics with different thresholds . . .")
+        score[1], voc, det = threshold_plots(preds_test, Y_test, original_test_shape,
+                                score, det_eval_ge_path, det_eval_path, det_bin,
+                                n_dig, job_id, job_file, char_dir)
+    else:
+        # To calculate metrics (binarized)
+        recons_preds_test = mix_data(bin_preds_test,
+                                     math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
+                                     out_shape=[h_num, v_num], grid=False)
+
+        Print("Calculate metrics . . .")
+        score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
+        voc = voc_calculation(Y_test, recons_preds_test, score[1])
+        det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path,
+                              det_eval_path, det_bin, n_dig, job_id)
+
     # To save the probabilities (no binarized)
     recons_no_bin_preds_test = mix_data(preds_test*255,
                                         math.ceil(preds_test.shape[0]/(h_num*v_num)),
                                         out_shape=[h_num, v_num], grid=False)
     recons_no_bin_preds_test = recons_no_bin_preds_test.astype(float)/255
-    
-    Y_test = mix_data(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
-                      out_shape=[h_num, v_num], grid=False)
-    Print("The shape of the test data reconstructed is " + str(Y_test.shape))
-    
-    # Metrics (Jaccard + VOC + DET)
-    Print("Calculate metrics . . .")
-    score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
-    voc = voc_calculation(Y_test, recons_preds_test, score[1])
-    det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path, 
-                          det_eval_path, det_bin, n_dig, job_id)
-    
+
     # Save output images
     if not os.path.exists(result_dir):
         os.makedirs(result_dir)
@@ -393,6 +402,38 @@ if rd_crop_after_DA == False:
             im = Image.fromarray(recons_no_bin_preds_test[i,:,:,0]*255)
             im = im.convert('L')
             im.save(os.path.join(result_dir,"test_out" + str(i) + ".png"))
+else:
+    ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, img_width_crop, 2)
+
+    Print("Evaluating overlapped test data . . .")
+    score = model.evaluate(ov_X_test, ov_Y_test, batch_size=batch_size_value, verbose=1)
+
+    Print("Making the predictions on overlapped test data . . .")
+    preds_test = model.predict(ov_X_test, batch_size=batch_size_value, verbose=1)
+
+    bin_preds_test = (preds_test > 0.5).astype(np.uint8)
+ 
+    Print("Calculate Jaccard for test . . .")
+    jac_no_ov = jaccard_index_numpy(ov_Y_test, bin_preds_test)
+    
+    # Save output images
+    if not os.path.exists(result_dir):
+        os.makedirs(result_dir)
+    if len(sys.argv) > 1 and test_id == "1":
+        Print("Saving predicted images . . .")
+        for i in range(0,len(preds_test)):
+            im = Image.fromarray(bin_preds_test[i,:,:,0]*255)
+            im = im.convert('L')
+            im.save(os.path.join(result_dir,"test_out_ov_bin_" + str(i) + ".png"))
+
+    Print("Merging the overlapped predictions . . .")
+    merged_preds_test = merge_data_with_overlap(ov_Y_test, original_test_shape, 
+                                                img_width_crop, 2, result_dir)
+    
+    bin_preds_test = (merged_preds_test > 0.5).astype(np.uint8)
+    
+    Print("Calculate Jaccard for test (with overlap calculated). . .")
+    jac_ov = jaccard_index_numpy(Y_test, bin_preds_test)
 
 
 ####################
@@ -453,12 +494,15 @@ if load_previous_weights == False:
     Print("Train jaccard_index: " + str(np.max(results.history['jaccard_index'])))
     Print("Validation loss: " + str(np.min(results.history['val_loss'])))
     Print("Validation jaccard_index: " + str(np.max(results.history['val_jaccard_index'])))
-
-if rd_crop_after_DA == False:    
     Print("Test loss: " + str(score[0]))
+    
+if rd_crop_after_DA == False:    
     Print("Test jaccard_index: " + str(score[1]))
     Print("VOC: " + str(voc))
     Print("DET: " + str(det))
+else:
+    Print("Test overlapped (without merge) jaccard_index: " + str(jac_no_ov))
+    Print("Test overlapped (with merge) jaccard_index: " + str(jac_ov))
     
 if load_previous_weights == False:
     # If we are running multiple tests store the results

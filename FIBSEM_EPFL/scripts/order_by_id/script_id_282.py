@@ -87,12 +87,12 @@ img_test_channels = 1
 original_test_shape = [img_test_width, img_test_height]
 
 # Crop variables
-img_width_crop = 512
-img_height_crop = 512
+img_width_crop = 256
+img_height_crop = 256
 img_channels_crop = 1 
-make_crops = False
-check_crop = False
-rd_crop_after_DA = True # No compatible with make_crops                                                        
+make_crops = True
+check_crop = True
+rd_crop_after_DA = False # No compatible with make_crops                                                        
 
 # Discard variables
 discard_cropped_images = False
@@ -108,9 +108,9 @@ norm_value_forced = -1
 custom_da = False
 aug_examples = False
 keras_zoom = False
-w_shift_r = 0.0
-h_shift_r = 0.0
-shear_range = 0.0
+w_shift_r = 0.1
+h_shift_r = 0.1
+shear_range = 0.1
 
 # Load preoviously generated model weigths
 load_previous_weights = False
@@ -463,6 +463,7 @@ if rd_crop_after_DA == False:
 if load_previous_weights == False:
     # If we are running multiple tests store the results
     if len(sys.argv) > 1:
+    
         if rd_crop_after_DA == False:
             if post_process == True and make_crops == True:
                 store_history(results, score, voc, det, time_callback, log_dir,

@@ -18,7 +18,7 @@ from util import Print
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
-              val_split=0.1, seedValue=42):                                            
+              val_split=0.1, shuffle_val=True, seedValue=42):                                            
     """Load train, validation and test data from the given paths. If the images 
        to be loaded are smaller than the given dimension it will be sticked in 
        the (0, 0).
@@ -114,7 +114,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train,
                                                           train_size=1-val_split,
                                                           test_size=val_split,
-                                                          shuffle=True,
+                                                          shuffle=shuffle_val,
                                                           random_state=seedValue)      
         Print("[LOAD] Loaded validation data shape is: " + str(X_val.shape))
 
@@ -144,7 +144,7 @@ def __foreground_percentage(mask, class_tag=1):
 
 def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
               d_percentage=0):                          
-    """Crop data into smaller pieces                                    
+    """Crop data into smaller pieces.
                                                                         
        Args:                                                            
             data (4D numpy array): data to crop.                        
@@ -248,12 +248,170 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
                 cont = cont + 1                                             
                                                                         
     if discard == True:
-        Print("[CROP] " +str(discarded) + " images discarded. New shape after " 
+        Print("[CROP] " + str(discarded) + " images discarded. New shape after " 
               + "cropping and discarding is " + str(cropped_data.shape))
     else:
         Print("[CROP] New data shape is: " + str(cropped_data.shape))
 
     return cropped_data, cropped_data_mask, force_shape
+
+
+def crop_data_with_overlap(data, data_mask, window_size, subdivision):                          
+    """Crop data into smaller pieces with overlap.
+       
+       Args:                                                                    
+            data (4D numpy array): data to crop.                                
+            data_mask (4D numpy array): data mask to crop.
+            window_size (int): crop size .
+            subdivision (int): number of tiles to create per axis. For instance,
+            a value of 2 will generate 4 tiles.
+                                                                                
+       Returns:                                                                 
+            cropped_data (4D numpy array): cropped image data.
+            cropped_data_mask (4D numpy array): cropped image data masks.                 
+    """
+
+    Print("Cropping [" + str(data.shape[1]) + ', ' + str(data.shape[2]) 
+          + "] images into [" + str(window_size) + ', ' + str(window_size) 
+          + "] with overlapping. . .")
+  
+    assert (subdivision*window_size) >= data.shape[1], "Dimension error: " \
+            + "subdivision*window_size is less than " + str(data.shape[1]) 
+    assert (subdivision*window_size) >= data.shape[2], "Dimension error: " \
+            + "subdivision*window_size is less than " + str(data.shape[2]) 
+
+    total_cropped = data.shape[0]*subdivision*subdivision
+
+    # Crop data                                                         
+    cropped_data = np.zeros((total_cropped, window_size, window_size,
+                             data.shape[3]), dtype=np.int16)
+    cropped_data_mask = np.zeros((total_cropped, window_size, window_size,
+                             data.shape[3]), dtype=np.int16)
+   
+    x_ov = abs(data.shape[1] - (window_size*subdivision))
+    y_ov = abs(data.shape[2] - (window_size*subdivision))
+    step_x = window_size - x_ov
+    step_y = window_size - y_ov 
+
+    cont = 0
+    for k, img_num in tqdm(enumerate(range(0, data.shape[0]))):
+        for i in range(0, data.shape[1]-x_ov, step_x):
+            for j in range(0, data.shape[2]-y_ov, step_y):
+                cropped_data[cont] = data[k, i:i+window_size, j:j+window_size, :]
+                cropped_data_mask[cont] = data_mask[k, i:i+window_size, j:j+window_size, :]    
+            
+                cont = cont + 1
+                
+    Print("[OV-CROP] New data shape is: " + str(cropped_data.shape))
+
+    return cropped_data, cropped_data_mask
+
+
+def merge_data_with_overlap(data, original_shape, window_size, subdivision, 
+                            out_dir, ov_map=True, ov_data_img=0):
+    """Merge data with an amount of overlap. Used to undo the crop made by the 
+       function crop_data_with_overlap.
+
+       Args:
+            data (4D numpy array): data to merge.
+            original_shape (tuple): original dimensions to reconstruct. 
+            window_size (int): crop size.
+            subdivision (int): number of tiles to merge per axis. For instance,
+            a value of 2 will merge 4 crops into one image.
+            out_dir (string): directory where the images will be save.
+            ov_map (bool, optional): whether to create overlap map.
+            ov_data_img (int, optional): number of the image on the data to 
+            create the overlappng map.
+
+       Returns:
+            merged_data (4D numpy array): merged image data.
+    """
+
+    Print("Merging [" + str(data.shape[1]) + ', ' + str(data.shape[2])
+          + "] images into [" + str(original_shape[1]) + ", " 
+          + str(original_shape[0]) + "] with overlapping . . .")
+
+    total_images = int((data.shape[0]/subdivision)/subdivision)
+    merged_data = np.zeros((total_images, original_shape[1], original_shape[0],
+                             data.shape[3]), dtype=np.int16)
+    overlap_matrix = np.zeros((original_shape[1], original_shape[0],
+                             data.shape[3]), dtype=np.int16)
+    if ov_map == True:
+        ov_map_matrix = np.zeros((original_shape[1], original_shape[0],
+                                   data.shape[3]), dtype=np.int16)
+
+    x_ov = abs(original_shape[1] - (window_size*subdivision))
+    y_ov = abs(original_shape[0] - (window_size*subdivision))
+    step_x = window_size - x_ov
+    step_y = window_size - y_ov
+
+    # Calculate the overlapping matrix
+    for i in range(0, original_shape[1]-x_ov, step_x):
+        for j in range(0, original_shape[0]-y_ov, step_y):
+            overlap_matrix[i:i+window_size, j:j+window_size, :] += 1
+            if ov_map == True:
+                ov_map_matrix[i:i+window_size, j:j+window_size, :] += 1
+
+    # Mark crops' border 
+    for i in range(0, original_shape[1]-x_ov, step_x):
+        for j in range(0, original_shape[0]-y_ov, step_y):
+            # Paint the grid
+            ov_map_matrix[i:(i+window_size-1), j] = -4 
+            ov_map_matrix[i:(i+window_size-1), (j+window_size-1)] = -4 
+            ov_map_matrix[i, j:(j+window_size-1)] = -4 
+            ov_map_matrix[(i+window_size-1), j:(j+window_size-1)] = -4 
+  
+    # Save overlapping map 
+    if ov_map == True:            
+        # Convert the overlap map into a gray scale representation where
+        # a darker color represents a more overlapping area
+        ov_map_matrix[ np.where(ov_map_matrix >= 8) ] = -1
+        ov_map_matrix[ np.where(ov_map_matrix >= 3) ] = -2
+        ov_map_matrix[ np.where(ov_map_matrix >= 2) ] = -3
+
+    # Merge the overlapping crops
+    cont = 0
+    for k, img_num in tqdm(enumerate(range(0, total_images))):
+        for i in range(0, original_shape[1]-x_ov, step_x):
+            for j in range(0, original_shape[0]-y_ov, step_y):
+                merged_data[k, i:i+window_size, j:j+window_size, :] += data[cont]
+                cont += 1
+           
+        merged_data[k] = np.true_divide(merged_data[k], overlap_matrix)
+
+    # Save a copy of the merged data with the overlapped regions colored as: 
+    # green when 2 crops overlap, yellow when 4 and red when more than 4 are 
+    # overlapped
+    if ov_map == True:
+        im = Image.fromarray(merged_data[ov_data_img,:,:,0]*255)
+        im = im.convert('RGB')
+        px = im.load()
+        width, height = im.size
+        for im_i in range(width): 
+            for im_j in range(height):
+                if ov_map_matrix[im_j, im_i] == -4: # White borders
+                    px[im_i, im_j] = (255, 255, 255) # White
+                elif ov_map_matrix[im_j, im_i] == -3: # 2 overlaps 
+                    if merged_data[ov_data_img, im_j, im_i, 0] == 1:
+                        px[im_i, im_j] = (73, 100, 73) # White + green
+                    else:
+                        px[im_i, im_j] = (0, 74, 0) # Black + green
+                elif ov_map_matrix[im_j, im_i] == -2: # 2 < x < 8 overlaps  
+                    if merged_data[ov_data_img, im_j, im_i, 0] == 1:
+                        px[im_i, im_j] = (100, 100, 73) # White + yellow
+                    else:
+                        px[im_i, im_j] = (74, 74, 0) # Black + yellow
+                elif ov_map_matrix[im_j, im_i] == -1: # 8 >= overlaps
+                    if merged_data[ov_data_img, im_j, im_i, 0] == 1:
+                        px[im_i, im_j] = (100, 73, 73) # White + red
+                    else:
+                        px[im_i, im_j] = (74, 0, 0) # Black + red
+
+        im.save(os.path.join(out_dir,"merged_ov_map.png"))
+  
+    Print("[MERGE-OV-CROP] New data shape is: " + str(merged_data.shape))
+
+    return merged_data
 
 
 def mix_data(data, num, out_shape=[1, 1], grid=True):
@@ -863,7 +1021,6 @@ def crop_generator(batches, crop_length, val=False):
 
 def random_crop(img, mask, random_crop_size, val=False):
     """Random crop.
-
        Based on:                                                                
            https://jkjung-avt.github.io/keras-image-cropping/
     """
@@ -878,5 +1035,4 @@ def random_crop(img, mask, random_crop_size, val=False):
         x = np.random.randint(0, width - dx + 1)                                
         y = np.random.randint(0, height - dy + 1)
     return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :]
-
 

@@ -216,12 +216,10 @@ def _recreate_from_subdivs(subdivs, window_size, subdivisions, padded_out_shape)
         a += 1
     return y / (subdivisions ** 2)
 
-
 def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, nb_classes, pred_func):
     """
     Apply the `pred_func` function to square patches of the image, and overlap
     the predictions to merge them smoothly.
-
     See 6th, 7th and 8th idea here:
     http://blog.kaggle.com/2017/05/09/dstl-satellite-imagery-competition-3rd-place-winners-interview-vladimir-sergey/
     """
@@ -270,6 +268,25 @@ def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, nb_c
         plt.show()
     return prd
 
+def predict_img_with_overlap(input_img, window_size, subdivisions, nb_classes, pred_func):
+    """Based on predict_img_with_smooth_windowing but works just with the original
+       image instead of creating 8 new ones.
+    """
+    pad = _pad_img(input_img, window_size, subdivisions)
+
+    sd = _windowed_subdivs(pad, window_size, subdivisions, nb_classes, pred_func)
+    one_padded_result = _recreate_from_subdivs(sd, window_size, subdivisions,
+                                               padded_out_shape=list(pad.shape[:-1])+[nb_classes])
+
+    prd = _unpad_img(one_padded_result, window_size, subdivisions)
+
+    prd = prd[:input_img.shape[0], :input_img.shape[1], :]
+
+    if PLOT_PROGRESS:
+        plt.imshow(prd)
+        plt.title("Smoothly Merged Patches that were Tiled Tighter")
+        plt.show()
+    return prd
 
 def cheap_tiling_prediction(img, window_size, nb_classes, pred_func):
     """
@@ -334,6 +351,7 @@ def round_predictions(prd, nb_channels_out, thresholds):
     return prd
 
 
+
 if __name__ == '__main__':
     ###
     # Image:
@@ -362,10 +380,8 @@ if __name__ == '__main__':
     def predict_for_patches(small_img_patches):
         """
         Apply prediction on images arranged in a 4D array as a batch.
-
         Here, we use a random color filter for each patch so as to see how it
         will blend.
-
         Note that the np array shape of "small_img_patches" is:
             (nb_images, x, y, nb_channels_in)
         The returned arra should be of the same shape, except for the last

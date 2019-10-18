@@ -188,7 +188,8 @@ def store_history(results, test_score, voc, det, time_callback, log_dir,
 
 
 def threshold_plots(preds_test, Y_test, o_test_shape, j_score, det_eval_ge_path,
-                    det_eval_path, det_bin, n_dig, job_id, job_file, char_dir):
+                    det_eval_path, det_bin, n_dig, job_id, job_file, char_dir, 
+                    r_val=0.5):
     """Create a plot with the different metric values binarizing the prediction
        with different thresholds, from 0.1 to 0.9.
                                                                                 
@@ -207,12 +208,13 @@ def threshold_plots(preds_test, Y_test, o_test_shape, j_score, det_eval_ge_path,
             job_id (str): id of the job.
             job_file (str): id and run number of the job.
             char_dir (str): path to store the charts generated.
+            r_val (float, optional): threshold values to return. 
 
         Returns:
-            t_jac[4] (float): value of the Jaccard index when the threshold 
-            is 0.5.
-            t_voc[4] (float): value of VOC when the threshold is 0.5.
-            t_det[4] (float): value of DET when the threshold is 0.5.
+            t_jac (float): value of the Jaccard index when the threshold is 
+            r_val.
+            t_voc (float): value of VOC when the threshold is r_val.
+            t_det (float): value of DET when the threshold is r_val.
     """
 
     from data import mix_data
@@ -224,9 +226,14 @@ def threshold_plots(preds_test, Y_test, o_test_shape, j_score, det_eval_ge_path,
     t_voc = np.zeros(9)                                                         
     t_det = np.zeros(9)                                                         
     objects = []                                                                
+    r_val_pos = 0
                                                                                 
     for i, t in enumerate(np.arange(0.1,1.0,0.1)):                              
-        objects.append(str(t))                                                  
+    
+        if t == r_val:
+            r_val_pos = i
+
+        objects.append(str('%.2f' % float(t)))                                                  
                                                                                 
         # Threshold images                                                      
         bin_preds_test = (preds_test > t).astype(np.uint8)                      
@@ -255,51 +262,39 @@ def threshold_plots(preds_test, Y_test, o_test_shape, j_score, det_eval_ge_path,
 
     # For matplotlib errors in display                                          
     os.environ['QT_QPA_PLATFORM']='offscreen'                                   
-    y_pos = np.arange(len(objects))                                             
-    Print("t_jac.shape: " + str(t_jac.shape))                                   
-    Print("y_pos.shape: " + str(y_pos.shape))                                   
-   
-                                                                             
+    
+    if not os.path.exists(char_dir):                                            
+        os.makedirs(char_dir)
+  
     # Plot Jaccard values   
-    fig, ax1 = plt.subplots()                                                    
-    p1 = ax1.bar(y_pos, t_jac, align='center')                                   
+    plt.clf()
+    plt.plot(objects, t_jac)                                   
     plt.title('Model JOBID=' + job_file + ' Jaccard', y=1.08)                 
     plt.ylabel('Value')                                                         
     plt.xlabel('Threshold')                                                     
-    if not os.path.exists(char_dir):                                            
-        os.makedirs(char_dir)                                                   
-    for p in p1:                                                                
-        ax1.text(p.get_x() + p.get_width()/2., 0.95*p.get_height(),              
-        '%.3f' % float(p.get_height()), ha='center', va='bottom')               
+    for k, point in enumerate(zip(objects, t_jac)):
+        plt.text(point[0], point[1], '%.3f' % float(t_jac[k]))
     plt.savefig(os.path.join(char_dir, job_file + '_threshold_Jaccard.png'))    
     plt.clf()                                                                   
                                                                                 
     # Plot VOC values                                                           
-    fig, ax2 = plt.subplots()
-    p2 = ax2.bar(y_pos, t_voc, align='center') 
-    plt.title('Model JOBID=' + job_file + ' VOC', y=1.08)                               
+    plt.plot(objects, t_voc)                                                    
+    plt.title('Model JOBID=' + job_file + ' VOC', y=1.08)                   
     plt.ylabel('Value')                                                         
     plt.xlabel('Threshold')                                                     
-    if not os.path.exists(char_dir):                                            
-        os.makedirs(char_dir)                                                   
-    for p in p2:                                                                
-        ax2.text(p.get_x() + p.get_width()/2., 0.95*p.get_height(),              
-        '%.3f' % float(p.get_height()), ha='center', va='bottom')
-    plt.savefig(os.path.join(char_dir, job_file + '_threshold_VOC.png'))        
-    plt.clf()                                                                   
+    for k, point in enumerate(zip(objects, t_voc)):                              
+        plt.text(point[0], point[1], '%.3f' % float(t_voc[k]))                  
+    plt.savefig(os.path.join(char_dir, job_file + '_threshold_VOC.png'))    
+    plt.clf()
                                                                                 
     # Plot DET values                                                           
-    fig, ax3 = plt.subplots()
-    p3 = ax3.bar(y_pos, t_det, align='center')
-    plt.title('Model JOBID=' + job_file + ' DET', y=1.08)                               
+    plt.plot(objects, t_det)                                                    
+    plt.title('Model JOBID=' + job_file + ' DET', y=1.08)                       
     plt.ylabel('Value')                                                         
     plt.xlabel('Threshold')                                                     
-    if not os.path.exists(char_dir):                                            
-        os.makedirs(char_dir)                                                   
-    for p in p3:                                                                
-        ax3.text(p.get_x() + p.get_width()/2., 0.95*p.get_height(),              
-        '%.3f' % float(p.get_height()), ha='center', va='bottom')
+    for k, point in enumerate(zip(objects, t_det)):                              
+        plt.text(point[0], point[1], '%.3f' % float(t_det[k]))                  
     plt.savefig(os.path.join(char_dir, job_file + '_threshold_DET.png'))        
     plt.clf()
 
-    return  t_jac[4], t_voc[4], t_det[4]
+    return  t_jac[r_val_pos], t_voc[r_val_pos], t_det[r_val_pos]
