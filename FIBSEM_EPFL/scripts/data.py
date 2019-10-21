@@ -307,6 +307,71 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
     return cropped_data, cropped_data_mask
 
 
+def crop_data_with_overlap2(data, data_mask, window_size, subdivision):
+    """Crop data into smaller pieces with overlap.
+
+       Args:
+            data (4D numpy array): data to crop.
+            data_mask (4D numpy array): data mask to crop.
+            window_size (int): crop size .
+            subdivision (int): number of tiles to create.
+
+       Returns:
+            cropped_data (4D numpy array): cropped image data.
+            cropped_data_mask (4D numpy array): cropped image data masks.
+    """
+
+    Print("Cropping [" + str(data.shape[1]) + ', ' + str(data.shape[2])
+          + "] images into [" + str(window_size) + ', ' + str(window_size)
+          + "] with overlapping. . .")
+
+    assert (subdivision % 2 == 0 or subdivision == 1), "Error: " \
+            + "subdivision must be 1 or an even number" 
+    assert window_size <= data.shape[1], "Error: " + "window_size " \
+            + str(window_size) + " greater than data width " \
+            + str(data.shape[1])
+    assert window_size <= data.shape[2], "Error: "  + "window_size " \
+            + str(window_size) + " greater than data height " \
+            + str(data.shape[2])
+
+    total_cropped = data.shape[0]*subdivision
+
+    # Crop data
+    cropped_data = np.zeros((total_cropped, window_size, window_size,
+                             data.shape[3]), dtype=np.int16)
+    cropped_data_mask = np.zeros((total_cropped, window_size, window_size,
+                             data.shape[3]), dtype=np.int16)
+
+    if subdivision == 1:
+        x_ov = 0
+        y_ov = 0
+        step_x = data.shape[1]
+        step_y = data.shape[2]
+    if subdivision <= 2:
+        x_ov = abs(data.shape[1] - (window_size*subdivision))
+        y_ov = 0
+        step_x = window_size - x_ov
+        step_y = data.shape[2]
+    else:
+        x_ov = abs(data.shape[1] - (window_size*(subdivision/2)))
+        y_ov = abs(data.shape[2] - (window_size*(subdivision/2)))
+        step_x = window_size - x_ov
+        step_y = window_size - y_ov
+    
+    cont = 0
+    for k, img_num in tqdm(enumerate(range(0, data.shape[0]))):
+        for i in range(0, data.shape[1]-x_ov, step_x):
+            for j in range(0, data.shape[2]-y_ov, step_y):
+                cropped_data[cont] = data[k, i:i+window_size, j:j+window_size, :]
+                cropped_data_mask[cont] = data_mask[k, i:i+window_size, j:j+window_size, :]
+                cont = cont + 1
+
+    Print("[OV-CROP] New data shape is: " + str(cropped_data.shape))
+
+    return cropped_data, cropped_data_mask
+
+
+
 def merge_data_with_overlap(data, original_shape, window_size, subdivision, 
                             out_dir, ov_map=True, ov_data_img=0):
     """Merge data with an amount of overlap. Used to undo the crop made by the 
@@ -585,15 +650,18 @@ class ImageDataGenerator(keras.utils.Sequence):
     """
 
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
-                 shuffle=False, da=True, e_prob=0.9, elastic=False, vflip=False,
-                 hflip=False, rotation=False):
-        """ ImageDataGenerator constructor.
+                 shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
+                 hflip=False, rotation=False, rd_crop_after_DA=False, 
+                 rd_crop_length=0, val=False):
+        """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
             X (numpy array): train data.                                  
             Y (numpy array): train mask data.                             
             batch_size (int, optional): size of the batches.
-            dim (tuple, optional): dimension of the desired images.
+            dim (tuple, optional): dimension of the desired images. As no effect 
+            if rd_crop_after_DA is active, as the dimension will be selected by 
+            rd_crop_after_DA.
             n_channels (int, optional): number of channels of the input images.
             shuffle (bool, optional): to decide if the indexes will be shuffled
             after every epoch. 
@@ -604,6 +672,12 @@ class ImageDataGenerator(keras.utils.Sequence):
             vflip (bool, optional): if true vertical flip are made.
             hflip (bool, optional): if true horizontal flips are made.          
             rotation (bool, optional): to make rotations of 90º, 180º or 270º.
+            rd_crop_after_DA (bool, optional): decide to make random crops after
+            apply DA transformations.
+            rd_crop_length (int, optional): length of the random crop after DA.
+            val (bool, optional): advice the generator that the images will be 
+            to validate the model to not make random crops (as the val. data must
+            be the same on each epoch).
         """
 
         self.dim = dim
@@ -618,9 +692,12 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.vflip = vflip
         self.hflip = hflip
         self.rotation = rotation
+        self.rd_crop_after_DA = rd_crop_after_DA
+        self.rd_crop_length = rd_crop_length
+        self.val = val
         self.on_epoch_end()
         
-        if self.X.shape[1] == self.X.shape[2]:
+        if self.X.shape[1] == self.X.shape[2] or self.rd_crop_after_DA == True:
             self.squared = True
         else:
             self.squared = False
@@ -630,6 +707,9 @@ class ImageDataGenerator(keras.utils.Sequence):
         # Create a list which will hold a counter of the number of times a 
         # transformation is performed. 
         self.t_counter = [0 ,0 ,0 ,0 ,0 ,0] 
+
+        if self.rd_crop_after_DA == True:
+            self.dim = (self.rd_crop_length, self.rd_crop_length)
 
     def __len__(self):
         """Defines the number of batches per epoch."""
@@ -651,12 +731,25 @@ class ImageDataGenerator(keras.utils.Sequence):
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         
-        for i, j in zip( range(0,self.batch_size), indexes ):
+        for i, j in zip(range(0,self.batch_size), indexes):
             if self.da == False: 
-                 batch_x[i], batch_y[i] = self.X[j], self.Y[j]
+                if self.rd_crop_after_DA == True:
+                    batch_x[i], batch_y[i] = random_crop(self.X[j], self.Y[j], 
+                                                         (self.rd_crop_length, self.rd_crop_length),
+                                                         self.val)
+                else:
+                    batch_x[i], batch_y[i] = self.X[j], self.Y[j]
             else:
-                batch_x[i], batch_y[i], _ = self.apply_transform(self.X[j],
-                                                              self.Y[j])
+                if self.rd_crop_after_DA == True:
+                    batch_x[i], batch_y[i] = random_crop(self.X[j], self.Y[j],
+                                                         (self.rd_crop_length, self.rd_crop_length), 
+                                                         self.val) 
+                    batch_x[i], batch_y[i], _ = self.apply_transform(batch_x[i],
+                                                                     batch_y[i])
+                else:
+                    batch_x[i], batch_y[i], _ = self.apply_transform(self.X[j],
+                                                                     self.Y[j])
+                
  
         return batch_x, batch_y
 
@@ -961,12 +1054,12 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
                               fill_mode=fill_mode, rotation_range=180,          
                               featurewise_center=featurewise_center,            
                               featurewise_std_normalization=featurewise_std_normalization,
-                              zoom_range=zoom_val,width_shift_range=w_shift_r,
+                              zoom_range=zoom_val, width_shift_range=w_shift_r,
                               height_shift_range=h_shift_r, 
                               shear_range=shear_range)                              
         data_gen_args2 = dict(horizontal_flip=hflip, vertical_flip=vflip,       
                               fill_mode=fill_mode, rotation_range=180,          
-                              zoom_range=zoom_val,width_shift_range=w_shift_r,
+                              zoom_range=zoom_val, width_shift_range=w_shift_r,
                               height_shift_range=h_shift_r, 
                               shear_range=shear_range)                              
                                                                                 

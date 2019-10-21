@@ -113,7 +113,7 @@ h_shift_r = 0.0
 shear_range = 0.0
 
 # Load preoviously generated model weigths
-load_previous_weights = True
+load_previous_weights = False
 
 # General parameters
 batch_size_value = 6
@@ -401,7 +401,7 @@ if rd_crop_after_DA == False:
             im = im.convert('L')
             im.save(os.path.join(result_dir,"test_out" + str(i) + ".png"))
 else:
-    ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, img_width_crop, 2)
+    ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, img_width_crop, 4)
 
     Print("Evaluating overlapped test data . . .")
     score = model.evaluate(ov_X_test, ov_Y_test, batch_size=batch_size_value, verbose=1)
@@ -426,7 +426,7 @@ else:
 
     Print("Merging the overlapped predictions . . .")
     merged_preds_test = merge_data_with_overlap(bin_preds_test, original_test_shape, 
-                                                img_width_crop, 2, result_dir)
+                                                img_width_crop, 4, result_dir)
     
     Print("Calculate Jaccard for test (with overlap calculated) . . .")
     jac_ov = jaccard_index_numpy(Y_test, merged_preds_test)

@@ -87,7 +87,7 @@ img_test_channels = 1
 original_test_shape = [img_test_width, img_test_height]
 
 # Crop variables
-mg_width_crop = 512
+img_width_crop = 512
 img_height_crop = 512
 img_channels_crop = 1 
 make_crops = False
@@ -116,7 +116,7 @@ shear_range = 0.0
 load_previous_weights = True
 
 # General parameters
-batch_size_value = 6
+batch_size_value = 4
 momentum_value = 0.99
 learning_rate_value = 0.001
 epochs_value = 360
@@ -425,13 +425,11 @@ else:
             im.save(os.path.join(result_dir,"test_out_ov_bin_" + str(i) + ".png"))
 
     Print("Merging the overlapped predictions . . .")
-    merged_preds_test = merge_data_with_overlap(ov_Y_test, original_test_shape, 
+    merged_preds_test = merge_data_with_overlap(bin_preds_test, original_test_shape, 
                                                 img_width_crop, 2, result_dir)
     
-    bin_preds_test = (merged_preds_test > 0.5).astype(np.uint8)
-    
-    Print("Calculate Jaccard for test (with overlap calculated). . .")
-    jac_ov = jaccard_index_numpy(Y_test, bin_preds_test)
+    Print("Calculate Jaccard for test (with overlap calculated) . . .")
+    jac_ov = jaccard_index_numpy(Y_test, merged_preds_test)
 
 
 ####################
@@ -499,8 +497,8 @@ if rd_crop_after_DA == False:
     Print("VOC: " + str(voc))
     Print("DET: " + str(det))
 else:
-    Print("Test overlapped (without merge) jaccard_index: " + str(jac_no_ov))
-    Print("Test overlapped (with merge) jaccard_index: " + str(jac_ov))
+    Print("Test overlapped (per crop) jaccard_index: " + str(jac_no_ov))
+    Print("Test overlapped (per image) jaccard_index: " + str(jac_ov))
     
 if load_previous_weights == False:
     # If we are running multiple tests store the results

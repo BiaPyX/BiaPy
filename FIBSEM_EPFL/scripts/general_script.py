@@ -92,7 +92,7 @@ img_height_crop = 512
 img_channels_crop = 1 
 make_crops = False
 check_crop = False
-rd_crop_after_DA = True # No compatible with make_crops                                                        
+rd_crop_after_DA = False # No compatible with make_crops                                                        
 
 # Discard variables
 discard_cropped_images = False
@@ -284,18 +284,19 @@ if custom_da == False:
             rd_crop_after_DA=rd_crop_after_DA, rd_crop_length=img_width_crop,
             w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
 
-        img_width = img_width_crop
-        img_height = img_height_crop
-
 else:
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                          dim=(img_height,img_width), n_channels=1,
                          shuffle=True, da=True, e_prob=0.7, elastic=True,
-                         vflip=False, hflip=False, rotation=True)
+                         vflip=False, hflip=False, rotation=True, 
+                         rd_crop_after_DA=rd_crop_after_DA, 
+                         rd_crop_length=img_width_crop)
 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
                              dim=(img_height,img_width), n_channels=1,
-                             shuffle=False, da=False)
+                             shuffle=False, da=False,
+                             rd_crop_after_DA=rd_crop_after_DA,
+                             rd_crop_length=img_width_crop, val=True)
 
     train_generator = ImageDataGenerator(**data_gen_args)
     val_generator = ImageDataGenerator(**data_gen_val_args)
@@ -303,6 +304,10 @@ else:
     # Generate examples of data augmentation
     if aug_examples == True:
         train_generator.flow_on_examples(10, job_id=job_id)
+
+if rd_crop_after_DA == True:
+    img_width = img_width_crop
+    img_height = img_height_crop
 
 
 ##########################
@@ -425,13 +430,11 @@ else:
             im.save(os.path.join(result_dir,"test_out_ov_bin_" + str(i) + ".png"))
 
     Print("Merging the overlapped predictions . . .")
-    merged_preds_test = merge_data_with_overlap(ov_Y_test, original_test_shape, 
+    merged_preds_test = merge_data_with_overlap(bin_preds_test, original_test_shape, 
                                                 img_width_crop, 2, result_dir)
     
-    bin_preds_test = (merged_preds_test > 0.5).astype(np.uint8)
-    
-    Print("Calculate Jaccard for test (with overlap calculated). . .")
-    jac_ov = jaccard_index_numpy(Y_test, bin_preds_test)
+    Print("Calculate Jaccard for test (with overlap calculated) . . .")
+    jac_ov = jaccard_index_numpy(Y_test, merged_preds_test)
 
 
 ####################
@@ -499,8 +502,8 @@ if rd_crop_after_DA == False:
     Print("VOC: " + str(voc))
     Print("DET: " + str(det))
 else:
-    Print("Test overlapped (without merge) jaccard_index: " + str(jac_no_ov))
-    Print("Test overlapped (with merge) jaccard_index: " + str(jac_ov))
+    Print("Test overlapped (per crop) jaccard_index: " + str(jac_no_ov))
+    Print("Test overlapped (per image) jaccard_index: " + str(jac_ov))
     
 if load_previous_weights == False:
     # If we are running multiple tests store the results

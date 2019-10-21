@@ -105,7 +105,7 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 # Data augmentation variables
 normalize_data = False
 norm_value_forced = -1
-custom_da = False
+custom_da = True
 aug_examples = False
 keras_zoom = False
 w_shift_r = 0.0
@@ -113,12 +113,12 @@ h_shift_r = 0.0
 shear_range = 0.0
 
 # Load preoviously generated model weigths
-load_previous_weights = True
+load_previous_weights = False
 
 # General parameters
-batch_size_value = 6
+batch_size_value = 4
 momentum_value = 0.99
-learning_rate_value = 0.001
+learning_rate_value = 0.0005
 epochs_value = 360
 make_threshold_plots = False
 
@@ -284,18 +284,19 @@ if custom_da == False:
             rd_crop_after_DA=rd_crop_after_DA, rd_crop_length=img_width_crop,
             w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
 
-        img_width = img_width_crop
-        img_height = img_height_crop
-
 else:
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                          dim=(img_height,img_width), n_channels=1,
                          shuffle=True, da=True, e_prob=0.7, elastic=True,
-                         vflip=False, hflip=False, rotation=True)
+                         vflip=False, hflip=False, rotation=True, 
+                         rd_crop_after_DA=rd_crop_after_DA, 
+                         rd_crop_length=img_width_crop)
 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
                              dim=(img_height,img_width), n_channels=1,
-                             shuffle=False, da=False)
+                             shuffle=False, da=False,
+                             rd_crop_after_DA=rd_crop_after_DA,
+                             rd_crop_length=img_width_crop, val=True)
 
     train_generator = ImageDataGenerator(**data_gen_args)
     val_generator = ImageDataGenerator(**data_gen_val_args)
@@ -304,18 +305,24 @@ else:
     if aug_examples == True:
         train_generator.flow_on_examples(10, job_id=job_id)
 
+if rd_crop_after_DA == True:
+    img_width = img_width_crop
+    img_height = img_height_crop
+
 
 ##########################
 #    BUILD THE NETWORK   #
 ##########################
 
 Print("Creating the network . . .")
-model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
+model = U_Net([img_height, img_width, img_channels], numInitChannels=16, 
+              fixed_dropout=0.2)
 
-sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
-                           decay=0.0, nesterov=False)
+adam = keras.optimizers.Adam(lr=learning_rate_value, beta_1=0.9,
+                             beta_2=0.999, epsilon=None, decay=0.0,
+                             amsgrad=False)
 
-model.compile(optimizer=sdg, loss='binary_crossentropy', metrics=[jaccard_index])
+model.compile(optimizer=adam, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
 if load_previous_weights == False:
@@ -428,7 +435,7 @@ else:
     merged_preds_test = merge_data_with_overlap(bin_preds_test, original_test_shape, 
                                                 img_width_crop, 2, result_dir)
     
-    Print("Calculate Jaccard for test (with overlap calculated) . . .")
+    Print("Calculate Jaccard for test (with overlap calculated). . .")
     jac_ov = jaccard_index_numpy(Y_test, merged_preds_test)
 
 
