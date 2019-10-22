@@ -256,58 +256,7 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
     return cropped_data, cropped_data_mask, force_shape
 
 
-def crop_data_with_overlap(data, data_mask, window_size, subdivision):                          
-    """Crop data into smaller pieces with overlap.
-       
-       Args:                                                                    
-            data (4D numpy array): data to crop.                                
-            data_mask (4D numpy array): data mask to crop.
-            window_size (int): crop size .
-            subdivision (int): number of tiles to create per axis. For instance,
-            a value of 2 will generate 4 tiles.
-                                                                                
-       Returns:                                                                 
-            cropped_data (4D numpy array): cropped image data.
-            cropped_data_mask (4D numpy array): cropped image data masks.                 
-    """
-
-    Print("Cropping [" + str(data.shape[1]) + ', ' + str(data.shape[2]) 
-          + "] images into [" + str(window_size) + ', ' + str(window_size) 
-          + "] with overlapping. . .")
-  
-    assert (subdivision*window_size) >= data.shape[1], "Dimension error: " \
-            + "subdivision*window_size is less than " + str(data.shape[1]) 
-    assert (subdivision*window_size) >= data.shape[2], "Dimension error: " \
-            + "subdivision*window_size is less than " + str(data.shape[2]) 
-
-    total_cropped = data.shape[0]*subdivision*subdivision
-
-    # Crop data                                                         
-    cropped_data = np.zeros((total_cropped, window_size, window_size,
-                             data.shape[3]), dtype=np.int16)
-    cropped_data_mask = np.zeros((total_cropped, window_size, window_size,
-                             data.shape[3]), dtype=np.int16)
-   
-    x_ov = abs(data.shape[1] - (window_size*subdivision))
-    y_ov = abs(data.shape[2] - (window_size*subdivision))
-    step_x = window_size - x_ov
-    step_y = window_size - y_ov 
-
-    cont = 0
-    for k, img_num in tqdm(enumerate(range(0, data.shape[0]))):
-        for i in range(0, data.shape[1]-x_ov, step_x):
-            for j in range(0, data.shape[2]-y_ov, step_y):
-                cropped_data[cont] = data[k, i:i+window_size, j:j+window_size, :]
-                cropped_data_mask[cont] = data_mask[k, i:i+window_size, j:j+window_size, :]    
-            
-                cont = cont + 1
-                
-    Print("[OV-CROP] New data shape is: " + str(cropped_data.shape))
-
-    return cropped_data, cropped_data_mask
-
-
-def crop_data_with_overlap2(data, data_mask, window_size, subdivision):
+def crop_data_with_overlap(data, data_mask, window_size, subdivision):
     """Crop data into smaller pieces with overlap.
 
        Args:
@@ -321,16 +270,16 @@ def crop_data_with_overlap2(data, data_mask, window_size, subdivision):
             cropped_data_mask (4D numpy array): cropped image data masks.
     """
 
-    Print("Cropping [" + str(data.shape[1]) + ', ' + str(data.shape[2])
+    Print("[OV-CROP] Cropping [" + str(data.shape[1]) + ', ' + str(data.shape[2])
           + "] images into [" + str(window_size) + ', ' + str(window_size)
           + "] with overlapping. . .")
 
     assert (subdivision % 2 == 0 or subdivision == 1), "Error: " \
             + "subdivision must be 1 or an even number" 
-    assert window_size <= data.shape[1], "Error: " + "window_size " \
+    assert window_size <= data.shape[1], "Error: window_size " \
             + str(window_size) + " greater than data width " \
             + str(data.shape[1])
-    assert window_size <= data.shape[2], "Error: "  + "window_size " \
+    assert window_size <= data.shape[2], "Error: window_size " \
             + str(window_size) + " greater than data height " \
             + str(data.shape[2])
 
@@ -342,28 +291,45 @@ def crop_data_with_overlap2(data, data_mask, window_size, subdivision):
     cropped_data_mask = np.zeros((total_cropped, window_size, window_size,
                              data.shape[3]), dtype=np.int16)
 
-    if subdivision == 1:
-        x_ov = 0
-        y_ov = 0
-        step_x = data.shape[1]
-        step_y = data.shape[2]
-    if subdivision <= 2:
-        x_ov = abs(data.shape[1] - (window_size*subdivision))
-        y_ov = 0
-        step_x = window_size - x_ov
-        step_y = data.shape[2]
-    else:
-        x_ov = abs(data.shape[1] - (window_size*(subdivision/2)))
-        y_ov = abs(data.shape[2] - (window_size*(subdivision/2)))
-        step_x = window_size - x_ov
+    min_d = sys.maxsize
+    rows = 1
+    columns = 1
+    for i in range(1, int(subdivision/2)+1, 1):
+        if subdivision % i == 0 and abs((subdivision/i) - i) < min_d:
+            min_d = abs((subdivision/i) - i)
+            rows = i
+            columns = int(subdivision/i)
+        
+    Print("[OV-CROP] The minimum overlap has been found with [" + str(rows) \
+          + ", " + str(columns) + "]")
+
+    if rows != 1:
+        y_ov = int(abs(data.shape[1] - window_size*rows)/(rows-1))
+        r_y = abs(data.shape[1] - window_size*rows) % (rows-1) 
         step_y = window_size - y_ov
-    
+    else:
+        y_ov = 0
+        r_y = 0
+        step_y = data.shape[1]
+
+    if columns != 1:
+        x_ov = int(abs(data.shape[2] - window_size*columns)/(columns-1))
+        r_x = abs(data.shape[2] - window_size*columns) % (columns-1) 
+        step_x = window_size - x_ov
+    else:
+        x_ov = 0
+        r_x = 0
+        step_x = data.shape[2]
+
     cont = 0
     for k, img_num in tqdm(enumerate(range(0, data.shape[0]))):
-        for i in range(0, data.shape[1]-x_ov, step_x):
-            for j in range(0, data.shape[2]-y_ov, step_y):
-                cropped_data[cont] = data[k, i:i+window_size, j:j+window_size, :]
-                cropped_data_mask[cont] = data_mask[k, i:i+window_size, j:j+window_size, :]
+        for i in range(0, data.shape[1]-y_ov, step_y):
+            for j in range(0, data.shape[2]-x_ov, step_x):
+                d_y = 0 if (i+window_size) < data.shape[1] else r_y
+                d_x = 0 if (j+window_size) < data.shape[2] else r_x
+
+                cropped_data[cont] = data[k, i-d_y:i+window_size, j-d_x:j+window_size, :]
+                cropped_data_mask[cont] = data_mask[k, i-d_y:i+window_size, j-d_x:j+window_size, :]
                 cont = cont + 1
 
     Print("[OV-CROP] New data shape is: " + str(cropped_data.shape))
@@ -392,11 +358,11 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
             merged_data (4D numpy array): merged image data.
     """
 
-    Print("Merging [" + str(data.shape[1]) + ', ' + str(data.shape[2])
+    Print("[OV-MERGE] Merging [" + str(data.shape[1]) + ', ' + str(data.shape[2])
           + "] images into [" + str(original_shape[1]) + ", " 
           + str(original_shape[0]) + "] with overlapping . . .")
 
-    total_images = int((data.shape[0]/subdivision)/subdivision)
+    total_images = int(data.shape[0]/subdivision)
     merged_data = np.zeros((total_images, original_shape[1], original_shape[0],
                              data.shape[3]), dtype=np.int16)
     overlap_matrix = np.zeros((original_shape[1], original_shape[0],
@@ -405,26 +371,57 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
         ov_map_matrix = np.zeros((original_shape[1], original_shape[0],
                                    data.shape[3]), dtype=np.int16)
 
-    x_ov = abs(original_shape[1] - (window_size*subdivision))
-    y_ov = abs(original_shape[0] - (window_size*subdivision))
-    step_x = window_size - x_ov
-    step_y = window_size - y_ov
+    min_d = sys.maxsize
+    rows = 1
+    columns = 1
+    for i in range(1, int(subdivision/2)+1, 1):
+        if subdivision % i == 0 and abs((subdivision/i) - i) < min_d:
+            min_d = abs((subdivision/i) - i)
+            rows = i
+            columns = int(subdivision/i)
+
+    Print("[OV-MERGE] The minimum overlap has been found with [" + str(rows) \
+          + ", " + str(columns) + "]")
+
+    if rows != 1:
+        y_ov = int(abs(original_shape[1] - window_size*rows)/(rows-1))
+        r_y = abs(original_shape[1] - window_size*rows) % (rows-1)
+        step_y = window_size - y_ov
+    else:
+        y_ov = 0
+        r_y = 0
+        step_y = original_shape[1]
+
+    if columns != 1:
+        x_ov = int(abs(original_shape[0] - window_size*columns)/(columns-1))
+        r_x = abs(original_shape[0] - window_size*columns) % (columns-1)
+        step_x = window_size - x_ov
+    else:
+        x_ov = 0
+        r_x = 0
+        step_x = original_shape[0]
 
     # Calculate the overlapping matrix
-    for i in range(0, original_shape[1]-x_ov, step_x):
-        for j in range(0, original_shape[0]-y_ov, step_y):
-            overlap_matrix[i:i+window_size, j:j+window_size, :] += 1
+    for i in range(0, original_shape[1]-y_ov, step_y):
+        for j in range(0, original_shape[0]-x_ov, step_x):
+            d_y = 0 if (i+window_size) < original_shape[1] else r_y
+            d_x = 0 if (j+window_size) < original_shape[0] else r_x
+
+            overlap_matrix[i-d_y:i+window_size, j-d_x:j+window_size, :] += 1
             if ov_map == True:
-                ov_map_matrix[i:i+window_size, j:j+window_size, :] += 1
+                ov_map_matrix[i-d_y:i+window_size, j-d_x:j+window_size, :] += 1
 
     # Mark crops' border 
-    for i in range(0, original_shape[1]-x_ov, step_x):
-        for j in range(0, original_shape[0]-y_ov, step_y):
+    for i in range(0, original_shape[1]-y_ov, step_y):
+        for j in range(0, original_shape[0]-x_ov, step_x):
+            d_y = 0 if (i+window_size) < original_shape[1] else r_y
+            d_x = 0 if (j+window_size) < original_shape[0] else r_x
+            
             # Paint the grid
-            ov_map_matrix[i:(i+window_size-1), j] = -4 
-            ov_map_matrix[i:(i+window_size-1), (j+window_size-1)] = -4 
-            ov_map_matrix[i, j:(j+window_size-1)] = -4 
-            ov_map_matrix[(i+window_size-1), j:(j+window_size-1)] = -4 
+            ov_map_matrix[i-d_y:(i+window_size-1), j-d_x] = -4 
+            ov_map_matrix[i-d_y:(i+window_size-1), (j+window_size-1-d_x)] = -4 
+            ov_map_matrix[i-d_y, j-d_x:(j+window_size-1)] = -4 
+            ov_map_matrix[(i+window_size-1-d_y), j-d_x:(j+window_size-1)] = -4 
   
     # Save overlapping map 
     if ov_map == True:            
@@ -437,9 +434,11 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
     # Merge the overlapping crops
     cont = 0
     for k, img_num in tqdm(enumerate(range(0, total_images))):
-        for i in range(0, original_shape[1]-x_ov, step_x):
-            for j in range(0, original_shape[0]-y_ov, step_y):
-                merged_data[k, i:i+window_size, j:j+window_size, :] += data[cont]
+        for i in range(0, original_shape[1]-y_ov, step_y):
+            for j in range(0, original_shape[0]-x_ov, step_x):
+                d_y = 0 if (i+window_size) < original_shape[1] else r_y
+                d_x = 0 if (j+window_size) < original_shape[0] else r_x
+                merged_data[k, i-d_y:i+window_size, j-d_x:j+window_size, :] += data[cont]
                 cont += 1
            
         merged_data[k] = np.true_divide(merged_data[k], overlap_matrix)
@@ -651,8 +650,8 @@ class ImageDataGenerator(keras.utils.Sequence):
 
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
                  shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
-                 hflip=False, rotation=False, rd_crop_after_DA=False, 
-                 rd_crop_length=0, val=False):
+                 hflip=False, rotation=False, crops_before_DA=False, 
+                 crop_length=0, val=False):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
@@ -660,8 +659,8 @@ class ImageDataGenerator(keras.utils.Sequence):
             Y (numpy array): train mask data.                             
             batch_size (int, optional): size of the batches.
             dim (tuple, optional): dimension of the desired images. As no effect 
-            if rd_crop_after_DA is active, as the dimension will be selected by 
-            rd_crop_after_DA.
+            if crops_before_DA is active, as the dimension will be selected by 
+            crops_before_DA.
             n_channels (int, optional): number of channels of the input images.
             shuffle (bool, optional): to decide if the indexes will be shuffled
             after every epoch. 
@@ -672,9 +671,9 @@ class ImageDataGenerator(keras.utils.Sequence):
             vflip (bool, optional): if true vertical flip are made.
             hflip (bool, optional): if true horizontal flips are made.          
             rotation (bool, optional): to make rotations of 90º, 180º or 270º.
-            rd_crop_after_DA (bool, optional): decide to make random crops after
+            crops_before_DA (bool, optional): decide to make random crops after
             apply DA transformations.
-            rd_crop_length (int, optional): length of the random crop after DA.
+            crop_length (int, optional): length of the random crop after DA.
             val (bool, optional): advice the generator that the images will be 
             to validate the model to not make random crops (as the val. data must
             be the same on each epoch).
@@ -692,12 +691,12 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.vflip = vflip
         self.hflip = hflip
         self.rotation = rotation
-        self.rd_crop_after_DA = rd_crop_after_DA
-        self.rd_crop_length = rd_crop_length
+        self.crops_before_DA = crops_before_DA
+        self.crop_length = crop_length
         self.val = val
         self.on_epoch_end()
         
-        if self.X.shape[1] == self.X.shape[2] or self.rd_crop_after_DA == True:
+        if self.X.shape[1] == self.X.shape[2] or self.crops_before_DA == True:
             self.squared = True
         else:
             self.squared = False
@@ -708,8 +707,8 @@ class ImageDataGenerator(keras.utils.Sequence):
         # transformation is performed. 
         self.t_counter = [0 ,0 ,0 ,0 ,0 ,0] 
 
-        if self.rd_crop_after_DA == True:
-            self.dim = (self.rd_crop_length, self.rd_crop_length)
+        if self.crops_before_DA == True:
+            self.dim = (self.crop_length, self.crop_length)
 
     def __len__(self):
         """Defines the number of batches per epoch."""
@@ -733,16 +732,16 @@ class ImageDataGenerator(keras.utils.Sequence):
         
         for i, j in zip(range(0,self.batch_size), indexes):
             if self.da == False: 
-                if self.rd_crop_after_DA == True:
+                if self.crops_before_DA == True:
                     batch_x[i], batch_y[i] = random_crop(self.X[j], self.Y[j], 
-                                                         (self.rd_crop_length, self.rd_crop_length),
+                                                         (self.crop_length, self.crop_length),
                                                          self.val)
                 else:
                     batch_x[i], batch_y[i] = self.X[j], self.Y[j]
             else:
-                if self.rd_crop_after_DA == True:
+                if self.crops_before_DA == True:
                     batch_x[i], batch_y[i] = random_crop(self.X[j], self.Y[j],
-                                                         (self.rd_crop_length, self.rd_crop_length), 
+                                                         (self.crop_length, self.crop_length), 
                                                          self.val) 
                     batch_x[i], batch_y[i], _ = self.apply_transform(batch_x[i],
                                                                      batch_y[i])
@@ -991,7 +990,7 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
                        preproc_function=True, featurewise_center=False,         
                        featurewise_std_normalization=False, zoom=False,         
                        w_shift_r=0.0, h_shift_r=0.0, shear_range=0,
-                       rd_crop_after_DA=False, rd_crop_length=0):             
+                       crops_before_DA=False, crop_length=0):             
                                                                                 
     """Makes data augmentation of the given input data.                         
                                                                                 
@@ -1021,9 +1020,9 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             h_shift_r (float, optional): height shift range.
             shear_range (float, optional): range to apply shearing 
             transformations. 
-            rd_crop_after_DA (bool, optional): decide to make random crops after
+            crops_before_DA (bool, optional): decide to make random crops after
             apply DA transformations.                                           
-            rd_crop_length (int, optional): length of the random crop after DA. 
+            crop_length (int, optional): length of the random crop after DA. 
                                                                                 
        Returns:                                                                 
             train_generator (Keras iterable of flow_from_directory): train data 
@@ -1088,9 +1087,9 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
     train_generator = zip(X_train_augmented, Y_train_augmented)                 
     val_generator = zip(X_val_flow, Y_val_flow)
                                                                    
-    if rd_crop_after_DA == True:                                                
-        train_generator = crop_generator(train_generator, rd_crop_length)
-        val_generator = crop_generator(val_generator, rd_crop_length, val=True)
+    if crops_before_DA == True:                                                
+        train_generator = crop_generator(train_generator, crop_length)
+        val_generator = crop_generator(val_generator, crop_length, val=True)
 
     return train_generator, val_generator
 
