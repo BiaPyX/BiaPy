@@ -92,7 +92,8 @@ img_height_crop = 512
 img_channels_crop = 1 
 make_crops = False
 check_crop = False
-rd_crop_after_DA = True # No compatible with make_crops                                                        
+crops_before_DA = True # No compatible with make_crops                                                        
+test_ov_crops = 4
 
 # Discard variables
 discard_cropped_images = False
@@ -272,31 +273,24 @@ else:
 ##########################
 
 if custom_da == False:
-    if rd_crop_after_DA == False:
-        train_generator, val_generator = keras_da_generator(X_train, Y_train, 
-            X_val, Y_val, batch_size_value, preproc_function=False, 
-            save_examples=aug_examples, job_id=job_id, zoom=keras_zoom,
-            w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
-    else:
-        train_generator, val_generator = keras_da_generator(X_train, Y_train, 
-            X_val, Y_val, batch_size_value, preproc_function=False, 
-            save_examples=aug_examples, job_id=job_id, zoom=keras_zoom, 
-            rd_crop_after_DA=rd_crop_after_DA, rd_crop_length=img_width_crop,
-            w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
-
+    train_generator, val_generator = keras_da_generator(X_train, Y_train, 
+        X_val, Y_val, batch_size_value, preproc_function=False, 
+        save_examples=aug_examples, job_id=job_id, zoom=keras_zoom, 
+        crops_before_DA=crops_before_DA, crop_length=img_width_crop,
+        w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
 else:
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                          dim=(img_height,img_width), n_channels=1,
-                         shuffle=True, da=True, e_prob=0.7, elastic=True,
-                         vflip=False, hflip=False, rotation=True, 
-                         rd_crop_after_DA=rd_crop_after_DA, 
-                         rd_crop_length=img_width_crop)
+                         shuffle=True, da=True, e_prob=0.0, elastic=False,
+                         vflip=True, hflip=True, rotation=True, 
+                         crops_before_DA=crops_before_DA, 
+                         crop_length=img_width_crop)
 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
                              dim=(img_height,img_width), n_channels=1,
                              shuffle=False, da=False,
-                             rd_crop_after_DA=rd_crop_after_DA,
-                             rd_crop_length=img_width_crop, val=True)
+                             crops_before_DA=crops_before_DA,
+                             crop_length=img_width_crop, val=True)
 
     train_generator = ImageDataGenerator(**data_gen_args)
     val_generator = ImageDataGenerator(**data_gen_val_args)
@@ -305,7 +299,7 @@ else:
     if aug_examples == True:
         train_generator.flow_on_examples(10, job_id=job_id)
 
-if rd_crop_after_DA == True:
+if crops_before_DA == True:
     img_width = img_width_crop
     img_height = img_height_crop
 
@@ -341,7 +335,6 @@ if load_previous_weights == False:
                                   epochs=epochs_value, callbacks=[earlystopper, 
                                                                   checkpointer,
                                                                   time_callback])
-    
 else:
     h5_file=os.path.join(h5_dir, 'model.fibsem_' + job_id + '_' + test_id + '.h5')
     Print("Loading model weights from h5_file: " + h5_file)
@@ -352,10 +345,11 @@ else:
 #    PREDICTION     #
 #####################
 
-if rd_crop_after_DA == False:
+if crops_before_DA == False:
     # Evaluate to obtain the loss value (the metric value will be discarded)
     Print("Evaluating test data . . .")
-    score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
+    score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, 
+                           verbose=1)
 
     # Predict on test
     Print("Making the predictions on test data . . .")
@@ -408,10 +402,21 @@ if rd_crop_after_DA == False:
             im = im.convert('L')
             im.save(os.path.join(result_dir,"test_out" + str(i) + ".png"))
 else:
-    ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, img_width_crop, 2)
+    ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, img_width_crop,
+                                                  test_ov_crops)
+
+    if check_crop == True:
+        for i in range(0, test_ov_crops):
+                im = Image.fromarray(ov_X_test[i,:,:,0])
+                im = im.convert('L')
+                im.save(os.path.join(result_dir,"ov_x_crop_ex_" + str(i) + ".png"))
+                im = Image.fromarray(ov_Y_test[i,:,:,0]*255)
+                im = im.convert('L')
+                im.save(os.path.join(result_dir,"ov_y_crop_ex_" + str(i) + ".png"))
 
     Print("Evaluating overlapped test data . . .")
-    score = model.evaluate(ov_X_test, ov_Y_test, batch_size=batch_size_value, verbose=1)
+    score = model.evaluate(ov_X_test, ov_Y_test, batch_size=batch_size_value, 
+                           verbose=1)
 
     Print("Making the predictions on overlapped test data . . .")
     preds_test = model.predict(ov_X_test, batch_size=batch_size_value, verbose=1)
@@ -431,22 +436,26 @@ else:
             im = im.convert('L')
             im.save(os.path.join(result_dir,"test_out_ov_bin_" + str(i) + ".png"))
 
-    Print("Merging the overlapped predictions . . .")
-    merged_preds_test = merge_data_with_overlap(bin_preds_test, original_test_shape, 
-                                                img_width_crop, 2, result_dir)
+    if test_ov_crops > 1:
+        Print("Merging the overlapped predictions . . .")
+        merged_preds_test = merge_data_with_overlap(bin_preds_test, 
+                                                    original_test_shape, 
+                                                    img_width_crop, 
+                                                    test_ov_crops, 
+                                                    result_dir)
     
-    Print("Calculate Jaccard for test (with overlap calculated). . .")
-    jac_ov = jaccard_index_numpy(Y_test, merged_preds_test)
+        Print("Calculate Jaccard for test (with overlap calculated). . .")
+        jac_ov = jaccard_index_numpy(Y_test, merged_preds_test)
 
 
 ####################
 #  POST-PROCESING  #
 ####################
 
-if (post_process == True and make_crops == True) or (rd_crop_after_DA == True):
+if (post_process == True and make_crops == True) or (crops_before_DA == True):
     Print("Post processing active . . .")
 
-    if rd_crop_after_DA == False:
+    if crops_before_DA == False:
         X_test = mix_data(X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
                           out_shape=[h_num, v_num], grid=False)
     
@@ -499,19 +508,20 @@ if load_previous_weights == False:
     Print("Validation jaccard_index: " + str(np.max(results.history['val_jaccard_index'])))
     Print("Test loss: " + str(score[0]))
     
-if rd_crop_after_DA == False:    
+if crops_before_DA == False:    
     Print("Test jaccard_index: " + str(score[1]))
     Print("VOC: " + str(voc))
     Print("DET: " + str(det))
 else:
     Print("Test overlapped (per crop) jaccard_index: " + str(jac_no_ov))
-    Print("Test overlapped (per image) jaccard_index: " + str(jac_ov))
+    if test_ov_crops > 1:
+        Print("Test overlapped (per image) jaccard_index: " + str(jac_ov))
     
 if load_previous_weights == False:
     # If we are running multiple tests store the results
     if len(sys.argv) > 1:
     
-        if rd_crop_after_DA == False:
+        if crops_before_DA == False:
             if post_process == True and make_crops == True:
                 store_history(results, score, voc, det, time_callback, log_dir,
                               job_file, smooth_score=smooth_score, 
@@ -523,7 +533,7 @@ if load_previous_weights == False:
         if test_id == "1":
             create_plots(results, job_id, char_dir)
 
-if (post_process == True and make_crops == True) or (rd_crop_after_DA == True):
+if (post_process == True and make_crops == True) or (crops_before_DA == True):
     Print("Post-process: SMOOTH - Test jaccard_index: " + str(smooth_score))
     Print("Post-process: SMOOTH - VOC: " + str(smooth_voc))
     Print("Post-process: SMOOTH - DET: " + str(smooth_det))

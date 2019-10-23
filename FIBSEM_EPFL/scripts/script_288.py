@@ -92,7 +92,7 @@ img_height_crop = 512
 img_channels_crop = 1 
 make_crops = False
 check_crop = True
-crops_before_DA = False # No compatible with make_crops                                                        
+crops_before_DA = True # No compatible with make_crops                                                        
 test_ov_crops = 8 # Only active with crops_before_DA
 
 # Discard variables
@@ -106,7 +106,7 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 # Data augmentation variables
 normalize_data = False
 norm_value_forced = -1
-custom_da = False
+custom_da = True
 aug_examples = False
 keras_zoom = False
 w_shift_r = 0.0
@@ -117,9 +117,9 @@ shear_range = 0.0
 load_previous_weights = False
 
 # General parameters
-batch_size_value = 6
+batch_size_value = 4
 momentum_value = 0.99
-learning_rate_value = 0.001
+learning_rate_value = 0.0005
 epochs_value = 360
 make_threshold_plots = False
 
@@ -275,20 +275,20 @@ else:
 if custom_da == False:
     train_generator, val_generator = keras_da_generator(X_train, Y_train, 
         X_val, Y_val, batch_size_value, preproc_function=False, 
-        save_examples=aug_examples, job_id=job_id, zoom=keras_zoom,
+        save_examples=aug_examples, job_id=job_id, zoom=keras_zoom, 
         crops_before_DA=crops_before_DA, crop_length=img_width_crop,
         w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
 else:
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                          dim=(img_height,img_width), n_channels=1,
                          shuffle=True, da=True, e_prob=0.0, elastic=False,
-                         vflip=True, hflip=True, rotation=True,
-                         crops_before_DA=crops_before_DA,
+                         vflip=True, hflip=True, rotation=True, 
+                         crops_before_DA=crops_before_DA, 
                          crop_length=img_width_crop)
 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
                              dim=(img_height,img_width), n_channels=1,
-                             shuffle=False, da=False, 
+                             shuffle=False, da=False,
                              crops_before_DA=crops_before_DA,
                              crop_length=img_width_crop, val=True)
 
@@ -309,12 +309,14 @@ if crops_before_DA == True:
 ##########################
 
 Print("Creating the network . . .")
-model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
+model = U_Net([img_height, img_width, img_channels], numInitChannels=16, 
+              fixed_dropout=0.2)
 
-sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
-                           decay=0.0, nesterov=False)
+adam = keras.optimizers.Adam(lr=learning_rate_value, beta_1=0.9,
+                             beta_2=0.999, epsilon=None, decay=0.0,
+                             amsgrad=False)
 
-model.compile(optimizer=sdg, loss='binary_crossentropy', metrics=[jaccard_index])
+model.compile(optimizer=adam, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
 if load_previous_weights == False:
@@ -400,7 +402,7 @@ if crops_before_DA == False:
             im = im.convert('L')
             im.save(os.path.join(result_dir,"test_out" + str(i) + ".png"))
 else:
-    ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, img_width_crop, 
+    ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, img_width_crop,
                                                   test_ov_crops)
 
     if check_crop == True:
@@ -415,7 +417,7 @@ else:
                 im.save(os.path.join(result_dir,"ov_y_crop_ex_" + str(i) + ".png"))
 
     Print("Evaluating overlapped test data . . .")
-    score = model.evaluate(ov_X_test, ov_Y_test, batch_size=batch_size_value,
+    score = model.evaluate(ov_X_test, ov_Y_test, batch_size=batch_size_value, 
                            verbose=1)
 
     Print("Making the predictions on overlapped test data . . .")
@@ -438,12 +440,12 @@ else:
 
     if test_ov_crops > 1:
         Print("Merging the overlapped predictions . . .")
-        merged_preds_test = merge_data_with_overlap(bin_preds_test,
-                                                    original_test_shape,
-                                                    img_width_crop,
-                                                    test_ov_crops,
+        merged_preds_test = merge_data_with_overlap(bin_preds_test, 
+                                                    original_test_shape, 
+                                                    img_width_crop, 
+                                                    test_ov_crops, 
                                                     result_dir)
-
+    
         Print("Calculate Jaccard for test (with overlap calculated). . .")
         jac_ov = jaccard_index_numpy(Y_test, merged_preds_test)
 
