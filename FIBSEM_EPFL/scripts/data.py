@@ -11,6 +11,7 @@ from skimage.io import imread, imshow
 from sklearn.model_selection import train_test_split
 from scipy.ndimage.interpolation import map_coordinates
 from scipy.ndimage.filters import gaussian_filter
+from scipy import ndimage
 from PIL import Image
 from texttable import Texttable
 from keras.preprocessing.image import ImageDataGenerator as kerasDA
@@ -651,7 +652,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
                  shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
-                 hflip=False, rotation=False, rd_crop_after_DA=False, 
+                 hflip=False, rotation90=False, rotation_range=0.0, rd_crop_after_DA=False,
                  rd_crop_length=0, val=False):
         """ImageDataGenerator constructor.
                                                                                 
@@ -670,12 +671,13 @@ class ImageDataGenerator(keras.utils.Sequence):
             transformations. 
             elastic (bool, optional): to make elastic transformations.
             vflip (bool, optional): if true vertical flip are made.
-            hflip (bool, optional): if true horizontal flips are made.          
-            rotation (bool, optional): to make rotations of 90º, 180º or 270º.
+            hflip (bool, optional): if true horizontal flips are made.
+            rotation90 (bool, optional): to make rotations of 90º, 180º or 270º.
+            rotation_range (float, optional): range of rotation degrees
             rd_crop_after_DA (bool, optional): decide to make random crops after
             apply DA transformations.
             rd_crop_length (int, optional): length of the random crop after DA.
-            val (bool, optional): advice the generator that the images will be 
+            val (bool, optional): advice the generator that the images will be
             to validate the model to not make random crops (as the val. data must
             be the same on each epoch).
         """
@@ -691,7 +693,8 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.elastic = elastic
         self.vflip = vflip
         self.hflip = hflip
-        self.rotation = rotation
+        self.rotation90 = rotation90
+        self.rotation_range = rotation_range
         self.rd_crop_after_DA = rd_crop_after_DA
         self.rd_crop_length = rd_crop_length
         self.val = val
@@ -701,7 +704,7 @@ class ImageDataGenerator(keras.utils.Sequence):
             self.squared = True
         else:
             self.squared = False
-            if rotation == True:
+            if rotation90 == True:
                 Print("[AUG] Images not square, only 180 rotations will be done.")
 
         # Create a list which will hold a counter of the number of times a 
@@ -853,7 +856,15 @@ class ImageDataGenerator(keras.utils.Sequence):
             trans_image = np.flip(trans_image, 1)                               
             trans_mask = np.flip(trans_mask, 1)
             
-        
+        # Free rotation from -range to range (in degrees)
+        if ( self.rotation_range != 0 ):
+            theta = np.random.uniform(-self.rotation_range, self.rotation_range)
+            trans_image = ndimage.rotate(trans_image, theta, reshape=False, mode='reflect', order=1)
+            trans_mask = ndimage.rotate(trans_mask, theta, reshape=False, mode='reflect', order=0)
+            transform_string = transform_string + '_rRange'
+            transformed = True
+
+        # Rotation with multiples of 90 degrees
         # [0-0.25) : 90º rotation
         # [0.25-0.5): 180º rotation
         # [0.5-0.75): 270º rotation
@@ -862,28 +873,28 @@ class ImageDataGenerator(keras.utils.Sequence):
         prob = random.uniform(0, 1)
         if self.squared == True:
             # 90 degree rotation
-            if (self.rotation == True or flow == True) and 0 <= prob < 0.25:
+            if (self.rotation90 == True or flow == True) and 0 <= prob < 0.25:
                 trans_image = np.rot90(trans_image)
                 trans_mask = np.rot90(trans_mask)
                 transform_string = transform_string + '_r90'
                 transformed = True 
                 self.t_counter[3] += 1
             # 180 degree rotation
-            elif (self.rotation == True or flow == True) and 0.25 <= prob < 0.5:
+            elif (self.rotation90 == True or flow == True) and 0.25 <= prob < 0.5:
                 trans_image = np.rot90(trans_image, 2)
                 trans_mask = np.rot90(trans_mask, 2)
                 transform_string = transform_string + '_r180'
                 transformed = True 
                 self.t_counter[4] += 1
             # 270 degree rotation
-            elif (self.rotation == True or flow == True) and 0.5 <= prob < 0.75:
+            elif (self.rotation90 == True or flow == True) and 0.5 <= prob < 0.75:
                 trans_image = np.rot90(trans_image, 3)
                 trans_mask = np.rot90(trans_mask, 3)
                 transform_string = transform_string + '_r270'
                 transformed = True 
                 self.t_counter[5] += 1
         else:
-            if (self.rotation == True or flow == True) and 0 <= prob < 0.5:
+            if (self.rotation90 == True or flow == True) and 0 <= prob < 0.5:
                 trans_image = np.rot90(trans_image, 2)                          
                 trans_mask = np.rot90(trans_mask, 2)                            
                 transform_string = transform_string + '_r180'                   
