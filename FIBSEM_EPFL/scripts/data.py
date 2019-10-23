@@ -673,8 +673,8 @@ class ImageDataGenerator(keras.utils.Sequence):
 
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
                  shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
-                 hflip=False, rotation90=False, rotation_range=0.0, rd_crop_after_DA=False,
-                 rd_crop_length=0, val=False):
+                 hflip=False, rotation90=False, rotation_range=0.0, crops_before_DA=False,
+                 crop_length=0, val=False):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
@@ -695,9 +695,7 @@ class ImageDataGenerator(keras.utils.Sequence):
             hflip (bool, optional): if true horizontal flips are made.
             rotation90 (bool, optional): to make rotations of 90º, 180º or 270º.
             rotation_range (float, optional): range of rotation degrees
-            rd_crop_after_DA (bool, optional): decide to make random crops after
-            apply DA transformations.
-            rd_crop_length (int, optional): length of the random crop after DA.
+            crop_length (int, optional): length of the random crop before DA.
             val (bool, optional): advice the generator that the images will be
             to validate the model to not make random crops (as the val. data must
             be the same on each epoch).
@@ -716,8 +714,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.hflip = hflip
         self.rotation90 = rotation90
         self.rotation_range = rotation_range
-        self.rd_crop_after_DA = rd_crop_after_DA
-        self.rd_crop_length = rd_crop_length
+        self.crop_length = crop_length
         self.val = val
         self.on_epoch_end()
         
@@ -1053,9 +1050,9 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             h_shift_r (float, optional): height shift range.
             shear_range (float, optional): range to apply shearing 
             transformations. 
-            crops_before_DA (bool, optional): decide to make random crops after
+            crops_before_DA (bool, optional): decide to make random crops before
             apply DA transformations.                                           
-            crop_length (int, optional): length of the random crop after DA. 
+            crop_length (int, optional): length of the random crop before DA. 
                                                                                 
        Returns:                                                                 
             train_generator (Keras iterable of flow_from_directory): train data 
