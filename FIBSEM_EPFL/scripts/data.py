@@ -714,6 +714,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.hflip = hflip
         self.rotation90 = rotation90
         self.rotation_range = rotation_range
+        self.crops_before_DA = crops_before_DA
         self.crop_length = crop_length
         self.val = val
         self.on_epoch_end()
