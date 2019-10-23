@@ -93,7 +93,7 @@ img_channels_crop = 1
 make_crops = False
 check_crop = True
 crops_before_DA = True # No compatible with make_crops                                                        
-test_ov_crops = 1 # Only active with crops_before_DA
+test_ov_crops = 8 # Only active with crops_before_DA
 
 # Discard variables
 discard_cropped_images = False

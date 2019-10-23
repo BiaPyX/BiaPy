@@ -404,6 +404,8 @@ else:
                                                   test_ov_crops)
 
     if check_crop == True:
+        if not os.path.exists(result_dir):
+            os.makedirs(result_dir)
         for i in range(0, test_ov_crops):
                 im = Image.fromarray(ov_X_test[i,:,:,0])
                 im = im.convert('L')

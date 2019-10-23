@@ -263,7 +263,7 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
             data (4D numpy array): data to crop.
             data_mask (4D numpy array): data mask to crop.
             window_size (int): crop size .
-            subdivision (int): number of tiles to create.
+            subdivision (int): number of crops to create.
 
        Returns:
             cropped_data (4D numpy array): cropped image data.
@@ -283,14 +283,14 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
             + str(window_size) + " greater than data height " \
             + str(data.shape[2])
 
-    total_cropped = data.shape[0]*subdivision
-
     # Crop data
+    total_cropped = data.shape[0]*subdivision
     cropped_data = np.zeros((total_cropped, window_size, window_size,
                              data.shape[3]), dtype=np.int16)
     cropped_data_mask = np.zeros((total_cropped, window_size, window_size,
                              data.shape[3]), dtype=np.int16)
 
+    # Find the mininum overlap configuration with the number of crops to create
     min_d = sys.maxsize
     rows = 1
     columns = 1
@@ -303,6 +303,9 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
     Print("[OV-CROP] The minimum overlap has been found with [" + str(rows) \
           + ", " + str(columns) + "]")
 
+    # Calculate the amount of overlap, the division remainder to obtain an 
+    # offset to adjust the last crop and the step size. All of this values per
+    # x/y or column/row axis
     if rows != 1:
         y_ov = int(abs(data.shape[1] - window_size*rows)/(rows-1))
         r_y = abs(data.shape[1] - window_size*rows) % (rows-1) 
@@ -321,6 +324,7 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
         r_x = 0
         step_x = data.shape[2]
 
+    # Create the crops
     cont = 0
     for k, img_num in tqdm(enumerate(range(0, data.shape[0]))):
         for i in range(0, data.shape[1]-y_ov, step_y):
@@ -337,7 +341,6 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
     return cropped_data, cropped_data_mask
 
 
-
 def merge_data_with_overlap(data, original_shape, window_size, subdivision, 
                             out_dir, ov_map=True, ov_data_img=0):
     """Merge data with an amount of overlap. Used to undo the crop made by the 
@@ -347,8 +350,7 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
             data (4D numpy array): data to merge.
             original_shape (tuple): original dimensions to reconstruct. 
             window_size (int): crop size.
-            subdivision (int): number of tiles to merge per axis. For instance,
-            a value of 2 will merge 4 crops into one image.
+            subdivision (int): number of crops to merge.
             out_dir (string): directory where the images will be save.
             ov_map (bool, optional): whether to create overlap map.
             ov_data_img (int, optional): number of the image on the data to 
@@ -362,15 +364,21 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
           + "] images into [" + str(original_shape[1]) + ", " 
           + str(original_shape[0]) + "] with overlapping . . .")
 
+    # Merged data
     total_images = int(data.shape[0]/subdivision)
     merged_data = np.zeros((total_images, original_shape[1], original_shape[0],
                              data.shape[3]), dtype=np.int16)
+
+    # Matrices to store the amount of overlap. The first is used to store the
+    # number of crops to merge for each pixel. The second matrix is used to 
+    # paint the overlapping map
     overlap_matrix = np.zeros((original_shape[1], original_shape[0],
                              data.shape[3]), dtype=np.int16)
     if ov_map == True:
         ov_map_matrix = np.zeros((original_shape[1], original_shape[0],
                                    data.shape[3]), dtype=np.int16)
 
+    # Find the mininum overlap configuration with the number of crops to create
     min_d = sys.maxsize
     rows = 1
     columns = 1
@@ -383,6 +391,9 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
     Print("[OV-MERGE] The minimum overlap has been found with [" + str(rows) \
           + ", " + str(columns) + "]")
 
+    # Calculate the amount of overlap, the division remainder to obtain an
+    # offset to adjust the last crop and the step size. All of this values per
+    # x/y or column/row axis
     if rows != 1:
         y_ov = int(abs(original_shape[1] - window_size*rows)/(rows-1))
         r_y = abs(original_shape[1] - window_size*rows) % (rows-1)
@@ -411,26 +422,19 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
             if ov_map == True:
                 ov_map_matrix[i-d_y:i+window_size, j-d_x:j+window_size, :] += 1
 
-    # Mark crops' border 
-    for i in range(0, original_shape[1]-y_ov, step_y):
-        for j in range(0, original_shape[0]-x_ov, step_x):
-            d_y = 0 if (i+window_size) < original_shape[1] else r_y
-            d_x = 0 if (j+window_size) < original_shape[0] else r_x
-            
-            # Paint the grid
-            ov_map_matrix[i-d_y:(i+window_size-1), j-d_x] = -4 
-            ov_map_matrix[i-d_y:(i+window_size-1), (j+window_size-1-d_x)] = -4 
-            ov_map_matrix[i-d_y, j-d_x:(j+window_size-1)] = -4 
-            ov_map_matrix[(i+window_size-1-d_y), j-d_x:(j+window_size-1)] = -4 
+    # Mark the border of each crop in the map
+    if ov_map == True:
+        for i in range(0, original_shape[1]-y_ov, step_y):
+            for j in range(0, original_shape[0]-x_ov, step_x):
+                d_y = 0 if (i+window_size) < original_shape[1] else r_y
+                d_x = 0 if (j+window_size) < original_shape[0] else r_x
+                
+                # Paint the grid
+                ov_map_matrix[i-d_y:(i+window_size-1), j-d_x] = -4 
+                ov_map_matrix[i-d_y:(i+window_size-1), (j+window_size-1-d_x)] = -4 
+                ov_map_matrix[i-d_y, j-d_x:(j+window_size-1)] = -4 
+                ov_map_matrix[(i+window_size-1-d_y), j-d_x:(j+window_size-1)] = -4 
   
-    # Save overlapping map 
-    if ov_map == True:            
-        # Convert the overlap map into a gray scale representation where
-        # a darker color represents a more overlapping area
-        ov_map_matrix[ np.where(ov_map_matrix >= 8) ] = -1
-        ov_map_matrix[ np.where(ov_map_matrix >= 3) ] = -2
-        ov_map_matrix[ np.where(ov_map_matrix >= 2) ] = -3
-
     # Merge the overlapping crops
     cont = 0
     for k, img_num in tqdm(enumerate(range(0, total_images))):
@@ -444,32 +448,50 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
         merged_data[k] = np.true_divide(merged_data[k], overlap_matrix)
 
     # Save a copy of the merged data with the overlapped regions colored as: 
-    # green when 2 crops overlap, yellow when 4 and red when more than 4 are 
-    # overlapped
+    # green when 2 crops overlap, yellow when (2 < x < 8) and red when more than 
+    # 7 overlaps are merged 
     if ov_map == True:
+        ov_map_matrix[ np.where(ov_map_matrix >= 8) ] = -1
+        ov_map_matrix[ np.where(ov_map_matrix >= 3) ] = -2
+        ov_map_matrix[ np.where(ov_map_matrix >= 2) ] = -3
+
         im = Image.fromarray(merged_data[ov_data_img,:,:,0]*255)
         im = im.convert('RGB')
         px = im.load()
         width, height = im.size
         for im_i in range(width): 
             for im_j in range(height):
-                if ov_map_matrix[im_j, im_i] == -4: # White borders
-                    px[im_i, im_j] = (255, 255, 255) # White
-                elif ov_map_matrix[im_j, im_i] == -3: # 2 overlaps 
+                # White borders
+                if ov_map_matrix[im_j, im_i] == -4: 
+                    # White
+                    px[im_i, im_j] = (255, 255, 255)
+
+                # 2 overlaps
+                elif ov_map_matrix[im_j, im_i] == -3: 
                     if merged_data[ov_data_img, im_j, im_i, 0] == 1:
-                        px[im_i, im_j] = (73, 100, 73) # White + green
+                        # White + green
+                        px[im_i, im_j] = (73, 100, 73)
                     else:
-                        px[im_i, im_j] = (0, 74, 0) # Black + green
-                elif ov_map_matrix[im_j, im_i] == -2: # 2 < x < 8 overlaps  
+                        # Black + green
+                        px[im_i, im_j] = (0, 74, 0)
+
+                # 2 < x < 8 overlaps
+                elif ov_map_matrix[im_j, im_i] == -2:
                     if merged_data[ov_data_img, im_j, im_i, 0] == 1:
-                        px[im_i, im_j] = (100, 100, 73) # White + yellow
+                        # White + yellow
+                        px[im_i, im_j] = (100, 100, 73)
                     else:
-                        px[im_i, im_j] = (74, 74, 0) # Black + yellow
-                elif ov_map_matrix[im_j, im_i] == -1: # 8 >= overlaps
+                        # Black + yellow
+                        px[im_i, im_j] = (74, 74, 0)
+
+                # 8 >= overlaps
+                elif ov_map_matrix[im_j, im_i] == -1:
                     if merged_data[ov_data_img, im_j, im_i, 0] == 1:
-                        px[im_i, im_j] = (100, 73, 73) # White + red
+                        # White + red
+                        px[im_i, im_j] = (100, 73, 73)
                     else:
-                        px[im_i, im_j] = (74, 0, 0) # Black + red
+                        # Black + red
+                        px[im_i, im_j] = (74, 0, 0)
 
         im.save(os.path.join(out_dir,"merged_ov_map.png"))
   

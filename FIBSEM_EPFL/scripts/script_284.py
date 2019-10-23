@@ -93,7 +93,7 @@ img_channels_crop = 1
 make_crops = False
 check_crop = True
 crops_before_DA = True # No compatible with make_crops                                                        
-test_ov_crops = 8
+test_ov_crops = 8 # Only active with crops_before_DA
 
 # Discard variables
 discard_cropped_images = False
@@ -403,6 +403,8 @@ else:
     ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, img_width_crop, 
                                                   test_ov_crops)
     if check_crop == True:
+        if not os.path.exists(result_dir):
+            os.makedirs(result_dir)
         for i in range(0, test_ov_crops):
                 im = Image.fromarray(ov_X_test[i,:,:,0])
                 im = im.convert('L')
