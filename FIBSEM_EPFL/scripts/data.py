@@ -673,8 +673,8 @@ class ImageDataGenerator(keras.utils.Sequence):
 
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
                  shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
-                 hflip=False, rotation90=False, rotation_range=0.0, crops_before_DA=False,
-                 crop_length=0, val=False):
+                 hflip=False, rotation90=False, rotation_range=0.0, 
+                 crops_before_DA=False, crop_length=0, val=False):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
@@ -683,7 +683,7 @@ class ImageDataGenerator(keras.utils.Sequence):
             batch_size (int, optional): size of the batches.
             dim (tuple, optional): dimension of the desired images. As no effect 
             if crops_before_DA is active, as the dimension will be selected by 
-            crops_before_DA.
+            that variable instead.
             n_channels (int, optional): number of channels of the input images.
             shuffle (bool, optional): to decide if the indexes will be shuffled
             after every epoch. 
@@ -694,8 +694,10 @@ class ImageDataGenerator(keras.utils.Sequence):
             vflip (bool, optional): if true vertical flip are made.
             hflip (bool, optional): if true horizontal flips are made.
             rotation90 (bool, optional): to make rotations of 90º, 180º or 270º.
-            rotation_range (float, optional): range of rotation degrees
-            crop_length (int, optional): length of the random crop before DA.
+            rotation_range (float, optional): range of rotation degrees.
+            crop_after_DA (bool, optional): decide to make random crops after
+            apply DA transformations.
+            crop_length (int, optional): length of the random crop after DA.
             val (bool, optional): advice the generator that the images will be
             to validate the model to not make random crops (as the val. data must
             be the same on each epoch).
@@ -848,7 +850,7 @@ class ImageDataGenerator(keras.utils.Sequence):
             self.t_counter[0] += 1
      
  
-        # [0-0.25) : vertical flip
+        # [0-0.25): vertical flip
         # [0.25-0.5): horizontal flip
         # [0.5-0.75): vertical + horizontal flip
         # [0.75-1]: nothing
@@ -874,17 +876,23 @@ class ImageDataGenerator(keras.utils.Sequence):
             trans_mask = np.flip(trans_mask, 0)
             trans_image = np.flip(trans_image, 1)                               
             trans_mask = np.flip(trans_mask, 1)
+            transform_string = transform_string + '_hfvf'
+            transformed = True
+            self.t_counter[1] += 1
+            self.t_counter[2] += 1
             
         # Free rotation from -range to range (in degrees)
-        if ( self.rotation_range != 0 ):
+        if (self.rotation_range != 0):
             theta = np.random.uniform(-self.rotation_range, self.rotation_range)
-            trans_image = ndimage.rotate(trans_image, theta, reshape=False, mode='reflect', order=1)
-            trans_mask = ndimage.rotate(trans_mask, theta, reshape=False, mode='reflect', order=0)
+            trans_image = ndimage.rotate(trans_image, theta, reshape=False, 
+                                         mode='reflect', order=1)
+            trans_mask = ndimage.rotate(trans_mask, theta, reshape=False, 
+                                        mode='reflect', order=0)
             transform_string = transform_string + '_rRange'
             transformed = True
 
         # Rotation with multiples of 90 degrees
-        # [0-0.25) : 90º rotation
+        # [0-0.25): 90º rotation
         # [0.25-0.5): 180º rotation
         # [0.5-0.75): 270º rotation
         # [0.75-1]: nothing

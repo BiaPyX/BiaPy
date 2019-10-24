@@ -96,30 +96,25 @@ def create_plots(results, job_id, chartOutDir):
     plt.clf()
 
 
-def store_history(results, test_score, voc, det, time_callback, log_dir, 
-                  job_file, metric='jaccard_index', smooth_score=0, smooth_voc=0,   
-                  smooth_det=0):
+def store_history(results, jac_per_crop, test_score, voc, det, time_callback, log_dir, 
+                  job_file, smooth_score, smooth_voc, smooth_det):
     """Stores the results obtained as csv to manipulate them later 
        and labeled in another file as historic results.
 
        Args:
-            results (history object): record of training loss values
-            and metrics values at successive epochs.
-            test_score (array of 2 int): loss and jaccard_index obtained
-            with the test data.
+            results (history object): record of training loss values and metrics 
+            values at successive epochs.
+            jac_per_crop (float): Jaccard index obtained per crop. 
+            test_score (array of 2 int): loss and Jaccard index obtained with 
+            the test data.
             voc (float): VOC score value.
             det (float): DET score value.
             time_callback: time structure with the time of each epoch.
             csv_file (str): path where the csv file will be stored.
-            history_file (str): path where the historic results will be
-            stored.
-            metric (str, optional): metric used (e.g. jaccard_index).
-            smooth_score (float, optional): main metric obtained with smooth
-            results.
-            smooth_voc (float, optional): VOC metric obtained with smooth
-            results.
-            smooth_det (float, optional): DET metric obtained with smooth
-            results.
+            history_file (str): path where the historic results will be stored.
+            smooth_score (float): main metric obtained with smooth results.
+            smooth_voc (float): VOC metric obtained with smooth results.
+            smooth_det (float): DET metric obtained with smooth results.
     """
 
     # Create folders and construct file names
@@ -139,8 +134,9 @@ def store_history(results, test_score, voc, det, time_callback, log_dir,
     f.write(str(np.min(results.history['loss'])) + ','
             + str(np.min(results.history['val_loss'])) + ','
             + str(test_score[0]) + ',' 
-            + str(np.max(results.history[metric])) + ',' 
-            + str(np.max(results.history['val_' + metric])) + ',' 
+            + str(np.max(results.history['jaccard_index'])) + ',' 
+            + str(np.max(results.history['val_jaccard_index'])) + ',' 
+            + str(jac_per_crop) + ',' 
             + str(test_score[1]) + ',' 
             + str(smooth_score) + ','
             + str(voc) + ','
@@ -164,17 +160,15 @@ def store_history(results, test_score, voc, det, time_callback, log_dir,
     f.write(str(results.history['val_loss']) + '\n')
     f.write('############## TEST LOSS ############## \n')
     f.write(str(test_score[0]) + '\n')
-    f.write('############## TRAIN ' + metric.upper() 
-            + ' ############## \n')
-    f.write(str(results.history[metric]) + '\n')
-    f.write('############## VALIDATION ' + metric.upper()
-            + ' ############## \n')
-    f.write(str(results.history[metric]) + '\n')
-    f.write('############## TEST ' + metric.upper()
-            + ' ############## \n')
+    f.write('############## TRAIN JACCARD INDEX ############## \n')
+    f.write(str(results.history['jaccard_index']) + '\n')
+    f.write('############## VALIDATION JACCARD INDEX ############## \n')
+    f.write(str(results.history['jaccard_index']) + '\n')
+    f.write('############## TEST JACCARD INDEX (per crop) ############## \n')
+    f.write(str(jac_per_crop) + '\n')
+    f.write('############## TEST JACCARD INDEX (per image) ############## \n')
     f.write(str(test_score[1]) + '\n')
-    f.write('############## TEST ' + metric.upper()
-            + ' SMOOTH ############## \n')
+    f.write('############## TEST JACCARD INDEX SMOOTH ############## \n')
     f.write(str(smooth_score) + '\n')
     f.write('############## VOC ############## \n')
     f.write(str(voc) + '\n')

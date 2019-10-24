@@ -282,8 +282,8 @@ else:
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                          dim=(img_height,img_width), n_channels=1,
                          shuffle=True, da=True, e_prob=0.0, elastic=False,
-                         vflip=True, hflip=True, rotation=True, 
-                         crops_before_DA=crops_before_DA, 
+                         vflip=True, hflip=True, rotation90=True, 
+                         rotation_range=0, crops_before_DA=crops_before_DA, 
                          crop_length=img_width_crop)
 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,

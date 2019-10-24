@@ -282,8 +282,8 @@ else:
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                          dim=(img_height,img_width), n_channels=1,
                          shuffle=True, da=True, e_prob=0.0, elastic=False,
-                         vflip=True, hflip=True, rotation=True,
-                         crops_before_DA=crops_before_DA,
+                         vflip=True, hflip=True, rotation90=True,
+                         rotation_range=0, crops_before_DA=crops_before_DA,
                          crop_length=img_width_crop)
 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
@@ -407,12 +407,12 @@ else:
         if not os.path.exists(result_dir):
             os.makedirs(result_dir)
         for i in range(0, test_ov_crops):
-                im = Image.fromarray(ov_X_test[i,:,:,0])
-                im = im.convert('L')
-                im.save(os.path.join(result_dir,"ov_x_crop_ex_" + str(i) + ".png"))
-                im = Image.fromarray(ov_Y_test[i,:,:,0]*255)
-                im = im.convert('L')
-                im.save(os.path.join(result_dir,"ov_y_crop_ex_" + str(i) + ".png"))
+            im = Image.fromarray(ov_X_test[i,:,:,0])
+            im = im.convert('L')
+            im.save(os.path.join(result_dir,"ov_x_crop_ex_" + str(i) + ".png"))
+            im = Image.fromarray(ov_Y_test[i,:,:,0]*255)
+            im = im.convert('L')
+            im.save(os.path.join(result_dir,"ov_y_crop_ex_" + str(i) + ".png"))
 
     Print("Evaluating overlapped test data . . .")
     score = model.evaluate(ov_X_test, ov_Y_test, batch_size=batch_size_value,
@@ -423,7 +423,7 @@ else:
 
     bin_preds_test = (preds_test > 0.5).astype(np.uint8)
  
-    Print("Calculate Jaccard for test . . .")
+    Print("Calculate Jaccard for test (per crop). . .")
     jac_no_ov = jaccard_index_numpy(ov_Y_test, bin_preds_test)
     
     # Save output images
@@ -444,10 +444,18 @@ else:
                                                     test_ov_crops,
                                                     result_dir)
 
-        Print("Calculate Jaccard for test (with overlap calculated). . .")
-        jac_ov = jaccard_index_numpy(Y_test, merged_preds_test)
+        Print("Calculate Jaccard for test (per image with overlap calculated). . .")
+        score[1] = jaccard_index_numpy(Y_test, merged_preds_test)
+        
+        voc = voc_calculation(Y_test, merged_preds_test, score[1])
+        det = DET_calculation(Y_test, merged_preds_test, det_eval_ge_path,
+                              det_eval_path, det_bin, n_dig, job_id)
+    else:
+        score[1] = -1
+        voc = -1
+        det = -1
 
-
+    
 ####################
 #  POST-PROCESING  #
 ####################
@@ -496,12 +504,9 @@ if (post_process == True and make_crops == True) or (crops_before_DA == True):
 ####################################
 
 if load_previous_weights == False:
-    # Time
     Print("Epoch average time: " + str(np.mean(time_callback.times)))
     Print("Epoch number: " +  str(len(results.history['val_loss'])))
     Print("Train time (s): " + str(np.sum(time_callback.times)))
-
-    # Loss and metric
     Print("Train loss: " + str(np.min(results.history['loss'])))
     Print("Train jaccard_index: " + str(np.max(results.history['jaccard_index'])))
     Print("Validation loss: " + str(np.min(results.history['val_loss'])))
@@ -509,29 +514,31 @@ if load_previous_weights == False:
     Print("Test loss: " + str(score[0]))
     
 if crops_before_DA == False:    
-    Print("Test jaccard_index: " + str(score[1]))
+    Print("Test (per image) jaccard_index: " + str(score[1]))
     Print("VOC: " + str(voc))
     Print("DET: " + str(det))
 else:
     Print("Test overlapped (per crop) jaccard_index: " + str(jac_no_ov))
     if test_ov_crops > 1:
-        Print("Test overlapped (per image) jaccard_index: " + str(jac_ov))
+        Print("Test overlapped (per image) jaccard_index: " + str(score[1]))
+        Print("VOC: " + str(voc))
+        Print("DET: " + str(det))
     
 if load_previous_weights == False:
-    # If we are running multiple tests store the results
-    if len(sys.argv) > 1:
+    if 'smooth_score' not in locals() or 'smooth_score' not in globals():
+        smooth_score = -1
+    if 'smooth_voc' not in locals() or 'smooth_voc' not in globals():
+        smooth_voc = -1
+    if 'smooth_det' not in locals() or 'smooth_det' not in globals():
+        smooth_det = -1
+    if 'jac_no_ov' not in locals() or 'jac_no_ov' not in globals():
+        jac_no_ov = -1
     
-        if crops_before_DA == False:
-            if post_process == True and make_crops == True:
-                store_history(results, score, voc, det, time_callback, log_dir,
-                              job_file, smooth_score=smooth_score, 
-                              smooth_voc=smooth_voc, smooth_det=smooth_det)
-            else:
-                store_history(results, score, voc, det, time_callback, log_dir,
-                              job_file)
-    
-        if test_id == "1":
-            create_plots(results, job_id, char_dir)
+    store_history(results, jac_no_ov, score, voc, det, time_callback, log_dir, job_file,
+                  smooth_score, smooth_voc, smooth_det)
+
+    if test_id == "1":
+        create_plots(results, job_id, char_dir)
 
 if (post_process == True and make_crops == True) or (crops_before_DA == True):
     Print("Post-process: SMOOTH - Test jaccard_index: " + str(smooth_score))
