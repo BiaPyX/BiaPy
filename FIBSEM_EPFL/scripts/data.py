@@ -105,22 +105,24 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         Y_test[n,:mask.shape[0],:mask.shape[1],:mask.shape[2]] = mask
                                                                         
     Y_test = Y_test/255                                                 
-
-    Print("[LOAD] Loaded test data shape is: " + str(X_test.shape))
-   
+    
     norm_value = np.mean(X_train)
  
     if create_val == True:                                            
         X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train,
                                                           test_size=val_split,
                                                           shuffle=shuffle_val,
-                                                          random_state=seedValue)
+                                                          random_state=seedValue)      
+
         Print("[LOAD] Loaded train data shape is: " + str(X_train.shape))
+        Print("[LOAD] Loaded test data shape is: " + str(X_test.shape))
         Print("[LOAD] Loaded validation data shape is: " + str(X_val.shape))
 
         return X_train, Y_train, X_val, Y_val, X_test, Y_test, norm_value
-    else:
+    else:                                                               
         Print("[LOAD] Loaded train data shape is: " + str(X_train.shape))
+        Print("[LOAD] Loaded test data shape is: " + str(X_test.shape))
+
         return X_train, Y_train, X_test, Y_test, norm_value                         
 
 def __foreground_percentage(mask, class_tag=1):
@@ -258,7 +260,7 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
 
 
 def crop_data_with_overlap(data, data_mask, window_size, subdivision):
-    """Crop data into smaller pieces with overlap.
+    """Crop data into smaller pieces with the minimun overlap.
 
        Args:
             data (4D numpy array): data to crop.
@@ -301,8 +303,8 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
             rows = i
             columns = int(subdivision/i)
         
-    Print("[OV-CROP] The minimum overlap has been found with [" + str(rows) \
-          + ", " + str(columns) + "]")
+    Print("[OV-CROP] The minimum overlap has been found with rows=" + str(rows) \
+          + " and columns=" + str(columns))
 
     # Calculate the amount of overlap, the division remainder to obtain an 
     # offset to adjust the last crop and the step size. All of this values per
@@ -1025,8 +1027,9 @@ def fixed_dregee(image):
 
 def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,        
                        save_examples=True, job_id="none_job_id", out_dir='aug', 
-                       hflip=True, vflip=True, seedValue=42, fill_mode='reflect',
-                       preproc_function=True, featurewise_center=False,         
+                       hflip=True, vflip=True, seedValue=42, rotation_range=180,
+                       fill_mode='reflect', preproc_function=False, 
+                       featurewise_center=False, 
                        featurewise_std_normalization=False, zoom=False,         
                        w_shift_r=0.0, h_shift_r=0.0, shear_range=0,
                        crops_before_DA=False, crop_length=0):             
@@ -1046,6 +1049,7 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             hflip (bool, optional): if true horizontal flips are made.          
             vflip (bool, optional): if true vertical flip are made.             
             seedValue (int, optional): seed value.                              
+            rotation_range (int, optional): range of rotation degrees.
             fill_mode (str, optional): ImageDataGenerator of Keras fill mode    
             values.                                                             
             preproc_function (bool, optional): if true preprocess function to   
@@ -1089,14 +1093,14 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
                               shear_range=shear_range)                              
     else:                                                                       
         data_gen_args1 = dict(horizontal_flip=hflip, vertical_flip=vflip,       
-                              fill_mode=fill_mode, rotation_range=180,          
+                              fill_mode=fill_mode, rotation_range=rotation_range,          
                               featurewise_center=featurewise_center,            
                               featurewise_std_normalization=featurewise_std_normalization,
                               zoom_range=zoom_val, width_shift_range=w_shift_r,
                               height_shift_range=h_shift_r, 
                               shear_range=shear_range)                              
         data_gen_args2 = dict(horizontal_flip=hflip, vertical_flip=vflip,       
-                              fill_mode=fill_mode, rotation_range=180,          
+                              fill_mode=fill_mode, rotation_range=rotation_range,          
                               zoom_range=zoom_val, width_shift_range=w_shift_r,
                               height_shift_range=h_shift_r, 
                               shear_range=shear_range)                              
