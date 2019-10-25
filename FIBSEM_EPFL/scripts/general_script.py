@@ -26,7 +26,8 @@ import keras
 import math
 import time
 import tensorflow as tf
-from data import load_data, crop_data, mix_data, check_crops, keras_da_generator, ImageDataGenerator, crop_data_with_overlap, merge_data_with_overlap
+from data import load_data, crop_data, mix_data, check_crops, keras_da_generator, \
+                 ImageDataGenerator, crop_data_with_overlap, merge_data_with_overlap
 from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation, DET_calculation
 from itertools import chain
@@ -76,8 +77,9 @@ train_mask_path = os.path.join('data', 'train', 'y')
 test_path = os.path.join('data', 'test', 'x')
 test_mask_path = os.path.join('data', 'test', 'y')
 # Note: train and test dimensions must be the same when training the network and
-# making the predictions. If you do not use crop_data() with the arg force_shape
-# be sure to take care of this.
+# making the predictions. Be sure to take care of this if you are not going to
+# use crop_data() with the arg force_shape, as this function resolves the 
+# problem creating lways crops of the same dimension
 img_train_width = 1024
 img_train_height = 768
 img_train_channels = 1
