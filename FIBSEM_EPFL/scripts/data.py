@@ -105,22 +105,22 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         Y_test[n,:mask.shape[0],:mask.shape[1],:mask.shape[2]] = mask
                                                                         
     Y_test = Y_test/255                                                 
-    
-    Print("[LOAD] Loaded train data shape is: " + str(X_train.shape))
+
     Print("[LOAD] Loaded test data shape is: " + str(X_test.shape))
    
     norm_value = np.mean(X_train)
  
     if create_val == True:                                            
         X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train,
-                                                          train_size=1-val_split,
                                                           test_size=val_split,
                                                           shuffle=shuffle_val,
-                                                          random_state=seedValue)      
+                                                          random_state=seedValue)
+        Print("[LOAD] Loaded train data shape is: " + str(X_train.shape))
         Print("[LOAD] Loaded validation data shape is: " + str(X_val.shape))
 
         return X_train, Y_train, X_val, Y_val, X_test, Y_test, norm_value
-    else:                                                               
+    else:
+        Print("[LOAD] Loaded train data shape is: " + str(X_train.shape))
         return X_train, Y_train, X_test, Y_test, norm_value                         
 
 def __foreground_percentage(mask, class_tag=1):
