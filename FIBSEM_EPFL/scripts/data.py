@@ -1,13 +1,12 @@
 import numpy as np
 import random
-import pandas as pd
 import os
 import cv2
 import keras
 import sys
 import math
 from tqdm import tqdm
-from skimage.io import imread, imshow
+from skimage.io import imread
 from sklearn.model_selection import train_test_split
 from scipy.ndimage.interpolation import map_coordinates
 from scipy.ndimage.filters import gaussian_filter
@@ -19,7 +18,7 @@ from util import Print
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
-              val_split=0.1, shuffle_val=True, seedValue=42):                                            
+              val_split=0.1, shuffle_val=True, seedValue=42, numOutputChannels=1):
     """Load train, validation and test data from the given paths. If the images 
        to be loaded are smaller than the given dimension it will be sticked in 
        the (0, 0).
@@ -34,7 +33,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             create_val (bool, optional): if true validation data is created.                                                    
             val_split (float, optional): % of the train data used as    
             validation (value between o and 1).                         
-            seedValue (int, optional): seed value.                      
+            seedValue (int, optional): seed value.
+            numOutputChannels (int, optional): number of output channels
                                                                         
        Returns:                                                         
                 X_train (numpy array): train images.                    
@@ -60,25 +60,22 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                         image_train_shape[0], image_train_shape[2]),
                         dtype=np.int16)                
     Y_train = np.zeros((len(train_mask_ids), image_train_shape[1], 
-                        image_train_shape[0], image_train_shape[2]),
+                        image_train_shape[0], numOutputChannels ),
                         dtype=np.int16) 
                                                                         
     Print("[LOAD] Loading train images . . .") 
     for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):     
         img = imread(os.path.join(train_path, id_))                     
-        if len(img.shape) == 3:
-            img = img[:,:,0]    
-        
-        img = np.expand_dims(img, axis=-1)                              
-        X_train[n,:img.shape[0],:img.shape[1],:img.shape[2]] = img                                                
+        if len(img.shape) == 2:
+            img = np.expand_dims(img, axis=-1)
+        X_train[n,:,:,:] = img
 
     Print('[LOAD] Loading train masks . . .')
     for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids)):                      
         mask = imread(os.path.join(train_mask_path, id_))               
-        if len(mask.shape) == 3:
-            mask = mask[:,:,0]
-        mask = np.expand_dims(mask, axis=-1)                            
-        Y_train[n,:mask.shape[0],:mask.shape[1],:mask.shape[2]] = mask
+        if len(mask.shape) == 2:
+            mask = np.expand_dims(mask, axis=-1)
+        Y_train[n,:,:,:] = mask
                                                                         
     Y_train = Y_train/255                                               
     
@@ -86,23 +83,21 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     X_test = np.zeros((len(test_ids), image_test_shape[1], image_test_shape[0],   
                        image_test_shape[2]), dtype=np.int16)                 
     Y_test = np.zeros((len(test_mask_ids), image_test_shape[1], 
-                       image_test_shape[0], image_test_shape[2]), dtype=np.int16) 
+                       image_test_shape[0], numOutputChannels ), dtype=np.int16)
                                                                         
     Print("[LOAD] Loading test images . . .")
     for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):       
         img = imread(os.path.join(test_path, id_))                      
-        if len(img.shape) == 3:                                                 
-            img = img[:,:,0]
-        img = np.expand_dims(img, axis=-1)                              
-        X_test[n,:img.shape[0],:img.shape[1],:img.shape[2]] = img
+        if len(img.shape) == 2:
+            img = np.expand_dims(img, axis=-1)
+        X_test[n,:,:,:] = img
 
     Print("[LOAD] Loading test masks . . .")
     for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids)):                       
         mask = imread(os.path.join(test_mask_path, id_))                
-        if len(mask.shape) == 3:
-            mask = mask[:,:,0]
-        mask = np.expand_dims(mask, axis=-1)                            
-        Y_test[n,:mask.shape[0],:mask.shape[1],:mask.shape[2]] = mask
+        if len(mask.shape) == 2:
+            mask = np.expand_dims(mask, axis=-1)
+        Y_test[n,:,:,:] = mask
                                                                         
     Y_test = Y_test/255                                                 
     
@@ -185,11 +180,11 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
     # Resize data to adjust to a value divisible by height x width
     r_data = np.zeros((data.shape[0], h_num*height, v_num*width, data.shape[3]),      
                       dtype=np.int16)    
-    r_data[:data.shape[0],:data.shape[1],:data.shape[2]] = data                      
-    r_data_mask = np.zeros((data.shape[0], h_num*height, v_num*width, 
-                            data.shape[3]), dtype=np.int16)                                   
+    r_data[:data.shape[0],:data.shape[1],:data.shape[2],:data.shape[3]] = data
+    r_data_mask = np.zeros((data_mask.shape[0], h_num*height, v_num*width,
+                            data_mask.shape[3]), dtype=np.int16)
     r_data_mask[:data_mask.shape[0],:data_mask.shape[1],
-                :data_mask.shape[2]] = data_mask
+                :data_mask.shape[2],:data_mask.shape[3]] = data_mask
     if data.shape != r_data.shape:
         Print("[CROP] Resized data from " + str(data.shape) + " to " 
               + str(r_data.shape) + " to be divisible by the shape provided")
@@ -218,7 +213,7 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
     cropped_data = np.zeros(((total_cropped-discarded), height, width,     
                              r_data.shape[3]), dtype=np.int16)
     cropped_data_mask = np.zeros(((total_cropped-discarded), height, width, 
-                                  r_data.shape[3]), dtype=np.int16)            
+                                  r_data_mask.shape[3]), dtype=np.int16)
     
     cont = 0                                                              
     l_i = 0
@@ -232,22 +227,22 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
 
                         cropped_data[l_i]= r_data[img_num, 
                                                   (i*width):((i+1)*height), 
-                                                  (j*width):((j+1)*height)]          
+                                                  (j*width):((j+1)*height),:]
 
                         cropped_data_mask[l_i]= r_data_mask[img_num,                 
                                                             (i*width):((i+1)*height),
-                                                            (j*width):((j+1)*height)]
+                                                            (j*width):((j+1)*height),:]
 
                         if l_i != len(selected_images) - 1:
                             l_i = l_i + 1
                 else: 
               
                     cropped_data[cont]= r_data[img_num, (i*width):((i+1)*height),      
-                                               (j*width):((j+1)*height)]      
+                                               (j*width):((j+1)*height),:]
                                                                         
                     cropped_data_mask[cont]= r_data_mask[img_num,             
                                                          (i*width):((i+1)*height),
-                                                         (j*width):((j+1)*height)]
+                                                         (j*width):((j+1)*height),:]
                 cont = cont + 1                                             
                                                                         
     if discard == True:
@@ -255,6 +250,7 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
               + "cropping and discarding is " + str(cropped_data.shape))
     else:
         Print("[CROP] New data shape is: " + str(cropped_data.shape))
+    Print("[CROP] New mask data shape is: " + str(cropped_data_mask.shape))
 
     return cropped_data, cropped_data_mask, force_shape
 
@@ -529,7 +525,7 @@ def mix_data(data, num, out_shape=[1, 1], grid=True):
     height = data.shape[2] 
 
     # Mix data
-    mixed_data = np.zeros((num, out_shape[1]*width, out_shape[0]*height, 1),
+    mixed_data = np.zeros((num, out_shape[1]*width, out_shape[0]*height, data.shape[3]),
                           dtype=np.int16)
     cont = 0
     for img_num in tqdm(range(0, num)):
@@ -604,10 +600,20 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
 
     if include_crops == True:
         Print("[CHECK_CROP] Saving cropped data images . . .")
+        Print("[CHECK_CROP] data.shape = " + str(data.shape))
         for i in tqdm(range(0, total)):
+            # grayscale images
+            if data.shape[3] == 1:
                 im = Image.fromarray(data[i,:,:,0]*v)
                 im = im.convert('L')
-                im.save(os.path.join(out_dir,"c_" + suffix + str(i) + ".png"))
+            # RGB images
+            else:
+                aux = np.asarray( data[i,:,:,:]*v, dtype="uint8" )
+                Print("[CHECK_CROP] aux.shape = " + str(aux.shape))
+                #im = Image.fromarray( (data[i,:,:,:]*v).astype('uint8'), 'RGB' )
+                im = Image.fromarray( aux, 'RGB' )
+
+            im.save(os.path.join(out_dir,"c_" + suffix + str(i) + ".png"))
 
     Print("[CHECK_CROP] Obtaining " + str(num_examples) + " images of ["
           + str(data.shape[1]*h_num) + "," + str(data.shape[2]*v_num) + "] from ["
@@ -1029,7 +1035,8 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
                        save_examples=True, job_id="none_job_id", out_dir='aug', 
                        hflip=True, vflip=True, seedValue=42, rotation_range=180,
                        fill_mode='reflect', preproc_function=False, 
-                       featurewise_center=False, 
+                       featurewise_center=False, brightness_range=None,
+                       channel_shift_range=0.0,
                        featurewise_std_normalization=False, zoom=False,         
                        w_shift_r=0.0, h_shift_r=0.0, shear_range=0,
                        crops_before_DA=False, crop_length=0):             
@@ -1051,11 +1058,13 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             seedValue (int, optional): seed value.                              
             rotation_range (int, optional): range of rotation degrees.
             fill_mode (str, optional): ImageDataGenerator of Keras fill mode    
-            values.                                                             
+            values.
             preproc_function (bool, optional): if true preprocess function to   
             make random 180 degrees rotations are performed.                    
             featurewise_center (bool, optional): set input mean to 0 over the   
-            dataset, feature-wise.                                              
+            dataset, feature-wise.
+            brightness_range (tuple or list of two floats, optional): range for picking a brightness shift value from.
+            channel_shift_range (float, optional): range for random channel shifts.
             featurewise_std_normalization (bool, optional): divide inputs by std 
             of the dataset, feature-wise.                                       
             zoom (bool, optional): make random zoom in the images.              
@@ -1098,7 +1107,9 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
                               featurewise_std_normalization=featurewise_std_normalization,
                               zoom_range=zoom_val, width_shift_range=w_shift_r,
                               height_shift_range=h_shift_r, 
-                              shear_range=shear_range)                              
+                              shear_range=shear_range,
+                              channel_shift_range=channel_shift_range,
+                              brightness_range=brightness_range )
         data_gen_args2 = dict(horizontal_flip=hflip, vertical_flip=vflip,       
                               fill_mode=fill_mode, rotation_range=rotation_range,          
                               zoom_range=zoom_val, width_shift_range=w_shift_r,
@@ -1117,10 +1128,10 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
 
     X_train_augmented = X_datagen_train.flow(X_train,                           
                                              batch_size=batch_size_value,       
-                                             shuffle=False, seed=seedValue)     
+                                             shuffle=True, seed=seedValue)
     Y_train_augmented = Y_datagen_train.flow(Y_train,                           
                                              batch_size=batch_size_value,       
-                                             shuffle=False, seed=seedValue)     
+                                             shuffle=True, seed=seedValue)
     X_val_flow = X_datagen_val.flow(X_val, batch_size=batch_size_value,         
                                     shuffle=False, seed=seedValue)              
     Y_val_flow = Y_datagen_val.flow(Y_val, batch_size=batch_size_value,         
@@ -1170,4 +1181,5 @@ def random_crop(img, mask, random_crop_size, val=False):
         x = np.random.randint(0, width - dx + 1)                                
         y = np.random.randint(0, height - dy + 1)
     return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :]
+
 
