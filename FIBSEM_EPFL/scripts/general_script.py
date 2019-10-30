@@ -313,10 +313,10 @@ if crops_before_DA == True:
 Print("Creating the network . . .")
 model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
 
-sdg = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
+sgd = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)
 
-model.compile(optimizer=sdg, loss='binary_crossentropy', metrics=[jaccard_index])
+model.compile(optimizer=sgd, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
 if load_previous_weights == False:
@@ -350,6 +350,7 @@ if crops_before_DA == False:
     Print("Evaluating test data . . .")
     score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, 
                            verbose=1)
+    jac_per_crop = score[1]
 
     # Predict on test
     Print("Making the predictions on test data . . .")
@@ -426,7 +427,7 @@ else:
     bin_preds_test = (preds_test > 0.5).astype(np.uint8)
  
     Print("Calculate Jaccard for test (per crop). . .")
-    jac_no_ov = jaccard_index_numpy(ov_Y_test, bin_preds_test)
+    jac_per_crop = jaccard_index_numpy(ov_Y_test, bin_preds_test)
     
     # Save output images
     if not os.path.exists(result_dir):
@@ -516,11 +517,12 @@ if load_previous_weights == False:
     Print("Test loss: " + str(score[0]))
     
 if crops_before_DA == False:    
+    Print("Test (per crop) jaccard_index: " + str(jac_per_crop))
     Print("Test (per image) jaccard_index: " + str(score[1]))
     Print("VOC: " + str(voc))
     Print("DET: " + str(det))
 else:
-    Print("Test overlapped (per crop) jaccard_index: " + str(jac_no_ov))
+    Print("Test overlapped (per crop) jaccard_index: " + str(jac_per_crop))
     if test_ov_crops > 1:
         Print("Test overlapped (per image) jaccard_index: " + str(score[1]))
         Print("VOC: " + str(voc))
@@ -533,11 +535,11 @@ if load_previous_weights == False:
         smooth_voc = -1
     if 'smooth_det' not in locals() or 'smooth_det' not in globals():
         smooth_det = -1
-    if 'jac_no_ov' not in locals() or 'jac_no_ov' not in globals():
-        jac_no_ov = -1
+    if 'jac_per_crop' not in locals() or 'jac_per_crop' not in globals():
+        jac_per_crop = -1
     
-    store_history(results, jac_no_ov, score, voc, det, time_callback, log_dir, job_file,
-                  smooth_score, smooth_voc, smooth_det)
+    store_history(results, jac_per_crop, score, voc, det, time_callback, log_dir,
+                  job_file, smooth_score, smooth_voc, smooth_det)
 
     if test_id == "1":
         create_plots(results, job_id, char_dir)
