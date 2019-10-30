@@ -57,19 +57,25 @@ class TimeHistory(keras.callbacks.Callback):
         self.times.append(time.time() - self.epoch_time_start)
 
 
-def create_plots(results, job_id, chartOutDir):
+def create_plots(results, job_id, test_id, chartOutDir):
     """Create loss and jaccard_index plots with the given matrix results
 
        Args:
             results (history object): record of training loss values 
             and metrics values at successive epochs.
-            job_id (str): job number. 
+            job_id (str): jod identifier.
+            test_id (str): number of job.
             chartOutDir (str): path where the charts will be stored 
             into.
     """
     
     # For matplotlib errors in display
     os.environ['QT_QPA_PLATFORM']='offscreen'
+
+    # Create the fodler if it does not exist
+    chartOutDir = os.path.join(chartOutDir, job_id)
+    if not os.path.exists(chartOutDir):                   
+        os.makedirs(chartOutDir)
 
     # Loss
     plt.plot(results.history['loss'])
@@ -78,8 +84,6 @@ def create_plots(results, job_id, chartOutDir):
     plt.ylabel('Value')
     plt.xlabel('Epoch')
     plt.legend(['Train loss', 'Val. loss'], loc='upper left')
-    if not os.path.exists(chartOutDir):
-        os.makedirs(chartOutDir)
     plt.savefig(os.path.join(chartOutDir , str(job_id) + '_loss.png'))
     plt.clf()
 
@@ -89,10 +93,8 @@ def create_plots(results, job_id, chartOutDir):
     plt.title('Model JOBID=' + job_id + ' jaccard_index')
     plt.ylabel('Value')
     plt.xlabel('Epoch')
-    plt.legend(['Train jaccard_index', 'Val. jaccard_index'], 
-               loc='upper left')
-    plt.savefig(os.path.join(chartOutDir , str(job_id) 
-                + '_jaccard_index.png'))
+    plt.legend(['Train jaccard_index', 'Val. jaccard_index'], loc='upper left')
+    plt.savefig(os.path.join(chartOutDir , str(job_id) + '_jaccard_index.png'))
     plt.clf()
 
 

@@ -32,9 +32,11 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             image_test_shape (array of 3 int): dimensions of the images.     
             create_val (bool, optional): if true validation data is created.                                                    
             val_split (float, optional): % of the train data used as    
-            validation (value between o and 1).                         
+            validation (value between 0 and 1).
             seedValue (int, optional): seed value.
-            numOutputChannels (int, optional): number of output channels
+            shuffle_val (bool, optional): take random training examples to      
+            create validation data.
+            numOutputChannels (int, optional): number of output channels.
                                                                         
        Returns:                                                         
                 X_train (numpy array): train images.                    
@@ -686,8 +688,8 @@ class ImageDataGenerator(keras.utils.Sequence):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
-            X (numpy array): train data.                                  
-            Y (numpy array): train mask data.                             
+            X (numpy array): data.                                  
+            Y (numpy array): mask data.                             
             batch_size (int, optional): size of the batches.
             dim (tuple, optional): dimension of the desired images. As no effect 
             if crops_before_DA is active, as the dimension will be selected by 
@@ -1036,7 +1038,7 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
                        hflip=True, vflip=True, seedValue=42, rotation_range=180,
                        fill_mode='reflect', preproc_function=False, 
                        featurewise_center=False, brightness_range=None,
-                       channel_shift_range=0.0,
+                       channel_shift_range=0.0, shuffle=True,
                        featurewise_std_normalization=False, zoom=False,         
                        w_shift_r=0.0, h_shift_r=0.0, shear_range=0,
                        crops_before_DA=False, crop_length=0):             
@@ -1065,6 +1067,7 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             dataset, feature-wise.
             brightness_range (tuple or list of two floats, optional): range for picking a brightness shift value from.
             channel_shift_range (float, optional): range for random channel shifts.
+            shuffle (bool, optional): randomize the training data.
             featurewise_std_normalization (bool, optional): divide inputs by std 
             of the dataset, feature-wise.                                       
             zoom (bool, optional): make random zoom in the images.              
@@ -1128,10 +1131,10 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
 
     X_train_augmented = X_datagen_train.flow(X_train,                           
                                              batch_size=batch_size_value,       
-                                             shuffle=True, seed=seedValue)
+                                             shuffle=shuffle, seed=seedValue)
     Y_train_augmented = Y_datagen_train.flow(Y_train,                           
                                              batch_size=batch_size_value,       
-                                             shuffle=True, seed=seedValue)
+                                             shuffle=shuffle, seed=seedValue)
     X_val_flow = X_datagen_val.flow(X_val, batch_size=batch_size_value,         
                                     shuffle=False, seed=seedValue)              
     Y_val_flow = Y_datagen_val.flow(Y_val, batch_size=batch_size_value,         

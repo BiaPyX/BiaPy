@@ -275,11 +275,12 @@ else:
 ##########################
 
 if custom_da == False:
-    train_generator, val_generator = keras_da_generator(X_train, Y_train, 
-        X_val, Y_val, batch_size_value, preproc_function=False, 
-        save_examples=aug_examples, job_id=job_id, zoom=keras_zoom,
-        crops_before_DA=crops_before_DA, crop_length=img_width_crop,
-        w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
+    train_generator, val_generator = keras_da_generator(X_train, Y_train,       
+        X_val, Y_val, batch_size_value, preproc_function=False,                 
+        save_examples=aug_examples, job_id=job_id, shuffle=False,               
+        zoom=keras_zoom, crops_before_DA=crops_before_DA,                       
+        crop_length=img_width_crop, w_shift_r=w_shift_r, h_shift_r=h_shift_r,   
+        shear_range=shear_range)
 else:
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                          dim=(img_height,img_width), n_channels=1,
@@ -541,8 +542,7 @@ if load_previous_weights == False:
     store_history(results, jac_per_crop, score, voc, det, time_callback, log_dir,
                   job_file, smooth_score, smooth_voc, smooth_det)
 
-    if test_id == "1":
-        create_plots(results, job_id, char_dir)
+    create_plots(results, job_id, test_id, char_dir)
 
 if (post_process == True and make_crops == True) or (crops_before_DA == True):
     Print("Post-process: SMOOTH - Test jaccard_index: " + str(smooth_score))
