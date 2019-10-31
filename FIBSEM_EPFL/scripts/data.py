@@ -606,7 +606,6 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
 
     if include_crops == True:
         Print("[CHECK_CROP] Saving cropped data images . . .")
-        Print("[CHECK_CROP] data.shape = " + str(data.shape))
         for i in tqdm(range(0, total)):
             # grayscale images
             if data.shape[3] == 1:
@@ -615,8 +614,6 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
             # RGB images
             else:
                 aux = np.asarray( data[i,:,:,:]*v, dtype="uint8" )
-                Print("[CHECK_CROP] aux.shape = " + str(aux.shape))
-                #im = Image.fromarray( (data[i,:,:,:]*v).astype('uint8'), 'RGB' )
                 im = Image.fromarray( aux, 'RGB' )
 
             im.save(os.path.join(out_dir,"c_" + suffix + str(i) + ".png"))
