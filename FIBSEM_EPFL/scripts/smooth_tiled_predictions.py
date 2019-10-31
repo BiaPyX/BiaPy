@@ -269,8 +269,8 @@ def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, nb_c
     return prd
 
 def predict_img_with_overlap(input_img, window_size, subdivisions, nb_classes, pred_func):
-    """Based on predict_img_with_smooth_windowing but works just with the original
-       image instead of creating 8 new ones.
+    """Based on predict_img_with_smooth_windowing but works just with the 
+       original image instead of creating 8 new ones.
     """
     pad = _pad_img(input_img, window_size, subdivisions)
 

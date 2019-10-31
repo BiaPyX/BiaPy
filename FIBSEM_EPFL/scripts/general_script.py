@@ -109,7 +109,6 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 normalize_data = False
 norm_value_forced = -1
 custom_da = False
-aug_examples = False
 keras_zoom = False
 w_shift_r = 0.0
 h_shift_r = 0.0
@@ -275,12 +274,11 @@ else:
 ##########################
 
 if custom_da == False:
-    train_generator, val_generator = keras_da_generator(X_train, Y_train,       
-        X_val, Y_val, batch_size_value, preproc_function=False,                 
-        save_examples=aug_examples, job_id=job_id, shuffle=False,               
-        zoom=keras_zoom, crops_before_DA=crops_before_DA,                       
-        crop_length=img_width_crop, w_shift_r=w_shift_r, h_shift_r=h_shift_r,   
-        shear_range=shear_range)
+    train_generator, val_generator = keras_da_generator(X_train, Y_train,
+        X_val, Y_val, batch_size_value, preproc_function=False,
+        job_id=job_id, shuffle=False, zoom=keras_zoom,
+        crops_before_DA=crops_before_DA, crop_length=img_width_crop,
+        w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
 else:
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                          dim=(img_height,img_width), n_channels=1,
@@ -297,10 +295,6 @@ else:
 
     train_generator = ImageDataGenerator(**data_gen_args)
     val_generator = ImageDataGenerator(**data_gen_val_args)
-
-    # Generate examples of data augmentation
-    if aug_examples == True:
-        train_generator.flow_on_examples(10, job_id=job_id)
 
 if crops_before_DA == True:
     img_width = img_width_crop

@@ -18,7 +18,8 @@ from util import Print
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
-              val_split=0.1, shuffle_val=True, seedValue=42, numOutputChannels=1):
+              val_split=0.1, shuffle_val=True, seedValue=42, numOutputChannels=1,
+              extra_train_data=0):
     """Load train, validation and test data from the given paths. If the images 
        to be loaded are smaller than the given dimension it will be sticked in 
        the (0, 0).
@@ -37,6 +38,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             shuffle_val (bool, optional): take random training examples to      
             create validation data.
             numOutputChannels (int, optional): number of output channels.
+            extra_train_data (int, optional): number of training extra data to 
+            be created. Only used to increase the data arrays' size. 
                                                                         
        Returns:                                                         
                 X_train (numpy array): train images.                    
@@ -58,10 +61,10 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     test_mask_ids = sorted(next(os.walk(test_mask_path))[2])            
                                                                         
     # Get and resize train images and masks                             
-    X_train = np.zeros((len(train_ids), image_train_shape[1], 
+    X_train = np.zeros((len(train_ids)+extra_train_data, image_train_shape[1], 
                         image_train_shape[0], image_train_shape[2]),
                         dtype=np.int16)                
-    Y_train = np.zeros((len(train_mask_ids), image_train_shape[1], 
+    Y_train = np.zeros((len(train_mask_ids)+extra_train_data, image_train_shape[1], 
                         image_train_shape[0], numOutputChannels ),
                         dtype=np.int16) 
                                                                         
@@ -82,9 +85,9 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     Y_train = Y_train/255                                               
     
     # Get and resize test images and masks                              
-    X_test = np.zeros((len(test_ids), image_test_shape[1], image_test_shape[0],   
+    X_test = np.zeros((len(test_ids)+extra_train_data, image_test_shape[1], image_test_shape[0],   
                        image_test_shape[2]), dtype=np.int16)                 
-    Y_test = np.zeros((len(test_mask_ids), image_test_shape[1], 
+    Y_test = np.zeros((len(test_mask_ids)+extra_train_data, image_test_shape[1], 
                        image_test_shape[0], numOutputChannels ), dtype=np.int16)
                                                                         
     Print("[LOAD] Loading test images . . .")
@@ -121,6 +124,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         Print("[LOAD] Loaded test data shape is: " + str(X_test.shape))
 
         return X_train, Y_train, X_test, Y_test, norm_value                         
+
 
 def __foreground_percentage(mask, class_tag=1):
     """ Percentage of pixels that corresponds to the class in the given image.
@@ -1034,8 +1038,8 @@ def fixed_dregee(image):
 
 
 def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,        
-                       save_examples=True, job_id="none_job_id", out_dir='aug', 
-                       hflip=True, vflip=True, seedValue=42, rotation_range=180,
+                       job_id="none_job_id", out_dir='aug', hflip=True, 
+                       vflip=True, seedValue=42, rotation_range=180,
                        fill_mode='reflect', preproc_function=False, 
                        featurewise_center=False, brightness_range=None,
                        channel_shift_range=0.0, shuffle=True,
@@ -1051,7 +1055,6 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             X_val_path (numpy array): validation data.                               
             Y_val_path (numpy array): validation mask data.                          
             batch_size_value (int): batch size.                                 
-            save_examples (bool, optional): if true 5 examples of DA are stored.
             job_id (str, optional): job identifier. If any provided the         
             examples will be generated under a folder 'aug/none_job_id'.        
             out_dir (string, optional): save directory suffix.                  
