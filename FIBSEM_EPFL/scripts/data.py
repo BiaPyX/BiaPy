@@ -765,11 +765,6 @@ class ImageDataGenerator(keras.utils.Sequence):
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
 
-        if self.val == True:
-            Print("VAL, Index: " + str(index) + ", " +  str(indexes))
-        else:
-            Print("TRAIN, Index: " + str(index) + ", " +  str(indexes))
-
         for i, j in zip(range(0,self.batch_size), indexes):
             if self.da == False: 
                 if self.crops_before_DA == True:
