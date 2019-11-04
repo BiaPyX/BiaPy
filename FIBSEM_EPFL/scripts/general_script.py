@@ -275,8 +275,8 @@ else:
 
 if custom_da == False:
     train_generator, val_generator = keras_da_generator(X_train, Y_train,
-        X_val, Y_val, batch_size_value, preproc_function=False,
-        job_id=job_id, shuffle=False, zoom=keras_zoom,
+        X_val, Y_val, batch_size_value, save_examples=aug_examples,     
+        preproc_function=False, job_id=job_id, shuffle=False, zoom=keras_zoom,
         crops_before_DA=crops_before_DA, crop_length=img_width_crop,
         w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
 else:
@@ -295,6 +295,10 @@ else:
 
     train_generator = ImageDataGenerator(**data_gen_args)
     val_generator = ImageDataGenerator(**data_gen_val_args)
+
+    # Generate examples of data augmentation
+    if aug_examples == True:
+        train_generator.flow_on_examples(10, job_id=job_id)
 
 if crops_before_DA == True:
     img_width = img_width_crop

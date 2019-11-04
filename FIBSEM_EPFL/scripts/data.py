@@ -759,13 +759,17 @@ class ImageDataGenerator(keras.utils.Sequence):
                batch_x (numpy array): corresponding X elements of the batch.
                batch_y (numpy array): corresponding Y elements of the batch.
         """
-
         batch_x = np.empty((self.batch_size, *self.dim, self.n_channels))
         batch_y = np.empty((self.batch_size, *self.dim, self.n_channels))
 
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        
+
+        if self.val == True:
+            Print("VAL, Index: " + str(index) + ", " +  str(indexes))
+        else:
+            Print("TRAIN, Index: " + str(index) + ", " +  str(indexes))
+
         for i, j in zip(range(0,self.batch_size), indexes):
             if self.da == False: 
                 if self.crops_before_DA == True:
@@ -970,7 +974,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         Print("[FLOW] Creating the examples of data augmentation . . .")
 
         prefix = ""
-        if 'save_prefix' in locals():
+        if save_prefix is not None:
             prefix = str(save_prefix)
 
         out_dir = os.path.join(out_dir, job_id) 
@@ -1035,8 +1039,8 @@ def fixed_dregee(image):
 
 
 def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,        
-                       job_id="none_job_id", out_dir='aug', hflip=True, 
-                       vflip=True, seedValue=42, rotation_range=180,
+                       save_examples=True, job_id="none_job_id", out_dir='aug',
+                       hflip=True, vflip=True, seedValue=42, rotation_range=180,
                        fill_mode='reflect', preproc_function=False, 
                        featurewise_center=False, brightness_range=None,
                        channel_shift_range=0.0, shuffle=True,
@@ -1052,6 +1056,7 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             X_val_path (numpy array): validation data.                               
             Y_val_path (numpy array): validation mask data.                          
             batch_size_value (int): batch size.                                 
+            save_examples (bool, optional): if true 5 examples of DA are stored.
             job_id (str, optional): job identifier. If any provided the         
             examples will be generated under a folder 'aug/none_job_id'.        
             out_dir (string, optional): save directory suffix.                  
@@ -1128,6 +1133,34 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
     # Validation data, no data augmentation, but we create a generator anyway   
     X_datagen_val = kerasDA()                                                   
     Y_datagen_val = kerasDA()                                                   
+    #X_datagen_val.fit(X_val, augment=False, seed=seedValue)
+    #Y_datagen_val.fit(Y_val, augment=False, seed=seedValue)
+
+    # Check a few of generated images
+    if save_examples == True:
+        
+        out_dir = os.path.join(out_dir, job_id)
+        if not os.path.exists(out_dir):          
+            os.makedirs(out_dir)
+     
+        i = 0
+        for batch in X_datagen_train.flow(X_train, 
+                                          save_to_dir=out_dir,
+                                          batch_size=batch_size_value,
+                                          shuffle=False, seed=seedValue,
+                                          save_prefix='x', save_format='jpeg'):
+            i = i + 1
+            if i > 2:
+                break
+        i = 0
+        for batch in Y_datagen_train.flow(Y_train, 
+                                          save_to_dir=out_dir,
+                                          batch_size=batch_size_value,
+                                          shuffle=False, seed=seedValue,
+                                          save_prefix='y', save_format='jpeg'):
+            i = i + 1
+            if i > 2:
+                break
 
     X_train_augmented = X_datagen_train.flow(X_train,                           
                                              batch_size=batch_size_value,       
