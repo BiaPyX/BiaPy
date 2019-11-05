@@ -18,8 +18,8 @@ from util import Print
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
-              val_split=0.1, shuffle_val=True, seedValue=42, numOutputChannels=1,
-              extra_train_data=0):
+              val_split=0.1, shuffle_val=True, seedValue=42, numOutputChannels=1):
+              
     """Load train, validation and test data from the given paths. If the images 
        to be loaded are smaller than the given dimension it will be sticked in 
        the (0, 0).
@@ -38,18 +38,15 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             shuffle_val (bool, optional): take random training examples to      
             create validation data.
             numOutputChannels (int, optional): number of output channels.
-            extra_train_data (int, optional): number of training extra data to 
-            be created. Only used to increase the data arrays' size. 
                                                                         
        Returns:                                                         
-                X_train (numpy array): train images.                    
-                Y_train (numpy array): train images' mask.              
-                X_val (numpy array, optional): validation images 
-                (create_val==True).
-                Y_val (numpy array, optional): validation images' mask 
-                (create_val==True).
-                X_test (numpy array): test images.                      
-                Y_test (numpy array): test images' mask.                
+            X_train (Numpy array): train images.                    
+            Y_train (Numpy array): train images' mask.              
+            X_val (Numpy array, optional): validation images (create_val==True).
+            Y_val (Numpy array, optional): validation images' mask 
+            (create_val==True).
+            X_test (Numpy array): test images.                      
+            Y_test (Numpy array): test images' mask.                
     """      
     
     Print("Loading images . . .")
@@ -61,11 +58,11 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     test_mask_ids = sorted(next(os.walk(test_mask_path))[2])            
                                                                         
     # Get and resize train images and masks                             
-    X_train = np.zeros((len(train_ids)+extra_train_data, image_train_shape[1], 
+    X_train = np.zeros((len(train_ids), image_train_shape[1], 
                         image_train_shape[0], image_train_shape[2]),
                         dtype=np.int16)                
-    Y_train = np.zeros((len(train_mask_ids)+extra_train_data, image_train_shape[1], 
-                        image_train_shape[0], numOutputChannels ),
+    Y_train = np.zeros((len(train_mask_ids), image_train_shape[1], 
+                        image_train_shape[0], numOutputChannels),
                         dtype=np.int16) 
                                                                         
     Print("[LOAD] Loading train images . . .") 
@@ -85,10 +82,10 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     Y_train = Y_train/255                                               
     
     # Get and resize test images and masks                              
-    X_test = np.zeros((len(test_ids)+extra_train_data, image_test_shape[1], image_test_shape[0],   
-                       image_test_shape[2]), dtype=np.int16)                 
-    Y_test = np.zeros((len(test_mask_ids)+extra_train_data, image_test_shape[1], 
-                       image_test_shape[0], numOutputChannels ), dtype=np.int16)
+    X_test = np.zeros((len(test_ids), image_test_shape[1], image_test_shape[0],
+                      image_test_shape[2]), dtype=np.int16)                 
+    Y_test = np.zeros((len(test_mask_ids), image_test_shape[1], 
+                       image_test_shape[0], numOutputChannels), dtype=np.int16)
                                                                         
     Print("[LOAD] Loading test images . . .")
     for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):       
@@ -130,11 +127,12 @@ def __foreground_percentage(mask, class_tag=1):
     """ Percentage of pixels that corresponds to the class in the given image.
         
         Args: 
-            mask (numpy 2D array): image mask to analize.
-            class_tag (int, optional): class to find in the image.
-        Return:
-            float: percentage of pixels that corresponds to the class. Value
-            between 0 and 1.
+             mask (2D Numpy array): image mask to analize.
+             class_tag (int, optional): class to find in the image.
+
+        Returns:
+             float: percentage of pixels that corresponds to the class. Value
+             between 0 and 1.
     """
 
     c = 0
@@ -151,8 +149,8 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
     """Crop data into smaller pieces.
                                                                         
        Args:                                                            
-            data (4D numpy array): data to crop.                        
-            data_mask (4D numpy array): data masks to crop.             
+            data (4D Numpy array): data to crop.                        
+            data_mask (4D Numpy array): data masks to crop.             
             width (str): output image width.
             height (str): output image height.
             force_shape (int tuple, optional): force horizontal and vertical 
@@ -162,8 +160,8 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
             discarded.
                                                                         
        Returns:                                                         
-            cropped_data (4D numpy array): cropped data images.         
-            cropped_data_mask (4D numpy array): cropped data masks.     
+            cropped_data (4D Numpy array): cropped data images.         
+            cropped_data_mask (4D Numpy array): cropped data masks.     
             force_shape (int tuple): number of horizontal and vertical crops 
             made. Useful for future crop calls. 
     """                                                                 
@@ -265,14 +263,14 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
     """Crop data into smaller pieces with the minimun overlap.
 
        Args:
-            data (4D numpy array): data to crop.
-            data_mask (4D numpy array): data mask to crop.
+            data (4D Numpy array): data to crop.
+            data_mask (4D Numpy array): data mask to crop.
             window_size (int): crop size .
             subdivision (int): number of crops to create.
 
        Returns:
-            cropped_data (4D numpy array): cropped image data.
-            cropped_data_mask (4D numpy array): cropped image data masks.
+            cropped_data (4D Numpy array): cropped image data.
+            cropped_data_mask (4D Numpy array): cropped image data masks.
     """
 
     Print("[OV-CROP] Cropping [" + str(data.shape[1]) + ', ' + str(data.shape[2])
@@ -352,7 +350,7 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
        function crop_data_with_overlap.
 
        Args:
-            data (4D numpy array): data to merge.
+            data (4D Numpy array): data to merge.
             original_shape (tuple): original dimensions to reconstruct. 
             window_size (int): crop size.
             subdivision (int): number of crops to merge.
@@ -362,7 +360,7 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
             create the overlappng map.
 
        Returns:
-            merged_data (4D numpy array): merged image data.
+            merged_data (4D Numpy array): merged image data.
     """
 
     Print("[OV-MERGE] Merging [" + str(data.shape[1]) + ', ' + str(data.shape[2])
@@ -510,15 +508,15 @@ def mix_data(data, num, out_shape=[1, 1], grid=True):
        opposite function of crop_data().
 
        Args:                                                                    
-            data (4D numpy array): data to crop.                                
+            data (4D Numpy array): data to crop.                                
             num (int, optional): number of examples to convert.
             out_shape (int tuple, optional): number of horizontal and vertical
             images to combine in a single one.
             grid (bool, optional): make the grid in the output image.
                                                                                 
        Returns:                                                                 
-            mixed_data (4D numpy array): mixed data images.                 
-            mixed_data_mask (4D numpy array): mixed data masks.
+            mixed_data (4D Numpy array): mixed data images.                 
+            mixed_data_mask (4D Numpy array): mixed data masks.
     """
 
     if grid == True:
@@ -564,7 +562,7 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
     """Check cropped images by the function crop_data(). 
         
        Args:
-            data (4D numpy array): data to crop.
+            data (4D Numpy array): data to crop.
             out_dim (int 2D tuple): width and height of the image to be 
             constructed.
             num_examples (int, optional): number of examples to create.
@@ -642,6 +640,7 @@ def elastic_transform(image, alpha, sigma, alpha_affine, seed=None):
        Code obtained from:
            https://www.kaggle.com/bguberfain/elastic-transform-for-data-augmentation
     """
+
     if seed is None:
         random_state = np.random.RandomState(None)
     else:
@@ -689,8 +688,8 @@ class ImageDataGenerator(keras.utils.Sequence):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
-            X (numpy array): data.                                  
-            Y (numpy array): mask data.                             
+            X (Numpy array): data.                                  
+            Y (Numpy array): mask data.                             
             batch_size (int, optional): size of the batches.
             dim (tuple, optional): dimension of the desired images. As no effect 
             if crops_before_DA is active, as the dimension will be selected by 
@@ -748,17 +747,19 @@ class ImageDataGenerator(keras.utils.Sequence):
 
     def __len__(self):
         """Defines the number of batches per epoch."""
+    
         return int(np.floor(len(self.X) / self.batch_size))
 
     def __getitem__(self, index):
         """Generation of one batch data. 
-           Arg:
-               index (int): batch index counter.
+           Args:
+                index (int): batch index counter.
             
-           Return:
-               batch_x (numpy array): corresponding X elements of the batch.
-               batch_y (numpy array): corresponding Y elements of the batch.
+           Returns:
+               batch_x (Numpy array): corresponding X elements of the batch.
+               batch_y (Numpy array): corresponding Y elements of the batch.
         """
+
         batch_x = np.empty((self.batch_size, *self.dim, self.n_channels))
         batch_y = np.empty((self.batch_size, *self.dim, self.n_channels))
 
@@ -789,6 +790,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
     def print_da_stats(self):
         """Print the counter of the transformations made in a table."""
+
         t = Texttable()
         t.add_rows([['Elastic', 'V. flip', 'H. flip', '90º rot.', '180º rot.',
                      '270º rot.'], [self.t_counter[0], self.t_counter[1],
@@ -798,6 +800,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
+
         self.indexes = np.arange(len(self.X))
         if self.shuffle == True:
             np.random.shuffle(self.indexes)
@@ -806,7 +809,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         """Draw grid of the specified size on an image. 
            
            Args:                                                                
-               im (2D numpy array): image to be modified.
+               im (2D Numpy array): image to be modified.
                grid_width (int, optional): grid's width. 
                m (bool, optional): advice the method to change the grid value
                if the input image is a mask.
@@ -827,13 +830,19 @@ class ImageDataGenerator(keras.utils.Sequence):
            the selected choices based on a probability. 
                 
            Args:
-               image (2D numpy array): image to be transformed.
-               mask (2D numpy array): image's mask.
-               flow (bool, optional): forces the transform independetly of the
-               previously selected probability. Also draws a grid in to the 
-               elastic transfomations to visualize it clearly. Do not set this 
-               option to train the network!
+                image (2D Numpy array): image to be transformed.
+                mask (2D Numpy array): image's mask.
+                flow (bool, optional): forces the transform independetly of the
+                previously selected probability. Also draws a grid in to the 
+                elastic transfomations to visualize it clearly. Do not set this 
+                option to train the network!
+            
+           Returns: 
+                trans_image (Numpy array): transformed image.
+                trans_mask (Numpy array): transformed image mask.
+                transform_string (str): string formed by applied transformations.
         """
+
         trans_image = image
         trans_mask = mask
         transform_string = '' 
@@ -944,38 +953,52 @@ class ImageDataGenerator(keras.utils.Sequence):
         return trans_image, trans_mask, transform_string
 
 
-    def flow_on_examples(self, num_examples, job_id="none_job_id", out_dir='aug',
-                         save_prefix=None, original_elastic=True,
-                         random_images=True):
+    def get_transformed_samples(self, num_examples, save_to_dir=False, 
+                                out_dir='aug', job_id="none_job_id", 
+                                save_prefix=None, original_elastic=True, 
+                                random_images=True):
         """Apply selected transformations to a defined number of images from
-           the dataset. The purpose of this method is to check the images 
-           generated by data augmentation. 
+           the dataset. 
             
            Args:
-               num_examples (int): number of examples to generate.
-               job_id (str, optional): job identifier. If any provided the
-               examples will be generated under a folder 'aug/none_job_id'.
-               out_dir (str, optional): name of the folder where the 
-               examples will be stored. If any provided the examples will be 
-               generated under a folder 'aug/none_job_id'.
-               save_prefix (str, optional): prefix to add to the generated 
-               examples' name. 
-               original_elastic (bool, optional): to save also the original
-               images when an elastic transformation is performed.
-               random_images (bool, optional): randomly select images from the
-               dataset. If False the examples will be generated from the start
-               of the dataset. 
+                num_examples (int): number of examples to generate.
+                save_to_dir (bool, optional): save the images generated. The 
+                purpose of this variable is to check the images generated by 
+                data augmentation.
+                out_dir (str, optional): name of the folder where the
+                examples will be stored. If any provided the examples will be
+                generated under a folder 'aug/none_job_id'.
+                job_id (str, optional): job identifier. If any provided the
+                examples will be generated under a folder 'aug/none_job_id'.
+                save_prefix (str, optional): prefix to add to the generated 
+                examples' name. 
+                original_elastic (bool, optional): to save also the original
+                images when an elastic transformation is performed.
+                random_images (bool, optional): randomly select images from the
+                dataset. If False the examples will be generated from the start
+                of the dataset. 
+
+            Returns:
+                batch_x (Numpy array): batch of data.
+                batch_y (Numpy array): batch of data mask.
         """
-        Print("[FLOW] Creating the examples of data augmentation . . .")
 
-        prefix = ""
-        if save_prefix is not None:
-            prefix = str(save_prefix)
+        Print("[TR-SAMPLES] Creating the examples of data augmentation . . .")
 
-        out_dir = os.path.join(out_dir, job_id) 
-        if not os.path.exists(out_dir):                              
-            os.makedirs(out_dir)
+        batch_x = np.zeros((num_examples, self.X.shape[0], self.X.shape[1],
+                            self.X.shape[2]), dtype=np.int16)
+        batch_y = np.zeros((num_examples, self.Y.shape[0], self.Y.shape[1],
+                            self.Y.shape[2]), dtype=np.int16)
 
+        if save_to_dir == True:
+            prefix = ""
+            if save_prefix is not None:
+                prefix = str(save_prefix)
+    
+            out_dir = os.path.join(out_dir, job_id) 
+            if not os.path.exists(out_dir):                              
+                os.makedirs(out_dir)
+    
         # Generate the examples 
         for i in tqdm(range(0,num_examples)):
             if random_images == True:
@@ -983,32 +1006,39 @@ class ImageDataGenerator(keras.utils.Sequence):
             else:
                 pos = cont 
 
-            im = self.X[pos]
-            mask = self.Y[pos]
+            batch_x[i] = self.X[pos]
+            batch_y[i] = self.Y[pos]
 
-            out_im, out_mask, t_str = self.apply_transform(im, mask, flow=True)
+            batch_x[i], batch_y[i], t_str = self.apply_transform(batch_x[i], 
+                                                                 batch_y[i],
+                                                                 flow=True)
+            if save_to_dir == True:    
+                batch_x[i] = Image.fromarray(batch_x[i,:,:,0])                           
+                batch_x[i] = batch_x[i].convert('L')                                                    
+                batch_x[i].save(os.path.join(out_dir, prefix + 'x_' + str(pos) 
+                                             + t_str + ".png"))          
+                     
+                batch_y[i] = Image.fromarray(batch_y[i,:,:,0]*255)                           
+                batch_y[i] = batch_y[i].convert('L')                                                    
+                batch_y[i].save(os.path.join(out_dir, prefix + 'y_' + str(pos) 
+                                             + t_str + ".png"))          
+                    
+                # Save also the original images if an elastic transformation was made
+                if original_elastic == True and '_e' in t_str: 
+                    batch_x[i] = Image.fromarray(batch_x[i,:,:,0])
+                    batch_x[i] = batch_x[i].convert('L')
+                    batch_x[i].save(os.path.join(out_dir, prefix + 'x_' 
+                                                          + str(pos) 
+                                                          + t_str 
+                                                          + '_original.png'))
+    
+                    batch_y[i] = Image.fromarray(batch_y[i,:,:,0]*255)
+                    batch_y[i] = batch_y[i].convert('L')
+                    batch_y[i].save(os.path.join(out_dir, prefix + 'y_' 
+                                                          + str(pos) + t_str 
+                                                          + '_original.png'))
 
-            out_im = Image.fromarray(out_im[:,:,0])                           
-            out_im = out_im.convert('L')                                                    
-            out_im.save(os.path.join(out_dir, prefix + 'x_' + str(pos) + t_str 
-                                     + ".png"))          
-                 
-            out_mask = Image.fromarray(out_mask[:,:,0]*255)                           
-            out_mask = out_mask.convert('L')                                                    
-            out_mask.save(os.path.join(out_dir, prefix + 'y_' + str(pos) + t_str
-                                       + ".png"))          
-                
-            # Save also the original images if an elastic transformation was made
-            if original_elastic == True and '_e' in t_str: 
-                im = Image.fromarray(im[:,:,0])
-                im = im.convert('L')
-                im.save(os.path.join(out_dir, prefix + 'x_' + str(pos) + t_str 
-                                     + '_original.png'))
-
-                mask = Image.fromarray(mask[:,:,0]*255)
-                mask = mask.convert('L')
-                mask.save(os.path.join(out_dir, prefix + 'y_' + str(pos) + t_str
-                                       + '_original.png'))
+        return batch_x, batch_y
 
 
 def fixed_dregee(image):
@@ -1018,8 +1048,9 @@ def fixed_dregee(image):
             image (img): image to be rotated.
 
        Returns:
-            out_image (numpy array): image rotated.
+            out_image (Numpy array): image rotated.
     """
+
     img = np.array(image)
 
     # get image height, width
@@ -1033,7 +1064,7 @@ def fixed_dregee(image):
     return out_image
 
 
-def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,        
+def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=None,
                        save_examples=True, job_id="none_job_id", out_dir='aug',
                        hflip=True, vflip=True, seedValue=42, rotation_range=180,
                        fill_mode='reflect', preproc_function=False, 
@@ -1041,16 +1072,16 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
                        channel_shift_range=0.0, shuffle=True,
                        featurewise_std_normalization=False, zoom=False,         
                        w_shift_r=0.0, h_shift_r=0.0, shear_range=0,
-                       crops_before_DA=False, crop_length=0):             
+                       crops_before_DA=False, crop_length=0, extra_train_data=0):             
                                                                                 
     """Makes data augmentation of the given input data.                         
                                                                                 
        Args:                                                                    
-            X_train_path (numpy array): train data.                                  
-            Y_train_path (numpy array): train mask data.                             
-            X_val_path (numpy array): validation data.                               
-            Y_val_path (numpy array): validation mask data.                          
-            batch_size_value (int): batch size.                                 
+            X_train_path (Numpy array): train data.                                  
+            Y_train_path (Numpy array): train mask data.                             
+            batch_size_value (int): batch size.
+            X_val_path (Numpy array, optional): validation data.                               
+            Y_val_path (Numpy array, optional): validation mask data.                          
             save_examples (bool, optional): if true 5 examples of DA are stored.
             job_id (str, optional): job identifier. If any provided the         
             examples will be generated under a folder 'aug/none_job_id'.        
@@ -1065,7 +1096,8 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             make random 180 degrees rotations are performed.                    
             featurewise_center (bool, optional): set input mean to 0 over the   
             dataset, feature-wise.
-            brightness_range (tuple or list of two floats, optional): range for picking a brightness shift value from.
+            brightness_range (tuple or list of two floats, optional): range for 
+            picking a brightness shift value from.
             channel_shift_range (float, optional): range for random channel shifts.
             shuffle (bool, optional): randomize the training data.
             featurewise_std_normalization (bool, optional): divide inputs by std 
@@ -1078,12 +1110,13 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
             crops_before_DA (bool, optional): decide to make random crops before
             apply DA transformations.                                           
             crop_length (int, optional): length of the random crop before DA. 
-                                                                                
+            extra_train_data (int, optional): number of training extra data to
+            be created. 
        Returns:                                                                 
-            train_generator (Keras iterable of flow_from_directory): train data 
-            iterator.                                                           
-            val_generator (Keras iterable of flow_from_directory): validation   
-            data iterator.                                                      
+            train_generator (Iterator): train data iterator.                                                           
+            val_generator (Iterator, optional): validation data iterator.                                                      
+            batch_x (Numpy array, optional): batch of data.
+            batch_y (Numpy array, optional): batch of data mask.
     """                                                                         
                                                                                 
     zoom_val = 0.25 if zoom == True else 0                                      
@@ -1128,8 +1161,6 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
     # Validation data, no data augmentation, but we create a generator anyway   
     X_datagen_val = kerasDA()                                                   
     Y_datagen_val = kerasDA()                                                   
-    #X_datagen_val.fit(X_val, augment=False, seed=seedValue)
-    #Y_datagen_val.fit(Y_val, augment=False, seed=seedValue)
 
     # Check a few of generated images
     if save_examples == True:
@@ -1142,7 +1173,7 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
         for batch in X_datagen_train.flow(X_train, 
                                           save_to_dir=out_dir,
                                           batch_size=batch_size_value,
-                                          shuffle=False, seed=seedValue,
+                                          shuffle=True, seed=seedValue,
                                           save_prefix='x', save_format='jpeg'):
             i = i + 1
             if i > 2:
@@ -1151,7 +1182,7 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
         for batch in Y_datagen_train.flow(Y_train, 
                                           save_to_dir=out_dir,
                                           batch_size=batch_size_value,
-                                          shuffle=False, seed=seedValue,
+                                          shuffle=True, seed=seedValue,
                                           save_prefix='y', save_format='jpeg'):
             i = i + 1
             if i > 2:
@@ -1163,20 +1194,61 @@ def keras_da_generator(X_train, Y_train, X_val, Y_val, batch_size_value,
     Y_train_augmented = Y_datagen_train.flow(Y_train,                           
                                              batch_size=batch_size_value,       
                                              shuffle=shuffle, seed=seedValue)
-    X_val_flow = X_datagen_val.flow(X_val, batch_size=batch_size_value,         
-                                    shuffle=False, seed=seedValue)              
-    Y_val_flow = Y_datagen_val.flow(Y_val, batch_size=batch_size_value,         
-                                    shuffle=False, seed=seedValue)              
+    if X_val is not None:
+        X_val_flow = X_datagen_val.flow(X_val, batch_size=batch_size_value,         
+                                        shuffle=False, seed=seedValue)              
+        Y_val_flow = Y_datagen_val.flow(Y_val, batch_size=batch_size_value,         
+                                        shuffle=False, seed=seedValue)              
              
     # Combine generators into one which yields image and masks                  
     train_generator = zip(X_train_augmented, Y_train_augmented)                 
-    val_generator = zip(X_val_flow, Y_val_flow)
+    if X_val is not None:
+        val_generator = zip(X_val_flow, Y_val_flow)
                                                                    
     if crops_before_DA == True:                                                
         train_generator = crop_generator(train_generator, crop_length)
-        val_generator = crop_generator(val_generator, crop_length, val=True)
+        if X_val is not None:
+            val_generator = crop_generator(val_generator, crop_length, val=True)
 
-    return train_generator, val_generator
+  
+    # Generate extra data 
+    if extra_train_data != 0:
+        batch_x = np.zeros((extra_train_data, X_train.shape[1], X_train.shape[2],
+                            X_train.shape[3]), dtype=np.int16)
+        batch_y = np.zeros((extra_train_data, Y_train.shape[1], Y_train.shape[2],
+                            Y_train.shape[3]), dtype=np.int16)
+        
+        n_batches = int(extra_train_data / batch_size_value) \
+                    + (extra_train_data % batch_size_value > 0)
+        
+        i = 0
+        for batch in X_datagen_train.flow(X_train, batch_size=batch_size_value,
+                                          shuffle=True, seed=seedValue):
+            for j in range(0, batch_size_value):
+                batch_x[i*batch_size_value+j] = batch[j]
+
+            i = i + 1
+            if i >= n_batches:
+                break
+        i = 0
+        for batch in Y_datagen_train.flow(Y_train, batch_size=batch_size_value,
+                                          shuffle=True, seed=seedValue):
+            for j in range(0, batch_size_value):
+                batch_y[i*batch_size_value+j] = batch[j]
+
+            i = i + 1
+            if i >= n_batches:
+                break
+
+        if X_val is not None:
+            return train_generator, val_generator, batch_x, batch_y
+        else:
+            return train_generator, batch_x, batch_y
+    else:
+        if X_val is not None:
+            return train_generator, val_generator
+        else:
+            return train_generator
 
 
 def crop_generator(batches, crop_length, val=False):
