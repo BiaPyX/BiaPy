@@ -684,7 +684,7 @@ class ImageDataGenerator(keras.utils.Sequence):
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
                  shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
                  hflip=False, rotation90=False, rotation_range=0.0, 
-                 crops_before_DA=False, crop_length=0, val=False):
+                 crops_before_DA=False, crop_length=0, prob_map=False, val=False):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
@@ -708,6 +708,8 @@ class ImageDataGenerator(keras.utils.Sequence):
             crop_after_DA (bool, optional): decide to make random crops after
             apply DA transformations.
             crop_length (int, optional): length of the random crop after DA.
+            prob_map (bool, optional): take the crop center based on a given    
+            probability ditribution.
             val (bool, optional): advice the generator that the images will be
             to validate the model to not make random crops (as the val. data must
             be the same on each epoch).
@@ -728,6 +730,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.rotation_range = rotation_range
         self.crops_before_DA = crops_before_DA
         self.crop_length = crop_length
+        self.prob_map = prob_map
         self.val = val
         self.on_epoch_end()
         
@@ -771,14 +774,16 @@ class ImageDataGenerator(keras.utils.Sequence):
                 if self.crops_before_DA == True:
                     batch_x[i], batch_y[i] = random_crop(self.X[j], self.Y[j], 
                                                          (self.crop_length, self.crop_length),
-                                                         self.val)
+                                                         self.val, 
+                                                         prob_map=self.prob_map)
                 else:
                     batch_x[i], batch_y[i] = self.X[j], self.Y[j]
             else:
                 if self.crops_before_DA == True:
                     batch_x[i], batch_y[i] = random_crop(self.X[j], self.Y[j],
                                                          (self.crop_length, self.crop_length), 
-                                                         self.val) 
+                                                         self.val,
+                                                         prob_map=self.prob_map) 
                     batch_x[i], batch_y[i], _ = self.apply_transform(batch_x[i],
                                                                      batch_y[i])
                 else:
@@ -825,17 +830,16 @@ class ImageDataGenerator(keras.utils.Sequence):
         for j in range(0, im.shape[0], grid_width):
             im[j, :] = v
 
-    def apply_transform(self, image, mask, flow=False):
+    def apply_transform(self, image, mask, grid=False):
         """Transform the input image and its mask at the same time with one of
            the selected choices based on a probability. 
                 
            Args:
                 image (2D Numpy array): image to be transformed.
                 mask (2D Numpy array): image's mask.
-                flow (bool, optional): forces the transform independetly of the
-                previously selected probability. Also draws a grid in to the 
-                elastic transfomations to visualize it clearly. Do not set this 
-                option to train the network!
+                grid (bool, optional): Draws a grid in to the elastic 
+                transfomations to visualize it clearly. Do not set this option 
+                to train the network!
             
            Returns: 
                 trans_image (Numpy array): transformed image.
@@ -850,9 +854,9 @@ class ImageDataGenerator(keras.utils.Sequence):
 
         # Elastic transformation
         prob = random.uniform(0, 1)
-        if (self.elastic == True or flow == True) and prob < self.e_prob:
+        if self.elastic == True and prob < self.e_prob:
 
-            if flow == True:
+            if grid == True:
                 self.__draw_grid(trans_image)
                 self.__draw_grid(trans_mask, m=True)
 
@@ -876,21 +880,21 @@ class ImageDataGenerator(keras.utils.Sequence):
         #
         # Vertical flip
         prob = random.uniform(0, 1)
-        if (self.vflip == True or flow == True) and 0 <= prob < 0.25:
+        if self.vflip == True and 0 <= prob < 0.25:
             trans_image = np.flip(trans_image, 0)
             trans_mask = np.flip(trans_mask, 0)
             transform_string = transform_string + '_vf'
             transformed = True 
             self.t_counter[1] += 1
         # Horizontal flip
-        elif (self.hflip == True or flow == True) and 0.25 <= prob < 0.5:
+        elif self.hflip == True and 0.25 <= prob < 0.5:
             trans_image = np.flip(trans_image, 1)
             trans_mask = np.flip(trans_mask, 1)
             transform_string = transform_string + '_hf'
             transformed = True
             self.t_counter[2] += 1 
         # Vertical and horizontal flip
-        elif (self.hflip == True or flow == True) and 0.5 <= prob < 0.75:
+        elif self.hflip == True and 0.5 <= prob < 0.75:
             trans_image = np.flip(trans_image, 0)                               
             trans_mask = np.flip(trans_mask, 0)
             trans_image = np.flip(trans_image, 1)                               
@@ -901,13 +905,13 @@ class ImageDataGenerator(keras.utils.Sequence):
             self.t_counter[2] += 1
             
         # Free rotation from -range to range (in degrees)
-        if (self.rotation_range != 0):
+        if self.rotation_range != 0:
             theta = np.random.uniform(-self.rotation_range, self.rotation_range)
             trans_image = ndimage.rotate(trans_image, theta, reshape=False, 
                                          mode='reflect', order=1)
             trans_mask = ndimage.rotate(trans_mask, theta, reshape=False, 
                                         mode='reflect', order=0)
-            transform_string = transform_string + '_rRange'
+            transform_string = transform_string + '_rRange' + str(int(theta))
             transformed = True
 
         # Rotation with multiples of 90 degrees
@@ -919,28 +923,28 @@ class ImageDataGenerator(keras.utils.Sequence):
         prob = random.uniform(0, 1)
         if self.squared == True:
             # 90 degree rotation
-            if (self.rotation90 == True or flow == True) and 0 <= prob < 0.25:
+            if self.rotation90 == True and 0 <= prob < 0.25:
                 trans_image = np.rot90(trans_image)
                 trans_mask = np.rot90(trans_mask)
                 transform_string = transform_string + '_r90'
                 transformed = True 
                 self.t_counter[3] += 1
             # 180 degree rotation
-            elif (self.rotation90 == True or flow == True) and 0.25 <= prob < 0.5:
+            elif self.rotation90 == True and 0.25 <= prob < 0.5:
                 trans_image = np.rot90(trans_image, 2)
                 trans_mask = np.rot90(trans_mask, 2)
                 transform_string = transform_string + '_r180'
                 transformed = True 
                 self.t_counter[4] += 1
             # 270 degree rotation
-            elif (self.rotation90 == True or flow == True) and 0.5 <= prob < 0.75:
+            elif self.rotation90 == True and 0.5 <= prob < 0.75:
                 trans_image = np.rot90(trans_image, 3)
                 trans_mask = np.rot90(trans_mask, 3)
                 transform_string = transform_string + '_r270'
                 transformed = True 
                 self.t_counter[5] += 1
         else:
-            if (self.rotation90 == True or flow == True) and 0 <= prob < 0.5:
+            if self.rotation90 == True and 0 <= prob < 0.5:
                 trans_image = np.rot90(trans_image, 2)                          
                 trans_mask = np.rot90(trans_mask, 2)                            
                 transform_string = transform_string + '_r180'                   
@@ -985,10 +989,16 @@ class ImageDataGenerator(keras.utils.Sequence):
 
         Print("[TR-SAMPLES] Creating the examples of data augmentation . . .")
 
-        batch_x = np.zeros((num_examples, self.X.shape[0], self.X.shape[1],
-                            self.X.shape[2]), dtype=np.int16)
-        batch_y = np.zeros((num_examples, self.Y.shape[0], self.Y.shape[1],
-                            self.Y.shape[2]), dtype=np.int16)
+        if self.crops_before_DA == True:
+            batch_x = np.zeros((num_examples, self.crop_length, self.crop_length,
+                                self.X.shape[3]), dtype=np.int16)                                  
+            batch_y = np.zeros((num_examples, self.crop_length, self.crop_length,
+                                self.Y.shape[3]), dtype=np.int16)
+        else:
+            batch_x = np.zeros((num_examples, self.X.shape[1], self.X.shape[2], 
+                                self.X.shape[3]), dtype=np.int16)
+            batch_y = np.zeros((num_examples, self.Y.shape[1], self.Y.shape[2], 
+                                self.X.shape[3]), dtype=np.int16)
 
         if save_to_dir == True:
             prefix = ""
@@ -1006,37 +1016,91 @@ class ImageDataGenerator(keras.utils.Sequence):
             else:
                 pos = cont 
 
-            batch_x[i] = self.X[pos]
-            batch_y[i] = self.Y[pos]
+            # Apply crops if selected
+            if self.crops_before_DA == True:
+                batch_x[i], batch_y[i], ox, oy,\
+                s_x, s_y = random_crop(self.X[pos], self.Y[pos],
+                                       (self.crop_length, self.crop_length),
+                                       self.val, prob_map=self.prob_map,
+                                       draw_prob_map_points=self.prob_map)
+            else:
+                batch_x[i] = self.X[pos]
+                batch_y[i] = self.Y[pos]
 
             batch_x[i], batch_y[i], t_str = self.apply_transform(batch_x[i], 
                                                                  batch_y[i],
-                                                                 flow=True)
+                                                                 grid=True)
+            # Save transformed images
             if save_to_dir == True:    
-                batch_x[i] = Image.fromarray(batch_x[i,:,:,0])                           
-                batch_x[i] = batch_x[i].convert('L')                                                    
-                batch_x[i].save(os.path.join(out_dir, prefix + 'x_' + str(pos) 
-                                             + t_str + ".png"))          
-                     
-                batch_y[i] = Image.fromarray(batch_y[i,:,:,0]*255)                           
-                batch_y[i] = batch_y[i].convert('L')                                                    
-                batch_y[i].save(os.path.join(out_dir, prefix + 'y_' + str(pos) 
-                                             + t_str + ".png"))          
+                im = Image.fromarray(batch_x[i,:,:,0])
+                im = im.convert('L')
+                im.save(os.path.join(out_dir, prefix + 'x_' + str(pos) + t_str  
+                                              + ".png"))
+                mask = Image.fromarray(batch_y[i,:,:,0]*255)
+                mask = mask.convert('L')
+                mask.save(os.path.join(out_dir, prefix + 'y_' + str(pos) + t_str    
+                                                + ".png"))
+
+                # Save the original images with a point that represents the 
+                # selected coordinates to be the center of the crop
+                if self.crops_before_DA == True and self.prob_map == True:
+                    im = Image.fromarray(self.X[pos,:,:,0]) 
+                    im = im.convert('RGB')                                                  
+                    px = im.load()                                                          
+                        
+                    # Paint the selected point in red
+                    p_size=6
+                    for col in range(oy-p_size,oy+p_size):
+                        for row in range(ox-p_size,ox+p_size): 
+                            if col >= 0 and col < self.X.shape[1] and \
+                               row >= 0 and row < self.X.shape[2]:
+                               px[row, col] = (255, 0, 0) 
                     
-                # Save also the original images if an elastic transformation was made
+                    # Paint a blue square that represent the crop made 
+                    for row in range(s_x, s_x+self.crop_length):
+                        px[row, s_y] = (0, 0, 255)
+                        px[row, s_y+self.crop_length-1] = (0, 0, 255)
+                    for col in range(s_y, s_y+self.crop_length):                    
+                        px[s_x, col] = (0, 0, 255)
+                        px[s_x+self.crop_length-1, col] = (0, 0, 255)
+
+                    im.save(os.path.join(out_dir, prefix + 'mark_x_' + str(pos) 
+                                                  + t_str + '.png'))
+                   
+                    mask = Image.fromarray(self.Y[pos,:,:,0]*255) 
+                    mask = mask.convert('RGB')                                      
+                    px = mask.load()                                              
+                        
+                    # Paint the selected point in red
+                    for col in range(oy-p_size,oy+p_size):                       
+                        for row in range(ox-p_size,ox+p_size):                   
+                            if col >= 0 and col < self.Y.shape[1] and \
+                               row >= 0 and row < self.Y.shape[2]:                
+                               px[row, col] = (255, 0, 0)
+
+                    # Paint a blue square that represent the crop made
+                    for row in range(s_x, s_x+self.crop_length):                
+                        px[row, s_y] = (0, 0, 255)                          
+                        px[row, s_y+self.crop_length-1] = (0, 0, 255)       
+                    for col in range(s_y, s_y+self.crop_length):                
+                        px[s_x, col] = (0, 0, 255)                          
+                        px[s_x+self.crop_length-1, col] = (0, 0, 255)
+
+                    mask.save(os.path.join(out_dir, prefix + 'mark_y_' + str(pos) 
+                                                    + t_str + '.png'))          
+                
+                # Save also the original images if an elastic transformation 
+                # was made
                 if original_elastic == True and '_e' in t_str: 
-                    batch_x[i] = Image.fromarray(batch_x[i,:,:,0])
-                    batch_x[i] = batch_x[i].convert('L')
-                    batch_x[i].save(os.path.join(out_dir, prefix + 'x_' 
-                                                          + str(pos) 
-                                                          + t_str 
-                                                          + '_original.png'))
+                    im = Image.fromarray(self.X[i,:,:,0])
+                    im = im.convert('L')
+                    im.save(os.path.join(out_dir, prefix + 'x_' + str(pos) 
+                                                  + t_str + '_original.png'))
     
-                    batch_y[i] = Image.fromarray(batch_y[i,:,:,0]*255)
-                    batch_y[i] = batch_y[i].convert('L')
-                    batch_y[i].save(os.path.join(out_dir, prefix + 'y_' 
-                                                          + str(pos) + t_str 
-                                                          + '_original.png'))
+                    mask = Image.fromarray(self.Y[i,:,:,0]*255)
+                    mask = mask.convert('L')
+                    mask.save(os.path.join(out_dir, prefix + 'y_' + str(pos) 
+                                                    + t_str + '_original.png'))
 
         return batch_x, batch_y
 
@@ -1112,6 +1176,7 @@ def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=Non
             crop_length (int, optional): length of the random crop before DA. 
             extra_train_data (int, optional): number of training extra data to
             be created. 
+
        Returns:                                                                 
             train_generator (Iterator): train data iterator.                                                           
             val_generator (Iterator, optional): validation data iterator.                                                      
@@ -1162,9 +1227,8 @@ def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=Non
     X_datagen_val = kerasDA()                                                   
     Y_datagen_val = kerasDA()                                                   
 
-    # Check a few of generated images
+    # Save a few examples 
     if save_examples == True:
-        
         out_dir = os.path.join(out_dir, job_id)
         if not os.path.exists(out_dir):          
             os.makedirs(out_dir)
@@ -1251,7 +1315,7 @@ def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=Non
             return train_generator
 
 
-def crop_generator(batches, crop_length, val=False):
+def crop_generator(batches, crop_length, val=False, prob_map=False):
     """Take as input a Keras ImageGen (Iterator) and generate random
        crops from the image batches generated by the original iterator.
         
@@ -1264,11 +1328,16 @@ def crop_generator(batches, crop_length, val=False):
         batch_crops_x = np.zeros((batch_x.shape[0], crop_length, crop_length, 1))
         batch_crops_y = np.zeros((batch_y.shape[0], crop_length, crop_length, 1))
         for i in range(batch_x.shape[0]):
-            batch_crops_x[i], batch_crops_y[i] = random_crop(batch_x[i], batch_y[i], (crop_length, crop_length), val)
+            batch_crops_x[i], batch_crops_y[i] = random_crop(batch_x[i], 
+                                                             batch_y[i], 
+                                                             (crop_length, crop_length),
+                                                             val,
+                                                             prob_map=prob_map)
         yield (batch_crops_x, batch_crops_y)
 
 
-def random_crop(img, mask, random_crop_size, val=False):
+def random_crop(img, mask, random_crop_size, val=False, prob_map=False, 
+                draw_prob_map_points=False, w_foreground=0.90, w_background=0.1):
     """Random crop.
        Based on:                                                                
            https://jkjung-avt.github.io/keras-image-cropping/
@@ -1281,8 +1350,53 @@ def random_crop(img, mask, random_crop_size, val=False):
         x = 0
         y = 0
     else:
-        x = np.random.randint(0, width - dx + 1)                                
-        y = np.random.randint(0, height - dy + 1)
-    return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :]
+        if prob_map == True:
+            # Use the mask to create the probability map 
+            pdf = np.copy(mask[:,:,0])
+            
+            # Remove artifacts connected to image border
+            from skimage.segmentation import clear_border
+            pdf = clear_border(pdf)
 
+            # Calculate the probabilities
+            pdf = np.float32(pdf)
+            foreground_pixels = (pdf == 1).sum()
+            background_pixels = (pdf == 0).sum()    
+            pdf[np.where(pdf == 1.0)] = w_foreground/foreground_pixels
+            pdf[np.where(pdf == 0.0)] = w_background/background_pixels
+            pdf /= pdf.sum() # Necessary to get all probs sum 1
+            prob = pdf.ravel() 
+            
+            # Generate the random coordinates based on the distribution
+            choices = np.prod(pdf.shape)
+            index = np.random.choice(choices, size=1, p=prob)
+            coordinates = np.unravel_index(index, dims=pdf.shape)
+            x = int(coordinates[1][0])
+            y = int(coordinates[0][0])
+            ox = int(coordinates[1][0]) 
+            oy = int(coordinates[0][0]) 
+            
+            # Adjust the coordinates to be the origin of the crop and control to
+            # not be out of the image
+            if y < int(random_crop_size[0]/2):
+                y = 0
+            elif y > img.shape[0] - int(random_crop_size[0]/2):
+                y = img.shape[0] - random_crop_size[0]
+            else:
+                y -= int(random_crop_size[0]/2)
+           
+            if x < int(random_crop_size[1]/2):
+                x = 0
+            elif x > img.shape[1] - int(random_crop_size[1]/2):
+                x = img.shape[1] - random_crop_size[1]
+            else: 
+                x -= int(random_crop_size[1]/2)
+        else:
+            x = np.random.randint(0, width - dx + 1)                                
+            y = np.random.randint(0, height - dy + 1)
+
+    if draw_prob_map_points == True:
+        return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :], ox, oy, x, y
+    else:
+        return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :]
 

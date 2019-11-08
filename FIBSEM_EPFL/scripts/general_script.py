@@ -89,13 +89,14 @@ img_test_channels = 1
 original_test_shape = [img_test_width, img_test_height]
 
 # Crop variables
-img_width_crop = 512
-img_height_crop = 512
+img_width_crop = 256
+img_height_crop = 256
 img_channels_crop = 1 
-make_crops = False
+make_crops = True
 check_crop = True
 crops_before_DA = False # No compatible with make_crops                                                        
 test_ov_crops = 8 # Only active with crops_before_DA
+probability_map = True # Only active with crops_before_DA                       
 
 # Discard variables
 discard_cropped_images = False
@@ -110,10 +111,11 @@ normalize_data = False
 norm_value_forced = -1
 custom_da = False
 keras_zoom = False
+aug_examples = True
 w_shift_r = 0.0
 h_shift_r = 0.0
 shear_range = 0.0
-extra_train_data = 300
+extra_train_data = 0
 
 # Load preoviously generated model weigths
 load_previous_weights = False
@@ -279,6 +281,7 @@ if custom_da == False:
     train_generator, val_generator = keras_da_generator(X_train, Y_train,       
                                                         batch_size_value,       
                                                         X_val=X_val, Y_val=Y_val,
+                                                        save_examples=aug_examples,
                                                         job_id=job_id,          
                                                         shuffle=False,          
                                                         zoom=keras_zoom,        
@@ -302,7 +305,7 @@ else:
                          shuffle=True, da=True, e_prob=0.0, elastic=False,      
                          vflip=True, hflip=True, rotation90=False,              
                          rotation_range=180, crops_before_DA=crops_before_DA,   
-                         crop_length=img_width_crop)                            
+                         crop_length=img_width_crop, prob_map=probability_map)                            
                                                                                 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,     
                              dim=(img_height,img_width), n_channels=1,          
