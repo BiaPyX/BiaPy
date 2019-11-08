@@ -684,7 +684,8 @@ class ImageDataGenerator(keras.utils.Sequence):
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
                  shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
                  hflip=False, rotation90=False, rotation_range=0.0, 
-                 crops_before_DA=False, crop_length=0, prob_map=False, val=False):
+                 crops_before_DA=False, crop_length=0, prob_map=False, 
+                 train_prob=None, val=False):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
@@ -710,6 +711,8 @@ class ImageDataGenerator(keras.utils.Sequence):
             crop_length (int, optional): length of the random crop after DA.
             prob_map (bool, optional): take the crop center based on a given    
             probability ditribution.
+            train_prob (numpy array, optional): probabilities of each pixels to
+            use with prob_map actived. 
             val (bool, optional): advice the generator that the images will be
             to validate the model to not make random crops (as the val. data must
             be the same on each epoch).
@@ -731,6 +734,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.crops_before_DA = crops_before_DA
         self.crop_length = crop_length
         self.prob_map = prob_map
+        self.train_prob = train_prob
         self.val = val
         self.on_epoch_end()
         
@@ -775,7 +779,8 @@ class ImageDataGenerator(keras.utils.Sequence):
                     batch_x[i], batch_y[i] = random_crop(self.X[j], self.Y[j], 
                                                          (self.crop_length, self.crop_length),
                                                          self.val, 
-                                                         prob_map=self.prob_map)
+                                                         prob_map=self.prob_map,
+                                                         img_prob=(self.train_prob[j] if self.train_prob is not None else None))
                 else:
                     batch_x[i], batch_y[i] = self.X[j], self.Y[j]
             else:
@@ -783,7 +788,8 @@ class ImageDataGenerator(keras.utils.Sequence):
                     batch_x[i], batch_y[i] = random_crop(self.X[j], self.Y[j],
                                                          (self.crop_length, self.crop_length), 
                                                          self.val,
-                                                         prob_map=self.prob_map) 
+                                                         prob_map=self.prob_map,
+                                                         img_prob=self.train_prob[j]) 
                     batch_x[i], batch_y[i], _ = self.apply_transform(batch_x[i],
                                                                      batch_y[i])
                 else:
@@ -1022,7 +1028,8 @@ class ImageDataGenerator(keras.utils.Sequence):
                 s_x, s_y = random_crop(self.X[pos], self.Y[pos],
                                        (self.crop_length, self.crop_length),
                                        self.val, prob_map=self.prob_map,
-                                       draw_prob_map_points=self.prob_map)
+                                       draw_prob_map_points=self.prob_map,
+                                        img_prob=self.train_prob[pos])
             else:
                 batch_x[i] = self.X[pos]
                 batch_y[i] = self.Y[pos]
@@ -1056,7 +1063,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                                row >= 0 and row < self.X.shape[2]:
                                px[row, col] = (255, 0, 0) 
                     
-                    # Paint a blue square that represent the crop made 
+                    # Paint a blue square that represents the crop made 
                     for row in range(s_x, s_x+self.crop_length):
                         px[row, s_y] = (0, 0, 255)
                         px[row, s_y+self.crop_length-1] = (0, 0, 255)
@@ -1078,7 +1085,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                                row >= 0 and row < self.Y.shape[2]:                
                                px[row, col] = (255, 0, 0)
 
-                    # Paint a blue square that represent the crop made
+                    # Paint a blue square that represents the crop made
                     for row in range(s_x, s_x+self.crop_length):                
                         px[row, s_y] = (0, 0, 255)                          
                         px[row, s_y+self.crop_length-1] = (0, 0, 255)       
@@ -1337,7 +1344,7 @@ def crop_generator(batches, crop_length, val=False, prob_map=False):
 
 
 def random_crop(img, mask, random_crop_size, val=False, prob_map=False, 
-                draw_prob_map_points=False, w_foreground=0.90, w_background=0.1):
+                draw_prob_map_points=False, img_prob=None):
     """Random crop.
        Based on:                                                                
            https://jkjung-avt.github.io/keras-image-cropping/
@@ -1351,26 +1358,12 @@ def random_crop(img, mask, random_crop_size, val=False, prob_map=False,
         y = 0
     else:
         if prob_map == True:
-            # Use the mask to create the probability map 
-            pdf = np.copy(mask[:,:,0])
-            
-            # Remove artifacts connected to image border
-            from skimage.segmentation import clear_border
-            pdf = clear_border(pdf)
-
-            # Calculate the probabilities
-            pdf = np.float32(pdf)
-            foreground_pixels = (pdf == 1).sum()
-            background_pixels = (pdf == 0).sum()    
-            pdf[np.where(pdf == 1.0)] = w_foreground/foreground_pixels
-            pdf[np.where(pdf == 0.0)] = w_background/background_pixels
-            pdf /= pdf.sum() # Necessary to get all probs sum 1
-            prob = pdf.ravel() 
+            prob = img_prob.ravel() 
             
             # Generate the random coordinates based on the distribution
-            choices = np.prod(pdf.shape)
+            choices = np.prod(img_prob.shape)
             index = np.random.choice(choices, size=1, p=prob)
-            coordinates = np.unravel_index(index, dims=pdf.shape)
+            coordinates = np.unravel_index(index, dims=img_prob.shape)
             x = int(coordinates[1][0])
             y = int(coordinates[0][0])
             ox = int(coordinates[1][0]) 

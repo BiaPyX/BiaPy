@@ -37,7 +37,9 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
-from smooth_tiled_predictions import predict_img_with_smooth_windowing
+from smooth_tiled_predictions import predict_img_with_smooth_windowing \
+                                     predict_img_with_overlap
+from skimage.segmentation import clear_border
 
 
 ##########################
@@ -97,6 +99,8 @@ check_crop = True
 crops_before_DA = False # No compatible with make_crops                                                        
 test_ov_crops = 8 # Only active with crops_before_DA
 probability_map = True # Only active with crops_before_DA                       
+w_foreground = 0.9
+w_background = 0.1
 
 # Discard variables
 discard_cropped_images = False
@@ -299,13 +303,34 @@ if custom_da == False:
                                                  crop_length=img_width_crop,    
                                                  extra_train_data=extra_train_data)
 else:                                                                           
+    # Calculate the probability map per image
+    train_prob = None
+    if probability_map == True:
+        train_prob = np.copy(Y_train[:,:,:,0])
+        train_prob = np.float32(train_prob)
+
+        for i in range(train_prob.shape[0]):
+            pdf = train_prob[i]
+        
+            # Remove artifacts connected to image border
+            pdf = clear_border(pdf)
+
+            foreground_pixels = (pdf == 1).sum()
+            background_pixels = (pdf == 0).sum()
+
+            pdf[np.where(pdf == 1.0)] = w_foreground/foreground_pixels
+            pdf[np.where(pdf == 0.0)] = w_background/background_pixels
+            pdf /= pdf.sum() # Necessary to get all probs sum 1
+            train_prob[i] = pdf
+
     # Custom Data Augmentation                                                  
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,     
                          dim=(img_height,img_width), n_channels=1,              
                          shuffle=True, da=True, e_prob=0.0, elastic=False,      
                          vflip=True, hflip=True, rotation90=False,              
                          rotation_range=180, crops_before_DA=crops_before_DA,   
-                         crop_length=img_width_crop, prob_map=probability_map)                            
+                         crop_length=img_width_crop, prob_map=probability_map,
+                         train_prob=train_prob)                            
                                                                                 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,     
                              dim=(img_height,img_width), n_channels=1,          
@@ -492,8 +517,27 @@ else:
         det = DET_calculation(Y_test, merged_preds_test, det_eval_ge_path,
                               det_eval_path, det_bin, n_dig, job_id)
     else:
-        score[1] = -1
-        voc = -1
+        Print("As the number of overlapped crops created is 1, we will obtain" +\
+              " the (per image) Jaccard value overlapping 4 tiles with the " +\ 
+              "predict_img_with_overlap function")                              
+                                                                                
+        Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))                
+        for i in tqdm(range(0,len(X_test))):                                    
+            predictions_smooth = predict_img_with_overlap(                      
+                X_test[i,:,:,:],                                                
+                window_size=img_width_crop,                                     
+                subdivisions=2,  # Minimal amount of overlap for windowing. Must be an even number.
+                nb_classes=1,                                                   
+                pred_func=(                                                     
+                    lambda img_batch_subdiv: model.predict(img_batch_subdiv)    
+                )                                                               
+            )                                                                   
+            Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)      
+                                                                                
+        score[1] = jaccard_index_numpy(Y_test, Y_test_smooth)                   
+        del Y_test_smooth                                                       
+                                                                                
+        voc = -1                                                                
         det = -1
 
     
@@ -561,8 +605,8 @@ if crops_before_DA == False:
     Print("DET: " + str(det))
 else:
     Print("Test overlapped (per crop) jaccard_index: " + str(jac_per_crop))
+    Print("Test overlapped (per image) jaccard_index: " + str(score[1]))
     if test_ov_crops > 1:
-        Print("Test overlapped (per image) jaccard_index: " + str(score[1]))
         Print("VOC: " + str(voc))
         Print("DET: " + str(det))
     
