@@ -39,9 +39,6 @@ def residual_block(x, dim, filter_size, activation='elu',
     # Add shortcut value to main path
     x = Add()([shortcut, x])
     
-    # Add the last activation
-    x = Activation( activation )(x)
-
     return x
 
 

@@ -37,7 +37,8 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
-from smooth_tiled_predictions import predict_img_with_smooth_windowing
+from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
+                                     predict_img_with_overlap
 
 
 ##########################
@@ -78,7 +79,7 @@ test_path = os.path.join('data', 'test', 'x')
 test_mask_path = os.path.join('data', 'test', 'y')
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. Be sure to take care of this if you are not going to
-# use crop_data() with the arg force_shape, as this function resolves the 
+# use crop_data() with the arg force_shape, as this function resolves the
 # problem creating lways crops of the same dimension
 img_train_width = 1024
 img_train_height = 768
@@ -89,13 +90,13 @@ img_test_channels = 1
 original_test_shape = [img_test_width, img_test_height]
 
 # Crop variables
-img_width_crop = 256
-img_height_crop = 256
+img_width_crop = 512
+img_height_crop = 512
 img_channels_crop = 1 
-make_crops = True
+make_crops = False
 check_crop = True
-crops_before_DA = False # No compatible with make_crops                                                        
-test_ov_crops = 8 # Only active with crops_before_DA
+crops_before_DA = True # No compatible with make_crops                                                        
+test_ov_crops = 1 # Only active with crops_before_DA
 
 # Discard variables
 discard_cropped_images = False
@@ -108,20 +109,20 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 # Data augmentation variables
 normalize_data = False
 norm_value_forced = -1
-custom_da = False
+custom_da = True
+aug_examples = False 
 keras_zoom = False
 w_shift_r = 0.0
 h_shift_r = 0.0
 shear_range = 0.0
-extra_train_data = 300
 
 # Load preoviously generated model weigths
 load_previous_weights = True
 
 # General parameters
-batch_size_value = 6
+batch_size_value = 4
 momentum_value = 0.99
-learning_rate_value = 0.001
+learning_rate_value = 0.0005
 epochs_value = 360
 make_threshold_plots = False
 
@@ -236,7 +237,7 @@ X_val, Y_val, \
 X_test, Y_test, norm_value = load_data(train_path, train_mask_path, test_path, 
                            test_mask_path, [img_train_width, img_train_height,
                            img_train_channels], [img_test_width, img_test_height,
-                           img_test_channels])
+                           img_test_channels], val_split=0.1, shuffle_val=False)
 # Nomalize the data
 if normalize_data == True:
     if norm_value_forced != -1: 
@@ -274,71 +275,36 @@ else:
 #    DATA AUGMENTATION   #
 ##########################
 
-if custom_da == False:                                                          
-    # Keras Data Augmentation                                                   
-    train_generator, val_generator = keras_da_generator(X_train, Y_train,       
-                                                        batch_size_value,       
-                                                        X_val=X_val, Y_val=Y_val,
-                                                        job_id=job_id,          
-                                                        shuffle=False,          
-                                                        zoom=keras_zoom,        
-                                                        crops_before_DA=crops_before_DA,
-                                                        crop_length=img_width_crop,
-                                                        w_shift_r=w_shift_r,    
-                                                        h_shift_r=h_shift_r,    
-                                                        shear_range=shear_range)
-    # Keras DA generated extra data                                             
-    if extra_train_data != 0:                                                   
-        _, extra_x, extra_y = keras_da_generator(X_train, Y_train,              
-                                                 batch_size_value, job_id=job_id,
-                                                 shuffle=True,                  
-                                                 crops_before_DA=crops_before_DA,
-                                                 crop_length=img_width_crop,    
-                                                 extra_train_data=extra_train_data)
-else:                                                                           
-    # Custom Data Augmentation                                                  
-    data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,     
-                         dim=(img_height,img_width), n_channels=1,              
-                         shuffle=True, da=True, e_prob=0.0, elastic=False,      
-                         vflip=True, hflip=True, rotation90=False,              
-                         rotation_range=180, crops_before_DA=crops_before_DA,   
-                         crop_length=img_width_crop)                            
-                                                                                
-    data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,     
-                             dim=(img_height,img_width), n_channels=1,          
-                             shuffle=False, da=False,                           
-                             crops_before_DA=crops_before_DA,                   
-                             crop_length=img_width_crop, val=True)              
-                                                                                
-    train_generator = ImageDataGenerator(**data_gen_args)                       
-    val_generator = ImageDataGenerator(**data_gen_val_args)                     
-                                                                                
-    # Generate examples of data augmentation                                    
-    if aug_examples == True:                                                    
-        train_generator.get_transformed_samples(10, save_to_dir=True,           
-                                                job_id=job_id)                  
-                                                                                
-    # Custom DA generated extra data                                            
-    if extra_train_data != 0:                                                   
-        extra_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
-                              dim=(img_height,img_width), n_channels=1,         
-                              shuffle=True, da=True, e_prob=0.0, elastic=False, 
-                              vflip=True, hflip=True, rotation90=False,         
-                              rotation_range=0, crops_before_DA=crops_before_DA,
-                              crop_length=img_width_crop)                       
-        extra_generator = ImageDataGenerator(**extra_gen_args)                  
-                                                                                
-        extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
+if custom_da == False:
+    train_generator, val_generator = keras_da_generator(X_train, Y_train, 
+        X_val, Y_val, batch_size_value, preproc_function=False, 
+        save_examples=aug_examples, job_id=job_id, zoom=keras_zoom,
+        crops_before_DA=crops_before_DA, crop_length=img_width_crop,
+        w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range)
+else:
+    data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
+                         dim=(img_height,img_width), n_channels=1,
+                         shuffle=True, da=True, e_prob=0.0, elastic=False,
+                         vflip=True, hflip=True, rotation90=False,
+                         rotation_range=180, crops_before_DA=crops_before_DA,
+                         crop_length=img_width_crop)
+
+    data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,
+                             dim=(img_height,img_width), n_channels=1,
+                             shuffle=False, da=False, 
+                             crops_before_DA=crops_before_DA,
+                             crop_length=img_width_crop, val=True)
+
+    train_generator = ImageDataGenerator(**data_gen_args)
+    val_generator = ImageDataGenerator(**data_gen_val_args)
+
+    # Generate examples of data augmentation
+    if aug_examples == True:
+        train_generator.flow_on_examples(10, job_id=job_id)
 
 if crops_before_DA == True:
     img_width = img_width_crop
     img_height = img_height_crop
-
-if extra_train_data != 0:                                                       
-    X_train = np.vstack((X_train, extra_x))                                     
-    Y_train = np.vstack((Y_train, extra_y))                                     
-    Print(str(extra_train_data) + " extra train data generated, the new shape " 
-          "of the train now is " + str(X_train.shape))             
 
 
 ##########################
@@ -346,17 +312,19 @@ if extra_train_data != 0:
 ##########################
 
 Print("Creating the network . . .")
-model = U_Net([img_height, img_width, img_channels], numInitChannels=16)
+model = U_Net([img_height, img_width, img_channels], numInitChannels=16, 
+              fixed_dropout=0.2)
 
-sgd = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
-                           decay=0.0, nesterov=False)
+adam = keras.optimizers.Adam(lr=learning_rate_value, beta_1=0.9, beta_2=0.999, 
+                             epsilon=None, decay=0.0, amsgrad=False)
 
-model.compile(optimizer=sgd, loss='binary_crossentropy', metrics=[jaccard_index])
+model.compile(optimizer=adam, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
 if load_previous_weights == False:
     # Fit model
-    earlystopper = EarlyStopping(patience=50, verbose=1, restore_best_weights=True)
+    earlystopper = EarlyStopping(patience=epochs_value, verbose=1,
+                                 restore_best_weights=True)
     
     if not os.path.exists(h5_dir):                                      
         os.makedirs(h5_dir)
@@ -489,7 +457,26 @@ else:
         det = DET_calculation(Y_test, merged_preds_test, det_eval_ge_path,
                               det_eval_path, det_bin, n_dig, job_id)
     else:
-        score[1] = -1
+        Print("As the number of overlapped crops created is 1, we will obtain" +\
+              " the (per image) Jaccard value overlapping 4 tiles with the " +\
+              "predict_img_with_overlap function")
+
+        Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
+        for i in tqdm(range(0,len(X_test))):
+            predictions_smooth = predict_img_with_overlap(
+                X_test[i,:,:,:],
+                window_size=img_width_crop,
+                subdivisions=2,  # Minimal amount of overlap for windowing. Must be an even number.
+                nb_classes=1,
+                pred_func=(
+                    lambda img_batch_subdiv: model.predict(img_batch_subdiv)
+                )
+            )
+            Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
+
+        score[1] = jaccard_index_numpy(Y_test, Y_test_smooth)
+        del Y_test_smooth
+    
         voc = -1
         det = -1
 
@@ -558,8 +545,8 @@ if crops_before_DA == False:
     Print("DET: " + str(det))
 else:
     Print("Test overlapped (per crop) jaccard_index: " + str(jac_per_crop))
+    Print("Test overlapped (per image) jaccard_index: " + str(score[1]))
     if test_ov_crops > 1:
-        Print("Test overlapped (per image) jaccard_index: " + str(score[1]))
         Print("VOC: " + str(voc))
         Print("DET: " + str(det))
     
