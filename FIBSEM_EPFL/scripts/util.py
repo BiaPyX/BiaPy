@@ -78,23 +78,24 @@ def create_plots(results, job_id, test_id, chartOutDir):
         os.makedirs(chartOutDir)
 
     # Loss
+    name = job_id + '_' + test_id
     plt.plot(results.history['loss'])
     plt.plot(results.history['val_loss'])
-    plt.title('Model JOBID=' + job_id + ' loss')
+    plt.title('Model JOBID=' + name + ' loss')
     plt.ylabel('Value')
     plt.xlabel('Epoch')
     plt.legend(['Train loss', 'Val. loss'], loc='upper left')
-    plt.savefig(os.path.join(chartOutDir , str(job_id) + '_loss.png'))
+    plt.savefig(os.path.join(chartOutDir , name + '_loss.png'))
     plt.clf()
 
     # Jaccard index
     plt.plot(results.history['jaccard_index'])
     plt.plot(results.history['val_jaccard_index'])
-    plt.title('Model JOBID=' + job_id + ' jaccard_index')
+    plt.title('Model JOBID=' + name + ' Jaccard Index')
     plt.ylabel('Value')
     plt.xlabel('Epoch')
     plt.legend(['Train jaccard_index', 'Val. jaccard_index'], loc='upper left')
-    plt.savefig(os.path.join(chartOutDir , str(job_id) + '_jaccard_index.png'))
+    plt.savefig(os.path.join(chartOutDir , name + '_jaccard_index.png'))
     plt.clf()
 
 
