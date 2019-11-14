@@ -114,11 +114,12 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 normalize_data = False
 norm_value_forced = -1
 custom_da = False
-keras_zoom = False
 aug_examples = True
-w_shift_r = 0.0
-h_shift_r = 0.0
-shear_range = 0.0
+keras_zoom = False # Only Keras DA
+w_shift_r = 0.0 # Only Keras DA
+h_shift_r = 0.0 # Only Keras DA
+shear_range = 0.0 # Only Keras DA
+brightness_range = [0.0, 0.0] # Keras and Custom DA
 
 # Extra train data generation
 duplicate_train = 0
@@ -335,7 +336,8 @@ if custom_da == False:
                                                         crop_length=img_width_crop,
                                                         w_shift_r=w_shift_r,    
                                                         h_shift_r=h_shift_r,    
-                                                        shear_range=shear_range)
+                                                        shear_range=shear_range,
+                                                        brightness_range=brightness_range)
 else:                                                                           
     # Calculate the probability map per image
     train_prob = None
@@ -362,7 +364,8 @@ else:
                          dim=(img_height,img_width), n_channels=1,              
                          shuffle=True, da=True, e_prob=0.0, elastic=False,      
                          vflip=True, hflip=True, rotation90=False,              
-                         rotation_range=180, crops_before_DA=crops_before_DA,   
+                         rotation_range=180, brightness_range=brightness_range,
+                         crops_before_DA=crops_before_DA, 
                          crop_length=img_width_crop, prob_map=probability_map,
                          train_prob=train_prob)                            
                                                                                 
@@ -532,8 +535,8 @@ else:
         det = DET_calculation(Y_test, merged_preds_test, det_eval_ge_path,
                               det_eval_path, det_bin, n_dig, job_id)
     else:
-        Print("As the number of overlapped crops created is 1, we will obtain" 
-              + " the (per image) Jaccard value overlapping 4 tiles with the " 
+        Print("As the number of overlapped crops created is 1, we will obtain " 
+              + "the (per image) Jaccard value overlapping 4 tiles with the " 
               + "predict_img_with_overlap function")                              
                                                                                 
         Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))                

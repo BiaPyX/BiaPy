@@ -12,9 +12,10 @@ from scipy.ndimage.interpolation import map_coordinates
 from scipy.ndimage.filters import gaussian_filter
 from scipy import ndimage
 from PIL import Image
+from PIL import ImageEnhance
 from texttable import Texttable
 from keras.preprocessing.image import ImageDataGenerator as kerasDA
-from util import Print
+from util import Print, array_to_img, img_to_array
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
@@ -684,8 +685,8 @@ class ImageDataGenerator(keras.utils.Sequence):
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
                  shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
                  hflip=False, rotation90=False, rotation_range=0.0, 
-                 crops_before_DA=False, crop_length=0, prob_map=False, 
-                 train_prob=None, val=False):
+                 brightness_range=None, crops_before_DA=False, crop_length=0, 
+                 prob_map=False, train_prob=None, val=False):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
@@ -706,6 +707,8 @@ class ImageDataGenerator(keras.utils.Sequence):
             hflip (bool, optional): if true horizontal flips are made.
             rotation90 (bool, optional): to make rotations of 90º, 180º or 270º.
             rotation_range (float, optional): range of rotation degrees.
+            brightness_range (tuple of two floats, optional): Range for picking 
+            a brightness shift value from.
             crop_after_DA (bool, optional): decide to make random crops after
             apply DA transformations.
             crop_length (int, optional): length of the random crop after DA.
@@ -731,6 +734,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.hflip = hflip
         self.rotation90 = rotation90
         self.rotation_range = rotation_range
+        self.brightness_range = brightness_range
         self.crops_before_DA = crops_before_DA
         self.crop_length = crop_length
         self.prob_map = prob_map
@@ -957,6 +961,20 @@ class ImageDataGenerator(keras.utils.Sequence):
                 transformed = True                                              
                 self.t_counter[4] += 1
 
+        if self.brightness_range is not None:
+            brightness = np.random.uniform(self.brightness_range[0],
+                                           self.brightness_range[1])
+            trans_image = array_to_img(trans_image)
+            trans_image = imgenhancer_Brightness = ImageEnhance.Brightness(trans_image)
+            trans_image = imgenhancer_Brightness.enhance(brightness)
+            trans_image = img_to_array(trans_image)
+            trans_mask = array_to_img(trans_mask)
+            trans_mask = imgenhancer_Brightness = ImageEnhance.Brightness(trans_mask)
+            trans_mask = imgenhancer_Brightness.enhance(brightness)
+            trans_mask = img_to_array(trans_mask)
+            transform_string = transform_string + '_b' + str(brightness)
+            transformed = True
+            
         if transformed == False:
             transform_string = '_none'         
 
@@ -1217,7 +1235,7 @@ def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=Non
                               height_shift_range=h_shift_r, 
                               shear_range=shear_range,
                               channel_shift_range=channel_shift_range,
-                              brightness_range=brightness_range )
+                              brightness_range=brightness_range)
         data_gen_args2 = dict(horizontal_flip=hflip, vertical_flip=vflip,       
                               fill_mode=fill_mode, rotation_range=rotation_range,          
                               zoom_range=zoom_val, width_shift_range=w_shift_r,
