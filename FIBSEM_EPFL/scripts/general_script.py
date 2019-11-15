@@ -119,7 +119,7 @@ keras_zoom = False # Only Keras DA
 w_shift_r = 0.0 # Only Keras DA
 h_shift_r = 0.0 # Only Keras DA
 shear_range = 0.0 # Only Keras DA
-brightness_range = [0.0, 0.0] # Keras and Custom DA
+brightness_range = [1.0, 1.0] # Keras and Custom DA
 
 # Extra train data generation
 duplicate_train = 0
@@ -381,7 +381,7 @@ else:
     # Generate examples of data augmentation                                    
     if aug_examples == True:                                                    
         train_generator.get_transformed_samples(10, save_to_dir=True,           
-                                                job_id=job_id)                  
+                                                job_id=os.path.join(job_id, test_id))
                                                                                 
 if crops_before_DA == True:
     img_width = img_width_crop

@@ -685,8 +685,9 @@ class ImageDataGenerator(keras.utils.Sequence):
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
                  shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
                  hflip=False, rotation90=False, rotation_range=0.0, 
-                 brightness_range=None, crops_before_DA=False, crop_length=0, 
-                 prob_map=False, train_prob=None, val=False):
+                 brightness_range=[1.0, 1.0], median_filter_size=0, 
+                 crops_before_DA=False, crop_length=0, prob_map=False, 
+                 train_prob=None, val=False):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
@@ -709,6 +710,8 @@ class ImageDataGenerator(keras.utils.Sequence):
             rotation_range (float, optional): range of rotation degrees.
             brightness_range (tuple of two floats, optional): Range for picking 
             a brightness shift value from.
+            median_filter_size (int, optional): size of the median filter. If 0 
+            no median filter will be applied. 
             crop_after_DA (bool, optional): decide to make random crops after
             apply DA transformations.
             crop_length (int, optional): length of the random crop after DA.
@@ -735,6 +738,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.rotation90 = rotation90
         self.rotation_range = rotation_range
         self.brightness_range = brightness_range
+        self.median_filter_size = median_filter_size
         self.crops_before_DA = crops_before_DA
         self.crop_length = crop_length
         self.prob_map = prob_map
@@ -961,20 +965,21 @@ class ImageDataGenerator(keras.utils.Sequence):
                 transformed = True                                              
                 self.t_counter[4] += 1
 
-        if self.brightness_range is not None:
+        # Brightness
+        if self.brightness_range != [1.0, 1.0]:
             brightness = np.random.uniform(self.brightness_range[0],
                                            self.brightness_range[1])
             trans_image = array_to_img(trans_image)
             trans_image = imgenhancer_Brightness = ImageEnhance.Brightness(trans_image)
             trans_image = imgenhancer_Brightness.enhance(brightness)
             trans_image = img_to_array(trans_image)
-            trans_mask = array_to_img(trans_mask)
-            trans_mask = imgenhancer_Brightness = ImageEnhance.Brightness(trans_mask)
-            trans_mask = imgenhancer_Brightness.enhance(brightness)
-            trans_mask = img_to_array(trans_mask)
-            transform_string = transform_string + '_b' + str(brightness)
+            transform_string = transform_string + '_b' + str(round(brightness, 1))
             transformed = True
             
+        # Median filter
+        if self.median_filter_size != 0:
+            trans_image = cv2.medianBlur(trans_image, self.median_filter_size)
+
         if transformed == False:
             transform_string = '_none'         
 
