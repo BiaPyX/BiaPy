@@ -114,12 +114,13 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 normalize_data = False
 norm_value_forced = -1
 custom_da = False
-aug_examples = True
+aug_examples = True # Only Keras DA
 keras_zoom = False # Only Keras DA
 w_shift_r = 0.0 # Only Keras DA
 h_shift_r = 0.0 # Only Keras DA
 shear_range = 0.0 # Only Keras DA
 brightness_range = [1.0, 1.0] # Keras and Custom DA
+median_filter_size = 0 # Only Custom DA
 
 # Extra train data generation
 duplicate_train = 0
@@ -365,6 +366,7 @@ else:
                          shuffle=True, da=True, e_prob=0.0, elastic=False,      
                          vflip=True, hflip=True, rotation90=False,              
                          rotation_range=180, brightness_range=brightness_range,
+                         median_filter_size=median_filter_size,
                          crops_before_DA=crops_before_DA, 
                          crop_length=img_width_crop, prob_map=probability_map,
                          train_prob=train_prob)                            

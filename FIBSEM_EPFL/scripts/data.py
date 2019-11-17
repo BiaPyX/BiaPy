@@ -973,12 +973,15 @@ class ImageDataGenerator(keras.utils.Sequence):
             trans_image = imgenhancer_Brightness = ImageEnhance.Brightness(trans_image)
             trans_image = imgenhancer_Brightness.enhance(brightness)
             trans_image = img_to_array(trans_image)
-            transform_string = transform_string + '_b' + str(round(brightness, 1))
+            transform_string = transform_string + '_b' + str(round(brightness, 2))
             transformed = True
             
         # Median filter
         if self.median_filter_size != 0:
-            trans_image = cv2.medianBlur(trans_image, self.median_filter_size)
+            trans_image = cv2.medianBlur(trans_image.astype('int16'), self.median_filter_size)
+            trans_image = np.expand_dims(trans_image, axis=-1).astype('float32') 
+            transform_string = transform_string + '_mf' + str(self.median_filter_size)
+            transformed = True
 
         if transformed == False:
             transform_string = '_none'         
