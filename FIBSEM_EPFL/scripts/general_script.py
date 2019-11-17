@@ -120,7 +120,7 @@ w_shift_r = 0.0 # Only Keras DA
 h_shift_r = 0.0 # Only Keras DA
 shear_range = 0.0 # Only Keras DA
 brightness_range = [1.0, 1.0] # Keras and Custom DA
-median_filter_size = 0 # Only Custom DA
+median_filter_size = [0, 0] # Only Custom DA
 
 # Extra train data generation
 duplicate_train = 0

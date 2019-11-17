@@ -685,7 +685,7 @@ class ImageDataGenerator(keras.utils.Sequence):
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
                  shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
                  hflip=False, rotation90=False, rotation_range=0.0, 
-                 brightness_range=[1.0, 1.0], median_filter_size=0, 
+                 brightness_range=[1.0, 1.0], median_filter_size=[0, 0], 
                  crops_before_DA=False, crop_length=0, prob_map=False, 
                  train_prob=None, val=False):
         """ImageDataGenerator constructor.
@@ -977,10 +977,14 @@ class ImageDataGenerator(keras.utils.Sequence):
             transformed = True
             
         # Median filter
-        if self.median_filter_size != 0:
-            trans_image = cv2.medianBlur(trans_image.astype('int16'), self.median_filter_size)
+        if self.median_filter_size != [0, 0]:
+            mf_size = np.random.randint(self.median_filter_size[0], 
+                                        self.median_filter_size[1])
+            if mf_size % 2 == 0:
+                mf_size += 1
+            trans_image = cv2.medianBlur(trans_image.astype('int16'), mf_size)
             trans_image = np.expand_dims(trans_image, axis=-1).astype('float32') 
-            transform_string = transform_string + '_mf' + str(self.median_filter_size)
+            transform_string = transform_string + '_mf' + str(mf_size)
             transformed = True
 
         if transformed == False:
