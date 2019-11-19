@@ -444,15 +444,27 @@ if random_crops_in_DA == False:
     # Threshold images
     bin_preds_test = (preds_test > 0.5).astype(np.uint8)
 
-    # Reconstruct the data to the original shape and calculate Jaccard
-    h_num = int(original_test_shape[0] / bin_preds_test.shape[1]) \
-            + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
-    v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
-            + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
+    # Reconstruct the data to the original shape
+    if make_crops == True:
+        h_num = int(original_test_shape[0] / bin_preds_test.shape[1]) \
+                + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
+        v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
+                + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
 
-    Y_test = mix_data(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
-                      out_shape=[h_num, v_num], grid=False)
-    Print("The shape of the test data reconstructed is " + str(Y_test.shape))
+        Y_test = mix_data(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
+                          out_shape=[h_num, v_num], grid=False)
+        Print("The shape of the test data reconstructed is " + str(Y_test.shape))
+        
+        # To calculate metrics (binarized)
+        recons_preds_test = mix_data(bin_preds_test,
+                                     math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
+                                     out_shape=[h_num, v_num], grid=False)
+
+        # To save the probabilities (no binarized)
+        recons_no_bin_preds_test = mix_data(preds_test*255,
+                                            math.ceil(preds_test.shape[0]/(h_num*v_num)),
+                                            out_shape=[h_num, v_num], grid=False)
+        recons_no_bin_preds_test = recons_no_bin_preds_test.astype(float)/255
 
     # Metric calculation
     if make_threshold_plots == True:
@@ -461,22 +473,11 @@ if random_crops_in_DA == False:
                                 score, det_eval_ge_path, det_eval_path, det_bin,
                                 n_dig, job_id, job_file, char_dir)
     else:
-        # To calculate metrics (binarized)
-        recons_preds_test = mix_data(bin_preds_test,
-                                     math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
-                                     out_shape=[h_num, v_num], grid=False)
-
         Print("Calculate metrics . . .")
         score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
         voc = voc_calculation(Y_test, recons_preds_test, score[1])
         det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path,
                               det_eval_path, det_bin, n_dig, job_id)
-
-    # To save the probabilities (no binarized)
-    recons_no_bin_preds_test = mix_data(preds_test*255,
-                                        math.ceil(preds_test.shape[0]/(h_num*v_num)),
-                                        out_shape=[h_num, v_num], grid=False)
-    recons_no_bin_preds_test = recons_no_bin_preds_test.astype(float)/255
 
     # Save output images
     if not os.path.exists(result_dir):
@@ -570,7 +571,7 @@ else:
 if (post_process == True and make_crops == True) or (random_crops_in_DA == True):
     Print("Post processing active . . .")
 
-    if random_crops_in_DA == False:
+    if random_crops_in_DA == False and make_crops == True:
         X_test = mix_data(X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
                           out_shape=[h_num, v_num], grid=False)
     
