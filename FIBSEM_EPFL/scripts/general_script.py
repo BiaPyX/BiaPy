@@ -27,7 +27,8 @@ import math
 import time
 import tensorflow as tf
 from data import load_data, crop_data, mix_data, check_crops, keras_da_generator, \
-                 ImageDataGenerator, crop_data_with_overlap, merge_data_with_overlap
+                 ImageDataGenerator, crop_data_with_overlap, merge_data_with_overlap, \
+                 calculate_z_filtering
 from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation, DET_calculation
 from itertools import chain
@@ -96,11 +97,11 @@ img_height_crop = 256
 img_channels_crop = 1 
 make_crops = True
 check_crop = True
-crops_before_DA = False # No compatible with make_crops                                                        
-test_ov_crops = 8 # Only active with crops_before_DA
-probability_map = False # Only active with crops_before_DA                       
-w_foreground = 0.9 # Only active with probability_map
-w_background = 0.1 # Only active with probability_map
+random_crops_in_DA = False # No compatible with make_crops                                                        
+test_ov_crops = 8 # Only active with random_crops_in_DA
+probability_map = False # Only active with random_crops_in_DA                       
+w_foreground = 0.94 # Only active with probability_map
+w_background = 0.06 # Only active with probability_map
 
 # Discard variables
 discard_cropped_images = False
@@ -114,7 +115,7 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 normalize_data = False
 norm_value_forced = -1
 custom_da = False
-aug_examples = True # Only Keras DA
+aug_examples = True # Keras and Custom DA
 keras_zoom = False # Only Keras DA
 w_shift_r = 0.0 # Only Keras DA
 h_shift_r = 0.0 # Only Keras DA
@@ -299,7 +300,7 @@ if extra_train_data != 0:
         _, extra_x, extra_y = keras_da_generator(X_train, Y_train,
                                                  batch_size_value, job_id=job_id,
                                                  shuffle=True,
-                                                 crops_before_DA=crops_before_DA,
+                                                 random_crops_in_DA=random_crops_in_DA,
                                                  crop_length=img_width_crop,
                                                  extra_train_data=extra_train_data)
     else:
@@ -308,7 +309,8 @@ if extra_train_data != 0:
                               dim=(img_height,img_width), n_channels=1,
                               shuffle=True, da=True, e_prob=0.0, elastic=False,
                               vflip=True, hflip=True, rotation90=False,
-                              rotation_range=0, crops_before_DA=crops_before_DA,
+                              rotation_range=0, 
+                              random_crops_in_DA=random_crops_in_DA,
                               crop_length=img_width_crop)
         extra_generator = ImageDataGenerator(**extra_gen_args)
 
@@ -333,7 +335,7 @@ if custom_da == False:
                                                         job_id=job_id,          
                                                         shuffle=False,          
                                                         zoom=keras_zoom,        
-                                                        crops_before_DA=crops_before_DA,
+                                                        random_crops_in_DA=random_crops_in_DA,
                                                         crop_length=img_width_crop,
                                                         w_shift_r=w_shift_r,    
                                                         h_shift_r=h_shift_r,    
@@ -367,14 +369,14 @@ else:
                          vflip=True, hflip=True, rotation90=False,              
                          rotation_range=180, brightness_range=brightness_range,
                          median_filter_size=median_filter_size,
-                         crops_before_DA=crops_before_DA, 
+                         random_crops_in_DA=random_crops_in_DA, 
                          crop_length=img_width_crop, prob_map=probability_map,
                          train_prob=train_prob)                            
                                                                                 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,     
                              dim=(img_height,img_width), n_channels=1,          
                              shuffle=False, da=False,                           
-                             crops_before_DA=crops_before_DA,                   
+                             random_crops_in_DA=random_crops_in_DA,                   
                              crop_length=img_width_crop, val=True)              
                                                                                 
     train_generator = ImageDataGenerator(**data_gen_args)                       
@@ -385,7 +387,7 @@ else:
         train_generator.get_transformed_samples(10, save_to_dir=True,           
                                                 job_id=os.path.join(job_id, test_id))
                                                                                 
-if crops_before_DA == True:
+if random_crops_in_DA == True:
     img_width = img_width_crop
     img_height = img_height_crop
 
@@ -428,7 +430,7 @@ else:
 #    PREDICTION     #
 #####################
 
-if crops_before_DA == False:
+if random_crops_in_DA == False:
     # Evaluate to obtain the loss value (the metric value will be discarded)
     Print("Evaluating test data . . .")
     score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, 
@@ -565,10 +567,10 @@ else:
 #  POST-PROCESING  #
 ####################
 
-if (post_process == True and make_crops == True) or (crops_before_DA == True):
+if (post_process == True and make_crops == True) or (random_crops_in_DA == True):
     Print("Post processing active . . .")
 
-    if crops_before_DA == False:
+    if random_crops_in_DA == False:
         X_test = mix_data(X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
                           out_shape=[h_num, v_num], grid=False)
     
@@ -603,6 +605,13 @@ if (post_process == True and make_crops == True) or (crops_before_DA == True):
 
     Print("Finish post-processing")
 
+if post_process == True:
+    bin_preds_test = calculate_z_filtering(bin_preds_test)
+    zfil_score = jaccard_index_numpy(Y_test, bin_preds_test)
+    zfil_voc = voc_calculation(Y_test, bin_preds_test, zfil_score)
+    zfil_det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
+                                 det_eval_post_path, det_bin, n_dig, job_id)
+    
 
 ####################################
 #  PRINT AND SAVE SCORES OBTAINED  #
@@ -618,7 +627,7 @@ if load_previous_weights == False:
     Print("Validation jaccard_index: " + str(np.max(results.history['val_jaccard_index'])))
     Print("Test loss: " + str(score[0]))
     
-if crops_before_DA == False:    
+if random_crops_in_DA == False:    
     Print("Test (per crop) jaccard_index: " + str(jac_per_crop))
     Print("Test (per image) jaccard_index: " + str(score[1]))
     Print("VOC: " + str(voc))
@@ -637,17 +646,29 @@ if load_previous_weights == False:
         smooth_voc = -1
     if 'smooth_det' not in locals() or 'smooth_det' not in globals():
         smooth_det = -1
+    if 'zfil_score' not in locals() or 'zfil_score' not in globals():
+        zfil_score = -1
+    if 'zfil_voc' not in locals() or 'zfil_voc' not in globals():
+        zfil_voc = -1
+    if 'zfil_det' not in locals() or 'zfil_det' not in globals():
+        zfil_det = -1
     if 'jac_per_crop' not in locals() or 'jac_per_crop' not in globals():
         jac_per_crop = -1
     
     store_history(results, jac_per_crop, score, voc, det, time_callback, log_dir,
-                  job_file, smooth_score, smooth_voc, smooth_det)
+                  job_file, smooth_score, smooth_voc, smooth_det, zfil_score, 
+                  zfil_voc, zfil_det)
 
     create_plots(results, job_id, test_id, char_dir)
 
-if (post_process == True and make_crops == True) or (crops_before_DA == True):
+if (post_process == True and make_crops == True) or (random_crops_in_DA == True):
     Print("Post-process: SMOOTH - Test jaccard_index: " + str(smooth_score))
     Print("Post-process: SMOOTH - VOC: " + str(smooth_voc))
     Print("Post-process: SMOOTH - DET: " + str(smooth_det))
+
+if post_process == True:
+    Print("Post-process: Z-filtering - Test jaccard_index: " + str(zfil_score))
+    Print("Post-process: Z-filtering - VOC: " + str(zfil_voc))
+    Print("Post-process: Z-filtering - DET: " + str(zfil_det))
 
 Print("FINISHED JOB " + job_file + " !!")

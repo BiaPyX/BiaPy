@@ -686,7 +686,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                  shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
                  hflip=False, rotation90=False, rotation_range=0.0, 
                  brightness_range=[1.0, 1.0], median_filter_size=[0, 0], 
-                 crops_before_DA=False, crop_length=0, prob_map=False, 
+                 random_crops_in_DA=False, crop_length=0, prob_map=False, 
                  train_prob=None, val=False):
         """ImageDataGenerator constructor.
                                                                                 
@@ -695,7 +695,7 @@ class ImageDataGenerator(keras.utils.Sequence):
             Y (Numpy array): mask data.                             
             batch_size (int, optional): size of the batches.
             dim (tuple, optional): dimension of the desired images. As no effect 
-            if crops_before_DA is active, as the dimension will be selected by 
+            if random_crops_in_DA is active, as the dimension will be selected by 
             that variable instead.
             n_channels (int, optional): number of channels of the input images.
             shuffle (bool, optional): to decide if the indexes will be shuffled
@@ -712,7 +712,8 @@ class ImageDataGenerator(keras.utils.Sequence):
             a brightness shift value from.
             median_filter_size (int, optional): size of the median filter. If 0 
             no median filter will be applied. 
-            crop_after_DA (bool, optional): decide to make random crops after
+            random_crops_in_DA (bool, optional): decide to make random crops in 
+            DA (before transformations).
             apply DA transformations.
             crop_length (int, optional): length of the random crop after DA.
             prob_map (bool, optional): take the crop center based on a given    
@@ -739,14 +740,14 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.rotation_range = rotation_range
         self.brightness_range = brightness_range
         self.median_filter_size = median_filter_size
-        self.crops_before_DA = crops_before_DA
+        self.random_crops_in_DA = random_crops_in_DA
         self.crop_length = crop_length
         self.prob_map = prob_map
         self.train_prob = train_prob
         self.val = val
         self.on_epoch_end()
         
-        if self.X.shape[1] == self.X.shape[2] or self.crops_before_DA == True:
+        if self.X.shape[1] == self.X.shape[2] or self.random_crops_in_DA == True:
             self.squared = True
         else:
             self.squared = False
@@ -757,7 +758,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         # transformation is performed. 
         self.t_counter = [0 ,0 ,0 ,0 ,0 ,0] 
 
-        if self.crops_before_DA == True:
+        if self.random_crops_in_DA == True:
             self.dim = (self.crop_length, self.crop_length)
 
     def __len__(self):
@@ -783,7 +784,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
         for i, j in zip(range(0,self.batch_size), indexes):
             if self.da == False: 
-                if self.crops_before_DA == True:
+                if self.random_crops_in_DA == True:
                     batch_x[i], batch_y[i] = random_crop(self.X[j], self.Y[j], 
                                                          (self.crop_length, self.crop_length),
                                                          self.val, 
@@ -792,7 +793,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                 else:
                     batch_x[i], batch_y[i] = self.X[j], self.Y[j]
             else:
-                if self.crops_before_DA == True:
+                if self.random_crops_in_DA == True:
                     batch_x[i], batch_y[i] = random_crop(self.X[j], self.Y[j],
                                                          (self.crop_length, self.crop_length), 
                                                          self.val,
@@ -1025,7 +1026,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
         Print("[TR-SAMPLES] Creating the examples of data augmentation . . .")
 
-        if self.crops_before_DA == True:
+        if self.random_crops_in_DA == True:
             batch_x = np.zeros((num_examples, self.crop_length, self.crop_length,
                                 self.X.shape[3]), dtype=np.int16)                                  
             batch_y = np.zeros((num_examples, self.crop_length, self.crop_length,
@@ -1053,7 +1054,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                 pos = cont 
 
             # Apply crops if selected
-            if self.crops_before_DA == True:
+            if self.random_crops_in_DA == True:
                 batch_x[i], batch_y[i], ox, oy,\
                 s_x, s_y = random_crop(self.X[pos], self.Y[pos],
                                        (self.crop_length, self.crop_length),
@@ -1080,7 +1081,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
                 # Save the original images with a point that represents the 
                 # selected coordinates to be the center of the crop
-                if self.crops_before_DA == True and self.prob_map == True:
+                if self.random_crops_in_DA == True and self.prob_map == True:
                     im = Image.fromarray(self.X[pos,:,:,0]) 
                     im = im.convert('RGB')                                                  
                     px = im.load()                                                          
@@ -1173,7 +1174,7 @@ def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=Non
                        channel_shift_range=0.0, shuffle=True,
                        featurewise_std_normalization=False, zoom=False,         
                        w_shift_r=0.0, h_shift_r=0.0, shear_range=0,
-                       crops_before_DA=False, crop_length=0, extra_train_data=0):             
+                       random_crops_in_DA=False, crop_length=0, extra_train_data=0):             
                                                                                 
     """Makes data augmentation of the given input data.                         
                                                                                 
@@ -1208,8 +1209,8 @@ def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=Non
             h_shift_r (float, optional): height shift range.
             shear_range (float, optional): range to apply shearing 
             transformations. 
-            crops_before_DA (bool, optional): decide to make random crops before
-            apply DA transformations.                                           
+            random_crops_in_DA (bool, optional): decide to make random crops 
+            in DA (after transformations).                                           
             crop_length (int, optional): length of the random crop before DA. 
             extra_train_data (int, optional): number of training extra data to
             be created. 
@@ -1306,7 +1307,7 @@ def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=Non
     if X_val is not None:
         val_generator = zip(X_val_flow, Y_val_flow)
                                                                    
-    if crops_before_DA == True:                                                
+    if random_crops_in_DA == True:                                                
         train_generator = crop_generator(train_generator, crop_length)
         if X_val is not None:
             val_generator = crop_generator(val_generator, crop_length, val=True)
@@ -1422,4 +1423,20 @@ def random_crop(img, mask, random_crop_size, val=False, prob_map=False,
         return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :], ox, oy, x, y
     else:
         return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :]
+
+
+def calculate_z_filtering(data, mf_size=5):
+    
+    # Must be odd
+    if mf_size % 2 == 0:
+       mf_size += 1
+
+    for i in range(0, data.shape[2]):
+        sl = data[:, :, i, 0]     
+        sl = np.reshape(sl, (data.shape[1],data.shape[0]))
+        sl = cv2.medianBlur(sl, mf_size)
+        sl = np.reshape(sl, (data.shape[0],data.shape[1]))
+        data[:, :, i] = np.expand_dims(sl, axis=-1)
+        
+    return data
 

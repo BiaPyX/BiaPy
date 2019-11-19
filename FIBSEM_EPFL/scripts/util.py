@@ -102,7 +102,8 @@ def create_plots(results, job_id, test_id, chartOutDir):
 
 
 def store_history(results, jac_per_crop, test_score, voc, det, time_callback, log_dir, 
-                  job_file, smooth_score, smooth_voc, smooth_det):
+                  job_file, smooth_score, smooth_voc, smooth_det, zfil_score, 
+                  zfil_voc, zfil_det):
     """Stores the results obtained as csv to manipulate them later 
        and labeled in another file as historic results.
 
@@ -120,6 +121,9 @@ def store_history(results, jac_per_crop, test_score, voc, det, time_callback, lo
             smooth_score (float): main metric obtained with smooth results.
             smooth_voc (float): VOC metric obtained with smooth results.
             smooth_det (float): DET metric obtained with smooth results.
+            zfil_score (float): main metric obtained with Z-filtering results.
+            zfil_voc (float): VOC metric obtained with Z-filtering results.
+            zfil_det (float): DET metric obtained with Z-filtering results.
     """
 
     # Create folders and construct file names
@@ -144,10 +148,13 @@ def store_history(results, jac_per_crop, test_score, voc, det, time_callback, lo
             + str(jac_per_crop) + ',' 
             + str(test_score[1]) + ',' 
             + str(smooth_score) + ','
+            + str(zfil_score) + ','
             + str(voc) + ','
             + str(smooth_voc) + ','
+            + str(zfil_voc) + ','
             + str(det) + ','
             + str(smooth_det) + ','
+            + str(zfil_det) + ','
             + str(len(results.history['val_loss'])) + ',' 
             + str(np.mean(time_callback.times)) + ','
             + str(np.sum(time_callback.times)) + '\n')
@@ -175,14 +182,20 @@ def store_history(results, jac_per_crop, test_score, voc, det, time_callback, lo
     f.write(str(test_score[1]) + '\n')
     f.write('############## TEST JACCARD INDEX SMOOTH ############## \n')
     f.write(str(smooth_score) + '\n')
+    f.write('############## TEST JACCARD INDEX Z-FILTERING ############## \n')
+    f.write(str(zfil_score) + '\n')
     f.write('############## VOC ############## \n')
     f.write(str(voc) + '\n')
     f.write('############## VOC SMOOTH ############## \n')
     f.write(str(smooth_voc) + '\n')
+    f.write('############## VOC Z-FILTERING ############## \n')
+    f.write(str(zfil_voc) + '\n')
     f.write('############## DET ############## \n')
     f.write(str(det) + '\n')
     f.write('############## DET SMOOTH ############## \n')
     f.write(str(smooth_det) + '\n')
+    f.write('############## DET Z-FILTERING ############## \n')
+    f.write(str(zfil_det) + '\n')
     f.close()
 
 
