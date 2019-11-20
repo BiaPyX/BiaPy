@@ -307,12 +307,14 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
     Print("[OV-CROP] The minimum overlap has been found with rows=" + str(rows) \
           + " and columns=" + str(columns))
 
-    assert window_size*rows >= data.shape[1], "Error: total width of all the "\
-            + "crops per row must be greater or equal " + str(data.shape[1])\
-            + " and it is only " + str(window_size*rows)
-    assert window_size*columns >= data.shape[2], "Error: total width of all the"\
-            + "crops per column must be greater or equal " + str(data.shape[2])\
-            + " and it is only " + str(window_size*columns)
+    if subdivision != 1:
+        assert window_size*rows >= data.shape[1], "Error: total width of all the"\
+                + " crops per row must be greater or equal " + str(data.shape[1])\
+                + " and it is only " + str(window_size*rows)
+        assert window_size*columns >= data.shape[2], "Error: total width of all"\
+                " the crops per column must be greater or equal " \
+                + str(data.shape[2]) + " and it is only " \
+                + str(window_size*columns)
 
     # Calculate the amount of overlap, the division remainder to obtain an 
     # offset to adjust the last crop and the step size. All of this values per
@@ -1433,17 +1435,17 @@ def random_crop(img, mask, random_crop_size, val=False, prob_map=False,
 
 
 def calculate_z_filtering(data, mf_size=5):
-    
+   
+    out_data = np.copy(data) 
+
     # Must be odd
     if mf_size % 2 == 0:
        mf_size += 1
 
     for i in range(0, data.shape[2]):
         sl = data[:, :, i, 0]     
-        sl = np.reshape(sl, (data.shape[1],data.shape[0]))
         sl = cv2.medianBlur(sl, mf_size)
-        sl = np.reshape(sl, (data.shape[0],data.shape[1]))
-        data[:, :, i] = np.expand_dims(sl, axis=-1)
+        out_data[:, :, i] = np.expand_dims(sl, axis=-1)
         
-    return data
+    return out_data
 
