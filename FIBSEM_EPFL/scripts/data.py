@@ -311,7 +311,7 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
             + "crops per row must be greater or equal " + str(data.shape[1])\
             + " and it is only " + str(window_size*rows)
     assert window_size*columns >= data.shape[2], "Error: total width of all the"\
-            + "crops per row must be greater or equal " + str(data.shape[2])\
+            + "crops per column must be greater or equal " + str(data.shape[2])\
             + " and it is only " + str(window_size*columns)
 
     # Calculate the amount of overlap, the division remainder to obtain an 
