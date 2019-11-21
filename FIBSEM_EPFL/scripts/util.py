@@ -103,7 +103,7 @@ def create_plots(results, job_id, test_id, chartOutDir):
 
 def store_history(results, jac_per_crop, test_score, voc, det, time_callback, log_dir, 
                   job_file, smooth_score, smooth_voc, smooth_det, zfil_score, 
-                  zfil_voc, zfil_det):
+                  zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det):
     """Stores the results obtained as csv to manipulate them later 
        and labeled in another file as historic results.
 
@@ -124,6 +124,9 @@ def store_history(results, jac_per_crop, test_score, voc, det, time_callback, lo
             zfil_score (float): main metric obtained with Z-filtering results.
             zfil_voc (float): VOC metric obtained with Z-filtering results.
             zfil_det (float): DET metric obtained with Z-filtering results.
+            smo_zfil_score (float): main metric obtained with smooth and Z-filtering results.
+            smo_zfil_voc (float): VOC metric obtained with smooth and Z-filtering results.
+            smo_zfil_det (float): DET metric obtained with smooth and Z-filtering results.
     """
 
     # Create folders and construct file names
@@ -149,12 +152,15 @@ def store_history(results, jac_per_crop, test_score, voc, det, time_callback, lo
             + str(test_score[1]) + ',' 
             + str(smooth_score) + ','
             + str(zfil_score) + ','
+            + str(smo_zfil_score) + ','
             + str(voc) + ','
             + str(smooth_voc) + ','
             + str(zfil_voc) + ','
+            + str(smo_zfil_voc) + ','
             + str(det) + ','
             + str(smooth_det) + ','
             + str(zfil_det) + ','
+            + str(smo_zfil_det) + ','
             + str(len(results.history['val_loss'])) + ',' 
             + str(np.mean(time_callback.times)) + ','
             + str(np.sum(time_callback.times)) + '\n')
@@ -184,18 +190,24 @@ def store_history(results, jac_per_crop, test_score, voc, det, time_callback, lo
     f.write(str(smooth_score) + '\n')
     f.write('############## TEST JACCARD INDEX Z-FILTERING ############## \n')
     f.write(str(zfil_score) + '\n')
+    f.write('############## TEST JACCARD INDEX SMOOTH+Z-FILTERING ############## \n')
+    f.write(str(smo_zfil_score) + '\n')
     f.write('############## VOC ############## \n')
     f.write(str(voc) + '\n')
     f.write('############## VOC SMOOTH ############## \n')
     f.write(str(smooth_voc) + '\n')
     f.write('############## VOC Z-FILTERING ############## \n')
     f.write(str(zfil_voc) + '\n')
+    f.write('############## VOC SMOOTH+Z-FILTERING ############## \n')
+    f.write(str(smo_zfil_voc) + '\n')
     f.write('############## DET ############## \n')
     f.write(str(det) + '\n')
     f.write('############## DET SMOOTH ############## \n')
     f.write(str(smooth_det) + '\n')
     f.write('############## DET Z-FILTERING ############## \n')
     f.write(str(zfil_det) + '\n')
+    f.write('############## DET SMOOTH+Z-FILTERING ############## \n')
+    f.write(str(smo_zfil_det) + '\n')
     f.close()
 
 
