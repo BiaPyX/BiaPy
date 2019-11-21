@@ -568,6 +568,7 @@ else:
 #  POST-PROCESING  #
 ####################
 
+# 1) SMOOTH
 if (post_process == True and make_crops == True) or (random_crops_in_DA == True):
     Print("Post processing active . . .")
 
@@ -604,15 +605,40 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
     smooth_det = DET_calculation(Y_test, Y_test_smooth, det_eval_ge_path,
                                  det_eval_post_path, det_bin, n_dig, job_id)
 
-    Print("Finish post-processing")
-
+# 2) Z-FILTERING
 if post_process == True:
-    bin_preds_test = calculate_z_filtering(bin_preds_test)
-    zfil_score = jaccard_index_numpy(Y_test, bin_preds_test)
-    zfil_voc = voc_calculation(Y_test, bin_preds_test, zfil_score)
-    zfil_det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
-                                 det_eval_post_path, det_bin, n_dig, job_id)
-    
+    zfil_preds_test = None
+    smooth_zfil_preds_test = None
+
+    if random_crops_in_DA == False:
+        Print("Applying Z-filter . . .")
+        zfil_preds_test = calculate_z_filtering(recons_preds_test)
+    else:
+        if test_ov_crops > 1:
+            Print("Applying Z-filter . . .")
+            zfil_preds_test = calculate_z_filtering(merged_preds_test)
+
+    if zfil_preds_test is not None:
+        Print("Calculate metrics for the Z-filtered data . . .")
+        zfil_score = jaccard_index_numpy(Y_test, zfil_preds_test)
+        zfil_voc = voc_calculation(Y_test, zfil_preds_test, zfil_score)
+        zfil_det = DET_calculation(Y_test, zfil_preds_test, det_eval_ge_path,
+                                   det_eval_post_path, det_bin, n_dig, job_id)
+
+    if Y_test_smooth is not None:
+        Print("Applying Z-filter to the smoothed data . . .")
+        smooth_zfil_preds_test = calculate_z_filtering(Y_test_smooth)
+
+        Print("Calculate metrics for the smoothed + Z-filtered data . . .")
+        smo_zfil_score = jaccard_index_numpy(Y_test, smooth_zfil_preds_test)
+        smo_zfil_voc = voc_calculation(Y_test, smooth_zfil_preds_test,
+                                       smo_zfil_score)
+        smo_zfil_det = DET_calculation(Y_test, smooth_zfil_preds_test,
+                                       det_eval_ge_path, det_eval_post_path,
+                                       det_bin, n_dig, job_id)
+
+
+Print("Finish post-processing") 
 
 ####################################
 #  PRINT AND SAVE SCORES OBTAINED  #
@@ -620,7 +646,7 @@ if post_process == True:
 
 if load_previous_weights == False:
     Print("Epoch average time: " + str(np.mean(time_callback.times)))
-    Print("Epoch number: " +  str(len(results.history['val_loss'])))
+    Print("Epoch number: " + str(len(results.history['val_loss'])))
     Print("Train time (s): " + str(np.sum(time_callback.times)))
     Print("Train loss: " + str(np.min(results.history['loss'])))
     Print("Train jaccard_index: " + str(np.max(results.history['jaccard_index'])))
@@ -653,12 +679,18 @@ if load_previous_weights == False:
         zfil_voc = -1
     if 'zfil_det' not in locals() or 'zfil_det' not in globals():
         zfil_det = -1
+    if 'smo_zfil_score' not in locals() or 'zfil_score' not in globals():
+        smo_zfil_score = -1
+    if 'smo_zfil_voc' not in locals() or 'zfil_voc' not in globals():
+        smo_zfil_voc = -1
+    if 'smo_zfil_det' not in locals() or 'zfil_det' not in globals():
+        smo_zfil_det = -1
     if 'jac_per_crop' not in locals() or 'jac_per_crop' not in globals():
         jac_per_crop = -1
-    
+
     store_history(results, jac_per_crop, score, voc, det, time_callback, log_dir,
-                  job_file, smooth_score, smooth_voc, smooth_det, zfil_score, 
-                  zfil_voc, zfil_det)
+                  job_file, smooth_score, smooth_voc, smooth_det, zfil_score,
+                  zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
 
     create_plots(results, job_id, test_id, char_dir)
 
@@ -667,9 +699,15 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
     Print("Post-process: SMOOTH - VOC: " + str(smooth_voc))
     Print("Post-process: SMOOTH - DET: " + str(smooth_det))
 
-if post_process == True:
+if post_process == True and zfil_preds_test is not None:
     Print("Post-process: Z-filtering - Test jaccard_index: " + str(zfil_score))
     Print("Post-process: Z-filtering - VOC: " + str(zfil_voc))
     Print("Post-process: Z-filtering - DET: " + str(zfil_det))
+
+if post_process == True and smooth_zfil_preds_test is not None:
+    Print("Post-process: SMOOTH + Z-filtering - Test jaccard_index: "
+          + str(smo_zfil_score))
+    Print("Post-process: SMOOTH + Z-filtering - VOC: " + str(smo_zfil_voc))
+    Print("Post-process: SMOOTH + Z-filtering - DET: " + str(smo_zfil_det))
 
 Print("FINISHED JOB " + job_file + " !!")
