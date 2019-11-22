@@ -82,7 +82,7 @@ test_mask_path = os.path.join('data', 'test', 'y')
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. Be sure to take care of this if you are not going to
 # use crop_data() with the arg force_shape, as this function resolves the 
-# problem creating lways crops of the same dimension
+# problem creating always crops of the same dimension
 img_train_width = 1024
 img_train_height = 768
 img_train_channels = 1
@@ -431,7 +431,7 @@ else:
 #####################
 
 if random_crops_in_DA == False:
-    # Evaluate to obtain the loss value (the metric value will be discarded)
+    # Evaluate to obtain the loss value and the Jaccard index (per crop)
     Print("Evaluating test data . . .")
     score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, 
                            verbose=1)
@@ -558,10 +558,10 @@ else:
             Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)      
                                                                                 
         score[1] = jaccard_index_numpy(Y_test, Y_test_smooth)                   
+        voc = voc_calculation(Y_test, Y_test_smooth, score[1])
+        det = DET_calculation(Y_test, Y_test_smooth, det_eval_ge_path,
+                              det_eval_path, det_bin, n_dig, job_id)
         del Y_test_smooth                                                       
-                                                                                
-        voc = -1                                                                
-        det = -1
 
     
 ####################
@@ -637,8 +637,8 @@ if post_process == True:
                                        det_eval_ge_path, det_eval_post_path,
                                        det_bin, n_dig, job_id)
 
-
 Print("Finish post-processing") 
+
 
 ####################################
 #  PRINT AND SAVE SCORES OBTAINED  #
