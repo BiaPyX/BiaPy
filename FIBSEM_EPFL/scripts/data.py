@@ -1435,6 +1435,16 @@ def random_crop(img, mask, random_crop_size, val=False, prob_map=False,
 
 
 def calculate_z_filtering(data, mf_size=5):
+    """Applies a median filtering in the z dimension of the provided data.
+
+       Args:
+            data (4D Numpy array): data to apply the filter to.
+            mf_size (int, optional): size of the median filter. Must be an odd 
+            number.
+       Returns:
+            out_data (4D Numpy array): data resulting from the application of   
+            the median filter.
+    """
    
     out_data = np.copy(data) 
 
