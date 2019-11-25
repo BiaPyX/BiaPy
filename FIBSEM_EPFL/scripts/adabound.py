@@ -1,7 +1,9 @@
 from keras import backend as K
 from keras.optimizers import Optimizer
 
-
+#
+# CODE EXTRACTED FROM: https://github.com/Luolc/AdaBound
+#
 class AdaBound(Optimizer):
     """AdaBound optimizer.
 
