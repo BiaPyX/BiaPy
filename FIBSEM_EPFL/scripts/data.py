@@ -19,8 +19,11 @@ from util import Print, array_to_img, img_to_array
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
-              val_split=0.1, shuffle_val=True, seedValue=42, numOutputChannels=1):
-              
+              val_split=0.1, shuffle_val=True, seedValue=42, 
+              job_id="none_job_id", e_d_data=[], e_d_mask=[], e_d_data_dim=[], 
+              crop_shape=None, check_crop=True, 
+              d_percentage=0, tab=""):         
+
     """Load train, validation and test data from the given paths. If the images 
        to be loaded are smaller than the given dimension it will be sticked in 
        the (0, 0).
@@ -38,7 +41,24 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             seedValue (int, optional): seed value.
             shuffle_val (bool, optional): take random training examples to      
             create validation data.
-            numOutputChannels (int, optional): number of output channels.
+            job_id (str, optional): job identifier. If any provided the examples
+            of the check_crop function will be generated under a folder 
+            'check_crops/none_job_id'.
+            e_d_data (list of str, optional): list of paths where the extra data
+            of other datasets are stored.
+            e_d_mask (list of str, optional): list of paths where the extra data
+            mask of other datasets are stored.
+            e_d_data_dim (list of int tuple, optional): list of shapes of the 
+            extra datasets provided. 
+            crop_shape (tuple of int, optional): shape of the crops. If any 
+            provided no crops will be made.
+            check_crop (bool, optional): to save the crops made to ensure they
+            are generating as one wish.
+            d_percentage (int, optional): number between 0 and 100. The images
+            that have less foreground pixels than the given number will be
+            discarded.
+            tab (str, optional): tabulation mark to add at the begining of the 
+            prints.
                                                                         
        Returns:                                                         
             X_train (Numpy array): train images.                    
@@ -48,9 +68,11 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             (create_val==True).
             X_test (Numpy array): test images.                      
             Y_test (Numpy array): test images' mask.                
+            norm_value (int): normalization value calculated.
+            crop_made (bool): True if crops have been made.
     """      
     
-    Print("Loading images . . .")
+    Print(tab + "### LOAD ###")
                                                                         
     train_ids = sorted(next(os.walk(train_path))[2])                    
     train_mask_ids = sorted(next(os.walk(train_mask_path))[2])          
@@ -63,18 +85,18 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                         image_train_shape[0], image_train_shape[2]),
                         dtype=np.int16)                
     Y_train = np.zeros((len(train_mask_ids), image_train_shape[1], 
-                        image_train_shape[0], numOutputChannels),
+                        image_train_shape[0], image_train_shape[2]),
                         dtype=np.int16) 
                                                                         
-    Print("[LOAD] Loading train images . . .") 
-    for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):     
+    Print(tab + "0) Loading train images . . .") 
+    for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids), desc=tab):     
         img = imread(os.path.join(train_path, id_))                     
         if len(img.shape) == 2:
             img = np.expand_dims(img, axis=-1)
         X_train[n,:,:,:] = img
 
-    Print('[LOAD] Loading train masks . . .')
-    for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids)):                      
+    Print(tab + "1) Loading train masks . . .")
+    for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids), desc=tab):                      
         mask = imread(os.path.join(train_mask_path, id_))               
         if len(mask.shape) == 2:
             mask = np.expand_dims(mask, axis=-1)
@@ -86,17 +108,17 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     X_test = np.zeros((len(test_ids), image_test_shape[1], image_test_shape[0],
                       image_test_shape[2]), dtype=np.int16)                 
     Y_test = np.zeros((len(test_mask_ids), image_test_shape[1], 
-                       image_test_shape[0], numOutputChannels), dtype=np.int16)
+                       image_test_shape[0], image_test_shape[2]), dtype=np.int16)
                                                                         
-    Print("[LOAD] Loading test images . . .")
-    for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):       
+    Print(tab + "2) Loading test images . . .")
+    for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids), desc=tab):       
         img = imread(os.path.join(test_path, id_))                      
         if len(img.shape) == 2:
             img = np.expand_dims(img, axis=-1)
         X_test[n,:,:,:] = img
 
-    Print("[LOAD] Loading test masks . . .")
-    for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids)):                       
+    Print(tab + "3) Loading test masks . . .")
+    for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids), desc=tab):                       
         mask = imread(os.path.join(test_mask_path, id_))                
         if len(mask.shape) == 2:
             mask = np.expand_dims(mask, axis=-1)
@@ -104,24 +126,118 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                                                                         
     Y_test = Y_test/255                                                 
     
+    # Crop the data
+    if crop_shape is not None:
+        Print(tab + "4) Crop data activated . . .")
+        Print(tab + "    4.1) Cropping train data . . .")
+        X_train, Y_train, _ = crop_data(X_train, Y_train, crop_shape, 
+                                              d_percentage=d_percentage, 
+                                              tab=tab + "    ")    
+        Print(tab + "    4.2) Cropping test data . . .")
+        X_test, Y_test, _ = crop_data(X_test, Y_test, crop_shape, 
+                                      tab=tab + "    ")
+        
+        if check_crop == True:
+            Print(tab + "    4.3) Checking the crops . . .")
+            check_crops(X_train, [image_test_shape[1], image_test_shape[0]],
+                        num_examples=3, out_dir="check_crops", job_id=job_id, 
+                        suffix="_x_", grid=True, tab=tab + "    ")
+            check_crops(Y_train, [image_test_shape[1], image_test_shape[0]],
+                        num_examples=3, out_dir="check_crops", job_id=job_id, 
+                        suffix="_y_", grid=True, tab=tab + "    ")
+        
+        image_test_shape[1] = crop_shape[1]
+        image_test_shape[0] = crop_shape[0]
+        crop_made = True
+    else:
+        crop_made = False
+        
+    # Load the extra datasets
+    if e_d_data:
+        Print(tab + "5) Loading extra datasets . . .")
+        for i in range(len(e_d_data)):
+            Print(tab + "    5." + str(i) + ") extra dataset in " 
+                  + str(e_d_data[i]) + " . . .")
+            train_ids = sorted(next(os.walk(e_d_data[i]))[2])
+            train_mask_ids = sorted(next(os.walk(e_d_mask[i]))[2])
+
+            d_dim = e_d_data_dim[i]
+            e_X_train = np.zeros((len(train_ids), d_dim[1], d_dim[0], d_dim[2]),
+                                 dtype=np.int16)
+            e_Y_train = np.zeros((len(train_mask_ids), d_dim[1], d_dim[0], 
+                                 d_dim[2]), dtype=np.int16)
+
+            Print(tab + "    5." + str(i) + ") Loading data of the extra "
+                  + "dataset . . .")
+            for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids), desc=tab):
+                im = imread(os.path.join(e_d_data[i], id_))
+                if len(im.shape) == 2:
+                    im = np.expand_dims(im, axis=-1)
+                e_X_train[n,:,:,:] = im
+
+            Print(tab + "    5." + str(i) + ") Loading masks of the extra "
+                  + "dataset . . .")
+            for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids), desc=tab):
+                mask = imread(os.path.join(e_d_mask[i], id_))
+                if len(mask.shape) == 2:
+                    mask = np.expand_dims(mask, axis=-1)
+                e_Y_train[n,:,:,:] = mask
+
+            e_Y_train = e_Y_train/255
+
+            if crop_shape is None:
+                assert d_dim[1] == image_test_shape[1] and \
+                       d_dim[0] == image_test_shape[0], "Error: "\
+                       + "extra dataset shape (" + str(d_dim) + ") is "\
+                       + "not equal the original dataset shape ("\
+                       + str(image_test_shape[1]) + ", "\
+                       + str(image_test_shape[0]) + ")"        
+            else:
+                Print(tab + "    5." + str(i) + ") Cropping the extra dataset"
+                      + " . . .")
+                e_X_train, e_Y_train, _ = crop_data(e_X_train, e_Y_train, 
+                                                    crop_shape, 
+                                                    d_percentage=d_percentage,
+                                                    tab=tab + "    ")
+
+                if check_crop == True:
+                    Print(tab + "    5." + str(i) + ") Checking the crops of the"
+                          + " extra dataset . . .")
+                    check_crops(e_X_train, [d_dim[1], d_dim[0]], num_examples=3, 
+                                out_dir="check_crops", job_id=job_id, 
+                                suffix="_e" + str(i) + "x_", grid=True, 
+                                tab=tab + "    ")
+                    check_crops(e_Y_train, [d_dim[1], d_dim[0]], num_examples=3,
+                                out_dir="check_crops", job_id=job_id, 
+                                suffix="_e" + str(i) + "y_", grid=True,
+                                tab=tab + "    ")
+
+            # Concatenate datasets
+            X_train = np.vstack((X_train, e_X_train))
+            Y_train = np.vstack((Y_train, e_Y_train))
+
+    # Calculate normalization value
     norm_value = np.mean(X_train)
- 
+
     if create_val == True:                                            
-        X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train,
-                                                          test_size=val_split,
-                                                          shuffle=shuffle_val,
-                                                          random_state=seedValue)      
+        X_train, X_val, \
+        Y_train, Y_val = train_test_split(X_train, Y_train, test_size=val_split,
+                                          shuffle=shuffle_val, 
+                                          random_state=seedValue)      
 
-        Print("[LOAD] Loaded train data shape is: " + str(X_train.shape))
-        Print("[LOAD] Loaded test data shape is: " + str(X_test.shape))
-        Print("[LOAD] Loaded validation data shape is: " + str(X_val.shape))
+        Print(tab + "*** Loaded train data shape is: " + str(X_train.shape))
+        Print(tab + "*** Loaded test data shape is: " + str(X_test.shape))
+        Print(tab + "*** Loaded validation data shape is: " + str(X_val.shape))
+        Print(tab + "### END LOAD ###")
 
-        return X_train, Y_train, X_val, Y_val, X_test, Y_test, norm_value
+        return X_train, Y_train, X_val, Y_val, X_test, Y_test, norm_value,\
+               crop_made
     else:                                                               
-        Print("[LOAD] Loaded train data shape is: " + str(X_train.shape))
-        Print("[LOAD] Loaded test data shape is: " + str(X_test.shape))
+        Print(tab + "*** Loaded train data shape is: " + str(X_train.shape))
+        Print(tab + "*** Loaded test data shape is: " + str(X_test.shape))
+        Print(tab + "### END LOAD ###")
 
-        return X_train, Y_train, X_test, Y_test, norm_value                         
+        return X_train, Y_train, X_test, Y_test, norm_value, crop_made                         
 
 
 def __foreground_percentage(mask, class_tag=1):
@@ -145,20 +261,21 @@ def __foreground_percentage(mask, class_tag=1):
     return (c*100)/(mask.shape[0]*mask.shape[1])
 
 
-def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
-              d_percentage=0):                          
+def crop_data(data, data_mask, crop_shape, force_shape=[0, 0], d_percentage=0, 
+              tab=""):                          
     """Crop data into smaller pieces.
                                                                         
        Args:                                                            
             data (4D Numpy array): data to crop.                        
             data_mask (4D Numpy array): data masks to crop.             
-            width (str): output image width.
-            height (str): output image height.
+            crop_shape (str tuple): output image shape.
             force_shape (int tuple, optional): force horizontal and vertical 
             crops to the given numbers.
             d_percentage (int, optional): number between 0 and 100. The images 
             that have less foreground pixels than the given number will be 
             discarded.
+            tab (str, optional): tabulation mark to add at the begining of the
+            prints.
                                                                         
        Returns:                                                         
             cropped_data (4D Numpy array): cropped data images.         
@@ -166,32 +283,34 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
             force_shape (int tuple): number of horizontal and vertical crops 
             made. Useful for future crop calls. 
     """                                                                 
-                                                                        
-    Print("Cropping [" + str(data.shape[1]) + ', ' + str(data.shape[2]) 
-          + "] images into [" + str(width) + ', ' + str(height) + "] . . .")
-    
+
+    Print(tab + "### CROP ###")                                                                    
+    Print(tab + "Cropping [" + str(data.shape[1]) + ', ' + str(data.shape[2]) 
+          + "] images into " + str(crop_shape) + " . . .")
+  
     # Calculate the number of images to be generated                    
     if force_shape == [0, 0]:
-        h_num = int(data.shape[1] / width) + (data.shape[1] % width > 0)
-        v_num = int(data.shape[2] / height) + (data.shape[2] % height > 0)
+        h_num = int(data.shape[1] / crop_shape[0]) + (data.shape[1] % crop_shape[0] > 0)
+        v_num = int(data.shape[2] / crop_shape[1]) + (data.shape[2] % crop_shape[1] > 0)
         force_shape = [h_num, v_num]
     else:
         h_num = force_shape[0]
         v_num = force_shape[1]
-        Print("[CROP] Force crops to [" + str(h_num) + ", " + str(v_num) + "]")
+        Print(tab + "Force crops to [" + str(h_num) + ", " + str(v_num) + "]")
 
     total_cropped = data.shape[0]*h_num*v_num    
 
-    # Resize data to adjust to a value divisible by height x width
-    r_data = np.zeros((data.shape[0], h_num*height, v_num*width, data.shape[3]),      
-                      dtype=np.int16)    
+    # Resize data to adjust to a value divisible by height and width
+    r_data = np.zeros((data.shape[0], h_num*crop_shape[1], v_num*crop_shape[0], 
+                       data.shape[3]), dtype=np.int16)    
     r_data[:data.shape[0],:data.shape[1],:data.shape[2],:data.shape[3]] = data
-    r_data_mask = np.zeros((data_mask.shape[0], h_num*height, v_num*width,
-                            data_mask.shape[3]), dtype=np.int16)
+    r_data_mask = np.zeros((data_mask.shape[0], h_num*crop_shape[1], 
+                            v_num*crop_shape[0], data_mask.shape[3]), 
+                           dtype=np.int16)
     r_data_mask[:data_mask.shape[0],:data_mask.shape[1],
                 :data_mask.shape[2],:data_mask.shape[3]] = data_mask
     if data.shape != r_data.shape:
-        Print("[CROP] Resized data from " + str(data.shape) + " to " 
+        Print(tab + "Resized data from " + str(data.shape) + " to " 
               + str(r_data.shape) + " to be divisible by the shape provided")
 
     discarded = 0                                                                    
@@ -199,14 +318,14 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
     selected_images  = []
 
     # Discard images from the data set
-    if discard == True:
-        Print("[CROP] Selecting images to discard . . .")
-        for img_num in tqdm(range(0, r_data.shape[0])):                             
+    if d_percentage > 0:
+        Print(tab + "0) Selecting images to discard . . .")
+        for img_num in tqdm(range(0, r_data.shape[0]), desc=tab):                             
             for i in range(0, h_num):                                       
                 for j in range(0, v_num):
                     p = __foreground_percentage(r_data_mask[img_num,
-                                                            (i*width):((i+1)*height),
-                                                            (j*width):((j+1)*height)])
+                                                            (i*crop_shape[0]):((i+1)*crop_shape[1]),
+                                                            (j*crop_shape[0]):((j+1)*crop_shape[1])])
                     if p > d_percentage: 
                         selected_images.append(cont)
                     else:
@@ -215,52 +334,51 @@ def crop_data(data, data_mask, width, height, force_shape=[0, 0], discard=False,
                     cont = cont + 1
 
     # Crop data                                                         
-    cropped_data = np.zeros(((total_cropped-discarded), height, width,     
-                             r_data.shape[3]), dtype=np.int16)
-    cropped_data_mask = np.zeros(((total_cropped-discarded), height, width, 
-                                  r_data_mask.shape[3]), dtype=np.int16)
+    cropped_data = np.zeros(((total_cropped-discarded), crop_shape[1], 
+                              crop_shape[0], r_data.shape[3]), dtype=np.int16)
+    cropped_data_mask = np.zeros(((total_cropped-discarded), crop_shape[1], 
+                                   crop_shape[0], r_data_mask.shape[3]), 
+                                 dtype=np.int16)
     
     cont = 0                                                              
     l_i = 0
-    Print("[CROP] Cropping images . . .")
-    for img_num in tqdm(range(0, r_data.shape[0])): 
+    Print(tab + "1) Cropping images . . .")
+    for img_num in tqdm(range(0, r_data.shape[0]), desc=tab): 
         for i in range(0, h_num):                                       
             for j in range(0, v_num):                     
-                if discard == True and len(selected_images) != 0:
+                if d_percentage > 0 and len(selected_images) != 0:
                     if selected_images[l_i] == cont \
                        or l_i == len(selected_images) - 1:
 
-                        cropped_data[l_i]= r_data[img_num, 
-                                                  (i*width):((i+1)*height), 
-                                                  (j*width):((j+1)*height),:]
+                        cropped_data[l_i] = r_data[img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]), 
+                                                   (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
 
-                        cropped_data_mask[l_i]= r_data_mask[img_num,                 
-                                                            (i*width):((i+1)*height),
-                                                            (j*width):((j+1)*height),:]
+                        cropped_data_mask[l_i] = r_data_mask[img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),
+                                                             (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
 
                         if l_i != len(selected_images) - 1:
                             l_i = l_i + 1
                 else: 
               
-                    cropped_data[cont]= r_data[img_num, (i*width):((i+1)*height),      
-                                               (j*width):((j+1)*height),:]
+                    cropped_data[cont] = r_data[img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),      
+                                                (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
                                                                         
-                    cropped_data_mask[cont]= r_data_mask[img_num,             
-                                                         (i*width):((i+1)*height),
-                                                         (j*width):((j+1)*height),:]
+                    cropped_data_mask[cont] = r_data_mask[img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),
+                                                          (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
                 cont = cont + 1                                             
                                                                         
-    if discard == True:
-        Print("[CROP] " + str(discarded) + " images discarded. New shape after " 
-              + "cropping and discarding is " + str(cropped_data.shape))
+    if d_percentage > 0:
+        Print(tab + "**** " + str(discarded) + " images discarded. New shape" 
+              + " after cropping and discarding is " + str(cropped_data.shape))
+        Print(tab + "### END CROP ###")
     else:
-        Print("[CROP] New data shape is: " + str(cropped_data.shape))
-    Print("[CROP] New mask data shape is: " + str(cropped_data_mask.shape))
+        Print(tab + "**** New data shape is: " + str(cropped_data.shape))
+        Print(tab + "### END CROP ###")
 
     return cropped_data, cropped_data_mask, force_shape
 
 
-def crop_data_with_overlap(data, data_mask, window_size, subdivision):
+def crop_data_with_overlap(data, data_mask, window_size, subdivision, tab=""):
     """Crop data into smaller pieces with the minimun overlap.
 
        Args:
@@ -268,13 +386,16 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
             data_mask (4D Numpy array): data mask to crop.
             window_size (int): crop size .
             subdivision (int): number of crops to create.
+            tab (str, optional): tabulation mark to add at the begining of the
+            prints.
 
        Returns:
             cropped_data (4D Numpy array): cropped image data.
             cropped_data_mask (4D Numpy array): cropped image data masks.
     """
 
-    Print("[OV-CROP] Cropping [" + str(data.shape[1]) + ', ' + str(data.shape[2])
+    Print(tab + "### OV-CROP ###")
+    Print(tab + "Cropping [" + str(data.shape[1]) + ', ' + str(data.shape[2])
           + "] images into [" + str(window_size) + ', ' + str(window_size)
           + "] with overlapping. . .")
 
@@ -304,8 +425,8 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
             rows = i
             columns = int(subdivision/i)
         
-    Print("[OV-CROP] The minimum overlap has been found with rows=" + str(rows) \
-          + " and columns=" + str(columns))
+    Print(tab + "The minimum overlap has been found with rows=" + str(rows)  + 
+          " and columns=" + str(columns))
 
     if subdivision != 1:
         assert window_size*rows >= data.shape[1], "Error: total width of all the"\
@@ -339,7 +460,8 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
 
     # Create the crops
     cont = 0
-    for k, img_num in tqdm(enumerate(range(0, data.shape[0]))):
+    Print(tab + "0) Cropping data with the minimun overlap . . .")
+    for k, img_num in tqdm(enumerate(range(0, data.shape[0])), desc=tab):
         for i in range(0, data.shape[1]-y_ov, step_y):
             for j in range(0, data.shape[2]-x_ov, step_x):
                 d_y = 0 if (i+window_size) < data.shape[1] else r_y
@@ -349,13 +471,14 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
                 cropped_data_mask[cont] = data_mask[k, i-d_y:i+window_size, j-d_x:j+window_size, :]
                 cont = cont + 1
 
-    Print("[OV-CROP] New data shape is: " + str(cropped_data.shape))
+    Print(tab + "**** New data shape is: " + str(cropped_data.shape))
+    Print(tab + "### END OV-CROP ###")
 
     return cropped_data, cropped_data_mask
 
 
 def merge_data_with_overlap(data, original_shape, window_size, subdivision, 
-                            out_dir, ov_map=True, ov_data_img=0):
+                            out_dir, ov_map=True, ov_data_img=0, tab=""):
     """Merge data with an amount of overlap. Used to undo the crop made by the 
        function crop_data_with_overlap.
 
@@ -368,13 +491,16 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
             ov_map (bool, optional): whether to create overlap map.
             ov_data_img (int, optional): number of the image on the data to 
             create the overlappng map.
+            tab (str, optional): tabulation mark to add at the begining of the
+            prints.
 
        Returns:
             merged_data (4D Numpy array): merged image data.
     """
 
-    Print("[OV-MERGE] Merging [" + str(data.shape[1]) + ', ' + str(data.shape[2])
-          + "] images into [" + str(original_shape[1]) + ", " 
+    Print(tab + "### MERGE-OV-CROP ###")
+    Print(tab + "Merging [" + str(data.shape[1]) + ', ' + str(data.shape[2]) + 
+          "] images into [" + str(original_shape[1]) + ", " 
           + str(original_shape[0]) + "] with overlapping . . .")
 
     # Merged data
@@ -401,8 +527,8 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
             rows = i
             columns = int(subdivision/i)
 
-    Print("[OV-MERGE] The minimum overlap has been found with [" + str(rows) \
-          + ", " + str(columns) + "]")
+    Print(tab + "The minimum overlap has been found with [" + str(rows) + ", " 
+          + str(columns) + "]")
 
     # Calculate the amount of overlap, the division remainder to obtain an
     # offset to adjust the last crop and the step size. All of this values per
@@ -450,7 +576,8 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
   
     # Merge the overlapping crops
     cont = 0
-    for k, img_num in tqdm(enumerate(range(0, total_images))):
+    Print(tab + "0) Merging the overlapping crops . . .")
+    for k, img_num in tqdm(enumerate(range(0, total_images)), desc=tab):
         for i in range(0, original_shape[1]-y_ov, step_y):
             for j in range(0, original_shape[0]-x_ov, step_x):
                 d_y = 0 if (i+window_size) < original_shape[1] else r_y
@@ -508,12 +635,13 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
 
         im.save(os.path.join(out_dir,"merged_ov_map.png"))
   
-    Print("[MERGE-OV-CROP] New data shape is: " + str(merged_data.shape))
+    Print(tab + "**** New data shape is: " + str(merged_data.shape))
+    Print(tab + "### END MERGE-OV-CROP ###")
 
     return merged_data
 
 
-def mix_data(data, num, out_shape=[1, 1], grid=True):
+def merge_data_without_overlap(data, num, out_shape=[1, 1], grid=True, tab=""):
     """Combine images from input data into a bigger one given shape. It is the 
        opposite function of crop_data().
 
@@ -523,12 +651,17 @@ def mix_data(data, num, out_shape=[1, 1], grid=True):
             out_shape (int tuple, optional): number of horizontal and vertical
             images to combine in a single one.
             grid (bool, optional): make the grid in the output image.
+            tab (str, optional): tabulation mark to add at the begining of the
+            prints.
                                                                                 
        Returns:                                                                 
             mixed_data (4D Numpy array): mixed data images.                 
             mixed_data_mask (4D Numpy array): mixed data masks.
     """
 
+    Print(tab + "### MERGE-CROP ###")
+
+    # To difference between data and masks
     if grid == True:
         if np.max(data) > 1:
             v = 255
@@ -538,11 +671,11 @@ def mix_data(data, num, out_shape=[1, 1], grid=True):
     width = data.shape[1]
     height = data.shape[2] 
 
-    # Mix data
-    mixed_data = np.zeros((num, out_shape[1]*width, out_shape[0]*height, data.shape[3]),
-                          dtype=np.int16)
+    mixed_data = np.zeros((num, out_shape[1]*width, out_shape[0]*height, 
+                           data.shape[3]), dtype=np.int16)
     cont = 0
-    for img_num in tqdm(range(0, num)):
+    Print(tab + "0) Merging crops . . .")
+    for img_num in tqdm(range(0, num), desc=tab):
         for i in range(0, out_shape[1]):
             for j in range(0, out_shape[0]):
                 
@@ -563,12 +696,13 @@ def mix_data(data, num, out_shape=[1, 1], grid=True):
                               (j*width):((j+1)*height)-1] = v
                 cont = cont + 1
 
+    Print(tab + "### END MERGE-CROP ###")
     return mixed_data
 
 
 def check_crops(data, out_dim, num_examples=2, include_crops=True,
                 out_dir="check_crops", job_id="none_job_id", suffix="_none_", 
-                grid=True):
+                grid=True, tab=""):
     """Check cropped images by the function crop_data(). 
         
        Args:
@@ -583,16 +717,19 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
             examples will be generated under a folder 'out_dir/none_job_id'.
             suffix (string, optional): suffix to add in image names. 
             grid (bool, optional): make the grid in the output image.
+            tab (str, optional): tabulation mark to add at the begining of the
+            prints.
     """
-   
-    # First checks
-    if out_dim[0] < data.shape[1] or out_dim[1] < data.shape[2]:
-        Print("[C_CROP] Aborting: out_dim must be equal or greater than" 
-              + "data.shape")
-        return
+  
+    Print(tab + "### CHECK-CROPS ###")
+ 
+    assert out_dim[0] >= data.shape[1] or out_dim[1] >= data.shape[2], "Error: "\
+           + " out_dim must be equal or greater than data.shape"
+
     out_dir = os.path.join(out_dir, job_id)
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
+
     # For mask data
     if np.max(data) > 1:
         v = 1
@@ -607,14 +744,14 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
     if total*num_examples > data.shape[0]:
         num_examples = math.ceil(data.shape[0]/total)
         total = num_examples
-        Print("[CHECK_CROP] Requested num_examples too high for data. Set " 
-              + "automatically to " + str(num_examples))
+        Print(tab + "Requested num_examples too high for data. Set automatically"
+              + " to " + str(num_examples))
     else:
         total = total*num_examples
 
     if include_crops == True:
-        Print("[CHECK_CROP] Saving cropped data images . . .")
-        for i in tqdm(range(0, total)):
+        Print(tab + "0) Saving cropped data images . . .")
+        for i in tqdm(range(0, total), desc=tab):
             # grayscale images
             if data.shape[3] == 1:
                 im = Image.fromarray(data[i,:,:,0]*v)
@@ -626,16 +763,20 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
 
             im.save(os.path.join(out_dir,"c_" + suffix + str(i) + ".png"))
 
-    Print("[CHECK_CROP] Obtaining " + str(num_examples) + " images of ["
-          + str(data.shape[1]*h_num) + "," + str(data.shape[2]*v_num) + "] from ["
-          + str(data.shape[1]) + "," + str(data.shape[2]) + "]")
-    m_data = mix_data(data, num_examples, out_shape=[h_num, v_num], grid=grid) 
+    Print(tab + "0) Reconstructing " + str(num_examples) + " images of ["
+          + str(data.shape[1]*h_num) + "," + str(data.shape[2]*v_num) + "] from "
+          + "[" + str(data.shape[1]) + "," + str(data.shape[2]) + "] crops")
+    m_data = merge_data_without_overlap(data, num_examples, 
+                                        out_shape=[h_num, v_num], grid=grid,
+                                        tab=tab + "    ") 
     
-    Print("[CHECK_CROP] Saving data mixed images . . .")
-    for i in tqdm(range(0, num_examples)):
+    Print(tab + "1) Saving data mixed images . . .")
+    for i in tqdm(range(0, num_examples), desc=tab):
         im = Image.fromarray(m_data[i,:,:,0]*v)
         im = im.convert('L')
         im.save(os.path.join(out_dir,"f" + suffix + str(i) + ".png"))
+
+    Print(tab + "### END CHECK-CROP ###")
 
 
 def elastic_transform(image, alpha, sigma, alpha_affine, seed=None):
@@ -1033,7 +1174,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                 batch_y (Numpy array): batch of data mask.
         """
 
-        Print("[TR-SAMPLES] Creating the examples of data augmentation . . .")
+        Print("### TR-SAMPLES ###")
 
         if self.random_crops_in_DA == True:
             batch_x = np.zeros((num_examples, self.crop_length, self.crop_length,
@@ -1056,7 +1197,8 @@ class ImageDataGenerator(keras.utils.Sequence):
                 os.makedirs(out_dir)
     
         # Generate the examples 
-        for i in tqdm(range(0,num_examples)):
+        Print("0) Creating the examples of data augmentation . . .")
+        for i in tqdm(range(0,num_examples), desc=tab):
             if random_images == True:
                 pos = random.randint(1,self.X.shape[0]-1) 
             else:
@@ -1149,6 +1291,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                     mask.save(os.path.join(out_dir, prefix + 'y_' + str(pos) 
                                                     + t_str + '_original.png'))
 
+        Print("### END TR-SAMPLES ###")
         return batch_x, batch_y
 
 
