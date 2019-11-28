@@ -124,7 +124,8 @@ keras_zoom = False # Only Keras DA
 w_shift_r = 0.0 # Only Keras DA
 h_shift_r = 0.0 # Only Keras DA
 shear_range = 0.0 # Only Keras DA
-brightness_range = [1.0, 1.0] # Keras and Custom DA
+brightness_range = None # Keras and Custom DA
+#brightness_range = [1.0, 1.0] # Example
 median_filter_size = [0, 0] # Only Custom DA
 
 # Extra train data generation
@@ -283,8 +284,9 @@ if extra_train_data != 0:
 
     if custom_da == False:
         # Keras DA generated extra data
-        _, extra_x, extra_y = keras_da_generator(X_train, Y_train,
-                                                 batch_size_value, job_id=job_id,
+        _, extra_x, extra_y = keras_da_generator(X_train=X_train, Y_train=Y_train,
+                                                 batch_size_value=batch_size_value, 
+                                                 val=False, job_id=job_id,
                                                  shuffle=True,
                                                  random_crops_in_DA=random_crops_in_DA,
                                                  crop_length=crop_shape[0],
@@ -319,7 +321,8 @@ if custom_da == False:
 
     # Keras Data Augmentation                                                   
     train_generator, \
-    val_generator = keras_da_generator(X_train, Y_train, batch_size_value,       
+    val_generator = keras_da_generator(X_train=X_train, Y_train=Y_train, 
+                                       batch_size_value=batch_size_value,
                                        X_val=X_val, Y_val=Y_val,
                                        save_examples=aug_examples, job_id=job_id,          
                                        shuffle=False, zoom=keras_zoom,        
@@ -389,8 +392,7 @@ if random_crops_in_DA == True:
 Print("###################\n" + "#  TRAIN PROCESS  #\n" + "###################\n")
 
 Print("Creating the network . . .")
-model = U_Net([img_height, img_width, img_channels], numInitChannels=32, 
-              spatial_dropout=True)
+model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
 
 sgd = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)
@@ -399,7 +401,7 @@ model.compile(optimizer=sgd, loss='binary_crossentropy', metrics=[jaccard_index]
 model.summary()
 
 if load_previous_weights == False:
-    earlystopper = EarlyStopping(patience=epochs_value, verbose=1, 
+    earlystopper = EarlyStopping(patience=50, verbose=1, 
                                  restore_best_weights=True)
     
     if not os.path.exists(h5_dir):                                      

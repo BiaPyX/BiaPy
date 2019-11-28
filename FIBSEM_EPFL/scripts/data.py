@@ -130,19 +130,20 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     if crop_shape is not None:
         Print(tab + "4) Crop data activated . . .")
         Print(tab + "    4.1) Cropping train data . . .")
-        X_train, Y_train, _ = crop_data(X_train, Y_train, crop_shape, 
-                                              d_percentage=d_percentage, 
-                                              tab=tab + "    ")    
+        X_train, Y_train, _ = crop_data(X_train, crop_shape, data_mask=Y_train, 
+                                        d_percentage=d_percentage, 
+                                        tab=tab + "    ")    
+
         Print(tab + "    4.2) Cropping test data . . .")
-        X_test, Y_test, _ = crop_data(X_test, Y_test, crop_shape, 
+        X_test, Y_test, _ = crop_data(X_test, crop_shape, data_mask=Y_test,
                                       tab=tab + "    ")
         
         if check_crop == True:
             Print(tab + "    4.3) Checking the crops . . .")
-            check_crops(X_train, [image_test_shape[1], image_test_shape[0]],
+            check_crops(X_train, [image_test_shape[0], image_test_shape[1]],
                         num_examples=3, out_dir="check_crops", job_id=job_id, 
                         suffix="_x_", grid=True, tab=tab + "    ")
-            check_crops(Y_train, [image_test_shape[1], image_test_shape[0]],
+            check_crops(Y_train, [image_test_shape[0], image_test_shape[1]],
                         num_examples=3, out_dir="check_crops", job_id=job_id, 
                         suffix="_y_", grid=True, tab=tab + "    ")
         
@@ -195,19 +196,19 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             else:
                 Print(tab + "    5." + str(i) + ") Cropping the extra dataset"
                       + " . . .")
-                e_X_train, e_Y_train, _ = crop_data(e_X_train, e_Y_train, 
-                                                    crop_shape, 
+                e_X_train, e_Y_train, _ = crop_data(e_X_train, crop_shape,
+                                                    data_mask=e_Y_train, 
                                                     d_percentage=d_percentage,
                                                     tab=tab + "    ")
 
                 if check_crop == True:
                     Print(tab + "    5." + str(i) + ") Checking the crops of the"
                           + " extra dataset . . .")
-                    check_crops(e_X_train, [d_dim[1], d_dim[0]], num_examples=3, 
+                    check_crops(e_X_train, [d_dim[0], d_dim[1]], num_examples=3, 
                                 out_dir="check_crops", job_id=job_id, 
                                 suffix="_e" + str(i) + "x_", grid=True, 
                                 tab=tab + "    ")
-                    check_crops(e_Y_train, [d_dim[1], d_dim[0]], num_examples=3,
+                    check_crops(e_Y_train, [d_dim[0], d_dim[1]], num_examples=3,
                                 out_dir="check_crops", job_id=job_id, 
                                 suffix="_e" + str(i) + "y_", grid=True,
                                 tab=tab + "    ")
@@ -261,19 +262,19 @@ def __foreground_percentage(mask, class_tag=1):
     return (c*100)/(mask.shape[0]*mask.shape[1])
 
 
-def crop_data(data, data_mask, crop_shape, force_shape=[0, 0], d_percentage=0, 
-              tab=""):                          
+def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0], 
+              d_percentage=0, tab=""):                          
     """Crop data into smaller pieces.
                                                                         
        Args:                                                            
             data (4D Numpy array): data to crop.                        
-            data_mask (4D Numpy array): data masks to crop.             
             crop_shape (str tuple): output image shape.
+            data_mask (4D Numpy array, optional): data masks to crop.
             force_shape (int tuple, optional): force horizontal and vertical 
             crops to the given numbers.
             d_percentage (int, optional): number between 0 and 100. The images 
             that have less foreground pixels than the given number will be 
-            discarded.
+            discarded. Only available if data_mask is provided.
             tab (str, optional): tabulation mark to add at the begining of the
             prints.
                                                                         
@@ -304,11 +305,12 @@ def crop_data(data, data_mask, crop_shape, force_shape=[0, 0], d_percentage=0,
     r_data = np.zeros((data.shape[0], h_num*crop_shape[1], v_num*crop_shape[0], 
                        data.shape[3]), dtype=np.int16)    
     r_data[:data.shape[0],:data.shape[1],:data.shape[2],:data.shape[3]] = data
-    r_data_mask = np.zeros((data_mask.shape[0], h_num*crop_shape[1], 
-                            v_num*crop_shape[0], data_mask.shape[3]), 
-                           dtype=np.int16)
-    r_data_mask[:data_mask.shape[0],:data_mask.shape[1],
-                :data_mask.shape[2],:data_mask.shape[3]] = data_mask
+    if data_mask is not None:
+        r_data_mask = np.zeros((data_mask.shape[0], h_num*crop_shape[1], 
+                                v_num*crop_shape[0], data_mask.shape[3]), 
+                               dtype=np.int16)
+        r_data_mask[:data_mask.shape[0],:data_mask.shape[1],
+                    :data_mask.shape[2],:data_mask.shape[3]] = data_mask
     if data.shape != r_data.shape:
         Print(tab + "Resized data from " + str(data.shape) + " to " 
               + str(r_data.shape) + " to be divisible by the shape provided")
@@ -318,7 +320,7 @@ def crop_data(data, data_mask, crop_shape, force_shape=[0, 0], d_percentage=0,
     selected_images  = []
 
     # Discard images from the data set
-    if d_percentage > 0:
+    if d_percentage > 0 and data_mask is not None:
         Print(tab + "0) Selecting images to discard . . .")
         for img_num in tqdm(range(0, r_data.shape[0]), desc=tab):                             
             for i in range(0, h_num):                                       
@@ -336,9 +338,10 @@ def crop_data(data, data_mask, crop_shape, force_shape=[0, 0], d_percentage=0,
     # Crop data                                                         
     cropped_data = np.zeros(((total_cropped-discarded), crop_shape[1], 
                               crop_shape[0], r_data.shape[3]), dtype=np.int16)
-    cropped_data_mask = np.zeros(((total_cropped-discarded), crop_shape[1], 
-                                   crop_shape[0], r_data_mask.shape[3]), 
-                                 dtype=np.int16)
+    if data_mask is not None:
+        cropped_data_mask = np.zeros(((total_cropped-discarded), crop_shape[1], 
+                                       crop_shape[0], r_data_mask.shape[3]), 
+                                     dtype=np.int16)
     
     cont = 0                                                              
     l_i = 0
@@ -346,7 +349,8 @@ def crop_data(data, data_mask, crop_shape, force_shape=[0, 0], d_percentage=0,
     for img_num in tqdm(range(0, r_data.shape[0]), desc=tab): 
         for i in range(0, h_num):                                       
             for j in range(0, v_num):                     
-                if d_percentage > 0 and len(selected_images) != 0:
+                if d_percentage > 0 and data_mask is not None \
+                   and len(selected_images) != 0:
                     if selected_images[l_i] == cont \
                        or l_i == len(selected_images) - 1:
 
@@ -363,11 +367,12 @@ def crop_data(data, data_mask, crop_shape, force_shape=[0, 0], d_percentage=0,
                     cropped_data[cont] = r_data[img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),      
                                                 (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
                                                                         
-                    cropped_data_mask[cont] = r_data_mask[img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),
-                                                          (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
+                    if data_mask is not None:
+                        cropped_data_mask[cont] = r_data_mask[img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),
+                                                              (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
                 cont = cont + 1                                             
                                                                         
-    if d_percentage > 0:
+    if d_percentage > 0 and data_mask is not None:
         Print(tab + "**** " + str(discarded) + " images discarded. New shape" 
               + " after cropping and discarding is " + str(cropped_data.shape))
         Print(tab + "### END CROP ###")
@@ -375,7 +380,10 @@ def crop_data(data, data_mask, crop_shape, force_shape=[0, 0], d_percentage=0,
         Print(tab + "**** New data shape is: " + str(cropped_data.shape))
         Print(tab + "### END CROP ###")
 
-    return cropped_data, cropped_data_mask, force_shape
+    if data_mask is not None:
+        return cropped_data, cropped_data_mask, force_shape
+    else:
+        return cropped_data, force_shape
 
 
 def crop_data_with_overlap(data, data_mask, window_size, subdivision, tab=""):
@@ -1318,24 +1326,44 @@ def fixed_dregee(image):
     return out_image
 
 
-def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=None,
-                       save_examples=True, job_id="none_job_id", out_dir='aug',
-                       hflip=True, vflip=True, seedValue=42, rotation_range=180,
+def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None, 
+                       data_paths=None, target_size=None, c_target_size=None,
+                       batch_size_value=1, val=True, save_examples=True, 
+                       job_id="none_job_id", out_dir='aug', hflip=True,
+                       vflip=True, seedValue=42, rotation_range=180, 
                        fill_mode='reflect', preproc_function=False, 
-                       featurewise_center=False, brightness_range=None,
-                       channel_shift_range=0.0, shuffle=True,
-                       featurewise_std_normalization=False, zoom=False,         
+                       featurewise_center=False, brightness_range=None, 
+                       channel_shift_range=0.0, shuffle=True, 
+                       featurewise_std_normalization=False, zoom=False, 
                        w_shift_r=0.0, h_shift_r=0.0, shear_range=0,
-                       random_crops_in_DA=False, crop_length=0, extra_train_data=0):             
+                       random_crops_in_DA=False, crop_length=0, 
+                       extra_train_data=0):             
                                                                                 
     """Makes data augmentation of the given input data.                         
                                                                                 
        Args:                                                                    
-            X_train_path (Numpy array): train data.                                  
-            Y_train_path (Numpy array): train mask data.                             
-            batch_size_value (int): batch size.
-            X_val_path (Numpy array, optional): validation data.                               
-            Y_val_path (Numpy array, optional): validation mask data.                          
+            X_train (Numpy array, optional): train data. If this arg is provided 
+            data_paths arg value will be avoided.
+            Y_train (Numpy array, optional): train mask data.                             
+            X_val (Numpy array, optional): validation data.
+            Y_val (Numpy array, optional): validation mask data.
+            data_paths (list of str, optional): list of paths where the data is 
+            stored. Use this instead of X_train and Y_train args to do not 
+            charge the data in memory and make a generator over the paths 
+            instead. The path order is this: 1) train images path 2) train masks
+            path 3) validation images path 4) validation masks path 5) test 
+            images path 6) test masks path 7) complete images path (this last 
+            useful to make the smoothing post processing, as it requires the 
+            reconstructed data). To provide the validation data val must be set 
+            to True. If no validation data provided the order of the paths is 
+            the same avoiding validation ones.
+            target_size (tuple of int, optional): size where the images will be 
+            resized if data_paths is defined. 
+            c_target_size (tuple of int, optional): size where complete images 
+            will be resized if data_paths is defined. 
+            batch_size_value (int, optional): batch size.
+            val (bool, optional): If True validation data generator will be 
+            returned.
             save_examples (bool, optional): if true 5 examples of DA are stored.
             job_id (str, optional): job identifier. If any provided the         
             examples will be generated under a folder 'aug/none_job_id'.        
@@ -1352,7 +1380,8 @@ def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=Non
             dataset, feature-wise.
             brightness_range (tuple or list of two floats, optional): range for 
             picking a brightness shift value from.
-            channel_shift_range (float, optional): range for random channel shifts.
+            channel_shift_range (float, optional): range for random channel 
+            shifts.
             shuffle (bool, optional): randomize the training data.
             featurewise_std_normalization (bool, optional): divide inputs by std 
             of the dataset, feature-wise.                                       
@@ -1369,11 +1398,25 @@ def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=Non
 
        Returns:                                                                 
             train_generator (Iterator): train data iterator.                                                           
+            test_generator (Iterator, optional): test data iterator.
             val_generator (Iterator, optional): validation data iterator.                                                      
             batch_x (Numpy array, optional): batch of data.
             batch_y (Numpy array, optional): batch of data mask.
+            complete_datagen (Iterator, optional): original data iterator useful 
+            to make the smoothing post processing, as it requires the 
+            reconstructed data.
+            n_train_samples (int, optional): number of training samples.  
+            n_val_samples (int, optional): number of validation samples.
+            n_test_samples (int, optional): number of test samples.
     """                                                                         
-                                                                                
+
+    assert data_paths is not None or X_train is not None, "Error: one between "\
+           + "X_train or data_paths must be provided"                                                                     
+    assert (data_paths is not None and target_size is not None and \
+            c_target_size is not None) or X_train is not None, "Error: " \
+            + "target_size and c_target_size must be specified while data_paths"\
+            + " is defined"
+
     zoom_val = 0.25 if zoom == True else 0                                      
                                                                                 
     if preproc_function == True:                                                
@@ -1406,67 +1449,159 @@ def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=Non
                               zoom_range=zoom_val, width_shift_range=w_shift_r,
                               height_shift_range=h_shift_r, 
                               shear_range=shear_range)                              
-                                                                                
-                                                                                
-    # Train data, provide the same seed and keyword arguments to the fit and    
-    # flow methods                                                              
-    X_datagen_train = kerasDA(**data_gen_args1)                                 
+
+    # Obtaining the path where the data is stored                                                                                 
+    if data_paths is not None:
+        train_path = data_paths[0]
+        train_mask_path = data_paths[1]
+        if val == True:
+            val_path = data_paths[2]
+            val_mask_path = data_paths[3]
+            test_path = data_paths[4]
+            test_mask_path = data_paths[5]
+            complete_path = data_paths[6]
+        else:
+            test_path = data_paths[2]
+            test_mask_path = data_paths[3]
+            complete_path = data_paths[4]
+                            
+    # Generators
+    X_datagen_train = kerasDA(**data_gen_args1)
     Y_datagen_train = kerasDA(**data_gen_args2)                                 
-                                                                                
-    # Validation data, no data augmentation, but we create a generator anyway   
-    X_datagen_val = kerasDA()                                                   
-    Y_datagen_val = kerasDA()                                                   
+    X_datagen_test = kerasDA()                                 
+    Y_datagen_test = kerasDA()                                 
+    if data_paths is not None:
+        complete_datagen = kerasDA()                                 
+    if val == True:
+        X_datagen_val = kerasDA()                                                   
+        Y_datagen_val = kerasDA()                                                   
 
     # Save a few examples 
     if save_examples == True:
+        Print("Saving some samples of the train generator . . .")        
         out_dir = os.path.join(out_dir, job_id)
         if not os.path.exists(out_dir):          
             os.makedirs(out_dir)
-     
-        i = 0
-        for batch in X_datagen_train.flow(X_train, 
-                                          save_to_dir=out_dir,
-                                          batch_size=batch_size_value,
-                                          shuffle=True, seed=seedValue,
-                                          save_prefix='x', save_format='jpeg'):
-            i = i + 1
-            if i > 2:
-                break
-        i = 0
-        for batch in Y_datagen_train.flow(Y_train, 
-                                          save_to_dir=out_dir,
-                                          batch_size=batch_size_value,
-                                          shuffle=True, seed=seedValue,
-                                          save_prefix='y', save_format='jpeg'):
-            i = i + 1
-            if i > 2:
-                break
 
-    X_train_augmented = X_datagen_train.flow(X_train,                           
-                                             batch_size=batch_size_value,       
-                                             shuffle=shuffle, seed=seedValue)
-    Y_train_augmented = Y_datagen_train.flow(Y_train,                           
-                                             batch_size=batch_size_value,       
-                                             shuffle=shuffle, seed=seedValue)
-    if X_val is not None:
-        X_val_flow = X_datagen_val.flow(X_val, batch_size=batch_size_value,         
-                                        shuffle=False, seed=seedValue)              
-        Y_val_flow = Y_datagen_val.flow(Y_val, batch_size=batch_size_value,         
-                                        shuffle=False, seed=seedValue)              
+        if X_train is not None:     
+            i = 0
+            for batch in X_datagen_train.flow(X_train, save_to_dir=out_dir,
+                                              batch_size=batch_size_value,
+                                              shuffle=True, seed=seedValue,
+                                              save_prefix='x', save_format='png'):
+                i = i + 1
+                if i > 2:
+                    break
+            i = 0
+            for batch in Y_datagen_train.flow(Y_train, save_to_dir=out_dir,
+                                              batch_size=batch_size_value,
+                                              shuffle=True, seed=seedValue,
+                                              save_prefix='y', save_format='png'):
+                i = i + 1
+                if i > 2:
+                    break
+        else:
+            i = 0
+            for batch in X_datagen_train.flow_from_directory(train_path,
+                                              save_to_dir=out_dir,
+                                              target_size=target_size,
+                                              batch_size=batch_size_value,
+                                              shuffle=True, seed=seedValue,
+                                              save_prefix='x', save_format='png'):
+                i = i + 1
+                if i > 2:
+                    break
+            i = 0
+            for batch in Y_datagen_train.flow_from_directory(train_mask_path,
+                                              save_to_dir=out_dir,
+                                              target_size=target_size,
+                                              batch_size=batch_size_value,
+                                              shuffle=True, seed=seedValue,
+                                              save_prefix='y', save_format='png'):
+                i = i + 1
+                if i > 2:
+                    break
+   
+    # Flow from data or directory to initialize the train/test/complete generators
+    if X_train is not None:
+        X_train_augmented = X_datagen_train.flow(X_train,                           
+                                                 batch_size=batch_size_value,       
+                                                 shuffle=shuffle, seed=seedValue)
+        Y_train_augmented = Y_datagen_train.flow(Y_train,                           
+                                                 batch_size=batch_size_value,       
+                                                 shuffle=shuffle, seed=seedValue)
+    else:
+        Print("Train data from directory: " + str(train_path))
+        X_train_augmented = X_datagen_train.flow_from_directory(train_path,
+                                                 target_size=target_size,
+                                                 class_mode=None, 
+                                                 color_mode="grayscale",
+                                                 batch_size=batch_size_value,
+                                                 shuffle=shuffle, seed=seedValue)
+        Y_train_augmented = Y_datagen_train.flow_from_directory(train_mask_path,
+                                                 target_size=target_size,
+                                                 class_mode=None,
+                                                 color_mode="grayscale",
+                                                 batch_size=batch_size_value,
+                                                 shuffle=shuffle, seed=seedValue)
+        n_train_samples = X_train_augmented.n 
+        
+        Print("Test data from directory: " + str(test_path))
+        X_test_augmented = X_datagen_test.flow_from_directory(test_path,
+                                                 target_size=target_size,
+                                                 class_mode=None,
+                                                 color_mode="grayscale",
+                                                 batch_size=batch_size_value,
+                                                 shuffle=shuffle, seed=seedValue)
+        Y_test_augmented = Y_datagen_test.flow_from_directory(test_mask_path,
+                                                 target_size=target_size,
+                                                 class_mode=None,
+                                                 color_mode="grayscale",
+                                                 batch_size=batch_size_value,
+                                                 shuffle=shuffle, seed=seedValue)
+        n_test_samples = X_test_augmented.n
+        test_generator = zip(X_test_augmented, Y_test_augmented)
+
+        Print("Complete data from directory: " + str(complete_path))
+        complete_augmented = complete_datagen.flow_from_directory(complete_path,
+                                                 target_size=c_target_size,
+                                                 color_mode="grayscale",
+                                                 batch_size=batch_size_value,
+                                                 shuffle=False, seed=seedValue)
+
+    # Flow from data or directory to initialize the validation generator
+    if val == True:
+        if X_train is not None:
+            X_val_flow = X_datagen_val.flow(X_val, batch_size=batch_size_value,         
+                                            shuffle=False, seed=seedValue)              
+            Y_val_flow = Y_datagen_val.flow(Y_val, batch_size=batch_size_value,         
+                                            shuffle=False, seed=seedValue)              
+        else:
+            Print("Validation data from directory: " + str(val_path))
+            X_val_flow = X_datagen_val.flow_from_directory(val_path, 
+                                            target_size=target_size,
+                                            batch_size=batch_size_value,
+                                            class_mode=None, color_mode="grayscale",
+                                            shuffle=False, seed=seedValue)
+            Y_val_flow = Y_datagen_val.flow_from_directory(val_mask_path, 
+                                            target_size=target_size,
+                                            batch_size=batch_size_value,
+                                            class_mode=None, color_mode="grayscale",
+                                            shuffle=False, seed=seedValue)
+            n_val_samples = X_val_flow.n
              
     # Combine generators into one which yields image and masks                  
     train_generator = zip(X_train_augmented, Y_train_augmented)                 
-    if X_val is not None:
+    if val == True:
         val_generator = zip(X_val_flow, Y_val_flow)
                                                                    
     if random_crops_in_DA == True:                                                
         train_generator = crop_generator(train_generator, crop_length)
-        if X_val is not None:
+        if val == True:
             val_generator = crop_generator(val_generator, crop_length, val=True)
-
   
     # Generate extra data 
-    if extra_train_data != 0:
+    if extra_train_data != 0 and X_train is not None:
         batch_x = np.zeros((extra_train_data, X_train.shape[1], X_train.shape[2],
                             X_train.shape[3]), dtype=np.int16)
         batch_y = np.zeros((extra_train_data, Y_train.shape[1], Y_train.shape[2],
@@ -1494,15 +1629,24 @@ def keras_da_generator(X_train, Y_train, batch_size_value, X_val=None, Y_val=Non
             if i >= n_batches:
                 break
 
-        if X_val is not None:
+        if val == True:
             return train_generator, val_generator, batch_x, batch_y
         else:
             return train_generator, batch_x, batch_y
     else:
-        if X_val is not None:
-            return train_generator, val_generator
+        if val == True:
+            if data_paths is not None:
+                return train_generator, val_generator, test_generator, \
+                       complete_augmented, n_train_samples, n_val_samples, \
+                       n_test_samples
+            else:
+                return train_generator, val_generator
         else:
-            return train_generator
+            if data_paths is not None:
+                return train_generator, test_generator, complete_augmented, \
+                       n_train_samples, n_test_samples
+            else:
+                return train_generator
 
 
 def crop_generator(batches, crop_length, val=False, prob_map=False):
