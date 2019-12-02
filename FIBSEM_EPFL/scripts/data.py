@@ -91,6 +91,11 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     Print(tab + "0) Loading train images . . .") 
     for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids), desc=tab):     
         img = imread(os.path.join(train_path, id_))                     
+        # Convert the image into grayscale
+        if len(img.shape) >= 3:
+            img = img[:, :, 0]
+            img = np.expand_dims(img, axis=-1)
+
         if len(img.shape) == 2:
             img = np.expand_dims(img, axis=-1)
         X_train[n,:,:,:] = img
@@ -98,6 +103,11 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     Print(tab + "1) Loading train masks . . .")
     for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids), desc=tab):                      
         mask = imread(os.path.join(train_mask_path, id_))               
+        # Convert the image into grayscale
+        if len(mask.shape) >= 3:
+            mask = mask[:, :, 0]
+            mask = np.expand_dims(mask, axis=-1)
+
         if len(mask.shape) == 2:
             mask = np.expand_dims(mask, axis=-1)
         Y_train[n,:,:,:] = mask
@@ -113,6 +123,11 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     Print(tab + "2) Loading test images . . .")
     for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids), desc=tab):       
         img = imread(os.path.join(test_path, id_))                      
+        # Convert the image into grayscale
+        if len(img.shape) >= 3:
+            img = img[:, :, 0]
+            img = np.expand_dims(img, axis=-1)
+
         if len(img.shape) == 2:
             img = np.expand_dims(img, axis=-1)
         X_test[n,:,:,:] = img
@@ -120,6 +135,11 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     Print(tab + "3) Loading test masks . . .")
     for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids), desc=tab):                       
         mask = imread(os.path.join(test_mask_path, id_))                
+        # Convert the image into grayscale
+        if len(mask.shape) >= 3:
+            mask = mask[:, :, 0]
+            mask = np.expand_dims(mask, axis=-1)
+
         if len(mask.shape) == 2:
             mask = np.expand_dims(mask, axis=-1)
         Y_test[n,:,:,:] = mask
