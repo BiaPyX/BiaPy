@@ -110,10 +110,10 @@ w_background = 0.06 # Only active with probability_map
 # Discard variables
 discard_cropped_images = False
 d_percentage_value = 0.05
-train_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'train', 'x')
-train_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'train', 'y')
-test_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'x')
-test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'y')
+train_crop_discard_path = os.path.join('data_d', job_file + '_kas_' + str(d_percentage_value), 'train', 'x')
+train_crop_discard_mask_path = os.path.join('data_d', job_file + '_kas_' + str(d_percentage_value), 'train', 'y')
+test_crop_discard_path = os.path.join('data_d', job_file + '_kas_' + str(d_percentage_value), 'test', 'x')
+test_crop_discard_mask_path = os.path.join('data_d', job_file + '_kas_' + str(d_percentage_value), 'test', 'y')
 
 # Data augmentation variables
 normalize_data = False
@@ -134,6 +134,7 @@ extra_train_data = 0 # Applied after duplicate_train
 
 # Load preoviously generated model weigths
 load_previous_weights = False
+fine_tunning = False
 
 # General parameters
 batch_size_value = 6
@@ -149,7 +150,7 @@ time_callback = TimeHistory()
 post_process = True
 
 # DET metric variables
-det_eval_ge_path = os.path.join('cell_challenge_eval', 'general')
+det_eval_ge_path = os.path.join('cell_challenge_eval', 'gen_' + job_file)
 det_eval_path = os.path.join('cell_challenge_eval', job_id, job_file)
 det_eval_post_path = os.path.join('cell_challenge_eval', job_id, job_file + '_s')
 det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
@@ -408,6 +409,11 @@ if load_previous_weights == False:
         os.makedirs(h5_dir)
     checkpointer = ModelCheckpoint(os.path.join(h5_dir, 'model.fibsem_' + job_file + '.h5'),
                                    verbose=1, save_best_only=True)
+    
+    if fine_tunning == True:                                                    
+        h5_file=os.path.join(h5_dir, 'model.fibsem_430_' + test_id + '.h5')     
+        Print("Fine-tunning: loading model weights from h5_file: " + h5_file)   
+        model.load_weights(h5_file)                                             
    
     results = model.fit_generator(train_generator, validation_data=val_generator,
                                   validation_steps=math.ceil(len(X_val)/batch_size_value),
