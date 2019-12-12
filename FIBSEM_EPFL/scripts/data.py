@@ -1040,8 +1040,8 @@ class ImageDataGenerator(keras.utils.Sequence):
                 transform_string (str): string formed by applied transformations.
         """
 
-        trans_image = image
-        trans_mask = mask
+        trans_image = np.copy(image)
+        trans_mask = np.copy(mask)
         transform_string = '' 
         transformed = False
 
