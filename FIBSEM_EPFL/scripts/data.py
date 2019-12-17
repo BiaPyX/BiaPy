@@ -21,8 +21,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
               image_train_shape, image_test_shape, create_val=True, 
               val_split=0.1, shuffle_val=True, seedValue=42, 
               job_id="none_job_id", e_d_data=[], e_d_mask=[], e_d_data_dim=[], 
-              crop_shape=None, check_crop=True, 
-              d_percentage=0, tab=""):         
+              e_d_dis=[], crop_shape=None, check_crop=True, d_percentage=0, 
+              tab=""):         
 
     """Load train, validation and test data from the given paths. If the images 
        to be loaded are smaller than the given dimension it will be sticked in 
@@ -50,6 +50,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             mask of other datasets are stored.
             e_d_data_dim (list of int tuple, optional): list of shapes of the 
             extra datasets provided. 
+            e_d_dis (list of float, optional): discard percentages of the extra
+            datasets provided. Values between 0 and 1.
             crop_shape (tuple of int, optional): shape of the crops. If any 
             provided no crops will be made.
             check_crop (bool, optional): to save the crops made to ensure they
@@ -218,7 +220,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                       + " . . .")
                 e_X_train, e_Y_train, _ = crop_data(e_X_train, crop_shape,
                                                     data_mask=e_Y_train, 
-                                                    d_percentage=d_percentage,
+                                                    d_percentage=e_d_dis[i],
                                                     tab=tab + "    ")
 
                 if check_crop == True:
@@ -797,7 +799,6 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
     m_data = merge_data_without_overlap(data, num_examples, 
                                         out_shape=[h_num, v_num], grid=grid,
                                         tab=tab + "    ") 
-    
     Print(tab + "1) Saving data mixed images . . .")
     for i in tqdm(range(0, num_examples), desc=tab):
         im = Image.fromarray(m_data[i,:,:,0]*v)

@@ -92,15 +92,17 @@ original_test_shape = [img_test_shape[0], img_test_shape[1]]
 extra_datasets_data_list = []
 extra_datasets_mask_list = []
 extra_datasets_data_dim_list = []
+extra_datasets_discard = []
 # Example of use:
 #extra_datasets_data_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'x'))
 #extra_datasets_mask_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'y'))
 #extra_datasets_data_dim_list.append([877, 967, 1])
+#extra_datasets_discard.append(0.05)                                             
 
 # Crop variables
 crop_shape = [256, 256, 1]
 make_crops = True
-check_crop = True
+check_crop = True # If discard_cropped_images is True only the run that prepare the discarded data will check te crops
 random_crops_in_DA = False # No compatible with make_crops                                                        
 test_ov_crops = 8 # Only active with random_crops_in_DA
 probability_map = False # Only active with random_crops_in_DA                       
@@ -178,9 +180,7 @@ if discard_cropped_images == True and make_crops == True \
     X_test, Y_test, \
     norm_value, crops_made = load_data(train_path, train_mask_path, test_path,
                            test_mask_path, img_train_shape, img_test_shape,
-                           create_val=False, e_d_data=extra_datasets_data_list, 
-                           job_id=job_id, e_d_mask=extra_datasets_mask_list,
-                           e_d_data_dim=extra_datasets_data_dim_list,
+                           create_val=False, job_id=job_id, 
                            crop_shape=crop_shape, check_crop=check_crop, 
                            d_percentage=d_percentage_value)
 
@@ -215,6 +215,15 @@ if discard_cropped_images == True and make_crops == True \
     # Update shapes 
     img_train_shape = crop_shape
     img_test_shape = crop_shape
+    discard_made_run = True
+else:
+    discard_made_run = False
+
+# Disable the crops if the run is not the one that have prepared the discarded 
+# data as it will work with cropped images instead of the original ones, 
+# rewriting the needed images 
+if discard_cropped_images == True and discard_made_run == False:
+    check_crop = False
 
 # For the rest of runs that are not the first that prepares the dataset when 
 # discard is active some variables must be set as if it would made the crops
@@ -242,6 +251,7 @@ norm_value, crops_made = load_data(train_path, train_mask_path, test_path,
                            e_d_data=extra_datasets_data_list, job_id=job_id, 
                            e_d_mask=extra_datasets_mask_list,
                            e_d_data_dim=extra_datasets_data_dim_list,
+                           e_d_dis=extra_datasets_discard,
                            crop_shape=crop_shape, check_crop=check_crop)
 
 # Nomalize the data
