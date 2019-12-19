@@ -1354,9 +1354,9 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
                        vflip=True, seedValue=42, rotation_range=180, 
                        fill_mode='reflect', preproc_function=False, 
                        featurewise_center=False, brightness_range=None, 
-                       channel_shift_range=0.0, shuffle=True, 
-                       featurewise_std_normalization=False, zoom=False, 
-                       w_shift_r=0.0, h_shift_r=0.0, shear_range=0,
+                       channel_shift_range=0.0, shuffle_train=True,
+                       shuffle_val=False, featurewise_std_normalization=False, 
+                       zoom=False, w_shift_r=0.0, h_shift_r=0.0, shear_range=0,
                        random_crops_in_DA=False, crop_length=0, 
                        extra_train_data=0):             
                                                                                 
@@ -1403,7 +1403,10 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
             picking a brightness shift value from.
             channel_shift_range (float, optional): range for random channel 
             shifts.
-            shuffle (bool, optional): randomize the training data.
+            shuffle_train (bool, optional): randomize the training data on each 
+            epoch.
+            shuffle_val(bool, optional): randomize the validation data on each 
+            epoch.
             featurewise_std_normalization (bool, optional): divide inputs by std 
             of the dataset, feature-wise.                                       
             zoom (bool, optional): make random zoom in the images.              
@@ -1547,10 +1550,12 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
     if X_train is not None:
         X_train_augmented = X_datagen_train.flow(X_train,                           
                                                  batch_size=batch_size_value,       
-                                                 shuffle=shuffle, seed=seedValue)
+                                                 shuffle=shuffle_train, 
+                                                 seed=seedValue)
         Y_train_augmented = Y_datagen_train.flow(Y_train,                           
                                                  batch_size=batch_size_value,       
-                                                 shuffle=shuffle, seed=seedValue)
+                                                 shuffle=shuffle_train, 
+                                                 seed=seedValue)
     else:
         Print("Train data from directory: " + str(train_path))
         X_train_augmented = X_datagen_train.flow_from_directory(train_path,
@@ -1558,13 +1563,15 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
                                                  class_mode=None, 
                                                  color_mode="grayscale",
                                                  batch_size=batch_size_value,
-                                                 shuffle=shuffle, seed=seedValue)
+                                                 shuffle=shuffle_train, 
+                                                 seed=seedValue)
         Y_train_augmented = Y_datagen_train.flow_from_directory(train_mask_path,
                                                  target_size=target_size,
                                                  class_mode=None,
                                                  color_mode="grayscale",
                                                  batch_size=batch_size_value,
-                                                 shuffle=shuffle, seed=seedValue)
+                                                 shuffle=shuffle_train, 
+                                                 seed=seedValue)
         n_train_samples = X_train_augmented.n 
         
         Print("Test data from directory: " + str(test_path))
@@ -1573,13 +1580,13 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
                                                  class_mode=None,
                                                  color_mode="grayscale",
                                                  batch_size=batch_size_value,
-                                                 shuffle=shuffle, seed=seedValue)
+                                                 shuffle=False, seed=seedValue)
         Y_test_augmented = Y_datagen_test.flow_from_directory(test_mask_path,
                                                  target_size=target_size,
                                                  class_mode=None,
                                                  color_mode="grayscale",
                                                  batch_size=batch_size_value,
-                                                 shuffle=shuffle, seed=seedValue)
+                                                 shuffle=False, seed=seedValue)
         n_test_samples = X_test_augmented.n
         test_generator = zip(X_test_augmented, Y_test_augmented)
 
@@ -1594,21 +1601,21 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
     if val == True:
         if X_train is not None:
             X_val_flow = X_datagen_val.flow(X_val, batch_size=batch_size_value,         
-                                            shuffle=False, seed=seedValue)              
+                                            shuffle=shuffle_val, seed=seedValue)              
             Y_val_flow = Y_datagen_val.flow(Y_val, batch_size=batch_size_value,         
-                                            shuffle=False, seed=seedValue)              
+                                            shuffle=shuffle_val, seed=seedValue)              
         else:
             Print("Validation data from directory: " + str(val_path))
             X_val_flow = X_datagen_val.flow_from_directory(val_path, 
                                             target_size=target_size,
                                             batch_size=batch_size_value,
                                             class_mode=None, color_mode="grayscale",
-                                            shuffle=False, seed=seedValue)
+                                            shuffle=shuffle_val, seed=seedValue)
             Y_val_flow = Y_datagen_val.flow_from_directory(val_mask_path, 
                                             target_size=target_size,
                                             batch_size=batch_size_value,
                                             class_mode=None, color_mode="grayscale",
-                                            shuffle=False, seed=seedValue)
+                                            shuffle=shuffle_val, seed=seedValue)
             n_val_samples = X_val_flow.n
              
     # Combine generators into one which yields image and masks                  
@@ -1633,7 +1640,7 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
         
         i = 0
         for batch in X_datagen_train.flow(X_train, batch_size=batch_size_value,
-                                          shuffle=True, seed=seedValue):
+                                          shuffle=shuffle_train, seed=seedValue):
             for j in range(0, batch_size_value):
                 batch_x[i*batch_size_value+j] = batch[j]
 
@@ -1642,7 +1649,7 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
                 break
         i = 0
         for batch in Y_datagen_train.flow(Y_train, batch_size=batch_size_value,
-                                          shuffle=True, seed=seedValue):
+                                          shuffle=shuffle_train, seed=seedValue):
             for j in range(0, batch_size_value):
                 batch_y[i*batch_size_value+j] = batch[j]
 
