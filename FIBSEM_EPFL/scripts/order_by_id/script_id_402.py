@@ -119,7 +119,10 @@ aug_examples = True
 w_shift_r = 0.0
 h_shift_r = 0.0
 shear_range = 0.0
-extra_train_data = 0
+
+# Extra train data generation
+duplicate_train = 12
+extra_train_data = 0 # Applied after duplicate_train
 
 # Load preoviously generated model weigths
 load_previous_weights = False
@@ -276,6 +279,45 @@ else:
     img_channels = img_train_channels
 
 
+#############################
+#   EXTRA DATA GENERATION   #
+#############################
+
+# Duplicate N times the training data
+if duplicate_train != 0:
+    X_train = np.vstack([X_train]*duplicate_train)
+    Y_train = np.vstack([Y_train]*duplicate_train)
+    Print("Train data replicated " + str(duplicate_train) + " times. Its new "
+          + "shape is: " + str(X_train.shape))
+
+# Add extra train data generated with DA
+if extra_train_data != 0:
+    if custom_da == False:
+        # Keras DA generated extra data
+        _, extra_x, extra_y = keras_da_generator(X_train, Y_train,
+                                                 batch_size_value, job_id=job_id,
+                                                 shuffle=True,
+                                                 crops_before_DA=crops_before_DA,
+                                                 crop_length=img_width_crop,
+                                                 extra_train_data=extra_train_data)
+    else:
+        # Custom DA generated extra data
+        extra_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
+                              dim=(img_height,img_width), n_channels=1,
+                              shuffle=True, da=True, e_prob=0.0, elastic=False,
+                              vflip=True, hflip=True, rotation90=False,
+                              rotation_range=0, crops_before_DA=crops_before_DA,
+                              crop_length=img_width_crop)
+        extra_generator = ImageDataGenerator(**extra_gen_args)
+
+        extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
+
+    X_train = np.vstack((X_train, extra_x))
+    Y_train = np.vstack((Y_train, extra_y))
+    Print(str(extra_train_data) + " extra train data generated, the new shape "
+              + "of the train now is " + str(X_train.shape))
+
+
 ##########################
 #    DATA AUGMENTATION   #
 ##########################
@@ -294,14 +336,6 @@ if custom_da == False:
                                                         w_shift_r=w_shift_r,    
                                                         h_shift_r=h_shift_r,    
                                                         shear_range=shear_range)
-    # Keras DA generated extra data                                             
-    if extra_train_data != 0:                                                   
-        _, extra_x, extra_y = keras_da_generator(X_train, Y_train,              
-                                                 batch_size_value, job_id=job_id,
-                                                 shuffle=True,                  
-                                                 crops_before_DA=crops_before_DA,
-                                                 crop_length=img_width_crop,    
-                                                 extra_train_data=extra_train_data)
 else:                                                                           
     # Calculate the probability map per image
     train_prob = None
@@ -346,27 +380,9 @@ else:
         train_generator.get_transformed_samples(10, save_to_dir=True,           
                                                 job_id=job_id)                  
                                                                                 
-    # Custom DA generated extra data                                            
-    if extra_train_data != 0:                                                   
-        extra_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
-                              dim=(img_height,img_width), n_channels=1,         
-                              shuffle=True, da=True, e_prob=0.0, elastic=False, 
-                              vflip=True, hflip=True, rotation90=False,         
-                              rotation_range=0, crops_before_DA=crops_before_DA,
-                              crop_length=img_width_crop)                       
-        extra_generator = ImageDataGenerator(**extra_gen_args)                  
-                                                                                
-        extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
-
 if crops_before_DA == True:
     img_width = img_width_crop
     img_height = img_height_crop
-
-if extra_train_data != 0:                                                       
-    X_train = np.vstack((X_train, extra_x))                                     
-    Y_train = np.vstack((Y_train, extra_y))                                     
-    Print(str(extra_train_data) + " extra train data generated, the new shape " 
-          "of the train now is " + str(X_train.shape))             
 
 
 ##########################
