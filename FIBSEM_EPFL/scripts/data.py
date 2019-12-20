@@ -21,8 +21,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
               image_train_shape, image_test_shape, create_val=True, 
               val_split=0.1, shuffle_val=True, seedValue=42, 
               job_id="none_job_id", e_d_data=[], e_d_mask=[], e_d_data_dim=[], 
-              e_d_dis=[], crop_shape=None, check_crop=True, d_percentage=0, 
-              tab=""):         
+              e_d_dis=[], num_crops_per_dataset=0, crop_shape=None, 
+              check_crop=True, d_percentage=0, tab=""):         
 
     """Load train, validation and test data from the given paths. If the images 
        to be loaded are smaller than the given dimension it will be sticked in 
@@ -52,6 +52,9 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             extra datasets provided. 
             e_d_dis (list of float, optional): discard percentages of the extra
             datasets provided. Values between 0 and 1.
+            num_crops_per_dataset (int, optional): number of crops per extra
+            dataset to take into account. Useful to ensure that all the datasets
+            have the same weight during network trainning. 
             crop_shape (tuple of int, optional): shape of the crops. If any 
             provided no crops will be made.
             check_crop (bool, optional): to save the crops made to ensure they
@@ -78,7 +81,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                                                                         
     train_ids = sorted(next(os.walk(train_path))[2])                    
     train_mask_ids = sorted(next(os.walk(train_mask_path))[2])          
-                                                                        
+    
     test_ids = sorted(next(os.walk(test_path))[2])                      
     test_mask_ids = sorted(next(os.walk(test_mask_path))[2])            
                                                                         
@@ -116,6 +119,10 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                                                                         
     Y_train = Y_train/255                                               
     
+    if num_crops_per_dataset != 0:
+        X_train = X_train[:num_crops_per_dataset]
+        Y_train = Y_train[:num_crops_per_dataset]
+
     # Get and resize test images and masks                              
     X_test = np.zeros((len(test_ids), image_test_shape[1], image_test_shape[0],
                       image_test_shape[2]), dtype=np.int16)                 
@@ -222,6 +229,9 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                                                     data_mask=e_Y_train, 
                                                     d_percentage=e_d_dis[i],
                                                     tab=tab + "    ")
+                if num_crops_per_dataset != 0:
+                    e_X_train = e_X_train[:num_crops_per_dataset]
+                    e_Y_train = e_Y_train[:num_crops_per_dataset]
 
                 if check_crop == True:
                     Print(tab + "    5." + str(i) + ") Checking the crops of the"
