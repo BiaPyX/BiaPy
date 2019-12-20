@@ -7,8 +7,8 @@ import time
 import keras
 import random
 import matplotlib.pyplot as plt
-from PIL import ImageEnhance
-from PIL import Image as pil_image
+from PIL import ImageEnhance, Image
+from tqdm import tqdm
 
 def Print(s):
     """ Just a print """
@@ -329,7 +329,7 @@ def array_to_img(x, data_format='channels_last', scale=True, dtype='float32'):
        As the Keras array_to_img function in:
             https://github.com/keras-team/keras-preprocessing/blob/28b8c9a57703b60ea7d23a196c59da1edf987ca0/keras_preprocessing/image/utils.py#L230
     """
-    if pil_image is None:
+    if Image is None:
         raise ImportError('Could not import PIL.Image. '
                           'The use of `array_to_img` requires PIL.')
     x = np.asarray(x, dtype=dtype)
@@ -353,16 +353,16 @@ def array_to_img(x, data_format='channels_last', scale=True, dtype='float32'):
         x *= 255
     if x.shape[2] == 4:
         # RGBA
-        return pil_image.fromarray(x.astype('uint8'), 'RGBA')
+        return Image.fromarray(x.astype('uint8'), 'RGBA')
     elif x.shape[2] == 3:
         # RGB
-        return pil_image.fromarray(x.astype('uint8'), 'RGB')
+        return Image.fromarray(x.astype('uint8'), 'RGB')
     elif x.shape[2] == 1:
         # grayscale
         if np.max(x) > 255:
             # 32-bit signed integer grayscale image. PIL mode "I"
-            return pil_image.fromarray(x[:, :, 0].astype('int32'), 'I')
-        return pil_image.fromarray(x[:, :, 0].astype('uint8'), 'L')
+            return Image.fromarray(x[:, :, 0].astype('int32'), 'I')
+        return Image.fromarray(x[:, :, 0].astype('uint8'), 'L')
     else:
         raise ValueError('Unsupported channel number: %s' % (x.shape[2],))
 
@@ -389,3 +389,52 @@ def img_to_array(img, data_format='channels_last', dtype='float32'):
     else:
         raise ValueError('Unsupported image shape: %s' % (x.shape,))
     return x
+
+
+def save_img(X=None, data_dir=None, Y=None, mask_dir="", prefix=""):
+    """Save images in the given directory. 
+       Args:                                                                    
+            X (4D numpy array, optional): data to save as images. The first 
+            dimension must be the number of images. 
+            data_dir (str, optional): path to store X images.
+            Y (4D numpy array, optional): masks to save as images. The first 
+            dimension must be the number of images.
+            mask_dir (str, optional): path to store X images. 
+            prefix (str, optional): path to store the charts generated.                 
+    """   
+
+    if prefix is "":
+        p_x = "x_"
+        p_y = "y_"
+    else:
+        p_x = prefix + "_x_"
+        p_y = prefix + "_y_"
+ 
+    if X is not None:
+        if data_dir is not None:                                                    
+            if not os.path.exists(data_dir):                                        
+                os.makedirs(data_dir)
+        else:       
+            print("Not data_dir provided so no image will be saved!")
+            return
+
+        d = len(str(X.shape[0]))
+        for i in tqdm(range(0, X.shape[0])):
+            im = Image.fromarray(X[i,:,:,0])         
+            im = im.convert('L')                                                
+            im.save(os.path.join(data_dir, p_x + str(i).zfill(d) + ".png")) 
+
+    if Y is not None:
+        if mask_dir is not None:                                                    
+            if not os.path.exists(mask_dir):                                        
+                os.makedirs(mask_dir)                                               
+        else:
+            print("Not mask_dir provided so no image will be saved!")
+            return
+
+        d = len(str(Y.shape[0]))
+        for i in tqdm(range(0, Y.shape[0])):
+            im = Image.fromarray(Y[i,:,:,0]*255)         
+            im = im.convert('L')                                                
+            im.save(os.path.join(mask_dir, p_y + str(i).zfill(d) + ".png")) 
+       
