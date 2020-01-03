@@ -84,6 +84,11 @@ train_path = os.path.join('data', 'train', 'x')
 train_mask_path = os.path.join('data', 'train', 'y')
 test_path = os.path.join('data', 'test', 'x')
 test_mask_path = os.path.join('data', 'test', 'y')
+# Percentage of the training data used as validation                            
+perc_used_as_val = 0.1
+# Create the validation data with random images of the training data. If False
+# the validation data will be the last portion of training images.
+random_val_data = True
 
 ### Dataset shape
 # Note: train and test dimensions must be the same when training the network and
@@ -172,10 +177,10 @@ custom_da = False
 aug_examples = True 
 # Flag to shuffle the training data on every epoch 
 #(Best options: Keras->False, Custom->True)
-shuffle_train_data = custom_da
+shuffle_train_data_each_epoch = custom_da
 # Flag to shuffle the validation data on every epoch
 # (Best option: False in both cases)
-shuffle_val_data = False
+shuffle_val_data_each_epoch = False
 # Make a bit of zoom in the images. Only available in Keras DA
 keras_zoom = False 
 # width_shift_range (more details in Keras ImageDataGenerator class). Only 
@@ -347,6 +352,8 @@ X_val, Y_val, \
 X_test, Y_test, \
 norm_value, crops_made = load_data(train_path, train_mask_path, test_path,
                            test_mask_path, img_train_shape, img_test_shape,
+                           val_split=perc_used_as_val, 
+                           shuffle_val=random_val_data,
                            e_d_data=extra_datasets_data_list, job_id=job_id, 
                            e_d_mask=extra_datasets_mask_list,
                            e_d_data_dim=extra_datasets_data_dim_list,
@@ -436,8 +443,8 @@ if custom_da == False:
                                        batch_size_value=batch_size_value,
                                        X_val=X_val, Y_val=Y_val,
                                        save_examples=aug_examples, job_id=job_id,          
-                                       shuffle_train=shuffle_train_data, 
-                                       shuffle_val=shuffle_val_data, 
+                                       shuffle_train=shuffle_train_data_each_epoch, 
+                                       shuffle_val=shuffle_val_data_each_epoch, 
                                        zoom=keras_zoom,        
                                        random_crops_in_DA=random_crops_in_DA,
                                        crop_length=crop_shape[0],
@@ -471,9 +478,10 @@ else:
     # Custom Data Augmentation                                                  
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,     
                          dim=(img_height,img_width), n_channels=1,              
-                         shuffle=shuffle_train_data, da=True, e_prob=0.0, 
-                         elastic=False, vflip=True, hflip=True, rotation90=False,              
-                         rotation_range=180, brightness_range=brightness_range,
+                         shuffle=shuffle_train_data_each_epoch, da=True, 
+                         e_prob=0.0, elastic=False, vflip=True, hflip=True, 
+                         rotation90=False, rotation_range=180, 
+                         brightness_range=brightness_range, 
                          median_filter_size=median_filter_size,
                          random_crops_in_DA=random_crops_in_DA, 
                          crop_length=crop_shape[0], prob_map=probability_map,
@@ -481,7 +489,7 @@ else:
                                                                                 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,     
                              dim=(img_height,img_width), n_channels=1,          
-                             shuffle=shuffle_val_data, da=False,                           
+                             shuffle=shuffle_val_data_each_epoch, da=False,                           
                              random_crops_in_DA=random_crops_in_DA,                   
                              crop_length=crop_shape[0], val=True)              
                                                                                 
