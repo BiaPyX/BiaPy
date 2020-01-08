@@ -37,7 +37,9 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
-from smooth_tiled_predictions import predict_img_with_smooth_windowing
+from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
+                                     predict_img_with_overlap
+from skimage.segmentation import clear_border
 
 
 ##########################
@@ -92,10 +94,13 @@ original_test_shape = [img_test_width, img_test_height]
 img_width_crop = 256
 img_height_crop = 256
 img_channels_crop = 1 
-make_crops = True
-check_crop = True
-crops_before_DA = False # No compatible with make_crops                                                        
-test_ov_crops = 8 # Only active with crops_before_DA
+make_crops = False
+check_crop = False
+crops_before_DA = True # No compatible with make_crops                                                        
+test_ov_crops = 1 # Only active with crops_before_DA
+probability_map = True # Only active with crops_before_DA                       
+w_foreground = 0.94 # Only active with probability_map
+w_background = 0.06 # Only active with probability_map
 
 # Discard variables
 discard_cropped_images = False
@@ -108,15 +113,20 @@ test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_v
 # Data augmentation variables
 normalize_data = False
 norm_value_forced = -1
-custom_da = False
-keras_zoom = False
-w_shift_r = 0.0
-h_shift_r = 0.0
-shear_range = 0.0
-extra_train_data = 300
+custom_da = True
+keras_zoom = False # Only Keras DA
+aug_examples = True # Only Keras DA
+w_shift_r = 0.0 # Only Keras DA
+h_shift_r = 0.0 # Only Keras DA
+shear_range = 0.0 # Only Keras DA
+brightness_range = [1.0, 1.0] # Keras and Custom DA
+
+# Extra train data generation
+duplicate_train = 12
+extra_train_data = 0 # Applied after duplicate_train
 
 # Load preoviously generated model weigths
-load_previous_weights = True
+load_previous_weights = False
 
 # General parameters
 batch_size_value = 6
@@ -270,6 +280,45 @@ else:
     img_channels = img_train_channels
 
 
+#############################
+#   EXTRA DATA GENERATION   #
+#############################
+
+# Duplicate train data N times
+if duplicate_train != 0:
+    X_train = np.vstack([X_train]*duplicate_train)
+    Y_train = np.vstack([Y_train]*duplicate_train)
+    Print("Train data replicated " + str(duplicate_train) + " times. Its new "
+          + "shape is: " + str(X_train.shape))
+
+# Add extra train data generated with DA
+if extra_train_data != 0:
+    if custom_da == False:
+        # Keras DA generated extra data
+        _, extra_x, extra_y = keras_da_generator(X_train, Y_train,
+                                                 batch_size_value, job_id=job_id,
+                                                 shuffle=True,
+                                                 crops_before_DA=crops_before_DA,
+                                                 crop_length=img_width_crop,
+                                                 extra_train_data=extra_train_data)
+    else:
+        # Custom DA generated extra data
+        extra_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
+                              dim=(img_height,img_width), n_channels=1,
+                              shuffle=True, da=True, e_prob=0.0, elastic=False,
+                              vflip=True, hflip=True, rotation90=False,
+                              rotation_range=0, crops_before_DA=crops_before_DA,
+                              crop_length=img_width_crop)
+        extra_generator = ImageDataGenerator(**extra_gen_args)
+
+        extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
+
+    X_train = np.vstack((X_train, extra_x))
+    Y_train = np.vstack((Y_train, extra_y))
+    Print(str(extra_train_data) + " extra train data generated, the new shape "
+          + "of the train now is " + str(X_train.shape))
+
+
 ##########################
 #    DATA AUGMENTATION   #
 ##########################
@@ -279,6 +328,7 @@ if custom_da == False:
     train_generator, val_generator = keras_da_generator(X_train, Y_train,       
                                                         batch_size_value,       
                                                         X_val=X_val, Y_val=Y_val,
+                                                        save_examples=aug_examples,
                                                         job_id=job_id,          
                                                         shuffle=False,          
                                                         zoom=keras_zoom,        
@@ -286,23 +336,38 @@ if custom_da == False:
                                                         crop_length=img_width_crop,
                                                         w_shift_r=w_shift_r,    
                                                         h_shift_r=h_shift_r,    
-                                                        shear_range=shear_range)
-    # Keras DA generated extra data                                             
-    if extra_train_data != 0:                                                   
-        _, extra_x, extra_y = keras_da_generator(X_train, Y_train,              
-                                                 batch_size_value, job_id=job_id,
-                                                 shuffle=True,                  
-                                                 crops_before_DA=crops_before_DA,
-                                                 crop_length=img_width_crop,    
-                                                 extra_train_data=extra_train_data)
+                                                        shear_range=shear_range,
+                                                        brightness_range=brightness_range)
 else:                                                                           
+    # Calculate the probability map per image
+    train_prob = None
+    if probability_map == True:
+        train_prob = np.copy(Y_train[:,:,:,0])
+        train_prob = np.float32(train_prob)
+
+        for i in range(train_prob.shape[0]):
+            pdf = train_prob[i]
+        
+            # Remove artifacts connected to image border
+            pdf = clear_border(pdf)
+
+            foreground_pixels = (pdf == 1).sum()
+            background_pixels = (pdf == 0).sum()
+
+            pdf[np.where(pdf == 1.0)] = w_foreground/foreground_pixels
+            pdf[np.where(pdf == 0.0)] = w_background/background_pixels
+            pdf /= pdf.sum() # Necessary to get all probs sum 1
+            train_prob[i] = pdf
+
     # Custom Data Augmentation                                                  
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,     
                          dim=(img_height,img_width), n_channels=1,              
                          shuffle=True, da=True, e_prob=0.0, elastic=False,      
                          vflip=True, hflip=True, rotation90=False,              
-                         rotation_range=180, crops_before_DA=crops_before_DA,   
-                         crop_length=img_width_crop)                            
+                         rotation_range=180, brightness_range=brightness_range,
+                         crops_before_DA=crops_before_DA,   
+                         crop_length=img_width_crop, prob_map=probability_map,
+                         train_prob=train_prob)                            
                                                                                 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,     
                              dim=(img_height,img_width), n_channels=1,          
@@ -316,29 +381,11 @@ else:
     # Generate examples of data augmentation                                    
     if aug_examples == True:                                                    
         train_generator.get_transformed_samples(10, save_to_dir=True,           
-                                                job_id=job_id)                  
+                                                job_id=os.path.join(job_id, test_id))
                                                                                 
-    # Custom DA generated extra data                                            
-    if extra_train_data != 0:                                                   
-        extra_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
-                              dim=(img_height,img_width), n_channels=1,         
-                              shuffle=True, da=True, e_prob=0.0, elastic=False, 
-                              vflip=True, hflip=True, rotation90=False,         
-                              rotation_range=0, crops_before_DA=crops_before_DA,
-                              crop_length=img_width_crop)                       
-        extra_generator = ImageDataGenerator(**extra_gen_args)                  
-                                                                                
-        extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
-
 if crops_before_DA == True:
     img_width = img_width_crop
     img_height = img_height_crop
-
-if extra_train_data != 0:                                                       
-    X_train = np.vstack((X_train, extra_x))                                     
-    Y_train = np.vstack((Y_train, extra_y))                                     
-    Print(str(extra_train_data) + " extra train data generated, the new shape " 
-          "of the train now is " + str(X_train.shape))             
 
 
 ##########################
@@ -346,7 +393,7 @@ if extra_train_data != 0:
 ##########################
 
 Print("Creating the network . . .")
-model = U_Net([img_height, img_width, img_channels], numInitChannels=16)
+model = U_Net([img_height, img_width, img_channels], numInitChannels=32)
 
 sgd = keras.optimizers.SGD(lr=learning_rate_value, momentum=momentum_value,
                            decay=0.0, nesterov=False)
@@ -360,8 +407,7 @@ if load_previous_weights == False:
     
     if not os.path.exists(h5_dir):                                      
         os.makedirs(h5_dir)
-    checkpointer = ModelCheckpoint(os.path.join(h5_dir, 'model.fibsem_' + job_file 
-                                                        + '.h5'),
+    checkpointer = ModelCheckpoint(os.path.join(h5_dir, 'model.fibsem_' + job_file + '.h5'),
                                    verbose=1, save_best_only=True)
    
     results = model.fit_generator(train_generator, validation_data=val_generator,
@@ -489,8 +535,27 @@ else:
         det = DET_calculation(Y_test, merged_preds_test, det_eval_ge_path,
                               det_eval_path, det_bin, n_dig, job_id)
     else:
-        score[1] = -1
-        voc = -1
+        Print("As the number of overlapped crops created is 1, we will obtain " 
+              + "the (per image) Jaccard value overlapping 4 tiles with the " 
+              + "predict_img_with_overlap function")                              
+                                                                                
+        Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))                
+        for i in tqdm(range(0,len(X_test))):                                    
+            predictions_smooth = predict_img_with_overlap(                      
+                X_test[i,:,:,:],                                                
+                window_size=img_width_crop,                                     
+                subdivisions=2,  # Minimal amount of overlap for windowing. Must be an even number.
+                nb_classes=1,                                                   
+                pred_func=(                                                     
+                    lambda img_batch_subdiv: model.predict(img_batch_subdiv)    
+                )                                                               
+            )                                                                   
+            Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)      
+                                                                                
+        score[1] = jaccard_index_numpy(Y_test, Y_test_smooth)                   
+        del Y_test_smooth                                                       
+                                                                                
+        voc = -1                                                                
         det = -1
 
     
@@ -558,8 +623,8 @@ if crops_before_DA == False:
     Print("DET: " + str(det))
 else:
     Print("Test overlapped (per crop) jaccard_index: " + str(jac_per_crop))
+    Print("Test overlapped (per image) jaccard_index: " + str(score[1]))
     if test_ov_crops > 1:
-        Print("Test overlapped (per image) jaccard_index: " + str(score[1]))
         Print("VOC: " + str(voc))
         Print("DET: " + str(det))
     

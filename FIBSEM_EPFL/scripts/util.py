@@ -7,6 +7,8 @@ import time
 import keras
 import random
 import matplotlib.pyplot as plt
+from PIL import ImageEnhance, Image
+from tqdm import tqdm
 
 def Print(s):
     """ Just a print """
@@ -78,28 +80,30 @@ def create_plots(results, job_id, test_id, chartOutDir):
         os.makedirs(chartOutDir)
 
     # Loss
+    name = job_id + '_' + test_id
     plt.plot(results.history['loss'])
     plt.plot(results.history['val_loss'])
-    plt.title('Model JOBID=' + job_id + ' loss')
+    plt.title('Model JOBID=' + name + ' loss')
     plt.ylabel('Value')
     plt.xlabel('Epoch')
     plt.legend(['Train loss', 'Val. loss'], loc='upper left')
-    plt.savefig(os.path.join(chartOutDir , str(job_id) + '_loss.png'))
+    plt.savefig(os.path.join(chartOutDir , name + '_loss.png'))
     plt.clf()
 
     # Jaccard index
     plt.plot(results.history['jaccard_index'])
     plt.plot(results.history['val_jaccard_index'])
-    plt.title('Model JOBID=' + job_id + ' jaccard_index')
+    plt.title('Model JOBID=' + name + ' Jaccard Index')
     plt.ylabel('Value')
     plt.xlabel('Epoch')
     plt.legend(['Train jaccard_index', 'Val. jaccard_index'], loc='upper left')
-    plt.savefig(os.path.join(chartOutDir , str(job_id) + '_jaccard_index.png'))
+    plt.savefig(os.path.join(chartOutDir , name + '_jaccard_index.png'))
     plt.clf()
 
 
 def store_history(results, jac_per_crop, test_score, voc, det, time_callback, log_dir, 
-                  job_file, smooth_score, smooth_voc, smooth_det):
+                  job_file, smooth_score, smooth_voc, smooth_det, zfil_score, 
+                  zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det):
     """Stores the results obtained as csv to manipulate them later 
        and labeled in another file as historic results.
 
@@ -117,6 +121,12 @@ def store_history(results, jac_per_crop, test_score, voc, det, time_callback, lo
             smooth_score (float): main metric obtained with smooth results.
             smooth_voc (float): VOC metric obtained with smooth results.
             smooth_det (float): DET metric obtained with smooth results.
+            zfil_score (float): main metric obtained with Z-filtering results.
+            zfil_voc (float): VOC metric obtained with Z-filtering results.
+            zfil_det (float): DET metric obtained with Z-filtering results.
+            smo_zfil_score (float): main metric obtained with smooth and Z-filtering results.
+            smo_zfil_voc (float): VOC metric obtained with smooth and Z-filtering results.
+            smo_zfil_det (float): DET metric obtained with smooth and Z-filtering results.
     """
 
     # Create folders and construct file names
@@ -141,10 +151,16 @@ def store_history(results, jac_per_crop, test_score, voc, det, time_callback, lo
             + str(jac_per_crop) + ',' 
             + str(test_score[1]) + ',' 
             + str(smooth_score) + ','
+            + str(zfil_score) + ','
+            + str(smo_zfil_score) + ','
             + str(voc) + ','
             + str(smooth_voc) + ','
+            + str(zfil_voc) + ','
+            + str(smo_zfil_voc) + ','
             + str(det) + ','
             + str(smooth_det) + ','
+            + str(zfil_det) + ','
+            + str(smo_zfil_det) + ','
             + str(len(results.history['val_loss'])) + ',' 
             + str(np.mean(time_callback.times)) + ','
             + str(np.sum(time_callback.times)) + '\n')
@@ -172,14 +188,26 @@ def store_history(results, jac_per_crop, test_score, voc, det, time_callback, lo
     f.write(str(test_score[1]) + '\n')
     f.write('############## TEST JACCARD INDEX SMOOTH ############## \n')
     f.write(str(smooth_score) + '\n')
+    f.write('############## TEST JACCARD INDEX Z-FILTERING ############## \n')
+    f.write(str(zfil_score) + '\n')
+    f.write('############## TEST JACCARD INDEX SMOOTH+Z-FILTERING ############## \n')
+    f.write(str(smo_zfil_score) + '\n')
     f.write('############## VOC ############## \n')
     f.write(str(voc) + '\n')
     f.write('############## VOC SMOOTH ############## \n')
     f.write(str(smooth_voc) + '\n')
+    f.write('############## VOC Z-FILTERING ############## \n')
+    f.write(str(zfil_voc) + '\n')
+    f.write('############## VOC SMOOTH+Z-FILTERING ############## \n')
+    f.write(str(smo_zfil_voc) + '\n')
     f.write('############## DET ############## \n')
     f.write(str(det) + '\n')
     f.write('############## DET SMOOTH ############## \n')
     f.write(str(smooth_det) + '\n')
+    f.write('############## DET Z-FILTERING ############## \n')
+    f.write(str(zfil_det) + '\n')
+    f.write('############## DET SMOOTH+Z-FILTERING ############## \n')
+    f.write(str(smo_zfil_det) + '\n')
     f.close()
 
 
@@ -295,3 +323,118 @@ def threshold_plots(preds_test, Y_test, o_test_shape, j_score, det_eval_ge_path,
 
     return  t_jac[r_val_pos], t_voc[r_val_pos], t_det[r_val_pos]
 
+
+def array_to_img(x, data_format='channels_last', scale=True, dtype='float32'):
+    """Converts a 3D Numpy array to a PIL Image instance.
+       As the Keras array_to_img function in:
+            https://github.com/keras-team/keras-preprocessing/blob/28b8c9a57703b60ea7d23a196c59da1edf987ca0/keras_preprocessing/image/utils.py#L230
+    """
+    if Image is None:
+        raise ImportError('Could not import PIL.Image. '
+                          'The use of `array_to_img` requires PIL.')
+    x = np.asarray(x, dtype=dtype)
+    if x.ndim != 3:
+        raise ValueError('Expected image array to have rank 3 (single image). '
+                         'Got array with shape: %s' % (x.shape,))
+
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Invalid data_format: %s' % data_format)
+
+    # Original Numpy array x has format (height, width, channel)
+    # or (channel, height, width)
+    # but target PIL image has format (width, height, channel)
+    if data_format == 'channels_first':
+        x = x.transpose(1, 2, 0)
+    if scale:
+        x = x - np.min(x)
+        x_max = np.max(x)
+        if x_max != 0:
+            x /= x_max
+        x *= 255
+    if x.shape[2] == 4:
+        # RGBA
+        return Image.fromarray(x.astype('uint8'), 'RGBA')
+    elif x.shape[2] == 3:
+        # RGB
+        return Image.fromarray(x.astype('uint8'), 'RGB')
+    elif x.shape[2] == 1:
+        # grayscale
+        if np.max(x) > 255:
+            # 32-bit signed integer grayscale image. PIL mode "I"
+            return Image.fromarray(x[:, :, 0].astype('int32'), 'I')
+        return Image.fromarray(x[:, :, 0].astype('uint8'), 'L')
+    else:
+        raise ValueError('Unsupported channel number: %s' % (x.shape[2],))
+
+
+def img_to_array(img, data_format='channels_last', dtype='float32'):
+    """Converts a PIL Image instance to a Numpy array.
+       As the Keras img_to_array function in:
+            https://github.com/keras-team/keras-preprocessing/blob/28b8c9a57703b60ea7d23a196c59da1edf987ca0/keras_preprocessing/image/utils.py#L288
+    """
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format: %s' % data_format)
+    # Numpy array x has format (height, width, channel)
+    # or (channel, height, width)
+    # but original PIL image has format (width, height, channel)
+    x = np.asarray(img, dtype=dtype)
+    if len(x.shape) == 3:
+        if data_format == 'channels_first':
+            x = x.transpose(2, 0, 1)
+    elif len(x.shape) == 2:
+        if data_format == 'channels_first':
+            x = x.reshape((1, x.shape[0], x.shape[1]))
+        else:
+            x = x.reshape((x.shape[0], x.shape[1], 1))
+    else:
+        raise ValueError('Unsupported image shape: %s' % (x.shape,))
+    return x
+
+
+def save_img(X=None, data_dir=None, Y=None, mask_dir="", prefix=""):
+    """Save images in the given directory. 
+       Args:                                                                    
+            X (4D numpy array, optional): data to save as images. The first 
+            dimension must be the number of images. 
+            data_dir (str, optional): path to store X images.
+            Y (4D numpy array, optional): masks to save as images. The first 
+            dimension must be the number of images.
+            mask_dir (str, optional): path to store X images. 
+            prefix (str, optional): path to store the charts generated.                 
+    """   
+
+    if prefix is "":
+        p_x = "x_"
+        p_y = "y_"
+    else:
+        p_x = prefix + "_x_"
+        p_y = prefix + "_y_"
+ 
+    if X is not None:
+        if data_dir is not None:                                                    
+            if not os.path.exists(data_dir):                                        
+                os.makedirs(data_dir)
+        else:       
+            print("Not data_dir provided so no image will be saved!")
+            return
+
+        d = len(str(X.shape[0]))
+        for i in tqdm(range(0, X.shape[0])):
+            im = Image.fromarray(X[i,:,:,0])         
+            im = im.convert('L')                                                
+            im.save(os.path.join(data_dir, p_x + str(i).zfill(d) + ".png")) 
+
+    if Y is not None:
+        if mask_dir is not None:                                                    
+            if not os.path.exists(mask_dir):                                        
+                os.makedirs(mask_dir)                                               
+        else:
+            print("Not mask_dir provided so no image will be saved!")
+            return
+
+        d = len(str(Y.shape[0]))
+        for i in tqdm(range(0, Y.shape[0])):
+            im = Image.fromarray(Y[i,:,:,0]*255)         
+            im = im.convert('L')                                                
+            im.save(os.path.join(mask_dir, p_y + str(i).zfill(d) + ".png")) 
+       
