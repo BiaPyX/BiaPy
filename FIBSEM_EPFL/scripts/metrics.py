@@ -8,6 +8,7 @@ from skimage import measure
 import distutils
 from distutils import dir_util
 from PIL import Image
+from tensorflow.python.keras import losses
 
 def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.
@@ -75,7 +76,7 @@ def jaccard_loss(y_true, y_pred):
 
     return 1 - jac
 
-
+'''
 def dice_loss(y_true, y_pred):
     """Define Dice loss.
        
@@ -118,6 +119,33 @@ def dice_loss2(y_true, y_pred):
     dice = numerator / (denominator + tf.keras.backend.epsilon())
 
     return (1 - dice)
+'''
+### BCE DICE LOSS from https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb
+def dice_coeff(y_true, y_pred):
+    smooth = 1.
+    # Flatten
+    y_true_f = tf.reshape(y_true, [-1])
+    y_pred_f = tf.reshape(y_pred, [-1])
+    intersection = tf.reduce_sum(y_true_f * y_pred_f)
+    score = (2. * intersection + smooth) / (tf.reduce_sum(y_true_f) + tf.reduce_sum(y_pred_f) + smooth)
+    return score
+
+def dice_loss(y_true, y_pred):
+    loss = 1 - dice_coeff(y_true, y_pred)
+    return loss
+
+def bce_dice_loss(y_true, y_pred):
+    loss = losses.binary_crossentropy(y_true, y_pred) + dice_loss(y_true, y_pred)
+    return loss
+
+###
+
+# Weighted BCE+Dice
+# Inspired by https://medium.com/@Bloomore/how-to-write-a-custom-loss-function-with-additional-arguments-in-keras-5f193929f7a0
+def weighted_bce_dice_loss(w_dice=0.5, w_bce=0.5):
+    def loss(y_true, y_pred):
+        return losses.binary_crossentropy(y_true, y_pred) * w_bce + dice_loss(y_true, y_pred) * w_dice
+    return loss
 
 
 def mean_iou(y_true, y_pred):
