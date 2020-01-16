@@ -88,10 +88,10 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     # Get and resize train images and masks                             
     X_train = np.zeros((len(train_ids), image_train_shape[1], 
                         image_train_shape[0], image_train_shape[2]),
-                        dtype=np.int16)                
+                        dtype=np.float32)
     Y_train = np.zeros((len(train_mask_ids), image_train_shape[1], 
                         image_train_shape[0], image_train_shape[2]),
-                        dtype=np.int16) 
+                        dtype=np.float32)
                                                                         
     Print(tab + "0) Loading train images . . .") 
     for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids), desc=tab):     
@@ -125,9 +125,9 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
     # Get and resize test images and masks                              
     X_test = np.zeros((len(test_ids), image_test_shape[1], image_test_shape[0],
-                      image_test_shape[2]), dtype=np.int16)                 
+                      image_test_shape[2]), dtype=np.float32)
     Y_test = np.zeros((len(test_mask_ids), image_test_shape[1], 
-                       image_test_shape[0], image_test_shape[2]), dtype=np.int16)
+                       image_test_shape[0], image_test_shape[2]), dtype=np.float32)
                                                                         
     Print(tab + "2) Loading test images . . .")
     for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids), desc=tab):       
@@ -193,9 +193,9 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
             d_dim = e_d_data_dim[i]
             e_X_train = np.zeros((len(train_ids), d_dim[1], d_dim[0], d_dim[2]),
-                                 dtype=np.int16)
+                                 dtype=np.float32)
             e_Y_train = np.zeros((len(train_mask_ids), d_dim[1], d_dim[0], 
-                                 d_dim[2]), dtype=np.int16)
+                                 d_dim[2]), dtype=np.float32)
 
             Print(tab + "    5." + str(i) + ") Loading data of the extra "
                   + "dataset . . .")
@@ -249,9 +249,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             X_train = np.vstack((X_train, e_X_train))
             Y_train = np.vstack((Y_train, e_Y_train))
 
-    # Calculate normalization value
-    norm_value = np.mean(X_train)
-
     if create_val == True:                                            
         X_train, X_val, \
         Y_train, Y_val = train_test_split(X_train, Y_train, test_size=val_split,
@@ -259,16 +256,19 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                                           random_state=seedValue)      
 
         Print(tab + "*** Loaded train data shape is: " + str(X_train.shape))
-        Print(tab + "*** Loaded test data shape is: " + str(X_test.shape))
         Print(tab + "*** Loaded validation data shape is: " + str(X_val.shape))
+        Print(tab + "*** Loaded test data shape is: " + str(X_test.shape))
         Print(tab + "### END LOAD ###")
-
+        # Calculate normalization value
+        norm_value = np.mean(X_train)
         return X_train, Y_train, X_val, Y_val, X_test, Y_test, norm_value,\
                crop_made
     else:                                                               
         Print(tab + "*** Loaded train data shape is: " + str(X_train.shape))
         Print(tab + "*** Loaded test data shape is: " + str(X_test.shape))
         Print(tab + "### END LOAD ###")
+        # Calculate normalization value
+        norm_value = np.mean(X_train)
 
         return X_train, Y_train, X_test, Y_test, norm_value, crop_made                         
 
@@ -335,12 +335,12 @@ def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0],
 
     # Resize data to adjust to a value divisible by height and width
     r_data = np.zeros((data.shape[0], h_num*crop_shape[1], v_num*crop_shape[0], 
-                       data.shape[3]), dtype=np.int16)    
+                       data.shape[3]), dtype=np.float32)
     r_data[:data.shape[0],:data.shape[1],:data.shape[2],:data.shape[3]] = data
     if data_mask is not None:
         r_data_mask = np.zeros((data_mask.shape[0], h_num*crop_shape[1], 
                                 v_num*crop_shape[0], data_mask.shape[3]), 
-                               dtype=np.int16)
+                               dtype=np.float32)
         r_data_mask[:data_mask.shape[0],:data_mask.shape[1],
                     :data_mask.shape[2],:data_mask.shape[3]] = data_mask
     if data.shape != r_data.shape:
@@ -369,11 +369,11 @@ def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0],
 
     # Crop data                                                         
     cropped_data = np.zeros(((total_cropped-discarded), crop_shape[1], 
-                              crop_shape[0], r_data.shape[3]), dtype=np.int16)
+                              crop_shape[0], r_data.shape[3]), dtype=np.float32)
     if data_mask is not None:
         cropped_data_mask = np.zeros(((total_cropped-discarded), crop_shape[1], 
                                        crop_shape[0], r_data_mask.shape[3]), 
-                                     dtype=np.int16)
+                                     dtype=np.float32)
     
     cont = 0                                                              
     l_i = 0
@@ -451,9 +451,9 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision, tab=""):
     # Crop data
     total_cropped = data.shape[0]*subdivision
     cropped_data = np.zeros((total_cropped, window_size, window_size,
-                             data.shape[3]), dtype=np.int16)
+                             data.shape[3]), dtype=np.float32)
     cropped_data_mask = np.zeros((total_cropped, window_size, window_size,
-                             data.shape[3]), dtype=np.int16)
+                             data.shape[3]), dtype=np.float32)
 
     # Find the mininum overlap configuration with the number of crops to create
     min_d = sys.maxsize
@@ -546,16 +546,16 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
     # Merged data
     total_images = int(data.shape[0]/subdivision)
     merged_data = np.zeros((total_images, original_shape[1], original_shape[0],
-                             data.shape[3]), dtype=np.int16)
+                             data.shape[3]), dtype=np.float32)
 
     # Matrices to store the amount of overlap. The first is used to store the
     # number of crops to merge for each pixel. The second matrix is used to 
     # paint the overlapping map
     overlap_matrix = np.zeros((original_shape[1], original_shape[0],
-                             data.shape[3]), dtype=np.int16)
+                             data.shape[3]), dtype=np.float32)
     if ov_map == True:
         ov_map_matrix = np.zeros((original_shape[1], original_shape[0],
-                                   data.shape[3]), dtype=np.int16)
+                                   data.shape[3]), dtype=np.float32)
 
     # Find the mininum overlap configuration with the number of crops to create
     min_d = sys.maxsize
@@ -712,7 +712,7 @@ def merge_data_without_overlap(data, num, out_shape=[1, 1], grid=True, tab=""):
     height = data.shape[2] 
 
     mixed_data = np.zeros((num, out_shape[1]*width, out_shape[0]*height, 
-                           data.shape[3]), dtype=np.int16)
+                           data.shape[3]), dtype=np.float32)
     cont = 0
     Print(tab + "0) Merging crops . . .")
     for img_num in tqdm(range(0, num), desc=tab):
@@ -1217,14 +1217,14 @@ class ImageDataGenerator(keras.utils.Sequence):
 
         if self.random_crops_in_DA == True:
             batch_x = np.zeros((num_examples, self.crop_length, self.crop_length,
-                                self.X.shape[3]), dtype=np.int16)                                  
+                                self.X.shape[3]), dtype=np.float32)
             batch_y = np.zeros((num_examples, self.crop_length, self.crop_length,
-                                self.Y.shape[3]), dtype=np.int16)
+                                self.Y.shape[3]), dtype=np.float32)
         else:
             batch_x = np.zeros((num_examples, self.X.shape[1], self.X.shape[2], 
-                                self.X.shape[3]), dtype=np.int16)
+                                self.X.shape[3]), dtype=np.float32)
             batch_y = np.zeros((num_examples, self.Y.shape[1], self.Y.shape[2], 
-                                self.X.shape[3]), dtype=np.int16)
+                                self.X.shape[3]), dtype=np.float32)
 
         if save_to_dir == True:
             prefix = ""
@@ -1641,9 +1641,9 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
     # Generate extra data 
     if extra_train_data != 0 and X_train is not None:
         batch_x = np.zeros((extra_train_data, X_train.shape[1], X_train.shape[2],
-                            X_train.shape[3]), dtype=np.int16)
+                            X_train.shape[3]), dtype=np.float32)
         batch_y = np.zeros((extra_train_data, Y_train.shape[1], Y_train.shape[2],
-                            Y_train.shape[3]), dtype=np.int16)
+                            Y_train.shape[3]), dtype=np.float32)
         
         n_batches = int(extra_train_data / batch_size_value) \
                     + (extra_train_data % batch_size_value > 0)
