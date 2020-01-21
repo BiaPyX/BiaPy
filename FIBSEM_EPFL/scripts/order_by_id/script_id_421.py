@@ -709,11 +709,10 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
     smooth_det = DET_calculation(Y_test, Y_test_smooth, det_eval_ge_path,
                                  det_eval_post_path, det_bin, n_dig, job_id)
 
-Print("2) Z-FILTERING")
+zfil_preds_test = None
+smooth_zfil_preds_test = None
 if post_process == True and not extra_datasets_data_list:
-
-    zfil_preds_test = None
-    smooth_zfil_preds_test = None
+    Print("2) Z-FILTERING")
 
     if random_crops_in_DA == False:
         Print("Applying Z-filter . . .")

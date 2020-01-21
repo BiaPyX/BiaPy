@@ -80,18 +80,18 @@ os.chdir(base_work_dir)
 
 ### Dataset variables
 # Main dataset data/mask paths
-train_path = os.path.join('data', 'reshaped_kasthuri', 'hist_matching',  'train', 'x')
-train_mask_path = os.path.join('data', 'reshaped_kasthuri', 'hist_matching',  'train', 'y')
-test_path = os.path.join('data', 'reshaped_kasthuri', 'hist_matching',  'test', 'x')
-test_mask_path = os.path.join('data', 'reshaped_kasthuri', 'hist_matching',  'test', 'y')
+train_path = os.path.join('data', 'train', 'x')
+train_mask_path = os.path.join('data', 'train', 'y')
+test_path = os.path.join('achucarro', 'adjusted', 'test', 'x')
+test_mask_path = os.path.join('achucarro', 'adjusted', 'test', 'y')
 
 ### Dataset shape
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. Be sure to take care of this if you are not going to
 # use "crop_data()" with the arg force_shape, as this function resolves the 
 # problem creating always crops of the same dimension
-img_train_shape = [1707, 1280, 1]
-img_test_shape = [1707, 1280, 1]
+img_train_shape = [1024, 768, 1]
+img_test_shape = [2048, 2048, 1]
 original_test_shape = [img_test_shape[0], img_test_shape[1]]
 
 ### Extra datasets variables
@@ -103,6 +103,14 @@ extra_datasets_data_list = []
 extra_datasets_mask_list = []
 extra_datasets_data_dim_list = []
 extra_datasets_discard = []
+extra_datasets_data_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'x'))
+extra_datasets_mask_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'y'))
+extra_datasets_data_dim_list.append([877, 967, 1])
+extra_datasets_discard.append(0.05)
+extra_datasets_data_list.append(os.path.join('achucarro', 'reshaped_fibsem', 'train', 'x'))
+extra_datasets_mask_list.append(os.path.join('achucarro', 'reshaped_fibsem', 'train', 'y'))
+extra_datasets_data_dim_list.append([2806, 2806, 1])
+extra_datasets_discard.append(0.00)
 ### Example of use:
 # Path to the data:
 # extra_datasets_data_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'x'))
@@ -115,7 +123,7 @@ extra_datasets_discard = []
 #
 # Number of crop to take form each dataset to train the network. If 0, the      
 # variable will be ignored                                                      
-num_crops_per_dataset = 0
+num_crops_per_dataset = 847 
 
 ### Crop variables
 # Shape of the crops
@@ -161,7 +169,7 @@ test_crop_discard_mask_path = os.path.join('data_d', job_id + str(d_percentage_v
 normalize_data = True
 # Force the normalization value to the given number instead of the mean pixel 
 # value
-norm_value_forced = 97.39952053940087
+norm_value_forced = -1                                                          
 
 ### Data augmentation (DA) variables
 # Flag to decide which type of DA implementation will be used. Select False to 
@@ -208,9 +216,9 @@ load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = job_id
 # Flag to activate the fine tunning
-fine_tunning = True
+fine_tunning = False
 # ID of the previous weigths to load the weigths from to make the fine tunning 
-fine_tunning_weigths = "429"
+fine_tunning_weigths = "232"
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
 # Name of the folder where weights files will be stored/loaded from. This folder 
@@ -238,7 +246,7 @@ time_callback = TimeHistory()
 # Number of channels in the first initial layer of the network
 num_init_channels = 32 
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
-spatial_dropout = True
+spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
 fixed_dropout_value = 0.0 
 

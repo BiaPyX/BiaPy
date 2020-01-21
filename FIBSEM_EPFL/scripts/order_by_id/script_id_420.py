@@ -212,7 +212,7 @@ extra_train_data = 0
 ### Load preoviously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
-load_previous_weights = True
+load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = job_id
 # Flag to activate the fine tunning
@@ -709,11 +709,10 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
     smooth_det = DET_calculation(Y_test, Y_test_smooth, det_eval_ge_path,
                                  det_eval_post_path, det_bin, n_dig, job_id)
 
-Print("2) Z-FILTERING")
+zfil_preds_test = None
+smooth_zfil_preds_test = None
 if post_process == True and not extra_datasets_data_list:
-
-    zfil_preds_test = None
-    smooth_zfil_preds_test = None
+    Print("2) Z-FILTERING")
 
     if random_crops_in_DA == False:
         Print("Applying Z-filter . . .")
@@ -778,9 +777,9 @@ if load_previous_weights == False:
     zfil_score = -1 if 'zfil_score' not in globals() else zfil_score
     zfil_voc = -1 if 'zfil_voc' not in globals() else zfil_voc
     zfil_det = -1 if 'zfil_det' not in globals() else zfil_det
-    smo_zfil_score = -1 if 'zfil_score' not in globals() else smo_zfil_score
-    smo_zfil_voc = -1 if 'zfil_voc' not in globals() else smo_zfil_voc
-    smo_zfil_det = -1 if 'zfil_det' not in globals() else smo_zfil_det
+    smo_zfil_score = -1 if 'smo_zfil_score' not in globals() else smo_zfil_score
+    smo_zfil_voc = -1 if 'smo_zfil_voc' not in globals() else smo_zfil_voc
+    smo_zfil_det = -1 if 'smo_zfil_det' not in globals() else smo_zfil_det
     jac_per_crop = -1 if 'jac_per_crop' not in globals() else jac_per_crop
 
     store_history(results, jac_per_crop, score, voc, det, time_callback, log_dir,

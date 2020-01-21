@@ -80,18 +80,18 @@ os.chdir(base_work_dir)
 
 ### Dataset variables
 # Main dataset data/mask paths
-train_path = os.path.join('data', 'reshaped_kasthuri', 'hist_matching',  'train', 'x')
-train_mask_path = os.path.join('data', 'reshaped_kasthuri', 'hist_matching',  'train', 'y')
-test_path = os.path.join('data', 'reshaped_kasthuri', 'hist_matching',  'test', 'x')
-test_mask_path = os.path.join('data', 'reshaped_kasthuri', 'hist_matching',  'test', 'y')
+train_path = os.path.join('achucarro', 'reshaped_fibsem', 'hist_matching', 'train', 'x')
+train_mask_path = os.path.join('achucarro', 'reshaped_fibsem', 'hist_matching', 'train', 'y')
+test_path = os.path.join('achucarro', 'reshaped_fibsem', 'hist_matching', 'test', 'x')
+test_mask_path = os.path.join('achucarro', 'reshaped_fibsem', 'hist_matching', 'test', 'y')
 
 ### Dataset shape
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. Be sure to take care of this if you are not going to
 # use "crop_data()" with the arg force_shape, as this function resolves the 
 # problem creating always crops of the same dimension
-img_train_shape = [1707, 1280, 1]
-img_test_shape = [1707, 1280, 1]
+img_train_shape = [2806, 2806, 1]
+img_test_shape = [2806, 2806, 1]
 original_test_shape = [img_test_shape[0], img_test_shape[1]]
 
 ### Extra datasets variables
@@ -161,7 +161,7 @@ test_crop_discard_mask_path = os.path.join('data_d', job_id + str(d_percentage_v
 normalize_data = True
 # Force the normalization value to the given number instead of the mean pixel 
 # value
-norm_value_forced = 97.39952053940087
+norm_value_forced = 140.48185582016453
 
 ### Data augmentation (DA) variables
 # Flag to decide which type of DA implementation will be used. Select False to 
@@ -204,13 +204,13 @@ extra_train_data = 0
 ### Load preoviously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
-load_previous_weights = False
+load_previous_weights = True
 # ID of the previous experiment to load the weigths from 
-previous_job_weights = job_id
+previous_job_weights = "472"
 # Flag to activate the fine tunning
-fine_tunning = True
+fine_tunning = False
 # ID of the previous weigths to load the weigths from to make the fine tunning 
-fine_tunning_weigths = "429"
+fine_tunning_weigths = "232"
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
 # Name of the folder where weights files will be stored/loaded from. This folder 
@@ -221,6 +221,8 @@ h5_dir = 'h5_files'
 ### Experiment main parameters
 # Batch size value
 batch_size_value = 6
+# Optimizer to use. Posible values: "sgd" or "adam"
+optimizer = "sgd"
 # Learning rate used by the optimization method
 learning_rate_value = 0.001
 # Number of epochs to train the network
@@ -238,7 +240,7 @@ time_callback = TimeHistory()
 # Number of channels in the first initial layer of the network
 num_init_channels = 32 
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
-spatial_dropout = True
+spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
 fixed_dropout_value = 0.0 
 
@@ -262,8 +264,18 @@ det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
 n_dig = "3"
 
 ### Paths of the results                                             
-# Directory where the resulting images of the segmentation will be stored
-result_dir = os.path.join('results', 'results_' + job_id)
+# Directory where predicted images of the segmentation will be stored
+result_dir = os.path.join('results', 'results_' + job_id, job_file)
+# Directory where binarized predicted images will be stored
+result_bin_dir = os.path.join(result_dir, 'binarized')
+# Directory where predicted images will be stored
+result_no_bin_dir = os.path.join(result_dir, 'no_binarized')
+# Folder where the smoothed images will be stored
+smooth_dir = os.path.join(result_dir, 'smooth')
+# Folder where the images with the z-filter applied will be stored
+zfil_dir = os.path.join(result_dir, 'zfil')
+# Folder where the images with smoothing and z-filter applied will be stored
+smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
 # folder pointed by "base_work_dir" variable 
@@ -497,10 +509,17 @@ model = U_Net([img_height, img_width, img_channels],
               numInitChannels=num_init_channels, spatial_dropout=spatial_dropout,
               fixed_dropout=fixed_dropout_value)
 
-sgd = keras.optimizers.SGD(lr=learning_rate_value, momentum=0.99, decay=0.0, 
-                           nesterov=False)
+if optimizer == "sgd":
+    opt = keras.optimizers.SGD(lr=learning_rate_value, momentum=0.99, decay=0.0, 
+                               nesterov=False)
+elif optimizer == "adam":    
+    opt = keras.optimizers.Adam(lr=learning_rate_value, beta_1=0.9, beta_2=0.999,
+                                epsilon=None, decay=0.0, amsgrad=False)
+else:
+    Print("Error: optimizer value must be 'sgd' or 'adam'")
+    sys.exit(0)
 
-model.compile(optimizer=sgd, loss='binary_crossentropy', metrics=[jaccard_index])
+model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
 if load_previous_weights == False:
@@ -573,6 +592,18 @@ if random_crops_in_DA == False:
                                                               out_shape=[h_num, v_num], 
                                                               grid=False)
         recons_no_bin_preds_test = recons_no_bin_preds_test.astype(float)/255
+        
+        Print("Saving predicted images . . .")
+        save_img(Y=recons_preds_test, mask_dir=result_bin_dir,
+                 prefix="test_out_bin")
+        save_img(Y=recons_no_bin_preds_test, mask_dir=result_no_bin_dir,
+                 prefix="test_out_no_bin")
+    else:
+        Print("Saving predicted images . . .")
+        save_img(Y=bin_preds_test, mask_dir=result_bin_dir,
+                 prefix="test_out_bin")
+        save_img(Y=preds_test, mask_dir=result_no_bin_dir,
+                 prefix="test_out_no_bin")
 
     # Metric calculation
     if make_threshold_plots == True:
@@ -582,16 +613,17 @@ if random_crops_in_DA == False:
                                 n_dig, job_id, job_file, char_dir)
     else:
         Print("Calculate metrics . . .")
-        score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
-        voc = voc_calculation(Y_test, recons_preds_test, score[1])
-        det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path,
-                              det_eval_path, det_bin, n_dig, job_id)
+        if make_crops == True:
+            score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
+            voc = voc_calculation(Y_test, recons_preds_test, score[1])
+            det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path,
+                                  det_eval_path, det_bin, n_dig, job_id)
+        else:
+            score[1] = jaccard_index_numpy(Y_test, bin_preds_test)
+            voc = voc_calculation(Y_test, bin_preds_test, score[1])
+            det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
+                                  det_eval_path, det_bin, n_dig, job_id)
 
-    # Save output images
-    if len(sys.argv) > 1 and test_id == "1":
-        Print("Saving predicted images . . .")
-        save_img(Y=recons_no_bin_preds_test, mask_dir=result_dir, 
-                 prefix="test_out")
 else:
     ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, crop_shape[0], 
                                                   test_ov_crops)
@@ -674,6 +706,12 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
     
     Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
 
+    # Extract the number of digits to create the image names
+    d = len(str(X_test.shape[0]))
+
+    if not os.path.exists(smooth_dir):
+        os.makedirs(smooth_dir)
+
     Print("Smoothing crops . . .")
     for i in tqdm(range(0,len(X_test))):
         predictions_smooth = predict_img_with_smooth_windowing(
@@ -687,12 +725,11 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
         )
         Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
 
-        if not os.path.exists(result_dir):
-            os.makedirs(result_dir)
         if len(sys.argv) > 1 and test_id == "1":
             im = Image.fromarray(predictions_smooth[:,:,0]*255)
             im = im.convert('L')
-            im.save(os.path.join(result_dir,"test_out_smooth_" + str(i) + ".png"))
+            im.save(os.path.join(smooth_dir,"test_out_smooth_" + str(i).zfill(d) 
+                                            + ".png"))
 
     # Metrics (Jaccard + VOC + DET)
     Print("Calculate metrics . . .")
@@ -715,6 +752,9 @@ if post_process == True and not extra_datasets_data_list:
             zfil_preds_test = calculate_z_filtering(merged_preds_test)
 
     if zfil_preds_test is not None:
+        Print("Saving Z-filtered images . . .")
+        save_img(Y=zfil_preds_test, mask_dir=zfil_dir, prefix="test_out_zfil")
+ 
         Print("Calculate metrics for the Z-filtered data . . .")
         zfil_score = jaccard_index_numpy(Y_test, zfil_preds_test)
         zfil_voc = voc_calculation(Y_test, zfil_preds_test, zfil_score)
@@ -724,6 +764,10 @@ if post_process == True and not extra_datasets_data_list:
     if Y_test_smooth is not None:
         Print("Applying Z-filter to the smoothed data . . .")
         smooth_zfil_preds_test = calculate_z_filtering(Y_test_smooth)
+
+        Print("Saving smoothed + Z-filtered images . . .")
+        save_img(Y=smooth_zfil_preds_test, mask_dir=smoo_zfil_dir, 
+                 prefix="test_out_smoo_zfil")
 
         Print("Calculate metrics for the smoothed + Z-filtered data . . .")
         smo_zfil_score = jaccard_index_numpy(Y_test, smooth_zfil_preds_test)

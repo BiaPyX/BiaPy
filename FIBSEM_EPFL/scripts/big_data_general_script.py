@@ -102,36 +102,7 @@ data_paths.append(test_path)
 data_paths.append(test_mask_path)
 data_paths.append(complete_test_path)
 
-# Extra datasets variables
-extra_datasets_data_list = []
-extra_datasets_mask_list = []
-extra_datasets_data_dim_list = []
-# Example of use:
-#extra_datasets_data_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'x'))
-#extra_datasets_mask_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'y'))
-#extra_datasets_data_dim_list.append([877, 967, 1])
-
-# Crop variables
-#crop_shape = [256, 256, 1]
-#make_crops = False
-#check_crop = False
-#random_crops_in_DA = False # No compatible with make_crops                                                        
-#test_ov_crops = 8 # Only active with random_crops_in_DA
-#probability_map = False # Only active with random_crops_in_DA                       
-#w_foreground = 0.94 # Only active with probability_map
-#w_background = 0.06 # Only active with probability_map
-
-# Discard variables
-#discard_cropped_images = False
-#d_percentage_value = 0.05
-#train_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'train', 'x')
-#train_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'train', 'y')
-#test_crop_discard_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'x')
-#test_crop_discard_mask_path = os.path.join('data_d', 'kas_' + str(d_percentage_value), 'test', 'y')
-
 # Data augmentation variables
-#normalize_data = False
-#norm_value_forced = -1
 custom_da = False
 aug_examples = True # Keras and Custom DA
 keras_zoom = False # Only Keras DA
@@ -140,10 +111,6 @@ h_shift_r = 0.0 # Only Keras DA
 shear_range = 0.0 # Only Keras DA
 brightness_range = [1.0, 1.0] # Keras and Custom DA
 median_filter_size = [0, 0] # Only Custom DA
-
-# Extra train data generation
-#duplicate_train = 0
-#extra_train_data = 0 # Applied after duplicate_train
 
 # Load preoviously generated model weigths
 load_previous_weights = False
@@ -200,51 +167,7 @@ if custom_da == False:
 else:                                                                           
     Print("Custom DA selected")
 
-    # Calculate the probability map per image
-    train_prob = None
-    if probability_map == True:
-        train_prob = np.copy(Y_train[:,:,:,0])
-        train_prob = np.float32(train_prob)
-
-        Print("Calculating the probability map . . .")
-        for i in range(train_prob.shape[0]):
-            pdf = train_prob[i]
-        
-            # Remove artifacts connected to image border
-            pdf = clear_border(pdf)
-
-            foreground_pixels = (pdf == 1).sum()
-            background_pixels = (pdf == 0).sum()
-
-            pdf[np.where(pdf == 1.0)] = w_foreground/foreground_pixels
-            pdf[np.where(pdf == 0.0)] = w_background/background_pixels
-            pdf /= pdf.sum() # Necessary to get all probs sum 1
-            train_prob[i] = pdf
-
-    # Custom Data Augmentation                                                  
-    data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,     
-                         dim=(img_height,img_width), n_channels=1,              
-                         shuffle=True, da=True, e_prob=0.0, elastic=False,      
-                         vflip=True, hflip=True, rotation90=False,              
-                         rotation_range=180, brightness_range=brightness_range,
-                         median_filter_size=median_filter_size,
-                         random_crops_in_DA=random_crops_in_DA, 
-                         crop_length=crop_shape[0], prob_map=probability_map,
-                         train_prob=train_prob)                            
-                                                                                
-    data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,     
-                             dim=(img_height,img_width), n_channels=1,          
-                             shuffle=False, da=False,                           
-                             random_crops_in_DA=random_crops_in_DA,                   
-                             crop_length=crop_shape[0], val=True)              
-                                                                                
-    train_generator = ImageDataGenerator(**data_gen_args)                       
-    val_generator = ImageDataGenerator(**data_gen_val_args)                     
-                                                                                
-    # Generate examples of data augmentation                                    
-    if aug_examples == True:                                                    
-        train_generator.get_transformed_samples(10, save_to_dir=True,           
-                                                job_id=os.path.join(job_id, test_id))
+    # NOT IMPLEMENTED YET #
 
 ##########################
 #    BUILD THE NETWORK   #
@@ -262,12 +185,12 @@ model.compile(optimizer=sgd, loss='binary_crossentropy', metrics=[jaccard_index]
 model.summary()
 
 if load_previous_weights == False:
-    earlystopper = EarlyStopping(patience=1, verbose=1, 
+    earlystopper = EarlyStopping(patience=50, verbose=1, 
                                  restore_best_weights=True)
     
     if not os.path.exists(h5_dir):                                      
         os.makedirs(h5_dir)
-    checkpointer = ModelCheckpoint(os.path.join(h5_dir, 'model.fibsem_' + job_file + '.h5'),
+    checkpointer = ModelCheckpoint(os.path.join(h5_dir, 'model.c_human_' + job_file + '.h5'),
                                    verbose=1, save_best_only=True)
    
     Print("Training the model . . .")
@@ -277,7 +200,7 @@ if load_previous_weights == False:
                                   epochs=epochs_value, 
                                   callbacks=[earlystopper, checkpointer, time_callback])
 else:
-    h5_file=os.path.join(h5_dir, 'model.fibsem_' + job_id + '_' + test_id + '.h5')
+    h5_file=os.path.join(h5_dir, 'model.c_human_' + job_id + '_' + test_id + '.h5')
     Print("Loading model weights from h5_file: " + h5_file)
     model.load_weights(h5_file)
 
@@ -290,11 +213,14 @@ Print("##################\n" + "#    INFERENCE   #\n" + "##################\n")
 
 # Evaluate to obtain the loss value and the Jaccard index (per crop)
 Print("Evaluating test data . . .")
-score = model.evaluate_generator(test_generator, steps=math.ceil(n_test_samples/batch_size_value), verbose=1)
+score = model.evaluate_generator(test_generator, 
+                                 steps=math.ceil(n_test_samples/batch_size_value), 
+                                 verbose=1)
 
 # Predict on test
 Print("Making the predictions on test data . . .")
-preds_test = model.predict_generator(test_generator, steps=math.ceil(n_test_samples/batch_size_value),
+preds_test = model.predict_generator(test_generator,    
+                                     steps=math.ceil(n_test_samples/batch_size_value),
                                      verbose=1)
 
 # Threshold images
@@ -350,20 +276,24 @@ if post_process == True:
                              dtype=np.uint8)
 
     if not os.path.exists(result_dir):
-            os.makedirs(result_dir)
+        os.makedirs(result_dir)
 
     Print("Smoothing crops . . .")
     iterations = math.ceil(complete_generator.n/batch_size_value)
     cont = 0
     for i in tqdm(range(0,iterations)):
         batch = next(complete_generator)
-        for im in batch:
+
+        images, _ = batch
+        for j in tqdm(range(0, images.shape[0])):
             if cont >= complete_generator.n:
                 break
+
+            im = images[j]
             predictions_smooth = predict_img_with_smooth_windowing(
-                im[0],
+                im,
                 window_size=img_train_shape[0],
-                subdivisions=2,  
+                subdivisions=2,
                 nb_classes=1,
                 pred_func=(
                     lambda img_batch_subdiv: model.predict(img_batch_subdiv)
@@ -375,7 +305,8 @@ if post_process == True:
             if len(sys.argv) > 1 and test_id == "1":
                 im = Image.fromarray(predictions_smooth[:,:,0])
                 im = im.convert('L')
-                im.save(os.path.join(result_dir,"test_out_smooth_" + str(i) + ".png"))
+                im.save(os.path.join(result_dir,"test_out_smooth_" + str(cont)
+                        + ".png"))
 
     # First crop the complete data 
     Y_test_smooth, _ = crop_data(Y_test_smooth, img_train_shape, tab="    ")

@@ -80,18 +80,18 @@ os.chdir(base_work_dir)
 
 ### Dataset variables
 # Main dataset data/mask paths
-train_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'background_correction', 'train', 'x')
-train_mask_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'background_correction', 'train', 'y')
-test_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'background_correction', 'test', 'x')
-test_mask_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'background_correction', 'test', 'y')
+train_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'hist_matching',  'train', 'x')
+train_mask_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'hist_matching',  'train', 'y')
+test_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'hist_matching',  'test', 'x')
+test_mask_path = os.path.join('kasthuri_pp', 'reshaped_fibsem', 'hist_matching',  'test', 'y')
 
 ### Dataset shape
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. Be sure to take care of this if you are not going to
 # use "crop_data()" with the arg force_shape, as this function resolves the 
 # problem creating always crops of the same dimension
-img_train_shape = [877, 967, 1]                                                 
-img_test_shape = [800, 931, 1]    
+img_train_shape = [877, 967, 1]
+img_test_shape = [800, 931, 1]
 original_test_shape = [img_test_shape[0], img_test_shape[1]]
 
 ### Extra datasets variables
@@ -113,9 +113,9 @@ extra_datasets_discard = []
 # Discard value to apply in the dataset (see "Discard variables" for more details):
 # extra_datasets_discard.append(0.05)                                             
 #
-# Number of crop to take form each dataset to train the network. If 0, the 
-# variable will be ignored
-num_crops_per_dataset = 0 
+# Number of crop to take form each dataset to train the network. If 0, the      
+# variable will be ignored                                                      
+num_crops_per_dataset = 0
 
 ### Crop variables
 # Shape of the crops
@@ -145,16 +145,16 @@ discard_cropped_images = True
 # Percentage of pixels labeled with the foreground class necessary to not 
 # discard the image 
 d_percentage_value = 0.05
-# Path where the train discarded data will be stored to be loaded by future 
-# runs instead of make again the process
-train_crop_discard_path = os.path.join('data_d', job_file + '_kas_' + str(d_percentage_value), 'train', 'x')
-# Path where the train discarded masks will be stored
-train_crop_discard_mask_path = os.path.join('data_d', job_file + '_kas_' + str(d_percentage_value), 'train', 'y')
+# Path where the train discarded data will be stored to be loaded by future runs 
+# instead of make again the process
+train_crop_discard_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'train', 'x')
+# Path where the train discarded masks will be stored                           
+train_crop_discard_mask_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'train', 'y')
 # The discards are NOT done in the test data, but this will store the test data,
-# which will be cropped, into the pointed path to be loaded by future runs 
-# together with the train discarded data and masks
-test_crop_discard_path = os.path.join('data_d', job_file + '_kas_' + str(d_percentage_value), 'test', 'x')
-test_crop_discard_mask_path = os.path.join('data_d', job_file + '_kas_' + str(d_percentage_value), 'test', 'y')
+# which will be cropped, into the pointed path to be loaded by future runs      
+# together with the train discarded data and masks                              
+test_crop_discard_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'test', 'x')
+test_crop_discard_mask_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'test', 'y')
 
 ### Normalization
 # Flag to normalize the data dividing by the mean pixel value
@@ -174,7 +174,7 @@ aug_examples = True
 #(Best options: Keras->False, Custom->True)
 shuffle_train_data = custom_da
 # Flag to shuffle the validation data on every epoch
-# (Best option: False in bot cases)
+# (Best option: False in both cases)
 shuffle_val_data = False
 # Make a bit of zoom in the images. Only available in Keras DA
 keras_zoom = False 
@@ -226,7 +226,7 @@ learning_rate_value = 0.001
 # Number of epochs to train the network
 epochs_value = 360
 # Number of epochs to stop the training process after no improvement
-patience = epochs_value
+patience = 50 
 # Flag to activate the creation of a chart showing the loss and metrics fixing 
 # different binarization threshold values, from 0.1 to 1. Useful to check a 
 # correct threshold value (normally 0.5)
@@ -701,11 +701,10 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
     smooth_det = DET_calculation(Y_test, Y_test_smooth, det_eval_ge_path,
                                  det_eval_post_path, det_bin, n_dig, job_id)
 
-Print("2) Z-FILTERING")
+zfil_preds_test = None
+smooth_zfil_preds_test = None
 if post_process == True and not extra_datasets_data_list:
-
-    zfil_preds_test = None
-    smooth_zfil_preds_test = None
+    Print("2) Z-FILTERING")
 
     if random_crops_in_DA == False:
         Print("Applying Z-filter . . .")
@@ -770,9 +769,9 @@ if load_previous_weights == False:
     zfil_score = -1 if 'zfil_score' not in globals() else zfil_score
     zfil_voc = -1 if 'zfil_voc' not in globals() else zfil_voc
     zfil_det = -1 if 'zfil_det' not in globals() else zfil_det
-    smo_zfil_score = -1 if 'zfil_score' not in globals() else smo_zfil_score
-    smo_zfil_voc = -1 if 'zfil_voc' not in globals() else smo_zfil_voc
-    smo_zfil_det = -1 if 'zfil_det' not in globals() else smo_zfil_det
+    smo_zfil_score = -1 if 'smo_zfil_score' not in globals() else smo_zfil_score
+    smo_zfil_voc = -1 if 'smo_zfil_voc' not in globals() else smo_zfil_voc
+    smo_zfil_det = -1 if 'smo_zfil_det' not in globals() else smo_zfil_det
     jac_per_crop = -1 if 'jac_per_crop' not in globals() else jac_per_crop
 
     store_history(results, jac_per_crop, score, voc, det, time_callback, log_dir,

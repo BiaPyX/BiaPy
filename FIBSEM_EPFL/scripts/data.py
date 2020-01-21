@@ -88,10 +88,10 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     # Get and resize train images and masks                             
     X_train = np.zeros((len(train_ids), image_train_shape[1], 
                         image_train_shape[0], image_train_shape[2]),
-                        dtype=np.float32)
+                        dtype=np.float32)                
     Y_train = np.zeros((len(train_mask_ids), image_train_shape[1], 
                         image_train_shape[0], image_train_shape[2]),
-                        dtype=np.float32)
+                        dtype=np.float32) 
                                                                         
     Print(tab + "0) Loading train images . . .") 
     for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids), desc=tab):     
@@ -125,7 +125,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
     # Get and resize test images and masks                              
     X_test = np.zeros((len(test_ids), image_test_shape[1], image_test_shape[0],
-                      image_test_shape[2]), dtype=np.float32)
+                      image_test_shape[2]), dtype=np.float32)                 
     Y_test = np.zeros((len(test_mask_ids), image_test_shape[1], 
                        image_test_shape[0], image_test_shape[2]), dtype=np.float32)
                                                                         
@@ -335,7 +335,7 @@ def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0],
 
     # Resize data to adjust to a value divisible by height and width
     r_data = np.zeros((data.shape[0], h_num*crop_shape[1], v_num*crop_shape[0], 
-                       data.shape[3]), dtype=np.float32)
+                       data.shape[3]), dtype=np.float32)    
     r_data[:data.shape[0],:data.shape[1],:data.shape[2],:data.shape[3]] = data
     if data_mask is not None:
         r_data_mask = np.zeros((data_mask.shape[0], h_num*crop_shape[1], 
@@ -1217,7 +1217,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
         if self.random_crops_in_DA == True:
             batch_x = np.zeros((num_examples, self.crop_length, self.crop_length,
-                                self.X.shape[3]), dtype=np.float32)
+                                self.X.shape[3]), dtype=np.float32)                                  
             batch_y = np.zeros((num_examples, self.crop_length, self.crop_length,
                                 self.Y.shape[3]), dtype=np.float32)
         else:
