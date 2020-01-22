@@ -117,8 +117,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             mask = np.expand_dims(mask, axis=-1)
         Y_train[n,:,:,:] = mask
                                                                         
-    Y_train = Y_train/255                                               
-    
     if num_crops_per_dataset != 0:
         X_train = X_train[:num_crops_per_dataset]
         Y_train = Y_train[:num_crops_per_dataset]
@@ -153,8 +151,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             mask = np.expand_dims(mask, axis=-1)
         Y_test[n,:,:,:] = mask
                                                                         
-    Y_test = Y_test/255                                                 
-    
     # Crop the data
     if crop_shape is not None:
         Print(tab + "4) Crop data activated . . .")
@@ -916,7 +912,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
         self.dim = dim
         self.batch_size = batch_size
-        self.Y = Y
+        self.Y = Y / 255
         self.X = X
         self.n_channels = n_channels
         self.shuffle = shuffle
@@ -1467,7 +1463,7 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
                               preprocessing_function=fixed_dregee,              
                               zoom_range=zoom_val, width_shift_range=w_shift_r,
                               height_shift_range=h_shift_r, 
-                              shear_range=shear_range)                              
+                              shear_range=shear_range, rescale=1./255)                              
     else:                                                                       
         data_gen_args1 = dict(horizontal_flip=hflip, vertical_flip=vflip,       
                               fill_mode=fill_mode, rotation_range=rotation_range,          
@@ -1482,7 +1478,7 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
                               fill_mode=fill_mode, rotation_range=rotation_range,          
                               zoom_range=zoom_val, width_shift_range=w_shift_r,
                               height_shift_range=h_shift_r, 
-                              shear_range=shear_range)                              
+                              shear_range=shear_range, rescale=1./255)                              
 
     # Obtaining the path where the data is stored                                                                                 
     if data_paths is not None:
