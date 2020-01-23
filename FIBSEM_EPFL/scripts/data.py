@@ -150,6 +150,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         if len(mask.shape) == 2:
             mask = np.expand_dims(mask, axis=-1)
         Y_test[n,:,:,:] = mask
+
+    Y_test = Y_test/255 
                                                                         
     # Crop the data
     if crop_shape is not None:
