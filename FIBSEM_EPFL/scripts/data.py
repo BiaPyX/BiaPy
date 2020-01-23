@@ -1499,12 +1499,12 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
     X_datagen_train = kerasDA(**data_gen_args1)
     Y_datagen_train = kerasDA(**data_gen_args2)                                 
     X_datagen_test = kerasDA()                                 
-    Y_datagen_test = kerasDA()                                 
+    Y_datagen_test = kerasDA(rescale=1./255)                                 
     if data_paths is not None:
         complete_datagen = kerasDA()                                 
     if val == True:
         X_datagen_val = kerasDA()                                                   
-        Y_datagen_val = kerasDA()                                                   
+        Y_datagen_val = kerasDA(rescale=1./255)                                                   
 
     # Save a few examples 
     if save_examples == True:
