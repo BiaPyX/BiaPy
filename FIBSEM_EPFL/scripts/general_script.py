@@ -28,7 +28,8 @@ import time
 import tensorflow as tf
 from data import load_data, crop_data, merge_data_without_overlap, check_crops,\
                  keras_da_generator, ImageDataGenerator, crop_data_with_overlap,\
-                 merge_data_with_overlap, calculate_z_filtering
+                 merge_data_with_overlap, calculate_z_filtering,\
+                 check_binary_masks
 from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
@@ -55,7 +56,6 @@ test_id = str(sys.argv[3])
 job_file = job_id + '_' + test_id                                     
 base_work_dir = str(sys.argv[4])
 log_dir = os.path.join(base_work_dir, 'logs', job_id)
-h5_dir = os.path.join(base_work_dir, 'h5_files')
 
 # Checks
 Print('job_id : ' + job_id)
@@ -206,7 +206,7 @@ duplicate_train = 0
 # Extra number of images to add to the train data. Applied after duplicate_train 
 extra_train_data = 0
 
-### Load preoviously generated model weigths
+### Load previously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
 load_previous_weights = False
@@ -285,6 +285,19 @@ smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # training the network will be shown. This folder will be created under the
 # folder pointed by "base_work_dir" variable 
 char_dir = 'charts'
+
+
+#####################
+#   SANITY CHECKS   #
+#####################
+
+Print("#####################\n#   SANITY CHECKS   #\n#####################")
+
+check_binary_masks(train_mask_path)
+check_binary_masks(test_mask_path)
+if extra_datasets_mask_list: 
+    for i in range(len(extra_datasets_mask_list)):
+        check_binary_masks(extra_datasets_mask_list[i])
 
 
 #############################################

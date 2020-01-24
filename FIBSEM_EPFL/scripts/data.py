@@ -17,6 +17,26 @@ from texttable import Texttable
 from keras.preprocessing.image import ImageDataGenerator as kerasDA
 from util import Print, array_to_img, img_to_array
 
+def check_binary_masks(path):
+    """Check wheter the data masks is binary checking the a few random images of 
+       the given path. If the function gives no error one should assume that the
+       masks are correct.
+        
+       Args:
+            path (str): path to the data mask.
+    """
+    Print("Checking wheter the images in " + path + " are binary . . .")
+
+    ids = sorted(next(os.walk(path))[2])
+
+    numbers = random.sample(range(0, len(ids)), 4)
+    for i in numbers:
+        img = imread(os.path.join(path, ids[i]))
+        values, _ = np.unique(img, return_counts=True)
+        if len(values) != 2:
+            raise ValueError("Error: given masks are not binary. Please correct "
+                             "the images before training")
+
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
               val_split=0.1, shuffle_val=True, seedValue=42, 
