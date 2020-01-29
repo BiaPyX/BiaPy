@@ -1615,8 +1615,8 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
                                                  color_mode="grayscale",
                                                  batch_size=batch_size_value,
                                                  shuffle=False, seed=seedValue)
+
         n_test_samples = X_test_augmented.n
-        test_generator = zip(X_test_augmented, Y_test_augmented)
 
         Print("Complete data from directory: " + str(complete_path))
         complete_augmented = complete_datagen.flow_from_directory(complete_path,
@@ -1692,15 +1692,16 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
     else:
         if val == True:
             if data_paths is not None:
-                return train_generator, val_generator, test_generator, \
+                return train_generator, val_generator, X_test_augmented, \
+                       Y_test_augmented,\
                        complete_augmented, n_train_samples, n_val_samples, \
                        n_test_samples
             else:
                 return train_generator, val_generator
         else:
             if data_paths is not None:
-                return train_generator, test_generator, complete_augmented, \
-                       n_train_samples, n_test_samples
+                return train_generator, X_test_augmented, Y_test_augmented, complete_augmented, \
+                      n_train_samples, n_test_samples
             else:
                 return train_generator
 
