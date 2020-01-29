@@ -746,11 +746,10 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
         )
         Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
 
-        if len(sys.argv) > 1 and test_id == "1":
-            im = Image.fromarray(predictions_smooth[:,:,0]*255)
-            im = im.convert('L')
-            im.save(os.path.join(smooth_dir,"test_out_smooth_" + str(i).zfill(d) 
-                                            + ".png"))
+        im = Image.fromarray(predictions_smooth[:,:,0]*255)
+        im = im.convert('L')
+        im.save(os.path.join(smooth_dir,"test_out_smooth_" + str(i).zfill(d) 
+                                        + ".png"))
 
     # Metrics (Jaccard + VOC + DET)
     Print("Calculate metrics . . .")
