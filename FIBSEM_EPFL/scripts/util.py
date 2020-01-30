@@ -391,7 +391,7 @@ def img_to_array(img, data_format='channels_last', dtype='float32'):
     return x
 
 
-def save_img(X=None, data_dir=None, Y=None, mask_dir="", prefix=""):
+def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
     """Save images in the given directory. 
        Args:                                                                    
             X (4D numpy array, optional): data to save as images. The first 
@@ -399,7 +399,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir="", prefix=""):
             data_dir (str, optional): path to store X images.
             Y (4D numpy array, optional): masks to save as images. The first 
             dimension must be the number of images.
-            mask_dir (str, optional): path to store X images. 
+            mask_dir (str, optional): path to store Y images. 
             prefix (str, optional): path to store the charts generated.                 
     """   
 

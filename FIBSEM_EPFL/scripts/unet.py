@@ -52,7 +52,7 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     c3 = Conv2D(numInitChannels*4, (3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (p2)
     if fixed_dropout == 0.0:
-        c3 = SpatialDropout2D(0.1) (c3) if spatial_dropout == True else Dropout(0.1) (c3)
+        c3 = SpatialDropout2D(0.2) (c3) if spatial_dropout == True else Dropout(0.2) (c3)
     else:    
         c3 = SpatialDropout2D(fixed_dropout) (c3) if spatial_dropout == True else Dropout(fixed_dropout) (c3)
     c3 = Conv2D(numInitChannels*4, (3, 3), activation=activation,
@@ -62,7 +62,7 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     c4 = Conv2D(numInitChannels*8, (3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (p3)
     if fixed_dropout == 0.0:
-        c4 = SpatialDropout2D(0.1) (c4) if spatial_dropout == True else Dropout(0.1) (c4)
+        c4 = SpatialDropout2D(0.2) (c4) if spatial_dropout == True else Dropout(0.2) (c4)
     else:
         c4 = SpatialDropout2D(fixed_dropout) (c4) if spatial_dropout == True else Dropout(fixed_dropout) (c4)
     c4 = Conv2D(numInitChannels*8, (3, 3), activation=activation,
@@ -72,7 +72,7 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     c5 = Conv2D(numInitChannels*16, (3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (p4)
     if fixed_dropout == 0.0:
-        c5 = SpatialDropout2D(0.1) (c5) if spatial_dropout == True else Dropout(0.1) (c5)
+        c5 = SpatialDropout2D(0.3) (c5) if spatial_dropout == True else Dropout(0.3) (c5)
     else:
         c5 = SpatialDropout2D(fixed_dropout) (c5) if spatial_dropout == True else Dropout(fixed_dropout) (c5)
     c5 = Conv2D(numInitChannels*16, (3, 3), activation=activation,
@@ -84,7 +84,7 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     c6 = Conv2D(numInitChannels*8, (3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (u6)
     if fixed_dropout == 0.0:
-        c6 = SpatialDropout2D(0.1) (c6) if spatial_dropout == True else Dropout(0.1) (c6)
+        c6 = SpatialDropout2D(0.2) (c6) if spatial_dropout == True else Dropout(0.2) (c6)
     else:
         c6 = SpatialDropout2D(fixed_dropout) (c6) if spatial_dropout == True else Dropout(fixed_dropout) (c6)
     c6 = Conv2D(numInitChannels*8, (3, 3), activation=activation,
@@ -96,7 +96,7 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     c7 = Conv2D(numInitChannels*4, (3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (u7)
     if fixed_dropout == 0.0:
-        c7 = SpatialDropout2D(0.1) (c7) if spatial_dropout == True else Dropout(0.1) (c7)
+        c7 = SpatialDropout2D(0.2) (c7) if spatial_dropout == True else Dropout(0.2) (c7)
     else:
         c7 = SpatialDropout2D(fixed_dropout) (c7) if spatial_dropout == True else Dropout(fixed_dropout) (c7)
     c7 = Conv2D(numInitChannels*4, (3, 3), activation=activation,
