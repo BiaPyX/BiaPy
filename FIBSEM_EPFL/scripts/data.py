@@ -29,7 +29,9 @@ def check_binary_masks(path):
 
     ids = sorted(next(os.walk(path))[2])
 
-    numbers = random.sample(range(0, len(ids)), 4)
+    # Check only 4 random images or less if there are not as many
+    num_sample = [4, len(ids)]
+    numbers = random.sample(range(0, len(ids)), min(num_sample))
     for i in numbers:
         img = imread(os.path.join(path, ids[i]))
         values, _ = np.unique(img, return_counts=True)
