@@ -293,7 +293,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         return X_train, Y_train, X_test, Y_test, norm_value, crop_made                         
 
 
-def __foreground_percentage(mask, class_tag=1):
+def __foreground_percentage(mask, class_tag=255):
     """ Percentage of pixels that corresponds to the class in the given image.
         
         Args: 
