@@ -101,7 +101,8 @@ def create_plots(results, job_id, test_id, chartOutDir):
     plt.clf()
 
 
-def store_history(results, jac_per_crop, test_score, voc, det, time_callback, log_dir, 
+def store_history(results, jac_per_crop, test_score, jac_per_img_50ov, voc, 
+                  voc_per_img_50ov, det, det_per_img_50ov, time_callback, log_dir, 
                   job_file, smooth_score, smooth_voc, smooth_det, zfil_score, 
                   zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det):
     """Stores the results obtained as csv to manipulate them later 
@@ -113,8 +114,14 @@ def store_history(results, jac_per_crop, test_score, voc, det, time_callback, lo
             jac_per_crop (float): Jaccard index obtained per crop. 
             test_score (array of 2 int): loss and Jaccard index obtained with 
             the test data.
-            voc (float): VOC score value.
-            det (float): DET score value.
+            jac_per_img_50ov (float): Jaccard index obtained per image with an 
+            overlap of 50%.
+            voc (float): VOC score value per image without overlap.
+            voc_per_img_50ov (float): VOC score value per image with an overlap 
+            of 50%.
+            det (float): DET score value per image without overlap.
+            det_per_img_50ov (float): DET score value per image with an overlap
+            of 50%.
             time_callback: time structure with the time of each epoch.
             csv_file (str): path where the csv file will be stored.
             history_file (str): path where the historic results will be stored.
@@ -150,14 +157,17 @@ def store_history(results, jac_per_crop, test_score, voc, det, time_callback, lo
             + str(np.max(results.history['val_jaccard_index'])) + ',' 
             + str(jac_per_crop) + ',' 
             + str(test_score[1]) + ',' 
+            + str(jac_per_img_50ov) + ',' 
             + str(smooth_score) + ','
             + str(zfil_score) + ','
             + str(smo_zfil_score) + ','
             + str(voc) + ','
+            + str(voc_per_img_50ov) + ','
             + str(smooth_voc) + ','
             + str(zfil_voc) + ','
             + str(smo_zfil_voc) + ','
             + str(det) + ','
+            + str(det_per_img_50ov) + ','
             + str(smooth_det) + ','
             + str(zfil_det) + ','
             + str(smo_zfil_det) + ','
@@ -186,22 +196,28 @@ def store_history(results, jac_per_crop, test_score, voc, det, time_callback, lo
     f.write(str(jac_per_crop) + '\n')
     f.write('############## TEST JACCARD INDEX (per image) ############## \n')
     f.write(str(test_score[1]) + '\n')
+    f.write('############## TEST JACCARD INDEX (per image with 50% ov) ############## \n')
+    f.write(str(jac_per_img_50ov) + '\n')
     f.write('############## TEST JACCARD INDEX SMOOTH ############## \n')
     f.write(str(smooth_score) + '\n')
     f.write('############## TEST JACCARD INDEX Z-FILTERING ############## \n')
     f.write(str(zfil_score) + '\n')
     f.write('############## TEST JACCARD INDEX SMOOTH+Z-FILTERING ############## \n')
     f.write(str(smo_zfil_score) + '\n')
-    f.write('############## VOC ############## \n')
+    f.write('############## VOC (per image) ############## \n')
     f.write(str(voc) + '\n')
+    f.write('############## VOC (per image with 50% ov) ############## \n')
+    f.write(str(voc_per_img_50ov) + '\n')
     f.write('############## VOC SMOOTH ############## \n')
     f.write(str(smooth_voc) + '\n')
     f.write('############## VOC Z-FILTERING ############## \n')
     f.write(str(zfil_voc) + '\n')
     f.write('############## VOC SMOOTH+Z-FILTERING ############## \n')
     f.write(str(smo_zfil_voc) + '\n')
-    f.write('############## DET ############## \n')
+    f.write('############## DET (per image) ############## \n')
     f.write(str(det) + '\n')
+    f.write('############## DET (per image with 50% ov) ############## \n')
+    f.write(str(det_per_img_50ov) + '\n')
     f.write('############## DET SMOOTH ############## \n')
     f.write(str(smooth_det) + '\n')
     f.write('############## DET Z-FILTERING ############## \n')
