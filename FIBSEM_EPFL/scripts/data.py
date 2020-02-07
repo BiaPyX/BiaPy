@@ -233,8 +233,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                     mask = np.expand_dims(mask, axis=-1)
                 e_Y_train[n,:,:,:] = mask
 
-            e_Y_train = e_Y_train/255
-
             if crop_shape is None:
                 assert d_dim[1] == image_test_shape[1] and \
                        d_dim[0] == image_test_shape[0], "Error: "\
