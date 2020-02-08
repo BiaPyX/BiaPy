@@ -198,6 +198,8 @@ brightness_range = None
 # Range to pick a median filter size value from to apply in the images. Option
 # only available in custom DA
 median_filter_size = [0, 0] 
+# Range of rotation
+rotation_range = 180
 
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when "random_crops_in_DA"
@@ -421,16 +423,17 @@ if extra_train_data != 0:
                                                  shuffle_train=True,
                                                  random_crops_in_DA=random_crops_in_DA,
                                                  crop_length=crop_shape[0],
-                                                 extra_train_data=extra_train_data)
+                                                 extra_train_data=extra_train_data,
+                                                 rotation_range=rotation_range)
     else:
         # Custom DA generated extra data
         extra_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                               dim=(img_height,img_width), n_channels=1,
                               shuffle=True, da=True, e_prob=0.0, elastic=False,
                               vflip=True, hflip=True, rotation90=False,
-                              rotation_range=0, 
                               random_crops_in_DA=random_crops_in_DA,
-                              crop_length=crop_shape[0])
+                              crop_length=crop_shape[0],
+                              rotation_range=rotation_range)
         extra_generator = ImageDataGenerator(**extra_gen_args)
 
         extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
