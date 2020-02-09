@@ -35,9 +35,10 @@ def check_binary_masks(path):
     for i in numbers:
         img = imread(os.path.join(path, ids[i]))
         values, _ = np.unique(img, return_counts=True)
-        if len(values) != 2:
+        if len(values) > 2 :
             raise ValueError("Error: given masks are not binary. Please correct "
-                             "the images before training")
+                             "the images before training. (image: {})\n"
+                             "Values: {}".format(os.path.join(path, ids[i]), values))
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
@@ -277,14 +278,17 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         Print(tab + "*** Loaded validation data shape is: " + str(X_val.shape))
         Print(tab + "*** Loaded test data shape is: " + str(X_test.shape))
         Print(tab + "### END LOAD ###")
+
         # Calculate normalization value
         norm_value = np.mean(X_train)
+
         return X_train, Y_train, X_val, Y_val, X_test, Y_test, norm_value,\
                crop_made
     else:                                                               
         Print(tab + "*** Loaded train data shape is: " + str(X_train.shape))
         Print(tab + "*** Loaded test data shape is: " + str(X_test.shape))
         Print(tab + "### END LOAD ###")
+
         # Calculate normalization value
         norm_value = np.mean(X_train)
 
@@ -914,7 +918,7 @@ class ImageDataGenerator(keras.utils.Sequence):
             vflip (bool, optional): if true vertical flip are made.
             hflip (bool, optional): if true horizontal flips are made.
             rotation90 (bool, optional): to make rotations of 90º, 180º or 270º.
-            rotation_range (float, optional): range of rotation degrees.
+            rotation_range (int, optional): range of rotation degrees.
             brightness_range (tuple of two floats, optional): Range for picking 
             a brightness shift value from.
             median_filter_size (int, optional): size of the median filter. If 0 
