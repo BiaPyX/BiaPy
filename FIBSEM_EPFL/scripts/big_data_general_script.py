@@ -216,6 +216,8 @@ result_dir = os.path.join('results', 'results_' + job_id, job_file)
 result_bin_dir = os.path.join(result_dir, 'binarized')
 # Directory where predicted images will be stored
 result_no_bin_dir = os.path.join(result_dir, 'no_binarized')
+# Directory where binarized predicted images with 50% of overlap will be stored
+result_bin_dir_50ov = os.path.join(result_dir, 'binarized_50ov')
 # Folder where the smoothed images will be stored
 smooth_dir = os.path.join(result_dir, 'smooth')
 # Folder where the images with the z-filter applied will be stored
@@ -347,7 +349,6 @@ bin_preds_test = (preds_test > 0.5).astype(np.uint8)
 # Load Y_test and reconstruct the original images
 Print("Loading test masks to make the predictions . . .")
 test_mask_ids = sorted(next(os.walk(os.path.join(test_mask_path, 'y')))[2])
-
 Y_test = np.zeros((len(test_mask_ids), img_test_shape[1], img_test_shape[0],
                    img_test_shape[2]), dtype=np.float32)
 
@@ -359,6 +360,7 @@ for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids)):
 Y_test = Y_test / 255
 Y_test = Y_test.astype(np.uint8)
 
+# Calculate number of crops per dimension to reconstruct the full image
 h_num = int(original_test_shape[0] / bin_preds_test.shape[1]) \
         + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
 v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
@@ -371,20 +373,52 @@ bin_preds_test = merge_data_without_overlap(bin_preds_test,
                                             math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
                                             out_shape=[h_num, v_num], grid=False)
 
-# Reconstruct the data to the original shape
 Print("Calculate metrics . . .")
+# Per image without overlap
 score[1] = jaccard_index_numpy(Y_test, bin_preds_test)
 voc = voc_calculation(Y_test, bin_preds_test, score[1])
 det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
                       det_eval_path, det_bin, n_dig, job_id)
 
-# Save output images
-if not os.path.exists(result_dir):
-    os.makedirs(result_dir)
 Print("Saving predicted images . . .")
 save_img(Y=bin_preds_test, mask_dir=result_bin_dir, prefix="test_out_bin")
 
-    
+# Per image with 50% overlap
+Y_test_50ov = np.zeros(Y_test.shape, dtype=(np.float32))
+cont = batch_size_value
+for i in tqdm(range(0,complete_generator.n)):
+    if cont % batch_size_value == 0:
+        cont = 1
+
+        batch = next(complete_generator)
+        images, _ = batch
+
+    else:
+        cont += 1
+
+    predictions_smooth = predict_img_with_overlap(
+                            images[cont-1],
+                            window_size=img_train_shape[0],
+                            subdivisions=2,
+                            nb_classes=1,
+                            pred_func=(
+                                lambda img_batch_subdiv: model.predict(img_batch_subdiv)
+                            )
+                        )
+    Y_test_50ov[i] = (predictions_smooth > 0.5).astype(np.uint8)
+
+Print("Saving 50% overlap predicted images . . .")
+save_img(Y=Y_test_50ov, mask_dir=result_bin_dir_50ov, prefix="test_out_bin_50ov")
+
+complete_generator.reset()
+
+Print("Calculate metrics for 50% overlap images . . .")
+jac_per_img_50ov = jaccard_index_numpy(Y_test, Y_test_50ov)
+voc_per_img_50ov = voc_calculation(Y_test, Y_test_50ov, jac_per_img_50ov)
+det_per_img_50ov = DET_calculation(Y_test, Y_test_50ov, det_eval_ge_path,
+                                   det_eval_path, det_bin, n_dig, job_id)
+
+
 ####################
 #  POST-PROCESING  #
 ####################
@@ -490,10 +524,13 @@ if load_previous_weights == False:
     Print("Validation jaccard_index: " + str(np.max(results.history['val_jaccard_index'])))
 
 Print("Test loss: " + str(score[0]))
-Print("Test (per crop) jaccard_index: " + str(jac_per_crop))
-Print("Test (per image) jaccard_index: " + str(score[1]))
-Print("VOC: " + str(voc))
-Print("DET: " + str(det))
+Print("Test jaccard_index (per crop): " + str(jac_per_crop))
+Print("Test jaccard_index (per image without overlap): " + str(score[1]))
+Print("Test jaccard_index (per image with 50% overlap): " + str(jac_per_img_50ov))
+Print("VOC (per image without overlap): " + str(voc))
+Print("VOC (per image with 50% overlap): " + str(voc_per_img_50ov))
+Print("DET (per image without overlap): " + str(det))
+Print("DET (per image with 50% overlap): " + str(det_per_img_50ov))
 
 if load_previous_weights == False:
     smooth_score = -1 if 'smooth_score' not in globals() else smooth_score
@@ -507,7 +544,8 @@ if load_previous_weights == False:
     smo_zfil_det = -1 if 'smo_zfil_det' not in globals() else smo_zfil_det
     jac_per_crop = -1 if 'jac_per_crop' not in globals() else jac_per_crop
 
-    store_history(results, jac_per_crop, score, voc, det, time_callback, log_dir,
+    store_history(results, jac_per_crop, score, jac_per_img_50ov, voc,
+                  voc_per_img_50ov, det, det_per_img_50ov, time_callback, log_dir,
                   job_file, smooth_score, smooth_voc, smooth_det, zfil_score,
                   zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
 

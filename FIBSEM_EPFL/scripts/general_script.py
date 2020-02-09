@@ -277,6 +277,8 @@ result_dir = os.path.join('results', 'results_' + job_id, job_file)
 result_bin_dir = os.path.join(result_dir, 'binarized')
 # Directory where predicted images will be stored
 result_no_bin_dir = os.path.join(result_dir, 'no_binarized')
+# Directory where binarized predicted images with 50% of overlap will be stored
+result_bin_dir_50ov = os.path.join(result_dir, 'binarized_50ov')
 # Folder where the smoothed images will be stored
 smooth_dir = os.path.join(result_dir, 'smooth')
 # Folder where the images with the z-filter applied will be stored
@@ -652,6 +654,11 @@ if random_crops_in_DA == False:
             )
             Y_test_50ov[i] = (predictions_smooth > 0.5).astype(np.float32)
 
+        Print("Saving 50% overlap predicted images . . .")
+        save_img(Y=Y_test_50ov, mask_dir=result_bin_dir_50ov, 
+                 prefix="test_out_bin_50ov")
+
+        Print("Calculate metrics for 50% overlap images . . .")
         jac_per_img_50ov = jaccard_index_numpy(Y_test, Y_test_50ov)
         voc_per_img_50ov = voc_calculation(Y_test, Y_test_50ov, jac_per_img_50ov)
         det_per_img_50ov = DET_calculation(Y_test, Y_test_50ov, det_eval_ge_path,
