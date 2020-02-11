@@ -376,7 +376,8 @@ norm_value, crops_made = load_data(train_path, train_mask_path, test_path,
                            e_d_data_dim=extra_datasets_data_dim_list,
                            e_d_dis=extra_datasets_discard,
                            num_crops_per_dataset=num_crops_per_dataset,
-                           crop_shape=crop_shape, check_crop=check_crop)
+                           make_crops=make_crops, crop_shape=crop_shape, 
+                           check_crop=check_crop)
 
 # Normalize the data
 if normalize_data == True:

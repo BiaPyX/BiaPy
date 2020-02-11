@@ -44,8 +44,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
               image_train_shape, image_test_shape, create_val=True, 
               val_split=0.1, shuffle_val=True, seedValue=42, 
               job_id="none_job_id", e_d_data=[], e_d_mask=[], e_d_data_dim=[], 
-              e_d_dis=[], num_crops_per_dataset=0, crop_shape=None, 
-              check_crop=True, d_percentage=0, tab=""):         
+              e_d_dis=[], num_crops_per_dataset=0, make_crops=True, 
+              crop_shape=None, check_crop=True, d_percentage=0, tab=""):         
 
     """Load train, validation and test data from the given paths. If the images 
        to be loaded are smaller than the given dimension it will be sticked in 
@@ -78,8 +78,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             num_crops_per_dataset (int, optional): number of crops per extra
             dataset to take into account. Useful to ensure that all the datasets
             have the same weight during network trainning. 
-            crop_shape (tuple of int, optional): shape of the crops. If any 
-            provided no crops will be made.
+            make_crops (bool, optional): flag to make crops on data.
+            crop_shape (tuple of int, optional): shape of the crops.
             check_crop (bool, optional): to save the crops made to ensure they
             are generating as one wish.
             d_percentage (int, optional): number between 0 and 100. The images
@@ -177,7 +177,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     Y_test = Y_test/255 
                                                                         
     # Crop the data
-    if crop_shape is not None:
+    if make_crops == True:
         Print(tab + "4) Crop data activated . . .")
         Print(tab + "    4.1) Cropping train data . . .")
         X_train, Y_train, _ = crop_data(X_train, crop_shape, data_mask=Y_train, 
@@ -234,7 +234,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                     mask = np.expand_dims(mask, axis=-1)
                 e_Y_train[n,:,:,:] = mask
 
-            if crop_shape is None:
+            if make_crops == False:
                 assert d_dim[1] == image_test_shape[1] and \
                        d_dim[0] == image_test_shape[0], "Error: "\
                        + "extra dataset shape (" + str(d_dim) + ") is "\
