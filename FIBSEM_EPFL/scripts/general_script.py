@@ -641,29 +641,34 @@ if random_crops_in_DA == False:
         det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
                               det_eval_path, det_bin, n_dig, job_id)
 
-        # Per image with 50% overlap
-        Y_test_50ov = np.zeros(Y_test.shape, dtype=(np.float32))
-        for i in tqdm(range(0,len(X_test))):
-            predictions_smooth = predict_img_with_overlap(
-                X_test[i,:,:,:],
-                window_size=crop_shape[0],
-                subdivisions=2,
-                nb_classes=1,
-                pred_func=(
-                    lambda img_batch_subdiv: model.predict(img_batch_subdiv)
+        if make_crops == True:
+            # Per image with 50% overlap
+            Y_test_50ov = np.zeros(Y_test.shape, dtype=(np.float32))
+            for i in tqdm(range(0,len(X_test))):
+                predictions_smooth = predict_img_with_overlap(
+                    X_test[i,:,:,:],
+                    window_size=crop_shape[0],
+                    subdivisions=2,
+                    nb_classes=1,
+                    pred_func=(
+                        lambda img_batch_subdiv: model.predict(img_batch_subdiv)
+                    )
                 )
-            )
-            Y_test_50ov[i] = (predictions_smooth > 0.5).astype(np.float32)
-
-        Print("Saving 50% overlap predicted images . . .")
-        save_img(Y=Y_test_50ov, mask_dir=result_bin_dir_50ov, 
-                 prefix="test_out_bin_50ov")
-
-        Print("Calculate metrics for 50% overlap images . . .")
-        jac_per_img_50ov = jaccard_index_numpy(Y_test, Y_test_50ov)
-        voc_per_img_50ov = voc_calculation(Y_test, Y_test_50ov, jac_per_img_50ov)
-        det_per_img_50ov = DET_calculation(Y_test, Y_test_50ov, det_eval_ge_path,
-                                           det_eval_path, det_bin, n_dig, job_id)
+                Y_test_50ov[i] = (predictions_smooth > 0.5).astype(np.float32)
+    
+            Print("Saving 50% overlap predicted images . . .")
+            save_img(Y=Y_test_50ov, mask_dir=result_bin_dir_50ov, 
+                     prefix="test_out_bin_50ov")
+        
+            Print("Calculate metrics for 50% overlap images . . .")
+            jac_per_img_50ov = jaccard_index_numpy(Y_test, Y_test_50ov)
+            voc_per_img_50ov = voc_calculation(Y_test, Y_test_50ov, jac_per_img_50ov)
+            det_per_img_50ov = DET_calculation(Y_test, Y_test_50ov, det_eval_ge_path,
+                                               det_eval_path, det_bin, n_dig, job_id)
+        else:
+            jac_per_img_50ov = -1
+            voc_per_img_50ov = -1
+            det_per_img_50ov = -1
 
 else:
     ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, crop_shape[0], 
