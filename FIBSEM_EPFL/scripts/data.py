@@ -126,7 +126,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
         if len(img.shape) == 2:
             img = np.expand_dims(img, axis=-1)
-        X_train[n,:,:,:] = img
+        X_train[n] = img
 
     Print(tab + "1) Loading train masks . . .")
     for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids), desc=tab):                      
@@ -138,7 +138,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
         if len(mask.shape) == 2:
             mask = np.expand_dims(mask, axis=-1)
-        Y_train[n,:,:,:] = mask
+        Y_train[n] = mask
                                                                         
     if num_crops_per_dataset != 0:
         X_train = X_train[:num_crops_per_dataset]
@@ -160,7 +160,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
         if len(img.shape) == 2:
             img = np.expand_dims(img, axis=-1)
-        X_test[n,:,:,:] = img
+        X_test[n] = img
 
     Print(tab + "3) Loading test masks . . .")
     for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids), desc=tab):                       
@@ -172,9 +172,16 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
         if len(mask.shape) == 2:
             mask = np.expand_dims(mask, axis=-1)
-        Y_test[n,:,:,:] = mask
+        Y_test[n] = mask
 
     Y_test = Y_test/255 
+
+    if create_val == True:
+        X_train, X_val, \
+        Y_train, Y_val = train_test_split(X_train, Y_train,
+                                          test_size=val_split,
+                                          shuffle=shuffle_val,
+                                          random_state=seedValue)
                                                                         
     # Crop the data
     if make_crops == True:
@@ -188,8 +195,14 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         X_test, Y_test, _ = crop_data(X_test, crop_shape, data_mask=Y_test,
                                       tab=tab + "    ")
         
+        if create_val == True:
+            Print(tab + "    4.3) Cropping validation data . . .")
+            X_val, Y_val, _ = crop_data(X_val, crop_shape, data_mask=Y_val,
+                                        d_percentage=d_percentage,
+                                        tab=tab + "    ")
+
         if check_crop == True:
-            Print(tab + "    4.3) Checking the crops . . .")
+            Print(tab + "    4.4) Checking the crops . . .")
             check_crops(X_train, [image_test_shape[0], image_test_shape[1]],
                         num_examples=3, out_dir="check_crops", job_id=job_id, 
                         suffix="_x_", grid=True, tab=tab + "    ")
@@ -224,7 +237,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                 im = imread(os.path.join(e_d_data[i], id_))
                 if len(im.shape) == 2:
                     im = np.expand_dims(im, axis=-1)
-                e_X_train[n,:,:,:] = im
+                e_X_train[n] = im
 
             Print(tab + "    5." + str(i) + ") Loading masks of the extra "
                   + "dataset . . .")
@@ -232,7 +245,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                 mask = imread(os.path.join(e_d_mask[i], id_))
                 if len(mask.shape) == 2:
                     mask = np.expand_dims(mask, axis=-1)
-                e_Y_train[n,:,:,:] = mask
+                e_Y_train[n] = mask
 
             if make_crops == False:
                 assert d_dim[1] == image_test_shape[1] and \
@@ -269,11 +282,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             Y_train = np.vstack((Y_train, e_Y_train))
 
     if create_val == True:                                            
-        X_train, X_val, \
-        Y_train, Y_val = train_test_split(X_train, Y_train, test_size=val_split,
-                                          shuffle=shuffle_val, 
-                                          random_state=seedValue)      
-
         Print(tab + "*** Loaded train data shape is: " + str(X_train.shape))
         Print(tab + "*** Loaded validation data shape is: " + str(X_val.shape))
         Print(tab + "*** Loaded test data shape is: " + str(X_test.shape))
