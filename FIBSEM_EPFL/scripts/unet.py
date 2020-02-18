@@ -4,10 +4,12 @@ from keras.layers.core import Dropout, Lambda, SpatialDropout2D
 from keras.layers.convolutional import Conv2D, Conv2DTranspose
 from keras.layers.pooling import MaxPooling2D
 from keras.layers.merge import concatenate
-
+import keras 
+from metrics import binary_crossentropy_weighted, jaccard_index
 
 def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0, 
-          spatial_dropout=False):
+          spatial_dropout=False, optimizer="sgd", weighted_loss=False, lr=0.001):
+
     """Create the U-Net
 
        Args:
@@ -26,6 +28,10 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
             model (Keras model): model containing the U-Net created.
     """
     inputs = Input((image_shape[0], image_shape[1], image_shape[2]))
+        
+    if weighted_loss == True:
+        weights = Input((image_shape[0], image_shape[1], image_shape[2]))
+
     s = Lambda(lambda x: x / 255) (inputs)
     
     c1 = Conv2D(numInitChannels, (3, 3), activation=activation,
@@ -127,7 +133,25 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
                 kernel_initializer='he_normal', padding='same') (c9)
     
     outputs = Conv2D(1, (1, 1), activation='sigmoid') (c9)
+   
+    if weighted_loss == True:
+        model = Model(inputs=[inputs, weights], outputs=[outputs]) 
+    else:
+        model = Model(inputs=[inputs], outputs=[outputs])
     
-    model = Model(inputs=[inputs], outputs=[outputs])
-    
+    # Specify the optimizer
+    if optimizer == "sgd":
+        opt = keras.optimizers.SGD(lr=lr, momentum=0.99, decay=0.0, 
+                                   nesterov=False)
+    elif optimizer == "adam":
+        opt = keras.optimizers.Adam(lr=lr, beta_1=0.9, beta_2=0.999, 
+                                    epsilon=None, decay=0.0, amsgrad=False)
+    else:
+        raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
+        
+    if weighted_loss == True:
+        model.compile(optimizer=opt, loss=binary_crossentropy_weighted(weights), metrics=[jaccard_index])
+    else:
+        model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
+
     return model

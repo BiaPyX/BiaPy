@@ -310,3 +310,22 @@ def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig,
 
     det = det_out.split()[2] 
     return det
+
+def binary_crossentropy_weighted(weights):
+    """
+    Based on:
+        https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py
+
+    Custom binary cross entropy loss. The weights are used to multiply
+    the results of the usual cross-entropy loss in order to give more weight
+    to areas between cells close to one another.
+    
+    The variable 'weights' refers to input weight-maps.
+    """
+    
+    def loss(y_true, y_pred): 
+        
+        return K.mean(weights * K.binary_crossentropy(y_true, y_pred), axis=-1)
+    
+    return loss
+

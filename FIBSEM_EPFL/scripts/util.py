@@ -9,6 +9,10 @@ import random
 import matplotlib.pyplot as plt
 from PIL import ImageEnhance, Image
 from tqdm import tqdm
+import copy
+from skimage import measure
+import scipy.ndimage
+
 
 def Print(s):
     """ Just a print """
@@ -454,3 +458,148 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
             im = im.convert('L')                                                
             im.save(os.path.join(mask_dir, p_y + str(i).zfill(d) + ".png")) 
        
+
+def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
+    """
+    Based on:
+        https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py
+
+    Generates a weight map in order to make the U-Net learn better the
+    borders of cells and distinguish individual cells that are tightly packed.
+    These weight maps follow the methodology of the original U-Net paper.
+    
+    The variable 'label' corresponds to a label image.
+    
+    The boolean 'binary' corresponds to whether or not the labels are
+    binary. Default value set to True.
+    
+    The float 'w0' controls for the importance of separating tightly associated
+    entities. Defaut value set to 10.
+    
+    The float 'sigma' represents the standard deviation of the Gaussian used
+    for the weight map. Default value set to 5.
+    """
+    
+    # Initialization.
+    lab = np.array(label)
+    lab_multi = lab
+       
+    if len(lab.shape) == 3:
+        lab = lab[:, :, 0]
+
+    # Get shape of label.
+    rows, cols = lab.shape
+    
+    if binary:
+        
+        # Converts the label into a binary image with background = 0
+        # and cells = 1.
+        lab[lab == 255] = 1
+        
+        
+        # Builds w_c which is the class balancing map. In our case, we want cells to have
+        # weight 2 as they are more important than background which is assigned weight 1.
+        w_c = np.array(lab, dtype=float)
+        w_c[w_c == 1] = 1
+        w_c[w_c == 0] = 0.5
+        
+        # Converts the labels to have one class per object (cell).
+        lab_multi = measure.label(lab, neighbors = 8, background = 0)
+    
+    else:
+        
+        # Converts the label into a binary image with background = 0.
+        # and cells = 1.
+        lab[lab > 0] = 1
+        
+        
+        # Builds w_c which is the class balancing map. In our case, we want cells to have
+        # weight 2 as they are more important than background which is assigned weight 1.
+        w_c = np.array(lab, dtype=float)
+        w_c[w_c == 1] = 1
+        w_c[w_c == 0] = 0.5
+        
+    components = np.unique(lab_multi)
+    
+    n_comp = len(components)-1
+    
+    maps = np.zeros((n_comp, rows, cols))
+    
+    map_weight = np.zeros((rows, cols))
+    
+    if n_comp >= 2:
+        for i in range(n_comp):
+            
+            # Only keeps current object.
+            tmp = (lab_multi == components[i+1])
+            
+            # Invert tmp so that it can have the correct distance.
+            # transform
+            tmp = ~tmp
+            
+            # For each pixel, computes the distance transform to
+            # each object.
+            maps[i][:][:] = scipy.ndimage.distance_transform_edt(tmp)
+    
+        maps = np.sort(maps, axis=0)
+        
+        # Get distance to the closest object (d1) and the distance to the second
+        # object (d2).
+        d1 = maps[0][:][:]
+        d2 = maps[1][:][:]
+        
+        map_weight = w0*np.exp(-((d1+d2)**2)/(2*(sigma**2)) ) * (lab==0).astype(int);
+
+    map_weight += w_c
+    
+    return map_weight
+
+
+def do_save_wm(labels, path, binary = True, w0 = 10, sigma = 5):
+    """
+    Based on:
+        https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py
+
+    Retrieves the label images, applies the weight-map algorithm and save the
+    weight maps in a folder.
+    
+    The variable 'labels' corresponds to given label images.
+    
+    The string 'path' refers to the path where the weight maps should be saved.
+    
+    The boolean 'binary' corresponds to whether or not the labels are
+    binary. Default value set to True.
+    
+    The float 'w0' controls for the importance of separating tightly associated
+    entities. Default value set to 10.
+    
+    The float 'sigma' represents the standard deviation of the Gaussian used
+    for the weight map. Default value set to 5.
+    """
+    
+    # Copy labels.
+    labels_ = copy.deepcopy(labels)
+    
+    # Perform weight maps.
+    for i in range(len(labels_)):
+        labels_[i] = make_weight_map(labels[i].copy(), binary, w0, sigma)
+    
+    maps = np.array(labels_)
+    
+    n, rows, cols = maps.shape
+    
+    # Resize correctly the maps so that it can be used in the model.
+    maps = maps.reshape((n, rows, cols, 1))
+    
+    # Count number of digits in n. This is important for the number
+    # of leading zeros in the name of the maps.
+    n_digits = len(str(n))
+    
+    # Save path with correct leading zeros.
+    path_to_save = path + "weight/{b:0" + str(n_digits) + "d}.npy"
+    
+    # Saving files as .npy files.
+    for i in range(len(labels_)):
+        np.save(path_to_save.format(b=i), labels_[i])
+        
+    return None

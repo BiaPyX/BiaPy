@@ -26,10 +26,11 @@ import keras
 import math
 import time
 import tensorflow as tf
-from data import load_data, crop_data, merge_data_without_overlap, check_crops,\
-                 keras_da_generator, ImageDataGenerator, crop_data_with_overlap,\
-                 merge_data_with_overlap, calculate_z_filtering,\
-                 check_binary_masks
+from data_manipulation import load_data, crop_data, merge_data_without_overlap,\
+                              check_crops, crop_data_with_overlap,\
+                              merge_data_with_overlap, check_binary_masks
+from data_generators import keras_da_generator, ImageDataGenerator,\
+                            keras_gen_samples, calculate_z_filtering
 from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
@@ -80,15 +81,17 @@ os.chdir(base_work_dir)
 
 ### Dataset variables
 # Main dataset data/mask paths
-train_path = os.path.join('data', 'train', 'x')
-train_mask_path = os.path.join('data', 'train', 'y')
-test_path = os.path.join('data', 'test', 'x')
-test_mask_path = os.path.join('data', 'test', 'y')
+data_base_path = 'data'
+train_path = os.path.join(data_base_path, 'train', 'x')
+train_mask_path = os.path.join(data_base_path, 'train', 'y')
+test_path = os.path.join(data_base_path, 'test', 'x')
+test_mask_path = os.path.join(data_base_path, 'test', 'y')
 # Percentage of the training data used as validation                            
 perc_used_as_val = 0.1
 # Create the validation data with random images of the training data. If False
 # the validation data will be the last portion of training images.
 random_val_data = True
+
 
 ### Dataset shape
 # Note: train and test dimensions must be the same when training the network and
@@ -98,6 +101,7 @@ random_val_data = True
 img_train_shape = [1024, 768, 1]
 img_test_shape = [1024, 768, 1]
 original_test_shape = [img_test_shape[0], img_test_shape[1]]
+
 
 ### Extra datasets variables
 # Paths, shapes and discard values for the extra dataset used together with the
@@ -122,6 +126,7 @@ extra_datasets_discard = []
 # variable will be ignored                                                      
 num_crops_per_dataset = 0
 
+
 ### Crop variables
 # Shape of the crops
 crop_shape = [256, 256, 1]
@@ -143,6 +148,7 @@ probability_map = False # Only active with random_crops_in_DA
 w_foreground = 0.94 # Only active with probability_map
 w_background = 0.06 # Only active with probability_map
 
+
 ### Discard variables
 # Flag to activate the discards in the main train data. Only active when 
 # "make_crops" variable is True
@@ -161,12 +167,14 @@ train_crop_discard_mask_path = os.path.join('data_d', job_id + '_' + str(d_perce
 test_crop_discard_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'test', 'x')
 test_crop_discard_mask_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'test', 'y')
 
+
 ### Normalization
 # Flag to normalize the data dividing by the mean pixel value
 normalize_data = False                                                          
 # Force the normalization value to the given number instead of the mean pixel 
 # value
 norm_value_forced = -1                                                          
+
 
 ### Data augmentation (DA) variables
 # Flag to decide which type of DA implementation will be used. Select False to 
@@ -201,12 +209,14 @@ median_filter_size = [0, 0]
 # Range of rotation
 rotation_range = 180
 
+
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when "random_crops_in_DA"
 # is made, as more original train data can be cover
 duplicate_train = 0
 # Extra number of images to add to the train data. Applied after duplicate_train 
 extra_train_data = 0
+
 
 ### Load previously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
@@ -224,6 +234,14 @@ weight_files_prefix = 'model.fibsem_'
 # must be located inside the directory pointed by "base_work_dir" variable. If
 # there is no such directory, it will be created for the first time
 h5_dir = 'h5_files'
+
+
+### Weithed loss parameters
+# Flag to insert weights on the loss function
+weighted_loss = False
+# Directory where weight maps will be stored
+loss_weight_dir = os.path.join(base_work_dir, 'loss_weights', job_id)
+
 
 ### Experiment main parameters
 # Batch size value
@@ -243,6 +261,7 @@ make_threshold_plots = False
 # Define time callback                                                          
 time_callback = TimeHistory()
 
+
 ### Network architecture specific parameters
 # Number of channels in the first initial layer of the network
 num_init_channels = 32 
@@ -251,9 +270,11 @@ spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
 fixed_dropout_value = 0.0 
 
+
 ### Post-processing
 # Flag to activate the post-processing (Smoooth and Z-filtering)
 post_process = True
+
 
 ### DET metric variables
 # More info of the metric at http://celltrackingchallenge.net/evaluation-methodology/ 
@@ -269,6 +290,7 @@ det_eval_post_path = os.path.join('cell_challenge_eval', job_id, job_file + '_s'
 det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
 # Number of digits used for encoding temporal indices of the DET metric
 n_dig = "3"
+
 
 ### Paths of the results                                             
 # Directory where predicted images of the segmentation will be stored
@@ -420,14 +442,15 @@ if extra_train_data != 0:
 
     if custom_da == False:
         # Keras DA generated extra data
-        _, extra_x, extra_y = keras_da_generator(X_train=X_train, Y_train=Y_train,
-                                                 batch_size_value=batch_size_value, 
-                                                 val=False, job_id=job_id,
-                                                 shuffle_train=True,
-                                                 random_crops_in_DA=random_crops_in_DA,
-                                                 crop_length=crop_shape[0],
-                                                 extra_train_data=extra_train_data,
-                                                 rotation_range=rotation_range)
+
+        extra_x, extra_y = keras_gen_samples(extra_train_data, X_data=X_train, 
+                                             Y_data=Y_train, 
+                                             batch_size_value=batch_size_value, 
+                                             zoom=keras_zoom, w_shift_r=w_shift_r, 
+                                             h_shift_r=h_shift_r,
+                                             shear_range=shear_range,
+                                             brightness_range=brightness_range,
+                                             rotation_range=rotation_range)
     else:
         # Custom DA generated extra data
         extra_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
@@ -446,7 +469,6 @@ if extra_train_data != 0:
     Print(str(extra_train_data) + " extra train data generated, the new shape "
           + "of the train now is " + str(X_train.shape))
 
-
 ##########################
 #    DATA AUGMENTATION   #
 ##########################
@@ -464,12 +486,15 @@ if custom_da == False:
                                        save_examples=aug_examples, job_id=job_id,          
                                        shuffle_train=shuffle_train_data_each_epoch, 
                                        shuffle_val=shuffle_val_data_each_epoch, 
-                                       zoom=keras_zoom,        
+                                       zoom=keras_zoom, 
+                                       rotation_range=rotation_range,        
                                        random_crops_in_DA=random_crops_in_DA,
                                        crop_length=crop_shape[0],
                                        w_shift_r=w_shift_r, h_shift_r=h_shift_r,    
                                        shear_range=shear_range,
-                                       brightness_range=brightness_range)
+                                       brightness_range=brightness_range,
+                                       weights=weighted_loss, 
+                                       weights_path=loss_weight_dir)
 else:                                                                           
     Print("Custom DA selected")
 
@@ -532,21 +557,10 @@ if random_crops_in_DA == True:
 Print("###################\n#  TRAIN PROCESS  #\n###################\n")
 
 Print("Creating the network . . .")
-model = U_Net([img_height, img_width, img_channels], 
+model = U_Net([img_height, img_width, img_channels],
               numInitChannels=num_init_channels, spatial_dropout=spatial_dropout,
-              fixed_dropout=fixed_dropout_value)
-
-if optimizer == "sgd":
-    opt = keras.optimizers.SGD(lr=learning_rate_value, momentum=0.99, decay=0.0, 
-                               nesterov=False)
-elif optimizer == "adam":    
-    opt = keras.optimizers.Adam(lr=learning_rate_value, beta_1=0.9, beta_2=0.999,
-                                epsilon=None, decay=0.0, amsgrad=False)
-else:
-    Print("Error: optimizer value must be 'sgd' or 'adam'")
-    sys.exit(0)
-
-model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
+              fixed_dropout=fixed_dropout_value, weighted_loss=weighted_loss,
+              optimizer=optimizer, lr=learning_rate_value)
 model.summary()
 
 if load_previous_weights == False:

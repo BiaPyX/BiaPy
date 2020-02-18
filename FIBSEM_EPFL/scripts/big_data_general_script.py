@@ -26,10 +26,11 @@ import keras
 import math
 import time
 import tensorflow as tf
-from data import load_data, crop_data, merge_data_without_overlap, check_crops,\
-                 keras_da_generator, ImageDataGenerator, crop_data_with_overlap,\
-                 merge_data_with_overlap, calculate_z_filtering,\
-                 check_binary_masks
+from data_manipulation import load_data, crop_data, merge_data_without_overlap,\
+                              check_crops, crop_data_with_overlap, \
+                              merge_data_with_overlap, check_binary_masks
+from data_generators import keras_da_generator, ImageDataGenerator,\
+                            keras_gen_samples, calculate_z_filtering
 from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
@@ -80,13 +81,14 @@ os.chdir(base_work_dir)
 
 ### Dataset variables
 # Main dataset data/mask paths
-train_path = os.path.join('harvard_datasets', 'human', 'histogram_matching', 'toy', 'train', 'x')
-train_mask_path = os.path.join('harvard_datasets', 'human', 'histogram_matching', 'toy', 'train', 'y')
-val_path = os.path.join('harvard_datasets', 'human', 'histogram_matching', 'toy', 'val', 'x')
-val_mask_path = os.path.join('harvard_datasets', 'human', 'histogram_matching', 'toy', 'val', 'y')
-test_path = os.path.join('harvard_datasets', 'human', 'histogram_matching', 'toy', 'test', 'x')
-test_mask_path = os.path.join('harvard_datasets', 'human', 'histogram_matching', 'toy', 'test', 'y')
-complete_test_path = os.path.join('harvard_datasets', 'human', 'histogram_matching', 'toy', 'complete', 'x')
+data_base_path = os.path.join('harvard_datasets', 'human', 'histogram_matching', 'toy')
+train_path = os.path.join(data_base_path, 'train', 'x')
+train_mask_path = os.path.join(data_base_path, 'train', 'y')
+val_path = os.path.join(data_base_path, 'val', 'x')
+val_mask_path = os.path.join(data_base_path, 'val', 'y')
+test_path = os.path.join(data_base_path, 'test', 'x')
+test_mask_path = os.path.join(data_base_path, 'test', 'y')
+complete_test_path = os.path.join(data_base_path, 'complete', 'x')
 
 
 ### Dataset shape
@@ -158,6 +160,13 @@ weight_files_prefix = 'model.c_human_'
 # must be located inside the directory pointed by "base_work_dir" variable. If
 # there is no such directory, it will be created for the first time
 h5_dir = 'h5_files'
+
+
+### Weithed loss parameters
+# Flag to insert weights on the loss function
+weighted_loss = False
+# Directory where weight maps will be stored
+loss_weight_dir = os.path.join(base_work_dir, 'loss_weights', job_id)
 
 
 ### Experiment main parameters
@@ -264,11 +273,13 @@ if custom_da == False:
                                         zoom=keras_zoom, w_shift_r=w_shift_r,
                                         h_shift_r=h_shift_r,
                                         shear_range=shear_range,
-                                        brightness_range=brightness_range)
+                                        brightness_range=brightness_range,
+                                        weights=weighted_loss,
+                                        weights_path=loss_weight_dir)
 else:                                                                           
     Print("Custom DA selected")
-
     # NOT IMPLEMENTED YET #
+
 
 ##########################
 #    BUILD THE NETWORK   #
@@ -278,19 +289,9 @@ Print("###################\n" + "#  TRAIN PROCESS  #\n" + "###################\n
 
 Print("Creating the network . . .")
 model = U_Net(img_train_shape, numInitChannels=num_init_channels, 
-              spatial_dropout=spatial_dropout, fixed_dropout=fixed_dropout_value)
-
-if optimizer == "sgd":
-    opt = keras.optimizers.SGD(lr=learning_rate_value, momentum=0.99, decay=0.0,
-                               nesterov=False)
-elif optimizer == "adam":
-    opt = keras.optimizers.Adam(lr=learning_rate_value, beta_1=0.9, beta_2=0.999,
-                                epsilon=None, decay=0.0, amsgrad=False)
-else:
-    Print("Error: optimizer value must be 'sgd' or 'adam'")
-    sys.exit(0)
-
-model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
+              spatial_dropout=spatial_dropout, fixed_dropout=fixed_dropout_value, 
+              weighted_loss=weighted_loss, optimizer=optimizer,
+              lr=learning_rate_value)
 model.summary()
 
 if load_previous_weights == False:
