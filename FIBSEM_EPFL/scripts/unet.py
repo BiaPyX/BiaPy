@@ -9,20 +9,31 @@ from metrics import binary_crossentropy_weighted, jaccard_index
 
 def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0, 
           spatial_dropout=False, optimizer="sgd", weighted_loss=False, lr=0.001):
-
     """Create the U-Net
 
        Args:
             image_shape (array of 3 int): dimensions of the input image.
+
             activation (str, optional): Keras available activation type.
-            numInitChannels (int, optional): number of convolution channels to 
-            start with. In each downsampling/upsampling the number of filters 
+
+            numInitChannels (int, optional): number of convolution channels to
+            start with. In each downsampling/upsampling the number of filters
             are multiplied/divided by 2.
-            fixed_dropout (float, optional): dropout value to be fixed. If no 
-            value is provided the default behaviour will be to select a 
+
+            fixed_dropout (float, optional): dropout value to be fixed. If no
+            value is provided the default behaviour will be to select a
             piramidal value stating from 0.1 and reaching 0.3 value.
+
             spatial_dropout (bool, optional): use spatial dropout instead of the
-            "normal" dropout. 
+            "normal" dropout.
+
+            optimizer (str, optional): optimizer used to minimize the loss
+            function. Posible options: 'sgd' or 'adam'.
+
+            weighted_loss (bool, optional): flag to control if a weighted loss
+            is going to be used.
+
+            lr (float, optional): learning rate value.
 
        Returns:
             model (Keras model): model containing the U-Net created.
@@ -139,7 +150,6 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     else:
         model = Model(inputs=[inputs], outputs=[outputs])
     
-    # Specify the optimizer
     if optimizer == "sgd":
         opt = keras.optimizers.SGD(lr=lr, momentum=0.99, decay=0.0, 
                                    nesterov=False)
