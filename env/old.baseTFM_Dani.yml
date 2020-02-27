@@ -1,4 +1,4 @@
-name: baseTFM
+name: old_baseTFM
 channels:
   - defaults
 dependencies:
@@ -109,5 +109,5 @@ dependencies:
     - sklearn==0.0
     - traitlets==4.3.2
     - wcwidth==0.1.7
-prefix: /home/dfranco/anaconda3/envs/baseTFM
+prefix: /home/dfranco/anaconda3/envs/old_baseTFM
 
