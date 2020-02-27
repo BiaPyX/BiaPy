@@ -14,7 +14,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
               val_split=0.1, shuffle_val=True, seedValue=42, 
               job_id="none_job_id", e_d_data=[], e_d_mask=[], e_d_data_dim=[], 
               e_d_dis=[], num_crops_per_dataset=0, make_crops=True, 
-              crop_shape=None, check_crop=True, d_percentage=0, tab=""):         
+              crop_shape=None, check_crop=True, d_percentage=0, 
+              prepare_subvolumes=False, subvol_shape=None, tab=""):         
 
     """Load train, validation and test data from the given paths. If the images 
        to be loaded are smaller than the given dimension it will be sticked in 
@@ -54,6 +55,9 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             d_percentage (int, optional): number between 0 and 100. The images
             that have less foreground pixels than the given number will be
             discarded.
+            prepare_subvolumes (bool, optional): flag to prepare 3D subvolumes 
+            (use this option only to train a 3D network). 
+            subvol_shape (Tuple, optional): 
             tab (str, optional): tabulation mark to add at the begining of the 
             prints.
                                                                         
@@ -68,7 +72,21 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             norm_value (int): normalization value calculated.
             crop_made (bool): True if crops have been made.
     """      
-    
+   
+    if make_crops == True and prepare_subvolumes == True:
+        raise ValueError("'make_crops' and 'prepare_subvolumes' both enabled are"
+                         " incompatible")
+    if prepare_subvolumes == True:
+        if e_d_data:
+            raise ValueError("No extra datasets can be used when "
+                             "'prepare_subvolumes' is enabled")
+        if subvol_shape is None:
+            raise ValueError("'subvol_shape' must be provided if "
+                             "'prepare_subvolumes' is enabled")
+        if shuffle_val == True:
+            raise ValueError("'shuffle_val' can not be enabled when "
+                             "'prepare_subvolumes' is also enabled")
+
     Print(tab + "### LOAD ###")
                                                                         
     train_ids = sorted(next(os.walk(train_path))[2])                    
@@ -145,13 +163,20 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
     Y_test = Y_test/255 
 
+    # Used for 3D networks. This must be done before create the validation split
+    # as the amount of images that will be in validation will not be enough to 
+    # create 3D data subvolumes
+    if prepare_subvolumes == True:                                              
+        X_train, Y_train = prepare_subvolume_data(X_train, Y_train, subvol_shape)
+        X_test, Y_test = prepare_subvolume_data(X_test, Y_test, subvol_shape)
+
+    # Create validation data splitting the train
     if create_val == True:
         X_train, X_val, \
         Y_train, Y_val = train_test_split(X_train, Y_train,
                                           test_size=val_split,
                                           shuffle=shuffle_val,
                                           random_state=seedValue)
-                                                                        
     # Crop the data
     if make_crops == True:
         Print(tab + "4) Crop data activated . . .")
@@ -184,7 +209,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         crop_made = True
     else:
         crop_made = False
-        
+
     # Load the extra datasets
     if e_d_data:
         Print(tab + "5) Loading extra datasets . . .")
@@ -839,3 +864,86 @@ def check_binary_masks(path):
             raise ValueError("Error: given masks are not binary. Please correct "
                              "the images before training. (image: {})\n"
                              "Values: {}".format(os.path.join(path, ids[i]), values))
+
+
+def prepare_subvolume_data(X, Y, shape=(82, 256, 256, 1)):                          
+    """Prepare given data into 3D subvolumes to train a 3D network.
+
+       Args:
+            X (Numpy 4D array): data. E.g. (image_number, x, y, channels).      
+                                                                                
+            Y (Numpy 4D array): mask data.  E.g. (image_number, x, y, channels).
+                                                                                
+            shape (tuple, optional): dimension of the desired images.           
+    
+       Returns:
+            X_prep (Numpy 5D array): X data separated in different subvolumes 
+            with the desired shape. E.g. (subvolume_number, ) + shape
+            
+            Y_prep (Numpy 5D array): Y data separated in different subvolumes     
+            with the desired shape. E.g. (subvolume_number, ) + shape
+    """
+                                                                            
+    if X.shape != Y.shape:                                                      
+        raise ValueError("The shape of X and Y must be the same")               
+    if X.ndim != 4 or Y.ndim != 4:                                              
+        raise ValueError("X or Y must be a 4D Numpy array")                     
+    if len(shape) != 4:
+        raise ValueError("'shape' must be 4D")
+    if X.shape[1] % shape[1] != 0 or X.shape[2] % shape[2] != 0:                
+        raise ValueError("Shape must be divisible by the shape of X" )          
+                                                                                
+    # Calculate the rest                                                        
+    rest = X.shape[0] % shape[0]                                                
+    if rest != 0:                                                               
+        print(("As the number of images required to form a stack 3D is "        
+               "not multiple of images provided, {} last image(s) will "        
+               "be unused").format(rest))                                       
+                                                                                
+    # Calculate of many crops are per axis                                      
+    h_num = int(X.shape[1]/shape[1])
+    v_num = int(X.shape[2]/shape[2])
+    crops_per_image = h_num*v_num                                               
+                                                                                
+    num_sub_volum = int(math.floor(X.shape[0]/shape[0])*crops_per_image)             
+    print("{} subvolumes of {} will be created".format(num_sub_volum,           
+          shape[-3:]))                                                          
+                                                                                
+    X_prep = np.zeros((num_sub_volum, ) + shape)                                
+    Y_prep = np.zeros((num_sub_volum, ) + shape)                                
+                                                                                
+    # Reshape the data to generate desired 3D subvolumes                        
+    print("Generating 3D subvolumes . . .")                                     
+    print("Converting {} data to {}".format(X.shape, X_prep.shape))             
+    print("Filling [0:{}] subvolumes with [0:{}] images . . ."                  
+          .format(crops_per_image-1, shape[0]-1))                               
+    subvolume = 0                                                               
+    vol_slice = 0                                                               
+    total_subvol_filled = 0                                                     
+    for k in range(X.shape[0]-rest):                                                 
+        for i in range(h_num):                                                  
+            for j in range(v_num):                                              
+                im = X[k, (i*shape[1]):((i+1)*shape[2]),(j*shape[1]):((j+1)*shape[2])]
+                mask = Y[k, (i*shape[1]):((i+1)*shape[2]),(j*shape[1]):((j+1)*shape[2])]
+                  
+                X_prep[subvolume, vol_slice] = im                               
+                Y_prep[subvolume, vol_slice] = mask                             
+                                                                                
+                subvolume += 1                                                  
+                if subvolume == (total_subvol_filled+crops_per_image):
+                    subvolume = total_subvol_filled
+                    vol_slice += 1                                              
+                                                                                
+                    # Reached this point we will have filled part of            
+                    # the subvolumes                                            
+                    if vol_slice == shape[0] and (k+1) != (X.shape[0]-rest):                                   
+                        total_subvol_filled += crops_per_image                  
+                        subvolume = total_subvol_filled
+                        vol_slice = 0                                           
+                                                                                
+                        print("Filling [{}:{}] subvolumes with [{}:{}] "        
+                              "images . . .".format(total_subvol_filled,        
+                              total_subvol_filled+crops_per_image-1, k+1,       
+                              k+shape[0]-1))
+
+    return X_prep, Y_prep
