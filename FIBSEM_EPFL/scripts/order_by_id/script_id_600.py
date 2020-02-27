@@ -26,9 +26,11 @@ import keras
 import math
 import time
 import tensorflow as tf
-from data import load_data, crop_data, merge_data_without_overlap, check_crops,\
-                 keras_da_generator, ImageDataGenerator, crop_data_with_overlap,\
-                 merge_data_with_overlap, calculate_z_filtering
+from data_manipulation import load_data, crop_data, merge_data_without_overlap,\
+                              check_crops, crop_data_with_overlap, \
+                              merge_data_with_overlap, check_binary_masks
+from data_generators import keras_da_generator, ImageDataGenerator,\
+                            keras_gen_samples, calculate_z_filtering
 from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
@@ -55,7 +57,6 @@ test_id = str(sys.argv[3])
 job_file = job_id + '_' + test_id                                     
 base_work_dir = str(sys.argv[4])
 log_dir = os.path.join(base_work_dir, 'logs', job_id)
-h5_dir = os.path.join(base_work_dir, 'h5_files')
 
 # Checks
 Print('job_id : ' + job_id)
@@ -84,6 +85,11 @@ train_path = os.path.join('data', 'train', 'x')
 train_mask_path = os.path.join('data', 'train', 'y')
 test_path = os.path.join('data', 'test', 'x')
 test_mask_path = os.path.join('data', 'test', 'y')
+# Percentage of the training data used as validation                            
+perc_used_as_val = 0.1
+# Create the validation data with random images of the training data. If False
+# the validation data will be the last portion of training images.
+random_val_data = True
 
 ### Dataset shape
 # Note: train and test dimensions must be the same when training the network and
@@ -147,18 +153,18 @@ discard_cropped_images = False
 d_percentage_value = 0.05
 # Path where the train discarded data will be stored to be loaded by future runs 
 # instead of make again the process
-train_crop_discard_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'train', 'x')
+train_crop_discard_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'train', 'x')
 # Path where the train discarded masks will be stored                           
-train_crop_discard_mask_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'train', 'y')
+train_crop_discard_mask_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'train', 'y')
 # The discards are NOT done in the test data, but this will store the test data,
 # which will be cropped, into the pointed path to be loaded by future runs      
 # together with the train discarded data and masks                              
-test_crop_discard_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'test', 'x')
-test_crop_discard_mask_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'test', 'y')
+test_crop_discard_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'test', 'x')
+test_crop_discard_mask_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'test', 'y')
 
 ### Normalization
 # Flag to normalize the data dividing by the mean pixel value
-normalize_data = False
+normalize_data = False                                                          
 # Force the normalization value to the given number instead of the mean pixel 
 # value
 norm_value_forced = -1                                                          
@@ -172,10 +178,10 @@ custom_da = False
 aug_examples = True 
 # Flag to shuffle the training data on every epoch 
 #(Best options: Keras->False, Custom->True)
-shuffle_train_data = custom_da
+shuffle_train_data_each_epoch = custom_da
 # Flag to shuffle the validation data on every epoch
 # (Best option: False in both cases)
-shuffle_val_data = False
+shuffle_val_data_each_epoch = False
 # Make a bit of zoom in the images. Only available in Keras DA
 keras_zoom = False 
 # width_shift_range (more details in Keras ImageDataGenerator class). Only 
@@ -193,6 +199,8 @@ brightness_range = None
 # Range to pick a median filter size value from to apply in the images. Option
 # only available in custom DA
 median_filter_size = [0, 0] 
+# Range of rotation
+rotation_range = 180
 
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when "random_crops_in_DA"
@@ -201,12 +209,12 @@ duplicate_train = 0
 # Extra number of images to add to the train data. Applied after duplicate_train 
 extra_train_data = 0
 
-### Load preoviously generated model weigths
+### Load previously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
 load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
-previous_job_weights = "472"
+previous_job_weights = job_id
 # Flag to activate the fine tunning
 fine_tunning = False
 # ID of the previous weigths to load the weigths from to make the fine tunning 
@@ -218,9 +226,17 @@ weight_files_prefix = 'model.fibsem_'
 # there is no such directory, it will be created for the first time
 h5_dir = 'h5_files'
 
+### Weithed loss parameters
+# Flag to insert weights on the loss function
+weighted_loss = False
+# Directory where weight maps will be stored
+loss_weight_dir = os.path.join('loss_weights', job_id, job_file)
+
 ### Experiment main parameters
 # Batch size value
 batch_size_value = 6
+# Optimizer to use. Posible values: "sgd" or "adam"
+optimizer = "sgd"
 # Learning rate used by the optimization method
 learning_rate_value = 0.001
 # Number of epochs to train the network
@@ -268,6 +284,8 @@ result_dir = os.path.join('results', 'results_' + job_id, job_file)
 result_bin_dir = os.path.join(result_dir, 'binarized')
 # Directory where predicted images will be stored
 result_no_bin_dir = os.path.join(result_dir, 'no_binarized')
+# Directory where binarized predicted images with 50% of overlap will be stored
+result_bin_dir_50ov = os.path.join(result_dir, 'binarized_50ov')
 # Folder where the smoothed images will be stored
 smooth_dir = os.path.join(result_dir, 'smooth')
 # Folder where the images with the z-filter applied will be stored
@@ -278,6 +296,19 @@ smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # training the network will be shown. This folder will be created under the
 # folder pointed by "base_work_dir" variable 
 char_dir = 'charts'
+
+
+#####################
+#   SANITY CHECKS   #
+#####################
+
+Print("#####################\n#   SANITY CHECKS   #\n#####################")
+
+check_binary_masks(train_mask_path)
+check_binary_masks(test_mask_path)
+if extra_datasets_mask_list: 
+    for i in range(len(extra_datasets_mask_list)):
+        check_binary_masks(extra_datasets_mask_list[i])
 
 
 #############################################
@@ -345,36 +376,15 @@ X_val, Y_val, \
 X_test, Y_test, \
 norm_value, crops_made = load_data(train_path, train_mask_path, test_path,
                            test_mask_path, img_train_shape, img_test_shape,
+                           val_split=perc_used_as_val, 
+                           shuffle_val=random_val_data,
                            e_d_data=extra_datasets_data_list, job_id=job_id, 
                            e_d_mask=extra_datasets_mask_list,
                            e_d_data_dim=extra_datasets_data_dim_list,
                            e_d_dis=extra_datasets_discard,
                            num_crops_per_dataset=num_crops_per_dataset,
-                           crop_shape=crop_shape, check_crop=check_crop)
-
-Print("#############")
-Print("X_train.dtype: " + str(X_train.dtype))                                   
-Print("X_val.dtype: " + str(X_val.dtype))                                       
-Print("X_test.dtype: " + str(X_test.dtype))                                     
-Print("Mean X_train: " + str(np.mean(X_train)))                                 
-Print("Mean X_val: " + str(np.mean(X_val)))                                     
-Print("Mean X_test: " + str(np.mean(X_test)))                                   
-Print("Max X_train: " + str(np.amax(X_train)))                                  
-Print("Max X_val: " + str(np.amax(X_val)))                                      
-Print("Max X_test: " + str(np.amax(X_test)))                                    
-Print("Min X_train: " + str(np.amin(X_train)))                                  
-Print("Min X_val: " + str(np.amin(X_val)))                                      
-Print("Min X_test: " + str(np.amin(X_test)))                                    
-Print("1-Mean X_train: " + str(np.mean(X_train[0])))                            
-Print("1-Mean X_val: " + str(np.mean(X_val[0])))                                
-Print("1-Mean X_test: " + str(np.mean(X_test[0])))                              
-Print("1-Max X_train: " + str(np.amax(X_train[0])))                             
-Print("1-Max X_val: " + str(np.amax(X_val[0])))                                 
-Print("1-Max X_test: " + str(np.amax(X_test[0])))                               
-Print("1-Min X_train: " + str(np.amin(X_train[0])))                             
-Print("1-Min X_val: " + str(np.amin(X_val[0])))                                 
-Print("1-Min X_test: " + str(np.amin(X_test[0])))
-Print("#############")
+                           make_crops=make_crops, crop_shape=crop_shape, 
+                           check_crop=check_crop)
 
 # Normalize the data
 if normalize_data == True:
@@ -386,33 +396,7 @@ if normalize_data == True:
     X_train -= int(norm_value)
     X_val -= int(norm_value)
     X_test -= int(norm_value)
-
-Print("X_train.dtype: " + str(X_train.dtype))    
-Print("X_val.dtype: " + str(X_val.dtype))    
-Print("X_test.dtype: " + str(X_test.dtype))    
-Print("Mean X_train: " + str(np.mean(X_train)))
-Print("Mean X_val: " + str(np.mean(X_val)))
-Print("Mean X_test: " + str(np.mean(X_test)))
-Print("Max X_train: " + str(np.amax(X_train)))
-Print("Max X_val: " + str(np.amax(X_val)))
-Print("Max X_test: " + str(np.amax(X_test)))
-Print("Min X_train: " + str(np.amin(X_train)))
-Print("Min X_val: " + str(np.amin(X_val)))
-Print("Min X_test: " + str(np.amin(X_test)))
-Print("1-Mean X_train: " + str(np.mean(X_train[0])))                                 
-Print("1-Mean X_val: " + str(np.mean(X_val[0])))                                     
-Print("1-Mean X_test: " + str(np.mean(X_test[0])))
-Print("1-Max X_train: " + str(np.amax(X_train[0])))
-Print("1-Max X_val: " + str(np.amax(X_val[0])))
-Print("1-Max X_test: " + str(np.amax(X_test[0])))
-Print("1-Min X_train: " + str(np.amin(X_train[0])))
-Print("1-Min X_val: " + str(np.amin(X_val[0])))
-Print("1-Min X_test: " + str(np.amin(X_test[0])))
-
-X_train = X_train / 255
-X_val = X_val / 255
-X_test = X_test / 255
-
+    
 # Crop the data to the desired size
 if make_crops == True and crops_made == True:
     img_width = crop_shape[0]
@@ -443,22 +427,24 @@ if extra_train_data != 0:
 
     if custom_da == False:
         # Keras DA generated extra data
-        _, extra_x, extra_y = keras_da_generator(X_train=X_train, Y_train=Y_train,
-                                                 batch_size_value=batch_size_value, 
-                                                 val=False, job_id=job_id,
-                                                 shuffle_train=True,
-                                                 random_crops_in_DA=random_crops_in_DA,
-                                                 crop_length=crop_shape[0],
-                                                 extra_train_data=extra_train_data)
+
+        extra_x, extra_y = keras_gen_samples(extra_train_data, X_data=X_train, 
+                                             Y_data=Y_train, 
+                                             batch_size_value=batch_size_value, 
+                                             zoom=keras_zoom, w_shift_r=w_shift_r, 
+                                             h_shift_r=h_shift_r,
+                                             shear_range=shear_range,
+                                             brightness_range=brightness_range,
+                                             rotation_range=rotation_range)
     else:
         # Custom DA generated extra data
         extra_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,
                               dim=(img_height,img_width), n_channels=1,
                               shuffle=True, da=True, e_prob=0.0, elastic=False,
                               vflip=True, hflip=True, rotation90=False,
-                              rotation_range=0, 
                               random_crops_in_DA=random_crops_in_DA,
-                              crop_length=crop_shape[0])
+                              crop_length=crop_shape[0],
+                              rotation_range=rotation_range)
         extra_generator = ImageDataGenerator(**extra_gen_args)
 
         extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
@@ -467,7 +453,6 @@ if extra_train_data != 0:
     Y_train = np.vstack((Y_train, extra_y))
     Print(str(extra_train_data) + " extra train data generated, the new shape "
           + "of the train now is " + str(X_train.shape))
-
 
 ##########################
 #    DATA AUGMENTATION   #
@@ -484,14 +469,17 @@ if custom_da == False:
                                        batch_size_value=batch_size_value,
                                        X_val=X_val, Y_val=Y_val,
                                        save_examples=aug_examples, job_id=job_id,          
-                                       shuffle_train=shuffle_train_data, 
-                                       shuffle_val=shuffle_val_data, 
-                                       zoom=keras_zoom,        
+                                       shuffle_train=shuffle_train_data_each_epoch, 
+                                       shuffle_val=shuffle_val_data_each_epoch, 
+                                       zoom=keras_zoom, 
+                                       rotation_range=rotation_range,        
                                        random_crops_in_DA=random_crops_in_DA,
                                        crop_length=crop_shape[0],
                                        w_shift_r=w_shift_r, h_shift_r=h_shift_r,    
                                        shear_range=shear_range,
-                                       brightness_range=brightness_range)
+                                       brightness_range=brightness_range,
+                                       weights=weighted_loss, 
+                                       weights_path=loss_weight_dir)
 else:                                                                           
     Print("Custom DA selected")
 
@@ -519,9 +507,10 @@ else:
     # Custom Data Augmentation                                                  
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,     
                          dim=(img_height,img_width), n_channels=1,              
-                         shuffle=shuffle_train_data, da=True, e_prob=0.0, 
-                         elastic=False, vflip=True, hflip=True, rotation90=False,              
-                         rotation_range=180, brightness_range=brightness_range,
+                         shuffle=shuffle_train_data_each_epoch, da=True, 
+                         e_prob=0.0, elastic=False, vflip=True, hflip=True, 
+                         rotation90=False, rotation_range=180, 
+                         brightness_range=brightness_range, 
                          median_filter_size=median_filter_size,
                          random_crops_in_DA=random_crops_in_DA, 
                          crop_length=crop_shape[0], prob_map=probability_map,
@@ -529,7 +518,7 @@ else:
                                                                                 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,     
                              dim=(img_height,img_width), n_channels=1,          
-                             shuffle=shuffle_val_data, da=False,                           
+                             shuffle=shuffle_val_data_each_epoch, da=False,                           
                              random_crops_in_DA=random_crops_in_DA,                   
                              crop_length=crop_shape[0], val=True)              
                                                                                 
@@ -553,14 +542,10 @@ if random_crops_in_DA == True:
 Print("###################\n#  TRAIN PROCESS  #\n###################\n")
 
 Print("Creating the network . . .")
-model = U_Net([img_height, img_width, img_channels], 
+model = U_Net([img_height, img_width, img_channels],
               numInitChannels=num_init_channels, spatial_dropout=spatial_dropout,
-              fixed_dropout=fixed_dropout_value)
-
-sgd = keras.optimizers.SGD(lr=learning_rate_value, momentum=0.99, decay=0.0, 
-                           nesterov=False)
-
-model.compile(optimizer=sgd, loss='binary_crossentropy', metrics=[jaccard_index])
+              fixed_dropout=fixed_dropout_value, weighted_loss=weighted_loss,
+              optimizer=optimizer, lr=learning_rate_value)
 model.summary()
 
 if load_previous_weights == False:
@@ -616,35 +601,30 @@ if random_crops_in_DA == False:
                 + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
         v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
                 + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
-
+        
+        X_test = merge_data_without_overlap(X_test,
+                                            math.ceil(X_test.shape[0]/(h_num*v_num)),
+                                            out_shape=[h_num, v_num], grid=False)
         Y_test = merge_data_without_overlap(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
                                             out_shape=[h_num, v_num], grid=False)
         Print("The shape of the test data reconstructed is " + str(Y_test.shape))
         
         # To calculate metrics (binarized)
-        recons_preds_test = merge_data_without_overlap(bin_preds_test,
-                                                       math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
-                                                       out_shape=[h_num, v_num], 
-                                                       grid=False)
+        bin_preds_test = merge_data_without_overlap(bin_preds_test,
+                                                    math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
+                                                    out_shape=[h_num, v_num], 
+                                                    grid=False)
 
         # To save the probabilities (no binarized)
-        recons_no_bin_preds_test = merge_data_without_overlap(preds_test*255,
-                                                              math.ceil(preds_test.shape[0]/(h_num*v_num)),
-                                                              out_shape=[h_num, v_num], 
-                                                              grid=False)
-        recons_no_bin_preds_test = recons_no_bin_preds_test.astype(float)/255
+        preds_test = merge_data_without_overlap(preds_test*255,
+                                                math.ceil(preds_test.shape[0]/(h_num*v_num)),
+                                                out_shape=[h_num, v_num], 
+                                                grid=False)
+        preds_test = preds_test.astype(float)/255
         
-        Print("Saving predicted images . . .")
-        save_img(Y=recons_preds_test, mask_dir=result_bin_dir,
-                 prefix="test_out_bin")
-        save_img(Y=recons_no_bin_preds_test, mask_dir=result_no_bin_dir,
-                 prefix="test_out_no_bin")
-    else:
-        Print("Saving predicted images . . .")
-        save_img(Y=bin_preds_test, mask_dir=result_bin_dir,
-                 prefix="test_out_bin")
-        save_img(Y=preds_test, mask_dir=result_no_bin_dir,
-                 prefix="test_out_no_bin")
+    Print("Saving predicted images . . .")
+    save_img(Y=bin_preds_test, mask_dir=result_bin_dir, prefix="test_out_bin")
+    save_img(Y=preds_test, mask_dir=result_no_bin_dir, prefix="test_out_no_bin")
 
     # Metric calculation
     if make_threshold_plots == True:
@@ -654,16 +634,40 @@ if random_crops_in_DA == False:
                                 n_dig, job_id, job_file, char_dir)
     else:
         Print("Calculate metrics . . .")
+        # Per image without overlap
+        score[1] = jaccard_index_numpy(Y_test, bin_preds_test)
+        voc = voc_calculation(Y_test, bin_preds_test, score[1])
+        det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
+                              det_eval_path, det_bin, n_dig, job_id)
+
         if make_crops == True:
-            score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
-            voc = voc_calculation(Y_test, recons_preds_test, score[1])
-            det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path,
-                                  det_eval_path, det_bin, n_dig, job_id)
+            # Per image with 50% overlap
+            Y_test_50ov = np.zeros(Y_test.shape, dtype=(np.float32))
+            for i in tqdm(range(0,len(X_test))):
+                predictions_smooth = predict_img_with_overlap(
+                    X_test[i,:,:,:],
+                    window_size=crop_shape[0],
+                    subdivisions=2,
+                    nb_classes=1,
+                    pred_func=(
+                        lambda img_batch_subdiv: model.predict(img_batch_subdiv)
+                    )
+                )
+                Y_test_50ov[i] = (predictions_smooth > 0.5).astype(np.float32)
+    
+            Print("Saving 50% overlap predicted images . . .")
+            save_img(Y=Y_test_50ov, mask_dir=result_bin_dir_50ov, 
+                     prefix="test_out_bin_50ov")
+        
+            Print("Calculate metrics for 50% overlap images . . .")
+            jac_per_img_50ov = jaccard_index_numpy(Y_test, Y_test_50ov)
+            voc_per_img_50ov = voc_calculation(Y_test, Y_test_50ov, jac_per_img_50ov)
+            det_per_img_50ov = DET_calculation(Y_test, Y_test_50ov, det_eval_ge_path,
+                                               det_eval_path, det_bin, n_dig, job_id)
         else:
-            score[1] = jaccard_index_numpy(Y_test, bin_preds_test)
-            voc = voc_calculation(Y_test, bin_preds_test, score[1])
-            det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
-                                  det_eval_path, det_bin, n_dig, job_id)
+            jac_per_img_50ov = -1
+            voc_per_img_50ov = -1
+            det_per_img_50ov = -1
 
 else:
     ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, crop_shape[0], 
@@ -702,7 +706,6 @@ else:
 
         Print("Calculate Jaccard for test (per image with overlap calculated). . .")
         score[1] = jaccard_index_numpy(Y_test, merged_preds_test)
-        
         voc = voc_calculation(Y_test, merged_preds_test, score[1])
         det = DET_calculation(Y_test, merged_preds_test, det_eval_ge_path,
                               det_eval_path, det_bin, n_dig, job_id)
@@ -741,17 +744,15 @@ Print("1) SMOOTH")
 if (post_process == True and make_crops == True) or (random_crops_in_DA == True):
     Print("Post processing active . . .")
 
-    if random_crops_in_DA == False and make_crops == True:
-        X_test = merge_data_without_overlap(X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
-                                            out_shape=[h_num, v_num], grid=False)
-    
     Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
 
-    Print("Smoothing crops . . .")
-
+    # Extract the number of digits to create the image names
     d = len(str(X_test.shape[0]))
+
     if not os.path.exists(smooth_dir):
         os.makedirs(smooth_dir)
+
+    Print("Smoothing crops . . .")
     for i in tqdm(range(0,len(X_test))):
         predictions_smooth = predict_img_with_smooth_windowing(
             X_test[i,:,:,:],
@@ -764,11 +765,10 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
         )
         Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
 
-        if len(sys.argv) > 1 and test_id == "1":
-            im = Image.fromarray(predictions_smooth[:,:,0]*255)
-            im = im.convert('L')
-            im.save(os.path.join(smooth_dir,"test_out_smooth_" + str(i).zfill(d) 
-                                            + ".png"))
+        im = Image.fromarray(predictions_smooth[:,:,0]*255)
+        im = im.convert('L')
+        im.save(os.path.join(smooth_dir,"test_out_smooth_" + str(i).zfill(d) 
+                                        + ".png"))
 
     # Metrics (Jaccard + VOC + DET)
     Print("Calculate metrics . . .")
@@ -784,7 +784,7 @@ if post_process == True and not extra_datasets_data_list:
 
     if random_crops_in_DA == False:
         Print("Applying Z-filter . . .")
-        zfil_preds_test = calculate_z_filtering(recons_preds_test)
+        zfil_preds_test = calculate_z_filtering(bin_preds_test)
     else:
         if test_ov_crops > 1:
             Print("Applying Z-filter . . .")
@@ -835,10 +835,13 @@ if load_previous_weights == False:
 Print("Test loss: " + str(score[0]))
     
 if random_crops_in_DA == False:    
-    Print("Test (per crop) jaccard_index: " + str(jac_per_crop))
-    Print("Test (per image) jaccard_index: " + str(score[1]))
-    Print("VOC: " + str(voc))
-    Print("DET: " + str(det))
+    Print("Test jaccard_index (per crop): " + str(jac_per_crop))
+    Print("Test jaccard_index (per image without overlap): " + str(score[1]))
+    Print("Test jaccard_index (per image with 50% overlap): " + str(jac_per_img_50ov))
+    Print("VOC (per image without overlap): " + str(voc))
+    Print("VOC (per image with 50% overlap): " + str(voc_per_img_50ov))
+    Print("DET (per image without overlap): " + str(det))
+    Print("DET (per image with 50% overlap): " + str(det_per_img_50ov))
 else:
     Print("Test overlapped (per crop) jaccard_index: " + str(jac_per_crop))
     Print("Test overlapped (per image) jaccard_index: " + str(score[1]))
@@ -858,7 +861,8 @@ if load_previous_weights == False:
     smo_zfil_det = -1 if 'smo_zfil_det' not in globals() else smo_zfil_det
     jac_per_crop = -1 if 'jac_per_crop' not in globals() else jac_per_crop
 
-    store_history(results, jac_per_crop, score, voc, det, time_callback, log_dir,
+    store_history(results, jac_per_crop, score, jac_per_img_50ov, voc, 
+                  voc_per_img_50ov, det, det_per_img_50ov, time_callback, log_dir,
                   job_file, smooth_score, smooth_voc, smooth_det, zfil_score,
                   zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
 

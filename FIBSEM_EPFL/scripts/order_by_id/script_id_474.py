@@ -28,7 +28,8 @@ import time
 import tensorflow as tf
 from data import load_data, crop_data, merge_data_without_overlap, check_crops,\
                  keras_da_generator, ImageDataGenerator, crop_data_with_overlap,\
-                 merge_data_with_overlap, calculate_z_filtering
+                 merge_data_with_overlap, calculate_z_filtering,\
+                 check_binary_masks
 from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
@@ -55,7 +56,6 @@ test_id = str(sys.argv[3])
 job_file = job_id + '_' + test_id                                     
 base_work_dir = str(sys.argv[4])
 log_dir = os.path.join(base_work_dir, 'logs', job_id)
-h5_dir = os.path.join(base_work_dir, 'h5_files')
 
 # Checks
 Print('job_id : ' + job_id)
@@ -80,17 +80,22 @@ os.chdir(base_work_dir)
 
 ### Dataset variables
 # Main dataset data/mask paths
-train_path = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'x')
-train_mask_path = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'y')
-test_path = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'x')
+train_path = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'x')            
+train_mask_path = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'y')       
+test_path = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'x')              
 test_mask_path = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'y')
+# Percentage of the training data used as validation                            
+perc_used_as_val = 0.1
+# Create the validation data with random images of the training data. If False
+# the validation data will be the last portion of training images.
+random_val_data = True
 
 ### Dataset shape
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. Be sure to take care of this if you are not going to
-# use "crop_data()" with the arg force_shape, as this function resolves the
+# use "crop_data()" with the arg force_shape, as this function resolves the 
 # problem creating always crops of the same dimension
-img_train_shape = [1463, 1613, 1]
+img_train_shape = [1463, 1613, 1]                                               
 img_test_shape = [1334, 1553, 1]
 original_test_shape = [img_test_shape[0], img_test_shape[1]]
 
@@ -172,10 +177,10 @@ custom_da = False
 aug_examples = True 
 # Flag to shuffle the training data on every epoch 
 #(Best options: Keras->False, Custom->True)
-shuffle_train_data = custom_da
+shuffle_train_data_each_epoch = custom_da
 # Flag to shuffle the validation data on every epoch
 # (Best option: False in both cases)
-shuffle_val_data = False
+shuffle_val_data_each_epoch = False
 # Make a bit of zoom in the images. Only available in Keras DA
 keras_zoom = False 
 # width_shift_range (more details in Keras ImageDataGenerator class). Only 
@@ -201,7 +206,7 @@ duplicate_train = 0
 # Extra number of images to add to the train data. Applied after duplicate_train 
 extra_train_data = 0
 
-### Load preoviously generated model weigths
+### Load previously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
 load_previous_weights = False
@@ -221,6 +226,8 @@ h5_dir = 'h5_files'
 ### Experiment main parameters
 # Batch size value
 batch_size_value = 6
+# Optimizer to use. Posible values: "sgd" or "adam"
+optimizer = "sgd"
 # Learning rate used by the optimization method
 learning_rate_value = 0.001
 # Number of epochs to train the network
@@ -278,6 +285,19 @@ smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # training the network will be shown. This folder will be created under the
 # folder pointed by "base_work_dir" variable 
 char_dir = 'charts'
+
+
+#####################
+#   SANITY CHECKS   #
+#####################
+
+Print("#####################\n#   SANITY CHECKS   #\n#####################")
+
+check_binary_masks(train_mask_path)
+check_binary_masks(test_mask_path)
+if extra_datasets_mask_list: 
+    for i in range(len(extra_datasets_mask_list)):
+        check_binary_masks(extra_datasets_mask_list[i])
 
 
 #############################################
@@ -345,6 +365,8 @@ X_val, Y_val, \
 X_test, Y_test, \
 norm_value, crops_made = load_data(train_path, train_mask_path, test_path,
                            test_mask_path, img_train_shape, img_test_shape,
+                           val_split=perc_used_as_val, 
+                           shuffle_val=random_val_data,
                            e_d_data=extra_datasets_data_list, job_id=job_id, 
                            e_d_mask=extra_datasets_mask_list,
                            e_d_data_dim=extra_datasets_data_dim_list,
@@ -434,8 +456,8 @@ if custom_da == False:
                                        batch_size_value=batch_size_value,
                                        X_val=X_val, Y_val=Y_val,
                                        save_examples=aug_examples, job_id=job_id,          
-                                       shuffle_train=shuffle_train_data, 
-                                       shuffle_val=shuffle_val_data, 
+                                       shuffle_train=shuffle_train_data_each_epoch, 
+                                       shuffle_val=shuffle_val_data_each_epoch, 
                                        zoom=keras_zoom,        
                                        random_crops_in_DA=random_crops_in_DA,
                                        crop_length=crop_shape[0],
@@ -469,9 +491,10 @@ else:
     # Custom Data Augmentation                                                  
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,     
                          dim=(img_height,img_width), n_channels=1,              
-                         shuffle=shuffle_train_data, da=True, e_prob=0.0, 
-                         elastic=False, vflip=True, hflip=True, rotation90=False,              
-                         rotation_range=180, brightness_range=brightness_range,
+                         shuffle=shuffle_train_data_each_epoch, da=True, 
+                         e_prob=0.0, elastic=False, vflip=True, hflip=True, 
+                         rotation90=False, rotation_range=180, 
+                         brightness_range=brightness_range, 
                          median_filter_size=median_filter_size,
                          random_crops_in_DA=random_crops_in_DA, 
                          crop_length=crop_shape[0], prob_map=probability_map,
@@ -479,7 +502,7 @@ else:
                                                                                 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,     
                              dim=(img_height,img_width), n_channels=1,          
-                             shuffle=shuffle_val_data, da=False,                           
+                             shuffle=shuffle_val_data_each_epoch, da=False,                           
                              random_crops_in_DA=random_crops_in_DA,                   
                              crop_length=crop_shape[0], val=True)              
                                                                                 
@@ -507,10 +530,17 @@ model = U_Net([img_height, img_width, img_channels],
               numInitChannels=num_init_channels, spatial_dropout=spatial_dropout,
               fixed_dropout=fixed_dropout_value)
 
-sgd = keras.optimizers.SGD(lr=learning_rate_value, momentum=0.99, decay=0.0, 
-                           nesterov=False)
+if optimizer == "sgd":
+    opt = keras.optimizers.SGD(lr=learning_rate_value, momentum=0.99, decay=0.0, 
+                               nesterov=False)
+elif optimizer == "adam":    
+    opt = keras.optimizers.Adam(lr=learning_rate_value, beta_1=0.9, beta_2=0.999,
+                                epsilon=None, decay=0.0, amsgrad=False)
+else:
+    Print("Error: optimizer value must be 'sgd' or 'adam'")
+    sys.exit(0)
 
-model.compile(optimizer=sgd, loss='binary_crossentropy', metrics=[jaccard_index])
+model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
 if load_previous_weights == False:
@@ -697,11 +727,13 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
     
     Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
 
-    Print("Smoothing crops . . .")
-
+    # Extract the number of digits to create the image names
     d = len(str(X_test.shape[0]))
+
     if not os.path.exists(smooth_dir):
         os.makedirs(smooth_dir)
+
+    Print("Smoothing crops . . .")
     for i in tqdm(range(0,len(X_test))):
         predictions_smooth = predict_img_with_smooth_windowing(
             X_test[i,:,:,:],
@@ -714,11 +746,10 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
         )
         Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
 
-        if len(sys.argv) > 1 and test_id == "1":
-            im = Image.fromarray(predictions_smooth[:,:,0]*255)
-            im = im.convert('L')
-            im.save(os.path.join(smooth_dir,"test_out_smooth_" + str(i).zfill(d) 
-                                            + ".png"))
+        im = Image.fromarray(predictions_smooth[:,:,0]*255)
+        im = im.convert('L')
+        im.save(os.path.join(smooth_dir,"test_out_smooth_" + str(i).zfill(d) 
+                                        + ".png"))
 
     # Metrics (Jaccard + VOC + DET)
     Print("Calculate metrics . . .")
@@ -781,7 +812,8 @@ if load_previous_weights == False:
     Print("Train jaccard_index: " + str(np.max(results.history['jaccard_index'])))
     Print("Validation loss: " + str(np.min(results.history['val_loss'])))
     Print("Validation jaccard_index: " + str(np.max(results.history['val_jaccard_index'])))
-    Print("Test loss: " + str(score[0]))
+
+Print("Test loss: " + str(score[0]))
     
 if random_crops_in_DA == False:    
     Print("Test (per crop) jaccard_index: " + str(jac_per_crop))

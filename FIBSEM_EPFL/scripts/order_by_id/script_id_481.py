@@ -30,7 +30,7 @@ from data import load_data, crop_data, merge_data_without_overlap, check_crops,\
                  keras_da_generator, ImageDataGenerator, crop_data_with_overlap,\
                  merge_data_with_overlap, calculate_z_filtering,\
                  check_binary_masks
-from unet2 import U_Net
+from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from itertools import chain
@@ -80,10 +80,10 @@ os.chdir(base_work_dir)
 
 ### Dataset variables
 # Main dataset data/mask paths
-train_path = os.path.join('data', 'train', 'x')
-train_mask_path = os.path.join('data', 'train', 'y')
-test_path = os.path.join('data', 'test', 'x')
-test_mask_path = os.path.join('data', 'test', 'y')
+train_path = os.path.join('vnc', 'only_train', 'train', 'x')
+train_mask_path = os.path.join('vnc', 'only_train', 'train', 'y')
+test_path = os.path.join('vnc', 'only_train', 'test', 'x')
+test_mask_path = os.path.join('vnc', 'only_train', 'test', 'y')
 # Percentage of the training data used as validation                            
 perc_used_as_val = 0.1
 # Create the validation data with random images of the training data. If False
@@ -95,8 +95,8 @@ random_val_data = True
 # making the predictions. Be sure to take care of this if you are not going to
 # use "crop_data()" with the arg force_shape, as this function resolves the 
 # problem creating always crops of the same dimension
-img_train_shape = [1024, 768, 1]
-img_test_shape = [1024, 768, 1]
+img_train_shape = [1024, 1024, 1]
+img_test_shape = [1024, 1024, 1]
 original_test_shape = [img_test_shape[0], img_test_shape[1]]
 
 ### Extra datasets variables
@@ -152,18 +152,18 @@ discard_cropped_images = False
 d_percentage_value = 0.05
 # Path where the train discarded data will be stored to be loaded by future runs 
 # instead of make again the process
-train_crop_discard_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'train', 'x')
+train_crop_discard_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'train', 'x')
 # Path where the train discarded masks will be stored                           
-train_crop_discard_mask_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'train', 'y')
+train_crop_discard_mask_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'train', 'y')
 # The discards are NOT done in the test data, but this will store the test data,
 # which will be cropped, into the pointed path to be loaded by future runs      
 # together with the train discarded data and masks                              
-test_crop_discard_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'test', 'x')
-test_crop_discard_mask_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'test', 'y')
+test_crop_discard_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'test', 'x')
+test_crop_discard_mask_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'test', 'y')
 
 ### Normalization
 # Flag to normalize the data dividing by the mean pixel value
-normalize_data = True
+normalize_data = False                                                          
 # Force the normalization value to the given number instead of the mean pixel 
 # value
 norm_value_forced = -1                                                          
@@ -225,7 +225,7 @@ h5_dir = 'h5_files'
 
 ### Experiment main parameters
 # Batch size value
-batch_size_value = 6
+batch_size_value = 1
 # Optimizer to use. Posible values: "sgd" or "adam"
 optimizer = "sgd"
 # Learning rate used by the optimization method
@@ -245,7 +245,7 @@ time_callback = TimeHistory()
 # Number of channels in the first initial layer of the network
 num_init_channels = 32 
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
-spatial_dropout = True
+spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
 fixed_dropout_value = 0.0 
 

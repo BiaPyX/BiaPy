@@ -28,7 +28,8 @@ import time
 import tensorflow as tf
 from data import load_data, crop_data, merge_data_without_overlap, check_crops,\
                  keras_da_generator, ImageDataGenerator, crop_data_with_overlap,\
-                 merge_data_with_overlap, calculate_z_filtering
+                 merge_data_with_overlap, calculate_z_filtering,\
+                 check_binary_masks
 from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
@@ -55,7 +56,6 @@ test_id = str(sys.argv[3])
 job_file = job_id + '_' + test_id                                     
 base_work_dir = str(sys.argv[4])
 log_dir = os.path.join(base_work_dir, 'logs', job_id)
-h5_dir = os.path.join(base_work_dir, 'h5_files')
 
 # Checks
 Print('job_id : ' + job_id)
@@ -83,7 +83,12 @@ os.chdir(base_work_dir)
 train_path = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'x')            
 train_mask_path = os.path.join('kasthuri_pp', 'Kasthuri++', 'train', 'y')       
 test_path = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'x')              
-test_mask_path = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'y')         
+test_mask_path = os.path.join('kasthuri_pp', 'Kasthuri++', 'test', 'y')
+# Percentage of the training data used as validation                            
+perc_used_as_val = 0.1
+# Create the validation data with random images of the training data. If False
+# the validation data will be the last portion of training images.
+random_val_data = True
 
 ### Dataset shape
 # Note: train and test dimensions must be the same when training the network and
@@ -172,10 +177,10 @@ custom_da = False
 aug_examples = True 
 # Flag to shuffle the training data on every epoch 
 #(Best options: Keras->False, Custom->True)
-shuffle_train_data = custom_da
+shuffle_train_data_each_epoch = custom_da
 # Flag to shuffle the validation data on every epoch
 # (Best option: False in both cases)
-shuffle_val_data = False
+shuffle_val_data_each_epoch = False
 # Make a bit of zoom in the images. Only available in Keras DA
 keras_zoom = False 
 # width_shift_range (more details in Keras ImageDataGenerator class). Only 
@@ -201,7 +206,7 @@ duplicate_train = 0
 # Extra number of images to add to the train data. Applied after duplicate_train 
 extra_train_data = 0
 
-### Load preoviously generated model weigths
+### Load previously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
 load_previous_weights = False
@@ -220,7 +225,9 @@ h5_dir = 'h5_files'
 
 ### Experiment main parameters
 # Batch size value
-batch_size_value = 1
+batch_size_value = 6
+# Optimizer to use. Posible values: "sgd" or "adam"
+optimizer = "sgd"
 # Learning rate used by the optimization method
 learning_rate_value = 0.001
 # Number of epochs to train the network
@@ -262,12 +269,35 @@ det_bin = os.path.join(script_dir, '..', 'cell_cha_eval' ,'Linux', 'DETMeasure')
 n_dig = "3"
 
 ### Paths of the results                                             
-# Directory where the resulting images of the segmentation will be stored
-result_dir = os.path.join('results', 'results_' + job_id)
+# Directory where predicted images of the segmentation will be stored
+result_dir = os.path.join('results', 'results_' + job_id, job_file)
+# Directory where binarized predicted images will be stored
+result_bin_dir = os.path.join(result_dir, 'binarized')
+# Directory where predicted images will be stored
+result_no_bin_dir = os.path.join(result_dir, 'no_binarized')
+# Folder where the smoothed images will be stored
+smooth_dir = os.path.join(result_dir, 'smooth')
+# Folder where the images with the z-filter applied will be stored
+zfil_dir = os.path.join(result_dir, 'zfil')
+# Folder where the images with smoothing and z-filter applied will be stored
+smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
 # folder pointed by "base_work_dir" variable 
 char_dir = 'charts'
+
+
+#####################
+#   SANITY CHECKS   #
+#####################
+
+Print("#####################\n#   SANITY CHECKS   #\n#####################")
+
+check_binary_masks(train_mask_path)
+check_binary_masks(test_mask_path)
+if extra_datasets_mask_list: 
+    for i in range(len(extra_datasets_mask_list)):
+        check_binary_masks(extra_datasets_mask_list[i])
 
 
 #############################################
@@ -335,6 +365,8 @@ X_val, Y_val, \
 X_test, Y_test, \
 norm_value, crops_made = load_data(train_path, train_mask_path, test_path,
                            test_mask_path, img_train_shape, img_test_shape,
+                           val_split=perc_used_as_val, 
+                           shuffle_val=random_val_data,
                            e_d_data=extra_datasets_data_list, job_id=job_id, 
                            e_d_mask=extra_datasets_mask_list,
                            e_d_data_dim=extra_datasets_data_dim_list,
@@ -424,8 +456,8 @@ if custom_da == False:
                                        batch_size_value=batch_size_value,
                                        X_val=X_val, Y_val=Y_val,
                                        save_examples=aug_examples, job_id=job_id,          
-                                       shuffle_train=shuffle_train_data, 
-                                       shuffle_val=shuffle_val_data, 
+                                       shuffle_train=shuffle_train_data_each_epoch, 
+                                       shuffle_val=shuffle_val_data_each_epoch, 
                                        zoom=keras_zoom,        
                                        random_crops_in_DA=random_crops_in_DA,
                                        crop_length=crop_shape[0],
@@ -459,9 +491,10 @@ else:
     # Custom Data Augmentation                                                  
     data_gen_args = dict(X=X_train, Y=Y_train, batch_size=batch_size_value,     
                          dim=(img_height,img_width), n_channels=1,              
-                         shuffle=shuffle_train_data, da=True, e_prob=0.0, 
-                         elastic=False, vflip=True, hflip=True, rotation90=False,              
-                         rotation_range=180, brightness_range=brightness_range,
+                         shuffle=shuffle_train_data_each_epoch, da=True, 
+                         e_prob=0.0, elastic=False, vflip=True, hflip=True, 
+                         rotation90=False, rotation_range=180, 
+                         brightness_range=brightness_range, 
                          median_filter_size=median_filter_size,
                          random_crops_in_DA=random_crops_in_DA, 
                          crop_length=crop_shape[0], prob_map=probability_map,
@@ -469,7 +502,7 @@ else:
                                                                                 
     data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=batch_size_value,     
                              dim=(img_height,img_width), n_channels=1,          
-                             shuffle=shuffle_val_data, da=False,                           
+                             shuffle=shuffle_val_data_each_epoch, da=False,                           
                              random_crops_in_DA=random_crops_in_DA,                   
                              crop_length=crop_shape[0], val=True)              
                                                                                 
@@ -497,10 +530,17 @@ model = U_Net([img_height, img_width, img_channels],
               numInitChannels=num_init_channels, spatial_dropout=spatial_dropout,
               fixed_dropout=fixed_dropout_value)
 
-sgd = keras.optimizers.SGD(lr=learning_rate_value, momentum=0.99, decay=0.0, 
-                           nesterov=False)
+if optimizer == "sgd":
+    opt = keras.optimizers.SGD(lr=learning_rate_value, momentum=0.99, decay=0.0, 
+                               nesterov=False)
+elif optimizer == "adam":    
+    opt = keras.optimizers.Adam(lr=learning_rate_value, beta_1=0.9, beta_2=0.999,
+                                epsilon=None, decay=0.0, amsgrad=False)
+else:
+    Print("Error: optimizer value must be 'sgd' or 'adam'")
+    sys.exit(0)
 
-model.compile(optimizer=sgd, loss='binary_crossentropy', metrics=[jaccard_index])
+model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
 model.summary()
 
 if load_previous_weights == False:
@@ -573,6 +613,18 @@ if random_crops_in_DA == False:
                                                               out_shape=[h_num, v_num], 
                                                               grid=False)
         recons_no_bin_preds_test = recons_no_bin_preds_test.astype(float)/255
+        
+        Print("Saving predicted images . . .")
+        save_img(Y=recons_preds_test, mask_dir=result_bin_dir,
+                 prefix="test_out_bin")
+        save_img(Y=recons_no_bin_preds_test, mask_dir=result_no_bin_dir,
+                 prefix="test_out_no_bin")
+    else:
+        Print("Saving predicted images . . .")
+        save_img(Y=bin_preds_test, mask_dir=result_bin_dir,
+                 prefix="test_out_bin")
+        save_img(Y=preds_test, mask_dir=result_no_bin_dir,
+                 prefix="test_out_no_bin")
 
     # Metric calculation
     if make_threshold_plots == True:
@@ -582,16 +634,17 @@ if random_crops_in_DA == False:
                                 n_dig, job_id, job_file, char_dir)
     else:
         Print("Calculate metrics . . .")
-        score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
-        voc = voc_calculation(Y_test, recons_preds_test, score[1])
-        det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path,
-                              det_eval_path, det_bin, n_dig, job_id)
+        if make_crops == True:
+            score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
+            voc = voc_calculation(Y_test, recons_preds_test, score[1])
+            det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path,
+                                  det_eval_path, det_bin, n_dig, job_id)
+        else:
+            score[1] = jaccard_index_numpy(Y_test, bin_preds_test)
+            voc = voc_calculation(Y_test, bin_preds_test, score[1])
+            det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
+                                  det_eval_path, det_bin, n_dig, job_id)
 
-    # Save output images
-    if len(sys.argv) > 1 and test_id == "1":
-        Print("Saving predicted images . . .")
-        save_img(Y=recons_no_bin_preds_test, mask_dir=result_dir, 
-                 prefix="test_out")
 else:
     ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, crop_shape[0], 
                                                   test_ov_crops)
@@ -674,6 +727,12 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
     
     Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
 
+    # Extract the number of digits to create the image names
+    d = len(str(X_test.shape[0]))
+
+    if not os.path.exists(smooth_dir):
+        os.makedirs(smooth_dir)
+
     Print("Smoothing crops . . .")
     for i in tqdm(range(0,len(X_test))):
         predictions_smooth = predict_img_with_smooth_windowing(
@@ -687,12 +746,10 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
         )
         Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
 
-        if not os.path.exists(result_dir):
-            os.makedirs(result_dir)
-        if len(sys.argv) > 1 and test_id == "1":
-            im = Image.fromarray(predictions_smooth[:,:,0]*255)
-            im = im.convert('L')
-            im.save(os.path.join(result_dir,"test_out_smooth_" + str(i) + ".png"))
+        im = Image.fromarray(predictions_smooth[:,:,0]*255)
+        im = im.convert('L')
+        im.save(os.path.join(smooth_dir,"test_out_smooth_" + str(i).zfill(d) 
+                                        + ".png"))
 
     # Metrics (Jaccard + VOC + DET)
     Print("Calculate metrics . . .")
@@ -701,11 +758,10 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
     smooth_det = DET_calculation(Y_test, Y_test_smooth, det_eval_ge_path,
                                  det_eval_post_path, det_bin, n_dig, job_id)
 
-Print("2) Z-FILTERING")
+zfil_preds_test = None
+smooth_zfil_preds_test = None
 if post_process == True and not extra_datasets_data_list:
-
-    zfil_preds_test = None
-    smooth_zfil_preds_test = None
+    Print("2) Z-FILTERING")
 
     if random_crops_in_DA == False:
         Print("Applying Z-filter . . .")
@@ -716,6 +772,9 @@ if post_process == True and not extra_datasets_data_list:
             zfil_preds_test = calculate_z_filtering(merged_preds_test)
 
     if zfil_preds_test is not None:
+        Print("Saving Z-filtered images . . .")
+        save_img(Y=zfil_preds_test, mask_dir=zfil_dir, prefix="test_out_zfil")
+ 
         Print("Calculate metrics for the Z-filtered data . . .")
         zfil_score = jaccard_index_numpy(Y_test, zfil_preds_test)
         zfil_voc = voc_calculation(Y_test, zfil_preds_test, zfil_score)
@@ -725,6 +784,10 @@ if post_process == True and not extra_datasets_data_list:
     if Y_test_smooth is not None:
         Print("Applying Z-filter to the smoothed data . . .")
         smooth_zfil_preds_test = calculate_z_filtering(Y_test_smooth)
+
+        Print("Saving smoothed + Z-filtered images . . .")
+        save_img(Y=smooth_zfil_preds_test, mask_dir=smoo_zfil_dir, 
+                 prefix="test_out_smoo_zfil")
 
         Print("Calculate metrics for the smoothed + Z-filtered data . . .")
         smo_zfil_score = jaccard_index_numpy(Y_test, smooth_zfil_preds_test)
@@ -749,7 +812,8 @@ if load_previous_weights == False:
     Print("Train jaccard_index: " + str(np.max(results.history['jaccard_index'])))
     Print("Validation loss: " + str(np.min(results.history['val_loss'])))
     Print("Validation jaccard_index: " + str(np.max(results.history['val_jaccard_index'])))
-    Print("Test loss: " + str(score[0]))
+
+Print("Test loss: " + str(score[0]))
     
 if random_crops_in_DA == False:    
     Print("Test (per crop) jaccard_index: " + str(jac_per_crop))
@@ -770,9 +834,9 @@ if load_previous_weights == False:
     zfil_score = -1 if 'zfil_score' not in globals() else zfil_score
     zfil_voc = -1 if 'zfil_voc' not in globals() else zfil_voc
     zfil_det = -1 if 'zfil_det' not in globals() else zfil_det
-    smo_zfil_score = -1 if 'zfil_score' not in globals() else smo_zfil_score
-    smo_zfil_voc = -1 if 'zfil_voc' not in globals() else smo_zfil_voc
-    smo_zfil_det = -1 if 'zfil_det' not in globals() else smo_zfil_det
+    smo_zfil_score = -1 if 'smo_zfil_score' not in globals() else smo_zfil_score
+    smo_zfil_voc = -1 if 'smo_zfil_voc' not in globals() else smo_zfil_voc
+    smo_zfil_det = -1 if 'smo_zfil_det' not in globals() else smo_zfil_det
     jac_per_crop = -1 if 'jac_per_crop' not in globals() else jac_per_crop
 
     store_history(results, jac_per_crop, score, voc, det, time_callback, log_dir,

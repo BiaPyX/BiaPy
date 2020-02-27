@@ -28,9 +28,8 @@ import time
 import tensorflow as tf
 from data import load_data, crop_data, merge_data_without_overlap, check_crops,\
                  keras_da_generator, ImageDataGenerator, crop_data_with_overlap,\
-                 merge_data_with_overlap, calculate_z_filtering,\
-                 check_binary_masks
-from unet2 import U_Net
+                 merge_data_with_overlap, calculate_z_filtering
+from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from itertools import chain
@@ -80,10 +79,10 @@ os.chdir(base_work_dir)
 
 ### Dataset variables
 # Main dataset data/mask paths
-train_path = os.path.join('data', 'train', 'x')
-train_mask_path = os.path.join('data', 'train', 'y')
-test_path = os.path.join('data', 'test', 'x')
-test_mask_path = os.path.join('data', 'test', 'y')
+train_path = os.path.join('achucarro', 'adjusted', 'train', 'x')
+train_mask_path = os.path.join('achucarro', 'adjusted', 'train', 'y')
+test_path = os.path.join('achucarro', 'adjusted', 'test', 'x')
+test_mask_path = os.path.join('achucarro', 'adjusted', 'test', 'y')
 # Percentage of the training data used as validation                            
 perc_used_as_val = 0.1
 # Create the validation data with random images of the training data. If False
@@ -95,8 +94,8 @@ random_val_data = True
 # making the predictions. Be sure to take care of this if you are not going to
 # use "crop_data()" with the arg force_shape, as this function resolves the 
 # problem creating always crops of the same dimension
-img_train_shape = [1024, 768, 1]
-img_test_shape = [1024, 768, 1]
+img_train_shape = [2048, 2048, 1]
+img_test_shape = [2048, 2048, 1]
 original_test_shape = [img_test_shape[0], img_test_shape[1]]
 
 ### Extra datasets variables
@@ -182,7 +181,7 @@ shuffle_train_data_each_epoch = custom_da
 # (Best option: False in both cases)
 shuffle_val_data_each_epoch = False
 # Make a bit of zoom in the images. Only available in Keras DA
-keras_zoom = False 
+keras_zoom = True
 # width_shift_range (more details in Keras ImageDataGenerator class). Only 
 # available in Keras DA
 w_shift_r = 0.0
@@ -225,11 +224,11 @@ h5_dir = 'h5_files'
 
 ### Experiment main parameters
 # Batch size value
-batch_size_value = 6
+batch_size_value = 1
 # Optimizer to use. Posible values: "sgd" or "adam"
-optimizer = "sgd"
+optimizer = "adam"
 # Learning rate used by the optimization method
-learning_rate_value = 0.001
+learning_rate_value = 0.0001
 # Number of epochs to train the network
 epochs_value = 360
 # Number of epochs to stop the training process after no improvement
@@ -243,9 +242,9 @@ time_callback = TimeHistory()
 
 ### Network architecture specific parameters
 # Number of channels in the first initial layer of the network
-num_init_channels = 32 
+num_init_channels = 16 
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
-spatial_dropout = True
+spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
 fixed_dropout_value = 0.0 
 
@@ -285,19 +284,6 @@ smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # training the network will be shown. This folder will be created under the
 # folder pointed by "base_work_dir" variable 
 char_dir = 'charts'
-
-
-#####################
-#   SANITY CHECKS   #
-#####################
-
-Print("#####################\n#   SANITY CHECKS   #\n#####################")
-
-check_binary_masks(train_mask_path)
-check_binary_masks(test_mask_path)
-if extra_datasets_mask_list: 
-    for i in range(len(extra_datasets_mask_list)):
-        check_binary_masks(extra_datasets_mask_list[i])
 
 
 #############################################
@@ -746,10 +732,11 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
         )
         Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
 
-        im = Image.fromarray(predictions_smooth[:,:,0]*255)
-        im = im.convert('L')
-        im.save(os.path.join(smooth_dir,"test_out_smooth_" + str(i).zfill(d) 
-                                        + ".png"))
+        if len(sys.argv) > 1 and test_id == "1":
+            im = Image.fromarray(predictions_smooth[:,:,0]*255)
+            im = im.convert('L')
+            im.save(os.path.join(smooth_dir,"test_out_smooth_" + str(i).zfill(d) 
+                                            + ".png"))
 
     # Metrics (Jaccard + VOC + DET)
     Print("Calculate metrics . . .")

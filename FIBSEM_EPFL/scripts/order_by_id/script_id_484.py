@@ -30,7 +30,7 @@ from data import load_data, crop_data, merge_data_without_overlap, check_crops,\
                  keras_da_generator, ImageDataGenerator, crop_data_with_overlap,\
                  merge_data_with_overlap, calculate_z_filtering,\
                  check_binary_masks
-from unet2 import U_Net
+from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from itertools import chain
@@ -80,23 +80,23 @@ os.chdir(base_work_dir)
 
 ### Dataset variables
 # Main dataset data/mask paths
-train_path = os.path.join('data', 'train', 'x')
-train_mask_path = os.path.join('data', 'train', 'y')
-test_path = os.path.join('data', 'test', 'x')
-test_mask_path = os.path.join('data', 'test', 'y')
+train_path = os.path.join('vnc', 'only_train', 'train', 'x')                    
+train_mask_path = os.path.join('vnc', 'only_train', 'train', 'y')               
+test_path = os.path.join('vnc', 'only_train', 'test', 'x')                      
+test_mask_path = os.path.join('vnc', 'only_train', 'test', 'y')                 
 # Percentage of the training data used as validation                            
-perc_used_as_val = 0.1
-# Create the validation data with random images of the training data. If False
-# the validation data will be the last portion of training images.
-random_val_data = True
-
-### Dataset shape
+perc_used_as_val = 0.1                                                          
+# Create the validation data with random images of the training data. If False  
+# the validation data will be the last portion of training images.              
+random_val_data = True                                                          
+                                                                                
+### Dataset shape                                                               
 # Note: train and test dimensions must be the same when training the network and
-# making the predictions. Be sure to take care of this if you are not going to
-# use "crop_data()" with the arg force_shape, as this function resolves the 
-# problem creating always crops of the same dimension
-img_train_shape = [1024, 768, 1]
-img_test_shape = [1024, 768, 1]
+# making the predictions. Be sure to take care of this if you are not going to  
+# use "crop_data()" with the arg force_shape, as this function resolves the     
+# problem creating always crops of the same dimension                           
+img_train_shape = [1024, 1024, 1]                                               
+img_test_shape = [1024, 1024, 1]
 original_test_shape = [img_test_shape[0], img_test_shape[1]]
 
 ### Extra datasets variables
@@ -152,18 +152,18 @@ discard_cropped_images = False
 d_percentage_value = 0.05
 # Path where the train discarded data will be stored to be loaded by future runs 
 # instead of make again the process
-train_crop_discard_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'train', 'x')
+train_crop_discard_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'train', 'x')
 # Path where the train discarded masks will be stored                           
-train_crop_discard_mask_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'train', 'y')
+train_crop_discard_mask_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'train', 'y')
 # The discards are NOT done in the test data, but this will store the test data,
 # which will be cropped, into the pointed path to be loaded by future runs      
 # together with the train discarded data and masks                              
-test_crop_discard_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'test', 'x')
-test_crop_discard_mask_path = os.path.join('data_d', job_id + str(d_percentage_value), job_file, 'test', 'y')
+test_crop_discard_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'test', 'x')
+test_crop_discard_mask_path = os.path.join('data_d', job_id + '_' + str(d_percentage_value), job_file, 'test', 'y')
 
 ### Normalization
 # Flag to normalize the data dividing by the mean pixel value
-normalize_data = True
+normalize_data = False                                                          
 # Force the normalization value to the given number instead of the mean pixel 
 # value
 norm_value_forced = -1                                                          
@@ -225,11 +225,11 @@ h5_dir = 'h5_files'
 
 ### Experiment main parameters
 # Batch size value
-batch_size_value = 6
+batch_size_value = 1
 # Optimizer to use. Posible values: "sgd" or "adam"
-optimizer = "sgd"
+optimizer = "adam"
 # Learning rate used by the optimization method
-learning_rate_value = 0.001
+learning_rate_value = 0.0001
 # Number of epochs to train the network
 epochs_value = 360
 # Number of epochs to stop the training process after no improvement
@@ -243,9 +243,9 @@ time_callback = TimeHistory()
 
 ### Network architecture specific parameters
 # Number of channels in the first initial layer of the network
-num_init_channels = 32 
+num_init_channels = 16
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
-spatial_dropout = True
+spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
 fixed_dropout_value = 0.0 
 
@@ -596,35 +596,30 @@ if random_crops_in_DA == False:
                 + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
         v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
                 + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
-
+        
+        X_test = merge_data_without_overlap(X_test,
+                                            math.ceil(X_test.shape[0]/(h_num*v_num)),
+                                            out_shape=[h_num, v_num], grid=False)
         Y_test = merge_data_without_overlap(Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
                                             out_shape=[h_num, v_num], grid=False)
         Print("The shape of the test data reconstructed is " + str(Y_test.shape))
         
         # To calculate metrics (binarized)
-        recons_preds_test = merge_data_without_overlap(bin_preds_test,
-                                                       math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
-                                                       out_shape=[h_num, v_num], 
-                                                       grid=False)
+        bin_preds_test = merge_data_without_overlap(bin_preds_test,
+                                                    math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
+                                                    out_shape=[h_num, v_num], 
+                                                    grid=False)
 
         # To save the probabilities (no binarized)
-        recons_no_bin_preds_test = merge_data_without_overlap(preds_test*255,
-                                                              math.ceil(preds_test.shape[0]/(h_num*v_num)),
-                                                              out_shape=[h_num, v_num], 
-                                                              grid=False)
-        recons_no_bin_preds_test = recons_no_bin_preds_test.astype(float)/255
+        preds_test = merge_data_without_overlap(preds_test*255,
+                                                math.ceil(preds_test.shape[0]/(h_num*v_num)),
+                                                out_shape=[h_num, v_num], 
+                                                grid=False)
+        preds_test = preds_test.astype(float)/255
         
-        Print("Saving predicted images . . .")
-        save_img(Y=recons_preds_test, mask_dir=result_bin_dir,
-                 prefix="test_out_bin")
-        save_img(Y=recons_no_bin_preds_test, mask_dir=result_no_bin_dir,
-                 prefix="test_out_no_bin")
-    else:
-        Print("Saving predicted images . . .")
-        save_img(Y=bin_preds_test, mask_dir=result_bin_dir,
-                 prefix="test_out_bin")
-        save_img(Y=preds_test, mask_dir=result_no_bin_dir,
-                 prefix="test_out_no_bin")
+    Print("Saving predicted images . . .")
+    save_img(Y=bin_preds_test, mask_dir=result_bin_dir, prefix="test_out_bin")
+    save_img(Y=preds_test, mask_dir=result_no_bin_dir, prefix="test_out_no_bin")
 
     # Metric calculation
     if make_threshold_plots == True:
@@ -634,16 +629,30 @@ if random_crops_in_DA == False:
                                 n_dig, job_id, job_file, char_dir)
     else:
         Print("Calculate metrics . . .")
-        if make_crops == True:
-            score[1] = jaccard_index_numpy(Y_test, recons_preds_test)
-            voc = voc_calculation(Y_test, recons_preds_test, score[1])
-            det = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path,
-                                  det_eval_path, det_bin, n_dig, job_id)
-        else:
-            score[1] = jaccard_index_numpy(Y_test, bin_preds_test)
-            voc = voc_calculation(Y_test, bin_preds_test, score[1])
-            det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
-                                  det_eval_path, det_bin, n_dig, job_id)
+        # Per image without overlap
+        score[1] = jaccard_index_numpy(Y_test, bin_preds_test)
+        voc = voc_calculation(Y_test, bin_preds_test, score[1])
+        det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
+                              det_eval_path, det_bin, n_dig, job_id)
+
+        # Per image with 50% overlap
+        Y_test_50ov = np.zeros(Y_test.shape, dtype=(np.float32))
+        for i in tqdm(range(0,len(X_test))):
+            predictions_smooth = predict_img_with_overlap(
+                X_test[i,:,:,:],
+                window_size=crop_shape[0],
+                subdivisions=2,
+                nb_classes=1,
+                pred_func=(
+                    lambda img_batch_subdiv: model.predict(img_batch_subdiv)
+                )
+            )
+            Y_test_50ov[i] = (predictions_smooth > 0.5).astype(np.float32)
+
+        jac_per_img_50ov = jaccard_index_numpy(Y_test, Y_test_50ov)
+        voc_per_img_50ov = voc_calculation(Y_test, Y_test_50ov, jac_per_img_50ov)
+        det_per_img_50ov = DET_calculation(Y_test, Y_test_50ov, det_eval_ge_path,
+                                           det_eval_path, det_bin, n_dig, job_id)
 
 else:
     ov_X_test, ov_Y_test = crop_data_with_overlap(X_test, Y_test, crop_shape[0], 
@@ -682,7 +691,6 @@ else:
 
         Print("Calculate Jaccard for test (per image with overlap calculated). . .")
         score[1] = jaccard_index_numpy(Y_test, merged_preds_test)
-        
         voc = voc_calculation(Y_test, merged_preds_test, score[1])
         det = DET_calculation(Y_test, merged_preds_test, det_eval_ge_path,
                               det_eval_path, det_bin, n_dig, job_id)
@@ -721,10 +729,6 @@ Print("1) SMOOTH")
 if (post_process == True and make_crops == True) or (random_crops_in_DA == True):
     Print("Post processing active . . .")
 
-    if random_crops_in_DA == False and make_crops == True:
-        X_test = merge_data_without_overlap(X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
-                                            out_shape=[h_num, v_num], grid=False)
-    
     Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
 
     # Extract the number of digits to create the image names
@@ -765,7 +769,7 @@ if post_process == True and not extra_datasets_data_list:
 
     if random_crops_in_DA == False:
         Print("Applying Z-filter . . .")
-        zfil_preds_test = calculate_z_filtering(recons_preds_test)
+        zfil_preds_test = calculate_z_filtering(bin_preds_test)
     else:
         if test_ov_crops > 1:
             Print("Applying Z-filter . . .")
@@ -816,10 +820,13 @@ if load_previous_weights == False:
 Print("Test loss: " + str(score[0]))
     
 if random_crops_in_DA == False:    
-    Print("Test (per crop) jaccard_index: " + str(jac_per_crop))
-    Print("Test (per image) jaccard_index: " + str(score[1]))
-    Print("VOC: " + str(voc))
-    Print("DET: " + str(det))
+    Print("Test jaccard_index (per crop): " + str(jac_per_crop))
+    Print("Test jaccard_index (per image without overlap): " + str(score[1]))
+    Print("Test jaccard_index (per image with 50% overlap): " + str(jac_per_img_50ov))
+    Print("VOC (per image without overlap): " + str(voc))
+    Print("VOC (per image with 50% overlap): " + str(voc_per_img_50ov))
+    Print("DET (per image without overlap): " + str(det))
+    Print("DET (per image with 50% overlap): " + str(det_per_img_50ov))
 else:
     Print("Test overlapped (per crop) jaccard_index: " + str(jac_per_crop))
     Print("Test overlapped (per image) jaccard_index: " + str(score[1]))
@@ -839,7 +846,8 @@ if load_previous_weights == False:
     smo_zfil_det = -1 if 'smo_zfil_det' not in globals() else smo_zfil_det
     jac_per_crop = -1 if 'jac_per_crop' not in globals() else jac_per_crop
 
-    store_history(results, jac_per_crop, score, voc, det, time_callback, log_dir,
+    store_history(results, jac_per_crop, score, jac_per_img_50ov, voc, 
+                  voc_per_img_50ov, det, det_per_img_50ov, time_callback, log_dir,
                   job_file, smooth_score, smooth_voc, smooth_det, zfil_score,
                   zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
 
