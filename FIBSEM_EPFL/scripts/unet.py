@@ -5,10 +5,11 @@ from keras.layers.convolutional import Conv2D, Conv2DTranspose
 from keras.layers.pooling import MaxPooling2D
 from keras.layers.merge import concatenate
 import keras 
-from metrics import binary_crossentropy_weighted, jaccard_index
+from metrics import binary_crossentropy_weighted, jaccard_index, \
+                    weighted_bce_dice_loss
 
 def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0, 
-          spatial_dropout=False, optimizer="sgd", weighted_loss=False, lr=0.001):
+          spatial_dropout=False, loss_type="bce", optimizer="sgd", lr=0.001):
     """Create the U-Net
 
        Args:
@@ -27,11 +28,12 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
             spatial_dropout (bool, optional): use spatial dropout instead of the
             "normal" dropout.
 
+            loss_type (str, optional): loss type to use, three type available: 
+            "bce" (Binary Cross Entropy) , "w_bce" (Weighted BCE, based on
+            weigth maps) and "w_bce_dice" (Weighted loss: weight1*BCE + weight2*Dice). 
+
             optimizer (str, optional): optimizer used to minimize the loss
             function. Posible options: 'sgd' or 'adam'.
-
-            weighted_loss (bool, optional): flag to control if a weighted loss
-            is going to be used.
 
             lr (float, optional): learning rate value.
 
@@ -40,7 +42,7 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     """
     inputs = Input((image_shape[0], image_shape[1], image_shape[2]))
         
-    if weighted_loss == True:
+    if loss_type == "w_bce":
         weights = Input((image_shape[0], image_shape[1], image_shape[2]))
 
     s = Lambda(lambda x: x / 255) (inputs)
@@ -145,7 +147,7 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     
     outputs = Conv2D(1, (1, 1), activation='sigmoid') (c9)
    
-    if weighted_loss == True:
+    if loss_type == "w_bce":
         model = Model(inputs=[inputs, weights], outputs=[outputs]) 
     else:
         model = Model(inputs=[inputs], outputs=[outputs])
@@ -159,9 +161,17 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     else:
         raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
         
-    if weighted_loss == True:
-        model.compile(optimizer=opt, loss=binary_crossentropy_weighted(weights), metrics=[jaccard_index])
+    if loss_type == "bce":
+        model.compile(optimizer=opt, loss='binary_crossentropy', 
+                      metrics=[jaccard_index])
+    elif loss_type == "w_bce":
+        model.compile(optimizer=opt, loss=binary_crossentropy_weighted(weights), 
+                      metrics=[jaccard_index])
+    elif loss_type == "w_bce_dice":
+        model.compile(optimizer=opt, 
+                      loss=weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33),
+                      metrics=[jaccard_index])
     else:
-        model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
+        raise ValueError("'loss_type' must be 'bce', 'w_bce' or 'w_bce_dice'")
 
     return model
