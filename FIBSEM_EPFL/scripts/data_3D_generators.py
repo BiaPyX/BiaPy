@@ -5,7 +5,7 @@ import math
 import os
 from tqdm import tqdm
 from skimage.io import imread
-from util import Print, array_to_img, img_to_array
+from util import array_to_img, img_to_array
 from scipy.ndimage import rotate
 from scipy.ndimage.interpolation import shift
 
@@ -14,25 +14,33 @@ class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
     """
 
     def __init__(self, data_dir, mask_dir=None, dim=(256, 256, 128, 1), 
-                 seed=42, batch_size=32, da=True,
-                 num_data_per_epoch=0, o_dim_vol=(750, 4096, 4096)):
+                 seed=42, batch_size=32, da=True, num_data_per_epoch=0, 
+                 o_dim_vol=(750, 4096, 4096)):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
             data_dir (str): path to the data directory. It should contain one 
             subdirectory per class as for flow_from_directory function of Keras.
             Only one class is supported. 
+
             mask_dir (str, optional): path to the mask directory. It should 
             contain one subdirectory per class as for flow_from_directory 
-            function of Keras.
-            Only one class is supported.
+            function of Keras.  Only one class is supported.
+
             dim (tuple, optional): dimension of the desired images. 
             E. g. (x, y, z, channels).
+
             seed (int, optional): seed for random functions.
+
             batch_size (int, optional): size of the batches.
-            shuffle (bool, optional): to decide if the indexes will be shuffled
-            after every epoch. 
-            da (bool, optional): to activate the data augmentation. 
+
+            da (bool, optional): to activate the data augmentation.
+
+            num_data_per_epoch (int, optional): amount of data to process per 
+            epoch. If the dataset has more data the rest is discarded. 
+
+            o_dim_vol (tuple, optional): original dataset shape.
+            E. g. (number_of_images, x, y)
         """
 
         classes = []
@@ -63,17 +71,17 @@ class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
                                  "multiple of the requested dimension %s." 
                                  % (o_dim_vol, dim))
 
-            print(('The number of data per epoch to operate with must be near '
-                   '{0} in a {1} volume.').format(num_data_per_epoch, o_dim_vol))
+            print("The number of data per epoch to operate with must be near {} "
+                  "in a {} volume").format(num_data_per_epoch, o_dim_vol))
 
             stacks_in_z = int(np.floor(o_dim_vol[0]/dim[2]))
             num_volumes = round(num_data_per_epoch/(stacks_in_z*dim[0]*dim[1]*dim[2]))
 
-            print(('As the stack shape is {0}, the number of stacks that covers '
-                   'the maximun depth of the original volumen is '
-                   '{1}.').format(dim, stacks_in_z))
-            print(('The number of full depth stacks to process per epoch is '
-                   '{0}.').format(num_volumes))
+            print("As the stack shape is {}, the number of stacks that covers "
+                  "the maximun depth of the original volumen is {}"\
+                  .format(dim, stacks_in_z))
+            print("The number of full depth stacks to process per epoch is {}"\
+                  .format(num_volumes))
         
             c_per_row = o_dim_vol[1]/dim[0]
             c_per_col = o_dim_vol[2]/dim[1]
@@ -130,9 +138,9 @@ class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
         self.total_batches_seen = 0
         self.num_images_to_form_stack = batch_size*dim[2]
   
-        print("Detected %d data samples in %s" % (self.n, self.data_dir)) 
+        print("Detected {} data samples in {}".format(self.n, self.data_dir)) 
         if mask_dir is not None:
-            print("Detected %d mask samples in %s" % (self.n, self.mask_dir)) 
+            print("Detected {} mask samples in {}".format(self.n, self.mask_dir)) 
 
         self.on_epoch_end()
 
@@ -147,9 +155,11 @@ class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
                 index (int): batch index counter.
             
            Returns:
-               batch_x (Numpy array): corresponding X elements of the batch.
-               batch_y (Numpy array, optional): corresponding Y elements of the 
-               batch.
+                batch_x (5D Numpy array): corresponding X elements of the batch.
+                E. g. (batch_size, x, y, z, channels). 
+
+                batch_y (5D Numpy array, optional): corresponding Y elements of the 
+                batch. E. g. (batch_size, x, y, z, channels).
         """
 
         batch_x = np.zeros((self.batch_size,) + self.dim)
@@ -215,114 +225,6 @@ class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
         if self.mask_dir is not None:
             self.mask_indexes = self.o_mask_indexes.copy()
 
-    def get_transformed_samples(self, num_examples, save_to_dir=False, 
-                                out_dir='aug', job_id="none_job_id", 
-                                save_prefix=None, random_images=True):
-        """Apply selected transformations to a defined number of images from
-           the dataset. 
-            
-           Args:
-                num_examples (int): number of examples to generate.
-                save_to_dir (bool, optional): save the images generated. The 
-                purpose of this variable is to check the images generated by 
-                data augmentation.
-                out_dir (str, optional): name of the folder where the
-                examples will be stored. If any provided the examples will be
-                generated under a folder 'aug/none_job_id'.
-                job_id (str, optional): job identifier. If any provided the
-                examples will be generated under a folder 'aug/none_job_id'.
-                save_prefix (str, optional): prefix to add to the generated 
-                examples' name. 
-                original_elastic (bool, optional): to save also the original
-                images when an elastic transformation is performed.
-                random_images (bool, optional): randomly select images from the
-                dataset. If False the examples will be generated from the start
-                of the dataset. 
-
-            Returns:
-                batch_x (Numpy array): batch of data.
-                batch_y (Numpy array, optional): batch of data mask.
-        """
-
-        batch_x = np.zeros((num_examples,) + self.dim)
-        img_stack = np.zeros((self.dim))
-        if self.mask_dir is not None:
-            batch_y = np.zeros((num_examples,) + self.dim)
-            mask_stack = np.zeros((self.dim))
-
-        if save_to_dir == True:
-            prefix = ""
-            if save_prefix is not None:
-                prefix = str(save_prefix)
-    
-            out_dir = os.path.join(out_dir, job_id) 
-            if not os.path.exists(out_dir):                              
-                os.makedirs(out_dir)
-   
-        if random_images == True:
-            random.Random(self.seed).shuffle(self.data_indexes)
-            if self.mask_dir is not None:
-                random.Random(self.seed).shuffle(self.mask_indexes)
-        else:
-            self.data_indexes = self.o_data_indexes.copy()
-            if self.mask_dir is not None:
-                self.mask_indexes = self.o_mask_indexes.copy()
- 
-        # Generate the examples 
-        Print("0) Creating the examples of data augmentation . . .")
-        j = 0
-        cont = 0
-        for i, (d_ind, m_ind) in enumerate(zip(self.data_indexes, self.mask_indexes)):
-            img = imread(os.path.join(self.data_dir, d_ind))
-
-            # Convert image into grayscale
-            if len(img.shape) >= 3:
-                img = img[:, :, 0]
-            if len(img.shape) == 2:
-                img = np.expand_dims(img, axis=-1)
-
-            img_stack[:,:,j,:] = img
-
-            if self.mask_dir is not None:
-                mask = imread(os.path.join(self.mask_dir, m_ind))
-                # Convert image into grayscale
-                if len(mask.shape) >= 3:
-                    mask = mask[:, :, 0]
-                if len(mask.shape) == 2:
-                    mask = np.expand_dims(mask, axis=-1)
-                mask_stack[:,:,j,:] = mask
-
-            j += 1
-
-            if j % self.dim[2] == 0:
-                j = 0
-
-                # Make data augmentation
-                batch_x[cont] = img_stack
-                if self.mask_dir is not None:
-                    batch_y[cont] = mask_stack
-
-                # Save transformed images
-                #if save_to_dir == True:    
-                #    im = Image.fromarray(batch_x[i,:,:,0])
-                #    im = im.convert('L')
-                #    im.save(os.path.join(out_dir, prefix + 'x_' + str(i) + ".png"))
-                #    mask = Image.fromarray(batch_y[i,:,:,0]*255)
-                #    mask = mask.convert('L')
-                #    mask.save(os.path.join(out_dir, prefix + 'y_' + str(i) + ".png"))
-    
-                cont += 1
-                if cont == num_examples:
-                    break
-
-        # To set configure the indixes again
-        self.on_epoch_end()
-
-        if self.mask_dir is not None:
-            return batch_x, batch_y
-        else:
-            return batch_x
-
 
 class VoxelDataGenerator(keras.utils.Sequence):
     """Custom ImageDataGenerator for 3D images.
@@ -334,9 +236,9 @@ class VoxelDataGenerator(keras.utils.Sequence):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
-            X (Numpy 5D array): data. E.g. (image_number, x, y, channels).
+            X (Numpy 4D array): data. E.g. (image_number, x, y, channels).
 
-            Y (Numpy 5D array): mask data.  E.g. (image_number, x, y, channels).
+            Y (Numpy 4D array): mask data.  E.g. (image_number, x, y, channels).
 
             random_subvolumes_in_DA (bool, optional): flag to extract random 
             subvolumes from the given data. If not, the data must be 5D and is 
@@ -399,8 +301,11 @@ class VoxelDataGenerator(keras.utils.Sequence):
                 index (int): batch index counter.
             
            Returns:
-               batch_x (Numpy array): corresponding X elements of the batch.
-               batch_y (Numpy array): corresponding Y elements of the batch.
+                batch_x (Numpy array): corresponding X elements of the batch.
+                E.g. (batch_size_value, x, y, z, channels).
+
+                batch_y (Numpy array): corresponding Y elements of the batch.
+                E.g. (batch_size_value, x, y, z, channels).
         """
 
         batch_x = np.zeros((self.batch_size, ) +  self.X.shape[1:])
@@ -437,11 +342,17 @@ class VoxelDataGenerator(keras.utils.Sequence):
     
            Args:
                 image (4D Numpy array): image to transform.
+                E.g. (x, y, z, channels).
+
                 mask (4D Numpy array): mask to transform.
+                E.g. (x, y, z, channels).
     
            Returns:
-                trans_image (Numpy array): transformed image.
-                trans_mask (Numpy array): transformed image mask.
+                trans_image (4D Numpy array): transformed image.
+                E.g. (x, y, z, channels).
+
+                trans_mask (4D Numpy array): transformed image mask.
+                E.g. (x, y, z, channels).
         """
             
         trans_image = np.copy(image)

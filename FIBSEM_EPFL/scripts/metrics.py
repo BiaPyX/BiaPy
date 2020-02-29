@@ -3,7 +3,6 @@ import os
 from keras import backend as K
 import tensorflow as tf
 import numpy as np
-from util import Print
 from skimage import measure
 import distutils
 from distutils import dir_util
@@ -14,8 +13,11 @@ def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.
 
        Args:
-            y_true (numpy array): ground truth masks.
-            y_pred (numpy array): predicted masks.
+            y_true (4D Numpy array): ground truth masks.
+            E.g. (image_number, x, y, channels).
+
+            y_pred (4D Numpy array): predicted masks.
+            E.g. (image_number, x, y, channels).
 
        Return:
             jac (float): Jaccard index value
@@ -38,7 +40,9 @@ def jaccard_index(y_true, y_pred, t=0.5):
 
        Args:
             y_true (tensor): ground truth masks.
+
             y_pred (tensor): predicted masks.
+
             t (float, optional): threshold to be applied.
 
        Return:
@@ -63,6 +67,7 @@ def jaccard_loss(y_true, y_pred):
 
        Args:
             y_true (tensor): ground truth masks.
+
             y_pred (tensor): predicted masks.
 
        Return:
@@ -120,6 +125,7 @@ def dice_loss2(y_true, y_pred):
 
     return (1 - dice)
 '''
+
 ### BCE DICE LOSS from https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb
 def dice_coeff(y_true, y_pred):
     smooth = 1.
@@ -148,72 +154,16 @@ def weighted_bce_dice_loss(w_dice=0.5, w_bce=0.5):
     return loss
 
 
-def mean_iou(y_true, y_pred):
-    """Define IoU metric.
-
-       Args:
-            y_true (tensor): ground truth masks.
-            y_pred (tensor): predicted masks.
-
-       Return:
-            meanIoU (tensor): mean IoU value.
-    """
-
-    prec = []
-    for t in np.arange(0.5, 1.0, 0.05):
-        y_pred_ = tf.to_int32(y_pred > t)
-        score, up_opt = tf.metrics.mean_iou(y_true, y_pred_, 2)
-        K.get_session().run(tf.local_variables_initializer())
-        with tf.control_dependencies([up_opt]):
-            score = tf.identity(score)
-        prec.append(score)
-    return K.mean(K.stack(prec), axis=0)
-
-
-def voc_calculation_meanIoU(y_true, y_pred, foreground_iou):
-    """Calculate VOC metric value.
-
-        Args:
-            y_pred (array): predicted masks.
-            y_true (array): ground truth masks.
-            foreground_iou (float): foreground IoU score.
-
-        Return:
-            voc (float): VOC score value.
-    """
-
-    # Invert the arrays
-    y_pred[y_pred == 0] = 2
-    y_pred[y_pred == 1] = 0
-    y_pred[y_pred == 2] = 1
-
-    y_true[y_true == 0] = 2
-    y_true[y_true == 1] = 0
-    y_true[y_true == 2] = 1
-
-    with tf.Session() as sess:
-        ypredT = tf.constant(np.argmax(y_pred, axis=-1))
-        ytrueT = tf.constant(np.argmax(y_true, axis=-1))
-        iou,conf_mat = tf.metrics.mean_iou(ytrueT, ypredT,
-                                           num_classes=3)
-        sess.run(tf.local_variables_initializer())
-        sess.run([conf_mat])
-        background_iou = sess.run([iou])
-
-    voc = (float)(foreground_iou + background_iou)/2
-
-    Print("Foreground IoU: " + str(foreground_iou))
-    Print("Background IoU: " + str(background_iou))
-    Print("VOC: " + str(voc))
-
-    return voc
-
 def voc_calculation(y_true, y_pred, foreground):
     """Calculate VOC metric value.
 
         Args:
-            y_true (array): ground truth masks.
-            y_pred (array): predicted masks.
+            y_true (4D Numpy array): ground truth masks.
+            E.g. (image_number, x, y, channels).
+
+            y_pred (4D Numpy array): predicted masks.
+            E.g. (image_number, x, y, channels).
+
             foreground (float): foreground Jaccard index score.
 
         Return:
@@ -244,6 +194,7 @@ def voc_calculation(y_true, y_pred, foreground):
 
     return voc
 
+
 def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig,
                     job_id="0"):
     """Cell tracking challenge detection accuracy (DET) calculation. This
@@ -257,26 +208,34 @@ def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig,
            https://public.celltrackingchallenge.net/documents/Naming%20and%20file%20content%20conventions.pdf
 
        Args:
-           Y_test (numpy array): ground truth mask.  
-           preds_test (numpy array): predicted mask.
-           ge_path (str): path where the ground truth is stored. If the folder
-           does not exist it will be created with the Y_test ground truth.
-           eval_path (str): path where the evaluation of the metric will be done.
-           det_bin (str): path to the DET binary provided by the cell tracking
-           challenge.      
-           n_dig (int): The number of digits used for encoding temporal indices
-           (e.g., 3). Used by the DET calculation binary, more info in: 
-               https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf
-           job_id (str, optional): id of the job. 
+            Y_test (4D Numpy array): ground truth mask.  
+            E.g. (image_number, x, y, channels).
+
+            preds_test (4D Numpy array): predicted mask.
+            E.g. (image_number, x, y, channels).
+
+            ge_path (str): path where the ground truth is stored. If the folder
+            does not exist it will be created with the Y_test ground truth.
+
+            eval_path (str): path where the evaluation of the metric will be done.
+
+            det_bin (str): path to the DET binary provided by the cell tracking
+            challenge.      
+
+            n_dig (int): The number of digits used for encoding temporal indices
+            (e.g., 3). Used by the DET calculation binary, more info in: 
+                https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf
+
+            job_id (str, optional): id of the job. 
            
        Return:
-           det (float): DET accuracy.
+            det (float): DET accuracy.
     """
 
     # Create the ground truth directory to be reused in future runs if it is not
     # created yet
     if not os.path.exists(ge_path):
-        Print("No ground truth folder detected. Creating it . . .")
+        print("No ground truth folder detected. Creating it . . .")
         os.makedirs(ge_path)
     
         gt_labels = measure.label(Y_test[:,:,:,0])
@@ -310,6 +269,7 @@ def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig,
 
     det = det_out.split()[2] 
     return det
+
 
 def binary_crossentropy_weighted(weights):
     """

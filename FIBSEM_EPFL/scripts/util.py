@@ -14,10 +14,6 @@ from skimage import measure
 import scipy.ndimage
 
 
-def Print(s):
-    """ Just a print """
-    print("\n" + s, flush=True)
-
 def limit_threads(threads_number='1'):
     """Limit the number of threads for a python process.
        
@@ -25,7 +21,7 @@ def limit_threads(threads_number='1'):
             threads_number (int, optional): number of threads.
     """
 
-    Print("Python process limited to " + threads_number + " thread")
+    print("Python process limited to {} thread".format(threads_number))
 
     os.environ['MKL_NUM_THREADS'] = '1'
     os.environ['OPENBLAS_NUM_THREADS'] = '1'
@@ -69,10 +65,12 @@ def create_plots(results, job_id, test_id, chartOutDir):
        Args:
             results (history object): record of training loss values 
             and metrics values at successive epochs.
+
             job_id (str): jod identifier.
+
             test_id (str): number of job.
-            chartOutDir (str): path where the charts will be stored 
-            into.
+
+            chartOutDir (str): path where the charts will be stored into.
     """
     
     # For matplotlib errors in display
@@ -115,28 +113,47 @@ def store_history(results, jac_per_crop, test_score, jac_per_img_50ov, voc,
        Args:
             results (history object): record of training loss values and metrics 
             values at successive epochs.
+
             jac_per_crop (float): Jaccard index obtained per crop. 
+
             test_score (array of 2 int): loss and Jaccard index obtained with 
             the test data.
+
             jac_per_img_50ov (float): Jaccard index obtained per image with an 
             overlap of 50%.
+
             voc (float): VOC score value per image without overlap.
+
             voc_per_img_50ov (float): VOC score value per image with an overlap 
             of 50%.
+
             det (float): DET score value per image without overlap.
+
             det_per_img_50ov (float): DET score value per image with an overlap
             of 50%.
+
             time_callback: time structure with the time of each epoch.
+
             csv_file (str): path where the csv file will be stored.
+
             history_file (str): path where the historic results will be stored.
+
             smooth_score (float): main metric obtained with smooth results.
+
             smooth_voc (float): VOC metric obtained with smooth results.
+
             smooth_det (float): DET metric obtained with smooth results.
+
             zfil_score (float): main metric obtained with Z-filtering results.
+
             zfil_voc (float): VOC metric obtained with Z-filtering results.
+
             zfil_det (float): DET metric obtained with Z-filtering results.
+
             smo_zfil_score (float): main metric obtained with smooth and Z-filtering results.
+
             smo_zfil_voc (float): VOC metric obtained with smooth and Z-filtering results.
+
             smo_zfil_det (float): DET metric obtained with smooth and Z-filtering results.
     """
 
@@ -238,31 +255,46 @@ def threshold_plots(preds_test, Y_test, o_test_shape, j_score, det_eval_ge_path,
        with different thresholds, from 0.1 to 0.9.
                                                                                 
        Args:                                                                    
-            preds_test (numpy array): predictions made by the model.
-            Y_test (numpy array): ground truth of the data.
+            preds_test (4D Numpy array): predictions made by the model. 
+            E.g. (image_number, x, y, channels).
+
+            Y_test (4D Numpy array): ground truth of the data.
+            E.g. (image_number, x, y, channels)
+
             o_test_shape (tuple): original shape of the data without crops, 
             necessary to reconstruct the images. 
+
             j_score (float): foreground jaccard score to calculate VOC.
+
             det_eval_ge_path (str): path where the ground truth is stored for 
             the DET calculation.
+
             det_eval_path (str): path where the evaluation of the metric will be done.
+
             det_bin (str): path to the DET binary.
+
             n_dig (int): The number of digits used for encoding temporal indices
             (e.g., 3). Used by the DET calculation binary.
+
             job_id (str): id of the job.
+
             job_file (str): id and run number of the job.
+
             char_dir (str): path to store the charts generated.
+
             r_val (float, optional): threshold values to return. 
 
         Returns:
-            t_jac (float): value of the Jaccard index when the threshold is 
-            r_val.
+            t_jac (float): value of the Jaccard index when the threshold is r_val.
+
             t_voc (float): value of VOC when the threshold is r_val.
+
             t_det (float): value of DET when the threshold is r_val.
     """
 
     from data import mix_data
-    from metrics import jaccard_index, jaccard_index_numpy, voc_calculation, DET_calculation
+    from metrics import jaccard_index, jaccard_index_numpy, voc_calculation, \
+                        DET_calculation
 
     char_dir = os.path.join(char_dir, "t_" + job_file)
 
@@ -294,15 +326,15 @@ def threshold_plots(preds_test, Y_test, o_test_shape, j_score, det_eval_ge_path,
                                      out_shape=[h_num, v_num], grid=False)      
                                                                                 
         # Metrics (Jaccard + VOC + DET)                                             
-        Print("Calculate metrics . . .")                                        
+        print("Calculate metrics . . .")                                        
         t_jac[i] = jaccard_index_numpy(Y_test, recons_preds_test)               
         t_voc[i] = voc_calculation(Y_test, recons_preds_test, j_score[1])         
         t_det[i] = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path, 
                                    det_eval_path, det_bin, n_dig, job_id)       
                                                                                 
-        Print("t_jac[" + str(i) + "]: " + str(t_jac[i]))                        
-        Print("t_voc[" + str(i) + "]: " + str(t_voc[i]))                        
-        Print("t_det[" + str(i) + "]: " + str(t_det[i]))
+        print("t_jac[{}]: {}".format(i, t_jac[i]))                        
+        print("t_voc[{}]: {}".format(i, t_voc[i]))                        
+        print("t_det[{}]: {}".format(i, t_det[i]))
 
     # For matplotlib errors in display                                          
     os.environ['QT_QPA_PLATFORM']='offscreen'                                   
@@ -346,6 +378,7 @@ def threshold_plots(preds_test, Y_test, o_test_shape, j_score, det_eval_ge_path,
 
 def array_to_img(x, data_format='channels_last', scale=True, dtype='float32'):
     """Converts a 3D Numpy array to a PIL Image instance.
+
        As the Keras array_to_img function in:
             https://github.com/keras-team/keras-preprocessing/blob/28b8c9a57703b60ea7d23a196c59da1edf987ca0/keras_preprocessing/image/utils.py#L230
     """
@@ -413,13 +446,18 @@ def img_to_array(img, data_format='channels_last', dtype='float32'):
 
 def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
     """Save images in the given directory. 
+
        Args:                                                                    
             X (4D numpy array, optional): data to save as images. The first 
-            dimension must be the number of images. 
-            data_dir (str, optional): path to store X images.
+            data_dir (str, optional): path to store X images. 
+            E.g. (image_number, x, y, channels)
+
             Y (4D numpy array, optional): masks to save as images. The first 
             dimension must be the number of images.
+            E.g. (image_number, x, y, channels)
+
             mask_dir (str, optional): path to store Y images. 
+
             prefix (str, optional): path to store the charts generated.                 
     """   
 

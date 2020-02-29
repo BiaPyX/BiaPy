@@ -161,8 +161,10 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.
         raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
         
     if weighted_loss == True:
-        model.compile(optimizer=opt, loss=binary_crossentropy_weighted(weights), metrics=[jaccard_index])
+        model.compile(optimizer=opt, loss=binary_crossentropy_weighted(weights), 
+                      metrics=[jaccard_index])
     else:
-        model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
+        model.compile(optimizer=opt, loss='binary_crossentropy', 
+                      metrics=[jaccard_index])
 
     return model
