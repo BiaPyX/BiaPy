@@ -126,27 +126,24 @@ class ImageDataGenerator(keras.utils.Sequence):
         for i, j in zip(range(0,self.batch_size), indexes):
             if self.da == False: 
                 if self.random_crops_in_DA == True:
-                    batch_x[i], batch_y[i] = random_crop(self.X[j], self.Y[j], 
-                                                         (self.crop_length, self.crop_length),
-                                                         self.val, 
-                                                         prob_map=self.prob_map,
-                                                         img_prob=(self.train_prob[j] if self.train_prob is not None else None))
+                    batch_x[i], batch_y[i] = random_crop(
+                        self.X[j], self.Y[j], (self.crop_length, self.crop_length),
+                        self.val, prob_map=self.prob_map,
+                        img_prob=(self.train_prob[j] if self.train_prob is not None else None))
                 else:
                     batch_x[i], batch_y[i] = self.X[j], self.Y[j]
             else:
                 if self.random_crops_in_DA == True:
-                    batch_x[i], batch_y[i] = random_crop(self.X[j], self.Y[j],
-                                                         (self.crop_length, self.crop_length), 
-                                                         self.val,
-                                                         prob_map=self.prob_map,
-                                                         img_prob=self.train_prob[j]) 
-                    batch_x[i], batch_y[i], _ = self.apply_transform(batch_x[i],
-                                                                     batch_y[i])
+                    batch_x[i], batch_y[i] = random_crop(
+                        self.X[j], self.Y[j], (self.crop_length, self.crop_length), 
+                        self.val, prob_map=self.prob_map, 
+                        img_prob=self.train_prob[j]) 
+                    batch_x[i], batch_y[i], _ = self.apply_transform(
+                        batch_x[i], batch_y[i])
                 else:
-                    batch_x[i], batch_y[i], _ = self.apply_transform(self.X[j],
-                                                                     self.Y[j])
+                    batch_x[i], batch_y[i], _ = self.apply_transform(
+                        self.X[j], self.Y[j])
                 
- 
         return batch_x, batch_y
 
     def print_da_stats(self):
@@ -218,9 +215,9 @@ class ImageDataGenerator(keras.utils.Sequence):
 
             im_concat = np.concatenate((trans_image, trans_mask), axis=2)            
 
-            im_concat_r = elastic_transform(im_concat, im_concat.shape[1]*2,
-                                            im_concat.shape[1]*0.08,
-                                            im_concat.shape[1]*0.08)
+            im_concat_r = elastic_transform(
+                im_concat, im_concat.shape[1]*2, im_concat.shape[1]*0.08,
+                im_concat.shape[1]*0.08)
 
             trans_image = np.expand_dims(im_concat_r[...,0], axis=-1)
             trans_mask = np.expand_dims(im_concat_r[...,1], axis=-1)
@@ -398,28 +395,28 @@ class ImageDataGenerator(keras.utils.Sequence):
             # Apply crops if selected
             if self.random_crops_in_DA == True:
                 batch_x[i], batch_y[i], ox, oy,\
-                s_x, s_y = random_crop(self.X[pos], self.Y[pos],
-                                       (self.crop_length, self.crop_length),
-                                       self.val, prob_map=self.prob_map,
-                                       draw_prob_map_points=self.prob_map,
-                                        img_prob=self.train_prob[pos])
+                s_x, s_y = random_crop(
+                    self.X[pos], self.Y[pos],
+                    (self.crop_length, self.crop_length), self.val, 
+                    prob_map=self.prob_map, draw_prob_map_points=self.prob_map,
+                    img_prob=self.train_prob[pos])
             else:
                 batch_x[i] = self.X[pos]
                 batch_y[i] = self.Y[pos]
 
-            batch_x[i], batch_y[i], t_str = self.apply_transform(batch_x[i], 
-                                                                 batch_y[i],
-                                                                 grid=True)
+            batch_x[i], batch_y[i], t_str = self.apply_transform(
+                batch_x[i], batch_y[i], grid=True)
+
             # Save transformed images
             if save_to_dir == True:    
                 im = Image.fromarray(batch_x[i,:,:,0])
                 im = im.convert('L')
-                im.save(os.path.join(out_dir, prefix + 'x_' + str(pos) + t_str  
-                                              + ".png"))
+                im.save(os.path.join(
+                            out_dir, prefix + 'x_' + str(pos) + t_str + ".png"))
                 mask = Image.fromarray(batch_y[i,:,:,0]*255)
                 mask = mask.convert('L')
-                mask.save(os.path.join(out_dir, prefix + 'y_' + str(pos) + t_str    
-                                                + ".png"))
+                mask.save(os.path.join(
+                            out_dir, prefix + 'y_' + str(pos) + t_str + ".png"))
 
                 # Save the original images with a point that represents the 
                 # selected coordinates to be the center of the crop
@@ -444,8 +441,9 @@ class ImageDataGenerator(keras.utils.Sequence):
                         px[s_x, col] = (0, 0, 255)
                         px[s_x+self.crop_length-1, col] = (0, 0, 255)
 
-                    im.save(os.path.join(out_dir, prefix + 'mark_x_' + str(pos) 
-                                                  + t_str + '.png'))
+                    im.save(os.path.join(
+                                out_dir, prefix + 'mark_x_' + str(pos) + t_str 
+                                + '.png'))
                    
                     mask = Image.fromarray(self.Y[pos,:,:,0]*255) 
                     mask = mask.convert('RGB')                                      
@@ -466,21 +464,24 @@ class ImageDataGenerator(keras.utils.Sequence):
                         px[s_x, col] = (0, 0, 255)                          
                         px[s_x+self.crop_length-1, col] = (0, 0, 255)
 
-                    mask.save(os.path.join(out_dir, prefix + 'mark_y_' + str(pos) 
-                                                    + t_str + '.png'))          
+                    mask.save(os.path.join(
+                                  out_dir, prefix + 'mark_y_' + str(pos) + t_str 
+                                  + '.png'))          
                 
                 # Save also the original images if an elastic transformation 
                 # was made
                 if original_elastic == True and '_e' in t_str: 
                     im = Image.fromarray(self.X[i,:,:,0])
                     im = im.convert('L')
-                    im.save(os.path.join(out_dir, prefix + 'x_' + str(pos) 
-                                                  + t_str + '_original.png'))
+                    im.save(os.path.join(
+                                out_dir, prefix + 'x_' + str(pos) + t_str 
+                                + '_original.png'))
     
                     mask = Image.fromarray(self.Y[i,:,:,0]*255)
                     mask = mask.convert('L')
-                    mask.save(os.path.join(out_dir, prefix + 'y_' + str(pos) 
-                                                    + t_str + '_original.png'))
+                    mask.save(os.path.join(
+                                  out_dir, prefix + 'y_' + str(pos) + t_str 
+                                  + '_original.png'))
 
         Print("### END TR-SAMPLES ###")
         return batch_x, batch_y
@@ -584,10 +585,10 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
                          "ld_img_from_disk is selected")
 
     if ld_img_from_disk == True and len(data_paths) != 7: 
-        raise ValueError("data_paths must contain the following paths: 1) train "
-                         "path ; 2) train masks path ; 3) validation path ; 4) "
-                         "validation masks path ; 5) test path ; 6) test masks "
-                         "path ; 7) complete images path")
+        raise ValueError(
+            "data_paths must contain the following paths: 1) train path ; 2) "
+            "train masks path ; 3) validation path ; 4) validation masks path ;"
+            "5) test path ; 6) test masks path ; 7) complete images path")
 
     if weights is None and weights == True:
        raise ValueError("weights_path must be provided when weights is selected")
@@ -596,10 +597,9 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
     zoom_val = 0.25 if zoom == True else 0                                      
                                                                                 
     if preproc_function == True:                                                
-        data_gen_args1 = dict(horizontal_flip=hflip, vertical_flip=vflip,       
-                              fill_mode=fill_mode,                              
-                              preprocessing_function=fixed_dregee,              
-                              featurewise_center=featurewise_center,            
+        data_gen_args1 = dict(
+            horizontal_flip=hflip, vertical_flip=vflip, fill_mode=fill_mode,                              
+            preprocessing_function=fixed_dregee, featurewise_center=featurewise_center,            
                               featurewise_std_normalization=featurewise_std_normalization,
                               zoom_range=zoom_val, width_shift_range=w_shift_r,
                               height_shift_range=h_shift_r, 

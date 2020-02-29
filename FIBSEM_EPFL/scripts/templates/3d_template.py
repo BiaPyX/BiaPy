@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(script_dir, '..'))
 
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
-                 TimeHistory, Print, threshold_plots, save_img
+                 TimeHistory, threshold_plots, save_img
 limit_threads()
 
 # Try to generate the results as reproducible as possible
@@ -58,12 +58,12 @@ base_work_dir = str(sys.argv[4])
 log_dir = os.path.join(base_work_dir, 'logs', job_id)
 
 # Checks
-Print('job_id : ' + job_id)
-Print('GPU selected : ' + gpu_selected)
-Print('Python       : ' + sys.version.split('\n')[0])
-Print('Numpy        : ' + np.__version__)
-Print('Keras        : ' + keras.__version__)
-Print('Tensorflow   : ' + tf.__version__)
+print("job_id : {}".format(job_id))
+print("GPU selected : {}".format(gpu_selected))
+print("Python       : {}".format(sys.version.split('\n')[0]))
+print("Numpy        : {}".format(np.__version__))
+print("Keras        : {}".format(keras.__version__))
+print("Tensorflow   : {}".format(tf.__version__))
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
 os.environ["CUDA_VISIBLE_DEVICES"] = gpu_selected;
 
@@ -208,7 +208,7 @@ char_dir = 'charts'
 #   SANITY CHECKS   #
 #####################
 
-Print("#####################\n#   SANITY CHECKS   #\n#####################")
+print("#####################\n#   SANITY CHECKS   #\n#####################")
 
 check_binary_masks(train_mask_path)
 check_binary_masks(test_mask_path)
@@ -218,24 +218,24 @@ check_binary_masks(test_mask_path)
 #       LOAD DATA        #                                                      
 ##########################
 
-Print("##################\n#    LOAD DATA   #\n##################\n")
+print("##################\n#    LOAD DATA   #\n##################\n")
 
 X_train, Y_train, \
 X_val, Y_val, \
 X_test, Y_test, \
-norm_value, _ = load_data(train_path, train_mask_path, test_path,
-                          test_mask_path, img_train_shape, img_test_shape,
-                          val_split=perc_used_as_val, shuffle_val=False,
-                          make_crops=False, prepare_subvolumes=use_all_volume, 
-                          subvol_shape=img_3d_desired_shape)
+norm_value, _ = load_data(
+    train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
+    img_test_shape, val_split=perc_used_as_val, shuffle_val=False,
+    make_crops=False, prepare_subvolumes=use_all_volume, 
+    subvol_shape=img_3d_desired_shape)
 
 # Normalize the data
 if normalize_data == True:
     if norm_value_forced != -1: 
-        Print("Forced normalization value to " + str(norm_value_forced))
+        print("Forced normalization value to {}".format(norm_value_forced))
         norm_value = norm_value_forced
     else:
-        Print("Normalization value calculated: " + str(norm_value))
+        print("Normalization value calculated: {}".format(norm_value))
     X_train -= int(norm_value)
     X_val -= int(norm_value)
     X_test -= int(norm_value)
@@ -245,27 +245,26 @@ if normalize_data == True:
 #    DATA AUGMENTATION   #
 ##########################
 
-Print("##################\n#    DATA AUG    #\n##################\n")
+print("##################\n#    DATA AUG    #\n##################\n")
 
-train_generator = VoxelDataGenerator(X_train, Y_train,                                          
-                                     random_subvolumes_in_DA=random_subvolumes_in_DA,           
-                                     shuffle_each_epoch=shuffle_train_data_each_epoch,          
-                                     batch_size=batch_size_value, da=da, 
-                                     flip=flips, shift_range=shift_range, 
-                                     rotation_range=rotation_range)
+train_generator = VoxelDataGenerator(
+    X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,           
+    shuffle_each_epoch=shuffle_train_data_each_epoch, batch_size=batch_size_value, 
+    da=da, flip=flips, shift_range=shift_range, rotation_range=rotation_range)
 
-val_generator = VoxelDataGenerator(X_val, Y_val, random_subvolumes_in_DA=False,           
-                                   shuffle_each_epoch=shuffle_val_data_each_epoch,        
-                                   batch_size=batch_size_value, da=False)  
+val_generator = VoxelDataGenerator(
+    X_val, Y_val, random_subvolumes_in_DA=False, 
+    shuffle_each_epoch=shuffle_val_data_each_epoch, batch_size=batch_size_value, 
+    da=False)  
                                                                                 
 
 ##########################
 #    BUILD THE NETWORK   #
 ##########################
 
-Print("###################\n#  TRAIN PROCESS  #\n###################\n")
+print("###################\n#  TRAIN PROCESS  #\n###################\n")
 
-Print("Creating the network . . .")
+print("Creating the network . . .")
 model = U_Net_3D(img_3d_desired_shape, numInitChannels=num_init_channels, 
                  spatial_dropout=spatial_dropout,
                  fixed_dropout=fixed_dropout_value,
@@ -279,24 +278,26 @@ if load_previous_weights == False:
     
     if not os.path.exists(h5_dir):                                      
         os.makedirs(h5_dir)
-    checkpointer = ModelCheckpoint(os.path.join(h5_dir, weight_files_prefix + job_file + '.h5'),
-                                   verbose=1, save_best_only=True)
+    checkpointer = ModelCheckpoint(
+        os.path.join(h5_dir, weight_files_prefix + job_file + '.h5'),
+        verbose=1, save_best_only=True)
     
     if fine_tunning == True:                                                    
         h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
-                                     + '_' + test_id + '.h5')     
-        Print("Fine-tunning: loading model weights from h5_file: " + h5_file)   
+                             + '_' + test_id + '.h5')     
+        print("Fine-tunning: loading model weights from h5_file: {}".format(h5_file))   
         model.load_weights(h5_file)                                             
    
-    results = model.fit_generator(train_generator, validation_data=val_generator,
-                                  validation_steps=math.ceil(len(X_val)/batch_size_value),
-                                  steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
-                                  epochs=epochs_value, 
-                                  callbacks=[earlystopper, checkpointer, time_callback])
+    results = model.fit_generator(
+        train_generator, validation_data=val_generator,
+        validation_steps=math.ceil(len(X_val)/batch_size_value),
+        steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
+        epochs=epochs_value, 
+        callbacks=[earlystopper, checkpointer, time_callback])
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
                                  + '_' + test_id + '.h5')
-    Print("Loading model weights from h5_file: " + h5_file)
+    print("Loading model weights from h5_file: {}".format(h5_file))
     model.load_weights(h5_file)
 
 
@@ -304,26 +305,26 @@ else:
 #     INFERENCE     #
 #####################
 
-Print("##################\n#    INFERENCE   #\n##################\n")
+print("##################\n#    INFERENCE   #\n##################\n")
 
 # Evaluate to obtain the loss value and the Jaccard index
-Print("Evaluating test data . . .")
+print("Evaluating test data . . .")
 score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
 jac_per_subvolume = score[1]
 
 # Predict on test
-Print("Making the predictions on test data . . .")
+print("Making the predictions on test data . . .")
 preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
 # Threshold images
 bin_preds_test = (preds_test > 0.5).astype(np.uint8)
 
-Print("Saving predicted images . . .")
+print("Saving predicted images . . .")
 #reconstruct the images 
 #save_img(Y=bin_preds_test, mask_dir=result_bin_dir, prefix="test_out_bin")
 #save_img(Y=preds_test, mask_dir=result_no_bin_dir, prefix="test_out_no_bin")
 
-Print("Calculate metrics . . .")
+print("Calculate metrics . . .")
 # Per image without overlap
 score[1] = jaccard_index_numpy(Y_test, bin_preds_test)
 voc = voc_calculation(Y_test, bin_preds_test, score[1])
@@ -341,13 +342,13 @@ det_per_img_50ov = -1
 #  POST-PROCESING  #
 ####################
 
-Print("##################\n# POST-PROCESING #\n##################\n") 
+print("##################\n# POST-PROCESING #\n##################\n") 
 
-Print("1) SMOOTH")
+print("1) SMOOTH")
 # not implemented
-Print("2) Z-FILTERING")
+print("2) Z-FILTERING")
 # not implemented
-Print("Finish post-processing") 
+print("Finish post-processing") 
 
 
 ####################################
@@ -355,22 +356,24 @@ Print("Finish post-processing")
 ####################################
 
 if load_previous_weights == False:
-    Print("Epoch average time: " + str(np.mean(time_callback.times)))
-    Print("Epoch number: " + str(len(results.history['val_loss'])))
-    Print("Train time (s): " + str(np.sum(time_callback.times)))
-    Print("Train loss: " + str(np.min(results.history['loss'])))
-    Print("Train jaccard_index: " + str(np.max(results.history['jaccard_index'])))
-    Print("Validation loss: " + str(np.min(results.history['val_loss'])))
-    Print("Validation jaccard_index: " + str(np.max(results.history['val_jaccard_index'])))
+    print("Epoch average time: {}".format(np.mean(time_callback.times)))
+    print("Epoch number: {}".format(len(results.history['val_loss'])))
+    print("Train time (s): {}".format(np.sum(time_callback.times)))
+    print("Train loss: {}".format(np.min(results.history['loss'])))
+    print("Train jaccard_index: {}"\
+          .format(np.max(results.history['jaccard_index'])))
+    print("Validation loss: {}".format(np.min(results.history['val_loss'])))
+    print("Validation jaccard_index: {}"\
+          .format(np.max(results.history['val_jaccard_index'])))
 
-Print("Test loss: " + str(score[0]))
-Print("Test jaccard_index (per subvolume): " + str(jac_per_subvolume))
-Print("Test jaccard_index (per image without overlap): " + str(score[1]))
-Print("Test jaccard_index (per image with 50% overlap): " + str(jac_per_img_50ov))
-Print("VOC (per image without overlap): " + str(voc))
-Print("VOC (per image with 50% overlap): " + str(voc_per_img_50ov))
-Print("DET (per image without overlap): " + str(det))
-Print("DET (per image with 50% overlap): " + str(det_per_img_50ov))
+print("Test loss: ".format(score[0]))
+print("Test jaccard_index (per subvolume): {}".format(jac_per_subvolume))
+print("Test jaccard_index (per image without overlap): {}".format(score[1]))
+print("Test jaccard_index (per image with 50% overlap): {}".format(jac_per_img_50ov))
+print("VOC (per image without overlap): {}".format(voc))
+print("VOC (per image with 50% overlap): {}".format(voc_per_img_50ov))
+print("DET (per image without overlap): {}".format(det))
+print("DET (per image with 50% overlap): {}".format(det_per_img_50ov))
     
 if load_previous_weights == False:
     smooth_score = -1 if 'smooth_score' not in globals() else smooth_score
@@ -384,11 +387,12 @@ if load_previous_weights == False:
     smo_zfil_det = -1 if 'smo_zfil_det' not in globals() else smo_zfil_det
     jac_per_subvolume = -1 if 'jac_per_subvolume' not in globals() else jac_per_subvolume
 
-    store_history(results, jac_per_subvolume, score, jac_per_img_50ov, voc, 
-                  voc_per_img_50ov, det, det_per_img_50ov, time_callback, log_dir,
-                  job_file, smooth_score, smooth_voc, smooth_det, zfil_score,
-                  zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
+    store_history(
+        results, jac_per_subvolume, score, jac_per_img_50ov, voc, 
+        voc_per_img_50ov, det, det_per_img_50ov, time_callback, log_dir,
+        job_file, smooth_score, smooth_voc, smooth_det, zfil_score, zfil_voc, 
+        zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
 
     create_plots(results, job_id, test_id, char_dir)
 
-Print("FINISHED JOB " + job_file + " !!")
+print("FINISHED JOB {} !!".format(job_file))

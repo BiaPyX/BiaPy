@@ -204,24 +204,24 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     # Create validation data splitting the train
     if create_val == True:
         X_train, X_val, \
-        Y_train, Y_val = train_test_split(X_train, Y_train,
-                                          test_size=val_split,
-                                          shuffle=shuffle_val,
-                                          random_state=seedValue)
+        Y_train, Y_val = train_test_split(
+            X_train, Y_train, test_size=val_split, shuffle=shuffle_val,
+            random_state=seedValue)
+
     # Crop the data
     if make_crops == True:
         print("4) Crop data activated . . .")
         print("4.1) Cropping train data . . .")
-        X_train, Y_train, _ = crop_data(X_train, crop_shape, data_mask=Y_train, 
-                                        d_percentage=d_percentage)   
+        X_train, Y_train, _ = crop_data(
+            X_train, crop_shape, data_mask=Y_train, d_percentage=d_percentage)   
 
         print("4.2) Cropping test data . . .")
         X_test, Y_test, _ = crop_data(X_test, crop_shape, data_mask=Y_test)
         
         if create_val == True:
             print("4.3) Cropping validation data . . .")
-            X_val, Y_val, _ = crop_data(X_val, crop_shape, data_mask=Y_val,
-                                        d_percentage=d_percentage)
+            X_val, Y_val, _ = crop_data(
+                X_val, crop_shape, data_mask=Y_val, d_percentage=d_percentage)
 
         if check_crop == True:
             print("4.4) Checking the crops . . .")
@@ -269,14 +269,15 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             if make_crops == False:
                 if d_dim[1] != image_test_shape[1] and \
                    d_dim[0] != image_test_shape[0]:
-                    raise ValueError("extra dataset shape {} is not equal the "
-                                     "original dataset shape ({}, {})"\
-                                     .format(d_dim, image_test_shape[1], image_test_shape[0]))
+                    raise ValueError(
+                        "extra dataset shape {} is not equal the original "
+                        "dataset shape ({}, {})".format(d_dim, \
+                        image_test_shape[1], image_test_shape[0]))
             else:
                 print("5.{}) Cropping the extra dataset . . .".format(i))
-                e_X_train, e_Y_train, _ = crop_data(e_X_train, crop_shape,
-                                                    data_mask=e_Y_train, 
-                                                    d_percentage=e_d_dis[i])
+                e_X_train, e_Y_train, _ = crop_data(
+                    e_X_train, crop_shape, data_mask=e_Y_train, 
+                    d_percentage=e_d_dis[i])
                 if num_crops_per_dataset != 0:
                     e_X_train = e_X_train[:num_crops_per_dataset]
                     e_Y_train = e_Y_train[:num_crops_per_dataset]
@@ -409,9 +410,9 @@ def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0],
         for img_num in tqdm(range(0, r_data.shape[0])):                             
             for i in range(0, h_num):                                       
                 for j in range(0, v_num):
-                    p = __foreground_percentage(r_data_mask[img_num,
-                                                            (i*crop_shape[0]):((i+1)*crop_shape[1]),
-                                                            (j*crop_shape[0]):((j+1)*crop_shape[1])])
+                    p = __foreground_percentage(r_data_mask[
+                        img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),
+                        (j*crop_shape[0]):((j+1)*crop_shape[1])])
                     if p > d_percentage: 
                         selected_images.append(cont)
                     else:
@@ -438,22 +439,26 @@ def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0],
                     if selected_images[l_i] == cont \
                        or l_i == len(selected_images) - 1:
 
-                        cropped_data[l_i] = r_data[img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]), 
-                                                   (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
+                        cropped_data[l_i] = r_data[
+                            img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]), 
+                            (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
 
-                        cropped_data_mask[l_i] = r_data_mask[img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),
-                                                             (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
+                        cropped_data_mask[l_i] = r_data_mask[
+                            img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),
+                            (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
 
                         if l_i != len(selected_images) - 1:
                             l_i = l_i + 1
                 else: 
               
-                    cropped_data[cont] = r_data[img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),      
-                                                (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
+                    cropped_data[cont] = r_data[
+                        img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),      
+                        (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
                                                                         
                     if data_mask is not None:
-                        cropped_data_mask[cont] = r_data_mask[img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),
-                                                              (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
+                        cropped_data_mask[cont] = r_data_mask[
+                            img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),
+                            (j*crop_shape[0]):((j+1)*crop_shape[1]),:]
                 cont = cont + 1                                             
                                                                         
     if d_percentage > 0 and data_mask is not None:
@@ -525,13 +530,13 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
 
     if subdivision != 1:
         if window_size*rows < data.shape[1]:
-            raise ValueError("Total height of all the crops per row must be "
-                             "greater or equal {} and it is only {}"\
-                             .format(data.shape[1], window_size*rows))
+            raise ValueError(
+                "Total height of all the crops per row must be greater or equal "
+                "{} and it is only {}".format(data.shape[1], window_size*rows))
         if window_size*columns < data.shape[2]:
-            raise ValueError("Total width of all the crops per row must be "
-                             "greater or equal {} and it is only {}"\
-                             .format(data.shape[2], window_size*columns))
+            raise ValueError(
+                "Total width of all the crops per row must be greater or equal "
+                "{} and it is only {}".format(data.shape[2], window_size*columns))
 
     # Calculate the amount of overlap, the division remainder to obtain an 
     # offset to adjust the last crop and the step size. All of this values per
@@ -563,8 +568,10 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
                 d_y = 0 if (i+window_size) < data.shape[1] else r_y
                 d_x = 0 if (j+window_size) < data.shape[2] else r_x
 
-                cropped_data[cont] = data[k, i-d_y:i+window_size, j-d_x:j+window_size, :]
-                cropped_data_mask[cont] = data_mask[k, i-d_y:i+window_size, j-d_x:j+window_size, :]
+                cropped_data[cont] = data[
+                    k, i-d_y:i+window_size, j-d_x:j+window_size, :]
+                cropped_data_mask[cont] = data_mask[
+                    k, i-d_y:i+window_size, j-d_x:j+window_size, :]
                 cont = cont + 1
 
     print("**** New data shape is: {}".format(cropped_data.shape))
@@ -792,14 +799,14 @@ def merge_data_without_overlap(data, num, out_shape=[1, 1], grid=True):
                            (j*width):((j+1)*height)] = data[cont]
                 
                 if grid == True:
-                    mixed_data[img_num,(i*width):((i+1)*height)-1,
-                              (j*width)] = v
-                    mixed_data[img_num,(i*width):((i+1)*height)-1,
-                              ((j+1)*width)-1] = v
-                    mixed_data[img_num,(i*height),
-                              (j*width):((j+1)*height)-1] = v
-                    mixed_data[img_num,((i+1)*height)-1,
-                              (j*width):((j+1)*height)-1] = v
+                    mixed_data[
+                        img_num,(i*width):((i+1)*height)-1, (j*width)] = v
+                    mixed_data[
+                        img_num,(i*width):((i+1)*height)-1, ((j+1)*width)-1] = v
+                    mixed_data[
+                        img_num,(i*height), (j*width):((j+1)*height)-1] = v
+                    mixed_data[
+                        img_num,((i+1)*height)-1, (j*width):((j+1)*height)-1] = v
                 cont = cont + 1
 
     print("### END MERGE-CROP ###")
@@ -875,11 +882,10 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
 
             im.save(os.path.join(out_dir,"c_" + suffix + str(i) + ".png"))
 
-    print("0) Reconstructing " + str(num_examples) + " images of ["
-          + str(data.shape[1]*h_num) + "," + str(data.shape[2]*v_num) + "] from "
-          + "[" + str(data.shape[1]) + "," + str(data.shape[2]) + "] crops")
-    m_data = merge_data_without_overlap(data, num_examples, 
-                                        out_shape=[h_num, v_num], grid=grid)
+    print("0) Reconstructing {} images of ({}, {}) from {}".format(num_examples,\
+          data.shape[1]*h_num, data.shape[2]*v_num, data.shape[1:]))
+    m_data = merge_data_without_overlap(
+        data, num_examples, out_shape=[h_num, v_num], grid=grid)
     print("1) Saving data mixed images . . .")
     for i in tqdm(range(0, num_examples)):
         im = Image.fromarray(m_data[i,:,:,0]*v)
@@ -908,9 +914,10 @@ def check_binary_masks(path):
         img = imread(os.path.join(path, ids[i]))
         values, _ = np.unique(img, return_counts=True)
         if len(values) > 2 :
-            raise ValueError("Error: given masks are not binary. Please correct "
-                             "the images before training. (image: {})\n"
-                             "Values: {}".format(os.path.join(path, ids[i]), values))
+            raise ValueError(
+                "Error: given masks are not binary. Please correct the images "
+                "before training. (image: {})\nValues: {}"\
+                .format(os.path.join(path, ids[i]), values))
 
 
 def prepare_subvolume_data(X, Y, shape=(82, 256, 256, 1)):                          
@@ -943,9 +950,9 @@ def prepare_subvolume_data(X, Y, shape=(82, 256, 256, 1)):
     # Calculate the rest                                                        
     rest = X.shape[0] % shape[0]                                                
     if rest != 0:                                                               
-        print(("As the number of images required to form a stack 3D is "        
-               "not multiple of images provided, {} last image(s) will "        
-               "be unused").format(rest))                                       
+        print("As the number of images required to form a stack 3D is not "
+              "multiple of images provided, {} last image(s) will be unused"\
+              .format(rest))
                                                                                 
     # Calculate of many crops are per axis                                      
     h_num = int(X.shape[1]/shape[1])

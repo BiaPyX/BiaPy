@@ -150,11 +150,14 @@ def store_history(results, jac_per_crop, test_score, jac_per_img_50ov, voc,
 
             zfil_det (float): DET metric obtained with Z-filtering results.
 
-            smo_zfil_score (float): main metric obtained with smooth and Z-filtering results.
+            smo_zfil_score (float): main metric obtained with smooth and 
+            Z-filtering results.
 
-            smo_zfil_voc (float): VOC metric obtained with smooth and Z-filtering results.
+            smo_zfil_voc (float): VOC metric obtained with smooth and 
+            Z-filtering results.
 
-            smo_zfil_det (float): DET metric obtained with smooth and Z-filtering results.
+            smo_zfil_det (float): DET metric obtained with smooth and 
+            Z-filtering results.
     """
 
     # Create folders and construct file names
@@ -176,22 +179,14 @@ def store_history(results, jac_per_crop, test_score, jac_per_img_50ov, voc,
             + str(test_score[0]) + ',' 
             + str(np.max(results.history['jaccard_index'])) + ',' 
             + str(np.max(results.history['val_jaccard_index'])) + ',' 
-            + str(jac_per_crop) + ',' 
-            + str(test_score[1]) + ',' 
-            + str(jac_per_img_50ov) + ',' 
-            + str(smooth_score) + ','
-            + str(zfil_score) + ','
-            + str(smo_zfil_score) + ','
-            + str(voc) + ','
-            + str(voc_per_img_50ov) + ','
-            + str(smooth_voc) + ','
-            + str(zfil_voc) + ','
-            + str(smo_zfil_voc) + ','
-            + str(det) + ','
-            + str(det_per_img_50ov) + ','
-            + str(smooth_det) + ','
-            + str(zfil_det) + ','
-            + str(smo_zfil_det) + ','
+            + str(jac_per_crop) + ',' + str(test_score[1]) + ',' 
+            + str(jac_per_img_50ov) + ',' + str(smooth_score) + ','
+            + str(zfil_score) + ',' + str(smo_zfil_score) + ','
+            + str(voc) + ',' + str(voc_per_img_50ov) + ','
+            + str(smooth_voc) + ',' + str(zfil_voc) + ','
+            + str(smo_zfil_voc) + ',' + str(det) + ','
+            + str(det_per_img_50ov) + ',' + str(smooth_det) + ','
+            + str(zfil_det) + ',' + str(smo_zfil_det) + ','
             + str(len(results.history['val_loss'])) + ',' 
             + str(np.mean(time_callback.times)) + ','
             + str(np.sum(time_callback.times)) + '\n')
@@ -321,16 +316,17 @@ def threshold_plots(preds_test, Y_test, o_test_shape, j_score, det_eval_ge_path,
                 + (o_test_shape[1] % bin_preds_test.shape[2] > 0)        
                                                                                 
         # To calculate the Jaccard (binarized)                                  
-        recons_preds_test = mix_data(bin_preds_test,                            
-                                     math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
-                                     out_shape=[h_num, v_num], grid=False)      
+        recons_preds_test = mix_data(
+            bin_preds_test, math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
+            out_shape=[h_num, v_num], grid=False)      
                                                                                 
         # Metrics (Jaccard + VOC + DET)                                             
         print("Calculate metrics . . .")                                        
         t_jac[i] = jaccard_index_numpy(Y_test, recons_preds_test)               
         t_voc[i] = voc_calculation(Y_test, recons_preds_test, j_score[1])         
-        t_det[i] = DET_calculation(Y_test, recons_preds_test, det_eval_ge_path, 
-                                   det_eval_path, det_bin, n_dig, job_id)       
+        t_det[i] = DET_calculation(
+            Y_test, recons_preds_test, det_eval_ge_path, det_eval_path, 
+            det_bin, n_dig, job_id)       
                                                                                 
         print("t_jac[{}]: {}".format(i, t_jac[i]))                        
         print("t_voc[{}]: {}".format(i, t_voc[i]))                        
@@ -534,8 +530,9 @@ def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
         # and cells = 1.
         lab[lab == 255] = 1
         
-        # Builds w_c which is the class balancing map. In our case, we want cells to have
-        # weight 2 as they are more important than background which is assigned weight 1.
+        # Builds w_c which is the class balancing map. In our case, we want 
+        # cells to have weight 2 as they are more important than background 
+        # which is assigned weight 1.
         w_c = np.array(lab, dtype=float)
         w_c[w_c == 1] = 1
         w_c[w_c == 0] = 0.5
@@ -548,8 +545,9 @@ def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
         # and cells = 1.
         lab[lab > 0] = 1
         
-        # Builds w_c which is the class balancing map. In our case, we want cells to have
-        # weight 2 as they are more important than background which is assigned weight 1.
+        # Builds w_c which is the class balancing map. In our case, we want 
+        # cells to have weight 2 as they are more important than background 
+        # which is assigned weight 1.
         w_c = np.array(lab, dtype=float)
         w_c[w_c == 1] = 1
         w_c[w_c == 0] = 0.5

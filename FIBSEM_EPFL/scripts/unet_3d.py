@@ -7,8 +7,9 @@ from keras.layers.merge import concatenate
 import keras 
 from metrics import binary_crossentropy_weighted, jaccard_index
 
-def U_Net_3D(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0, 
-             spatial_dropout=False, optimizer="sgd", weighted_loss=False, lr=0.001):
+def U_Net_3D(image_shape, activation='elu', numInitChannels=16, 
+             fixed_dropout=0.0, spatial_dropout=False, optimizer="sgd", 
+             weighted_loss=False, lr=0.001):
     """Create 3D U-Net.
 
        Args:
