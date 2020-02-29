@@ -195,6 +195,65 @@ def _windowed_subdivs(padded_img, window_size, subdivisions, nb_classes, pred_fu
 
     return subdivs
 
+def _windowed_subdivs_weighted(padded_img, weight_map, window_size, subdivisions, nb_classes, pred_func):
+    """
+    Create tiled overlapping patches.
+
+    Returns:
+        5D numpy array of shape = (
+            nb_patches_along_X,
+            nb_patches_along_Y,
+            patches_resolution_along_X,
+            patches_resolution_along_Y,
+            nb_output_channels
+        )
+
+    Note:
+        patches_resolution_along_X == patches_resolution_along_Y == window_size
+    """
+    WINDOW_SPLINE_2D = _window_2D(window_size=window_size, power=2)
+
+    step = int(window_size/subdivisions)
+    padx_len = padded_img.shape[0]
+    pady_len = padded_img.shape[1]
+    subdivs = []
+    subdivs_w = []
+
+    for i in range(0, padx_len-window_size+1, step):
+        subdivs.append([])
+        subdivs_w.append([])
+        for j in range(0, pady_len-window_size+1, step):
+            patch = padded_img[i:i+window_size, j:j+window_size, :]
+            subdivs[-1].append(patch)
+            patch = weight_map[i:i+window_size, j:j+window_size, :]
+            subdivs_w[-1].append(patch)
+
+    # Here, `gc.collect()` clears RAM between operations.
+    # It should run faster if they are removed, if enough memory is available.
+    gc.collect()
+    subdivs = np.array(subdivs)
+    subdivs_w = np.array(subdivs_w)
+    gc.collect()
+    a, b, c, d, e = subdivs.shape
+    subdivs = subdivs.reshape(a * b, c, d, e)
+    subdivs_w = subdivs_w.reshape(a * b, c, d, e)
+    gc.collect()
+
+    # merge images and weights to predict 
+    subdivs_merged = []
+    for i in range(len(subdivs)):    
+        subdivs_merged[-1].append([subdivs[i],subdivs_w[i]])    
+
+    subdivs = pred_func(subdivs_merged)
+    gc.collect()
+    subdivs = np.array([patch * WINDOW_SPLINE_2D for patch in subdivs])
+    gc.collect()
+
+    # Such 5D array:
+    subdivs = subdivs.reshape(a, b, c, d, nb_classes)
+    gc.collect()
+
+    return subdivs
 
 def _recreate_from_subdivs(subdivs, window_size, subdivisions, padded_out_shape):
     """
@@ -275,6 +334,27 @@ def predict_img_with_overlap(input_img, window_size, subdivisions, nb_classes, p
     pad = _pad_img(input_img, window_size, subdivisions)
 
     sd = _windowed_subdivs(pad, window_size, subdivisions, nb_classes, pred_func)
+    one_padded_result = _recreate_from_subdivs(sd, window_size, subdivisions,
+                                               padded_out_shape=list(pad.shape[:-1])+[nb_classes])
+
+    prd = _unpad_img(one_padded_result, window_size, subdivisions)
+
+    prd = prd[:input_img.shape[0], :input_img.shape[1], :]
+
+    if PLOT_PROGRESS:
+        plt.imshow(prd)
+        plt.title("Smoothly Merged Patches that were Tiled Tighter")
+        plt.show()
+    return prd
+
+def predict_img_with_overlap_weighted(input_img, weight_map, window_size, subdivisions, nb_classes, pred_func):
+    """Based on predict_img_with_smooth_windowing but works just with the
+       original image (adding a weight map) instead of creating 8 new ones.
+    """
+    pad = _pad_img(input_img, window_size, subdivisions)
+    pad_w = _pad_img(weight_map, window_size, subdivisions)
+
+    sd = _windowed_subdivs_weighted(pad, pad_w, window_size, subdivisions, nb_classes, pred_func)
     one_padded_result = _recreate_from_subdivs(sd, window_size, subdivisions,
                                                padded_out_shape=list(pad.shape[:-1])+[nb_classes])
 
