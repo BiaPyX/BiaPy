@@ -240,14 +240,9 @@ weight_files_prefix = 'model.fibsem_'
 h5_dir = 'h5_files'
 
 
-### Weithed loss parameters
-# Flag to insert weights on the loss function
-weighted_loss = False
-# Directory where weight maps will be stored
-loss_weight_dir = os.path.join(base_work_dir, 'loss_weights', job_id)
-
-
 ### Experiment main parameters
+# Loss type, three options: "bce", "w_bce" or "w_bce_dice"                      
+loss_type = "bce"
 # Batch size value
 batch_size_value = 6
 # Optimizer to use. Posible values: "sgd" or "adam"
@@ -264,6 +259,8 @@ patience = 50
 make_threshold_plots = False
 # Define time callback                                                          
 time_callback = TimeHistory()
+# If weights on data are going to be applied. To true when loss_type is 'w_bce' 
+weights_on_data = True if loss_type == "w_bce" else False
 
 
 ### Network architecture specific parameters
@@ -315,6 +312,8 @@ smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # training the network will be shown. This folder will be created under the
 # folder pointed by "base_work_dir" variable 
 char_dir = 'charts'
+# Directory where weight maps will be stored                                    
+loss_weight_dir = os.path.join(base_work_dir, 'loss_weights', job_id)
 
 
 #####################

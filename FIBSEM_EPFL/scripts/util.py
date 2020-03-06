@@ -445,8 +445,10 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
 
        Args:                                                                    
             X (4D numpy array, optional): data to save as images. The first 
-            data_dir (str, optional): path to store X images. 
+            dimension must be the number of images.
             E.g. (image_number, x, y, channels)
+    
+            data_dir (str, optional): path to store X images.
 
             Y (4D numpy array, optional): masks to save as images. The first 
             dimension must be the number of images.

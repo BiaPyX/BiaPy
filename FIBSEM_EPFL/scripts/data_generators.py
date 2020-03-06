@@ -874,8 +874,8 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
         if ld_img_from_disk == True:
             c_weights = [np.load(os.path.join(complete_w_path, fname)) for fname in c_filelist]
             c_weights = np.array(c_weights, dtype=np.float32)                     
-            c_weights = c_weights.reshape((len(c_weights),target_size[0],        
-                                          target_size[1],1))
+            c_weights = c_weights.reshape((len(c_weights),c_target_size[0],        
+                                          c_target_size[1],1))
 
         # Create the weight generator 
         W_train_aug = w_datagen.flow(t_weights, batch_size=batch_size_value,
@@ -1020,7 +1020,7 @@ def keras_gen_samples(num_samples, X_data=None, Y_data=None,
         height_shift_range=h_shift_r, shear_range=shear_range, 
         channel_shift_range=channel_shift_range, brightness_range=brightness_range)
     data_gen_args2 = dict(
-        horizontal_flip=hflip, vertical_flip=vflip, fill_mode=fill_mode, r
+        horizontal_flip=hflip, vertical_flip=vflip, fill_mode=fill_mode, 
         rotation_range=rotation_range, preprocessing_function=preproc_function,
         zoom_range=zoom_val, width_shift_range=w_shift_r, 
         height_shift_range=h_shift_r, shear_range=shear_range, rescale=1./255)
@@ -1030,31 +1030,32 @@ def keras_gen_samples(num_samples, X_data=None, Y_data=None,
 
     # Use X_data and Y_data to generate the samples 
     if ld_img_from_disk == False:
-        x_samples = np.zeros((num_samples, target_size[0], target_size[1], 1), 
-                           dtype=np.float32)
-        y_samples = np.zeros((num_samples, target_size[0], target_size[1], 1),
-                           dtype=np.float32)
+        x_samples = np.zeros((num_samples,) + X_data.shape[1:], dtype=np.float32)
+        y_samples = np.zeros((num_samples,) + Y_data.shape[1:], dtype=np.float32)
 
         n_batches = int(num_samples / batch_size_value) \
                     + (num_samples % batch_size_value > 0)
 
-        i = 0
-        for batch in X_datagen.flow(X_data, batch_size=batch_size_value,
-                                    shuffle=shuffle_data, seed=seedValue):
-            for j in range(0, batch_size_value):
-                x_samples[i*batch_size_value+j] = batch[j]
-
-            i = i + 1
-            if i >= n_batches:
-                break
-        i = 0
-        for batch in Y_datagen.flow(Y_data, batch_size=batch_size_value,
-                                    shuffle=shuffle_data, seed=seedValue):
-            for j in range(0, batch_size_value):
-                y_samples[i*batch_size_value+j] = batch[j]
-
-            i = i + 1
-            if i >= n_batches:
+        print("Generating new data samples . . .")
+        i = 0                                                                   
+        c = 0                                                                   
+        for batch in X_datagen.flow(X_data, batch_size=batch_size_value,        
+                                    shuffle=shuffle_data, seed=seedValue):      
+            for j in range(0, batch.shape[0]):                                  
+                x_samples[c] = batch[j]                                         
+                c += 1                                                          
+            i = i + 1                                                           
+            if i >= n_batches:                                                  
+                break                                                           
+        i = 0                                                                   
+        c = 0                                                                   
+        for batch in Y_datagen.flow(Y_data, batch_size=batch_size_value,        
+                                    shuffle=shuffle_data, seed=seedValue):      
+            for j in range(0, batch.shape[0]):                                  
+                y_samples[c] = batch[j]                                         
+                c += 1                                                          
+            i = i + 1                                                           
+            if i >= n_batches:                                                  
                 break
 
     # Use data_paths to load images from disk to make more samples
@@ -1067,23 +1068,26 @@ def keras_gen_samples(num_samples, X_data=None, Y_data=None,
         n_batches = int(num_samples / batch_size_value) \
                     + (num_samples % batch_size_value > 0)
 
+        print("Generating new data samples . . .")
         i = 0
+        c = 0
         for batch in X_datagen.flow_from_directory(
             data_paths[0], target_size=target_size, batch_size=batch_size_value,    
             shuffle=shuffle_data, seed=seedValue):
             for j in range(0, batch_size_value):
-                x_samples[i*batch_size_value+j] = batch[j]
-
+                x_samples[c] = batch[j]
+                c += 1
             i = i + 1
             if i >= n_batches:
                 break
         i = 0
+        c = 0
         for batch in Y_datagen.flow_from_directory(
             data_paths[1], target_size=target_size, batch_size=batch_size_value,
             shuffle=shuffle_data, seed=seedValue):
             for j in range(0, batch_size_value):
-                y_samples[i*batch_size_value+j] = batch[j]
-
+                y_samples[c] = batch[j]
+                c += 1
             i = i + 1
             if i >= n_batches:
                 break
@@ -1192,6 +1196,8 @@ def prepare_weight_maps(train_w_path, val_w_path, test_w_path, c_w_path=None,
                     cont += 1
 
             Y_train_aug.reset()
+        else:
+            print("Train weight maps are already prepared!")
             
         if not os.path.exists(val_w_path):
             print("Constructing validation weight maps from disk . . .")
@@ -1224,6 +1230,8 @@ def prepare_weight_maps(train_w_path, val_w_path, test_w_path, c_w_path=None,
                     cont += 1
 
             Y_val_aug.reset()
+        else:                                                                   
+            print("Validation weight maps are already prepared!")
 
         if not os.path.exists(test_w_path):                                      
             print("Constructing test weight maps from disk . . .")        
@@ -1255,6 +1263,8 @@ def prepare_weight_maps(train_w_path, val_w_path, test_w_path, c_w_path=None,
                     cont += 1                                                   
                                                                                 
             Y_test_aug.reset()
+        else:                                                                   
+            print("Test weight maps are already prepared!")
 
         if not os.path.exists(c_w_path):                                     
             print("Constructing complete image weight maps from disk . . .")              
@@ -1288,6 +1298,8 @@ def prepare_weight_maps(train_w_path, val_w_path, test_w_path, c_w_path=None,
                     cont += 1                                                   
                                                                                 
             Y_cmp_aug.reset()
+        else:                                                                   
+            print("Complete image weight maps are already prepared!")
 
     print("Weight maps are prepared!")
     
@@ -1374,6 +1386,8 @@ def random_crop(image, mask, random_crop_size, val=False, prob_map=False,
 
     if weights_on_data == True:
         img, we = image
+    else:
+        img = image
    
     height, width = img.shape[0], img.shape[1]
     dy, dx = random_crop_size

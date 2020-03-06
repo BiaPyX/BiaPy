@@ -505,7 +505,7 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
         raise ValueError("'subdivision' must be 1 or an even number")
     if window_size > data.shape[1]:
         raise ValueError("'window_size' greater than {}".format(data.shape[1]))
-    if window_size > data.shape[]:
+    if window_size > data.shape[2]:
         raise ValueError("'window_size' greater than {}".format(data.shape[2]))
 
     # Crop data
@@ -636,7 +636,7 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
             columns = int(subdivision/i)
 
     print("The minimum overlap has been found with ({}, {})"\
-          .format(rows), columns))
+          .format(rows, columns))
 
     # Calculate the amount of overlap, the division remainder to obtain an
     # offset to adjust the last crop and the step size. All of this values per

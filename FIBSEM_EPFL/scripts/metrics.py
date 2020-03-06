@@ -7,7 +7,7 @@ from skimage import measure
 import distutils
 from distutils import dir_util
 from PIL import Image
-from tensorflow.python.keras import losses
+from keras import losses
 
 def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.
