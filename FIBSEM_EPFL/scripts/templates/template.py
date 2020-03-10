@@ -302,6 +302,8 @@ result_bin_dir = os.path.join(result_dir, 'binarized')
 result_no_bin_dir = os.path.join(result_dir, 'no_binarized')
 # Directory where binarized predicted images with 50% of overlap will be stored
 result_bin_dir_50ov = os.path.join(result_dir, 'binarized_50ov')
+# Directory where predicted images with 50% of overlap will be stored
+result_no_bin_dir_50ov = os.path.join(result_dir, 'no_binarized_50ov')
 # Folder where the smoothed images will be stored
 smooth_dir = os.path.join(result_dir, 'smooth')
 # Folder where the images with the z-filter applied will be stored
@@ -447,6 +449,26 @@ if extra_train_data != 0:
             w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range,
             brightness_range=brightness_range, rotation_range=rotation_range)
     else:
+        train_prob = None
+        if probability_map == True:
+            train_prob = np.copy(Y_train[:,:,:,0])
+            train_prob = np.float32(train_prob)
+
+            print("Calculating the probability map . . .")
+            for i in range(train_prob.shape[0]):
+                pdf = train_prob[i]
+
+                # Remove artifacts connected to image border
+                pdf = clear_border(pdf)
+
+                foreground_pixels = (pdf == 255).sum()
+                background_pixels = (pdf == 0).sum()
+
+                pdf[np.where(pdf == 255)] = w_foreground/foreground_pixels
+                pdf[np.where(pdf == 0)] = w_background/background_pixels
+                pdf /= pdf.sum() # Necessary to get all probs sum 1
+                train_prob[i] = pdf
+
         # Custom DA generated extra data
         extra_gen_args = dict(
             X=X_train, Y=Y_train, batch_size=batch_size_value,
@@ -457,7 +479,8 @@ if extra_train_data != 0:
 
         extra_generator = ImageDataGenerator(**extra_gen_args)
 
-        extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
+        extra_x, extra_y = extra_generator.get_transformed_samples(
+            extra_train_data, force_full_images=True)
 
     X_train = np.vstack((X_train, extra_x))
     Y_train = np.vstack((Y_train, extra_y))
@@ -483,13 +506,12 @@ if custom_da == False:
         rotation_range=rotation_range, random_crops_in_DA=random_crops_in_DA,
         crop_length=crop_shape[0], w_shift_r=w_shift_r, h_shift_r=h_shift_r,    
         shear_range=shear_range, brightness_range=brightness_range,
-        weights=weighted_loss, weights_path=loss_weight_dir)
+        weights_on_data=weights_on_data, weights_path=loss_weight_dir)
 else:                                                                           
     print("Custom DA selected")
 
     # Calculate the probability map per image
-    train_prob = None
-    if probability_map == True:
+    if probability_map == True and train_prob is None:
         train_prob = np.copy(Y_train[:,:,:,0])
         train_prob = np.float32(train_prob)
 
@@ -500,11 +522,11 @@ else:
             # Remove artifacts connected to image border
             pdf = clear_border(pdf)
 
-            foreground_pixels = (pdf == 1).sum()
+            foreground_pixels = (pdf == 255).sum()
             background_pixels = (pdf == 0).sum()
 
-            pdf[np.where(pdf == 1.0)] = w_foreground/foreground_pixels
-            pdf[np.where(pdf == 0.0)] = w_background/background_pixels
+            pdf[np.where(pdf == 255)] = w_foreground/foreground_pixels
+            pdf[np.where(pdf == 0)] = w_background/background_pixels
             pdf /= pdf.sum() # Necessary to get all probs sum 1
             train_prob[i] = pdf
 
@@ -578,7 +600,7 @@ if load_previous_weights == False:
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
                          + '_' + test_id + '.h5')
-    print("Loading model weights from h5_file: ".format(h5_file))
+    print("Loading model weights from h5_file: {}".format(h5_file))
     model.load_weights(h5_file)
 
 
@@ -664,6 +686,8 @@ if random_crops_in_DA == False:
             print("Saving 50% overlap predicted images . . .")
             save_img(Y=Y_test_50ov, mask_dir=result_bin_dir_50ov, 
                      prefix="test_out_bin_50ov")
+            save_img(Y=Y_test_50ov_no_bin, mask_dir=result_no_bin_dir_50ov,
+                     prefix="test_out_no_bin_50ov")
         
             print("Calculate metrics for 50% overlap images . . .")
             jac_per_img_50ov = jaccard_index_numpy(Y_test, Y_test_50ov)
@@ -762,14 +786,10 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
     print("Smoothing crops . . .")
     for i in tqdm(range(0,len(X_test))):
         predictions_smooth = predict_img_with_smooth_windowing(
-            X_test[i,:,:,:],
-            window_size=crop_shape[0],
-            subdivisions=2,  
-            nb_classes=1,
-            pred_func=(
-                lambda img_batch_subdiv: model.predict(img_batch_subdiv)
-            )
-        )
+            X_test[i,:,:,:], window_size=crop_shape[0], subdivisions=2,  
+            nb_classes=1, pred_func=(
+                lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
+
         Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
 
         im = Image.fromarray(predictions_smooth[:,:,0]*255)

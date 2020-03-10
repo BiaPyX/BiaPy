@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(script_dir, '..', 'code'))
 
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
-                 TimeHistory, Print, threshold_plots, save_img
+                 TimeHistory, threshold_plots, save_img
 limit_threads()
 
 # Try to generate the results as reproducible as possible
@@ -30,7 +30,8 @@ from data_manipulation import load_data, crop_data, merge_data_without_overlap,\
                               check_crops, crop_data_with_overlap, \
                               merge_data_with_overlap, check_binary_masks
 from data_generators import keras_da_generator, ImageDataGenerator,\
-                            keras_gen_samples, calculate_z_filtering
+                            keras_gen_samples, calculate_z_filtering,\
+                            combine_generators
 from unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
@@ -42,7 +43,8 @@ from keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
-                                     predict_img_with_overlap
+                                     predict_img_with_overlap,\
+                                     predict_img_with_overlap_weighted
 from skimage.segmentation import clear_border
 
 
@@ -59,12 +61,12 @@ base_work_dir = str(sys.argv[4])
 log_dir = os.path.join(base_work_dir, 'logs', job_id)
 
 # Checks
-Print('job_id : ' + job_id)
-Print('GPU selected : ' + gpu_selected)
-Print('Python       : ' + sys.version.split('\n')[0])
-Print('Numpy        : ' + np.__version__)
-Print('Keras        : ' + keras.__version__)
-Print('Tensorflow   : ' + tf.__version__)
+print("job_id : {}".format(job_id))
+print("GPU selected : {}".format(gpu_selected))
+print("Python       : {}".format(sys.version.split('\n')[0]))
+print("Numpy        : {}".format(np.__version__))
+print("Keras        : {}".format(keras.__version__))
+print("Tensorflow   : {}".format(tf.__version__))
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
 os.environ["CUDA_VISIBLE_DEVICES"] = gpu_selected;
 
@@ -88,7 +90,8 @@ val_path = os.path.join(data_base_path, 'val', 'x')
 val_mask_path = os.path.join(data_base_path, 'val', 'y')
 test_path = os.path.join(data_base_path, 'test', 'x')
 test_mask_path = os.path.join(data_base_path, 'test', 'y')
-complete_test_path = os.path.join(data_base_path, 'complete', 'x')
+complete_test_path = os.path.join('harvard_datasets', 'human', 'test', 'x')
+complete_test_mask_path = os.path.join('harvard_datasets', 'human', 'test', 'y')
 
 
 ### Dataset shape
@@ -110,6 +113,7 @@ data_paths.append(val_mask_path)
 data_paths.append(test_path)
 data_paths.append(test_mask_path)
 data_paths.append(complete_test_path)
+data_paths.append(complete_test_mask_path)
 
 
 ### Data augmentation (DA) variables
@@ -162,14 +166,9 @@ weight_files_prefix = 'model.c_human_'
 h5_dir = 'h5_files'
 
 
-### Weithed loss parameters
-# Flag to insert weights on the loss function
-weighted_loss = False
-# Directory where weight maps will be stored
-loss_weight_dir = os.path.join(base_work_dir, 'loss_weights', job_id)
-
-
 ### Experiment main parameters
+# Loss type, three options: "bce", "w_bce" or "w_bce_dice"
+loss_type = "w_bce"
 # Batch size value
 batch_size_value = 6
 # Optimizer to use. Posible values: "sgd" or "adam"
@@ -186,6 +185,8 @@ patience = 50
 make_threshold_plots = False
 # Define time callback                                                          
 time_callback = TimeHistory()
+# If weights on data are going to be applied. To true when loss_type is 'w_bce'
+weights_on_data = True if loss_type == "w_bce" else False
 
 
 ### Network architecture specific parameters
@@ -227,6 +228,8 @@ result_bin_dir = os.path.join(result_dir, 'binarized')
 result_no_bin_dir = os.path.join(result_dir, 'no_binarized')
 # Directory where binarized predicted images with 50% of overlap will be stored
 result_bin_dir_50ov = os.path.join(result_dir, 'binarized_50ov')
+# Directory where predicted images with 50% of overlap will be stored
+result_no_bin_dir_50ov = os.path.join(result_dir, 'no_binarized_50ov')
 # Folder where the smoothed images will be stored
 smooth_dir = os.path.join(result_dir, 'smooth')
 # Folder where the images with the z-filter applied will be stored
@@ -237,13 +240,15 @@ smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # training the network will be shown. This folder will be created under the
 # folder pointed by "base_work_dir" variable 
 char_dir = 'charts'
+# Directory where weight maps will be stored
+loss_weight_dir = os.path.join(base_work_dir, 'loss_weights', job_id)
 
 
 #####################
 #   SANITY CHECKS   #
 #####################
 
-Print("#####################\n#   SANITY CHECKS   #\n#####################")
+print("#####################\n#   SANITY CHECKS   #\n#####################")
 
 check_binary_masks(os.path.join(train_mask_path, 'y'))
 check_binary_masks(os.path.join(val_mask_path, 'y'))
@@ -254,30 +259,29 @@ check_binary_masks(os.path.join(test_mask_path, 'y'))
 #    DATA AUGMENTATION   #
 ##########################
 
-Print("##################\n" + "#    DATA AUG    #\n" + "##################\n")
+print("##################\n#    DATA AUG    #\n##################\n")
 
 if custom_da == False:                                                          
-    Print("Keras DA selected")
+    print("Keras DA selected")
 
     # Keras Data Augmentation
-    train_generator, val_generator, \
-    X_test_augmented, Y_test_augmented,\
-    complete_generator, n_train_samples,\
-    n_val_samples, n_test_samples  = keras_da_generator(data_paths=data_paths,
-                                        target_size=(img_train_shape[0], img_train_shape[1]),
-                                        c_target_size=(original_test_shape[0], original_test_shape[1]),
-                                        batch_size_value=batch_size_value,
-                                        save_examples=aug_examples, job_id=job_id,
-                                        shuffle_train=shuffle_train_data_each_epoch,
-                                        shuffle_val=shuffle_val_data_each_epoch,
-                                        zoom=keras_zoom, w_shift_r=w_shift_r,
-                                        h_shift_r=h_shift_r,
-                                        shear_range=shear_range,
-                                        brightness_range=brightness_range,
-                                        weights=weighted_loss,
-                                        weights_path=loss_weight_dir)
+    train_generator, val_generator, \                                           
+    X_test_augmented, Y_test_augmented, \                                       
+    W_test_augmented, X_complete_aug, \                                         
+    Y_complete_aug, W_complete_aug, \                                           
+    n_train_samples, n_val_samples, \                                           
+    n_test_samples  = keras_da_generator(                                       
+        ld_img_from_disk=True, data_paths=data_paths,                           
+        target_size=(img_train_shape[0], img_train_shape[1]),                   
+        c_target_size=(original_test_shape[0], original_test_shape[1]),         
+        batch_size_value=batch_size_value, save_examples=aug_examples,          
+        job_id=job_id, shuffle_train=shuffle_train_data_each_epoch,             
+        shuffle_val=shuffle_val_data_each_epoch, zoom=keras_zoom,               
+        w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range,      
+        brightness_range=brightness_range, weights_on_data=weights_on_data,     
+        weights_path=loss_weight_dir)
 else:                                                                           
-    Print("Custom DA selected")
+    print("Custom DA selected")
     # NOT IMPLEMENTED YET #
 
 
@@ -285,13 +289,12 @@ else:
 #    BUILD THE NETWORK   #
 ##########################
 
-Print("###################\n" + "#  TRAIN PROCESS  #\n" + "###################\n")
+print("###################\n#  TRAIN PROCESS  #\n###################\n")
 
-Print("Creating the network . . .")
+print("Creating the network . . .")
 model = U_Net(img_train_shape, numInitChannels=num_init_channels, 
-              spatial_dropout=spatial_dropout, fixed_dropout=fixed_dropout_value, 
-              weighted_loss=weighted_loss, optimizer=optimizer,
-              lr=learning_rate_value)
+              fixed_dropout=fixed_dropout_value, spatial_dropout=spatial_dropout,
+              loss_type=loss_type, optimizer=optimizer, lr=learning_rate_value)
 model.summary()
 
 if load_previous_weights == False:
@@ -300,25 +303,27 @@ if load_previous_weights == False:
 
     if not os.path.exists(h5_dir):
         os.makedirs(h5_dir)
-    checkpointer = ModelCheckpoint(os.path.join(h5_dir, weight_files_prefix + job_file + '.h5'),
-                                   verbose=1, save_best_only=True)
+    checkpointer = ModelCheckpoint(
+        os.path.join(h5_dir, weight_files_prefix + job_file + '.h5'),
+        verbose=1, save_best_only=True)
 
     if fine_tunning == True:
         h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths
                                      + '_' + test_id + '.h5')
-        Print("Fine-tunning: loading model weights from h5_file: " + h5_file)
+        print("Fine-tunning: loading model weights from h5_file: {}".format(h5_file))
         model.load_weights(h5_file)
 
-    results = model.fit_generator(train_generator, validation_data=val_generator,
-                                  validation_steps=math.ceil(n_val_samples/batch_size_value),
-                                  steps_per_epoch=math.ceil(n_train_samples/batch_size_value),
-                                  epochs=epochs_value,
-                                  callbacks=[earlystopper, checkpointer, time_callback])
+    results = model.fit_generator(
+        train_generator, validation_data=val_generator,
+        validation_steps=math.ceil(n_val_samples/batch_size_value),
+        steps_per_epoch=math.ceil(n_train_samples/batch_size_value),
+        epochs=epochs_value,
+        callbacks=[earlystopper, checkpointer, time_callback])
 
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights
                                  + '_' + test_id + '.h5')
-    Print("Loading model weights from h5_file: " + h5_file)
+    print("Loading model weights from h5_file: {}".format(h5_file))
     model.load_weights(h5_file)
 
 
@@ -326,29 +331,37 @@ else:
 #     INFERENCE     #
 #####################
 
-Print("##################\n" + "#    INFERENCE   #\n" + "##################\n")
+print("##################\n#    INFERENCE   #\n##################\n")
 
 # Evaluate to obtain the loss value and the Jaccard index (per crop)
-Print("Evaluating test data . . .")
-score = model.evaluate_generator(zip(X_test_augmented, Y_test_augmented),
-                                 steps=math.ceil(n_test_samples/batch_size_value),
-                                 verbose=1)
+print("Evaluating test data . . .")
+if loss_type == "w_bce":
+    gen = combine_generators(X_test_augmented, Y_test_augmented, W_test_augmented)
+    score = model.evaluate_generator(
+        gen, steps=math.ceil(n_test_samples/batch_size_value), verbose=1)
+else:
+    score = model.evaluate_generator(
+        zip(X_test_augmented, Y_test_augmented),
+        steps=math.ceil(n_test_samples/batch_size_value), verbose=1)
+
 jac_per_crop = score[1]
 
 X_test_augmented.reset()
 Y_test_augmented.reset()
 
 # Predict on test
-Print("Making the predictions on test data . . .")
-preds_test = model.predict_generator(zip(X_test_augmented, Y_test_augmented),
-                                     steps=math.ceil(n_test_samples/batch_size_value),
-                                     verbose=1)
-
-# Threshold images
-bin_preds_test = (preds_test > 0.5).astype(np.uint8)
+print("Making the predictions on test data . . .")
+if loss_type == "w_bce":
+    gen = combine_generators(X_test_augmented, Y_test_augmented, W_test_augmented)
+    preds_test = model.predict_generator(
+        gen, steps=math.ceil(n_test_samples/batch_size_value), verbose=1)
+else:
+    preds_test = model.predict_generator(
+        zip(X_test_augmented, Y_test_augmented),
+        steps=math.ceil(n_test_samples/batch_size_value), verbose=1)
 
 # Load Y_test and reconstruct the original images
-Print("Loading test masks to make the predictions . . .")
+print("Loading test masks to make the predictions . . .")
 test_mask_ids = sorted(next(os.walk(os.path.join(test_mask_path, 'y')))[2])
 Y_test = np.zeros((len(test_mask_ids), img_test_shape[1], img_test_shape[0],
                    img_test_shape[2]), dtype=np.float32)
@@ -362,144 +375,166 @@ Y_test = Y_test / 255
 Y_test = Y_test.astype(np.uint8)
 
 # Calculate number of crops per dimension to reconstruct the full image
-h_num = int(original_test_shape[0] / bin_preds_test.shape[1]) \
-        + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
-v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
-        + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
+h_num = int(original_test_shape[0] / preds_test.shape[1]) \
+        + (original_test_shape[0] % preds_test.shape[1] > 0)
+v_num = int(original_test_shape[1] / preds_test.shape[2]) \
+        + (original_test_shape[1] % preds_test.shape[2] > 0)
 
-Y_test = merge_data_without_overlap(Y_test,
-                                    math.ceil(Y_test.shape[0]/(h_num*v_num)),
-                                    out_shape=[h_num, v_num], grid=False)
-bin_preds_test = merge_data_without_overlap(bin_preds_test,
-                                            math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
-                                            out_shape=[h_num, v_num], grid=False)
+Y_test = merge_data_without_overlap(
+    Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)), out_shape=[h_num, v_num], 
+    grid=False)
+preds_test = merge_data_without_overlap(
+    preds_test, math.ceil(preds_test.shape[0]/(h_num*v_num)),
+    out_shape=[h_num, v_num], grid=False)
 
-Print("Calculate metrics . . .")
+print("Calculate metrics . . .")
+# Threshold images                                                              
+bin_preds_test = (preds_test > 0.5).astype(np.uint8)
 # Per image without overlap
 score[1] = jaccard_index_numpy(Y_test, bin_preds_test)
 voc = voc_calculation(Y_test, bin_preds_test, score[1])
 det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
                       det_eval_path, det_bin, n_dig, job_id)
 
-Print("Saving predicted images . . .")
+print("Saving predicted images . . .")
 save_img(Y=bin_preds_test, mask_dir=result_bin_dir, prefix="test_out_bin")
+save_img(Y=preds_test, mask_dir=result_no_bin_dir, prefix="test_out_no_bin")
 
 # Per image with 50% overlap
 Y_test_50ov = np.zeros(Y_test.shape, dtype=(np.float32))
-cont = batch_size_value
-for i in tqdm(range(0,complete_generator.n)):
-    if cont % batch_size_value == 0:
-        cont = 1
-
-        batch = next(complete_generator)
-        images, _ = batch
-
+cont = 0
+for i in tqdm(range(X_complete_aug.n)):
+    if cont == batch_size_value:                                                
+        cont = 0
+        images = next(X_complete_aug)                                           
+        masks = next(Y_complete_aug)                                            
+                                                                                
+        if loss_type == "w_bce":                                                
+            maps = next(W_complete_aug)
+    
+    if weights_on_data == False:
+        predictions_smooth = predict_img_with_overlap(
+            images[cont], window_size=img_train_shape[0], subdivisions=2,
+            nb_classes=1, pred_func=(
+                lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
     else:
-        cont += 1
+        predictions_smooth = predict_img_with_overlap_weighted(
+            images[cont], masks[cont], maps[cont], batch_size_value,
+            window_size=img_train_shape[0], subdivisions=2, nb_classes=1, 
+            pred_func=(
+                lambda img_batch_subdiv, 
+                       steps: model.predict(img_batch_subdiv, steps)))
 
-    predictions_smooth = predict_img_with_overlap(
-                            images[cont-1],
-                            window_size=img_train_shape[0],
-                            subdivisions=2,
-                            nb_classes=1,
-                            pred_func=(
-                                lambda img_batch_subdiv: model.predict(img_batch_subdiv)
-                            )
-                        )
-    Y_test_50ov[i] = (predictions_smooth > 0.5).astype(np.uint8)
+    Y_test_50ov[i] = predictions_smooth
+    
+    cont += 1
 
-Print("Saving 50% overlap predicted images . . .")
-save_img(Y=Y_test_50ov, mask_dir=result_bin_dir_50ov, prefix="test_out_bin_50ov")
+print("Saving 50% overlap predicted images . . .")
+save_img(Y=(Y_test_50ov > 0.5).astype(np.uint8), mask_dir=result_bin_dir_50ov, 
+         prefix="test_out_bin_50ov")
+save_img(Y=Y_test_50ov, mask_dir=result_no_bin_dir_50ov,
+         prefix="test_out_no_bin_50ov")
 
-complete_generator.reset()
+X_complete_aug.reset()
+Y_complete_aug.reset()
+if loss_type == "w_bce":
+    W_complete_aug.reset()
 
-Print("Calculate metrics for 50% overlap images . . .")
+print("Calculate metrics for 50% overlap images . . .")
 jac_per_img_50ov = jaccard_index_numpy(Y_test, Y_test_50ov)
 voc_per_img_50ov = voc_calculation(Y_test, Y_test_50ov, jac_per_img_50ov)
 det_per_img_50ov = DET_calculation(Y_test, Y_test_50ov, det_eval_ge_path,
                                    det_eval_path, det_bin, n_dig, job_id)
+
+det_per_img_50ov = -1
+
+del Y_test_50ov
 
 
 ####################
 #  POST-PROCESING  #
 ####################
 
-Print("##################\n" + "# POST-PROCESING #\n" + "##################\n") 
+print("##################\n# POST-PROCESING #\n##################\n") 
 
-Print("1) SMOOTH")
+print("1) SMOOTH")
 if post_process == True:
 
-    Print("Post processing active . . .")
-
-    Y_test_smooth = np.zeros((complete_generator.n, original_test_shape[0], 
-                              original_test_shape[1], original_test_shape[2]), 
+    print("Post processing active . . .")
+    Y_test_smooth = np.zeros((X_complete_aug.n, original_test_shape[0],
+                              original_test_shape[1], original_test_shape[2]),
                              dtype=np.uint8)
 
     # Extract the number of digits to create the image names
-    d = len(str(complete_generator.n))
+    d = len(str(X_complete_aug.n))
 
     if not os.path.exists(smooth_dir):
         os.makedirs(smooth_dir)
 
-    Print("Smoothing crops . . .")
-    iterations = math.ceil(complete_generator.n/batch_size_value)
+    print("Smoothing crops . . .")
     cont = 0
-    for i in tqdm(range(0,iterations)):
-        batch = next(complete_generator)
+    for i in tqdm(range(X_complete_aug.n)):
+        if cont == batch_size_value:                                                
+            cont = 0                                                                
+            images = next(X_complete_aug)                                           
+            masks = next(Y_complete_aug)                                            
+                                                                                    
+            if loss_type == "w_bce":                                                
+                maps = next(W_complete_aug)
 
-        images, _ = batch
-        for j in tqdm(range(0, images.shape[0])):
-            if cont >= complete_generator.n:
-                break
-
-            im = images[j]
+        if weights_on_data == False:
             predictions_smooth = predict_img_with_smooth_windowing(
-                im,
-                window_size=img_train_shape[0],
-                subdivisions=2,
-                nb_classes=1,
-                pred_func=(
-                    lambda img_batch_subdiv: model.predict(img_batch_subdiv)
-                )
-            )
-            Y_test_smooth[cont] = (predictions_smooth > 0.5).astype(np.uint8)
-            cont += 1
+                images[cont], window_size=img_train_shape[0], subdivisions=2,
+                nb_classes=1, pred_func=(
+                    lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
+        else:
+            m = maps[j]
+            predictions_smooth = predict_img_with_overlap_weighted(
+                images[cont], masks[cont], maps[cont], batch_size_value,
+                window_size=img_train_shape[0], subdivisions=2, nb_classes=1, 
+                pred_func=(                                                         
+                lambda img_batch_subdiv,                                        
+                       steps: model.predict(img_batch_subdiv, steps)))
 
-            im = Image.fromarray(predictions_smooth[:,:,0]*255)
-            im = im.convert('L')
-            im.save(os.path.join(smooth_dir, "test_out_smooth_" 
-                                 + str(cont).zfill(d) + ".png"))
+        Y_test_smooth[cont] = (predictions_smooth > 0.5).astype(np.uint8)
+
+        cont += 1
+
+        im = Image.fromarray(predictions_smooth[:,:,0]*255)
+        im = im.convert('L')
+        im.save(os.path.join(smooth_dir, "test_out_smooth_" 
+                             + str(cont).zfill(d) + ".png"))
 
     # Metrics (Jaccard + VOC + DET)                                             
-    Print("Calculate metrics . . .")
+    print("Calculate metrics . . .")
     smooth_score = jaccard_index_numpy(Y_test, Y_test_smooth)
     smooth_voc = voc_calculation(Y_test, Y_test_smooth, smooth_score)
     smooth_det = DET_calculation(Y_test, Y_test_smooth, det_eval_ge_path,
                                  det_eval_post_path, det_bin, n_dig, job_id)
 
 if post_process == True:
-    Print("2) Z-FILTERING")
+    print("2) Z-FILTERING")
 
-    Print("Applying Z-filter . . .")
+    print("Applying Z-filter . . .")
     zfil_preds_test = calculate_z_filtering(bin_preds_test)
 
-    Print("Saving Z-filtered images . . .")
+    print("Saving Z-filtered images . . .")
     save_img(Y=zfil_preds_test, mask_dir=zfil_dir, prefix="test_out_zfil")
 
-    Print("Calculate metrics for the Z-filtered data . . .")
+    print("Calculate metrics for the Z-filtered data . . .")
     zfil_score = jaccard_index_numpy(Y_test, zfil_preds_test)
     zfil_voc = voc_calculation(Y_test, zfil_preds_test, zfil_score)
     zfil_det = DET_calculation(Y_test, zfil_preds_test, det_eval_ge_path,
                                det_eval_post_path, det_bin, n_dig, job_id)
 
-    Print("Applying Z-filter to the smoothed data . . .")
+    print("Applying Z-filter to the smoothed data . . .")
     smooth_zfil_preds_test = calculate_z_filtering(Y_test_smooth)
 
-    Print("Saving smoothed + Z-filtered images . . .")
+    print("Saving smoothed + Z-filtered images . . .")
     save_img(Y=smooth_zfil_preds_test, mask_dir=smoo_zfil_dir, 
              prefix="test_out_smoo_zfil")
 
-    Print("Calculate metrics for the smoothed + Z-filtered data . . .")
+    print("Calculate metrics for the smoothed + Z-filtered data . . .")
     smo_zfil_score = jaccard_index_numpy(Y_test, smooth_zfil_preds_test)
     smo_zfil_voc = voc_calculation(Y_test, smooth_zfil_preds_test,
                                    smo_zfil_score)
@@ -508,7 +543,7 @@ if post_process == True:
                                    det_bin, n_dig, job_id)
 
 del Y_test
-Print("Finish post-processing") 
+print("Finished post-processing!") 
 
 
 ####################################
@@ -516,22 +551,22 @@ Print("Finish post-processing")
 ####################################
 
 if load_previous_weights == False:
-    Print("Epoch average time: " + str(np.mean(time_callback.times)))
-    Print("Epoch number: " + str(len(results.history['val_loss'])))
-    Print("Train time (s): " + str(np.sum(time_callback.times)))
-    Print("Train loss: " + str(np.min(results.history['loss'])))
-    Print("Train jaccard_index: " + str(np.max(results.history['jaccard_index'])))
-    Print("Validation loss: " + str(np.min(results.history['val_loss'])))
-    Print("Validation jaccard_index: " + str(np.max(results.history['val_jaccard_index'])))
+    print("Epoch average time: {}".format(np.mean(time_callback.times)))
+    print("Epoch number: {}".format(len(results.history['val_loss'])))
+    print("Train time (s): {}".format(np.sum(time_callback.times)))
+    print("Train loss: {}".format(np.min(results.history['loss'])))
+    print("Train jaccard_index: {}".format(np.max(results.history['jaccard_index'])))
+    print("Validation loss: {}".format(np.min(results.history['val_loss'])))
+    print("Validation jaccard_index: {}".format(np.max(results.history['val_jaccard_index'])))
 
-Print("Test loss: " + str(score[0]))
-Print("Test jaccard_index (per crop): " + str(jac_per_crop))
-Print("Test jaccard_index (per image without overlap): " + str(score[1]))
-Print("Test jaccard_index (per image with 50% overlap): " + str(jac_per_img_50ov))
-Print("VOC (per image without overlap): " + str(voc))
-Print("VOC (per image with 50% overlap): " + str(voc_per_img_50ov))
-Print("DET (per image without overlap): " + str(det))
-Print("DET (per image with 50% overlap): " + str(det_per_img_50ov))
+print("Test loss: {}".format(score[0]))
+print("Test jaccard_index (per crop): {}".format(jac_per_crop))
+print("Test jaccard_index (per image without overlap): {}".format(score[1]))
+print("Test jaccard_index (per image with 50% overlap): {}".format(jac_per_img_50ov))
+print("VOC (per image without overlap): {}".format(voc))
+print("VOC (per image with 50% overlap): {}".format(voc_per_img_50ov))
+print("DET (per image without overlap): {}".format(det))
+print("DET (per image with 50% overlap): {}".format(det_per_img_50ov))
 
 if load_previous_weights == False:
     smooth_score = -1 if 'smooth_score' not in globals() else smooth_score
@@ -545,23 +580,24 @@ if load_previous_weights == False:
     smo_zfil_det = -1 if 'smo_zfil_det' not in globals() else smo_zfil_det
     jac_per_crop = -1 if 'jac_per_crop' not in globals() else jac_per_crop
 
-    store_history(results, jac_per_crop, score, jac_per_img_50ov, voc,
-                  voc_per_img_50ov, det, det_per_img_50ov, time_callback, log_dir,
-                  job_file, smooth_score, smooth_voc, smooth_det, zfil_score,
-                  zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
+    store_history(
+        results, jac_per_crop, score, jac_per_img_50ov, voc, voc_per_img_50ov, 
+        det, det_per_img_50ov, time_callback, log_dir, job_file, smooth_score, 
+        smooth_voc, smooth_det, zfil_score, zfil_voc, zfil_det, smo_zfil_score, 
+        smo_zfil_voc, smo_zfil_det)
 
     create_plots(results, job_id, test_id, char_dir)
 
 if post_process == True:
-    Print("Post-process: SMOOTH - Test jaccard_index: " + str(smooth_score))
-    Print("Post-process: SMOOTH - VOC: " + str(smooth_voc))
-    Print("Post-process: SMOOTH - DET: " + str(smooth_det))
-    Print("Post-process: Z-filtering - Test jaccard_index: " + str(zfil_score))
-    Print("Post-process: Z-filtering - VOC: " + str(zfil_voc))
-    Print("Post-process: Z-filtering - DET: " + str(zfil_det))
-    Print("Post-process: SMOOTH + Z-filtering - Test jaccard_index: "
+    print("Post-process: SMOOTH - Test jaccard_index: {}".format(smooth_score))
+    print("Post-process: SMOOTH - VOC: {}".format(smooth_voc))
+    print("Post-process: SMOOTH - DET: {}".format(smooth_det))
+    print("Post-process: Z-filtering - Test jaccard_index: {}".format(zfil_score))
+    print("Post-process: Z-filtering - VOC: {}".format(zfil_voc))
+    print("Post-process: Z-filtering - DET: {}".format(zfil_det))
+    print("Post-process: SMOOTH + Z-filtering - Test jaccard_index: "
           + str(smo_zfil_score))
-    Print("Post-process: SMOOTH + Z-filtering - VOC: " + str(smo_zfil_voc))
-    Print("Post-process: SMOOTH + Z-filtering - DET: " + str(smo_zfil_det))
+    print("Post-process: SMOOTH + Z-filtering - VOC: {}".format(smo_zfil_voc))
+    print("Post-process: SMOOTH + Z-filtering - DET: {}".format(smo_zfil_det))
 
-Print("FINISHED JOB " + job_file + " !!")
+print("FINISHED JOB " + job_file + " !!")

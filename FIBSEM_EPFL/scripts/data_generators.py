@@ -27,7 +27,7 @@ class ImageDataGenerator(keras.utils.Sequence):
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
                  shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
                  hflip=False, rotation90=False, rotation_range=0.0, 
-                 brightness_range=[1.0, 1.0], median_filter_size=[0, 0], 
+                 brightness_range=None, median_filter_size=[0, 0], 
                  random_crops_in_DA=False, crop_length=0, prob_map=False, 
                  train_prob=None, val=False):
         """ImageDataGenerator constructor.
@@ -98,7 +98,10 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.hflip = hflip
         self.rotation90 = rotation90
         self.rotation_range = rotation_range
-        self.brightness_range = brightness_range
+        if brightness_range is None:
+            self.brightness_range = [1.0, 1.0]
+        else:
+            self.brightness_range = brightness_range
         self.median_filter_size = median_filter_size
         self.random_crops_in_DA = random_crops_in_DA
         self.crop_length = crop_length
@@ -138,7 +141,6 @@ class ImageDataGenerator(keras.utils.Sequence):
                batch_y (4D Numpy array): corresponding Y elements of the batch.
                E.g. (batch_size, x, y, channels).
         """
-
         batch_x = np.empty((self.batch_size, *self.dim, self.n_channels))
         batch_y = np.empty((self.batch_size, *self.dim, self.n_channels))
 
@@ -365,7 +367,7 @@ class ImageDataGenerator(keras.utils.Sequence):
     def get_transformed_samples(self, num_examples, save_to_dir=False, 
                                 out_dir='aug', job_id="none_job_id", 
                                 save_prefix=None, original_elastic=True, 
-                                random_images=True):
+                                random_images=True, force_full_images=False):
         """Apply selected transformations to a defined number of images from
            the dataset. 
             
@@ -393,6 +395,11 @@ class ImageDataGenerator(keras.utils.Sequence):
                 dataset. If False the examples will be generated from the start
                 of the dataset. 
 
+                force_full_images (bool, optional): force the usage of the entire
+                images. Useful to generate extra images and overide
+                'self.random_crops_in_DA' functionality.
+
+
             Returns:
                 batch_x (4D Numpy array): batch of data.
                 E.g. (num_examples, x, y, channels).
@@ -403,7 +410,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
         print("### TR-SAMPLES ###")
 
-        if self.random_crops_in_DA == True:
+        if self.random_crops_in_DA == True and force_full_images == False:
             batch_x = np.zeros((num_examples, self.crop_length, self.crop_length,
                                 self.X.shape[3]), dtype=np.float32)                                  
             batch_y = np.zeros((num_examples, self.crop_length, self.crop_length,
@@ -432,7 +439,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                 pos = cont 
 
             # Apply crops if selected
-            if self.random_crops_in_DA == True:
+            if self.random_crops_in_DA == True and force_full_images == False:
                 batch_x[i], batch_y[i], ox, oy,\
                 s_x, s_y = random_crop(
                     self.X[pos], self.Y[pos], 
@@ -459,7 +466,8 @@ class ImageDataGenerator(keras.utils.Sequence):
 
                 # Save the original images with a point that represents the 
                 # selected coordinates to be the center of the crop
-                if self.random_crops_in_DA == True and self.prob_map == True:
+                if self.random_crops_in_DA == True and self.prob_map == True\
+                   and force_full_images == False:
                     im = Image.fromarray(self.X[pos,:,:,0]) 
                     im = im.convert('RGB')                                                  
                     px = im.load()                                                          
@@ -1320,16 +1328,15 @@ def combine_generators(X_aug, Y_aug, W_aug=None):
 
     if W_aug is None:
         generator = zip(X_aug, Y_aug)
-        
+
         for (img, label) in generator:
             yield (img, label)
     else:
-        generator = zip(X_aug, Y_aug, W_aug) 
-   
+        generator = zip(X_aug, Y_aug, W_aug)
         for (img, label, weight) in generator:
             yield ([img, weight], label) 
         
-     
+        
 def crop_generator(batches, crop_length, val=False, prob_map=False, 
                    weights_on_data=False):
     """Take as input a Keras ImageGen (Iterator) and generate random
