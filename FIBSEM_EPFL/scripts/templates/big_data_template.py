@@ -406,32 +406,33 @@ save_img(Y=preds_test, mask_dir=result_no_bin_dir, prefix="test_out_no_bin")
 
 # Per image with 50% overlap
 Y_test_50ov = np.zeros(Y_test.shape, dtype=(np.float32))
-cont = 0
-for i in tqdm(range(X_complete_aug.n)):
-    if cont == batch_size_value:                                                
-        cont = 0
+cont = 0                                                                        
+for i in tqdm(range(X_complete_aug.n)):                                         
+    if cont == 0:                                                               
         images = next(X_complete_aug)                                           
-        masks = next(Y_complete_aug)                                            
                                                                                 
         if loss_type == "w_bce":                                                
-            maps = next(W_complete_aug)
-    
-    if weights_on_data == False:
-        predictions_smooth = predict_img_with_overlap(
-            images[cont], window_size=img_train_shape[0], subdivisions=2,
-            nb_classes=1, pred_func=(
-                lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
-    else:
-        predictions_smooth = predict_img_with_overlap_weighted(
-            images[cont], masks[cont], maps[cont], batch_size_value,
-            window_size=img_train_shape[0], subdivisions=2, nb_classes=1, 
-            pred_func=(
-                lambda img_batch_subdiv, 
-                       steps: model.predict(img_batch_subdiv, steps)))
-
-    Y_test_50ov[i] = predictions_smooth
-    
-    cont += 1
+            masks = next(Y_complete_aug)                                        
+            maps = next(W_complete_aug)                                         
+                                                                                
+    if weights_on_data == False:                                                
+        predictions_smooth = predict_img_with_overlap(                          
+            images[cont], window_size=img_train_shape[0], subdivisions=2,       
+            nb_classes=1, pred_func=(                                           
+                lambda img_batch_subdiv: model.predict(img_batch_subdiv)))      
+    else:                                                                       
+        predictions_smooth = predict_img_with_overlap_weighted(                 
+            images[cont], masks[cont], maps[cont], batch_size_value,            
+            window_size=img_train_shape[0], subdivisions=2, nb_classes=1,       
+            pred_func=(                                                         
+                lambda img_batch_subdiv,                                        
+                       steps: model.predict_generator(img_batch_subdiv, steps)))
+                                                                                
+    Y_test_50ov[i] = predictions_smooth                                         
+                                                                                
+    cont += 1                                                                   
+    if cont == batch_size_value:                                                
+        cont = 0
 
 print("Saving 50% overlap predicted images . . .")
 save_img(Y=(Y_test_50ov > 0.5).astype(np.uint8), mask_dir=result_bin_dir_50ov, 
@@ -440,8 +441,8 @@ save_img(Y=Y_test_50ov, mask_dir=result_no_bin_dir_50ov,
          prefix="test_out_no_bin_50ov")
 
 X_complete_aug.reset()
-Y_complete_aug.reset()
 if loss_type == "w_bce":
+    Y_complete_aug.reset()
     W_complete_aug.reset()
 
 print("Calculate metrics for 50% overlap images . . .")
@@ -478,32 +479,33 @@ if post_process == True:
         os.makedirs(smooth_dir)
 
     print("Smoothing crops . . .")
-    cont = 0
-    for i in tqdm(range(X_complete_aug.n)):
-        if cont == batch_size_value:                                                
-            cont = 0                                                                
-            images = next(X_complete_aug)                                           
-            masks = next(Y_complete_aug)                                            
-                                                                                    
-            if loss_type == "w_bce":                                                
-                maps = next(W_complete_aug)
-
-        if weights_on_data == False:
-            predictions_smooth = predict_img_with_smooth_windowing(
-                images[cont], window_size=img_train_shape[0], subdivisions=2,
-                nb_classes=1, pred_func=(
-                    lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
-        else:
-            predictions_smooth = predict_img_with_overlap_weighted(
-                images[cont], masks[cont], maps[cont], batch_size_value,
-                window_size=img_train_shape[0], subdivisions=2, nb_classes=1, 
-                pred_func=(                                                         
+    cont = 0                                                                    
+    for i in tqdm(range(X_complete_aug.n)):                                     
+        if cont == 0:                                                           
+            images = next(X_complete_aug)                                       
+            masks = next(Y_complete_aug)                                        
+                                                                                
+            if loss_type == "w_bce":                                            
+                maps = next(W_complete_aug)                                     
+                                                                                
+        if weights_on_data == False:                                            
+            predictions_smooth = predict_img_with_smooth_windowing(             
+                images[cont], window_size=img_train_shape[0], subdivisions=2,   
+                nb_classes=1, pred_func=(                                       
+                    lambda img_batch_subdiv: model.predict(img_batch_subdiv)))  
+        else:                                                                   
+            predictions_smooth = predict_img_with_overlap_weighted(             
+                images[cont], masks[cont], maps[cont], batch_size_value,        
+                window_size=img_train_shape[0], subdivisions=2, nb_classes=1,   
+                pred_func=(                                                     
                 lambda img_batch_subdiv,                                        
-                       steps: model.predict(img_batch_subdiv, steps)))
-
-        Y_test_smooth[cont] = (predictions_smooth > 0.5).astype(np.uint8)
-
-        cont += 1
+                       steps: model.predict_generator(img_batch_subdiv, steps)))          
+                                                                                
+        Y_test_smooth[cont] = (predictions_smooth > 0.5).astype(np.uint8)       
+                                                                                
+        cont += 1                                                               
+        if cont == batch_size_value:                                            
+            cont = 0
 
         im = Image.fromarray(predictions_smooth[:,:,0]*255)
         im = im.convert('L')
