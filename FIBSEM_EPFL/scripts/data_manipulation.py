@@ -501,7 +501,7 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
     print("Cropping {} images into ({}, {}) with overlapping. . ."\
           .format(data.shape[1:], window_size, window_size))
 
-    if subdivision != 1 or subdivision % 2 != 0:
+    if subdivision != 1 and subdivision % 2 != 0:
         raise ValueError("'subdivision' must be 1 or an even number")
     if window_size > data.shape[1]:
         raise ValueError("'window_size' greater than {}".format(data.shape[1]))

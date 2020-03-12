@@ -241,7 +241,10 @@ h5_dir = 'h5_files'
 
 
 ### Experiment main parameters
-# Loss type, three options: "bce", "w_bce" or "w_bce_dice"                      
+# Loss type, three options: "bce" or "w_bce_dice", which refers to binary cross 
+# entropy (BCE) and BCE and Dice with with a weight term on each one (that must 
+# sum 1) to calculate the total loss value. NOTE: "w_bce" is not implemented on 
+# this template type: please use big_data_template.py instead.
 loss_type = "bce"
 # Batch size value
 batch_size_value = 6
@@ -449,26 +452,6 @@ if extra_train_data != 0:
             w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range,
             brightness_range=brightness_range, rotation_range=rotation_range)
     else:
-        train_prob = None
-        if probability_map == True:
-            train_prob = np.copy(Y_train[:,:,:,0])
-            train_prob = np.float32(train_prob)
-
-            print("Calculating the probability map . . .")
-            for i in range(train_prob.shape[0]):
-                pdf = train_prob[i]
-
-                # Remove artifacts connected to image border
-                pdf = clear_border(pdf)
-
-                foreground_pixels = (pdf == 255).sum()
-                background_pixels = (pdf == 0).sum()
-
-                pdf[np.where(pdf == 255)] = w_foreground/foreground_pixels
-                pdf[np.where(pdf == 0)] = w_background/background_pixels
-                pdf /= pdf.sum() # Necessary to get all probs sum 1
-                train_prob[i] = pdf
-
         # Custom DA generated extra data
         extra_gen_args = dict(
             X=X_train, Y=Y_train, batch_size=batch_size_value,
@@ -483,7 +466,7 @@ if extra_train_data != 0:
             extra_train_data, force_full_images=True)
 
     X_train = np.vstack((X_train, extra_x))
-    Y_train = np.vstack((Y_train, extra_y))
+    Y_train = np.vstack((Y_train, extra_y*255))
     print("{} extra train data generated, the new shape of the train now is {}"\
           .format(extra_train_data, X_train.shape))
 
@@ -511,7 +494,8 @@ else:
     print("Custom DA selected")
 
     # Calculate the probability map per image
-    if probability_map == True and train_prob is None:
+    train_prob = None
+    if probability_map == True:
         train_prob = np.copy(Y_train[:,:,:,0])
         train_prob = np.float32(train_prob)
 
@@ -568,10 +552,10 @@ if random_crops_in_DA == True:
 print("###################\n#  TRAIN PROCESS  #\n###################\n")
 
 print("Creating the network . . .")
-model = U_Net([img_height, img_width, img_channels],
-              numInitChannels=num_init_channels, spatial_dropout=spatial_dropout,
-              fixed_dropout=fixed_dropout_value, weighted_loss=weighted_loss,
-              optimizer=optimizer, lr=learning_rate_value)
+model = U_Net([img_height, img_width, img_channels], 
+              numInitChannels=num_init_channels, 
+              fixed_dropout=fixed_dropout_value, spatial_dropout=spatial_dropout,
+              loss_type=loss_type, optimizer=optimizer, lr=learning_rate_value)
 model.summary()
 
 if load_previous_weights == False:
