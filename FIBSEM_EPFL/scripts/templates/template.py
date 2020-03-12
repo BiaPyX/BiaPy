@@ -666,18 +666,19 @@ if random_crops_in_DA == False:
                         lambda img_batch_subdiv: model.predict(img_batch_subdiv)
                     )
                 )
-                Y_test_50ov[i] = (predictions_smooth > 0.5).astype(np.float32)
+                Y_test_50ov[i] = predictions_smooth
     
             print("Saving 50% overlap predicted images . . .")
-            save_img(Y=Y_test_50ov, mask_dir=result_bin_dir_50ov, 
-                     prefix="test_out_bin_50ov")
+            save_img(Y=(Y_test_50ov > 0.5).astype(np.float32), 
+                     mask_dir=result_bin_dir_50ov, prefix="test_out_bin_50ov")
             save_img(Y=Y_test_50ov_no_bin, mask_dir=result_no_bin_dir_50ov,
                      prefix="test_out_no_bin_50ov")
         
             print("Calculate metrics for 50% overlap images . . .")
-            jac_per_img_50ov = jaccard_index_numpy(Y_test, Y_test_50ov)
-            voc_per_img_50ov = voc_calculation(Y_test, Y_test_50ov, 
-                                               jac_per_img_50ov)
+            jac_per_img_50ov = jaccard_index_numpy(
+                Y_test, (Y_test_50ov > 0.5).astype(np.float32)
+            voc_per_img_50ov = voc_calculation(
+                Y_test, (Y_test_50ov > 0.5).astype(np.float32) jac_per_img_50ov)
             det_per_img_50ov = DET_calculation(
                 Y_test, Y_test_50ov, det_eval_ge_path, det_eval_path, det_bin, 
                 n_dig, job_id)
