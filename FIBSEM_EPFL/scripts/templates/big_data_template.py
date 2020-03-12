@@ -157,7 +157,7 @@ previous_job_weights = job_id
 # Flag to activate the fine tunning
 fine_tunning = False
 # ID of the previous weigths to load the weigths from to make the fine tunning
-fine_tunning_weigths = "232"
+fine_tunning_weigths = job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.c_human_'
 # Name of the folder where weights files will be stored/loaded from. This folder
@@ -297,7 +297,8 @@ print("###################\n#  TRAIN PROCESS  #\n###################\n")
 print("Creating the network . . .")
 model = U_Net(img_train_shape, numInitChannels=num_init_channels, 
               fixed_dropout=fixed_dropout_value, spatial_dropout=spatial_dropout,
-              loss_type=loss_type, optimizer=optimizer, lr=learning_rate_value)
+              loss_type=loss_type, optimizer=optimizer, lr=learning_rate_value,
+              fine_tunning=fine_tunning)
 model.summary()
 
 if load_previous_weights == False:

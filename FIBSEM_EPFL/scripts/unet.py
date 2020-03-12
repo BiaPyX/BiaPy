@@ -9,7 +9,8 @@ from metrics import binary_crossentropy_weighted, jaccard_index, \
                     weighted_bce_dice_loss
 
 def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0, 
-          spatial_dropout=False, loss_type="bce", optimizer="sgd", lr=0.001):
+          spatial_dropout=False, loss_type="bce", optimizer="sgd", lr=0.001,
+          fine_tunning=False):
     """Create the U-Net
 
        Args:
@@ -36,6 +37,9 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
             function. Posible options: 'sgd' or 'adam'.
 
             lr (float, optional): learning rate value.
+        
+            fine_tunning (bool, optional): flag to freeze the encoder part for 
+            fine tuning.
 
        Returns:
             model (Keras model): model containing the U-Net created.
@@ -146,12 +150,14 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
                 kernel_initializer='he_normal', padding='same') (c9)
     
     outputs = Conv2D(1, (1, 1), activation='sigmoid') (c9)
-   
+  
+    # Loss type 
     if loss_type == "w_bce":
         model = Model(inputs=[inputs, weights], outputs=[outputs]) 
     else:
         model = Model(inputs=[inputs], outputs=[outputs])
     
+    # Select the optimizer
     if optimizer == "sgd":
         opt = keras.optimizers.SGD(lr=lr, momentum=0.99, decay=0.0, 
                                    nesterov=False)
@@ -161,6 +167,15 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     else:
         raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
         
+    # Fine tunning: freeze the enconder part
+    if fine_tunning == True:
+        print("Freezing the contracting path of the U-Net for fine tunning . . .")
+        for layer in model.layers[:20]:
+            layer.trainable = False
+        for layer in model.layers:
+            print("{}: {}".format(layer, layer.trainable))
+
+    # Compile the model
     if loss_type == "bce":
         model.compile(optimizer=opt, loss='binary_crossentropy', 
                       metrics=[jaccard_index])
