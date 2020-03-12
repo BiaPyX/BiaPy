@@ -83,15 +83,15 @@ os.chdir(base_work_dir)
 
 ### Dataset variables
 # Main dataset data/mask paths
-data_base_path = os.path.join('harvard_datasets', 'human', 'histogram_matching', 'toy')
+data_base_path = os.path.join('harvard_datasets', 'human_v2')
 train_path = os.path.join(data_base_path, 'train', 'x')
 train_mask_path = os.path.join(data_base_path, 'train', 'y')
 val_path = os.path.join(data_base_path, 'val', 'x')
 val_mask_path = os.path.join(data_base_path, 'val', 'y')
 test_path = os.path.join(data_base_path, 'test', 'x')
 test_mask_path = os.path.join(data_base_path, 'test', 'y')
-complete_test_path = os.path.join('harvard_datasets', 'human', 'test', 'x')
-complete_test_mask_path = os.path.join('harvard_datasets', 'human', 'test', 'y')
+complete_test_path = os.path.join('harvard_datasets', 'human_v2', 'test', 'x')
+complete_test_mask_path = os.path.join('harvard_datasets', 'human_v2', 'test', 'y')
 
 
 ### Dataset shape
@@ -167,8 +167,11 @@ h5_dir = 'h5_files'
 
 
 ### Experiment main parameters
-# Loss type, three options: "bce", "w_bce" or "w_bce_dice"
-loss_type = "w_bce"
+# Loss type, three options: "bce", "w_bce" or "w_bce_dice", which refers to 
+# binary cross entropy (BCE), weighted BCE (based on a weight map) and 
+# BCE and Dice with with a weight term on each one (that must sum 1) to 
+# calculate the total loss value.
+loss_type = "bce"
 # Batch size value
 batch_size_value = 6
 # Optimizer to use. Posible values: "sgd" or "adam"
@@ -265,11 +268,11 @@ if custom_da == False:
     print("Keras DA selected")
 
     # Keras Data Augmentation
-    train_generator, val_generator, \                                           
-    X_test_augmented, Y_test_augmented, \                                       
-    W_test_augmented, X_complete_aug, \                                         
-    Y_complete_aug, W_complete_aug, \                                           
-    n_train_samples, n_val_samples, \                                           
+    train_generator, val_generator, \
+    X_test_augmented, Y_test_augmented, \
+    W_test_augmented, X_complete_aug, \
+    Y_complete_aug, W_complete_aug, \
+    n_train_samples, n_val_samples, \
     n_test_samples  = keras_da_generator(                                       
         ld_img_from_disk=True, data_paths=data_paths,                           
         target_size=(img_train_shape[0], img_train_shape[1]),                   
@@ -393,8 +396,9 @@ bin_preds_test = (preds_test > 0.5).astype(np.uint8)
 # Per image without overlap
 score[1] = jaccard_index_numpy(Y_test, bin_preds_test)
 voc = voc_calculation(Y_test, bin_preds_test, score[1])
-det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
-                      det_eval_path, det_bin, n_dig, job_id)
+#det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
+#                      det_eval_path, det_bin, n_dig, job_id)
+det = -1
 
 print("Saving predicted images . . .")
 save_img(Y=bin_preds_test, mask_dir=result_bin_dir, prefix="test_out_bin")
@@ -441,11 +445,13 @@ if loss_type == "w_bce":
     W_complete_aug.reset()
 
 print("Calculate metrics for 50% overlap images . . .")
-jac_per_img_50ov = jaccard_index_numpy(Y_test, Y_test_50ov)
-voc_per_img_50ov = voc_calculation(Y_test, Y_test_50ov, jac_per_img_50ov)
-det_per_img_50ov = DET_calculation(Y_test, Y_test_50ov, det_eval_ge_path,
-                                   det_eval_path, det_bin, n_dig, job_id)
-
+jac_per_img_50ov = jaccard_index_numpy(
+    Y_test, (Y_test_50ov > 0.5).astype(np.uint8))
+voc_per_img_50ov = voc_calculation(
+    Y_test, (Y_test_50ov > 0.5).astype(np.uint8), jac_per_img_50ov)
+#det_per_img_50ov = DET_calculation(
+#   Y_test, (Y_test_50ov > 0.5).astype(np.uint8), det_eval_ge_path,
+#   det_eval_path, det_bin, n_dig, job_id)
 det_per_img_50ov = -1
 
 del Y_test_50ov
@@ -488,7 +494,6 @@ if post_process == True:
                 nb_classes=1, pred_func=(
                     lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
         else:
-            m = maps[j]
             predictions_smooth = predict_img_with_overlap_weighted(
                 images[cont], masks[cont], maps[cont], batch_size_value,
                 window_size=img_train_shape[0], subdivisions=2, nb_classes=1, 
@@ -509,8 +514,8 @@ if post_process == True:
     print("Calculate metrics . . .")
     smooth_score = jaccard_index_numpy(Y_test, Y_test_smooth)
     smooth_voc = voc_calculation(Y_test, Y_test_smooth, smooth_score)
-    smooth_det = DET_calculation(Y_test, Y_test_smooth, det_eval_ge_path,
-                                 det_eval_post_path, det_bin, n_dig, job_id)
+#    smooth_det = DET_calculation(Y_test, Y_test_smooth, det_eval_ge_path,
+#                                 det_eval_post_path, det_bin, n_dig, job_id)
 
 if post_process == True:
     print("2) Z-FILTERING")
@@ -524,8 +529,8 @@ if post_process == True:
     print("Calculate metrics for the Z-filtered data . . .")
     zfil_score = jaccard_index_numpy(Y_test, zfil_preds_test)
     zfil_voc = voc_calculation(Y_test, zfil_preds_test, zfil_score)
-    zfil_det = DET_calculation(Y_test, zfil_preds_test, det_eval_ge_path,
-                               det_eval_post_path, det_bin, n_dig, job_id)
+#    zfil_det = DET_calculation(Y_test, zfil_preds_test, det_eval_ge_path,
+#                               det_eval_post_path, det_bin, n_dig, job_id)
 
     print("Applying Z-filter to the smoothed data . . .")
     smooth_zfil_preds_test = calculate_z_filtering(Y_test_smooth)
@@ -538,9 +543,9 @@ if post_process == True:
     smo_zfil_score = jaccard_index_numpy(Y_test, smooth_zfil_preds_test)
     smo_zfil_voc = voc_calculation(Y_test, smooth_zfil_preds_test,
                                    smo_zfil_score)
-    smo_zfil_det = DET_calculation(Y_test, smooth_zfil_preds_test,
-                                   det_eval_ge_path, det_eval_post_path,
-                                   det_bin, n_dig, job_id)
+#    smo_zfil_det = DET_calculation(Y_test, smooth_zfil_preds_test,
+#                                   det_eval_ge_path, det_eval_post_path,
+#                                   det_bin, n_dig, job_id)
 
 del Y_test
 print("Finished post-processing!") 
@@ -600,4 +605,4 @@ if post_process == True:
     print("Post-process: SMOOTH + Z-filtering - VOC: {}".format(smo_zfil_voc))
     print("Post-process: SMOOTH + Z-filtering - DET: {}".format(smo_zfil_det))
 
-print("FINISHED JOB " + job_file + " !!")
+print("FINISHED JOB {} !!".format(job_file))
