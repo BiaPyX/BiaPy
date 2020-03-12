@@ -722,7 +722,7 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
     Y_datagen_test = kerasDA(rescale=1./255)                                 
     if ld_img_from_disk == True:
         complete_datagen = kerasDA()                                 
-        complete_mask_datagen = kerasDA()                                 
+        complete_mask_datagen = kerasDA(rescale=1./255)                                 
     if val == True:
         X_datagen_val = kerasDA()                                                   
         Y_datagen_val = kerasDA(rescale=1./255)                                                   
