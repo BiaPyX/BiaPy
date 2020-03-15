@@ -174,7 +174,7 @@ h5_dir = 'h5_files'
 loss_type = "bce"
 # Batch size value
 batch_size_value = 6
-# Optimizer to use. Posible values: "sgd" or "adam"
+# Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "sgd"
 # Learning rate used by the optimization method
 learning_rate_value = 0.001

@@ -248,7 +248,7 @@ h5_dir = 'h5_files'
 loss_type = "bce"
 # Batch size value
 batch_size_value = 6
-# Optimizer to use. Posible values: "sgd" or "adam"
+# Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "sgd"
 # Learning rate used by the optimization method
 learning_rate_value = 0.001
@@ -676,9 +676,9 @@ if random_crops_in_DA == False:
         
             print("Calculate metrics for 50% overlap images . . .")
             jac_per_img_50ov = jaccard_index_numpy(
-                Y_test, (Y_test_50ov > 0.5).astype(np.float32)
+                Y_test, (Y_test_50ov > 0.5).astype(np.float32))
             voc_per_img_50ov = voc_calculation(
-                Y_test, (Y_test_50ov > 0.5).astype(np.float32) jac_per_img_50ov)
+                Y_test, (Y_test_50ov > 0.5).astype(np.float32), jac_per_img_50ov)
             det_per_img_50ov = DET_calculation(
                 Y_test, Y_test_50ov, det_eval_ge_path, det_eval_path, det_bin, 
                 n_dig, job_id)
