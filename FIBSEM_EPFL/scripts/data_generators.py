@@ -366,8 +366,9 @@ class ImageDataGenerator(keras.utils.Sequence):
 
     def get_transformed_samples(self, num_examples, save_to_dir=False, 
                                 out_dir='aug', job_id="none_job_id", 
-                                save_prefix=None, original_elastic=True, 
-                                random_images=True, force_full_images=False):
+                                save_prefix=None, train=True, 
+                                original_elastic=True, random_images=True, 
+                                force_full_images=False):
         """Apply selected transformations to a defined number of images from
            the dataset. 
             
@@ -387,6 +388,10 @@ class ImageDataGenerator(keras.utils.Sequence):
 
                 save_prefix (str, optional): prefix to add to the generated 
                 examples' name. 
+
+                train (bool, optional): flag to avoid drawing a grid on the 
+                generated images. This should be set when the samples will be
+                used for training.
 
                 original_elastic (bool, optional): to save also the original
                 images when an elastic transformation is performed.
@@ -429,7 +434,9 @@ class ImageDataGenerator(keras.utils.Sequence):
             out_dir = os.path.join(out_dir, job_id) 
             if not os.path.exists(out_dir):                              
                 os.makedirs(out_dir)
-    
+   
+        grid = False if train == True else True
+                 
         # Generate the examples 
         print("0) Creating the examples of data augmentation . . .")
         for i in tqdm(range(0,num_examples)):
@@ -451,7 +458,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                 batch_y[i] = self.Y[pos]
 
             batch_x[i], batch_y[i], t_str = self.apply_transform(
-                batch_x[i], batch_y[i], grid=True)
+                batch_x[i], batch_y[i], grid=grid)
 
             # Save transformed images
             if save_to_dir == True:    

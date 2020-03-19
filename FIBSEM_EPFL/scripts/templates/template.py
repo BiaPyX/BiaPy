@@ -538,7 +538,8 @@ else:
     # Generate examples of data augmentation                                    
     if aug_examples == True:                                                    
         train_generator.get_transformed_samples(
-            10, save_to_dir=True, job_id=os.path.join(job_id, test_id))
+            10, save_to_dir=True, train=False, 
+            job_id=os.path.join(job_id, test_id))
                                                                                 
 if random_crops_in_DA == True:
     img_width = crop_shape[0]
