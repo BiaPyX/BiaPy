@@ -43,6 +43,7 @@ from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap
 from skimage.segmentation import clear_border
+from keras.utils.vis_utils import plot_model
 
 
 ##########################
@@ -135,7 +136,7 @@ random_subvolumes_in_DA = False
 ### Load previously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
-load_previous_weights = True
+load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = job_id
 # Flag to activate the fine tunning
@@ -201,7 +202,7 @@ smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
 # folder pointed by "base_work_dir" variable 
-char_dir = 'charts'
+char_dir = os.path.join('charts', job_id)
 
 
 #####################
@@ -270,7 +271,10 @@ model = U_Net_3D(img_3d_desired_shape, numInitChannels=num_init_channels,
                  fixed_dropout=fixed_dropout_value,
                  optimizer=optimizer, lr=learning_rate_value)
 
+# Check the network created
 model.summary()
+model_name = os.path.join(char_dir, "model_plot_" + job_file + ".png")
+plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
     earlystopper = EarlyStopping(patience=patience, verbose=1, 
