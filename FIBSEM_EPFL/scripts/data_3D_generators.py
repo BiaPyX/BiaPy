@@ -71,13 +71,13 @@ class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
                                  "multiple of the requested dimension %s." 
                                  % (o_dim_vol, dim))
 
-            print("The number of data per epoch to operate with must be near {} "
-                  "in a {} volume").format(num_data_per_epoch, o_dim_vol))
+            print("The number of data per epoch to operate with must be near {}"
+                  "in a {} volume".format(num_data_per_epoch, o_dim_vol))
 
             stacks_in_z = int(np.floor(o_dim_vol[0]/dim[2]))
             num_volumes = round(num_data_per_epoch/(stacks_in_z*dim[0]*dim[1]*dim[2]))
 
-            print("As the stack shape is {}, the number of stacks that covers "
+            print("As the stack shape is {}, the number of stacks that covers"
                   "the maximun depth of the original volumen is {}"\
                   .format(dim, stacks_in_z))
             print("The number of full depth stacks to process per epoch is {}"\
@@ -273,11 +273,8 @@ class VoxelDataGenerator(keras.utils.Sequence):
         if shift_range < 0 or shift_range > 1:
             raise ValueError("'shift_range' must be a float between 0 and 1")
 
-        self.X = X                                                         
-        if np.max(Y) > 1:
-            self.Y = Y/255
-        else:
-            self.Y = Y
+        self.X = X/255 if np.max(X) > 1 else X
+        self.Y = Y/255 if np.max(Y) > 1 else Y
         self.random_subvolumes_in_DA = random_subvolumes_in_DA
         self.seed = seed
         self.shuffle_each_epoch = shuffle_each_epoch
@@ -431,3 +428,18 @@ class VoxelDataGenerator(keras.utils.Sequence):
 
         return trans_image, trans_mask
 
+
+    def get_transformed_samples(num_examples, random_images=True):
+
+        sample_x = np.zeros((num_examples, ) +  self.X.shape[1:])
+        sample_y = np.zeros((num_examples, ) +  self.Y.shape[1:])
+
+        # Generate the examples 
+        print("0) Creating the examples of data augmentation . . .")
+        for i in tqdm(range(0,num_examples)):
+            if random_images == True:
+                pos = random.randint(1,self.X.shape[0]-1) 
+            else:
+                pos = cont 
+
+            sample_x[i], sample_y[i] = apply_transform(self.X[pos], self.Y[pos])

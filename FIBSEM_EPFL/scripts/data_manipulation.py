@@ -846,8 +846,7 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
         raise ValueError("'out_dim' must be equal or greater than 'data.shape'")
 
     out_dir = os.path.join(out_dir, job_id)
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
+    os.makedirs(out_dir, exist_ok=True)
 
     # For mask data
     if np.max(data) > 1:

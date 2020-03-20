@@ -78,8 +78,7 @@ def create_plots(results, job_id, test_id, chartOutDir):
 
     # Create the fodler if it does not exist
     chartOutDir = os.path.join(chartOutDir, job_id)
-    if not os.path.exists(chartOutDir):                   
-        os.makedirs(chartOutDir)
+    os.makedirs(chartOutDir, exist_ok=True)
 
     # Loss
     name = job_id + '_' + test_id
@@ -163,10 +162,8 @@ def store_history(results, jac_per_crop, test_score, jac_per_img_50ov, voc,
     # Create folders and construct file names
     csv_file = os.path.join(log_dir, 'formatted', job_file)          
     history_file = os.path.join(log_dir, 'history_of_values', job_file)
-    if not os.path.exists(os.path.join(log_dir, 'formatted')):
-        os.makedirs(os.path.join(log_dir, 'formatted'))
-    if not os.path.exists(os.path.join(log_dir, 'history_of_values')):
-        os.makedirs(os.path.join(log_dir, 'history_of_values'))
+    os.makedirs(os.path.join(log_dir, 'formatted'), exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'history_of_values'), exist_ok=True)
     
     # Store the results as csv
     try:
@@ -335,8 +332,7 @@ def threshold_plots(preds_test, Y_test, o_test_shape, j_score, det_eval_ge_path,
     # For matplotlib errors in display                                          
     os.environ['QT_QPA_PLATFORM']='offscreen'                                   
     
-    if not os.path.exists(char_dir):                                            
-        os.makedirs(char_dir)
+    os.makedirs(char_dir, exist_ok=True)
   
     # Plot Jaccard values   
     plt.clf()
@@ -468,8 +464,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
  
     if X is not None:
         if data_dir is not None:                                                    
-            if not os.path.exists(data_dir):                                        
-                os.makedirs(data_dir)
+            os.makedirs(data_dir, exist_ok=True)
         else:       
             print("Not data_dir provided so no image will be saved!")
             return
@@ -482,8 +477,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
 
     if Y is not None:
         if mask_dir is not None:                                                    
-            if not os.path.exists(mask_dir):                                        
-                os.makedirs(mask_dir)                                               
+            os.makedirs(mask_dir, exist_ok=True)
         else:
             print("Not mask_dir provided so no image will be saved!")
             return

@@ -236,7 +236,7 @@ def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig,
     # created yet
     if not os.path.exists(ge_path):
         print("No ground truth folder detected. Creating it . . .")
-        os.makedirs(ge_path)
+        os.makedirs(ge_path, exist_ok=True)
     
         gt_labels = measure.label(Y_test[:,:,:,0])
         for i in range(0,len(gt_labels)):
@@ -252,8 +252,7 @@ def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig,
   
     # Create results folder 
     res_eval_path = os.path.join(eval_path, job_id + '_RES')
-    if not os.path.exists(res_eval_path):
-        os.makedirs(res_eval_path)
+    os.makedirs(res_eval_path, exist_ok=True)
     
     res_labels = measure.label(preds_test[:,:,:,0])
     for i in range(0,len(res_labels)):

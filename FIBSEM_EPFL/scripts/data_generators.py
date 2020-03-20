@@ -432,8 +432,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                 prefix = str(save_prefix)
     
             out_dir = os.path.join(out_dir, job_id) 
-            if not os.path.exists(out_dir):                              
-                os.makedirs(out_dir)
+            os.makedirs(out_dir, exist_ok=True)
    
         grid = False if train == True else True
                  
@@ -740,8 +739,7 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
     if save_examples == True:
         print("Saving some samples of the train generator . . .")        
         out_dir = os.path.join(out_dir, job_id)
-        if not os.path.exists(out_dir):          
-            os.makedirs(out_dir)
+        os.makedirs(out_dir, exist_ok=True)
 
         if ld_img_from_disk == False:
             i = 0

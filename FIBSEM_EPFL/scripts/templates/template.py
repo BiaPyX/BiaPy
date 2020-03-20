@@ -562,6 +562,7 @@ model = U_Net([img_height, img_width, img_channels],
 
 # Check the network created
 model.summary()
+os.makedirs(char_dir, exist_ok=True)
 model_name = os.path.join(char_dir, "model_plot_" + job_file + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
@@ -569,8 +570,7 @@ if load_previous_weights == False:
     earlystopper = EarlyStopping(patience=patience, verbose=1, 
                                  restore_best_weights=True)
     
-    if not os.path.exists(h5_dir):                                      
-        os.makedirs(h5_dir)
+    os.makedirs(h5_dir, exist_ok=True)
     checkpointer = ModelCheckpoint(
         os.path.join(h5_dir, weight_files_prefix + job_file + '.h5'), verbose=1, 
         save_best_only=True)
@@ -714,8 +714,7 @@ else:
     jac_per_crop = jaccard_index_numpy(ov_Y_test, bin_preds_test)
     
     # Save output images
-    if not os.path.exists(result_dir):
-        os.makedirs(result_dir)
+    os.makedirs(result_dir, exist_ok=True)
     if len(sys.argv) > 1 and test_id == "1":
         print("Saving predicted images . . .")
         save_img(Y=bin_preds_test, mask_dir=result_dir, prefix="test_out_ov_bin")
@@ -772,8 +771,7 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
     # Extract the number of digits to create the image names
     d = len(str(X_test.shape[0]))
 
-    if not os.path.exists(smooth_dir):
-        os.makedirs(smooth_dir)
+    os.makedirs(smooth_dir, exist_ok=True)
 
     print("Smoothing crops . . .")
     for i in tqdm(range(0,len(X_test))):

@@ -273,6 +273,7 @@ model = U_Net_3D(img_3d_desired_shape, numInitChannels=num_init_channels,
 
 # Check the network created
 model.summary()
+os.makedirs(char_dir, exist_ok=True)
 model_name = os.path.join(char_dir, "model_plot_" + job_file + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
@@ -280,8 +281,7 @@ if load_previous_weights == False:
     earlystopper = EarlyStopping(patience=patience, verbose=1, 
                                  restore_best_weights=True)
     
-    if not os.path.exists(h5_dir):                                      
-        os.makedirs(h5_dir)
+    os.makedirs(h5_dir, exist_ok=True)
     checkpointer = ModelCheckpoint(
         os.path.join(h5_dir, weight_files_prefix + job_file + '.h5'),
         verbose=1, save_best_only=True)

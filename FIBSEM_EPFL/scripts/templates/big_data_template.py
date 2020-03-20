@@ -302,6 +302,7 @@ model = U_Net(img_train_shape, numInitChannels=num_init_channels,
               fine_tunning=fine_tunning)
 # Check the network created
 model.summary()
+os.makedirs(char_dir, exist_ok=True)
 model_name = os.path.join(char_dir, "model_plot_" + job_file + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
@@ -309,8 +310,7 @@ if load_previous_weights == False:
     earlystopper = EarlyStopping(patience=patience, verbose=1,
                                  restore_best_weights=True)
 
-    if not os.path.exists(h5_dir):
-        os.makedirs(h5_dir)
+    os.makedirs(h5_dir, exist_ok=True)
     checkpointer = ModelCheckpoint(
         os.path.join(h5_dir, weight_files_prefix + job_file + '.h5'),
         verbose=1, save_best_only=True)
@@ -480,8 +480,7 @@ if post_process == True:
     # Extract the number of digits to create the image names
     d = len(str(X_complete_aug.n))
 
-    if not os.path.exists(smooth_dir):
-        os.makedirs(smooth_dir)
+    os.makedirs(smooth_dir, exist_ok=True)
 
     print("Smoothing crops . . .")
     cont = 0                                                                    
