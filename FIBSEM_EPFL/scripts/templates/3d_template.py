@@ -272,7 +272,7 @@ model = U_Net_3D(img_3d_desired_shape, numInitChannels=num_init_channels,
                  optimizer=optimizer, lr=learning_rate_value)
 
 # Check the network created
-model.summary()
+model.summary(line_length=150)
 os.makedirs(char_dir, exist_ok=True)
 model_name = os.path.join(char_dir, "model_plot_" + job_file + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
