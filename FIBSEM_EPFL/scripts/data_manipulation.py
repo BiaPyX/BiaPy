@@ -1000,3 +1000,44 @@ def prepare_subvolume_data(X, Y, shape=(82, 256, 256, 1)):
                               k+shape[0]-1))
 
     return X_prep, Y_prep
+
+
+def img_to_onehot_encoding(img, num_classes=2):
+    """Converts image given into one-hot encode format.
+       Args:
+            img (Numpy 4D array): data. E.g. (z, x, y, channels).
+            
+            num_classes (int, optional): number of classes to distinguish.
+       
+       Return: 
+            one_hot_labels (Numpy 4D array): data one-hot encoded. 
+            E.g. (z, x, y, num_classes)
+
+    """
+
+    shape = img.shape[:3]+(num_classes,)
+    encoded_image = np.zeros(shape, dtype=np.int8)
+
+    for i in range(num_classes):
+        encoded_image[:,:,:,i] = np.all(img.reshape((-1,1)) == i, axis=1).reshape(shape[:3])
+
+    return encoded_image
+
+
+def binary_onehot_encoding_to_img(one_hot):
+    """Converts given binary one-hot encoded image into its original format.
+       Args:
+            one_hot (Numpy 4D array): data. E.g. (z, x, y, num_classes).
+
+       Return:
+            single_layer (Numpy 3D array): data one-hot encoded.
+            E.g. (z, x, y, 1)
+
+    """
+
+    single_layer = np.argmax(one_hot, axis=-1)
+    return np.uint8(single_layer)
+
+
+
+
