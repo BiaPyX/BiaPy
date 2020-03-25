@@ -469,11 +469,19 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
             print("Not data_dir provided so no image will be saved!")
             return
 
-        d = len(str(X.shape[0]))
-        for i in tqdm(range(0, X.shape[0])):
-            im = Image.fromarray(X[i,:,:,0])         
-            im = im.convert('L')                                                
-            im.save(os.path.join(data_dir, p_x + str(i).zfill(d) + ".png")) 
+        if X.ndim > 4:
+            d = len(str(X.shape[0]*X.shape[1]))
+            for i in tqdm(range(X.shape[0])):
+                for j in range(X.shape[1]):
+                    im = Image.fromarray(X[i,j,:,:,0])
+                    im = im.convert('L')
+                    im.save(os.path.join(data_dir, p_x + str(i).zfill(d) + ".png"))
+        else:
+            d = len(str(X.shape[0]))
+            for i in tqdm(range(X.shape[0])):
+                im = Image.fromarray(X[i,:,:,0])         
+                im = im.convert('L')                                                
+                im.save(os.path.join(data_dir, p_x + str(i).zfill(d) + ".png")) 
 
     if Y is not None:
         if mask_dir is not None:                                                    
@@ -481,12 +489,21 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
         else:
             print("Not mask_dir provided so no image will be saved!")
             return
-
-        d = len(str(Y.shape[0]))
-        for i in tqdm(range(0, Y.shape[0])):
-            im = Image.fromarray(Y[i,:,:,0]*255)         
-            im = im.convert('L')                                                
-            im.save(os.path.join(mask_dir, p_y + str(i).zfill(d) + ".png")) 
+        if Y.ndim > 4:
+            c = 0
+            d = len(str(Y.shape[0]*Y.shape[1]))
+            for i in tqdm(range(Y.shape[0])):
+                for j in range(Y.shape[1]):
+                    im = Image.fromarray(Y[i,j,:,:,0]*255)
+                    im = im.convert('L')
+                    im.save(os.path.join(mask_dir, p_x + str(c).zfill(d) + ".png"))
+                    c += 1
+        else:
+            d = len(str(Y.shape[0]))
+            for i in tqdm(range(0, Y.shape[0])):
+                im = Image.fromarray(Y[i,:,:,0]*255)         
+                im = im.convert('L')                                                
+                im.save(os.path.join(mask_dir, p_y + str(i).zfill(d) + ".png")) 
        
 
 def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
