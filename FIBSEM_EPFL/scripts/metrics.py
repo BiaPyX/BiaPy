@@ -62,6 +62,38 @@ def jaccard_index(y_true, y_pred, t=0.5):
     return jac
 
 
+def jaccard_index_softmax(y_true, y_pred, t=0.5):
+    """Define Jaccard index.
+
+       Args:
+            y_true (tensor): ground truth masks.
+
+            y_pred (tensor): predicted masks.
+
+            t (float, optional): threshold to be applied.
+
+       Return:
+            jac (tensor): Jaccard index value
+    """
+    y_pred = tf.to_int32(y_pred > t)
+    y_pred_ = tf.identity(y_pred)
+    y_pred_ = tf.math.argmax(y_pred_, axis=-1)    
+    
+    y_true = tf.cast(y_true, dtype=tf.int32)
+    y_true_ = tf.identity(y_true)
+    y_true_ = tf.math.argmax(y_true_, axis=-1)
+
+    TP = tf.count_nonzero(y_pred_ * y_true_)
+    FP = tf.count_nonzero(y_pred_ * (y_true_ - 1))
+    FN = tf.count_nonzero((y_pred_ - 1) * y_true_)
+
+    jac = tf.cond(tf.greater((TP + FP + FN), 0), lambda: TP / (TP + FP + FN),
+                  lambda: K.cast(0.000, dtype='float64'))
+
+    return jac
+
+
+
 def jaccard_loss(y_true, y_pred):
     """Define Jaccard index.
 
