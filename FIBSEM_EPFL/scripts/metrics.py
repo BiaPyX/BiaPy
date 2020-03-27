@@ -13,11 +13,13 @@ def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.
 
        Args:
-            y_true (4D Numpy array): ground truth masks.
-            E.g. (image_number, x, y, channels).
+            y_true (N dim Numpy array): ground truth masks.
+            E.g. (image_number, x, y, channels) for 2D images or 
+            (volume_number, z, x, y, channels) for 3D volumes.
 
-            y_pred (4D Numpy array): predicted masks.
-            E.g. (image_number, x, y, channels).
+            y_pred (N dim Numpy array): predicted masks.
+            E.g. (image_number, x, y, channels) for 2D images or
+            (volume_number, z, x, y, channels) for 3D volumes.
 
        Return:
             jac (float): Jaccard index value

@@ -8,6 +8,8 @@ from skimage.io import imread
 from util import array_to_img, img_to_array
 from scipy.ndimage import rotate
 from scipy.ndimage.interpolation import shift
+from data_manipulation import img_to_onehot_encoding
+
 
 class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
     """Custom ImageDataGenerator for 3D images loaded from the disk.
@@ -232,7 +234,7 @@ class VoxelDataGenerator(keras.utils.Sequence):
 
     def __init__(self, X, Y, random_subvolumes_in_DA=True, seed=42, 
                  shuffle_each_epoch=False, batch_size=32, da=True, 
-                 rotation_range=180, flip=True, shift_range=0):
+                 rotation_range=180, flip=True, shift_range=0, softmax_out=False):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
@@ -275,6 +277,7 @@ class VoxelDataGenerator(keras.utils.Sequence):
 
         self.X = X/255 if np.max(X) > 1 else X
         self.Y = Y/255 if np.max(Y) > 1 else Y
+        self.softmax_out = softmax_out
         self.random_subvolumes_in_DA = random_subvolumes_in_DA
         self.seed = seed
         self.shuffle_each_epoch = shuffle_each_epoch
@@ -314,15 +317,22 @@ class VoxelDataGenerator(keras.utils.Sequence):
                 # Random crop here
                 print("Random crop here")
             else:
-                im = self.X[j]  
-                mask = self.Y[j]
+                im = np.copy(self.X[j])
+                mask = np.copy(self.Y[j])
 
             if self.da == False:
                 batch_x[i] = im
                 batch_y[i] = mask
             else:
                 batch_x[i], batch_y[i] = self.apply_transform(im, mask)
-                                                                     
+
+        if self.softmax_out == True:
+            batch_y_ = np.zeros((self.batch_size, ) + self.Y.shape[1:4] + (2,))
+            for i in range(self.batch_size):
+                batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[i]))
+
+            batch_y = batch_y_
+
         self.total_batches_seen += 1
         return batch_x, batch_y    
 
