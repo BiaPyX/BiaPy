@@ -475,7 +475,8 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
                 for j in range(X.shape[1]):
                     im = Image.fromarray(X[i,j,:,:,0])
                     im = im.convert('L')
-                    im.save(os.path.join(data_dir, p_x + str(i).zfill(d) + ".png"))
+                    im.save(os.path.join(data_dir, p_x + str(i).zfill(d) + "_" \
+                                         + str(j).zfill(d) + ".png"))
         else:
             d = len(str(X.shape[0]))
             for i in tqdm(range(X.shape[0])):
@@ -490,14 +491,13 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
             print("Not mask_dir provided so no image will be saved!")
             return
         if Y.ndim > 4:
-            c = 0
             d = len(str(Y.shape[0]*Y.shape[1]))
             for i in tqdm(range(Y.shape[0])):
                 for j in range(Y.shape[1]):
                     im = Image.fromarray(Y[i,j,:,:,0]*255)
                     im = im.convert('L')
-                    im.save(os.path.join(mask_dir, p_x + str(c).zfill(d) + ".png"))
-                    c += 1
+                    im.save(os.path.join(mask_dir, p_x + str(i).zfill(d) + "_" \
+                                         + str(j).zfill(d) + ".png"))
         else:
             d = len(str(Y.shape[0]))
             for i in tqdm(range(0, Y.shape[0])):
