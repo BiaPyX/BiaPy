@@ -682,11 +682,24 @@ def crop_3D_data_with_overlap(data, data_mask, vol_shape, overlap_z=0.5):
                         data[z*step_z:(z*step_z)+vol_shape[0],
                              (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
                              (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
-                    
+
                     cropped_data_mask[c,0:r_div-(f_z*step_z)] = \
                         data_mask[z*step_z:(z*step_z)+vol_shape[0],
                                   (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
                                   (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
+
+
+                    for s in range(vol_shape[0]-(r_div-(f_z*step_z))):
+                        cropped_data[c,(r_div-(f_z*step_z))+s:vol_shape[0]]  = \
+                            data[data.shape[0]-1,
+                                 (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
+                                 (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
+
+                        cropped_data_mask[c,(r_div-(f_z*step_z))+s:vol_shape[0]] = \
+                            data_mask[data.shape[0]-1,
+                                      (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
+                                      (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
+
                 c += 1
 
         # To adjust the final volumes in z
