@@ -121,8 +121,6 @@ def U_Net_3D_Xiao(image_shape, activation='elu', numInitChannels=16,
         
     model.compile(optimizer=opt, loss=custom_loss(a1, a2),
                   metrics=[jaccard_index_softmax])
-    #model.compile(optimizer=opt, loss="categorical_crossentropy",
-    #              metrics=[jaccard_index_softmax])
 
     return model
 
