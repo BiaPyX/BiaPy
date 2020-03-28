@@ -332,7 +332,7 @@ class VoxelDataGenerator(keras.utils.Sequence):
                 batch_x[i] = im
                 batch_y[i] = mask
             else:
-                batch_x[i], batch_y[i] = self.apply_transform(im, mask)
+                batch_x[i], batch_y[i], _ = self.apply_transform(im, mask)
 
         if self.softmax_out == True:
             batch_y_ = np.zeros((self.batch_size, ) + self.Y.shape[1:4] + (2,))
@@ -372,6 +372,7 @@ class VoxelDataGenerator(keras.utils.Sequence):
             
         trans_image = np.copy(image)
         trans_mask = np.copy(mask)
+        transform_string = ''
 
         # [0-0.25): y axis flip
         # [0.25-0.5): z axis flip
@@ -383,16 +384,19 @@ class VoxelDataGenerator(keras.utils.Sequence):
         if self.flip == True and prob < 0.25:
             trans_image = np.flip(trans_image, 0)
             trans_mask = np.flip(trans_mask, 0)
+            transform_string = '_yf'
         # z axis flip
         elif self.flip == True and 0.25 <= prob < 0.5:
             trans_image = np.flip(trans_image, 1)
             trans_mask = np.flip(trans_mask, 1)
+            transform_string = '_zf'
         # y and z axis flip
         elif self.flip == True and 0.5 <= prob < 0.75:
             trans_image = np.flip(trans_image, 0)                               
             trans_mask = np.flip(trans_mask, 0)
             trans_image = np.flip(trans_image, 1)                               
             trans_mask = np.flip(trans_mask, 1)
+            transform_string = '_yzf'
        
         if self.square_rotations == False:
             # [0-0.25): x axis rotation
@@ -407,18 +411,21 @@ class VoxelDataGenerator(keras.utils.Sequence):
                        reshape=False) 
                 rotate(trans_mask, axes=(2, 3), angle=theta, mode='reflect', 
                        reshape=False)
+                transform_string += '_xr' + str(theta)
             # y axis rotation
             elif self.rotation_range != 0 and 0.25 <= prob < 0.5:
                 rotate(trans_image, axes=(3, 1), angle=theta, mode='reflect', 
                        reshape=False)
                 rotate(trans_mask, axes=(3, 1), angle=theta, mode='reflect', 
                        reshape=False)
+                transform_string += '_yr' + str(theta)
             # z axis rotation
             elif self.rotation_range != 0 and 0.5 <= prob < 0.75:
                 rotate(trans_image, axes=(1, 2), angle=theta, mode='reflect', 
                        reshape=False)
                 rotate(trans_mask, axes=(1, 2), angle=theta, mode='reflect', 
                        reshape=False)
+                transform_string += '_zr' + str(theta)
         else:
             # [0-0.25): 90º rotation
             # [0.25-0.5): -90º rotation
@@ -432,18 +439,21 @@ class VoxelDataGenerator(keras.utils.Sequence):
                        reshape=False)
                 rotate(trans_mask, axes=(3, 1), angle=90, mode='reflect',
                        reshape=False)
+                transform_string += '_yr90'
             # -90º rotation on y axis
             elif 0.25 <= prob < 0.5:
                 rotate(trans_image, axes=(3, 1), angle=-90, mode='reflect',
                        reshape=False)
                 rotate(trans_mask, axes=(3, 1), angle=-90, mode='reflect',
                        reshape=False)
+                transform_string += '_yr-90'
             # 180º rotation on y axis
             elif 0.5 <= prob < 0.75:
                 rotate(trans_image, axes=(3, 1), angle=180, mode='reflect',
                        reshape=False)
                 rotate(trans_mask, axes=(3, 1), angle=180, mode='reflect',
                        reshape=False)
+                transform_string += '_yr180'
 
         # [0-0.25): x axis shift 
         # [0.25-0.5): y axis shift
@@ -456,23 +466,29 @@ class VoxelDataGenerator(keras.utils.Sequence):
             s[0] = math.floor(self.shift_range * trans_image.shape[0])
             shift(trans_image, shift=s, mode='reflect')
             shift(trans_mask, shift=s, mode='reflect')
+            transform_string += '_xs' 
         # y axis shift 
         elif self.shift_range != 0 and 0.25 <= prob < 0.5:                   
             s = [1] * trans_image.ndim                                          
             s[1] = math.floor(self.shift_range * trans_image.shape[1])          
             shift(trans_image, shift=s, mode='reflect')
             shift(trans_mask, shift=s, mode='reflect')
+            transform_string += '_ys'
         # z axis shift
         elif self.shift_range != 0 and 0.5 <= prob < 0.75:                   
             s = [2] * trans_image.ndim                                          
             s[2] = math.floor(self.shift_range * trans_image.shape[2])          
             shift(trans_image, shift=s, mode='reflect')
             shift(trans_mask, shift=s, mode='reflect')
+            transform_string += '_zs'
 
-        return trans_image, trans_mask
+        if transform_string == '':
+            transform_string = '_none'
+
+        return trans_image, trans_mask, transform_string
 
 
-    def get_transformed_samples(num_examples, random_images=True, 
+    def get_transformed_samples(self, num_examples, random_images=True, 
                                 save_to_dir=True, out_dir='aug_3d'):
         """Apply selected transformations to a defined number of images from
            the dataset. 
@@ -501,18 +517,21 @@ class VoxelDataGenerator(keras.utils.Sequence):
             if random_images == True:
                 pos = random.randint(1,self.X.shape[0]-1) 
             else:
-                pos = cont 
+                pos = i
 
             if self.da == False:
                 sample_x[i] = self.X[pos]
                 sample_y[i] = self.Y[pos]
+                t_str = ''
             else:
-                sample_x[i], sample_y[i] = self.apply_transform(self.X[pos], 
-                                                                self.Y[pos])
+                sample_x[i], sample_y[i], t_str = \
+                    self.apply_transform(self.X[pos], self.Y[pos])
 
-        # Save transformed 3d volumes 
-        if save_to_dir == True:
-            save_img(X=sample_x, data_dir=out_dir, Y=sample_y, 
-                     mask_dir=out_dir, prefix="aug_3d_smp")
+            # Save transformed 3d volumes 
+            if save_to_dir == True:
+                save_img(X=sample_x[i]*255, data_dir=out_dir, Y=sample_y[i], 
+                         mask_dir=out_dir, prefix="aug_3d_smp_" + str(pos) + t_str)
 
         return sample_x, sample_y
+
+

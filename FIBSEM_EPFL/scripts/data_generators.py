@@ -442,7 +442,7 @@ class ImageDataGenerator(keras.utils.Sequence):
             if random_images == True:
                 pos = random.randint(1,self.X.shape[0]-1) 
             else:
-                pos = cont 
+                pos = i
 
             # Apply crops if selected
             if self.random_crops_in_DA == True and force_full_images == False:
