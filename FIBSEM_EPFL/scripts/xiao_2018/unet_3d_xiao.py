@@ -6,14 +6,13 @@ from keras.layers.convolutional import Conv3D, Conv3DTranspose
 from keras.layers.pooling import MaxPooling3D
 from keras.layers.merge import concatenate
 from keras.layers.normalization import BatchNormalization
+from keras.regularizers import l2
 import keras 
 from metrics import binary_crossentropy_weighted, jaccard_index, jaccard_index_softmax
 from loss import custom_loss
 
 
-def U_Net_3D_Xiao(image_shape, activation='elu', numInitChannels=16, 
-             fixed_dropout=0.0, spatial_dropout=False, optimizer="sgd", 
-             weighted_loss=False, lr=0.0001, num_classes=2):
+def U_Net_3D_Xiao(image_shape, optimizer="adam", lr=0.0001, num_classes=2):
     """Create 3D U-Net.
 
        Args:
@@ -78,7 +77,8 @@ def U_Net_3D_Xiao(image_shape, activation='elu', numInitChannels=16,
     #a1 = UpSampling3D((1, 2, 2)) (x)    
     a1 = UpSampling3D((1, 2, 2)) (x)    
     a1 = Conv3D(num_classes, (1, 1, 1), activation=None,
-               kernel_initializer='he_normal', padding='same')(a1)
+                kernel_initializer='he_normal', padding='same',
+                kernel_regularizer=l2(0.01))(a1)
     a1 = Activation('softmax')(a1)
 
 
@@ -98,14 +98,15 @@ def U_Net_3D_Xiao(image_shape, activation='elu', numInitChannels=16,
     # Auxiliary ouput 2
     #a2 = UpSampling3D((1, 2, 2)) (x)
     a2 = Conv3D(num_classes, (1, 1, 1), activation=None,
-               kernel_initializer='he_normal', padding='same')(x)
+                kernel_initializer='he_normal', padding='same',
+                kernel_regularizer=l2(0.01))(x)
     a2 = Activation('softmax')(a2)
 
 
     x = Add()([s1, x])
     x = residual_block(x, 32)
     x = Conv3D(3, (3, 3, 3), activation=None, kernel_initializer='he_normal', 
-               padding='same')(x)
+               padding='same', kernel_regularizer=l2(0.01))(x)
     x = BatchNormalization()(x)
     x = ELU() (x)
 

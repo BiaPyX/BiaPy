@@ -12,9 +12,7 @@ def custom_loss(aux1, aux2):
         w2 = 0.3
         L_x_w_aux2 = tf.keras.backend.categorical_crossentropy(aux2,y_pred)
               
-        regu = 0
-
-        total_loss =  L_x_w + w1*L_x_w_aux1 + w2*L_x_w_aux2 + regu
+        total_loss =  L_x_w + w1*L_x_w_aux1 + w2*L_x_w_aux2
 
         return total_loss
     
