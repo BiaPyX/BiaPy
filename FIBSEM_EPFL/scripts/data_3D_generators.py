@@ -374,29 +374,27 @@ class VoxelDataGenerator(keras.utils.Sequence):
         trans_mask = np.copy(mask)
         transform_string = ''
 
-        # [0-0.25): y axis flip
-        # [0.25-0.5): z axis flip
-        # [0.5-0.75): y and z axis flip
+        # [0-0.25): x axis flip
+        # [0.25-0.5): y axis flip
+        # [0.5-0.75): z axis flip
         # [0.75-1]: nothing
         #
-        # y axis flip
+        # x axis flip
         prob = random.uniform(0, 1)
         if self.flip == True and prob < 0.25:
             trans_image = np.flip(trans_image, 0)
             trans_mask = np.flip(trans_mask, 0)
-            transform_string = '_yf'
-        # z axis flip
+            transform_string = '_xf'
+        # y axis flip
         elif self.flip == True and 0.25 <= prob < 0.5:
             trans_image = np.flip(trans_image, 1)
             trans_mask = np.flip(trans_mask, 1)
-            transform_string = '_zf'
-        # y and z axis flip
+            transform_string = '_yf'
+        # z axis flip
         elif self.flip == True and 0.5 <= prob < 0.75:
-            trans_image = np.flip(trans_image, 0)                               
-            trans_mask = np.flip(trans_mask, 0)
-            trans_image = np.flip(trans_image, 1)                               
-            trans_mask = np.flip(trans_mask, 1)
-            transform_string = '_yzf'
+            trans_image = np.flip(trans_image, 2)                               
+            trans_mask = np.flip(trans_mask, 2)
+            transform_string = '_zf'
        
         if self.square_rotations == False:
             # [0-0.25): x axis rotation

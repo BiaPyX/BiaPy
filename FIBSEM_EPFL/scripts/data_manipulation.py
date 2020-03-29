@@ -643,9 +643,9 @@ def crop_3D_data_with_overlap(data, data_mask, vol_shape, overlap_z=0.5):
           .format(vols_per_z, vols_per_x, vols_per_y))
     
     if r_div != 0:
-        print("WARNING: The last volumes {} in z will be filled by zeros to "
-              "complete the volume with the shape {} provided, so be careful and"
-              " resize the data before run the metrics on it!"
+        print("WARNING: The last volumes {} in z will be filled with the last "
+              "image to complete the volume with the shape {} provided, so be "
+              "careful and resize the data before run the metrics on it!"
               .format(r_div, vol_shape[0]))
 
     total_vol = vols_per_z*vols_per_x*vols_per_y
@@ -990,8 +990,8 @@ def merge_3D_data_with_overlap(data, data_mask, orig_vol_shape, overlap_z=0.5):
     r_div = int(d_num-(orig_vol_shape[0]%(d_num*overlap_z)))
     if r_div != 0:
         print("WARNING: Is assumed that the last {} slices in z have been filled"
-              " by zeros to complete the volume, so they will be discarded"
-              .format(r_div))
+              " with the last image to complete the volume, so they will be "
+              "discarded".format(r_div))
 
     # Calculating overlap
     step_z = int(d_num*overlap_z)
