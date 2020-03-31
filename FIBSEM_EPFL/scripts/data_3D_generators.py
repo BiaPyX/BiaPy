@@ -290,8 +290,15 @@ class VoxelDataGenerator(keras.utils.Sequence):
         self.shuffle_each_epoch = shuffle_each_epoch
         self.da = da
         self.batch_size = batch_size
-        self.rotation_range = rotation_range
         self.square_rotations = square_rotations
+        self.rotation_range = rotation_range
+        if X.shape[1]  == X.shape[2] == X.shape[3]:
+            self.is_cube = True
+        else:
+            self.is_cube = False
+            if rotation_range != 0:
+                print("WARNING: As the 3d volume is not a cube the rotation "
+                      "will be only done over z axis")
         self.flip = flip
         self.shift_range = shift_range 
         self.total_batches_seen = 0
@@ -397,33 +404,48 @@ class VoxelDataGenerator(keras.utils.Sequence):
             transform_string = '_zf'
        
         if self.square_rotations == False:
-            # [0-0.25): x axis rotation
-            # [0.25-0.5): y axis rotation
-            # [0.5-0.75): z axis rotation
-            # [0.75-1]: nothing
+            
+            # When is cube:
+            #  [0-0.25): x axis rotation
+            #  [0.25-0.5): y axis rotation
+            #  [0.5-0.75): z axis rotation
+            #  [0.75-1]: nothing
+            #
+            # If it is not a cube
+            #  [0-0.5): z axis rotation
+            #  [0.5-1]: nothing
             prob = random.uniform(0, 1) 
             theta = np.random.uniform(-self.rotation_range, self.rotation_range)
-            # x axis rotation
-            if self.rotation_range != 0 and prob < 0.25:
-                rotate(trans_image, axes=(2, 3), angle=theta, mode='reflect', 
-                       reshape=False) 
-                rotate(trans_mask, axes=(2, 3), angle=theta, mode='reflect', 
-                       reshape=False)
-                transform_string += '_xr' + str(theta)
-            # y axis rotation
-            elif self.rotation_range != 0 and 0.25 <= prob < 0.5:
-                rotate(trans_image, axes=(3, 1), angle=theta, mode='reflect', 
-                       reshape=False)
-                rotate(trans_mask, axes=(3, 1), angle=theta, mode='reflect', 
-                       reshape=False)
-                transform_string += '_yr' + str(theta)
-            # z axis rotation
-            elif self.rotation_range != 0 and 0.5 <= prob < 0.75:
-                rotate(trans_image, axes=(1, 2), angle=theta, mode='reflect', 
-                       reshape=False)
-                rotate(trans_mask, axes=(1, 2), angle=theta, mode='reflect', 
-                       reshape=False)
-                transform_string += '_zr' + str(theta)
+            if self.is_cube == True:
+                # x axis rotation
+                if self.rotation_range != 0 and prob < 0.25:
+                    trans_image = rotate(trans_image, axes=(0, 2), angle=theta, 
+                                         mode='reflect', reshape=False) 
+                    trans_mask = rotate(trans_mask, axes=(0, 2), angle=theta, 
+                                        mode='reflect', reshape=False)
+                    transform_string += '_xr' + str(theta)
+                # y axis rotation
+                elif self.rotation_range != 0 and 0.25 <= prob < 0.5:
+                    trans_image = rotate(trans_image, axes=(0, 1), angle=theta, 
+                                         mode='reflect', reshape=False)
+                    trans_mask = rotate(trans_mask, axes=(0, 1), angle=theta, 
+                                        mode='reflect', reshape=False)
+                    transform_string += '_yr' + str(theta)
+                # z axis rotation
+                elif self.rotation_range != 0 and 0.5 <= prob < 0.75:
+                    trans_image = rotate(trans_image, axes=(1, 2), angle=theta, 
+                                         mode='reflect', reshape=False)
+                    trans_mask = rotate(trans_mask, axes=(1, 2), angle=theta, 
+                                        mode='reflect', reshape=False)
+                    transform_string += '_zr' + str(theta)
+            else:
+                # z axis rotation
+                if self.rotation_range != 0 and prob < 0.5:
+                    trans_image = rotate(trans_image, axes=(1, 2), angle=theta, 
+                                         mode='reflect', reshape=False)
+                    trans_mask = rotate(trans_mask, axes=(1, 2), angle=theta, 
+                                        mode='reflect', reshape=False)
+                    transform_string += '_zr' + str(theta)
         else:
             # [0-0.25): 90º rotation
             # [0.25-0.5): -90º rotation
@@ -431,27 +453,28 @@ class VoxelDataGenerator(keras.utils.Sequence):
             # [0.75-1]: nothing
             prob = random.uniform(0, 1)
             theta = np.random.uniform(-self.rotation_range, self.rotation_range)
-            # 90º rotation on y axis
-            if prob < 0.25:
-                rotate(trans_image, axes=(3, 1), angle=90, mode='reflect',
+            # 0, 2 eje x 
+            # 90º rotation on z axis
+            if prob < 0.25: 
+                trans_image = rotate(trans_image, axes=(1, 2), angle=90,
                        reshape=False)
-                rotate(trans_mask, axes=(3, 1), angle=90, mode='reflect',
+                trans_mask = rotate(trans_mask, axes=(1, 2), angle=90, 
                        reshape=False)
-                transform_string += '_yr90'
-            # -90º rotation on y axis
+                transform_string += '_zr90'
+            # -90º rotation on z axis
             elif 0.25 <= prob < 0.5:
-                rotate(trans_image, axes=(3, 1), angle=-90, mode='reflect',
+                trans_image = rotate(trans_image, axes=(1, 2), angle=-90,
                        reshape=False)
-                rotate(trans_mask, axes=(3, 1), angle=-90, mode='reflect',
+                trans_mask = rotate(trans_mask, axes=(1, 2), angle=-90,
                        reshape=False)
-                transform_string += '_yr-90'
+                transform_string += '_zr-90'
             # 180º rotation on y axis
             elif 0.5 <= prob < 0.75:
-                rotate(trans_image, axes=(3, 1), angle=180, mode='reflect',
+                trans_image = rotate(trans_image, axes=(1, 2), angle=180,
                        reshape=False)
-                rotate(trans_mask, axes=(3, 1), angle=180, mode='reflect',
+                trans_mask = rotate(trans_mask, axes=(1, 2), angle=180, 
                        reshape=False)
-                transform_string += '_yr180'
+                transform_string += '_zr180'
 
         # [0-0.25): x axis shift 
         # [0.25-0.5): y axis shift
