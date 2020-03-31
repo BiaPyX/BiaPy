@@ -12,8 +12,13 @@
 import numpy as np
 import scipy.signal
 from tqdm import tqdm
-
 import gc
+from keras.preprocessing.image import ImageDataGenerator as kerasDA
+import math
+
+from scipy.ndimage import rotate
+from data_3D_generators import VoxelDataGenerator
+from data_manipulation import binary_onehot_encoding_to_img
 
 
 if __name__ == '__main__':
@@ -195,9 +200,9 @@ def _windowed_subdivs(padded_img, window_size, subdivisions, nb_classes, pred_fu
 
     return subdivs
 
-def _windowed_subdivs_weighted(padded_img, weight_map, window_size, subdivisions, nb_classes, pred_func):
+def _windowed_subdivs_weighted(padded_img, padded_mask, weight_map, batch_size_value, window_size, subdivisions, nb_classes, pred_func):
     """
-    Create tiled overlapping patches.
+    Create tiled overlapping patches with weights.
 
     Returns:
         5D numpy array of shape = (
@@ -217,43 +222,55 @@ def _windowed_subdivs_weighted(padded_img, weight_map, window_size, subdivisions
     padx_len = padded_img.shape[0]
     pady_len = padded_img.shape[1]
     subdivs = []
+    subdivs_m = []
     subdivs_w = []
 
     for i in range(0, padx_len-window_size+1, step):
         subdivs.append([])
+        subdivs_m.append([])
         subdivs_w.append([])
         for j in range(0, pady_len-window_size+1, step):
             patch = padded_img[i:i+window_size, j:j+window_size, :]
             subdivs[-1].append(patch)
+            patch = padded_mask[i:i+window_size, j:j+window_size, :]
+            subdivs_m[-1].append(patch)
             patch = weight_map[i:i+window_size, j:j+window_size, :]
             subdivs_w[-1].append(patch)
-
+    
     # Here, `gc.collect()` clears RAM between operations.
     # It should run faster if they are removed, if enough memory is available.
-    gc.collect()
     subdivs = np.array(subdivs)
+    subdivs_m = np.array(subdivs_m)
     subdivs_w = np.array(subdivs_w)
-    gc.collect()
     a, b, c, d, e = subdivs.shape
     subdivs = subdivs.reshape(a * b, c, d, e)
+    subdivs_m = subdivs_m.reshape(a * b, c, d, e)
     subdivs_w = subdivs_w.reshape(a * b, c, d, e)
-    gc.collect()
+    r = np.zeros((a * b, c, d, e))
 
-    # merge images and weights to predict 
-    subdivs_merged = []
-    for i in range(len(subdivs)):    
-        subdivs_merged[-1].append([subdivs[i],subdivs_w[i]])    
+    # merge images and weights to predict
+    X_datagen = kerasDA()
+    Y_datagen = kerasDA()
+    W_datagen = kerasDA()
 
-    subdivs = pred_func(subdivs_merged)
-    gc.collect()
-    subdivs = np.array([patch * WINDOW_SPLINE_2D for patch in subdivs])
-    gc.collect()
+    X_aug = X_datagen.flow(subdivs, batch_size=batch_size_value, shuffle=False)
+    Y_aug = Y_datagen.flow(subdivs_m, batch_size=batch_size_value, shuffle=False)
+    W_aug = W_datagen.flow(subdivs_w, batch_size=batch_size_value, shuffle=False)
+
+    gen = create_gen(X_aug, Y_aug, W_aug)
+    r = pred_func(gen, steps=math.ceil(X_aug.n/batch_size_value))
+            
+    subdivs = np.array([patch * WINDOW_SPLINE_2D for patch in r])
 
     # Such 5D array:
     subdivs = subdivs.reshape(a, b, c, d, nb_classes)
-    gc.collect()
 
     return subdivs
+
+def create_gen(subdivs, subdivs_m, subdivs_w):
+    gen = zip(subdivs, subdivs_m, subdivs_w)
+    for (img, label, weights) in gen:
+        yield ([img, weights], label)
 
 def _recreate_from_subdivs(subdivs, window_size, subdivisions, padded_out_shape):
     """
@@ -347,14 +364,15 @@ def predict_img_with_overlap(input_img, window_size, subdivisions, nb_classes, p
         plt.show()
     return prd
 
-def predict_img_with_overlap_weighted(input_img, weight_map, window_size, subdivisions, nb_classes, pred_func):
+def predict_img_with_overlap_weighted(input_img, input_mask, weight_map, batch_size_value, window_size, subdivisions, nb_classes, pred_func):
     """Based on predict_img_with_smooth_windowing but works just with the
        original image (adding a weight map) instead of creating 8 new ones.
     """
     pad = _pad_img(input_img, window_size, subdivisions)
+    pad_mask = _pad_img(input_mask, window_size, subdivisions)
     pad_w = _pad_img(weight_map, window_size, subdivisions)
 
-    sd = _windowed_subdivs_weighted(pad, pad_w, window_size, subdivisions, nb_classes, pred_func)
+    sd = _windowed_subdivs_weighted(pad, pad_mask, pad_w, batch_size_value, window_size, subdivisions, nb_classes, pred_func)
     one_padded_result = _recreate_from_subdivs(sd, window_size, subdivisions,
                                                padded_out_shape=list(pad.shape[:-1])+[nb_classes])
 
@@ -431,110 +449,93 @@ def round_predictions(prd, nb_channels_out, thresholds):
     return prd
 
 
+def smooth_3d_predictions(vol, pred_func, batch_size_value=1, 
+                          softmax_output=True):
+   
+    aug_vols = []
+        
+    # Convert into square image to make the rotations properly
+    pad_to_square = vol.shape[1] - vol.shape[2]
+   
+    if pad_to_square < 0:
+        volume = np.pad(vol, [(0, 0), (abs(pad_to_square), 0), (0, 0), (0, 0)], 'reflect') 
+    else:
+        volume = np.pad(vol, [(0, 0), (0, 0), (pad_to_square, 0), (0, 0)], 'reflect')
+    
+    # Make 16 different combinations of the volume 
+    aug_vols.append(volume) 
+    aug_vols.append(rotate(volume, mode='reflect', axes=(1, 2), angle=90, reshape=False))
+    aug_vols.append(rotate(volume, mode='reflect', axes=(1, 2), angle=180, reshape=False))
+    aug_vols.append(rotate(volume, mode='reflect', axes=(1, 2), angle=270, reshape=False))
+    volume_aux = np.flip(volume, 0)
+    aug_vols.append(volume_aux)
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=90, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=180, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=270, reshape=False))
+    volume_aux = np.flip(volume, 1)
+    aug_vols.append(volume_aux)
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=90, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=180, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=270, reshape=False))
+    volume_aux = np.flip(volume, 2)
+    aug_vols.append(volume_aux)
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=90, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=180, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=270, reshape=False))
+    del volume_aux
 
-if __name__ == '__main__':
-    ###
-    # Image:
-    ###
+    # Create the generator. Fake the labels with the images as they are not 
+    # needed for predict but yes to create the generator
+    gen = VoxelDataGenerator(
+        np.array(aug_vols), np.array(aug_vols), random_subvolumes_in_DA=False, 
+        shuffle_each_epoch=False, batch_size=batch_size_value, da=False, 
+        softmax_out=False)
+    decoded_aug_vols = np.zeros((np.array(aug_vols).shape))
 
-    img_resolution = 600
-    # 3 such as RGB, but there could be more in other cases:
-    nb_channels_in = 3
+    # Make the predictions and decode softmax output
+    aug_vols = pred_func(gen)
 
-    # Get an image
-    input_img = get_dummy_img(img_resolution, nb_channels_in)
-    # Normally, preprocess the image for input in the neural net:
-    # input_img = to_neural_input(input_img)
+    if softmax_output == True:
+        for i in range(aug_vols.shape[0]):
+            decoded_aug_vols[i] = binary_onehot_encoding_to_img(aug_vols[i])
+    
+    # Undo the combinations of the volume
+    out_vols = []
+    out_vols.append(np.array(decoded_aug_vols[0]))
+    out_vols.append(rotate(np.array(decoded_aug_vols[1]), mode='reflect', axes=(1, 2), angle=-90, reshape=False))
+    out_vols.append(rotate(np.array(decoded_aug_vols[2]), mode='reflect', axes=(1, 2), angle=-180, reshape=False))
+    out_vols.append(rotate(np.array(decoded_aug_vols[3]), mode='reflect', axes=(1, 2), angle=-270, reshape=False))
+    out_vols.append(np.flip(np.array(decoded_aug_vols[4]), 0))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[5]), mode='reflect', axes=(1, 2), angle=-90, reshape=False), 0))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[6]), mode='reflect', axes=(1, 2), angle=-180, reshape=False), 0))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[7]), mode='reflect', axes=(1, 2), angle=-270, reshape=False), 0))
+    out_vols.append(np.flip(np.array(decoded_aug_vols[8]), 1))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[9]), mode='reflect', axes=(1, 2), angle=-90, reshape=False), 1))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[10]), mode='reflect', axes=(1, 2), angle=-180, reshape=False), 1))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[11]), mode='reflect', axes=(1, 2), angle=-270, reshape=False), 1))
+    out_vols.append(np.flip(np.array(decoded_aug_vols[12]), 2))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[13]), mode='reflect', axes=(1, 2), angle=-90, reshape=False), 2))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[14]), mode='reflect', axes=(1, 2), angle=-180, reshape=False), 2))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[15]), mode='reflect', axes=(1, 2), angle=-270, reshape=False), 2))
+  
+    # Create the output data
+    out_vols = np.array(out_vols) 
+    if pad_to_square != 0:
+        if pad_to_square < 0:
+            out = np.zeros((out_vols.shape[0], volume.shape[0], 
+                            volume.shape[1]+pad_to_square, 
+                            volume.shape[2], volume.shape[3]))
+        else:
+            out = np.zeros((out_vols.shape[0], volume.shape[0], volume.shape[1],
+                            volume.shape[2]-pad_to_square, volume.shape[3]))
+    else:
+        out = np.zeros(out_vols.shape)
 
-    ###
-    # Neural Net predictions params:
-    ###
+    # Undo the padding
+    for i in range(out_vols.shape[0]):
+        if pad_to_square < 0:
+            out[i] = out_vols[i,:,abs(pad_to_square):,:,:]
+        else:
+            out[i] = out_vols[i,:,:,abs(pad_to_square):,:]
 
-    # Number of output channels. E.g. a U-Net may output 10 classes, per pixel:
-    nb_channels_out = 3
-    # U-Net's receptive field border size, it does not absolutely
-    # need to be a divisor of "img_resolution":
-    window_size = 128
-
-    # This here would be the neural network's predict function, to used below:
-    def predict_for_patches(small_img_patches):
-        """
-        Apply prediction on images arranged in a 4D array as a batch.
-        Here, we use a random color filter for each patch so as to see how it
-        will blend.
-        Note that the np array shape of "small_img_patches" is:
-            (nb_images, x, y, nb_channels_in)
-        The returned arra should be of the same shape, except for the last
-        dimension which will go from nb_channels_in to nb_channels_out
-        """
-        small_img_patches = np.array(small_img_patches)
-        rand_channel_color = np.random.random(size=(
-            small_img_patches.shape[0],
-            1,
-            1,
-            small_img_patches.shape[-1])
-        )
-        return small_img_patches * rand_channel_color * 2
-
-    ###
-    # Doing cheap tiled prediction:
-    ###
-
-    # Predictions, blending the patches:
-    cheaply_predicted_img = cheap_tiling_prediction(
-        input_img, window_size, nb_channels_out, pred_func=predict_for_patches
-    )
-
-    ###
-    # Doing smooth tiled prediction:
-    ###
-
-    # The amount of overlap (extra tiling) between windows. A power of 2, and is >= 2:
-    subdivisions = 2
-
-    # Predictions, blending the patches:
-    smoothly_predicted_img = predict_img_with_smooth_windowing(
-        input_img, window_size, subdivisions,
-        nb_classes=nb_channels_out, pred_func=predict_for_patches
-    )
-
-    ###
-    # Demonstrating that the reconstruction is correct:
-    ###
-
-    # No more plots from now on
-    PLOT_PROGRESS = False
-
-    # useful stats to get a feel on how high will be the error relatively
-    print(
-        "Image's min and max pixels' color values:",
-        np.min(input_img),
-        np.max(input_img))
-
-    # First, defining a prediction function that just returns the patch without
-    # any modification:
-    def predict_same(small_img_patches):
-        """
-        Apply NO prediction on images arranged in a 4D array as a batch.
-        This implies that nb_channels_in == nb_channels_out: dimensions
-        and contained values are unchanged.
-        """
-        return small_img_patches
-
-    same_image_reconstructed = predict_img_with_smooth_windowing(
-        input_img, window_size, subdivisions,
-        nb_classes=nb_channels_out, pred_func=predict_same
-    )
-
-    diff = np.mean(np.abs(same_image_reconstructed - input_img))
-    print(
-        "Mean absolute reconstruction difference on pixels' color values:",
-        diff)
-    print(
-        "Relative absolute mean error on pixels' color values:",
-        100*diff/(np.max(input_img)) - np.min(input_img),
-        "%")
-    print(
-        "A low error (e.g.: 0.28 %) confirms that the image is still "
-        "the same before and after reconstruction if no changes are "
-        "made by the passed prediction function.")
+    return np.mean(out, axis=0)
