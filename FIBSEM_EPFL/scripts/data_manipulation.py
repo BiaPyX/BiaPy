@@ -592,7 +592,7 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
     return cropped_data, cropped_data_mask
 
 
-def crop_3D_data_with_overlap(data, data_mask, vol_shape, overlap_z=0.5):
+def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
     """Crop 3D data into smaller volumes with the minimun overlap.
        Reverse function of merge_3D_data_with_overlap().
 
@@ -600,10 +600,10 @@ def crop_3D_data_with_overlap(data, data_mask, vol_shape, overlap_z=0.5):
             data (4D Numpy array): data to crop.
             E.g. (image_number, x, y, channels).
 
-            data_mask (4D Numpy array): data mask to crop.
-            E.g. (image_number, x, y, channels).
-
             vol_shape (4D tuple): shape of the desired volumes to be created.
+        
+            data_mask (4D Numpy array, optional): data mask to crop.
+            E.g. (image_number, x, y, channels).
 
             overlap_z (float, optional): amount of overlap on z dimension. The 
             value must be on range [0, 1), that is, 0% or 99% of overlap. 
@@ -612,8 +612,8 @@ def crop_3D_data_with_overlap(data, data_mask, vol_shape, overlap_z=0.5):
             cropped_data (5D Numpy array): cropped image data.
             E.g. (vol_number, z, x, y, channels).
 
-            cropped_data_mask (5D Numpy array): cropped image data masks.
-            E.g. (vol_number, z, x, y, channels).
+            cropped_data_mask (5D Numpy array, optional): cropped image data 
+            masks. E.g. (vol_number, z, x, y, channels).
     """
 
     print("### 3D-OV-CROP ###")
@@ -650,7 +650,8 @@ def crop_3D_data_with_overlap(data, data_mask, vol_shape, overlap_z=0.5):
 
     total_vol = vols_per_z*vols_per_x*vols_per_y
     cropped_data = np.zeros((total_vol,) + vol_shape)
-    cropped_data_mask = np.zeros((total_vol,) + vol_shape)
+    if data_mask is not None:
+        cropped_data_mask = np.zeros((total_vol,) + vol_shape)
 
     # Calculate the overlap
     step_z = int(vol_shape[0]*overlap_z)
@@ -671,11 +672,12 @@ def crop_3D_data_with_overlap(data, data_mask, vol_shape, overlap_z=0.5):
                              (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
                              (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
     
-                    cropped_data_mask[c] = \
-                        data_mask[z*step_z:(z*step_z)+vol_shape[0],
-                                  (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
-                                  (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
-
+                    if data_mask is not None:
+                        cropped_data_mask[c] = \
+                            data_mask[z*step_z:(z*step_z)+vol_shape[0],
+                                      (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
+                                      (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
+    
                 # Fill the final volumes in z with the rests of the data
                 else:
                     cropped_data[c,0:r_div-(f_z*step_z)] = \
@@ -683,10 +685,11 @@ def crop_3D_data_with_overlap(data, data_mask, vol_shape, overlap_z=0.5):
                              (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
                              (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
 
-                    cropped_data_mask[c,0:r_div-(f_z*step_z)] = \
-                        data_mask[z*step_z:(z*step_z)+vol_shape[0],
-                                  (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
-                                  (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
+                    if data_mask is not None:
+                        cropped_data_mask[c,0:r_div-(f_z*step_z)] = \
+                            data_mask[z*step_z:(z*step_z)+vol_shape[0],
+                                      (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
+                                      (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
 
 
                     for s in range(vol_shape[0]-(r_div-(f_z*step_z))):
@@ -694,12 +697,13 @@ def crop_3D_data_with_overlap(data, data_mask, vol_shape, overlap_z=0.5):
                             data[data.shape[0]-1,
                                  (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
                                  (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
-
-                        cropped_data_mask[c,(r_div-(f_z*step_z))+s:vol_shape[0]] = \
-                            data_mask[data.shape[0]-1,
-                                      (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
-                                      (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
-
+                    
+                        if data_mask is not None:
+                            cropped_data_mask[c,(r_div-(f_z*step_z))+s:vol_shape[0]] = \
+                                data_mask[data.shape[0]-1,
+                                          (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
+                                          (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
+    
                 c += 1
 
         # To adjust the final volumes in z
@@ -709,7 +713,10 @@ def crop_3D_data_with_overlap(data, data_mask, vol_shape, overlap_z=0.5):
     print("**** New data shape is: {}".format(cropped_data.shape))
     print("### END OV-CROP ###")
 
-    return cropped_data, cropped_data_mask
+    if data_mask is not None:
+        return cropped_data, cropped_data_mask
+    else:
+        return cropped_data
 
 
 def merge_data_with_overlap(data, original_shape, window_size, subdivision, 
@@ -946,7 +953,8 @@ def merge_data_without_overlap(data, num, out_shape=[1, 1], grid=True):
     return mixed_data
 
 
-def merge_3D_data_with_overlap(data, data_mask, orig_vol_shape, overlap_z=0.5):
+def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
+                               overlap_z=0.5):
     """Merge 3D smaller volumes in a 3D full volume with a defined overlap.
        Reverse operation of crop_3D_data_with_overlap().
 
@@ -954,10 +962,11 @@ def merge_3D_data_with_overlap(data, data_mask, orig_vol_shape, overlap_z=0.5):
             data (5D Numpy array): data to crop.
             E.g. (volume_number, z, x, y, channels).
 
-            data_mask (4D Numpy array): data mask to crop.
-            E.g. (volume_number, z, x, y, channels).
+            orig_vol_shape (4D tuple): shape of the desired volumes to be 
+            created.
 
-            vol_shape (4D tuple): shape of the desired volumes to be created.
+            data_mask (4D Numpy array, optional): data mask to crop.
+            E.g. (volume_number, z, x, y, channels).
 
             overlap_z (float, optional): amount of overlap on z dimension. The
             value must be on range [0, 1), that is, 0% or 99% of overlap.
@@ -966,17 +975,15 @@ def merge_3D_data_with_overlap(data, data_mask, orig_vol_shape, overlap_z=0.5):
             cropped_data (5D Numpy array): cropped image data.
             E.g. (vol_number, z, x, y, channels).
 
-            cropped_data_mask (5D Numpy array): cropped image data masks.
-            E.g. (image_number, z, x, y, channels).
-
-            rest_z (int): amount of slices filled with zeros on z dimension.
-            Should be needed to crop the data before metric calculations.
+            cropped_data_mask (5D Numpy array, optional): cropped image data 
+            masks. E.g. (image_number, z, x, y, channels).
     """ 
  
     print("### MERGE-3D-OV-CROP ###")
    
     merged_data = np.zeros((orig_vol_shape))
-    merged_data_mask = np.zeros((orig_vol_shape))
+    if data_mask is not None:
+        merged_data_mask = np.zeros((orig_vol_shape))
     ov_map_counter = np.zeros((orig_vol_shape))
 
     d_num = data.shape[1]
@@ -1010,11 +1017,12 @@ def merge_3D_data_with_overlap(data, data_mask, orig_vol_shape, overlap_z=0.5):
                     merged_data[z*step_z:(z*step_z)+d_num, 
                                 (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_, 
                                 (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] +=  data[c]
-    
-                    merged_data_mask[z*step_z:(z*step_z)+d_num,
-                                     (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
-                                     (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] += \
-                                        data_mask[c]
+   
+                    if data_mask is not None: 
+                        merged_data_mask[z*step_z:(z*step_z)+d_num,
+                                         (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
+                                         (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] += \
+                                            data_mask[c]
 
                     ov_map_counter[z*step_z:(z*step_z)+d_num,
                                    (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
@@ -1024,11 +1032,11 @@ def merge_3D_data_with_overlap(data, data_mask, orig_vol_shape, overlap_z=0.5):
                                 (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
                                 (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] +=  \
                         data[c, 0:r_div-(f_z*step_z)] 
-            
-                    merged_data_mask[z*step_z:orig_vol_shape[0],
-                                     (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
-                                     (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] +=  \
-                        data_mask[c, 0:r_div-(f_z*step_z)]
+                    if data_mask is not None:
+                        merged_data_mask[z*step_z:orig_vol_shape[0],
+                                         (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
+                                         (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] +=  \
+                            data_mask[c, 0:r_div-(f_z*step_z)]
 
                     ov_map_counter[z*step_z:orig_vol_shape[0],
                                    (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
@@ -1039,13 +1047,16 @@ def merge_3D_data_with_overlap(data, data_mask, orig_vol_shape, overlap_z=0.5):
         if (z*step_z)+d_num > orig_vol_shape[0]:
             f_z += 1
 
-    merged_data = np.true_divide(merged_data, ov_map_counter)
-    merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter)
-   
     print("**** New data shape is: {}".format(merged_data.shape))
     print("### END MERGE-3D-OV-CROP ###")        
- 
-    return merged_data, merged_data_mask
+
+    merged_data = np.true_divide(merged_data, ov_map_counter)
+    if data_mask is not None: 
+        merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter)
+        return merged_data, merged_data_mask
+    else:
+        return merged_data
+        
 
 
 def check_crops(data, out_dim, num_examples=2, include_crops=True,
@@ -1192,7 +1203,7 @@ def prepare_subvolume_data(X, Y, shape=(82, 256, 256, 1), test=False):
         if test == True:
             print("As {} images should be discarded and data is for test, "
                   "overlap cropping will be done".format(rest))
-            X, Y = crop_3D_data_with_overlap(X, Y, shape)
+            X, Y = crop_3D_data_with_overlap(X, shape, data_mask=Y)
             return X, Y
 
         print("As the number of images required to form a stack 3D is not "
