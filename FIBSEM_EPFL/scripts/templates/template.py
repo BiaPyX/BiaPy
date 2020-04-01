@@ -764,11 +764,11 @@ else:
 #  POST-PROCESING  #
 ####################
 
-print("##################\n# POST-PROCESING #\n##################\n") 
-
-print("1) SMOOTH")
 if (post_process == True and make_crops == True) or (random_crops_in_DA == True):
-    print("Post processing active . . .")
+
+    print("##################\n# POST-PROCESING #\n##################\n")
+
+    print("1) SMOOTH")
 
     Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
 

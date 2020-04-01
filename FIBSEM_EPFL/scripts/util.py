@@ -307,10 +307,10 @@ def threshold_plots(preds_test, Y_test, o_test_shape, j_score, det_eval_ge_path,
         bin_preds_test = (preds_test > t).astype(np.uint8)                      
                                                                                 
         # Reconstruct the data to the original shape and calculate Jaccard      
-        h_num = int(o_test_shape[0] / bin_preds_test.shape[1]) \
-                + (o_test_shape[0] % bin_preds_test.shape[1] > 0)        
-        v_num = int(o_test_shape[1] / bin_preds_test.shape[2]) \
-                + (o_test_shape[1] % bin_preds_test.shape[2] > 0)        
+        h_num = int(o_test_shape[1] / bin_preds_test.shape[1]) \
+                + (o_test_shape[1] % bin_preds_test.shape[1] > 0)        
+        v_num = int(o_test_shape[2] / bin_preds_test.shape[2]) \
+                + (o_test_shape[2] % bin_preds_test.shape[2] > 0)        
                                                                                 
         # To calculate the Jaccard (binarized)                                  
         recons_preds_test = mix_data(
