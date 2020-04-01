@@ -177,10 +177,6 @@ learning_rate_value = 0.001
 epochs_value = 360
 # Number of epochs to stop the training process after no improvement
 patience = 50 
-# Flag to activate the creation of a chart showing the loss and metrics fixing 
-# different binarization threshold values, from 0.1 to 1. Useful to check a 
-# correct threshold value (normally 0.5)
-make_threshold_plots = False
 # Define time callback                                                          
 time_callback = TimeHistory()
 
@@ -206,14 +202,8 @@ result_dir = os.path.join('results', 'results_' + job_id, job_file)
 result_bin_dir = os.path.join(result_dir, 'binarized')
 # Directory where predicted images will be stored
 result_no_bin_dir = os.path.join(result_dir, 'no_binarized')
-# Directory where binarized predicted images with 50% of overlap will be stored
-result_bin_dir_50ov = os.path.join(result_dir, 'binarized_50ov')
 # Folder where the smoothed images will be stored
 smooth_dir = os.path.join(result_dir, 'smooth')
-# Folder where the images with the z-filter applied will be stored
-zfil_dir = os.path.join(result_dir, 'zfil')
-# Folder where the images with smoothing and z-filter applied will be stored
-smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
 # folder pointed by "base_work_dir" variable 
