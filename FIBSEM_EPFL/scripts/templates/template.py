@@ -213,6 +213,8 @@ brightness_range = None
 median_filter_size = [0, 0] 
 # Range of rotation
 rotation_range = 180
+# Flag to make flips on the subvolumes. Available for both Keras and custom DA.
+flips = True
 
 
 ### Extra train data generation
@@ -452,15 +454,16 @@ if extra_train_data != 0:
             extra_train_data, X_data=X_train, Y_data=Y_train, 
             batch_size_value=batch_size_value, zoom=keras_zoom, 
             w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range,
-            brightness_range=brightness_range, rotation_range=rotation_range)
+            brightness_range=brightness_range, rotation_range=rotation_range,
+            hflip=flips, vflip=flips)
     else:
         # Custom DA generated extra data
         extra_gen_args = dict(
             X=X_train, Y=Y_train, batch_size=batch_size_value,
             dim=(img_height,img_width), n_channels=1, shuffle=True, da=True, 
-            e_prob=0.0, elastic=False, vflip=True, hflip=True, rotation90=False,
-            random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0],
-            rotation_range=rotation_range)
+            e_prob=0.0, elastic=False, vflip=flips, hflip=flips, 
+            rotation90=False, random_crops_in_DA=random_crops_in_DA, 
+            crop_length=crop_shape[0], rotation_range=rotation_range)
 
         extra_generator = ImageDataGenerator(**extra_gen_args)
 
@@ -492,7 +495,8 @@ if custom_da == False:
         rotation_range=rotation_range, random_crops_in_DA=random_crops_in_DA,
         crop_length=crop_shape[0], w_shift_r=w_shift_r, h_shift_r=h_shift_r,    
         shear_range=shear_range, brightness_range=brightness_range,
-        weights_on_data=weights_on_data, weights_path=loss_weight_dir)
+        weights_on_data=weights_on_data, weights_path=loss_weight_dir,
+        hflip=flips, vflip=flips)
         
 else:                                                                           
     print("Custom DA selected")
@@ -523,7 +527,7 @@ else:
         X=X_train, Y=Y_train, batch_size=batch_size_value,     
         dim=(img_height,img_width), n_channels=1,              
         shuffle=shuffle_train_data_each_epoch, da=True, e_prob=0.0, 
-        elastic=False, vflip=True, hflip=True, rotation90=False, 
+        elastic=False, vflip=flips, hflip=flips, rotation90=False, 
         rotation_range=180, brightness_range=brightness_range, 
         median_filter_size=median_filter_size, 
         random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
