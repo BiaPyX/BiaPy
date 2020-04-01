@@ -320,6 +320,8 @@ smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 char_dir = os.path.join('charts', job_id)
 # Directory where weight maps will be stored                                    
 loss_weight_dir = os.path.join(base_work_dir, 'loss_weights', job_id)
+# Folder where smaples of DA will be stored
+da_samples_dir = os.path.join(result_dir, 'aug')
 
 
 #####################
@@ -394,10 +396,9 @@ if make_crops == True and discard_cropped_images == True:
 
 print("##################\n#    LOAD DATA   #\n##################\n")
 
-X_train, Y_train, \
-X_val, Y_val, \
-X_test, Y_test, \
-norm_value, crops_made = load_data(
+X_train, Y_train, X_val,\
+Y_val,  X_test, Y_test,\
+orig_test_shape, norm_value, crops_made = load_data(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
     img_test_shape, val_split=perc_used_as_val, shuffle_val=random_val_data,
     e_d_data=extra_datasets_data_list, job_id=job_id, 
@@ -471,6 +472,7 @@ if extra_train_data != 0:
     print("{} extra train data generated, the new shape of the train now is {}"\
           .format(extra_train_data, X_train.shape))
 
+
 ##########################
 #    DATA AUGMENTATION   #
 ##########################
@@ -484,13 +486,14 @@ if custom_da == False:
     train_generator, \
     val_generator = keras_da_generator(
         X_train=X_train, Y_train=Y_train, batch_size_value=batch_size_value,
-        X_val=X_val, Y_val=Y_val, save_examples=aug_examples, job_id=job_id,          
-        shuffle_train=shuffle_train_data_each_epoch, 
+        X_val=X_val, Y_val=Y_val, save_examples=aug_examples,
+        out_dir=da_samples_dir, shuffle_train=shuffle_train_data_each_epoch, 
         shuffle_val=shuffle_val_data_each_epoch, zoom=keras_zoom, 
         rotation_range=rotation_range, random_crops_in_DA=random_crops_in_DA,
         crop_length=crop_shape[0], w_shift_r=w_shift_r, h_shift_r=h_shift_r,    
         shear_range=shear_range, brightness_range=brightness_range,
         weights_on_data=weights_on_data, weights_path=loss_weight_dir)
+        
 else:                                                                           
     print("Custom DA selected")
 

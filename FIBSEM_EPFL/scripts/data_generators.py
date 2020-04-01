@@ -543,7 +543,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None, 
                        ld_img_from_disk=False, data_paths=None, target_size=None, 
                        c_target_size=None, batch_size_value=1, val=True, 
-                       save_examples=True, job_id="none_job_id", out_dir='aug', 
+                       save_examples=True, out_dir='aug', 
                        hflip=True, vflip=True, seedValue=42, rotation_range=180, 
                        fill_mode='reflect', preproc_function=False, 
                        featurewise_center=False, brightness_range=None, 
@@ -596,9 +596,6 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
             returned.
 
             save_examples (bool, optional): if true 5 examples of DA are stored.
-
-            job_id (str, optional): job identifier. If any provided the         
-            examples will be generated under a folder 'aug/none_job_id'.        
 
             out_dir (string, optional): save directory suffix.                  
 
@@ -738,7 +735,6 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
     # Save a few examples 
     if save_examples == True:
         print("Saving some samples of the train generator . . .")        
-        out_dir = os.path.join(out_dir, job_id)
         os.makedirs(out_dir, exist_ok=True)
 
         if ld_img_from_disk == False:
