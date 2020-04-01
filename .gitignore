@@ -12,11 +12,8 @@ FIBSEM_EPFL/charts
 FIBSEM_EPFL/h5_files
 FIBSEM_EPFL/jupyterNotebooks
 FIBSEM_EPFL/cell_challenge_eval
-TEM/data
 FIBSEM_EPFL/scripts/cell_cha_eval/testing_dataset
 FIBSEM_EPFL/scripts/jobs
 FIBSEM_EPFL/scripts/xiao_2018/__pycache__
-GAN
 miccai2020
-TEM
-mb3d
+other_projects
