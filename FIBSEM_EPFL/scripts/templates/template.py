@@ -101,7 +101,6 @@ random_val_data = True
 # problem creating always crops of the same dimension
 img_train_shape = [1024, 768, 1]
 img_test_shape = [1024, 768, 1]
-original_test_shape = [img_test_shape[0], img_test_shape[1]]
 
 
 ### Extra datasets variables
@@ -351,9 +350,10 @@ if discard_cropped_images == True and make_crops == True \
     print("##################\n#  DISCARD DATA  #\n##################\n") 
 
     # Load data
-    X_train, Y_train, \
+    X_train, Y_train, 
     X_test, Y_test, \
-    norm_value, crops_made = load_data(
+    orig_test_shape, norm_value, \
+    crops_made = load_data(
         train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
         img_test_shape, create_val=False, job_id=job_id, crop_shape=crop_shape, 
         check_crop=check_crop, d_percentage=d_percentage_value)
@@ -621,10 +621,10 @@ if random_crops_in_DA == False:
 
     # Reconstruct the data to the original shape
     if make_crops == True:
-        h_num = int(original_test_shape[0] / bin_preds_test.shape[1]) \
-                + (original_test_shape[0] % bin_preds_test.shape[1] > 0)
-        v_num = int(original_test_shape[1] / bin_preds_test.shape[2]) \
-                + (original_test_shape[1] % bin_preds_test.shape[2] > 0)
+        h_num = int(orig_test_shape[1] / bin_preds_test.shape[1]) \
+                + (orig_test_shape[1] % bin_preds_test.shape[1] > 0)
+        v_num = int(orig_test_shape[2] / bin_preds_test.shape[2]) \
+                + (orig_test_shape[2] % bin_preds_test.shape[2] > 0)
         
         X_test = merge_data_without_overlap(
             X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
@@ -653,7 +653,7 @@ if random_crops_in_DA == False:
     if make_threshold_plots == True:
         print("Calculate metrics with different thresholds . . .")
         score[1], voc, det = threshold_plots(
-            preds_test, Y_test, original_test_shape, score, det_eval_ge_path, 
+            preds_test, Y_test, orig_test_shape, score, det_eval_ge_path, 
             det_eval_path, det_bin, n_dig, job_id, job_file, char_dir)
     else:
         print("Calculate metrics . . .")
@@ -726,7 +726,7 @@ else:
     if test_ov_crops > 1:
         print("Merging the overlapped predictions . . .")
         merged_preds_test = merge_data_with_overlap(
-            bin_preds_test, original_test_shape, crop_shape[0], test_ov_crops,
+            bin_preds_test, orig_test_shape, crop_shape[0], test_ov_crops,
             result_dir)
 
         print("Calculate Jaccard for test (per image with overlap calculated). . .")

@@ -748,20 +748,20 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
 
     print("### MERGE-OV-CROP ###")
     print("Merging {} images into ({},{}) with overlapping . . ."
-          .format(data.shape[1:], original_shape[1], original_shape[0]))
+          .format(data.shape[1:], original_shape[2], original_shape[1]))
 
     # Merged data
     total_images = int(data.shape[0]/subdivision)
-    merged_data = np.zeros((total_images, original_shape[1], original_shape[0],
+    merged_data = np.zeros((total_images, original_shape[2], original_shape[1],
                              data.shape[3]), dtype=np.float32)
 
     # Matrices to store the amount of overlap. The first is used to store the
     # number of crops to merge for each pixel. The second matrix is used to 
     # paint the overlapping map
-    overlap_matrix = np.zeros((original_shape[1], original_shape[0],
+    overlap_matrix = np.zeros((original_shape[2], original_shape[1],
                              data.shape[3]), dtype=np.float32)
     if ov_map == True:
-        ov_map_matrix = np.zeros((original_shape[1], original_shape[0],
+        ov_map_matrix = np.zeros((original_shape[2], original_shape[1],
                                    data.shape[3]), dtype=np.float32)
 
     # Find the mininum overlap configuration with the number of crops to create
@@ -781,28 +781,28 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
     # offset to adjust the last crop and the step size. All of this values per
     # x/y or column/row axis
     if rows != 1:
-        y_ov = int(abs(original_shape[1] - window_size*rows)/(rows-1))
-        r_y = abs(original_shape[1] - window_size*rows) % (rows-1)
+        y_ov = int(abs(original_shape[2] - window_size*rows)/(rows-1))
+        r_y = abs(original_shape[2] - window_size*rows) % (rows-1)
         step_y = window_size - y_ov
     else:
         y_ov = 0
         r_y = 0
-        step_y = original_shape[1]
+        step_y = original_shape[2]
 
     if columns != 1:
-        x_ov = int(abs(original_shape[0] - window_size*columns)/(columns-1))
-        r_x = abs(original_shape[0] - window_size*columns) % (columns-1)
+        x_ov = int(abs(original_shape[1] - window_size*columns)/(columns-1))
+        r_x = abs(original_shape[1] - window_size*columns) % (columns-1)
         step_x = window_size - x_ov
     else:
         x_ov = 0
         r_x = 0
-        step_x = original_shape[0]
+        step_x = original_shape[1]
 
     # Calculate the overlapping matrix
-    for i in range(0, original_shape[1]-y_ov, step_y):
-        for j in range(0, original_shape[0]-x_ov, step_x):
-            d_y = 0 if (i+window_size) < original_shape[1] else r_y
-            d_x = 0 if (j+window_size) < original_shape[0] else r_x
+    for i in range(0, original_shape[2]-y_ov, step_y):
+        for j in range(0, original_shape[1]-x_ov, step_x):
+            d_y = 0 if (i+window_size) < original_shape[2] else r_y
+            d_x = 0 if (j+window_size) < original_shape[1] else r_x
 
             overlap_matrix[i-d_y:i+window_size, j-d_x:j+window_size, :] += 1
             if ov_map == True:
@@ -810,10 +810,10 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
 
     # Mark the border of each crop in the map
     if ov_map == True:
-        for i in range(0, original_shape[1]-y_ov, step_y):
-            for j in range(0, original_shape[0]-x_ov, step_x):
-                d_y = 0 if (i+window_size) < original_shape[1] else r_y
-                d_x = 0 if (j+window_size) < original_shape[0] else r_x
+        for i in range(0, original_shape[2]-y_ov, step_y):
+            for j in range(0, original_shape[1]-x_ov, step_x):
+                d_y = 0 if (i+window_size) < original_shape[2] else r_y
+                d_x = 0 if (j+window_size) < original_shape[1] else r_x
                 
                 # Paint the grid
                 ov_map_matrix[i-d_y:(i+window_size-1), j-d_x] = -4 
@@ -825,10 +825,10 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
     cont = 0
     print("0) Merging the overlapping crops . . .")
     for k, img_num in tqdm(enumerate(range(0, total_images))):
-        for i in range(0, original_shape[1]-y_ov, step_y):
-            for j in range(0, original_shape[0]-x_ov, step_x):
-                d_y = 0 if (i+window_size) < original_shape[1] else r_y
-                d_x = 0 if (j+window_size) < original_shape[0] else r_x
+        for i in range(0, original_shape[2]-y_ov, step_y):
+            for j in range(0, original_shape[1]-x_ov, step_x):
+                d_y = 0 if (i+window_size) < original_shape[2] else r_y
+                d_x = 0 if (j+window_size) < original_shape[1] else r_x
                 merged_data[k, i-d_y:i+window_size, j-d_x:j+window_size, :] += data[cont]
                 cont += 1
            
