@@ -27,8 +27,11 @@ import math
 import time
 import tensorflow as tf
 from data_manipulation import load_data, crop_data, merge_data_without_overlap,\
-                              check_crops, crop_data_with_overlap,\
-                              merge_data_with_overlap, check_binary_masks
+                              check_crops, crop_data_with_overlap, \
+                              merge_data_with_overlap, check_binary_masks, \
+                              binary_onehot_encoding_to_img, \
+                              crop_3D_data_with_overlap, \
+                              merge_3D_data_with_overlap
 from data_3D_generators import VoxelDataGenerator
 from unet_3d import U_Net_3D
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
@@ -41,7 +44,8 @@ from keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
-                                     predict_img_with_overlap
+                                     predict_img_with_overlap,\
+                                     smooth_3d_predictions
 from skimage.segmentation import clear_border
 from keras.utils.vis_utils import plot_model
 
@@ -67,9 +71,6 @@ print("Keras        : {}".format(keras.__version__))
 print("Tensorflow   : {}".format(tf.__version__))
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
 os.environ["CUDA_VISIBLE_DEVICES"] = gpu_selected;
-
-# Control variables 
-crops_made = False
 
 # Working dir
 os.chdir(base_work_dir)
@@ -100,8 +101,10 @@ img_test_shape = (1024, 768, 1)
 
 
 ### 3D volume variables
-# Shape of the 3D subvolumes 
-img_3d_desired_shape = (80, 256, 256, 1)
+# Train shape of the 3D subvolumes
+train_3d_desired_shape = (20, 256, 256, 1)
+# Train shape of the 3D subvolumes
+test_3d_desired_shape = (20, 448, 576, 1)
 # Flag to use all the images to create the 3D subvolumes. If it is False random
 # subvolumes from the whole data will be generated instead.
 use_all_volume = True
@@ -118,6 +121,8 @@ norm_value_forced = -1
 ### Data augmentation (DA) variables
 # Flag to activate DA
 da = False
+# Create samples of the DA made. Useful to check the output images made.
+aug_examples = True
 # Flag to shuffle the training data on every epoch 
 shuffle_train_data_each_epoch = False
 # Flag to shuffle the validation data on every epoch
@@ -126,11 +131,21 @@ shuffle_val_data_each_epoch = False
 shift_range = 0.0
 # Range of rotation to the subvolumes
 rotation_range = 0
+# Square rotations (90º, -90º and 180º) intead of using a range
+square_rotations = True
 # Flag to make flips on the subvolumes 
 flips = False
 # Flag to extract random subvolumnes during the DA. Not compatible with 
 # 'use_all_volume' as it forces the data preparation into subvolumes
 random_subvolumes_in_DA = False
+
+
+### Extra train data generation
+# Number of times to duplicate the train data. Useful when "random_crops_in_DA"
+# is made, as more original train data can be cover
+duplicate_train = 70
+# Extra number of images to add to the train data. Applied after duplicate_train
+extra_train_data = 0
 
 
 ### Load previously generated model weigths
@@ -203,6 +218,8 @@ smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # training the network will be shown. This folder will be created under the
 # folder pointed by "base_work_dir" variable 
 char_dir = os.path.join('charts', job_id)
+# Folder where smaples of DA will be stored
+da_samples_dir = os.path.join(result_dir, 'aug')
 
 
 #####################
@@ -221,14 +238,14 @@ check_binary_masks(test_mask_path)
 
 print("##################\n#    LOAD DATA   #\n##################\n")
 
-X_train, Y_train, \
-X_val, Y_val, \
-X_test, Y_test, \
-norm_value, _ = load_data(
-    train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
+X_train, Y_train, X_val,\
+Y_val, X_test, Y_test,\
+orig_test_shape, norm_value, _ = load_data(
+    train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
     img_test_shape, val_split=perc_used_as_val, shuffle_val=False,
-    make_crops=False, prepare_subvolumes=use_all_volume, 
-    subvol_shape=img_3d_desired_shape)
+    make_crops=False, prepare_subvolumes=use_all_volume,
+    train_subvol_shape=train_3d_desired_shape,
+    test_subvol_shape=test_3d_desired_shape)
 
 # Normalize the data
 if normalize_data == True:
@@ -242,22 +259,66 @@ if normalize_data == True:
     X_test -= int(norm_value)
     
 
+#############################
+#   EXTRA DATA GENERATION   #
+#############################
+
+# Duplicate train data N times
+if duplicate_train != 0:
+    print("##################\n# DUPLICATE DATA #\n##################\n")
+
+    X_train = np.vstack([X_train]*duplicate_train)
+    Y_train = np.vstack([Y_train]*duplicate_train)
+    print("Train data replicated {} times. Its new shape is: {}"\
+          .format(duplicate_train, X_train.shape))
+
+# Add extra train data generated with DA
+if extra_train_data != 0:
+    print("##################\n#   EXTRA DATA   #\n##################\n")
+
+    extra_generator = VoxelDataGenerator(
+        X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,
+        shuffle_each_epoch=True, batch_size=batch_size_value,
+        da=True, flip=True, shift_range=0.0, rotation_range=0)
+
+    extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
+
+    X_train = np.vstack((X_train, extra_x))
+    Y_train = np.vstack((Y_train, extra_y*255))
+    print("{} extra train data generated, the new shape of the train now is {}"\
+          .format(extra_train_data, X_train.shape))
+
+
 ##########################
 #    DATA AUGMENTATION   #
 ##########################
 
 print("##################\n#    DATA AUG    #\n##################\n")
 
+print("Preparing train data generator . . .")
 train_generator = VoxelDataGenerator(
-    X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,           
-    shuffle_each_epoch=shuffle_train_data_each_epoch, batch_size=batch_size_value, 
-    da=da, flip=flips, shift_range=shift_range, rotation_range=rotation_range)
+    X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,
+    shuffle_each_epoch=shuffle_train_data_each_epoch, 
+    batch_size=batch_size_value, da=da, flip=flips, shift_range=shift_range, 
+    rotation_range=rotation_range, square_rotations=square_rotations)
 
+print("Preparing validation data generator . . .")
 val_generator = VoxelDataGenerator(
-    X_val, Y_val, random_subvolumes_in_DA=False, 
-    shuffle_each_epoch=shuffle_val_data_each_epoch, batch_size=batch_size_value, 
-    da=False)  
-                                                                                
+    X_val, Y_val, random_subvolumes_in_DA=random_subvolumes_in_DA,
+    shuffle_each_epoch=shuffle_val_data_each_epoch, batch_size=batch_size_value,
+    da=False)
+
+# Create the test data generator without DA
+print("Preparing test data generator . . .")
+test_generator = VoxelDataGenerator(
+    X_test, Y_test, random_subvolumes_in_DA=False, shuffle_each_epoch=False,
+    batch_size=batch_size_value, da=False)
+
+# Generate examples of data augmentation
+if aug_examples == True:
+    train_generator.get_transformed_samples(
+        10, random_images=True, save_to_dir=True, out_dir=da_samples_dir)
+
 
 ##########################
 #    BUILD THE NETWORK   #
@@ -313,46 +374,66 @@ print("##################\n#    INFERENCE   #\n##################\n")
 
 # Evaluate to obtain the loss value and the Jaccard index
 print("Evaluating test data . . .")
-score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
+score = model.evaluate_generator(test_generator, batch_size=batch_size_value, 
+                                 verbose=1)
 jac_per_subvolume = score[1]
 
 # Predict on test
 print("Making the predictions on test data . . .")
-preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
+preds_test = model.predict_generator(test_generator, batch_size=batch_size_value,
+                                     verbose=1)
 
-# Threshold images
-bin_preds_test = (preds_test > 0.5).astype(np.uint8)
+# Decode predicted images into the original one
+decoded_pred_test = np.zeros(Y_test.shape)
+for i in range(preds_test.shape[0]):
+    decoded_pred_test[i] = binary_onehot_encoding_to_img(preds_test[i])
+
+# Merge the volumes and convert them into 2D data
+recons_pred_test, Y_test = merge_3D_data_with_overlap(
+    decoded_pred_test, orig_test_shape, data_mask=Y_test)
 
 print("Saving predicted images . . .")
-#reconstruct the images 
-#save_img(Y=bin_preds_test, mask_dir=result_bin_dir, prefix="test_out_bin")
-#save_img(Y=preds_test, mask_dir=result_no_bin_dir, prefix="test_out_no_bin")
+save_img(Y=(recons_pred_test > 0.5).astype(np.uint8), mask_dir=result_bin_dir,
+         prefix="test_out_bin")
+save_img(Y=recons_pred_test, mask_dir=result_no_bin_dir, prefix="test_out_no_bin")
 
 print("Calculate metrics . . .")
-# Per image without overlap
-score[1] = jaccard_index_numpy(Y_test, bin_preds_test)
-voc = voc_calculation(Y_test, bin_preds_test, score[1])
+score[1] = jaccard_index_numpy(Y_test, (recons_pred_test > 0.5).astype(np.uint8))
+voc = voc_calculation(Y_test, (recons_pred_test > 0.5).astype(np.uint8), score[1])
 #det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
 #                      det_eval_path, det_bin, n_dig, job_id)
 det = -1
-
-# 50% overlap
-jac_per_img_50ov = -1
-voc_per_img_50ov = -1
-det_per_img_50ov = -1
 
     
 ####################
 #  POST-PROCESING  #
 ####################
 
-print("##################\n# POST-PROCESING #\n##################\n") 
+if post_process == True:
+    print("##################\n# POST-PROCESING #\n##################\n")
+    print("1) SMOOTH")
 
-print("1) SMOOTH")
-# not implemented
-print("2) Z-FILTERING")
-# not implemented
-print("Finish post-processing") 
+    Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
+
+    for i in tqdm(range(X_test.shape[0])):
+        predictions_smooth = smooth_3d_predictions(X_test[i]/255,
+            pred_func=(lambda img_batch_subdiv: \
+                           model.predict_generator(img_batch_subdiv)))
+
+        Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
+
+    print("Saving smooth predicted images . . .")
+    save_img(Y=Y_test_smooth, mask_dir=smooth_dir, prefix="test_out_smooth")
+
+    # Merge the volumes and convert them into 2D data
+    Y_test_smooth = merge_3D_data_with_overlap(Y_test_smooth, orig_test_shape)
+
+    # Metrics (Jaccard + VOC + DET)
+    print("Calculate metrics . . .")
+    smooth_score = jaccard_index_numpy(Y_test, Y_test_smooth)
+    smooth_voc = voc_calculation(Y_test, Y_test_smooth, smooth_score)
+
+    print("Finish post-processing")
 
 
 ####################################
@@ -372,12 +453,10 @@ if load_previous_weights == False:
 
 print("Test loss: ".format(score[0]))
 print("Test jaccard_index (per subvolume): {}".format(jac_per_subvolume))
-print("Test jaccard_index (per image without overlap): {}".format(score[1]))
-print("Test jaccard_index (per image with 50% overlap): {}".format(jac_per_img_50ov))
+print("Test jaccard_index (per image): {}".format(score[1]))
 print("VOC (per image without overlap): {}".format(voc))
-print("VOC (per image with 50% overlap): {}".format(voc_per_img_50ov))
-print("DET (per image without overlap): {}".format(det))
-print("DET (per image with 50% overlap): {}".format(det_per_img_50ov))
+#print("DET (per image without overlap): {}".format(det))
+#print("DET (per image with 50% overlap): {}".format(det_per_img_50ov))
     
 if load_previous_weights == False:
     smooth_score = -1 if 'smooth_score' not in globals() else smooth_score
@@ -390,6 +469,9 @@ if load_previous_weights == False:
     smo_zfil_voc = -1 if 'smo_zfil_voc' not in globals() else smo_zfil_voc
     smo_zfil_det = -1 if 'smo_zfil_det' not in globals() else smo_zfil_det
     jac_per_subvolume = -1 if 'jac_per_subvolume' not in globals() else jac_per_subvolume
+    jac_per_img_50ov = -1 if 'jac_per_img_50ov' not in globals() else jac_per_img_50ov
+    voc_per_img_50ov = -1 if 'voc_per_img_50ov' not in globals() else voc_per_img_50ov
+    det_per_img_50ov = -1 if 'det_per_img_50ov' not in globals() else det_per_img_50ov
 
     store_history(
         results, jac_per_subvolume, score, jac_per_img_50ov, voc, 
@@ -398,5 +480,9 @@ if load_previous_weights == False:
         zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
 
     create_plots(results, job_id, test_id, char_dir)
+
+if post_process == True:
+    print("Post-process: SMOOTH - Test jaccard_index: {}".format(smooth_score))
+    print("Post-process: SMOOTH - VOC: {}".format(smooth_voc))
 
 print("FINISHED JOB {} !!".format(job_file))
