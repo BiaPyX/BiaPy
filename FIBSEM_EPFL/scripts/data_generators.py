@@ -365,8 +365,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
 
     def get_transformed_samples(self, num_examples, save_to_dir=False, 
-                                out_dir='aug', job_id="none_job_id", 
-                                save_prefix=None, train=True, 
+                                out_dir='aug', save_prefix=None, train=True, 
                                 original_elastic=True, random_images=True, 
                                 force_full_images=False):
         """Apply selected transformations to a defined number of images from
@@ -381,10 +380,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
                 out_dir (str, optional): name of the folder where the
                 examples will be stored. If any provided the examples will be
-                generated under a folder 'aug/none_job_id'.
-
-                job_id (str, optional): job identifier. If any provided the
-                examples will be generated under a folder 'aug/none_job_id'.
+                generated under a folder 'aug'.
 
                 save_prefix (str, optional): prefix to add to the generated 
                 examples' name. 
@@ -431,7 +427,6 @@ class ImageDataGenerator(keras.utils.Sequence):
             if save_prefix is not None:
                 prefix = str(save_prefix)
     
-            out_dir = os.path.join(out_dir, job_id) 
             os.makedirs(out_dir, exist_ok=True)
    
         grid = False if train == True else True

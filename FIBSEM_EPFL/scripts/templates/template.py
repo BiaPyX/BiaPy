@@ -528,22 +528,19 @@ else:
         median_filter_size=median_filter_size, 
         random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
         prob_map=probability_map, train_prob=train_prob)                            
-                                                                                
     data_gen_val_args = dict(
         X=X_val, Y=Y_val, batch_size=batch_size_value, 
         dim=(img_height,img_width), n_channels=1, 
         shuffle=shuffle_val_data_each_epoch, da=False, 
         random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
         val=True)              
-                                                                                
     train_generator = ImageDataGenerator(**data_gen_args)                       
     val_generator = ImageDataGenerator(**data_gen_val_args)                     
                                                                                 
     # Generate examples of data augmentation                                    
     if aug_examples == True:                                                    
         train_generator.get_transformed_samples(
-            10, save_to_dir=True, train=False, 
-            job_id=os.path.join(job_id, test_id))
+            10, save_to_dir=True, train=False, out_dir=da_samples_dir)
                                                                                 
 if random_crops_in_DA == True:
     img_width = crop_shape[0]
