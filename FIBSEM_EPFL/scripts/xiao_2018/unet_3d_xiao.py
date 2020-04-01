@@ -12,7 +12,7 @@ from metrics import binary_crossentropy_weighted, jaccard_index, jaccard_index_s
 from loss import custom_loss
 
 
-def U_Net_3D_Xiao(image_shape, optimizer="adam", lr=0.0001, num_classes=2):
+def U_Net_3D_Xiao(image_shape, lr=0.0001, num_classes=2):
     """Create 3D U-Net.
 
        Args:
@@ -31,9 +31,6 @@ def U_Net_3D_Xiao(image_shape, optimizer="adam", lr=0.0001, num_classes=2):
             spatial_dropout (bool, optional): use spatial dropout instead of the
             "normal" dropout. 
 
-            optimizer (str, optional): optimizer used to minimize the loss 
-            function. Posible options: 'sgd' or 'adam'.
-        
             weighted_loss (bool, optional): flag to control if a weighted loss 
             is going to be used.
 
