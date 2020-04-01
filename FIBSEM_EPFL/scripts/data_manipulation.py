@@ -326,7 +326,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         # Calculate normalization value
         norm_value = np.mean(X_train)
 
-        return X_train, Y_train, X_test, Y_test, rest_test_z, norm_value, \
+        return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value, \
                crop_made                         
 
 
