@@ -1,14 +1,15 @@
-name: old_baseTFM
+name: DL_EM_base_env
 channels:
   - defaults
 dependencies:
+  - _libgcc_mutex=0.1=main
   - _tflow_select=2.1.0=gpu
   - absl-py=0.7.0=py36_0
   - astor=0.7.1=py36_0
   - blas=1.0=mkl
   - c-ares=1.15.0=h7b6447c_1
-  - ca-certificates=2019.1.23=0
-  - certifi=2018.11.29=py36_0
+  - ca-certificates=2020.1.1=0
+  - certifi=2019.11.28=py36_0
   - cloudpickle=0.8.0=py36_0
   - cudatoolkit=9.2=0
   - cudnn=7.3.1=cuda9.2_0
@@ -51,6 +52,7 @@ dependencies:
   - markdown=3.0.1=py36_0
   - matplotlib=3.0.2=py36h5429711_0
   - mkl=2019.1=144
+  - mkl-service=1.1.2=py36he904b0f_5
   - mkl_fft=1.0.10=py36ha843d7b_0
   - mkl_random=1.0.2=py36hd81dba3_0
   - ncurses=6.1=he6710b0_1
@@ -58,7 +60,7 @@ dependencies:
   - numpy=1.16.2=py36h7e9f1db_0
   - numpy-base=1.16.2=py36hde5b4d6_0
   - olefile=0.46=py36_0
-  - openssl=1.0.2r=h7b6447c_0
+  - openssl=1.0.2u=h7b6447c_0
   - pcre=8.42=h439df22_0
   - pillow=5.4.1=py36h34e0f95_0
   - pip=19.0.3=py36_0
@@ -97,17 +99,18 @@ dependencies:
     - ipython==7.3.0
     - ipython-genutils==0.2.0
     - jedi==0.13.3
+    - opencv-python==4.2.0.32
     - pandas==0.24.1
     - parso==0.3.4
     - pexpect==4.6.0
     - pickleshare==0.7.5
     - prompt-toolkit==2.0.9
     - ptyprocess==0.6.0
+    - pydot==1.4.1
     - pygments==2.3.1
     - scikit-image==0.14.2
     - scikit-learn==0.20.3
     - sklearn==0.0
+    - texttable==1.6.2
     - traitlets==4.3.2
     - wcwidth==0.1.7
-prefix: /home/dfranco/anaconda3/envs/old_baseTFM
-
