@@ -10,10 +10,10 @@ from PIL import Image
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
-              val_split=0.1, shuffle_val=True, seedValue=42, 
-              job_id="none_job_id", e_d_data=[], e_d_mask=[], e_d_data_dim=[], 
-              e_d_dis=[], num_crops_per_dataset=0, make_crops=True, 
-              crop_shape=None, check_crop=True, d_percentage=0, 
+              val_split=0.1, shuffle_val=True, seedValue=42, e_d_data=[], 
+              e_d_mask=[], e_d_data_dim=[], e_d_dis=[], num_crops_per_dataset=0, 
+              make_crops=True, crop_shape=None, check_crop=True, 
+              check_crop_path="check_crop", d_percentage=0, 
               prepare_subvolumes=False, train_subvol_shape=None, 
               test_subvol_shape=None):         
 
@@ -45,10 +45,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             shuffle_val (bool, optional): take random training examples to      
             create validation data.
 
-            job_id (str, optional): job identifier. If any provided the examples
-            of the check_crop function will be generated under a folder 
-            'check_crops/none_job_id'.
-
             e_d_data (list of str, optional): list of paths where the extra data
             of other datasets are stored.
 
@@ -71,6 +67,8 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
             check_crop (bool, optional): to save the crops made to ensure they
             are generating as one wish.
+
+            check_crop_path (str, optional): path to save the crop samples.
 
             d_percentage (int, optional): number between 0 and 100. The images
             that have less foreground pixels than the given number will be
@@ -201,7 +199,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         Y_test[n] = mask
 
     Y_test = Y_test/255 
-    orig_test_shape = Y_test.shape
+    orig_test_shape = tuple(Y_test.shape[i] for i in [0, 2, 1, 3])
 
     # Used for 3D networks. This must be done before create the validation split
     # as the amount of images that will be in validation will not be enough to 
@@ -237,11 +235,11 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         if check_crop == True:
             print("4.4) Checking the crops . . .")
             check_crops(X_train, [image_test_shape[0], image_test_shape[1]],
-                        num_examples=3, out_dir="check_crops", job_id=job_id, 
-                        suffix="_x_", grid=True)
+                        num_examples=3, out_dir=check_crop_path, suffix="_x_", 
+                        grid=True)
             check_crops(Y_train, [image_test_shape[0], image_test_shape[1]],
-                        num_examples=3, out_dir="check_crops", job_id=job_id, 
-                        suffix="_y_", grid=True)
+                        num_examples=3, out_dir=check_crop_path, suffix="_y_", 
+                        grid=True)
         
         image_test_shape[1] = crop_shape[1]
         image_test_shape[0] = crop_shape[0]
@@ -297,10 +295,10 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                     print("5.{}) Checking the crops of the extra dataset . . ."\
                           .format(i))
                     check_crops(e_X_train, [d_dim[0], d_dim[1]], num_examples=3, 
-                                out_dir="check_crops", job_id=job_id, 
+                                out_dir=check_crop_path, 
                                 suffix="_e" + str(i) + "x_", grid=True)
                     check_crops(e_Y_train, [d_dim[0], d_dim[1]], num_examples=3,
-                                out_dir="check_crops", job_id=job_id, 
+                                out_dir=check_crop_path,
                                 suffix="_e" + str(i) + "y_", grid=True)
 
             # Concatenate datasets
@@ -1060,8 +1058,7 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
 
 
 def check_crops(data, out_dim, num_examples=2, include_crops=True,
-                out_dir="check_crops", job_id="none_job_id", suffix="_none_", 
-                grid=True):
+                out_dir="check_crops", suffix="_none_", grid=True):
     """Check cropped images by the function crop_data(). 
         
        Args:
@@ -1078,9 +1075,6 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
 
             out_dir (string, optional): directory where the images will be save.
 
-            job_id (str, optional): job identifier. If any provided the
-            examples will be generated under a folder 'out_dir/none_job_id'.
-
             suffix (string, optional): suffix to add in image names. 
 
             grid (bool, optional): make the grid in the output image.
@@ -1091,7 +1085,6 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
     if out_dim[0] < data.shape[1] or out_dim[1] < data.shape[2]:
         raise ValueError("'out_dim' must be equal or greater than 'data.shape'")
 
-    out_dir = os.path.join(out_dir, job_id)
     os.makedirs(out_dir, exist_ok=True)
 
     # For mask data
