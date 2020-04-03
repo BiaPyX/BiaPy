@@ -14,12 +14,11 @@ parser.add_argument("result_dir",
 parser.add_argument("-id", "--job_id", "--id", help="Job identifier", 
                     default="unknown_job")
 parser.add_argument("-rid","--run_id", "--rid", help="Run number of the same job", 
-                    type=int, default="0")
+                    type=int, default=0)
 parser.add_argument("-gpu","--gpu", dest="gpu_selected", 
                     help="GPU number according to 'nvidia-smi' command",
                     required=True)
 args = parser.parse_args()
-print(args.base_work_dir)
 
 
 ##########################
@@ -241,7 +240,7 @@ extra_train_data = 0
 ### Load previously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
-load_previous_weights = True
+load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
 # Flag to activate the fine tunning
@@ -251,8 +250,8 @@ fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
 # Name of the folder where weights files will be stored/loaded from. This folder 
-# must be located inside the directory pointed by "args.base_work_dir" variable. If
-# there is no such directory, it will be created for the first time
+# must be located inside the directory pointed by "args.base_work_dir" variable. 
+# If there is no such directory, it will be created for the first time
 h5_dir = os.path.join(args.result_dir, 'h5_files')
 
 
@@ -509,8 +508,8 @@ if custom_da == False:
     # Keras Data Augmentation                                                   
     train_generator, \
     val_generator = keras_da_generator(
-        X_train=X_train, Y_train=Y_train, batch_size_value=batch_size_value,
-        X_val=X_val, Y_val=Y_val, save_examples=aug_examples,
+        X_train=X_train, Y_train=Y_train, X_val=X_val, Y_val=Y_val, 
+        batch_size_value=batch_size_value, save_examples=aug_examples,
         out_dir=da_samples_dir, shuffle_train=shuffle_train_data_each_epoch, 
         shuffle_val=shuffle_val_data_each_epoch, zoom=keras_zoom, 
         rotation_range=rotation_range, random_crops_in_DA=random_crops_in_DA,
@@ -872,18 +871,18 @@ if load_previous_weights == False:
     print("Epoch number: {}".format(len(results.history['val_loss'])))
     print("Train time (s): {}".format(np.sum(time_callback.times)))
     print("Train loss: {}".format(np.min(results.history['loss'])))
-    print("Train jaccard_index: {}"\
+    print("Train jaccard_index: {}"
           .format(np.max(results.history['jaccard_index'])))
     print("Validation loss: {}".format(np.min(results.history['val_loss'])))
-    print("Validation jaccard_index: {}"\
+    print("Validation jaccard_index: {}"
           .format(np.max(results.history['val_jaccard_index'])))
 
-print("Test loss: ".format(score[0]))
+print("Test loss: {}".format(score[0]))
     
 if random_crops_in_DA == False:    
     print("Test jaccard_index (per crop): {}".format(jac_per_crop))
     print("Test jaccard_index (per image without overlap): {}".format(score[1]))
-    print("Test jaccard_index (per image with 50% overlap): {}"\
+    print("Test jaccard_index (per image with 50% overlap): {}"
           .format(jac_per_img_50ov))
     print("VOC (per image without overlap): {}".format(voc))
     print("VOC (per image with 50% overlap): {}".format(voc_per_img_50ov))
@@ -927,7 +926,7 @@ if post_process == True and zfil_preds_test is not None:
     print("Post-process: Z-filtering - DET: {}".format(zfil_det))
 
 if post_process == True and smooth_zfil_preds_test is not None:
-    print("Post-process: SMOOTH + Z-filtering - Test jaccard_index: {}"\
+    print("Post-process: SMOOTH + Z-filtering - Test jaccard_index: {}"
           .format(smo_zfil_score))
     print("Post-process: SMOOTH + Z-filtering - VOC: {}".format(smo_zfil_voc))
     print("Post-process: SMOOTH + Z-filtering - DET: {}".format(smo_zfil_det))
