@@ -368,7 +368,7 @@ if discard_cropped_images == True and make_crops == True \
     print("##################\n#  DISCARD DATA  #\n##################\n") 
 
     # Load data
-    X_train, Y_train, 
+    X_train, Y_train, \
     X_test, Y_test, \
     orig_test_shape, norm_value, \
     crops_made = load_data(
@@ -460,7 +460,7 @@ if duplicate_train != 0:
 
     X_train = np.vstack([X_train]*duplicate_train)
     Y_train = np.vstack([Y_train]*duplicate_train)
-    print("Train data replicated {} times. Its new shape is: {}"\
+    print("Train data replicated {} times. Its new shape is: {}"
           .format(duplicate_train, X_train.shape))
 
 # Add extra train data generated with DA
