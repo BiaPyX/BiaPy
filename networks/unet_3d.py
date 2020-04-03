@@ -56,7 +56,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
 
     c1 = Conv3D(numInitChannels, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c1)
-    p1 = MaxPooling3D((2, 2, 2)) (c1)
+    p1 = MaxPooling3D((1, 2, 2), padding='same') (c1)
     
     c2 = Conv3D(numInitChannels*2, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (p1)
@@ -66,7 +66,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
         c2 = SpatialDropout3D(fixed_dropout) (c2) if spatial_dropout == True else Dropout(fixed_dropout) (c2)
     c2 = Conv3D(numInitChannels*2, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c2)
-    p2 = MaxPooling3D((2, 2, 2)) (c2)
+    p2 = MaxPooling3D((1, 2, 2), padding='same') (c2)
     
     c3 = Conv3D(numInitChannels*4, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (p2)
@@ -76,7 +76,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
         c3 = SpatialDropout3D(fixed_dropout) (c3) if spatial_dropout == True else Dropout(fixed_dropout) (c3)
     c3 = Conv3D(numInitChannels*4, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c3)
-    p3 = MaxPooling3D((2, 2, 2)) (c3)
+    p3 = MaxPooling3D((1, 2, 2), padding='same') (c3)
     
     c4 = Conv3D(numInitChannels*8, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (p3)
@@ -86,7 +86,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
         c4 = SpatialDropout3D(fixed_dropout) (c4) if spatial_dropout == True else Dropout(fixed_dropout) (c4)
     c4 = Conv3D(numInitChannels*8, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c4)
-    p4 = MaxPooling3D(pool_size=(2, 2, 2)) (c4)
+    p4 = MaxPooling3D((1, 2, 2), padding='same') (c4)
     
     c5 = Conv3D(numInitChannels*16, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (p4)
@@ -97,7 +97,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
     c5 = Conv3D(numInitChannels*16, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c5)
     
-    u6 = Conv3DTranspose(numInitChannels*8, (2, 2, 2), strides=(2, 2, 2),
+    u6 = Conv3DTranspose(numInitChannels*8, (1, 2, 2), strides=(1, 2, 2),
                          padding='same') (c5)
     u6 = concatenate([u6, c4])
     c6 = Conv3D(numInitChannels*8, (3, 3, 3), activation=activation,
@@ -109,7 +109,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
     c6 = Conv3D(numInitChannels*8, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c6)
     
-    u7 = Conv3DTranspose(numInitChannels*4, (2, 2, 2), strides=(2, 2, 2),
+    u7 = Conv3DTranspose(numInitChannels*4, (1, 2, 2), strides=(1, 2, 2),
                          padding='same') (c6)
     u7 = concatenate([u7, c3])
     c7 = Conv3D(numInitChannels*4, (3, 3, 3), activation=activation,
@@ -121,7 +121,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
     c7 = Conv3D(numInitChannels*4, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c7)
     
-    u8 = Conv3DTranspose(numInitChannels*2, (2, 2, 2), strides=(2, 2, 2),
+    u8 = Conv3DTranspose(numInitChannels*2, (1, 2, 2), strides=(1, 2, 2),
                          padding='same') (c7)
     u8 = concatenate([u8, c2])
     c8 = Conv3D(numInitChannels*2, (3, 3, 3), activation=activation,
@@ -133,7 +133,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
     c8 = Conv3D(numInitChannels*2, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c8)
     
-    u9 = Conv3DTranspose(numInitChannels, (2, 2, 2), strides=(2, 2, 2),
+    u9 = Conv3DTranspose(numInitChannels, (1, 2, 2), strides=(1, 2, 2),
                          padding='same') (c8)
     u9 = concatenate([u9, c1])
     c9 = Conv3D(numInitChannels, (3, 3, 3), activation=activation,

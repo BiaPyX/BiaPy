@@ -1,11 +1,36 @@
 ##########################
+#   ARGS COMPROBATION    #
+##########################
+
+import argparse
+parser = argparse.ArgumentParser(
+    description="Template based of template/template.py")
+parser.add_argument("base_work_dir",
+                    help="Path to code base dir , i.e ~/DeepLearning_EM")
+parser.add_argument("data_dir", help="Path to data base dir")
+parser.add_argument("result_dir",
+                    help="Path to where the resulting output of the job will "\
+                    "be stored")
+parser.add_argument("-id", "--job_id", "--id", help="Job identifier",
+                    default="unknown_job")
+parser.add_argument("-rid","--run_id", "--rid", help="Run number of the same job",
+                    type=int, default=0)
+parser.add_argument("-gpu","--gpu", dest="gpu_selected",
+                    help="GPU number according to 'nvidia-smi' command",
+                    required=True)
+args = parser.parse_args()
+
+
+##########################
 #        PREAMBLE        #
 ##########################
 
 import os
 import sys
-script_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(script_dir, '..'))
+sys.path.insert(0, args.base_work_dir)
+
+# Working dir
+os.chdir(args.base_work_dir)
 
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
@@ -14,6 +39,9 @@ limit_threads()
 
 # Try to generate the results as reproducible as possible
 set_seed(42)
+
+crops_made = False
+job_identifier = args.job_id + '_' + str(args.run_id)
 
 
 ##########################
@@ -26,54 +54,35 @@ import keras
 import math
 import time
 import tensorflow as tf
-from data_manipulation import load_data, crop_data, merge_data_without_overlap,\
-                              check_crops, crop_data_with_overlap, \
-                              merge_data_with_overlap, check_binary_masks, \
+from data_manipulation import load_data, check_binary_masks, \
                               binary_onehot_encoding_to_img, \
                               crop_3D_data_with_overlap, \
                               merge_3D_data_with_overlap
 from data_3D_generators import VoxelDataGenerator
-from unet_3d import U_Net_3D
+from networks.unet_3d import U_Net_3D
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from itertools import chain
-from skimage.io import imread, imshow, imread_collection, concatenate_images
-from skimage.morphology import label
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.models import load_model
-from PIL import Image
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap,\
                                      smooth_3d_predictions
-from skimage.segmentation import clear_border
 from keras.utils.vis_utils import plot_model
 
 
-##########################
-#   ARGS COMPROBATION    #
-##########################
+############
+#  CHECKS  #
+############
 
-# Take arguments
-gpu_selected = str(sys.argv[1])                                       
-job_id = str(sys.argv[2])                                             
-test_id = str(sys.argv[3])                                            
-job_file = job_id + '_' + test_id                                     
-base_work_dir = str(sys.argv[4])
-log_dir = os.path.join(base_work_dir, 'logs', job_id)
-
-# Checks
-print("job_id : {}".format(job_id))
-print("GPU selected : {}".format(gpu_selected))
+print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
 print("Keras        : {}".format(keras.__version__))
 print("Tensorflow   : {}".format(tf.__version__))
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
-os.environ["CUDA_VISIBLE_DEVICES"] = gpu_selected;
-
-# Working dir
-os.chdir(base_work_dir)
+os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_selected;
 
 
 ##########################                                                      
@@ -82,11 +91,10 @@ os.chdir(base_work_dir)
 
 ### Dataset variables
 # Main dataset data/mask paths
-data_base_path = 'data'
-train_path = os.path.join(data_base_path, 'train', 'x')
-train_mask_path = os.path.join(data_base_path, 'train', 'y')
-test_path = os.path.join(data_base_path, 'test', 'x')
-test_mask_path = os.path.join(data_base_path, 'test', 'y')
+train_path = os.path.join(args.data_dir, 'train', 'x')
+train_mask_path = os.path.join(args.data_dir, 'train', 'y')
+test_path = os.path.join(args.data_dir, 'test', 'x')
+test_mask_path = os.path.join(args.data_dir, 'test', 'y')
 # Percentage of the training data used as validation                            
 perc_used_as_val = 0.1
 
@@ -143,7 +151,7 @@ random_subvolumes_in_DA = False
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when "random_crops_in_DA"
 # is made, as more original train data can be cover
-duplicate_train = 70
+duplicate_train = 0
 # Extra number of images to add to the train data. Applied after duplicate_train
 extra_train_data = 0
 
@@ -153,23 +161,23 @@ extra_train_data = 0
 # the network again
 load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
-previous_job_weights = job_id
+previous_job_weights = args.job_id
 # Flag to activate the fine tunning
 fine_tunning = False
 # ID of the previous weigths to load the weigths from to make the fine tunning 
-fine_tunning_weigths = "232"
+fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
 # Name of the folder where weights files will be stored/loaded from. This folder 
-# must be located inside the directory pointed by "base_work_dir" variable. If
-# there is no such directory, it will be created for the first time
-h5_dir = 'h5_files'
+# must be located inside the directory pointed by "args.base_work_dir" variable. 
+# If there is no such directory, it will be created for the first time
+h5_dir = os.path.join(args.result_dir, 'h5_files')
 
 
 ### Experiment main parameters
 # Batch size value
 batch_size_value = 1
-# Optimizer to use. Posible values: "sgd" or "adam"
+# Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "sgd"
 # Learning rate used by the optimization method
 learning_rate_value = 0.001
@@ -183,7 +191,7 @@ time_callback = TimeHistory()
 
 ### Network architecture specific parameters
 # Number of channels in the first initial layer of the network
-num_init_channels = 16
+num_init_channels = 32
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
 spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
@@ -197,7 +205,7 @@ post_process = True
 
 ### Paths of the results                                             
 # Directory where predicted images of the segmentation will be stored
-result_dir = os.path.join('results', 'results_' + job_id, job_file)
+result_dir = os.path.join(args.result_dir, 'results', job_identifier)
 # Directory where binarized predicted images will be stored
 result_bin_dir = os.path.join(result_dir, 'binarized')
 # Directory where predicted images will be stored
@@ -206,10 +214,10 @@ result_no_bin_dir = os.path.join(result_dir, 'no_binarized')
 smooth_dir = os.path.join(result_dir, 'smooth')
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
-# folder pointed by "base_work_dir" variable 
-char_dir = os.path.join('charts', job_id)
+# folder pointed by "args.base_work_dir" variable 
+char_dir = os.path.join(result_dir, 'charts', job_identifier)
 # Folder where smaples of DA will be stored
-da_samples_dir = os.path.join(result_dir, 'aug')
+da_samples_dir = os.path.join(result_dir, 'aug', job_identifier)
 
 
 #####################
@@ -259,7 +267,7 @@ if duplicate_train != 0:
 
     X_train = np.vstack([X_train]*duplicate_train)
     Y_train = np.vstack([Y_train]*duplicate_train)
-    print("Train data replicated {} times. Its new shape is: {}"\
+    print("Train data replicated {} times. Its new shape is: {}"
           .format(duplicate_train, X_train.shape))
 
 # Add extra train data generated with DA
@@ -317,7 +325,7 @@ if aug_examples == True:
 print("###################\n#  TRAIN PROCESS  #\n###################\n")
 
 print("Creating the network . . .")
-model = U_Net_3D(img_3d_desired_shape, numInitChannels=num_init_channels, 
+model = U_Net_3D(train_3d_desired_shape, numInitChannels=num_init_channels, 
                  spatial_dropout=spatial_dropout,
                  fixed_dropout=fixed_dropout_value,
                  optimizer=optimizer, lr=learning_rate_value)
@@ -325,7 +333,7 @@ model = U_Net_3D(img_3d_desired_shape, numInitChannels=num_init_channels,
 # Check the network created
 model.summary(line_length=150)
 os.makedirs(char_dir, exist_ok=True)
-model_name = os.path.join(char_dir, "model_plot_" + job_file + ".png")
+model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
@@ -334,13 +342,14 @@ if load_previous_weights == False:
     
     os.makedirs(h5_dir, exist_ok=True)
     checkpointer = ModelCheckpoint(
-        os.path.join(h5_dir, weight_files_prefix + job_file + '.h5'),
+        os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
         verbose=1, save_best_only=True)
     
     if fine_tunning == True:                                                    
         h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
-                             + '_' + test_id + '.h5')     
-        print("Fine-tunning: loading model weights from h5_file: {}".format(h5_file))   
+                             + '_' + str(args.run_id) + '.h5')     
+        print("Fine-tunning: loading model weights from h5_file: {}"
+              .format(h5_file))   
         model.load_weights(h5_file)                                             
    
     results = model.fit_generator(
@@ -351,7 +360,7 @@ if load_previous_weights == False:
         callbacks=[earlystopper, checkpointer, time_callback])
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
-                                 + '_' + test_id + '.h5')
+                                 + '_' + str(args.run_id) + '.h5')
     print("Loading model weights from h5_file: {}".format(h5_file))
     model.load_weights(h5_file)
 
@@ -391,7 +400,7 @@ print("Calculate metrics . . .")
 score[1] = jaccard_index_numpy(Y_test, (recons_pred_test > 0.5).astype(np.uint8))
 voc = voc_calculation(Y_test, (recons_pred_test > 0.5).astype(np.uint8), score[1])
 #det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
-#                      det_eval_path, det_bin, n_dig, job_id)
+#                      det_eval_path, det_bin, n_dig, job_identifier)
 det = -1
 
     
@@ -435,10 +444,10 @@ if load_previous_weights == False:
     print("Epoch number: {}".format(len(results.history['val_loss'])))
     print("Train time (s): {}".format(np.sum(time_callback.times)))
     print("Train loss: {}".format(np.min(results.history['loss'])))
-    print("Train jaccard_index: {}"\
+    print("Train jaccard_index: {}"
           .format(np.max(results.history['jaccard_index'])))
     print("Validation loss: {}".format(np.min(results.history['val_loss'])))
-    print("Validation jaccard_index: {}"\
+    print("Validation jaccard_index: {}"
           .format(np.max(results.history['val_jaccard_index'])))
 
 print("Test loss: ".format(score[0]))
@@ -466,13 +475,13 @@ if load_previous_weights == False:
     store_history(
         results, jac_per_subvolume, score, jac_per_img_50ov, voc, 
         voc_per_img_50ov, det, det_per_img_50ov, time_callback, log_dir,
-        job_file, smooth_score, smooth_voc, smooth_det, zfil_score, zfil_voc, 
-        zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
+        job_identifier, smooth_score, smooth_voc, smooth_det, zfil_score, 
+        zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
 
-    create_plots(results, job_id, test_id, char_dir)
+    create_plots(results, job_identifier, args.run_id, char_dir)
 
 if post_process == True:
     print("Post-process: SMOOTH - Test jaccard_index: {}".format(smooth_score))
     print("Post-process: SMOOTH - VOC: {}".format(smooth_voc))
 
-print("FINISHED JOB {} !!".format(job_file))
+print("FINISHED JOB {} !!".format(job_identifier))
