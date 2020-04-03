@@ -951,7 +951,7 @@ def merge_data_without_overlap(data, num, out_shape=[1, 1], grid=True):
     return mixed_data
 
 
-def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
+def merge_3D_data_with_overlap(data, o_vol_shape, data_mask=None,
                                overlap_z=0.5):
     """Merge 3D smaller volumes in a 3D full volume with a defined overlap.
        Reverse operation of crop_3D_data_with_overlap().
@@ -978,7 +978,9 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
     """ 
  
     print("### MERGE-3D-OV-CROP ###")
-   
+
+    orig_vol_shape = tuple(o_vol_shape[i] for i in [0, 2, 1, 3]) 
+
     merged_data = np.zeros((orig_vol_shape))
     if data_mask is not None:
         merged_data_mask = np.zeros((orig_vol_shape))
@@ -1010,7 +1012,6 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
             for y in range(vols_per_y):     
                 ov_x_ = ov_x if x != 0 else 0
                 ov_y_ = ov_y if y != 0 else 0
-
                 if (z*step_z)+d_num < orig_vol_shape[0]:
                     merged_data[z*step_z:(z*step_z)+d_num, 
                                 (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_, 
