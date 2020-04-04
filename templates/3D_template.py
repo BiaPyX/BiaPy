@@ -474,7 +474,7 @@ if load_previous_weights == False:
 
     store_history(
         results, jac_per_subvolume, score, jac_per_img_50ov, voc, 
-        voc_per_img_50ov, det, det_per_img_50ov, time_callback, log_dir,
+        voc_per_img_50ov, det, det_per_img_50ov, time_callback, result_dir,
         job_identifier, smooth_score, smooth_voc, smooth_det, zfil_score, 
         zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
 
