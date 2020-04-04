@@ -259,13 +259,13 @@ smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
 # folder pointed by "args.base_work_dir" variable 
-char_dir = os.path.join(result_dir, 'charts', job_identifier)
+char_dir = os.path.join(result_dir, 'charts')
 # Directory where weight maps will be stored
-loss_weight_dir = os.path.join(result_dir, 'loss_weights', args.job_id)
+loss_weight_dir = os.path.join(result_dir, 'loss_weights')
 # Folder where smaples of DA will be stored
-da_samples_dir = os.path.join(result_dir, 'aug', job_identifier)
+da_samples_dir = os.path.join(result_dir, 'aug')
 # Folder where crop samples will be stored
-check_crop_path = os.path.join(result_dir, 'check_crop', job_identifier)
+check_crop_path = os.path.join(result_dir, 'check_crop')
 
 
 #####################

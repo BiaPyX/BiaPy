@@ -196,7 +196,8 @@ num_init_channels = 32
 spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
 fixed_dropout_value = 0.0 
-
+# Active flag if softmax is used as the last layer of the network
+softmax_out = False
 
 ### Post-processing
 # Flag to activate the post-processing (Smoooth and Z-filtering)
@@ -215,9 +216,9 @@ smooth_dir = os.path.join(result_dir, 'smooth')
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
 # folder pointed by "args.base_work_dir" variable 
-char_dir = os.path.join(result_dir, 'charts', job_identifier)
+char_dir = os.path.join(result_dir, 'charts')
 # Folder where smaples of DA will be stored
-da_samples_dir = os.path.join(result_dir, 'aug', job_identifier)
+da_samples_dir = os.path.join(result_dir, 'aug')
 
 
 #####################
@@ -298,19 +299,20 @@ train_generator = VoxelDataGenerator(
     X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,
     shuffle_each_epoch=shuffle_train_data_each_epoch, 
     batch_size=batch_size_value, da=da, flip=flips, shift_range=shift_range, 
-    rotation_range=rotation_range, square_rotations=square_rotations)
+    rotation_range=rotation_range, square_rotations=square_rotations,
+    softmax_out=softmax_out)
 
 print("Preparing validation data generator . . .")
 val_generator = VoxelDataGenerator(
     X_val, Y_val, random_subvolumes_in_DA=random_subvolumes_in_DA,
     shuffle_each_epoch=shuffle_val_data_each_epoch, batch_size=batch_size_value,
-    da=False)
+    da=False, softmax_out=softmax_out)
 
 # Create the test data generator without DA
 print("Preparing test data generator . . .")
 test_generator = VoxelDataGenerator(
     X_test, Y_test, random_subvolumes_in_DA=False, shuffle_each_epoch=False,
-    batch_size=batch_size_value, da=False)
+    batch_size=batch_size_value, da=False, softmax_out=softmax_out)
 
 # Generate examples of data augmentation
 if aug_examples == True:
@@ -373,23 +375,23 @@ print("##################\n#    INFERENCE   #\n##################\n")
 
 # Evaluate to obtain the loss value and the Jaccard index
 print("Evaluating test data . . .")
-score = model.evaluate_generator(test_generator, batch_size=batch_size_value, 
-                                 verbose=1)
+score = model.evaluate_generator(test_generator, verbose=1)
 jac_per_subvolume = score[1]
 
 # Predict on test
 print("Making the predictions on test data . . .")
-preds_test = model.predict_generator(test_generator, batch_size=batch_size_value,
-                                     verbose=1)
+preds_test = model.predict_generator(test_generator, verbose=1)
 
-# Decode predicted images into the original one
-decoded_pred_test = np.zeros(Y_test.shape)
-for i in range(preds_test.shape[0]):
-    decoded_pred_test[i] = binary_onehot_encoding_to_img(preds_test[i])
+if softmax_out == True:
+    # Decode predicted images into the original one
+    decoded_pred_test = np.zeros(Y_test.shape)
+    for i in range(preds_test.shape[0]):
+        decoded_pred_test[i] = binary_onehot_encoding_to_img(preds_test[i])
+    preds_test = decoded_pred_test
 
 # Merge the volumes and convert them into 2D data
 recons_pred_test, Y_test = merge_3D_data_with_overlap(
-    decoded_pred_test, orig_test_shape, data_mask=Y_test)
+    preds_test, orig_test_shape, data_mask=Y_test)
 
 print("Saving predicted images . . .")
 save_img(Y=(recons_pred_test > 0.5).astype(np.uint8), mask_dir=result_bin_dir,
