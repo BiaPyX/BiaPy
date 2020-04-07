@@ -423,11 +423,11 @@ if post_process == True:
 
         Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
 
-    print("Saving smooth predicted images . . .")
-    save_img(Y=Y_test_smooth, mask_dir=smooth_dir, prefix="test_out_smooth")
-
     # Merge the volumes and convert them into 2D data
     Y_test_smooth = merge_3D_data_with_overlap(Y_test_smooth, orig_test_shape)
+
+    print("Saving smooth predicted images . . .")
+    save_img(Y=Y_test_smooth, mask_dir=smooth_dir, prefix="test_out_smooth")
 
     # Metrics (Jaccard + VOC + DET)
     print("Calculate metrics . . .")
