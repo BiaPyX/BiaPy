@@ -14,6 +14,7 @@ from PIL import ImageEnhance
 from texttable import Texttable
 from keras.preprocessing.image import ImageDataGenerator as kerasDA
 from util import array_to_img, img_to_array, do_save_wm, make_weight_map
+from data_manipulation  import img2D_to_onehot_encoding
 
 
 class ImageDataGenerator(keras.utils.Sequence):
@@ -29,7 +30,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                  hflip=False, rotation90=False, rotation_range=0.0, 
                  brightness_range=None, median_filter_size=[0, 0], 
                  random_crops_in_DA=False, crop_length=0, prob_map=False, 
-                 train_prob=None, val=False):
+                 train_prob=None, val=False, softmax_out=False):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
@@ -108,6 +109,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         self.prob_map = prob_map
         self.train_prob = train_prob
         self.val = val
+        self.softmax_out = softmax_out 
         self.on_epoch_end()
         
         if self.X.shape[1] == self.X.shape[2] or self.random_crops_in_DA == True:
@@ -169,7 +171,13 @@ class ImageDataGenerator(keras.utils.Sequence):
                     batch_x[i], batch_y[i], _ = self.apply_transform(
                         self.X[j], self.Y[j])
                 
- 
+        if self.softmax_out == True:
+            batch_y_ = np.zeros((self.batch_size, ) + self.Y.shape[1:3] + (2,))
+            for i in range(self.batch_size):
+                batch_y_[i] = np.asarray(img2D_to_onehot_encoding(batch_y[i]))
+
+            batch_y = batch_y_
+
         return batch_x, batch_y
 
     def print_da_stats(self):
