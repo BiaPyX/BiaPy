@@ -18,7 +18,6 @@ import math
 
 from scipy.ndimage import rotate
 from data_3D_generators import VoxelDataGenerator
-from data_manipulation import binary_onehot_encoding_to_img
 
 
 if __name__ == '__main__':
@@ -497,7 +496,7 @@ def smooth_3d_predictions(vol, pred_func, batch_size_value=1,
 
     if softmax_output == True:
         for i in range(aug_vols.shape[0]):
-            decoded_aug_vols[i] = binary_onehot_encoding_to_img(aug_vols[i])
+            decoded_aug_vols[i] = np.expand_dims(aug_vols[i,...,1], -1)
     
     # Undo the combinations of the volume
     out_vols = []
