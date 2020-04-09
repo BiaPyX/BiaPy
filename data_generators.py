@@ -14,7 +14,7 @@ from PIL import ImageEnhance
 from texttable import Texttable
 from keras.preprocessing.image import ImageDataGenerator as kerasDA
 from util import array_to_img, img_to_array, do_save_wm, make_weight_map
-from data_manipulation  import img2D_to_onehot_encoding
+from data_manipulation  import img_to_onehot_encoding
 
 
 class ImageDataGenerator(keras.utils.Sequence):
@@ -174,7 +174,7 @@ class ImageDataGenerator(keras.utils.Sequence):
         if self.softmax_out == True:
             batch_y_ = np.zeros((self.batch_size, ) + self.Y.shape[1:3] + (2,))
             for i in range(self.batch_size):
-                batch_y_[i] = np.asarray(img2D_to_onehot_encoding(batch_y[i]))
+                batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[i]))
 
             batch_y = batch_y_
 
