@@ -1273,23 +1273,3 @@ def img_to_onehot_encoding(img, num_classes=2):
         encoded_image[:,:,:,i] = np.all(img.reshape((-1,1)) == i, axis=1).reshape(shape[:3])
 
     return encoded_image
-
-
-def binary_onehot_encoding_to_img(one_hot):
-    """Converts given binary one-hot encoded image into its original format.
-       Args:
-            one_hot (Numpy 4D array): data. E.g. (z, x, y, num_classes).
-
-       Return:
-            single_layer (Numpy 3D array): data one-hot encoded.
-            E.g. (z, x, y, 1)
-
-    """
-    single_layer = np.argmax(one_hot, axis=-1)
-    output = np.zeros(one_hot.shape[:3]+(1,), dtype='float32')
-
-    output[single_layer==0] = 0 # uncomment to avoid background probabilities 
-    #output[single_layer==0] = 1 - np.expand_dims(one_hot[...,0],-1)[single_layer==0]
-    output[single_layer==1] = np.expand_dims(one_hot[...,1],-1)[single_layer==1]
-
-    return output
