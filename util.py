@@ -645,3 +645,62 @@ def do_save_wm(labels, path, binary = True, w0 = 10, sigma = 5):
         np.save(path_to_save.format(b=i), labels_[i])
         
     return None
+
+
+def foreground_percentage(mask, class_tag):
+    """ Percentage of pixels that corresponds to the class in the given image.
+
+        Args:
+             mask (2D Numpy array): image mask to analize.
+
+             class_tag (int): class to find in the image.
+
+        Returns:
+             float: percentage of pixels that corresponds to the class. Value
+             between 0 and 1.
+    """
+
+    c = 0
+    for i in range(0, mask.shape[0]):
+        for j in range(0, mask.shape[1]):
+            if mask[i, j, 0] == class_tag:
+                c = c + 1
+
+    return (c*100)/(mask.shape[0]*mask.shape[1])
+
+
+def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, 
+                             class_names=None, th=0.5):
+    """
+
+    """
+        
+    if class_names is None:
+        class_names = []
+        for i in range(num_classes):
+            class_names.append("class" + str(i)) 
+    else:
+        if len(class_names) != num_classes:
+            raise ValueError("A name per 'num_classes' must be given")      
+
+    # Create the directories
+    os.makedirs(os.path.join(out_dir, "x"), exist_ok=True)
+    os.makedirs(os.path.join(out_dir, "y"), exist_ok=True)
+
+    print("Dividing provided data into {} classes . . .".format(len(class_names)))
+    d = len(str(data.shape[0]))
+    for i in tqdm(range(data.shape[0])):
+        # Assign the image to a class if it has, in percentage, more pixels of 
+        # that class than the given threshold 
+        for j in range(num_classes):
+            t = foreground_percentage(data_mask[i], j)
+            print("t: {}".format(t)) 
+            if t > th:
+                im = Image.fromarray(data[i,:,:,0])
+                im = im.convert('L')
+                im.save(os.path.join(os.path.join(out_dir, "x"), 
+                        "im_" + str(i).zfill(d) + class_names[j] + ".png"))
+                im = Image.fromarray(data_mask[i,:,:,0])
+                im = im.convert('L')
+                im.save(os.path.join(os.path.join(out_dir, "y"), 
+                        "mask_" + str(i).zfill(d) + class_names[j] + ".png"))

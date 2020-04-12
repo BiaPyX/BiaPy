@@ -150,7 +150,7 @@ def _rotate_mirror_undo(im_mirrs):
     return np.mean(origs, axis=0)
 
 
-def _windowed_subdivs(padded_img, window_size, subdivisions, nb_classes, pred_func):
+def _windowed_subdivs(padded_img, window_size, subdivisions, nb_classes, pred_func, softmax=False):
     """
     Create tiled overlapping patches.
 
@@ -193,6 +193,13 @@ def _windowed_subdivs(padded_img, window_size, subdivisions, nb_classes, pred_fu
     subdivs = np.array([patch * WINDOW_SPLINE_2D for patch in subdivs])
     gc.collect()
 
+    # Decode predicted images into the original one
+    if softmax == True:
+        decoded_subdivs = np.zeros(subdivs.shape[:3] + (1,))
+        for i in range(subdivs.shape[0]):
+            decoded_subdivs[i] = binary_onehot_encoding_to_2Dimg(subdivs[i])
+        subdivs = decoded_subdivs
+    
     # Such 5D array:
     subdivs = subdivs.reshape(a, b, c, d, nb_classes)
     gc.collect()
@@ -291,7 +298,7 @@ def _recreate_from_subdivs(subdivs, window_size, subdivisions, padded_out_shape)
         a += 1
     return y / (subdivisions ** 2)
 
-def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, nb_classes, pred_func):
+def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, nb_classes, pred_func, softmax=False):
     """
     Apply the `pred_func` function to square patches of the image, and overlap
     the predictions to merge them smoothly.
@@ -323,7 +330,7 @@ def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, nb_c
     res = []
     for pad in tqdm(pads):
         # For every rotation:
-        sd = _windowed_subdivs(pad, window_size, subdivisions, nb_classes, pred_func)
+        sd = _windowed_subdivs(pad, window_size, subdivisions, nb_classes, pred_func, softmax=softmax)
         one_padded_result = _recreate_from_subdivs(
             sd, window_size, subdivisions,
             padded_out_shape=list(pad.shape[:-1])+[nb_classes])

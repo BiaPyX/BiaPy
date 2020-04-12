@@ -7,6 +7,7 @@ from tqdm import tqdm
 from skimage.io import imread
 from sklearn.model_selection import train_test_split
 from PIL import Image
+from util import foreground_percentage
 
 def load_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
@@ -328,28 +329,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                crop_made                         
 
 
-def __foreground_percentage(mask, class_tag=255):
-    """ Percentage of pixels that corresponds to the class in the given image.
-        
-        Args: 
-             mask (2D Numpy array): image mask to analize.
-
-             class_tag (int, optional): class to find in the image.
-
-        Returns:
-             float: percentage of pixels that corresponds to the class. Value
-             between 0 and 1.
-    """
-
-    c = 0
-    for i in range(0, mask.shape[0]):
-        for j in range(0, mask.shape[1]):     
-            if mask[i][j] == class_tag:
-                c = c + 1
-
-    return (c*100)/(mask.shape[0]*mask.shape[1])
-
-
 def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0], 
               d_percentage=0):                          
     """Crop data into smaller pieces.
@@ -420,9 +399,9 @@ def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0],
         for img_num in tqdm(range(0, r_data.shape[0])):                             
             for i in range(0, h_num):                                       
                 for j in range(0, v_num):
-                    p = __foreground_percentage(r_data_mask[
+                    p = foreground_percentage(r_data_mask[
                         img_num, (i*crop_shape[0]):((i+1)*crop_shape[1]),
-                        (j*crop_shape[0]):((j+1)*crop_shape[1])])
+                        (j*crop_shape[0]):((j+1)*crop_shape[1])], 255)
                     if p > d_percentage: 
                         selected_images.append(cont)
                     else:
@@ -1266,10 +1245,17 @@ def img_to_onehot_encoding(img, num_classes=2):
 
     """
 
-    shape = img.shape[:3]+(num_classes,)
+    if img.ndim != 4:
+        shape = img.shape[:3]+(num_classes,)
+    else:
+        shape = img.shape[:2]+(num_classes,)
+
     encoded_image = np.zeros(shape, dtype=np.int8)
 
     for i in range(num_classes):
-        encoded_image[:,:,:,i] = np.all(img.reshape((-1,1)) == i, axis=1).reshape(shape[:3])
+        if img.ndim != 4:
+            encoded_image[:,:,:,i] = np.all(img.reshape((-1,1)) == i, axis=1).reshape(shape[:3])
+        else:
+            encoded_image[:,:,i] = np.all(img.reshape((-1,1)) == i, axis=1).reshape(shape[:2])
 
     return encoded_image
