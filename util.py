@@ -59,16 +59,14 @@ class TimeHistory(keras.callbacks.Callback):
         self.times.append(time.time() - self.epoch_time_start)
 
 
-def create_plots(results, job_id, test_id, chartOutDir):
+def create_plots(results, job_id, chartOutDir):
     """Create loss and jaccard_index plots with the given matrix results
 
        Args:
-            results (history object): record of training loss values 
-            and metrics values at successive epochs.
+            results (history object): record of training loss values and metrics 
+            values at successive epochs.
 
             job_id (str): jod identifier.
-
-            test_id (str): number of job.
 
             chartOutDir (str): path where the charts will be stored into.
     """
@@ -81,24 +79,23 @@ def create_plots(results, job_id, test_id, chartOutDir):
     os.makedirs(chartOutDir, exist_ok=True)
 
     # Loss
-    name = job_id + '_' + test_id
     plt.plot(results.history['loss'])
     plt.plot(results.history['val_loss'])
-    plt.title('Model JOBID=' + name + ' loss')
+    plt.title('Model JOBID=' + job_id + ' loss')
     plt.ylabel('Value')
     plt.xlabel('Epoch')
     plt.legend(['Train loss', 'Val. loss'], loc='upper left')
-    plt.savefig(os.path.join(chartOutDir , name + '_loss.png'))
+    plt.savefig(os.path.join(chartOutDir , job_id + '_loss.png'))
     plt.clf()
 
     # Jaccard index
     plt.plot(results.history['jaccard_index'])
     plt.plot(results.history['val_jaccard_index'])
-    plt.title('Model JOBID=' + name + ' Jaccard Index')
+    plt.title('Model JOBID=' + job_id + ' Jaccard Index')
     plt.ylabel('Value')
     plt.xlabel('Epoch')
     plt.legend(['Train jaccard_index', 'Val. jaccard_index'], loc='upper left')
-    plt.savefig(os.path.join(chartOutDir , name + '_jaccard_index.png'))
+    plt.savefig(os.path.join(chartOutDir , job_id + '_jaccard_index.png'))
     plt.clf()
 
 

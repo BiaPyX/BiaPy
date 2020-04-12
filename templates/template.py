@@ -913,7 +913,7 @@ if load_previous_weights == False:
         smooth_score, smooth_voc, smooth_det, zfil_score, zfil_voc, zfil_det, 
         smo_zfil_score, smo_zfil_voc, smo_zfil_det)
 
-    create_plots(results, args.job_id, args.run_id, char_dir)
+    create_plots(results, job_identifier, char_dir)
 
 if (post_process == True and make_crops == True) or (random_crops_in_DA == True):
     print("Post-process: SMOOTH - Test jaccard_index: {}".format(smooth_score))
