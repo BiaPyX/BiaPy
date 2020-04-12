@@ -328,6 +328,25 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value, \
                crop_made                         
 
+def load_data_from_dir(data_dir, shape):
+    ids = sorted(next(os.walk(data_dir))[2])
+
+    data = np.zeros((len(ids), ) + shape, dtype=np.float32)
+
+    for n, id_ in tqdm(enumerate(ids)):
+        img = imread(os.path.join(data_dir, id_))
+
+        # Convert the image into grayscale
+        if len(img.shape) >= 3:
+            img = img[:, :, 0]
+            img = np.expand_dims(img, axis=-1)
+
+        if len(img.shape) == 2:
+            img = np.expand_dims(img, axis=-1)
+
+        data[n] = img
+
+    return data
 
 def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0], 
               d_percentage=0):                          
@@ -1245,7 +1264,7 @@ def img_to_onehot_encoding(img, num_classes=2):
 
     """
 
-    if img.ndim != 4:
+    if img.ndim == 4:
         shape = img.shape[:3]+(num_classes,)
     else:
         shape = img.shape[:2]+(num_classes,)
@@ -1253,7 +1272,7 @@ def img_to_onehot_encoding(img, num_classes=2):
     encoded_image = np.zeros(shape, dtype=np.int8)
 
     for i in range(num_classes):
-        if img.ndim != 4:
+        if img.ndim == 4:
             encoded_image[:,:,:,i] = np.all(img.reshape((-1,1)) == i, axis=1).reshape(shape[:3])
         else:
             encoded_image[:,:,i] = np.all(img.reshape((-1,1)) == i, axis=1).reshape(shape[:2])
