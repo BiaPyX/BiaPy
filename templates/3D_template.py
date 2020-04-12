@@ -55,7 +55,6 @@ import math
 import time
 import tensorflow as tf
 from data_manipulation import load_data, check_binary_masks, \
-                              binary_onehot_encoding_to_img, \
                               crop_3D_data_with_overlap, \
                               merge_3D_data_with_overlap
 from data_3D_generators import VoxelDataGenerator
@@ -388,7 +387,7 @@ if softmax_out == True:
     # Decode predicted images into the original one
     decoded_pred_test = np.zeros(Y_test.shape)
     for i in range(preds_test.shape[0]):
-        decoded_pred_test[i] = binary_onehot_encoding_to_img(preds_test[i])
+        decoded_pred_test[i] = np.expand_dims(preds_test[i,...,1], -1)
     preds_test = decoded_pred_test
 
 # Merge the volumes and convert them into 2D data
@@ -423,7 +422,7 @@ if post_process == True:
             pred_func=(lambda img_batch_subdiv: \
                            model.predict_generator(img_batch_subdiv)))
 
-        Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
+        Y_test_smooth[i] = predictions_smooth
 
     # Merge the volumes and convert them into 2D data
     Y_test_smooth = merge_3D_data_with_overlap(Y_test_smooth, orig_test_shape)
