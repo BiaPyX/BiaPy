@@ -197,7 +197,7 @@ def _windowed_subdivs(padded_img, window_size, subdivisions, nb_classes, pred_fu
     if softmax == True:
         decoded_subdivs = np.zeros(subdivs.shape[:3] + (1,))
         for i in range(subdivs.shape[0]):
-            decoded_subdivs[i] = binary_onehot_encoding_to_2Dimg(subdivs[i])
+            decoded_subdivs[i] = np.expand_dims(subdivs[i,...,1], -1)
         subdivs = decoded_subdivs
     
     # Such 5D array:
