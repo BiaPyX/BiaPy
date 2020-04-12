@@ -284,7 +284,7 @@ if extra_train_data != 0:
 
     extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
 
-    X_train = np.vstack((X_train, extra_x))
+    X_train = np.vstack((X_train, extra_x*255))
     Y_train = np.vstack((Y_train, extra_y*255))
     print("{} extra train data generated, the new shape of the train now is {}"\
           .format(extra_train_data, X_train.shape))

@@ -490,7 +490,7 @@ if extra_train_data != 0:
         extra_x, extra_y = extra_generator.get_transformed_samples(
             extra_train_data, force_full_images=True)
 
-    X_train = np.vstack((X_train, extra_x))
+    X_train = np.vstack((X_train, extra_x*255))
     Y_train = np.vstack((Y_train, extra_y*255))
     print("{} extra train data generated, the new shape of the train now is {}"\
           .format(extra_train_data, X_train.shape))
@@ -662,9 +662,8 @@ if random_crops_in_DA == False:
 
         # To save the probabilities (no binarized)
         preds_test = merge_data_without_overlap(
-            preds_test*255, math.ceil(preds_test.shape[0]/(h_num*v_num)),
+            preds_test, math.ceil(preds_test.shape[0]/(h_num*v_num)),
             out_shape=[h_num, v_num], grid=False)
-        preds_test = preds_test.astype(float)/255
         
     print("Saving predicted images . . .")
     save_img(Y=bin_preds_test, mask_dir=result_bin_dir, prefix="test_out_bin")

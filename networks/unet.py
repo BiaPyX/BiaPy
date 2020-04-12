@@ -49,10 +49,8 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     if loss_type == "w_bce":
         weights = Input((image_shape[0], image_shape[1], image_shape[2]))
 
-    s = Lambda(lambda x: x / 255) (inputs)
-    
     c1 = Conv2D(numInitChannels, (3, 3), activation=activation,
-                kernel_initializer='he_normal', padding='same') (s)
+                kernel_initializer='he_normal', padding='same') (inputs)
     if fixed_dropout == 0.0:
         c1 = SpatialDropout2D(0.1) (c1) if spatial_dropout == True else Dropout(0.1) (c1)
     else:

@@ -55,10 +55,9 @@ def Attention_U_Net_BN(image_shape, activation='elu', numInitChannels=16):
             model (Keras model): model containing the U-Net created.
     """
     inputs = Input((image_shape[0], image_shape[1], image_shape[2]))
-    s = Lambda(lambda x: x / 255) (inputs)
     
     c1 = Conv2D(numInitChannels, (3, 3), activation=None,
-                kernel_initializer='he_normal', padding='same') (s)
+                kernel_initializer='he_normal', padding='same') (inputs)
     c1 = BatchNormalization()(c1)
     c1 = Activation( activation )(c1)
     c1 = Conv2D(numInitChannels, (3, 3), activation=None,

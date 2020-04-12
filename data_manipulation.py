@@ -199,7 +199,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             mask = np.expand_dims(mask, axis=-1)
         Y_test[n] = mask
 
-    Y_test = Y_test/255 
     orig_test_shape = tuple(Y_test.shape[i] for i in [0, 2, 1, 3])
 
     # Used for 3D networks. This must be done before create the validation split
@@ -909,13 +908,6 @@ def merge_data_without_overlap(data, num, out_shape=[1, 1], grid=True):
 
     print("### MERGE-CROP ###")
 
-    # To difference between data and masks
-    if grid == True:
-        if np.max(data) > 1:
-            v = 255
-        else:
-            v = 1
-
     width = data.shape[1]
     height = data.shape[2] 
 
@@ -935,13 +927,13 @@ def merge_data_without_overlap(data, num, out_shape=[1, 1], grid=True):
                 
                 if grid == True:
                     mixed_data[
-                        img_num,(i*width):((i+1)*height)-1, (j*width)] = v
+                        img_num,(i*width):((i+1)*height)-1, (j*width)] = 255
                     mixed_data[
-                        img_num,(i*width):((i+1)*height)-1, ((j+1)*width)-1] = v
+                        img_num,(i*width):((i+1)*height)-1, ((j+1)*width)-1] = 255
                     mixed_data[
-                        img_num,(i*height), (j*width):((j+1)*height)-1] = v
+                        img_num,(i*height), (j*width):((j+1)*height)-1] = 255
                     mixed_data[
-                        img_num,((i+1)*height)-1, (j*width):((j+1)*height)-1] = v
+                        img_num,((i+1)*height)-1, (j*width):((j+1)*height)-1] = 255
                 cont = cont + 1
 
     print("**** New data shape is: {}".format(mixed_data.shape))
@@ -1086,12 +1078,6 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
 
     os.makedirs(out_dir, exist_ok=True)
 
-    # For mask data
-    if np.max(data) > 1:
-        v = 1
-    else:
-        v = 255
-   
     # Calculate horizontal and vertical image number for the data
     h_num = int(out_dim[0] / data.shape[1]) + (out_dim[0] % data.shape[1] > 0)
     v_num = int(out_dim[1] / data.shape[2]) + (out_dim[1] % data.shape[2] > 0)
@@ -1110,11 +1096,11 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
         for i in tqdm(range(0, total)):
             # grayscale images
             if data.shape[3] == 1:
-                im = Image.fromarray(data[i,:,:,0]*v)
+                im = Image.fromarray(data[i,:,:,0])
                 im = im.convert('L')
             # RGB images
             else:
-                aux = np.asarray( data[i,:,:,:]*v, dtype="uint8" )
+                aux = np.asarray( data[i,:,:,:], dtype="uint8" )
                 im = Image.fromarray( aux, 'RGB' )
 
             im.save(os.path.join(out_dir,"c_" + suffix + str(i) + ".png"))
@@ -1125,7 +1111,7 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
         data, num_examples, out_shape=[h_num, v_num], grid=grid)
     print("1) Saving data mixed images . . .")
     for i in tqdm(range(0, num_examples)):
-        im = Image.fromarray(m_data[i,:,:,0]*v)
+        im = Image.fromarray(m_data[i,:,:,0])
         im = im.convert('L')
         im.save(os.path.join(out_dir,"f" + suffix + str(i) + ".png"))
 

@@ -45,12 +45,10 @@ def asymmetric_U_Net(image_shape, activation='elu', numInitChannels=16,
     """
     inputs = Input((image_shape[0], image_shape[1], image_shape[2]))
         
-    s = Lambda(lambda x: x / 255) (inputs)
-
     # Input block
     channels = numInitChannels
     c1 = Conv2D(channels, (3, 3), activation=None, strides=(2, 2),
-                      kernel_initializer='he_normal', padding='same') (s)
+                      kernel_initializer='he_normal', padding='same') (inputs)
     m1 = MaxPooling2D(pool_size=(2, 2))(s)
     x = concatenate([c1,m1])
        

@@ -83,13 +83,13 @@ class ImageDataGenerator(keras.utils.Sequence):
 
             val (bool, optional): advice the generator that the images will be
             to validate the model to not make random crops (as the val. data must
-            be the same on each epoch).
+            be the same on each epoch). Valid when random_crops_in_DA is set.
         """
 
         self.dim = dim
         self.batch_size = batch_size
-        self.Y = Y / 255
-        self.X = X
+        self.X = X/255 if np.max(X) > 1 else X
+        self.Y = Y/255 if np.max(Y) > 1 else Y
         self.n_channels = n_channels
         self.shuffle = shuffle
         self.da = da
@@ -197,22 +197,16 @@ class ImageDataGenerator(keras.utils.Sequence):
         if self.shuffle == True:
             np.random.shuffle(self.indexes)
 
-    def __draw_grid(self, im, grid_width=50, m=False):
+    def __draw_grid(self, im, grid_width=50):
         """Draw grid of the specified size on an image. 
            
            Args:                                                                
                im (2D Numpy array): image to be modified. E. g. (x, y)
 
                grid_width (int, optional): grid's width. 
-
-               m (bool, optional): advice the method to change the grid value
-               if the input image is a mask.
         """
 
-        if m == True:
-            v = 1
-        else:
-            v = 255
+        v = 1
 
         for i in range(0, im.shape[1], grid_width):
             im[:, i] = v
@@ -251,7 +245,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
             if grid == True:
                 self.__draw_grid(trans_image)
-                self.__draw_grid(trans_mask, m=True)
+                self.__draw_grid(trans_mask)
 
             im_concat = np.concatenate((trans_image, trans_mask), axis=2)            
 
@@ -464,7 +458,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
             # Save transformed images
             if save_to_dir == True:    
-                im = Image.fromarray(batch_x[i,:,:,0])
+                im = Image.fromarray(batch_x[i,:,:,0]*255)
                 im = im.convert('L')
                 im.save(os.path.join(
                             out_dir, prefix + 'x_' + str(pos) + t_str + ".png"))
@@ -477,7 +471,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                 # selected coordinates to be the center of the crop
                 if self.random_crops_in_DA == True and self.prob_map == True\
                    and force_full_images == False:
-                    im = Image.fromarray(self.X[pos,:,:,0]) 
+                    im = Image.fromarray(self.X[pos,:,:,0]*255) 
                     im = im.convert('RGB')                                                  
                     px = im.load()                                                          
                         
@@ -527,7 +521,7 @@ class ImageDataGenerator(keras.utils.Sequence):
                 # Save also the original images if an elastic transformation 
                 # was made
                 if original_elastic == True and '_e' in t_str: 
-                    im = Image.fromarray(self.X[i,:,:,0])
+                    im = Image.fromarray(self.X[i,:,:,0]*255)
                     im = im.convert('L')
                     im.save(os.path.join(
                                 out_dir, prefix + 'x_' + str(pos) + t_str 
@@ -703,7 +697,7 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
         zoom_range=zoom_val, width_shift_range=w_shift_r,
         height_shift_range=h_shift_r, shear_range=shear_range,
         channel_shift_range=channel_shift_range,
-        brightness_range=brightness_range)
+        brightness_range=brightness_range, rescale=1./255)
     data_gen_args2 = dict(
         horizontal_flip=hflip, vertical_flip=vflip, fill_mode=fill_mode, 
         rotation_range=rotation_range, zoom_range=zoom_val, 
@@ -724,13 +718,13 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
     # Generators
     X_datagen_train = kerasDA(**data_gen_args1)
     Y_datagen_train = kerasDA(**data_gen_args2)                                 
-    X_datagen_test = kerasDA()                                 
+    X_datagen_test = kerasDA(rescale=1./255)
     Y_datagen_test = kerasDA(rescale=1./255)                                 
     if ld_img_from_disk == True:
-        complete_datagen = kerasDA()                                 
+        complete_datagen = kerasDA(rescale=1./255)
         complete_mask_datagen = kerasDA(rescale=1./255)                                 
     if val == True:
-        X_datagen_val = kerasDA()                                                   
+        X_datagen_val = kerasDA(rescale=1./255)
         Y_datagen_val = kerasDA(rescale=1./255)                                                   
     if weights_on_data == True:
         w_datagen = kerasDA(**data_gen_args2)
@@ -1030,7 +1024,8 @@ def keras_gen_samples(num_samples, X_data=None, Y_data=None,
         featurewise_std_normalization=featurewise_std_normalization,
         zoom_range=zoom_val, width_shift_range=w_shift_r, 
         height_shift_range=h_shift_r, shear_range=shear_range, 
-        channel_shift_range=channel_shift_range, brightness_range=brightness_range)
+        channel_shift_range=channel_shift_range, 
+        brightness_range=brightness_range, rescale=1./255)
     data_gen_args2 = dict(
         horizontal_flip=hflip, vertical_flip=vflip, fill_mode=fill_mode, 
         rotation_range=rotation_range, preprocessing_function=preproc_function,

@@ -214,6 +214,9 @@ class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
                 cont += 1
 
         self.total_batches_seen += 1
+
+        batch_x /= 255
+        batch_y /= 255
     
         if self.mask_dir is not None:
             return batch_x, batch_y    
@@ -550,7 +553,7 @@ class VoxelDataGenerator(keras.utils.Sequence):
 
             # Save transformed 3d volumes 
             if save_to_dir == True:
-                save_img(X=sample_x[i]*255, data_dir=out_dir, Y=sample_y[i], 
+                save_img(X=sample_x[i], data_dir=out_dir, Y=sample_y[i], 
                          mask_dir=out_dir, prefix="aug_3d_smp_" + str(pos) + t_str)
 
         return sample_x, sample_y

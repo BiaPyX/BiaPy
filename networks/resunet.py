@@ -80,11 +80,10 @@ def ResUNet(image_shape, activation='elu', kernel_initializer='he_normal',
     """
 
     inputs = Input((image_shape[0], image_shape[1], image_shape[2]))
-    s = Lambda(lambda x: x / 255) (inputs)
 
     conv_strides = (1,1) if maxpooling else (2,2)
 
-    x = level_block(s, 4, numInitChannels, 3, activation, kernel_initializer,
+    x = level_block(inputs, 4, numInitChannels, 3, activation, kernel_initializer,
                     dropout_value, batchnorm, conv_strides, separable, True,
                     maxpooling)
 
