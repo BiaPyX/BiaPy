@@ -459,7 +459,7 @@ if load_previous_weights == False:
     print("Validation jaccard_index: {}"
           .format(np.max(results.history['val_jaccard_index'])))
 
-print("Test loss: ".format(score[0]))
+print("Test loss: {}".format(score[0]))
 print("Test jaccard_index (per subvolume): {}".format(jac_per_subvolume))
 print("Test jaccard_index (per image): {}".format(score[1]))
 print("VOC (per image without overlap): {}".format(voc))
