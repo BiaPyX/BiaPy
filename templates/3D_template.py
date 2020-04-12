@@ -213,6 +213,8 @@ result_bin_dir = os.path.join(result_dir, 'binarized')
 result_no_bin_dir = os.path.join(result_dir, 'no_binarized')
 # Folder where the smoothed images will be stored
 smooth_dir = os.path.join(result_dir, 'smooth')
+# Folder where the smoothed images (no binarized) will be stored
+smooth_no_bin_dir = os.path.join(result_dir, 'smooth_no_bin')
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
 # folder pointed by "args.base_work_dir" variable 
@@ -414,7 +416,7 @@ if post_process == True:
     print("##################\n# POST-PROCESING #\n##################\n")
     print("1) SMOOTH")
 
-    Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
+    Y_test_smooth = np.zeros(X_test.shape, dtype=(np.float32))
 
     for i in tqdm(range(X_test.shape[0])):
         predictions_smooth = smooth_3d_predictions(X_test[i]/255,
@@ -427,12 +429,17 @@ if post_process == True:
     Y_test_smooth = merge_3D_data_with_overlap(Y_test_smooth, orig_test_shape)
 
     print("Saving smooth predicted images . . .")
-    save_img(Y=Y_test_smooth, mask_dir=smooth_dir, prefix="test_out_smooth")
+    save_img(Y=Y_test_smooth, mask_dir=smooth_no_bin_dir,
+             prefix="test_out_smooth_no_bin")
+    save_img(Y=(Y_test_smooth > 0.5).astype(np.uint8), mask_dir=smooth_dir,
+             prefix="test_out_smooth")
 
     # Metrics (Jaccard + VOC + DET)
     print("Calculate metrics . . .")
-    smooth_score = jaccard_index_numpy(Y_test, Y_test_smooth)
-    smooth_voc = voc_calculation(Y_test, Y_test_smooth, smooth_score)
+    smooth_score = jaccard_index_numpy(
+        Y_test, (Y_test_smooth > 0.5).astype(np.uint8))
+    smooth_voc = voc_calculation(
+        Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smooth_score)
 
     print("Finish post-processing")
 
