@@ -466,18 +466,19 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
             print("Not data_dir provided so no image will be saved!")
             return
 
+        v = 1 if np.max(X) > 1 else 255 
         if X.ndim > 4:
             d = len(str(X.shape[0]*X.shape[1]))
             for i in tqdm(range(X.shape[0])):
                 for j in range(X.shape[1]):
-                    im = Image.fromarray(X[i,j,:,:,0])
+                    im = Image.fromarray(X[i,j,:,:,0]*v)
                     im = im.convert('L')
                     im.save(os.path.join(data_dir, p_x + str(i).zfill(d) + "_" \
                                          + str(j).zfill(d) + ".png"))
         else:
             d = len(str(X.shape[0]))
             for i in tqdm(range(X.shape[0])):
-                im = Image.fromarray(X[i,:,:,0])         
+                im = Image.fromarray(X[i,:,:,0]*v)         
                 im = im.convert('L')                                                
                 im.save(os.path.join(data_dir, p_x + str(i).zfill(d) + ".png")) 
 
@@ -487,18 +488,20 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
         else:
             print("Not mask_dir provided so no image will be saved!")
             return
+        
+        v = 1 if np.max(X) > 1 else 255
         if Y.ndim > 4:
             d = len(str(Y.shape[0]*Y.shape[1]))
             for i in tqdm(range(Y.shape[0])):
                 for j in range(Y.shape[1]):
-                    im = Image.fromarray(Y[i,j,:,:,0]*255)
+                    im = Image.fromarray(Y[i,j,:,:,0]*v)
                     im = im.convert('L')
                     im.save(os.path.join(mask_dir, p_x + str(i).zfill(d) + "_" \
                                          + str(j).zfill(d) + ".png"))
         else:
             d = len(str(Y.shape[0]))
             for i in tqdm(range(0, Y.shape[0])):
-                im = Image.fromarray(Y[i,:,:,0]*255)         
+                im = Image.fromarray(Y[i,:,:,0]*v)         
                 im = im.convert('L')                                                
                 im.save(os.path.join(mask_dir, p_y + str(i).zfill(d) + ".png")) 
        
@@ -666,41 +669,49 @@ def foreground_percentage(mask, class_tag):
             if mask[i, j, 0] == class_tag:
                 c = c + 1
 
-    return (c*100)/(mask.shape[0]*mask.shape[1])
+    return c/(mask.shape[0]*mask.shape[1])
 
 
-def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, 
-                             class_names=None, th=0.5):
-    """
+def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, th=0.8):
+    """Create a folder for each class where the images that have more pixels 
+       labeled as the class (in percentage) than the given threshold will be 
+       stored. 
+    
+       Args:
+            data (4D numpy array, optional): data to save as images. The first
+            dimension must be the number of images.
+            E.g. (image_number, x, y, channels)
 
+            data_mask (4D numpy array, optional): data mask to save as images. 
+            The first dimension must be the number of images.
+            E.g. (image_number, x, y, channels)
+
+            out_dir (str): path to save the images.
+
+            num_classes (int, optional): number of classes. 
+
+            th (float, optional): percentage of the pixels that must be labeled
+            as a class to save it inside that class folder. 
     """
         
-    if class_names is None:
-        class_names = []
-        for i in range(num_classes):
-            class_names.append("class" + str(i)) 
-    else:
-        if len(class_names) != num_classes:
-            raise ValueError("A name per 'num_classes' must be given")      
-
     # Create the directories
-    os.makedirs(os.path.join(out_dir, "x"), exist_ok=True)
-    os.makedirs(os.path.join(out_dir, "y"), exist_ok=True)
+    for i in range(num_classes):
+        os.makedirs(os.path.join(out_dir, "x", "class"+str(i)), exist_ok=True)
+        os.makedirs(os.path.join(out_dir, "y", "class"+str(i)), exist_ok=True)
 
-    print("Dividing provided data into {} classes . . .".format(len(class_names)))
+    print("Dividing provided data into {} classes . . .".format(num_classes))
     d = len(str(data.shape[0]))
     for i in tqdm(range(data.shape[0])):
         # Assign the image to a class if it has, in percentage, more pixels of 
         # that class than the given threshold 
         for j in range(num_classes):
             t = foreground_percentage(data_mask[i], j)
-            print("t: {}".format(t)) 
             if t > th:
                 im = Image.fromarray(data[i,:,:,0])
                 im = im.convert('L')
-                im.save(os.path.join(os.path.join(out_dir, "x"), 
-                        "im_" + str(i).zfill(d) + class_names[j] + ".png"))
-                im = Image.fromarray(data_mask[i,:,:,0])
+                im.save(os.path.join(os.path.join(out_dir, "x", "class"+str(j)), 
+                        "im_" + str(i).zfill(d) + ".png"))
+                im = Image.fromarray(data_mask[i,:,:,0]*255)
                 im = im.convert('L')
-                im.save(os.path.join(os.path.join(out_dir, "y"), 
-                        "mask_" + str(i).zfill(d) + class_names[j] + ".png"))
+                im.save(os.path.join(os.path.join(out_dir, "y", "class"+str(j)), 
+                        "mask_" + str(i).zfill(d) + ".png"))
