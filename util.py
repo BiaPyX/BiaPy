@@ -104,7 +104,8 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
 def store_history(results, jac_per_crop, test_score, jac_per_img_50ov, voc, 
                   voc_per_img_50ov, det, det_per_img_50ov, time_callback, log_dir, 
                   job_file, smooth_score, smooth_voc, smooth_det, zfil_score, 
-                  zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det):
+                  zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det,
+                  metric='jaccard_index'):
     """Stores the results obtained as csv to manipulate them later 
        and labeled in another file as historic results.
 
@@ -173,8 +174,8 @@ def store_history(results, jac_per_crop, test_score, jac_per_img_50ov, voc,
     f.write(str(np.min(results.history['loss'])) + ','
             + str(np.min(results.history['val_loss'])) + ','
             + str(test_score[0]) + ',' 
-            + str(np.max(results.history['jaccard_index'])) + ',' 
-            + str(np.max(results.history['val_jaccard_index'])) + ',' 
+            + str(np.max(results.history[metric])) + ',' 
+            + str(np.max(results.history['val_'+metric])) + ',' 
             + str(jac_per_crop) + ',' + str(test_score[1]) + ',' 
             + str(jac_per_img_50ov) + ',' + str(smooth_score) + ','
             + str(zfil_score) + ',' + str(smo_zfil_score) + ','
@@ -201,9 +202,9 @@ def store_history(results, jac_per_crop, test_score, jac_per_img_50ov, voc,
     f.write('############## TEST LOSS ############## \n')
     f.write(str(test_score[0]) + '\n')
     f.write('############## TRAIN JACCARD INDEX ############## \n')
-    f.write(str(results.history['jaccard_index']) + '\n')
+    f.write(str(results.history[metric]) + '\n')
     f.write('############## VALIDATION JACCARD INDEX ############## \n')
-    f.write(str(results.history['jaccard_index']) + '\n')
+    f.write(str(results.history[metric]) + '\n')
     f.write('############## TEST JACCARD INDEX (per crop) ############## \n')
     f.write(str(jac_per_crop) + '\n')
     f.write('############## TEST JACCARD INDEX (per image) ############## \n')
