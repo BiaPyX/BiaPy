@@ -1,3 +1,5 @@
+# Script based on 3D_template.py
+
 ##########################
 #   ARGS COMPROBATION    #
 ##########################

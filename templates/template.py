@@ -1,3 +1,5 @@
+# Script based on template.py
+
 ##########################
 #   ARGS COMPROBATION    #
 ##########################

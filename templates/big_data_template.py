@@ -1,3 +1,5 @@
+# Script based on big_data_template.py
+
 ##########################
 #   ARGS COMPROBATION    #
 ##########################
