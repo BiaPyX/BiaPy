@@ -59,8 +59,8 @@ class TimeHistory(keras.callbacks.Callback):
         self.times.append(time.time() - self.epoch_time_start)
 
 
-def create_plots(results, job_id, chartOutDir):
-    """Create loss and jaccard_index plots with the given matrix results
+def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
+    """Create loss and main metric plots with the given results.
 
        Args:
             results (history object): record of training loss values and metrics 
@@ -69,6 +69,8 @@ def create_plots(results, job_id, chartOutDir):
             job_id (str): jod identifier.
 
             chartOutDir (str): path where the charts will be stored into.
+            
+            metric (str, optional): metric used.
     """
     
     # For matplotlib errors in display
@@ -89,13 +91,13 @@ def create_plots(results, job_id, chartOutDir):
     plt.clf()
 
     # Jaccard index
-    plt.plot(results.history['jaccard_index'])
-    plt.plot(results.history['val_jaccard_index'])
-    plt.title('Model JOBID=' + job_id + ' Jaccard Index')
+    plt.plot(results.history[metric])
+    plt.plot(results.history['val_' + metric])
+    plt.title('Model JOBID=' + job_id + metric)
     plt.ylabel('Value')
     plt.xlabel('Epoch')
-    plt.legend(['Train jaccard_index', 'Val. jaccard_index'], loc='upper left')
-    plt.savefig(os.path.join(chartOutDir , job_id + '_jaccard_index.png'))
+    plt.legend(['Train metric', 'Val. metric'], loc='upper left')
+    plt.savefig(os.path.join(chartOutDir , job_id + '_' + metric +'.png'))
     plt.clf()
 
 
