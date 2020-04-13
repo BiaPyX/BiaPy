@@ -127,77 +127,22 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
     print("### LOAD ###")
                                                                         
-    train_ids = sorted(next(os.walk(train_path))[2])                    
-    train_mask_ids = sorted(next(os.walk(train_mask_path))[2])          
+    tr_shape = (image_train_shape[1], image_train_shape[0], image_train_shape[2])
     
-    test_ids = sorted(next(os.walk(test_path))[2])                      
-    test_mask_ids = sorted(next(os.walk(test_mask_path))[2])            
-                                                                        
-    # Get and resize train images and masks                             
-    X_train = np.zeros((len(train_ids), image_train_shape[1], 
-                        image_train_shape[0], image_train_shape[2]),
-                        dtype=np.float32)                
-    Y_train = np.zeros((len(train_mask_ids), image_train_shape[1], 
-                        image_train_shape[0], image_train_shape[2]),
-                        dtype=np.float32) 
-                                                                        
-    print("0) Loading train images . . .") 
-    for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):     
-        img = imread(os.path.join(train_path, id_))                     
-        # Convert the image into grayscale
-        if len(img.shape) >= 3:
-            img = img[:, :, 0]
-            img = np.expand_dims(img, axis=-1)
-
-        if len(img.shape) == 2:
-            img = np.expand_dims(img, axis=-1)
-        X_train[n] = img
-
+    print("0) Loading train images . . .")
+    X_train = load_data_from_dir(train_path, tr_shape)
     print("1) Loading train masks . . .")
-    for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids)):                      
-        mask = imread(os.path.join(train_mask_path, id_))               
-        # Convert the image into grayscale
-        if len(mask.shape) >= 3:
-            mask = mask[:, :, 0]
-            mask = np.expand_dims(mask, axis=-1)
+    Y_train = load_data_from_dir(train_mask_path, tr_shape)
 
-        if len(mask.shape) == 2:
-            mask = np.expand_dims(mask, axis=-1)
-        Y_train[n] = mask
-                                                                        
     if num_crops_per_dataset != 0:
         X_train = X_train[:num_crops_per_dataset]
         Y_train = Y_train[:num_crops_per_dataset]
 
-    # Get and resize test images and masks                              
-    X_test = np.zeros((len(test_ids), image_test_shape[1], image_test_shape[0],
-                      image_test_shape[2]), dtype=np.float32)                 
-    Y_test = np.zeros((len(test_mask_ids), image_test_shape[1], 
-                       image_test_shape[0], image_test_shape[2]), dtype=np.float32)
-                                                                        
+    te_shape = (image_test_shape[1], image_test_shape[0], image_test_shape[2])
     print("2) Loading test images . . .")
-    for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):       
-        img = imread(os.path.join(test_path, id_))                      
-        # Convert the image into grayscale
-        if len(img.shape) >= 3:
-            img = img[:, :, 0]
-            img = np.expand_dims(img, axis=-1)
-
-        if len(img.shape) == 2:
-            img = np.expand_dims(img, axis=-1)
-        X_test[n] = img
-
+    X_test = load_data_from_dir(test_path, te_shape)
     print("3) Loading test masks . . .")
-    for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids)):                       
-        mask = imread(os.path.join(test_mask_path, id_))                
-        # Convert the image into grayscale
-        if len(mask.shape) >= 3:
-            mask = mask[:, :, 0]
-            mask = np.expand_dims(mask, axis=-1)
-
-        if len(mask.shape) == 2:
-            mask = np.expand_dims(mask, axis=-1)
-        Y_test[n] = mask
+    Y_test = load_data_from_dir(test_mask_path, te_shape)
 
     orig_test_shape = tuple(Y_test.shape[i] for i in [0, 2, 1, 3])
 
@@ -327,12 +272,25 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value, \
                crop_made                         
 
+
 def load_data_from_dir(data_dir, shape):
+    """Load data from a directory.
+        
+       Args:
+            data_dir (str): path to read the data from.
+
+            shape (tuple): shape of the data.
+
+       Return:
+            data (4D Numpy array): data loaded. 
+            E.g. (image_number, x, y, channels).
+    """
+
     ids = sorted(next(os.walk(data_dir))[2])
 
     data = np.zeros((len(ids), ) + shape, dtype=np.float32)
 
-    for n, id_ in tqdm(enumerate(ids)):
+    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         img = imread(os.path.join(data_dir, id_))
 
         # Convert the image into grayscale
@@ -346,6 +304,7 @@ def load_data_from_dir(data_dir, shape):
         data[n] = img
 
     return data
+
 
 def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0], 
               d_percentage=0):                          

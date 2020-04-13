@@ -56,7 +56,7 @@ import time
 import tensorflow as tf
 from data_manipulation import load_data, crop_data, merge_data_without_overlap,\
                               crop_data_with_overlap, merge_data_with_overlap, \
-                              check_binary_masks
+                              check_binary_masks, load_data_from_dir
 from data_generators import keras_da_generator, ImageDataGenerator,\
                             keras_gen_samples, calculate_z_filtering,\
                             combine_generators
@@ -393,16 +393,9 @@ else:
 
 # Load Y_test to calculate the metrics
 print("Loading test masks to make the predictions . . .")
-test_mask_ids = sorted(next(os.walk(os.path.join(test_mask_path, 'y')))[2])
-Y_test = np.zeros((len(test_mask_ids), img_test_shape[1], img_test_shape[0],
-                   img_test_shape[2]), dtype=np.float32)
-for n, id_ in tqdm(enumerate(test_mask_ids), total=len(test_mask_ids)):
-  mask = imread(os.path.join(test_mask_path, 'y', id_))
-  if len(mask.shape) == 2:
-    mask = np.expand_dims(mask, axis=-1)
-  Y_test[n,:,:,:] = mask
-Y_test = Y_test / 255
-Y_test = Y_test.astype(np.uint8)
+Y_test = load_data_from_dir(test_mask_path, (img_test_shape[1], img_test_shape[0],
+                            img_test_shape[2]))
+Y_test = (Y_test / 255).astype(np.uint8)
 
 # Calculate number of crops per dimension to reconstruct the full images
 h_num = int(original_test_shape[0] / preds_test.shape[1]) \
