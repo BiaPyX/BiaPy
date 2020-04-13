@@ -76,8 +76,6 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
     # For matplotlib errors in display
     os.environ['QT_QPA_PLATFORM']='offscreen'
 
-    # Create the fodler if it does not exist
-    chartOutDir = os.path.join(chartOutDir, job_id)
     os.makedirs(chartOutDir, exist_ok=True)
 
     # Loss
@@ -87,7 +85,7 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
     plt.ylabel('Value')
     plt.xlabel('Epoch')
     plt.legend(['Train loss', 'Val. loss'], loc='upper left')
-    plt.savefig(os.path.join(chartOutDir , job_id + '_loss.png'))
+    plt.savefig(os.path.join(chartOutDir, job_id + '_loss.png'))
     plt.clf()
 
     # Jaccard index
@@ -97,7 +95,7 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
     plt.ylabel('Value')
     plt.xlabel('Epoch')
     plt.legend(['Train metric', 'Val. metric'], loc='upper left')
-    plt.savefig(os.path.join(chartOutDir , job_id + '_' + metric +'.png'))
+    plt.savefig(os.path.join(chartOutDir, job_id + '_' + metric +'.png'))
     plt.clf()
 
 
