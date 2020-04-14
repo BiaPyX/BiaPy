@@ -103,7 +103,7 @@ python -u template.py ${code_dir} "${data_dir}" "${job_dir}" --id "${jobID}" --r
 
 The folllowing state-of-the-art approaches for EM semantic segmentation have been implemented:
 
-- 3D U-Net: + post-processing. Everything contained in [xiao_2018](xiao_2018). 
+- 3D U-Net + post-processing. Everything contained in [xiao_2018](xiao_2018). 
 ```
 Chi Xiao, Xi Chen, Weifu Li, Linlin Li, Lu Wang, Qiwei Xie, and Hua Han, "Automatic mitochondria 
 segmentation for em data using a 3d supervised convolutional network", Frontiers in Neuroanatomy 
@@ -116,5 +116,12 @@ H. Cheng and A. Varshney, "Volume segmentation using convolutional neural networ
 training data," 2017 IEEE International Conference on Image Processing (ICIP), Beijing, 2017, 
 pp. 590-594.
 ```
+
+- CNN + post-processing. Everything contained in [oztel_2017](oztel_2017).
+```
+Ismail Oztel, Gozde Yolcu, Ilker Ersoy, Tommi White, and Filiz Bunyak, "Mitochondria segmentation 
+in electron microscopy volumes using deep convolutional neural network", 2017 IEEE International 
+Conference on Bioinformatics and Biomedicine (BIBM), IEEE, 2017, pp. 1195-1200.
+``` 
 
 A readme is located on each implementation folder that explains how to reproduce the experiments reported by they work.
