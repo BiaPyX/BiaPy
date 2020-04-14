@@ -111,9 +111,9 @@ complete_test_mask_path = os.path.join(args.data_dir, '..', '..', 'test', 'y')
 # making the predictions. Be sure to take care of this if you are not going to
 # use "crop_data()" with the arg force_shape, as this function resolves the
 # problem creating always crops of the same dimension
-img_train_shape =  [256, 256, 1] 
-img_test_shape = [256, 256, 1]
-original_test_shape = [4096, 4096, 1]
+img_train_shape =  (256, 256, 1)
+img_test_shape = (256, 256, 1)
+original_test_shape = (4096, 4096, 1)
 
 
 ### Big data variables

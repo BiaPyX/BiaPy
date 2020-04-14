@@ -110,8 +110,8 @@ random_val_data = True
 # making the predictions. Be sure to take care of this if you are not going to
 # use "crop_data()" with the arg force_shape, as this function resolves the 
 # problem creating always crops of the same dimension
-img_train_shape = [1024, 768, 1]
-img_test_shape = [1024, 768, 1]
+img_train_shape = (1024, 768, 1)
+img_test_shape = (1024, 768, 1)
 
 
 ### Extra datasets variables
@@ -129,7 +129,7 @@ extra_datasets_discard = []
 # Path to the mask: 
 # extra_datasets_mask_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'y'))
 # Shape of the images:
-# extra_datasets_data_dim_list.append([877, 967, 1])
+# extra_datasets_data_dim_list.append((877, 967, 1))
 # Discard value to apply in the dataset (see "Discard variables" for more details):
 # extra_datasets_discard.append(0.05)                                             
 #
@@ -140,7 +140,7 @@ num_crops_per_dataset = 0
 
 ### Crop variables
 # Shape of the crops
-crop_shape = [256, 256, 1]
+crop_shape = (256, 256, 1)
 # Flag to make crops on the train data
 make_crops = True
 # Flag to check the crops. Useful to ensure that the crops have been made 
@@ -224,7 +224,7 @@ shear_range = 0.0
 brightness_range = None 
 # Range to pick a median filter size value from to apply in the images. Option
 # only available in custom DA
-median_filter_size = [0, 0] 
+median_filter_size = [0, 0]
 # Range of rotation
 rotation_range = 180
 # Flag to make flips on the subvolumes. Available for both Keras and custom DA.

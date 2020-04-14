@@ -14,7 +14,7 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     """Create the U-Net
 
        Args:
-            image_shape (array of 3 int): dimensions of the input image.
+            image_shape (3D tuple): dimensions of the input image.
 
             activation (str, optional): Keras available activation type.
 

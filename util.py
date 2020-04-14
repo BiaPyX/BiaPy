@@ -91,7 +91,7 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
     # Jaccard index
     plt.plot(results.history[metric])
     plt.plot(results.history['val_' + metric])
-    plt.title('Model JOBID=' + job_id + metric)
+    plt.title('Model JOBID=' + job_id + " " + metric)
     plt.ylabel('Value')
     plt.xlabel('Epoch')
     plt.legend(['Train metric', 'Val. metric'], loc='upper left')

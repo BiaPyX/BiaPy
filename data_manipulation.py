@@ -52,7 +52,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             e_d_mask (list of str, optional): list of paths where the extra data
             mask of other datasets are stored.
 
-            e_d_data_dim (list of int tuple, optional): list of shapes of the 
+            e_d_data_dim (list of 3D int tuple, optional): list of shapes of the 
             extra datasets provided. 
 
             e_d_dis (list of float, optional): discard percentages of the extra
@@ -64,7 +64,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
             make_crops (bool, optional): flag to make crops on data.
 
-            crop_shape (tuple of int, optional): shape of the crops.
+            crop_shape (3D int tuple, optional): shape of the crops.
 
             check_crop (bool, optional): to save the crops made to ensure they
             are generating as one wish.
@@ -128,7 +128,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     print("### LOAD ###")
                                                                         
     tr_shape = (image_train_shape[1], image_train_shape[0], image_train_shape[2])
-    
     print("0) Loading train images . . .")
     X_train = load_data_from_dir(train_path, tr_shape)
     print("1) Loading train masks . . .")
@@ -179,10 +178,10 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
         if check_crop == True:
             print("4.4) Checking the crops . . .")
-            check_crops(X_train, [image_test_shape[0], image_test_shape[1]],
+            check_crops(X_train, (image_test_shape[0], image_test_shape[1]),
                         num_examples=3, out_dir=check_crop_path, suffix="_x_", 
                         grid=True)
-            check_crops(Y_train, [image_test_shape[0], image_test_shape[1]],
+            check_crops(Y_train, (image_test_shape[0], image_test_shape[1]),
                         num_examples=3, out_dir=check_crop_path, suffix="_y_", 
                         grid=True)
         
@@ -239,10 +238,10 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                 if check_crop == True:
                     print("5.{}) Checking the crops of the extra dataset . . ."\
                           .format(i))
-                    check_crops(e_X_train, [d_dim[0], d_dim[1]], num_examples=3, 
+                    check_crops(e_X_train, (d_dim[0], d_dim[1]), num_examples=3, 
                                 out_dir=check_crop_path, 
                                 suffix="_e" + str(i) + "x_", grid=True)
-                    check_crops(e_Y_train, [d_dim[0], d_dim[1]], num_examples=3,
+                    check_crops(e_Y_train, (d_dim[0], d_dim[1]), num_examples=3,
                                 out_dir=check_crop_path,
                                 suffix="_e" + str(i) + "y_", grid=True)
 
@@ -279,7 +278,7 @@ def load_data_from_dir(data_dir, shape):
        Args:
             data_dir (str): path to read the data from.
 
-            shape (tuple): shape of the data.
+            shape (3D int tuple): shape of the data.
 
        Return:
             data (4D Numpy array): data loaded. 
@@ -287,7 +286,6 @@ def load_data_from_dir(data_dir, shape):
     """
 
     ids = sorted(next(os.walk(data_dir))[2])
-
     data = np.zeros((len(ids), ) + shape, dtype=np.float32)
 
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
@@ -306,7 +304,7 @@ def load_data_from_dir(data_dir, shape):
     return data
 
 
-def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0], 
+def crop_data(data, crop_shape, data_mask=None, force_shape=(0, 0), 
               d_percentage=0):                          
     """Crop data into smaller pieces.
                                                                         
@@ -314,13 +312,13 @@ def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0],
             data (4D Numpy array): data to crop. 
             E.g. (image_number, x, y, channels).
 
-            crop_shape (str tuple): output image shape.
+            crop_shape (3D int tuple): output image shape.
             E.g. (image_number, x, y, channels).
 
             data_mask (4D Numpy array, optional): data masks to crop.
             E.g. (image_number, x, y, channels).
 
-            force_shape (int tuple, optional): force horizontal and vertical 
+            force_shape (2D int tuple, optional): force horizontal and vertical 
             crops to the given numbers.
 
             d_percentage (int, optional): number between 0 and 100. The images 
@@ -332,7 +330,7 @@ def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0],
 
             cropped_data_mask (4D Numpy array): cropped data masks.     
 
-            force_shape (int tuple): number of horizontal and vertical crops 
+            force_shape (2D int tuple): number of horizontal and vertical crops 
             made. Useful for future crop calls. 
     """                                                                 
 
@@ -341,10 +339,10 @@ def crop_data(data, crop_shape, data_mask=None, force_shape=[0, 0],
           data.shape[2], crop_shape)) 
   
     # Calculate the number of images to be generated                    
-    if force_shape == [0, 0]:
+    if force_shape == (0, 0):
         h_num = int(data.shape[1] / crop_shape[0]) + (data.shape[1] % crop_shape[0] > 0)
         v_num = int(data.shape[2] / crop_shape[1]) + (data.shape[2] % crop_shape[1] > 0)
-        force_shape = [h_num, v_num]
+        force_shape = (h_num, v_num)
     else:
         h_num = force_shape[0]
         v_num = force_shape[1]
@@ -554,7 +552,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
             data (4D Numpy array): data to crop.
             E.g. (image_number, x, y, channels).
 
-            vol_shape (4D tuple): shape of the desired volumes to be created.
+            vol_shape (4D int tuple): shape of the desired volumes to be created.
         
             data_mask (4D Numpy array, optional): data mask to crop.
             E.g. (image_number, x, y, channels).
@@ -577,7 +575,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
     if overlap_z >= 1 or overlap_z < 0:
         raise ValueError("'overlap_z' must be a float on range [0, 1)")
     if len(vol_shape) != 4:
-        raise ValueError("'vol_shape' must be 4D tuple")
+        raise ValueError("'vol_shape' must be 4D int tuple")
     if vol_shape[0] > data.shape[0]:
         raise ValueError("'vol_shape[0]' {} greater than {}"
                          .format(vol_shape[0], data.shape[0]))
@@ -682,7 +680,7 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
             data (4D Numpy array): data to merge.
             E.g. (image_number, x, y, channels).
 
-            original_shape (tuple): original dimensions to reconstruct. 
+            original_shape (4D int tuple): original dimensions to reconstruct. 
 
             window_size (int): crop size.
 
@@ -842,7 +840,7 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
     return merged_data
 
 
-def merge_data_without_overlap(data, num, out_shape=[1, 1], grid=True):
+def merge_data_without_overlap(data, num, out_shape=(1, 1), grid=True):
     """Combine images from input data into a bigger one given shape. It is the 
        opposite function of crop_data().
 
@@ -852,8 +850,8 @@ def merge_data_without_overlap(data, num, out_shape=[1, 1], grid=True):
 
             num (int, optional): number of examples to convert.
 
-            out_shape (int tuple, optional): number of horizontal and vertical
-            images to combine in a single one.
+            out_shape (2D int tuple, optional): number of horizontal and 
+            vertical images to combine in a single one.
 
             grid (bool, optional): make the grid in the output image.
 
@@ -909,7 +907,7 @@ def merge_3D_data_with_overlap(data, o_vol_shape, data_mask=None,
             data (5D Numpy array): data to crop.
             E.g. (volume_number, z, x, y, channels).
 
-            orig_vol_shape (4D tuple): shape of the desired volumes to be 
+            orig_vol_shape (4D int tuple): shape of the desired volumes to be 
             created.
 
             data_mask (4D Numpy array, optional): data mask to crop.
@@ -1067,7 +1065,7 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
     print("0) Reconstructing {} images of ({}, {}) from {}".format(num_examples,\
           data.shape[1]*h_num, data.shape[2]*v_num, data.shape[1:]))
     m_data = merge_data_without_overlap(
-        data, num_examples, out_shape=[h_num, v_num], grid=grid)
+        data, num_examples, out_shape=(h_num, v_num), grid=grid)
     print("1) Saving data mixed images . . .")
     for i in tqdm(range(0, num_examples)):
         im = Image.fromarray(m_data[i,:,:,0])
@@ -1110,7 +1108,7 @@ def prepare_subvolume_data(X, Y, shape=(82, 256, 256, 1), test=False):
                                                                                 
             Y (Numpy 4D array): mask data.  E.g. (image_number, x, y, channels).
                                                                                 
-            shape (tuple, optional): dimension of the desired images.           
+            shape (4D int tuple, optional): dimension of the desired images.           
 
             test (bool, optional): to advice the method that the input data is 
             for test. If True no prepation of the data wil be done if the shape

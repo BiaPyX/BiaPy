@@ -40,9 +40,9 @@ class ImageDataGenerator(keras.utils.Sequence):
 
             batch_size (int, optional): size of the batches.
 
-            dim (tuple, optional): dimension of the desired images. As no effect 
-            if random_crops_in_DA is active, as the dimension will be selected by 
-            that variable instead.
+            dim (2D int tuple, optional): dimension of the desired images. As no 
+            effect if random_crops_in_DA is active, as the dimension will be 
+            selected by that variable instead.
 
             n_channels (int, optional): number of channels of the input images.
 
@@ -64,8 +64,8 @@ class ImageDataGenerator(keras.utils.Sequence):
 
             rotation_range (int, optional): range of rotation degrees.
 
-            brightness_range (tuple of two floats, optional): Range for picking 
-            a brightness shift value from.
+            brightness_range (2D float tuple, optional): Range for picking a
+            brightness shift value from.
 
             median_filter_size (int, optional): size of the median filter. If 0 
             no median filter will be applied. 
@@ -581,10 +581,10 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
             data val must be set to True. If no validation data provided the 
             order of the paths is the same avoiding validation ones.
 
-            target_size (tuple of int, optional): size where the images will be 
+            target_size (2D int tuple, optional): size where the images will be 
             resized if data_paths is defined. 
 
-            c_target_size (tuple of int, optional): size where complete images 
+            c_target_size (2D int tuple, optional): size where complete images 
             will be resized if data_paths is defined. 
 
             batch_size_value (int, optional): batch size.
@@ -613,8 +613,8 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
             featurewise_center (bool, optional): set input mean to 0 over the   
             dataset, feature-wise.
 
-            brightness_range (tuple or list of two floats, optional): range for 
-            picking a brightness shift value from.
+            brightness_range (2D float tuple, optional): range for picking a 
+            brightness shift value from.
 
             channel_shift_range (float, optional): range for random channel 
             shifts.
@@ -951,7 +951,8 @@ def keras_gen_samples(num_samples, X_data=None, Y_data=None,
             data_paths (list of str): path were the data and mask are stored to 
             generate the new samples.
 
-            target_size (tuple, optional): shape of the images to load from disk.
+            target_size (2D int tuple, optional): shape of the images to load 
+            from disk.
 
             batch_size_value (int, optional): batch size value.
 
@@ -975,8 +976,8 @@ def keras_gen_samples(num_samples, X_data=None, Y_data=None,
             featurewise_center (bool, optional): set input mean to 0 over the
             dataset, feature-wise.
 
-            brightness_range (tuple or list of two floats, optional): range for
-            picking a brightness shift value from.
+            brightness_range (2D float tuple, optional): range for picking a 
+            brightness shift value from.
 
             channel_shift_range (float, optional): range for random channel
             shifts.

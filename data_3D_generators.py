@@ -29,7 +29,7 @@ class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
             contain one subdirectory per class as for flow_from_directory 
             function of Keras.  Only one class is supported.
 
-            dim (tuple, optional): dimension of the desired images. 
+            dim (4D int tuple, optional): dimension of the desired images. 
             E. g. (x, y, z, channels).
 
             seed (int, optional): seed for random functions.
@@ -41,7 +41,7 @@ class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
             num_data_per_epoch (int, optional): amount of data to process per 
             epoch. If the dataset has more data the rest is discarded. 
 
-            o_dim_vol (tuple, optional): original dataset shape.
+            o_dim_vol (3D int tuple, optional): original dataset shape.
             E. g. (number_of_images, x, y)
         """
 
