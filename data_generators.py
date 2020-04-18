@@ -62,7 +62,7 @@ class ImageDataGenerator(keras.utils.Sequence):
 
             rotation90 (bool, optional): to make rotations of 90º, 180º or 270º.
 
-            rotation_range (int, optional): range of rotation degrees.
+            rotation_range (float, optional): range of rotation degrees.
 
             brightness_range (2D float tuple, optional): Range for picking a
             brightness shift value from.
@@ -85,6 +85,10 @@ class ImageDataGenerator(keras.utils.Sequence):
             to validate the model to not make random crops (as the val. data must
             be the same on each epoch). Valid when random_crops_in_DA is set.
         """
+
+        if rotation_range != 0 and rotation90 == True:
+            raise ValueError("'rotation_range' and 'rotation90' can not be set "
+                             "together")
 
         self.dim = dim
         self.batch_size = batch_size
