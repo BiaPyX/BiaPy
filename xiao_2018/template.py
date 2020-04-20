@@ -56,7 +56,6 @@ import math
 import time
 import tensorflow as tf
 from data_manipulation import load_data, check_binary_masks, \
-                              binary_onehot_encoding_to_img, \
                               crop_3D_data_with_overlap, \
                               merge_3D_data_with_overlap
 from data_3D_generators import VoxelDataGenerator
@@ -215,6 +214,8 @@ result_bin_dir = os.path.join(result_dir, 'binarized')
 result_no_bin_dir = os.path.join(result_dir, 'no_binarized')
 # Folder where the smoothed images will be stored
 smooth_dir = os.path.join(result_dir, 'smooth')
+# Folder where the smoothed images (no binarized) will be stored
+smooth_no_bin_dir = os.path.join(result_dir, 'smooth_no_bin')
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
 # folder pointed by "args.base_work_dir" variable 
@@ -284,7 +285,7 @@ if extra_train_data != 0:
 
     extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
 
-    X_train = np.vstack((X_train, extra_x))
+    X_train = np.vstack((X_train, extra_x*255))
     Y_train = np.vstack((Y_train, extra_y*255))
     print("{} extra train data generated, the new shape of the train now is {}"\
           .format(extra_train_data, X_train.shape))
@@ -374,20 +375,22 @@ print("##################\n#    INFERENCE   #\n##################\n")
 
 # Evaluate to obtain the loss value and the Jaccard index
 print("Evaluating test data . . .")
-#score = model.evaluate_generator(test_generator, verbose=1)
-#jac_per_subvolume = score[1]
-score = [0, 0]
-jac_per_subvolume = -1
+score = model.evaluate_generator(test_generator, verbose=1)
+jac_per_subvolume = score[1]
 
 # Predict on test
 print("Making the predictions on test data . . .")
 preds_test = model.predict_generator(test_generator, verbose=1)
 
+# Divide the test data into 255 if it is going to be used
+Y_test /= 255 if np.max(Y_test) > 1 else Y_test
+X_test /= 255 if np.max(X_test) > 1 else X_test
+
 if softmax_out == True:
     # Decode predicted images into the original one
     decoded_pred_test = np.zeros(Y_test.shape)
     for i in range(preds_test.shape[0]):
-        decoded_pred_test[i] = binary_onehot_encoding_to_img(preds_test[i])
+        decoded_pred_test[i] = np.expand_dims(preds_test[i,...,1], -1)
     preds_test = decoded_pred_test
 
 # Merge the volumes and convert them into 2D data
@@ -415,25 +418,30 @@ if post_process == True:
     print("##################\n# POST-PROCESING #\n##################\n")
     print("1) SMOOTH")
 
-    Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
+    Y_test_smooth = np.zeros(X_test.shape, dtype=(np.float32))
 
     for i in tqdm(range(X_test.shape[0])):
-        predictions_smooth = smooth_3d_predictions(X_test[i]/255,
+        predictions_smooth = smooth_3d_predictions(X_test[i],
             pred_func=(lambda img_batch_subdiv: \
                            model.predict_generator(img_batch_subdiv)))
 
-        Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
-
-    print("Saving smooth predicted images . . .")
-    save_img(Y=Y_test_smooth, mask_dir=smooth_dir, prefix="test_out_smooth")
+        Y_test_smooth[i] = predictions_smooth
 
     # Merge the volumes and convert them into 2D data
     Y_test_smooth = merge_3D_data_with_overlap(Y_test_smooth, orig_test_shape)
 
+    print("Saving smooth predicted images . . .")
+    save_img(Y=Y_test_smooth, mask_dir=smooth_no_bin_dir,
+             prefix="test_out_smooth_no_bin")
+    save_img(Y=(Y_test_smooth > 0.5).astype(np.uint8), mask_dir=smooth_dir,
+             prefix="test_out_smooth")
+
     # Metrics (Jaccard + VOC + DET)
     print("Calculate metrics . . .")
-    smooth_score = jaccard_index_numpy(Y_test, Y_test_smooth)
-    smooth_voc = voc_calculation(Y_test, Y_test_smooth, smooth_score)
+    smooth_score = jaccard_index_numpy(
+        Y_test, (Y_test_smooth > 0.5).astype(np.uint8))
+    smooth_voc = voc_calculation(
+        Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smooth_score)
 
     print("Finish post-processing")
 
@@ -453,7 +461,7 @@ if load_previous_weights == False:
     print("Validation jaccard_index: {}"
           .format(np.max(results.history['val_jaccard_index_softmax'])))
 
-print("Test loss: ".format(score[0]))
+print("Test loss: {}".format(score[0]))
 print("Test jaccard_index (per subvolume): {}".format(jac_per_subvolume))
 print("Test jaccard_index (per image): {}".format(score[1]))
 print("VOC (per image without overlap): {}".format(voc))
@@ -475,13 +483,15 @@ if load_previous_weights == False:
     voc_per_img_50ov = -1 if 'voc_per_img_50ov' not in globals() else voc_per_img_50ov
     det_per_img_50ov = -1 if 'det_per_img_50ov' not in globals() else det_per_img_50ov
 
-#    store_history(
-#        results, jac_per_subvolume, score, jac_per_img_50ov, voc, 
-#        voc_per_img_50ov, det, det_per_img_50ov, time_callback, log_dir,
-#        job_identifier, smooth_score, smooth_voc, smooth_det, zfil_score, 
-#        zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
-#
-#    create_plots(results, job_identifier, args.run_id, char_dir)
+    store_history(
+        results, jac_per_subvolume, score, jac_per_img_50ov, voc, 
+        voc_per_img_50ov, det, det_per_img_50ov, time_callback, result_dir,
+        job_identifier, smooth_score, smooth_voc, smooth_det, zfil_score, 
+        zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det,
+        metric="jaccard_index_softmax")
+
+    create_plots(results, job_identifier, char_dir, 
+                 metric="jaccard_index_softmax")
 
 if post_process == True:
     print("Post-process: SMOOTH - Test jaccard_index: {}".format(smooth_score))
