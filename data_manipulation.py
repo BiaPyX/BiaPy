@@ -149,8 +149,10 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
     # as the amount of images that will be in validation will not be enough to 
     # create 3D data subvolumes
     if prepare_subvolumes == True:                                              
+        print("Preparing train data subvolumes . . .")
         X_train, Y_train, = prepare_subvolume_data(
             X_train, Y_train, train_subvol_shape)
+        print("Preparing test data subvolumes . . .")
         X_test, Y_test = prepare_subvolume_data(
             X_test, Y_test, test_subvol_shape, test=True)
 
