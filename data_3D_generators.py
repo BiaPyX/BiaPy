@@ -149,7 +149,7 @@ class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
     def __len__(self):
         """Defines the number of batches per epoch."""
     
-        return int(np.floor(self.n/self.batch_size))
+        return int(np.ceil(self.n/self.batch_size))
 
     def __getitem__(self, index):
         """Generation of one batch of data. 
@@ -164,13 +164,14 @@ class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
                 batch. E. g. (batch_size, x, y, z, channels).
         """
 
-        batch_x = np.zeros((self.batch_size,) + self.dim)
         d_indexes = self.data_indexes[index*self.num_images_to_form_stack:(index+1)*self.num_images_to_form_stack]
+
+        batch_x = np.zeros((len(d_indexes),) + self.dim)
         img_stack = np.zeros((self.dim))
 
         if self.mask_dir is not None:
-            batch_y = np.zeros((self.batch_size,) + self.dim)
             m_indexes = self.mask_indexes[index*self.num_images_to_form_stack:(index+1)*self.num_images_to_form_stack]
+            batch_y = np.zeros((len(m_indexes),) + self.dim)
             mask_stack = np.zeros((self.dim))
 
         j = 0
@@ -311,7 +312,7 @@ class VoxelDataGenerator(keras.utils.Sequence):
     def __len__(self):
         """Defines the number of batches per epoch."""
     
-        return int(np.floor(self.X.shape[0]/self.batch_size))
+        return int(np.ceil(self.X.shape[0]/self.batch_size))
 
     def __getitem__(self, index):
         """Generation of one batch of data. 
@@ -326,11 +327,11 @@ class VoxelDataGenerator(keras.utils.Sequence):
                 E.g. (batch_size_value, x, y, z, channels).
         """
 
-        batch_x = np.zeros((self.batch_size, ) +  self.X.shape[1:])
-        batch_y = np.zeros((self.batch_size, ) +  self.Y.shape[1:])
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
+        batch_x = np.zeros((len(indexes), ) +  self.X.shape[1:])
+        batch_y = np.zeros((len(indexes), ) +  self.Y.shape[1:])
 
-        for i, j in zip(range(self.batch_size), indexes):
+        for i, j in zip(range(len(indexes)), indexes):
             if self.random_subvolumes_in_DA == True:
                 # Random crop here
                 print("Random crop here")
@@ -345,8 +346,8 @@ class VoxelDataGenerator(keras.utils.Sequence):
                 batch_x[i], batch_y[i], _ = self.apply_transform(im, mask)
 
         if self.softmax_out == True:
-            batch_y_ = np.zeros((self.batch_size, ) + self.Y.shape[1:4] + (2,))
-            for i in range(self.batch_size):
+            batch_y_ = np.zeros((len(indexes), ) + self.Y.shape[1:4] + (2,))
+            for i in range(len(indexes)):
                 batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[i]))
 
             batch_y = batch_y_
@@ -357,7 +358,7 @@ class VoxelDataGenerator(keras.utils.Sequence):
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
 
-        self.indexes = np.arange(len(self.X))
+        self.indexes = np.arange(self.X.shape[0])
         if self.shuffle_each_epoch == True:
             random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
 

@@ -133,7 +133,7 @@ class ImageDataGenerator(keras.utils.Sequence):
     def __len__(self):
         """Defines the number of batches per epoch."""
     
-        return int(np.floor(len(self.X) / self.batch_size))
+        return int(np.ceil(self.X.shape[0]/self.batch_size))
 
     def __getitem__(self, index):
         """Generation of one batch data. 
@@ -147,13 +147,17 @@ class ImageDataGenerator(keras.utils.Sequence):
                batch_y (4D Numpy array): corresponding Y elements of the batch.
                E.g. (batch_size, x, y, channels).
         """
-        batch_x = np.empty((self.batch_size, *self.dim, self.n_channels))
-        batch_y = np.empty((self.batch_size, *self.dim, self.n_channels))
 
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
 
-        for i, j in zip(range(0,self.batch_size), indexes):
+        batch_x = np.empty((len(indexes), *self.dim, self.n_channels))
+        batch_y = np.empty((len(indexes), *self.dim, self.n_channels))
+
+        # Generate indexes of the batch
+        indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
+
+        for i, j in zip(range(len(indexes)), indexes):
             if self.da == False: 
                 if self.random_crops_in_DA == True:
                     batch_x[i], batch_y[i] = random_crop(
@@ -176,8 +180,8 @@ class ImageDataGenerator(keras.utils.Sequence):
                         self.X[j], self.Y[j])
                 
         if self.softmax_out == True:
-            batch_y_ = np.zeros((self.batch_size, ) + self.Y.shape[1:3] + (2,))
-            for i in range(self.batch_size):
+            batch_y_ = np.zeros((len(indexes), ) + self.Y.shape[1:3] + (2,))
+            for i in range(len(indexes)):
                 batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[i]))
 
             batch_y = batch_y_
