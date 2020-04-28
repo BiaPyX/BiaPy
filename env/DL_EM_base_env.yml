@@ -1,4 +1,4 @@
-name: tf2Keras
+name: DL_EM_base_env
 channels:
   - defaults
 dependencies:
@@ -146,5 +146,3 @@ dependencies:
     - traits==5.2.0
     - traitsui==6.1.3
     - urllib3==1.25.8
-prefix: /home/dfranco/anaconda3/envs/tf2Keras
-
