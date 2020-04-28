@@ -1,5 +1,5 @@
 import numpy as np
-import keras
+import tensorflow as tf
 import random
 import math
 import os
@@ -11,7 +11,7 @@ from scipy.ndimage.interpolation import shift
 from data_manipulation import img_to_onehot_encoding
 
 
-class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
+class VoxelDataGeneratorFromDisk(tf.keras.utils.Sequence):
     """Custom ImageDataGenerator for 3D images loaded from the disk.
     """
 
@@ -232,7 +232,7 @@ class VoxelDataGeneratorFromDisk(keras.utils.Sequence):
             self.mask_indexes = self.o_mask_indexes.copy()
 
 
-class VoxelDataGenerator(keras.utils.Sequence):
+class VoxelDataGenerator(tf.keras.utils.Sequence):
     """Custom ImageDataGenerator for 3D images.
     """
 

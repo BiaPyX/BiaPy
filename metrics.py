@@ -1,13 +1,13 @@
 import time
 import os
-from keras import backend as K
+from tensorflow.keras import backend as K
 import tensorflow as tf
 import numpy as np
 from skimage import measure
 import distutils
 from distutils import dir_util
 from PIL import Image
-from keras import losses
+from tensorflow.keras import losses
 
 def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.

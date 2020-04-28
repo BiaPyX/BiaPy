@@ -2,9 +2,7 @@ import os
 import math
 import mkl
 import numpy as np
-from tensorflow import set_random_seed
 import time
-import keras
 import random
 import matplotlib.pyplot as plt
 from PIL import ImageEnhance, Image
@@ -12,6 +10,7 @@ from tqdm import tqdm
 import copy
 from skimage import measure
 import scipy.ndimage
+import tensorflow as tf 
 
 
 def limit_threads(threads_number='1'):
@@ -41,11 +40,11 @@ def set_seed(seedValue=42):
     """
     random.seed = seedValue
     np.random.seed(seed=seedValue)
-    set_random_seed(seedValue)
+    tf.random.set_seed(seedValue)
     os.environ["PYTHONHASHSEED"]=str(seedValue);
 
 
-class TimeHistory(keras.callbacks.Callback):
+class TimeHistory(tf.keras.callbacks.Callback):
     """Class to record each epoch time.
     """
 

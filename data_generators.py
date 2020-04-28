@@ -1,8 +1,8 @@
+import tensorflow as tf
 import numpy as np
 import random
 import os
 import cv2
-import keras
 import sys
 import math
 from tqdm import tqdm
@@ -12,12 +12,12 @@ from scipy import ndimage
 from PIL import Image
 from PIL import ImageEnhance
 from texttable import Texttable
-from keras.preprocessing.image import ImageDataGenerator as kerasDA
+from tensorflow.keras.preprocessing.image import ImageDataGenerator as kerasDA
 from util import array_to_img, img_to_array, do_save_wm, make_weight_map
 from data_manipulation  import img_to_onehot_encoding
 
 
-class ImageDataGenerator(keras.utils.Sequence):
+class ImageDataGenerator(tf.keras.utils.Sequence):
     """Custom ImageDataGenerator.
 
        Based on:

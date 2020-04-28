@@ -1,10 +1,10 @@
-from keras.models import Model
-from keras.layers import Input
-from keras.layers.core import Dropout, Lambda, SpatialDropout2D
-from keras.layers.convolutional import Conv2D, Conv2DTranspose
-from keras.layers.pooling import MaxPooling2D
-from keras.layers.merge import concatenate
-import keras 
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input
+from tensorflow.keras.layers.core import Dropout, Lambda, SpatialDropout2D
+from tensorflow.keras.layers.convolutional import Conv2D, Conv2DTranspose
+from tensorflow.keras.layers.pooling import MaxPooling2D
+from tensorflow.keras.layers.merge import concatenate
 from metrics import binary_crossentropy_weighted, jaccard_index, \
                     weighted_bce_dice_loss
 
@@ -157,11 +157,12 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
     
     # Select the optimizer
     if optimizer == "sgd":
-        opt = keras.optimizers.SGD(lr=lr, momentum=0.99, decay=0.0, 
-                                   nesterov=False)
+        opt = tf.keras.optimizers.SGD(
+            lr=lr, momentum=0.99, decay=0.0, nesterov=False)
     elif optimizer == "adam":
-        opt = keras.optimizers.Adam(lr=lr, beta_1=0.9, beta_2=0.999, 
-                                    epsilon=None, decay=0.0, amsgrad=False)
+        opt = tf.keras.optimizers.Adam(
+            lr=lr, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, 
+            amsgrad=False)
     else:
         raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
         
