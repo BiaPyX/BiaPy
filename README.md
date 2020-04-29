@@ -104,7 +104,7 @@ python -u template.py ${code_dir} "${data_dir}" "${job_dir}" --id "${jobID}" --r
 
 ### Other state-of-the-art implementations
 
-The folllowing state-of-the-art approaches for EM semantic segmentation have been implemented:
+The following state-of-the-art approaches for EM semantic segmentation have been implemented:
 
 - 3D U-Net + post-processing. Everything contained in [xiao_2018](xiao_2018). 
 ```

@@ -52,7 +52,6 @@ job_identifier = args.job_id + '_' + str(args.run_id)
 
 import random
 import numpy as np
-import keras
 import math
 import time
 import tensorflow as tf
@@ -64,13 +63,13 @@ from networks.unet_3d import U_Net_3D
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from itertools import chain
-from keras.callbacks import EarlyStopping, ModelCheckpoint
-from keras.models import load_model
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.models import load_model
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap,\
                                      smooth_3d_predictions
-from keras.utils.vis_utils import plot_model
+from tensorflow.utils.vis_utils import plot_model
 
 
 ############
@@ -186,8 +185,6 @@ learning_rate_value = 0.001
 epochs_value = 360
 # Number of epochs to stop the training process after no improvement
 patience = 50 
-# Define time callback                                                          
-time_callback = TimeHistory()
 
 
 ### Network architecture specific parameters
@@ -222,6 +219,19 @@ smooth_no_bin_dir = os.path.join(result_dir, 'smooth_no_bin')
 char_dir = os.path.join(result_dir, 'charts')
 # Folder where smaples of DA will be stored
 da_samples_dir = os.path.join(result_dir, 'aug')
+
+
+### Callbacks
+# To measure the time
+time_callback = TimeHistory()
+# Stop early and restore the best model weights when finished the training 
+earlystopper = EarlyStopping(
+    patience=patience, verbose=1, restore_best_weights=True)
+# Save the best model into a h5 file in case one need again the weights learned 
+os.makedirs(h5_dir, exist_ok=True)
+checkpointer = ModelCheckpoint(
+    os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
+    verbose=1, save_best_only=True)
 
 
 #####################
@@ -342,13 +352,6 @@ model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
-    earlystopper = EarlyStopping(patience=patience, verbose=1, 
-                                 restore_best_weights=True)
-    
-    os.makedirs(h5_dir, exist_ok=True)
-    checkpointer = ModelCheckpoint(
-        os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
-        verbose=1, save_best_only=True)
     
     if fine_tunning == True:                                                    
         h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
@@ -356,13 +359,10 @@ if load_previous_weights == False:
         print("Fine-tunning: loading model weights from h5_file: {}"
               .format(h5_file))   
         model.load_weights(h5_file)                                             
-   
-    results = model.fit_generator(
-        train_generator, validation_data=val_generator,
-        validation_steps=math.ceil(len(X_val)/batch_size_value),
-        steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
-        epochs=epochs_value, 
-        callbacks=[earlystopper, checkpointer, time_callback])
+
+    results = model.fit(x=train_generator, validation_data=val_generator,
+        validation_steps=len(val_generator), steps_per_epoch=len(train_generator),
+        epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
                                  + '_' + str(args.run_id) + '.h5')
@@ -385,12 +385,12 @@ jac_per_subvolume = score[1]
 print("Making the predictions on test data . . .")
 preds_test = model.predict_generator(test_generator, verbose=1)
 
+# Divide the test data into 255 if it is going to be used
+Y_test /= 255 if np.max(Y_test) > 1 else Y_test
+X_test /= 255 if np.max(X_test) > 1 else X_test
+
 if softmax_out == True:
-    # Decode predicted images into the original one
-    decoded_pred_test = np.zeros(Y_test.shape)
-    for i in range(preds_test.shape[0]):
-        decoded_pred_test[i] = np.expand_dims(preds_test[i,...,1], -1)
-    preds_test = decoded_pred_test
+    preds_test = np.expand_dims(preds_test[...,1], -1)
 
 # Merge the volumes and convert them into 2D data
 recons_pred_test, Y_test = merge_3D_data_with_overlap(
@@ -420,7 +420,7 @@ if post_process == True:
     Y_test_smooth = np.zeros(X_test.shape, dtype=(np.float32))
 
     for i in tqdm(range(X_test.shape[0])):
-        predictions_smooth = smooth_3d_predictions(X_test[i]/255,
+        predictions_smooth = smooth_3d_predictions(X_test[i],
             pred_func=(lambda img_batch_subdiv: \
                            model.predict_generator(img_batch_subdiv)))
 
@@ -486,9 +486,10 @@ if load_previous_weights == False:
         results, jac_per_subvolume, score, jac_per_img_50ov, voc, 
         voc_per_img_50ov, det, det_per_img_50ov, time_callback, result_dir,
         job_identifier, smooth_score, smooth_voc, smooth_det, zfil_score, 
-        zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det)
+        zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det,
+        metric="jaccard_index")
 
-    create_plots(results, job_identifier, char_dir)
+    create_plots(results, job_identifier, char_dir, metric="jaccard_index")
 
 if post_process == True:
     print("Post-process: SMOOTH - Test jaccard_index: {}".format(smooth_score))
