@@ -51,7 +51,6 @@ job_identifier = args.job_id + '_' + str(args.run_id)
 
 import random
 import numpy as np
-import keras
 import math
 import time
 import tensorflow as tf
@@ -63,13 +62,13 @@ from unet_3d_xiao import U_Net_3D_Xiao
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from itertools import chain
-from keras.callbacks import EarlyStopping, ModelCheckpoint
-from keras.models import load_model
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.models import load_model
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap,\
                                      smooth_3d_predictions
-from keras.utils.vis_utils import plot_model
+from tensorflow.keras.utils import plot_model
 
 
 ############
@@ -79,7 +78,7 @@ from keras.utils.vis_utils import plot_model
 print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
-print("Keras        : {}".format(keras.__version__))
+print("Keras        : {}".format(tf.keras.__version__))
 print("Tensorflow   : {}".format(tf.__version__))
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_selected;
@@ -96,7 +95,7 @@ train_mask_path = os.path.join(args.data_dir, 'train', 'y')
 test_path = os.path.join(args.data_dir, 'test', 'x')
 test_mask_path = os.path.join(args.data_dir, 'test', 'y')
 # Percentage of the training data used as validation                            
-perc_used_as_val = 0.1
+perc_used_as_val = 0.2
 
 
 ### Dataset shape
@@ -132,7 +131,7 @@ da = True
 # Create samples of the DA made. Useful to check the output images made.
 aug_examples = True
 # Flag to shuffle the training data on every epoch 
-shuffle_train_data_each_epoch = False
+shuffle_train_data_each_epoch = True
 # Flag to shuffle the validation data on every epoch
 shuffle_val_data_each_epoch = False
 # Shift range to appply to the subvolumes 
@@ -151,7 +150,7 @@ random_subvolumes_in_DA = False
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when "random_crops_in_DA"
 # is made, as more original train data can be cover
-duplicate_train = 70
+duplicate_train = 75
 # Extra number of images to add to the train data. Applied after duplicate_train
 extra_train_data = 0
 
@@ -353,13 +352,10 @@ if load_previous_weights == False:
         print("Fine-tunning: loading model weights from h5_file: {}"
               .format(h5_file))   
         model.load_weights(h5_file)                                             
-   
-    results = model.fit_generator(
-        train_generator, validation_data=val_generator,
-        validation_steps=math.ceil(len(X_val)/batch_size_value),
-        steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
-        epochs=epochs_value, 
-        callbacks=[earlystopper, checkpointer, time_callback])
+
+    results = model.fit(x=train_generator, validation_data=val_generator,
+        validation_steps=len(val_generator), steps_per_epoch=len(train_generator),
+        epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
                                  + '_' + str(args.run_id) + '.h5')
@@ -387,11 +383,7 @@ Y_test /= 255 if np.max(Y_test) > 1 else Y_test
 X_test /= 255 if np.max(X_test) > 1 else X_test
 
 if softmax_out == True:
-    # Decode predicted images into the original one
-    decoded_pred_test = np.zeros(Y_test.shape)
-    for i in range(preds_test.shape[0]):
-        decoded_pred_test[i] = np.expand_dims(preds_test[i,...,1], -1)
-    preds_test = decoded_pred_test
+    preds_test = np.expand_dims(preds_test[...,1], -1)
 
 # Merge the volumes and convert them into 2D data
 recons_pred_test, Y_test = merge_3D_data_with_overlap(

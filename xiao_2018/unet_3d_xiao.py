@@ -1,13 +1,10 @@
 import tensorflow as tf
-from keras.models import Model
-from keras.layers import Input, ELU, UpSampling3D, Add, Dense, Activation, Reshape, Flatten, Permute
-from keras.layers.core import Dropout, Lambda, SpatialDropout3D
-from keras.layers.convolutional import Conv3D, Conv3DTranspose
-from keras.layers.pooling import MaxPooling3D
-from keras.layers.merge import concatenate
-from keras.layers.normalization import BatchNormalization
-from keras.regularizers import l2
-import keras 
+from tensorflow.keras import Model, Input
+from tensorflow.keras.layers import ELU, UpSampling3D, Add, Dense, Activation, \
+                                    Reshape, Flatten, Permute, Dropout, Lambda,\
+                                    SpatialDropout3D, Conv3D, Conv3DTranspose, \
+                                    MaxPooling3D, concatenate, BatchNormalization
+from tensorflow.keras.regularizers import l2
 from metrics import binary_crossentropy_weighted, jaccard_index, jaccard_index_softmax
 from loss import custom_loss
 
@@ -114,11 +111,11 @@ def U_Net_3D_Xiao(image_shape, lr=0.0001, num_classes=2):
    
     model = Model(inputs=[inputs], outputs=[outputs])
     
-    opt = keras.optimizers.Adam(lr=lr, beta_1=0.9, beta_2=0.999, 
-                                epsilon=1e-8, decay=0.0, amsgrad=False)
+    opt = tf.keras.optimizers.Adam(lr=lr, beta_1=0.9, beta_2=0.999, 
+                                   epsilon=1e-8, decay=0.0, amsgrad=False)
         
     model.compile(optimizer=opt, loss=custom_loss(a1, a2),
-                  metrics=[jaccard_index_softmax])
+                  metrics=[jaccard_index_softmax], experimental_run_tf_function=False)
 
     return model
 
