@@ -20,6 +20,7 @@ In [templates](templates/) directory are located a few different templates that 
 - [template.py](templates/template.py): use this template as a baseline to make segmantic segmentation with an 2D U-Net on small datasets.
 - [big_data_template.py](templates/big_data_template.py): same as the first, but should be used with large datasets, as it makes use of `flow_from_directory()` instead of `flow()` method. Notice that the dataset directory structure changes.
 - [3D_template.py](templates/3D_template.py): use this template as a baseline to make segmantic segmentation with a 3D U-Net on small datasets.
+- Template from one of each state-of-the-art implementations: [xiao_template.py](xiao_2018/xiao_template.py), [cheng_template.py](cheng_2017/cheng_template.py), or [oztel_template.py](oztel_2017/oztel_template.py).
 
 ### Data structure
 
@@ -83,6 +84,8 @@ dataset/
 ```
 </details>
 
+For instance, one of EM datasets used on this work can be downloaded [here](https://www.epfl.ch/labs/cvlab/data/data-em/ "EPFL")
+
 ### Run the code 
 An example to run it in bash shell could be this:
 ```Bash
@@ -124,4 +127,8 @@ in electron microscopy volumes using deep convolutional neural network", 2017 IE
 Conference on Bioinformatics and Biomedicine (BIBM), IEEE, 2017, pp. 1195-1200.
 ``` 
 
-A readme is located on each implementation folder that explains how to reproduce the experiments reported by they work.
+- 2D U-Net + post-processing. Everything contained in [casser_2018](casser_2018).
+```
+Vincent Casser, Kai Kang, Hanspeter Pfister, and Daniel Haehn, "Fast mitochondria segmentation 
+for connectomics", arXiv preprint arXiv:1812.06024 (2018).
+```
