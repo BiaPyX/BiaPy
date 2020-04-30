@@ -64,7 +64,7 @@ from networks.unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from itertools import chain
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
@@ -72,6 +72,7 @@ from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap
 from skimage.segmentation import clear_border
 from tensorflow.keras.utils import plot_model
+from callbacks import ModelCheckpoint
 
 
 ############
