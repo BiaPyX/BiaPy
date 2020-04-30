@@ -1,7 +1,7 @@
 # Code copied from https://github.com/keras-team/keras/blob/master/keras/callbacks/callbacks.py#L633
 # just inserting a few lines on the prints to avoid the error cited in
-# https://github.com/tensorflow/tensorflow/issues/35100 overlap that messages of
-# this callback
+# https://github.com/tensorflow/tensorflow/issues/35100 overlap the messages of
+# this callback.
 
 import warnings
 import tensorflow as tf
