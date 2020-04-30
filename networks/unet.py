@@ -1,10 +1,7 @@
 import tensorflow as tf
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input
-from tensorflow.keras.layers.core import Dropout, Lambda, SpatialDropout2D
-from tensorflow.keras.layers.convolutional import Conv2D, Conv2DTranspose
-from tensorflow.keras.layers.pooling import MaxPooling2D
-from tensorflow.keras.layers.merge import concatenate
+from tensorflow.keras import Model, Input
+from tensorflow.keras.layers import Dropout, Lambda, SpatialDropout2D, Conv2D, \
+                                    Conv2DTranspose, MaxPooling2D, concatenate
 from metrics import binary_crossentropy_weighted, jaccard_index, \
                     weighted_bce_dice_loss
 

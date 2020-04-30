@@ -51,7 +51,7 @@ def jaccard_index(y_true, y_pred, t=0.5):
             jac (tensor): Jaccard index value
     """
 
-    y_pred_ = tf.to_int32(y_pred > t)
+    y_pred_ = tf.cast(y_pred > t, dtype=tf.int32)
     y_true = tf.cast(y_true, dtype=tf.int32)
 
     TP = tf.math.count_nonzero(y_pred_ * y_true)

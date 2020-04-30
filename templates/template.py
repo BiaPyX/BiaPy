@@ -52,7 +52,6 @@ job_identifier = args.job_id + '_' + str(args.run_id)
 
 import random
 import numpy as np
-import keras
 import math
 import time
 import tensorflow as tf
@@ -65,14 +64,14 @@ from networks.unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from itertools import chain
-from keras.callbacks import EarlyStopping, ModelCheckpoint
-from keras.models import load_model
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap
 from skimage.segmentation import clear_border
-from keras.utils.vis_utils import plot_model
+from tensorflow.keras.utils import plot_model
 
 
 ############
@@ -82,7 +81,7 @@ from keras.utils.vis_utils import plot_model
 print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
-print("Keras        : {}".format(keras.__version__))
+print("Keras        : {}".format(tf.keras.__version__))
 print("Tensorflow   : {}".format(tf.__version__))
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_selected;
@@ -277,8 +276,6 @@ patience = 50
 # different binarization threshold values, from 0.1 to 1. Useful to check a 
 # correct threshold value (normally 0.5)
 make_threshold_plots = False
-# Define time callback                                                          
-time_callback = TimeHistory()
 # If weights on data are going to be applied. To true when loss_type is 'w_bce' 
 weights_on_data = True if loss_type == "w_bce" else False
 
@@ -343,6 +340,19 @@ loss_weight_dir = os.path.join(result_dir, 'loss_weights', args.job_id)
 da_samples_dir = os.path.join(result_dir, 'aug')
 # Folder where crop samples will be stored
 check_crop_path = os.path.join(result_dir, 'check_crop')
+
+
+### Callbacks
+# To measure the time
+time_callback = TimeHistory()
+# Stop early and restore the best model weights when finished the training
+earlystopper = EarlyStopping(
+    patience=patience, verbose=1, restore_best_weights=True)
+# Save the best model into a h5 file in case one need again the weights learned
+os.makedirs(h5_dir, exist_ok=True)
+checkpointer = ModelCheckpoint(
+    os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
+    verbose=1, save_best_only=True)
 
 
 #####################
@@ -420,7 +430,7 @@ if make_crops == True and discard_cropped_images == True:
 print("##################\n#    LOAD DATA   #\n##################\n")
 
 X_train, Y_train, X_val,\
-Y_val,  X_test, Y_test,\
+Y_val, X_test, Y_test,\
 orig_test_shape, norm_value, crops_made = load_data(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
     img_test_shape, val_split=perc_used_as_val, shuffle_val=random_val_data,
@@ -593,14 +603,6 @@ model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
-    earlystopper = EarlyStopping(patience=patience, verbose=1, 
-                                 restore_best_weights=True)
-    
-    os.makedirs(h5_dir, exist_ok=True)
-    checkpointer = ModelCheckpoint(
-        os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'), 
-        verbose=1, save_best_only=True)
-    
     if fine_tunning == True:                                                    
         h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
                              + '_' + args.run_id + '.h5')     
@@ -608,12 +610,10 @@ if load_previous_weights == False:
               .format(h5_file))
         model.load_weights(h5_file)                                             
    
-    results = model.fit_generator(
-        train_generator, validation_data=val_generator,
-        validation_steps=math.ceil(len(X_val)/batch_size_value),
-        steps_per_epoch=math.ceil(len(X_train)/batch_size_value),
-        epochs=epochs_value, 
-        callbacks=[earlystopper, checkpointer, time_callback])
+    results = model.fit(x=train_generator, validation_data=val_generator,
+        validation_steps=math.ceil(X_val.shape[0]/batch_size_value),
+        steps_per_epoch=math.ceil(X_train.shape[0]/batch_size_value),
+        epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
                          + '_' + str(args.run_id) + '.h5')
@@ -627,161 +627,97 @@ else:
 
 print("##################\n#    INFERENCE   #\n##################\n")
 
-if random_crops_in_DA == False:
-    # Evaluate to obtain the loss value and the Jaccard index (per crop)
-    print("Evaluating test data . . .")
-    score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, 
-                           verbose=1)
-    jac_per_crop = score[1]
-
-    # Predict on test
-    print("Making the predictions on test data . . .")
-    preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
-
-    # Threshold images
-    bin_preds_test = (preds_test > 0.5).astype(np.uint8)
-
-    # Reconstruct the data to the original shape
-    if make_crops == True:
-        h_num = int(orig_test_shape[1] / bin_preds_test.shape[1]) \
-                + (orig_test_shape[1] % bin_preds_test.shape[1] > 0)
-        v_num = int(orig_test_shape[2] / bin_preds_test.shape[2]) \
-                + (orig_test_shape[2] % bin_preds_test.shape[2] > 0)
-        
-        X_test = merge_data_without_overlap(
-            X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
-            out_shape=[h_num, v_num], grid=False)
-        Y_test = merge_data_without_overlap(
-            Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
-            out_shape=[h_num, v_num], grid=False)
-        print("The shape of the test data reconstructed is {}"
-              .format(Y_test.shape))
-        
-        # To calculate metrics (binarized)
-        bin_preds_test = merge_data_without_overlap(
-            bin_preds_test, math.ceil(bin_preds_test.shape[0]/(h_num*v_num)),
-            out_shape=[h_num, v_num], grid=False)
-
-        # To save the probabilities (no binarized)
-        preds_test = merge_data_without_overlap(
-            preds_test, math.ceil(preds_test.shape[0]/(h_num*v_num)),
-            out_shape=[h_num, v_num], grid=False)
-        
-    print("Saving predicted images . . .")
-    save_img(Y=bin_preds_test, mask_dir=result_bin_dir, prefix="test_out_bin")
-    save_img(Y=preds_test, mask_dir=result_no_bin_dir, prefix="test_out_no_bin")
-
-    # Metric calculation
-    if make_threshold_plots == True:
-        print("Calculate metrics with different thresholds . . .")
-        score[1], voc, det = threshold_plots(
-            preds_test, Y_test, orig_test_shape, score, det_eval_ge_path, 
-            det_eval_path, det_bin, n_dig, args.job_id, job_identifier, char_dir)
-    else:
-        print("Calculate metrics . . .")
-        # Per image without overlap
-        score[1] = jaccard_index_numpy(Y_test, bin_preds_test)
-        voc = voc_calculation(Y_test, bin_preds_test, score[1])
-        det = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path,
-                              det_eval_path, det_bin, n_dig, args.job_id)
-
-        if make_crops == True:
-            # Per image with 50% overlap
-            Y_test_50ov = np.zeros(X_test.shape, dtype=(np.float32))
-            for i in tqdm(range(0,len(X_test))):
-                predictions_smooth = predict_img_with_overlap(
-                    X_test[i,:,:,:],
-                    window_size=crop_shape[0],
-                    subdivisions=2,
-                    nb_classes=1,
-                    pred_func=(
-                        lambda img_batch_subdiv: model.predict(img_batch_subdiv)
-                    )
-                )
-                Y_test_50ov[i] = predictions_smooth
-    
-            print("Saving 50% overlap predicted images . . .")
-            save_img(Y=(Y_test_50ov > 0.5).astype(np.float32), 
-                     mask_dir=result_bin_dir_50ov, prefix="test_out_bin_50ov")
-            save_img(Y=Y_test_50ov, mask_dir=result_no_bin_dir_50ov,
-                     prefix="test_out_no_bin_50ov")
-        
-            print("Calculate metrics for 50% overlap images . . .")
-            jac_per_img_50ov = jaccard_index_numpy(
-                Y_test, (Y_test_50ov > 0.5).astype(np.float32))
-            voc_per_img_50ov = voc_calculation(
-                Y_test, (Y_test_50ov > 0.5).astype(np.float32), jac_per_img_50ov)
-            det_per_img_50ov = DET_calculation(
-                Y_test, (Y_test_50ov > 0.5).astype(np.float32), det_eval_ge_path, 
-                det_eval_path, det_bin, n_dig, args.job_id)
-        else:
-            jac_per_img_50ov = -1
-            voc_per_img_50ov = -1
-            det_per_img_50ov = -1
-
-else:
-    ov_X_test, ov_Y_test = crop_data_with_overlap(
+# Divide the test data to fit into crop shape used to train
+if random_crops_in_DA == True:
+    X_test, Y_test = crop_data_with_overlap(
         X_test, Y_test, crop_shape[0], test_ov_crops)
 
     if check_crop == True:
-        save_img(X=ov_X_test, data_dir=result_dir, Y=ov_Y_test, 
+        save_img(X=X_test, data_dir=result_dir, Y=Y_test,
                  mask_dir=result_dir, prefix="ov_crop")
 
-    print("Evaluating overlapped test data . . .")
-    score = model.evaluate(ov_X_test, ov_Y_test, batch_size=batch_size_value,
-                           verbose=1)
+Y_test /= 255 if np.max(Y_test) > 1 else Y_test
+X_test /= 255 if np.max(X_test) > 1 else X_test
 
-    print("Making the predictions on overlapped test data . . .")
-    preds_test = model.predict(ov_X_test, batch_size=batch_size_value, verbose=1)
+print("Evaluating test data . . .")
+score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
+jac_per_crop = score[1]
 
-    bin_preds_test = (preds_test > 0.5).astype(np.uint8)
- 
-    print("Calculate Jaccard for test (per crop). . .")
-    jac_per_crop = jaccard_index_numpy(ov_Y_test, bin_preds_test)
+print("Making the predictions on test data . . .")
+preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
+
+# Reconstruct the data to the original shape
+if make_crops == True:
+    h_num = math.ceil(orig_test_shape[1]/(preds_test > 0.5).astype(np.uint8).shape[1])
+    v_num = math.ceil(orig_test_shape[2]/(preds_test > 0.5).astype(np.uint8).shape[2]) 
+
+    print("Reconstruct X_test . . .")    
+    X_test = merge_data_without_overlap(
+        X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
+        out_shape=[h_num, v_num], grid=False)
+    print("Reconstruct Y_test . . .")
+    Y_test = merge_data_without_overlap(
+        Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
+        out_shape=[h_num, v_num], grid=False)
     
-    # Save output images
-    os.makedirs(result_dir, exist_ok=True)
-    if len(sys.argv) > 1 and args.run_id == "1":
-        print("Saving predicted images . . .")
-        save_img(Y=bin_preds_test, mask_dir=result_dir, prefix="test_out_ov_bin")
+    print("Reconstruct preds_test . . .")
+    preds_test = merge_data_without_overlap(
+        preds_test, math.ceil(preds_test.shape[0]/(h_num*v_num)),
+        out_shape=[h_num, v_num], grid=False)
 
-    if test_ov_crops > 1:
-        print("Merging the overlapped predictions . . .")
-        merged_preds_test = merge_data_with_overlap(
-            bin_preds_test, orig_test_shape, crop_shape[0], test_ov_crops,
-            result_dir)
+elif random_crops_in_DA == True and test_ov_crops > 1:
+    print("Reconstruct preds_test . . .")
+    preds_test = merge_data_with_overlap(
+        preds_test, orig_test_shape, crop_shape[0], test_ov_crops, result_dir)
 
-        print("Calculate Jaccard for test (per image with overlap calculated). . .")
-        score[1] = jaccard_index_numpy(Y_test, merged_preds_test)
-        voc = voc_calculation(Y_test, merged_preds_test, score[1])
-        det = DET_calculation(
-            Y_test, merged_preds_test, det_eval_ge_path, det_eval_path, det_bin, 
-            n_dig, args.job_id)
-    else:
-        print("As the number of overlapped crops created is 1, we will obtain " 
-              + "the (per image) Jaccard value overlapping 4 tiles with the " 
-              + "predict_img_with_overlap function")                              
-                                                                                
-        Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))                
-        for i in tqdm(range(0,len(X_test))):                                    
-            predictions_smooth = predict_img_with_overlap(                      
-                X_test[i,:,:,:],                                                
-                window_size=crop_shape[0],                                     
-                subdivisions=2,  
-                nb_classes=1,                                                   
-                pred_func=(                                                     
-                    lambda img_batch_subdiv: model.predict(img_batch_subdiv)    
-                )                                                               
-            )                                                                   
-            Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)      
-                                                                                
-        score[1] = jaccard_index_numpy(Y_test, Y_test_smooth)                   
-        voc = voc_calculation(Y_test, Y_test_smooth, score[1])
-        det = DET_calculation(Y_test, Y_test_smooth, det_eval_ge_path,
-                              det_eval_path, det_bin, n_dig, args.job_id)
-        del Y_test_smooth                                                       
+print("Saving predicted images . . .")
+save_img(Y=(preds_test > 0.5).astype(np.uint8), 
+         mask_dir=result_bin_dir, prefix="test_out_bin")
+save_img(Y=preds_test, mask_dir=result_no_bin_dir, prefix="test_out_no_bin")
 
+# Generate a plot with different binarization thresholds 
+if make_threshold_plots == True and random_crops_in_DA == False:
+    print("Calculate metrics with different thresholds . . .")
+    score[1], voc, det = threshold_plots(
+        preds_test, Y_test, orig_test_shape, score, det_eval_ge_path, 
+        det_eval_path, det_bin, n_dig, args.job_id, job_identifier, char_dir)
+
+print("Calculate metrics . . .")
+score[1] = jaccard_index_numpy(Y_test, (preds_test > 0.5).astype(np.uint8))
+voc = voc_calculation(Y_test, (preds_test > 0.5).astype(np.uint8), score[1])
+det = DET_calculation(Y_test, (preds_test > 0.5).astype(np.uint8), 
+                      det_eval_ge_path, det_eval_path, det_bin, n_dig, args.job_id)
+if make_crops == True or (random_crops_in_DA == True and test_ov_crops > 1):
+    Y_test_50ov = np.zeros(X_test.shape, dtype=(np.float32))
+    for i in tqdm(range(X_test.shape[0])):
+        predictions_smooth = predict_img_with_overlap(
+            X_test[i,:,:,:], window_size=crop_shape[0], subdivisions=2, 
+            nb_classes=1, pred_func=(
+                lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
+        Y_test_50ov[i] = predictions_smooth
+
+    print("Saving 50% overlap predicted images . . .")
+    save_img(Y=(Y_test_50ov > 0.5).astype(np.float32), 
+             mask_dir=result_bin_dir_50ov, prefix="test_out_bin_50ov")
+    save_img(Y=Y_test_50ov, mask_dir=result_no_bin_dir_50ov,
+             prefix="test_out_no_bin_50ov")
+
+    print("Calculate metrics for 50% overlap images . . .")
+    jac_per_img_50ov = jaccard_index_numpy(
+        Y_test, (Y_test_50ov > 0.5).astype(np.float32))
+    voc_per_img_50ov = voc_calculation(
+        Y_test, (Y_test_50ov > 0.5).astype(np.float32), jac_per_img_50ov)
+    det_per_img_50ov = DET_calculation(
+        Y_test, (Y_test_50ov > 0.5).astype(np.float32), det_eval_ge_path, 
+        det_eval_path, det_bin, n_dig, args.job_id)
     
+    del Y_test_50ov
+else:
+    jac_per_img_50ov = -1
+    voc_per_img_50ov = -1
+    det_per_img_50ov = -1
+
+
 ####################
 #  POST-PROCESING  #
 ####################
@@ -800,7 +736,7 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
     os.makedirs(smooth_dir, exist_ok=True)
 
     print("Smoothing crops . . .")
-    for i in tqdm(range(0,len(X_test))):
+    for i in tqdm(range(X_test.shape[0])):
         predictions_smooth = predict_img_with_smooth_windowing(
             X_test[i,:,:,:], window_size=crop_shape[0], subdivisions=2,  
             nb_classes=1, pred_func=(
@@ -827,7 +763,7 @@ if post_process == True and not extra_datasets_data_list:
 
     if random_crops_in_DA == False:
         print("Applying Z-filter . . .")
-        zfil_preds_test = calculate_z_filtering(bin_preds_test)
+        zfil_preds_test = calculate_z_filtering((preds_test > 0.5).astype(np.uint8))
     else:
         if test_ov_crops > 1:
             print("Applying Z-filter . . .")
@@ -879,22 +815,14 @@ if load_previous_weights == False:
           .format(np.max(results.history['val_jaccard_index'])))
 
 print("Test loss: {}".format(score[0]))
-    
-if random_crops_in_DA == False:    
-    print("Test jaccard_index (per crop): {}".format(jac_per_crop))
-    print("Test jaccard_index (per image without overlap): {}".format(score[1]))
-    print("Test jaccard_index (per image with 50% overlap): {}"
-          .format(jac_per_img_50ov))
-    print("VOC (per image without overlap): {}".format(voc))
-    print("VOC (per image with 50% overlap): {}".format(voc_per_img_50ov))
-    print("DET (per image without overlap): {}".format(det))
-    print("DET (per image with 50% overlap): {}".format(det_per_img_50ov))
-else:
-    print("Test overlapped (per crop) jaccard_index: {}".format(jac_per_crop))
-    print("Test overlapped (per image) jaccard_index: {}".format(score[1]))
-    if test_ov_crops > 1:
-        print("VOC: {}".format(voc))
-        print("DET: {}".format(det))
+print("Test jaccard_index (per crop): {}".format(jac_per_crop))
+print("Test jaccard_index (per image): {}".format(score[1]))
+print("Test jaccard_index (per image with 50% overlap): {}"
+      .format(jac_per_img_50ov))
+print("VOC (per image): {}".format(voc))
+print("VOC (per image with 50% overlap): {}".format(voc_per_img_50ov))
+print("DET (per image): {}".format(det))
+print("DET (per image with 50% overlap): {}".format(det_per_img_50ov))
     
 if load_previous_weights == False:
     smooth_score = -1 if 'smooth_score' not in globals() else smooth_score

@@ -187,8 +187,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                         num_examples=3, out_dir=check_crop_path, suffix="_y_", 
                         grid=True)
         
-        image_test_shape[1] = crop_shape[1]
-        image_test_shape[0] = crop_shape[0]
         crop_made = True
     else:
         crop_made = False
