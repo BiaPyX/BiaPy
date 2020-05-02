@@ -633,10 +633,6 @@ if random_crops_in_DA == True:
     X_test, Y_test = crop_data_with_overlap(
         X_test, Y_test, crop_shape[0], test_ov_crops)
 
-    if check_crop == True:
-        save_img(X=X_test, data_dir=result_dir, Y=Y_test,
-                 mask_dir=result_dir, prefix="ov_crop")
-
 Y_test /= 255 if np.max(Y_test) > 1 else Y_test
 X_test /= 255 if np.max(X_test) > 1 else X_test
 
@@ -688,7 +684,7 @@ score[1] = jaccard_index_numpy(Y_test, (preds_test > 0.5).astype(np.uint8))
 voc = voc_calculation(Y_test, (preds_test > 0.5).astype(np.uint8), score[1])
 det = DET_calculation(Y_test, (preds_test > 0.5).astype(np.uint8), 
                       det_eval_ge_path, det_eval_path, det_bin, n_dig, args.job_id)
-if make_crops == True or (random_crops_in_DA == True and test_ov_crops > 1):
+if make_crops == True or random_crops_in_DA == True:
     Y_test_50ov = np.zeros(X_test.shape, dtype=(np.float32))
     for i in tqdm(range(X_test.shape[0])):
         predictions_smooth = predict_img_with_overlap(
