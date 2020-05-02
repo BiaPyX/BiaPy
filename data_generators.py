@@ -110,7 +110,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         self.median_filter_size = median_filter_size
         self.random_crops_in_DA = random_crops_in_DA
         self.crop_length = crop_length
-        self.prob_map = prob_map
         self.train_prob = train_prob
         self.val = val
         self.softmax_out = softmax_out 
@@ -158,26 +157,16 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
 
         for i, j in zip(range(len(indexes)), indexes):
-            if self.da == False: 
-                if self.random_crops_in_DA == True:
-                    batch_x[i], batch_y[i] = random_crop(
-                        self.X[j], self.Y[j], (self.crop_length, self.crop_length),
-                        self.val, prob_map=self.prob_map,
-                        img_prob=(self.train_prob[j] if self.train_prob is not None else None))
-                else:
-                    batch_x[i], batch_y[i] = self.X[j], self.Y[j]
+            if self.random_crops_in_DA == True:
+                batch_x[i], batch_y[i] = random_crop(
+                    self.X[j], self.Y[j], (self.crop_length, self.crop_length),
+                    self.val, img_prob=(self.train_prob[j] if self.train_prob is not None else None))
             else:
-                if self.random_crops_in_DA == True:
-                    batch_x[i], batch_y[i] = random_crop(
-                        self.X[j], self.Y[j], (self.crop_length, self.crop_length), 
-                        self.val, prob_map=self.prob_map,
-                        img_prob=self.train_prob[j]) 
-
-                    batch_x[i], batch_y[i], _ = self.apply_transform(
-                        batch_x[i], batch_y[i])
-                else:
-                    batch_x[i], batch_y[i], _ = self.apply_transform(
-                        self.X[j], self.Y[j])
+                batch_x[i], batch_y[i] = self.X[j], self.Y[j]
+            
+            if self.da == True: 
+                batch_x[i], batch_y[i], _ = self.apply_transform(
+                    batch_x[i], batch_y[i])
                 
         if self.softmax_out == True:
             batch_y_ = np.zeros((len(indexes), ) + self.Y.shape[1:3] + (2,))
@@ -427,10 +416,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             batch_y = np.zeros((num_examples, self.crop_length, self.crop_length,
                                 self.Y.shape[3]), dtype=np.float32)
         else:
-            batch_x = np.zeros((num_examples, self.X.shape[1], self.X.shape[2], 
-                                self.X.shape[3]), dtype=np.float32)
-            batch_y = np.zeros((num_examples, self.Y.shape[1], self.Y.shape[2], 
-                                self.X.shape[3]), dtype=np.float32)
+            batch_x = np.zeros((num_examples,) + self.X.shape[1:], dtype=np.float32)
+            batch_y = np.zeros((num_examples,) + self.Y.shape[1:], dtype=np.float32)
 
         if save_to_dir == True:
             prefix = ""
@@ -443,7 +430,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                  
         # Generate the examples 
         print("0) Creating the examples of data augmentation . . .")
-        for i in tqdm(range(0,num_examples)):
+        for i in tqdm(range(num_examples)):
             if random_images == True:
                 pos = random.randint(1,self.X.shape[0]-1) 
             else:
@@ -455,8 +442,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 s_x, s_y = random_crop(
                     self.X[pos], self.Y[pos], 
                     (self.crop_length, self.crop_length), self.val, 
-                    prob_map=self.prob_map, draw_prob_map_points=self.prob_map,
-                    img_prob=self.train_prob[pos])
+                    draw_prob_map_points=True,
+                    img_prob=(self.train_prob[pos] if self.train_prob is not None else None))
             else:
                 batch_x[i] = self.X[pos]
                 batch_y[i] = self.Y[pos]
@@ -477,7 +464,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
                 # Save the original images with a point that represents the 
                 # selected coordinates to be the center of the crop
-                if self.random_crops_in_DA == True and self.prob_map == True\
+                if self.random_crops_in_DA == True and self.train_prob is not None\
                    and force_full_images == False:
                     im = Image.fromarray(self.X[pos,:,:,0]*255) 
                     im = im.convert('RGB')                                                  
@@ -1386,7 +1373,7 @@ def crop_generator(batches, crop_length, val=False, prob_map=False,
                 yield (batch_crops_x, batch_crops_y)
         
 
-def random_crop(image, mask, random_crop_size, val=False, prob_map=False, 
+def random_crop(image, mask, random_crop_size, val=False, 
                 draw_prob_map_points=False, img_prob=None, weights_on_data=False,
                 weight_map=None):
     """Random crop.
@@ -1409,8 +1396,10 @@ def random_crop(image, mask, random_crop_size, val=False, prob_map=False,
     if val == True:
         x = 0
         y = 0
+        ox = 0
+        oy = 0
     else:
-        if prob_map == True:
+        if img_prob is not None:
             prob = img_prob.ravel() 
             
             # Generate the random coordinates based on the distribution
