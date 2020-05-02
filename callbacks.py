@@ -93,7 +93,7 @@ class ModelCheckpoint(tf.keras.callbacks.Callback):
                             self.model.save(filepath, overwrite=True)
                     else:
                         if self.verbose > 0:
-                            print('\n\nnEpoch %05d: %s did not improve from %0.5f\n\n' %
+                            print('\n\nEpoch %05d: %s did not improve from %0.5f\n\n' %
                                   (epoch + 1, self.monitor, self.best))
             else:
                 if self.verbose > 0:
