@@ -71,9 +71,6 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
             
             metric (str, optional): metric used.
     """
-    
-    # For matplotlib errors in display
-    os.environ['QT_QPA_PLATFORM']='offscreen'
 
     os.makedirs(chartOutDir, exist_ok=True)
 
@@ -715,3 +712,60 @@ def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, th=0.8):
                 im = im.convert('L')
                 im.save(os.path.join(os.path.join(out_dir, "y", "class"+str(j)), 
                         "mask_" + str(i).zfill(d) + ".png"))
+
+
+def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="",
+                              img_per_row=8):
+
+    """Create an image of the filters learned by a convolutional layer. One can 
+       identify the layer with 'l_num' or 'name' args. If both are passed 'name'
+       will be prioritized. 
+    
+       Args:
+            model (Keras Model): model where the layers are stored.
+
+            out_dir (str): path where the image will be stored.
+        
+            l_num (int, optional): number of the layer to extract filters from. 
+            
+            name (str, optional): name of the layer to extract filters from.
+
+            prefix (str, optional): prefix to add to the output image name. 
+        
+            img_per_row (int, optional): filters per row on the image.
+    """
+
+    if l_num is None and name is None:
+        raise ValueError("One between 'l_num' or 'name' must be provided")
+
+    # Find layer number of the layer named by 'name' variable
+    if name is not None:
+        pos = 0
+        for layer in model.layers:
+            if name == layer.name:
+                break
+            pos += 1
+        l_num = pos
+
+    filters, biases = model.layers[l_num].get_weights()
+    print(layer.name, filters.shape)
+    
+    # normalize filter values to 0-1 so we can visualize them
+    f_min, f_max = filters.min(), filters.max()
+    filters = (filters - f_min) / (f_max - f_min)
+    
+    rows = int(math.floor(filters.shape[3]/img_per_row))
+    i = 0
+    for r in range(rows):
+        for c in range(img_per_row):
+            ax = plt.subplot(rows, img_per_row, i+1)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            f = filters[:,:,0,i]
+            plt.imshow(filters[:,:,0,i], cmap='gray')
+
+            i += 1
+
+    prefix += "_" if prefix != "" else prefix
+    plt.savefig(os.path.join(out_dir, prefix + 'f_layer' + str(l_num) + '.png'))
+    plt.clf()
