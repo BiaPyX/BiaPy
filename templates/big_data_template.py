@@ -52,7 +52,6 @@ job_identifier = args.job_id + '_' + str(args.run_id)
 
 import random
 import numpy as np
-import keras
 import math
 import time
 import tensorflow as tf
@@ -67,14 +66,15 @@ from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from itertools import chain
 from skimage.io import imread
-from keras.callbacks import EarlyStopping, ModelCheckpoint
-from keras.models import load_model
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap,\
                                      predict_img_with_overlap_weighted
-from keras.utils.vis_utils import plot_model
+from tensorflow.keras.utils import plot_model
+from callbacks import ModelCheckpoint
 
 
 ############
@@ -84,7 +84,7 @@ from keras.utils.vis_utils import plot_model
 print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
-print("Keras        : {}".format(keras.__version__))
+print("Keras        : {}".format(tf.keras.__version__))
 print("Tensorflow   : {}".format(tf.__version__))
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_selected;
@@ -202,8 +202,6 @@ patience = 50
 # different binarization threshold values, from 0.1 to 1. Useful to check a 
 # correct threshold value (normally 0.5)
 make_threshold_plots = False
-# Define time callback                                                          
-time_callback = TimeHistory()
 # If weights on data are going to be applied. To true when loss_type is 'w_bce'
 weights_on_data = True if loss_type == "w_bce" else False
 
@@ -270,6 +268,19 @@ da_samples_dir = os.path.join(result_dir, 'aug')
 check_crop_path = os.path.join(result_dir, 'check_crop')
 
 
+### Callbacks
+# To measure the time
+time_callback = TimeHistory()
+# Stop early and restore the best model weights when finished the training
+earlystopper = EarlyStopping(
+    patience=patience, verbose=1, restore_best_weights=True)
+# Save the best model into a h5 file in case one need again the weights learned
+os.makedirs(h5_dir, exist_ok=True)
+checkpointer = ModelCheckpoint(
+    os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
+    verbose=1, save_best_only=True)
+
+
 #####################
 #   SANITY CHECKS   #
 #####################
@@ -331,14 +342,6 @@ model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
-    earlystopper = EarlyStopping(patience=patience, verbose=1,
-                                 restore_best_weights=True)
-
-    os.makedirs(h5_dir, exist_ok=True)
-    checkpointer = ModelCheckpoint(
-        os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
-        verbose=1, save_best_only=True)
-
     if fine_tunning == True:
         h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths
                                      + '_' + args.run_id + '.h5')
@@ -370,10 +373,10 @@ print("##################\n#    INFERENCE   #\n##################\n")
 print("Evaluating test data . . .")
 if loss_type == "w_bce":
     gen = combine_generators(X_test_augmented, Y_test_augmented, W_test_augmented)
-    score = model.evaluate_generator(
+    score = model.evaluate( 
         gen, steps=math.ceil(n_test_samples/batch_size_value), verbose=1)
 else:
-    score = model.evaluate_generator(
+    score = model.evaluate(
         zip(X_test_augmented, Y_test_augmented),
         steps=math.ceil(n_test_samples/batch_size_value), verbose=1)
 
@@ -386,29 +389,28 @@ Y_test_augmented.reset()
 print("Making the predictions on test data . . .")
 if loss_type == "w_bce":
     gen = combine_generators(X_test_augmented, Y_test_augmented, W_test_augmented)
-    preds_test = model.predict_generator(
+    preds_test = model.predict(
         gen, steps=math.ceil(n_test_samples/batch_size_value), verbose=1)
 else:
-    preds_test = model.predict_generator(
+    preds_test = model.predict(
         zip(X_test_augmented, Y_test_augmented),
         steps=math.ceil(n_test_samples/batch_size_value), verbose=1)
 
 # Load Y_test to calculate the metrics
 print("Loading test masks to make the predictions . . .")
-Y_test = load_data_from_dir(test_mask_path, (img_test_shape[1], img_test_shape[0],
-                            img_test_shape[2]))
-Y_test = (Y_test / 255).astype(np.uint8)
+Y_test = load_data_from_dir(os.path.join(test_mask_path, 'y'), 
+    (img_test_shape[1], img_test_shape[0], img_test_shape[2]))
+Y_test = (Y_test/255).astype(np.uint8)
 
 # Calculate number of crops per dimension to reconstruct the full images
-h_num = int(original_test_shape[0] / preds_test.shape[1]) \
-        + (original_test_shape[0] % preds_test.shape[1] > 0)
-v_num = int(original_test_shape[1] / preds_test.shape[2]) \
-        + (original_test_shape[1] % preds_test.shape[2] > 0)
+h_num = math.ceil(original_test_shape[0]/preds_test.shape[1])
+v_num = math.ceil(original_test_shape[1]/preds_test.shape[2])
 
 # Reconstruct the predict and Y_test images 
 Y_test = merge_data_without_overlap(
     Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)), out_shape=[h_num, v_num], 
     grid=False)
+
 preds_test = merge_data_without_overlap(
     preds_test, math.ceil(preds_test.shape[0]/(h_num*v_num)),
     out_shape=[h_num, v_num], grid=False)
@@ -426,6 +428,8 @@ det = -1
 print("Saving predicted images . . .")
 save_img(Y=bin_preds_test, mask_dir=result_bin_dir, prefix="test_out_bin")
 save_img(Y=preds_test, mask_dir=result_no_bin_dir, prefix="test_out_no_bin")
+
+del preds_test
 
 # Per image with 50% overlap
 Y_test_50ov = np.zeros(Y_test.shape, dtype=(np.float32))
@@ -522,7 +526,7 @@ if post_process == True:
                 lambda img_batch_subdiv,                                        
                        steps: model.predict_generator(img_batch_subdiv, steps)))          
                                                                                 
-        Y_test_smooth[cont] = (predictions_smooth > 0.5).astype(np.uint8)       
+        Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)       
                                                                                 
         cont += 1                                                               
         if cont == batch_size_value:                                            
@@ -539,8 +543,8 @@ if post_process == True:
     smooth_voc = voc_calculation(Y_test, Y_test_smooth, smooth_score)
 #    smooth_det = DET_calculation(Y_test, Y_test_smooth, det_eval_ge_path,
 #                                 det_eval_post_path, det_bin, n_dig, args.job_id)
+    smooth_det = -1
 
-if post_process == True:
     print("2) Z-FILTERING")
 
     print("Applying Z-filter . . .")
@@ -554,6 +558,7 @@ if post_process == True:
     zfil_voc = voc_calculation(Y_test, zfil_preds_test, zfil_score)
 #    zfil_det = DET_calculation(Y_test, zfil_preds_test, det_eval_ge_path,
 #                               det_eval_post_path, det_bin, n_dig, args.job_id)
+    zfil_det = -1
 
     print("Applying Z-filter to the smoothed data . . .")
     smooth_zfil_preds_test = calculate_z_filtering(Y_test_smooth)
@@ -569,6 +574,7 @@ if post_process == True:
 #    smo_zfil_det = DET_calculation(Y_test, smooth_zfil_preds_test,
 #                                   det_eval_ge_path, det_eval_post_path,
 #                                   det_bin, n_dig, args.job_id)
+    smo_zfil_det = -1
     print("Finished post-processing!")
 
 del Y_test
