@@ -284,7 +284,7 @@ def load_data_from_dir(data_dir, shape):
             data (4D Numpy array): data loaded. 
             E.g. (image_number, x, y, channels).
     """
-
+    print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
     data = np.zeros((len(ids), ) + shape, dtype=np.float32)
 

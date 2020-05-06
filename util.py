@@ -737,6 +737,9 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="",
 
     if l_num is None and name is None:
         raise ValueError("One between 'l_num' or 'name' must be provided")
+    
+    # For matplotlib errors in display
+    os.environ['QT_QPA_PLATFORM']='offscreen'
 
     # Find layer number of the layer named by 'name' variable
     if name is not None:
