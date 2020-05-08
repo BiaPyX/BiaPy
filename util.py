@@ -751,7 +751,6 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="",
         l_num = pos
 
     filters, biases = model.layers[l_num].get_weights()
-    print(layer.name, filters.shape)
     
     # normalize filter values to 0-1 so we can visualize them
     f_min, f_max = filters.min(), filters.max()
