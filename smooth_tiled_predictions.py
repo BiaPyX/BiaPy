@@ -17,8 +17,6 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator as kerasDA
 import math
 
 from scipy.ndimage import rotate
-from data_3D_generators import VoxelDataGenerator
-
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -490,21 +488,15 @@ def smooth_3d_predictions(vol, pred_func, batch_size_value=1,
     aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=270, reshape=False))
     del volume_aux
 
-    # Create the generator. Fake the labels with the images as they are not 
-    # needed for predict but yes to create the generator
-    gen = VoxelDataGenerator(
-        np.array(aug_vols), np.array(aug_vols), random_subvolumes_in_DA=False, 
-        shuffle_each_epoch=False, batch_size=batch_size_value, da=False, 
-        softmax_out=False)
-    decoded_aug_vols = np.zeros((np.array(aug_vols).shape))
+    aug_vols = np.array(aug_vols)
+    decoded_aug_vols = np.zeros(aug_vols.shape)
 
-    # Make the predictions and decode softmax output
-    aug_vols = pred_func(gen)
+    for i in range(aug_vols.shape[0]):
+        if softmax_output == True:
+            decoded_aug_vols[i] = np.expand_dims(pred_func(np.expand_dims(aug_vols[i], 0))[...,1], -1)
+        else:
+            decoded_aug_vols[i] = pred_func(np.expand_dims(aug_vols[i], 0))
 
-    if softmax_output == True:
-        for i in range(aug_vols.shape[0]):
-            decoded_aug_vols[i] = np.expand_dims(aug_vols[i,...,1], -1)
-    
     # Undo the combinations of the volume
     out_vols = []
     out_vols.append(np.array(decoded_aug_vols[0]))
