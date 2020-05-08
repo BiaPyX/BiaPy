@@ -596,9 +596,9 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
     
     if r_div != 0:
         print("WARNING: The last volumes {} in z will be filled with the last "
-              "image to complete the volume with the shape {} provided, so be "
-              "careful and resize the data before run the metrics on it!"
-              .format(r_div, vol_shape[0]))
+              "images in as mirror to complete the volume with the shape {} "
+              "provided, so be careful and resize the data before run the "
+              "metrics on it!".format(r_div, vol_shape[0]))
 
     total_vol = vols_per_z*vols_per_x*vols_per_y
     cropped_data = np.zeros((total_vol,) + vol_shape)
@@ -646,13 +646,13 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
 
                     for s in range(vol_shape[0]-(r_div-(f_z*step_z))):
                         cropped_data[c,(r_div-(f_z*step_z))+s:vol_shape[0]]  = \
-                            data[data.shape[0]-1,
+                            data[data.shape[0]-1-s,
                                  (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
                                  (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
                     
                         if data_mask is not None:
                             cropped_data_mask[c,(r_div-(f_z*step_z))+s:vol_shape[0]] = \
-                                data_mask[data.shape[0]-1,
+                                data_mask[data.shape[0]-1-s,
                                           (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
                                           (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
     
