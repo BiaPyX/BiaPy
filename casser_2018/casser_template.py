@@ -647,8 +647,8 @@ preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
 # Reconstruct the data to the original shape
 if make_crops == True:
-    h_num = math.ceil(orig_test_shape[1]/(preds_test > 0.5).astype(np.uint8).shape[1])
-    v_num = math.ceil(orig_test_shape[2]/(preds_test > 0.5).astype(np.uint8).shape[2]) 
+    h_num = math.ceil(orig_test_shape[1]/preds_test.shape[1])
+    v_num = math.ceil(orig_test_shape[2]/preds_test.shape[2]) 
 
     print("Reconstruct X_test . . .")    
     X_test = merge_data_without_overlap(
