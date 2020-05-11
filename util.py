@@ -462,8 +462,8 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
         else:       
             print("Not data_dir provided so no image will be saved!")
             return
-
-        v = 1 if np.max(X) > 1 else 255 
+        
+        v = 1 if np.max(X) > 2 else 255 
         if X.ndim > 4:
             d = len(str(X.shape[0]*X.shape[1]))
             for i in tqdm(range(X.shape[0])):
