@@ -1360,7 +1360,7 @@ def crop_generator(batches, crop_length, val=False, prob_map=False,
                 batch_crops_y[i],\
                 batch_crops_w[i] = random_crop(
                     x[i], y[i], (crop_length, crop_length), val=val, 
-                    prob_map=prob_map, weights_on_data=True, weight_map=w[i])
+                    weights_on_data=True, weight_map=w[i])
 
                 yield ([batch_crops_x, batch_crops_w], batch_crops_y)
             
@@ -1368,7 +1368,7 @@ def crop_generator(batches, crop_length, val=False, prob_map=False,
                 batch_crops_x[i],\
                 batch_crops_y[i] = random_crop(
                     batch_x[i], batch_y[i], (crop_length, crop_length), val=val, 
-                    prob_map=prob_map, weights_on_data=weights_on_data) 
+                    weights_on_data=weights_on_data) 
 
                 yield (batch_crops_x, batch_crops_y)
         
