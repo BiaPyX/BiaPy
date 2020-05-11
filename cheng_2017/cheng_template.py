@@ -51,6 +51,7 @@ job_identifier = args.job_id + '_' + str(args.run_id)
 
 import random
 import numpy as np
+import keras
 import math
 import time
 import tensorflow as tf
@@ -63,14 +64,14 @@ from asymmetric_unet import asymmetric_U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from itertools import chain
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from tensorflow.keras.models import load_model
+from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap
 from skimage.segmentation import clear_border
-from tensorflow.keras.utils import plot_model
+from keras.utils.vis_utils import plot_model
 
 
 ############
@@ -80,7 +81,7 @@ from tensorflow.keras.utils import plot_model
 print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
-print("Keras        : {}".format(tf.keras.__version__))
+print("Keras        : {}".format(keras.__version__))
 print("Tensorflow   : {}".format(tf.__version__))
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_selected;
@@ -224,7 +225,7 @@ brightness_range = None
 # only available in custom DA
 median_filter_size = [0, 0] 
 # Range of rotation
-rotation_range = 0
+rotation_range = 180
 # Flag to make flips on the subvolumes. Available for both Keras and custom DA.
 flips = True
 
@@ -262,11 +263,11 @@ h5_dir = os.path.join(args.result_dir, 'h5_files')
 # this template type: please use big_data_template.py instead.
 loss_type = "bce"
 # Batch size value
-batch_size_value = 24
+batch_size_value = 6
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "sgd"
 # Learning rate used by the optimization method
-learning_rate_value = 0.05
+learning_rate_value = 0.001
 # Number of epochs to train the network
 epochs_value = 360
 # Number of epochs to stop the training process after no improvement
@@ -334,13 +335,13 @@ smoo_zfil_dir = os.path.join(result_dir, 'smoo_zfil')
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
 # folder pointed by "args.base_work_dir" variable 
-char_dir = os.path.join(result_dir, 'charts')
+char_dir = os.path.join(result_dir, 'charts', job_identifier)
 # Directory where weight maps will be stored                                    
 loss_weight_dir = os.path.join(result_dir, 'loss_weights', args.job_id)
 # Folder where smaples of DA will be stored
-da_samples_dir = os.path.join(result_dir, 'aug')
+da_samples_dir = os.path.join(result_dir, 'aug', job_identifier)
 # Folder where crop samples will be stored
-check_crop_path = os.path.join(result_dir, 'check_crop')
+check_crop_path = os.path.join(result_dir, 'check_crop', job_identifier)
 
 
 #####################
