@@ -4,7 +4,7 @@ import numpy as np
 from tensorflow.keras import backend as K
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, BatchNormalization, Activation, Dropout, Lambda, SpatialDropout2D, Conv2D, Conv2DTranspose, MaxPooling2D, concatenate, Add
-from metrics import binary_crossentropy_weighted, weighted_bce_dice_loss
+from metrics import binary_crossentropy_weighted, weighted_bce_dice_loss, jaccard_index
 from metrics_cheng2017 import jaccard_loss_cheng2017
 from tensorflow.keras.layers import PReLU
 import tensorflow as tensorflow
@@ -49,7 +49,7 @@ def asymmetric_U_Net(image_shape, activation='elu', numInitChannels=16,
     channels = numInitChannels
     c1 = Conv2D(channels, (3, 3), activation=None, strides=(2, 2),
                       kernel_initializer='he_normal', padding='same') (inputs)
-    m1 = MaxPooling2D(pool_size=(2, 2))(s)
+    m1 = MaxPooling2D(pool_size=(2, 2))(inputs)
     x = concatenate([c1,m1])
        
     # First encode block sequence
@@ -68,14 +68,20 @@ def asymmetric_U_Net(image_shape, activation='elu', numInitChannels=16,
         x = encode_block(x, channels, t_downsmp_layer=t_downsmp_layer)
 
     # 2nd downsample block
+    channels += 8
     x = encode_block(x, channels, downsample=True, 
                      t_downsmp_layer=t_downsmp_layer)
     
     # Third encode block sequence
-    for i in range(6):
+    for i in range(4):
         channels += 8
         x = encode_block(x, channels, t_downsmp_layer=t_downsmp_layer)
    
+    channels += 16
+    x = encode_block(x, channels, t_downsmp_layer=t_downsmp_layer)
+    channels += 8
+    x = encode_block(x, channels, t_downsmp_layer=t_downsmp_layer)
+
     # 1st upsample block 
     channels = int(channels/2)
     x = decode_block(x, channels, upsample=True) 
@@ -93,7 +99,7 @@ def asymmetric_U_Net(image_shape, activation='elu', numInitChannels=16,
         x = decode_block(x, channels)
 
     # Last transpose conv 
-    outputs = Conv2DTranspose(1, (2, 2), activation=None, strides=(2, 2)) (x)
+    outputs = Conv2DTranspose(1, (2, 2), activation="softmax", strides=(2, 2)) (x)
 
     if loss_type == "w_bce":
         model = Model(inputs=[inputs, weights], outputs=[outputs]) 
@@ -119,7 +125,7 @@ def asymmetric_U_Net(image_shape, activation='elu', numInitChannels=16,
         
     if loss_type == "bce":
         model.compile(optimizer=opt, loss='binary_crossentropy', 
-                      metrics=[jaccard_loss_cheng2017])
+                      metrics=[jaccard_index])
     elif loss_type == "w_bce":
         model.compile(optimizer=opt, loss=binary_crossentropy_weighted(weights), 
                       metrics=[jaccard_loss_cheng2017])
@@ -140,32 +146,34 @@ def pad_depth(x, desired_channels):
 
 def encode_block(inp_layer, channels, t_downsmp_layer=4, downsample=False):
         if downsample == True:
-            shortcut_padded = Lambda(
-                sto_downsampling2d, 
-                arguments={'t':t_downsmp_layer})(inp_layer)
-            shortcut_padded = Conv2D(1, (1, 1), activation=None) (shortcut_padded)
+            #shortcut_padded = Lambda(
+            #    sto_downsampling2d, 
+            #    arguments={'t':t_downsmp_layer})(inp_layer)
+            shortcut_padded = MaxPooling2D((2, 2)) (inp_layer) 
+            shortcut_padded = Conv2D(channels, (1, 1), activation=None) (shortcut_padded)
         else:
             shortcut_padded = Lambda(
                 pad_depth, arguments={'desired_channels':channels})(inp_layer)
-    
+            #shortcut_padded = inp_layer
+   
         x = BatchNormalization()(inp_layer)
-        x = PReLU() (x)
+        x = PReLU(shared_axes=[1, 2]) (x)
         if downsample == True:
             x = Conv2D(channels, (3, 3), activation=None, strides=(2, 2),
                        kernel_initializer='he_normal', padding='same') (x)
         else:
-            #x = Conv2D(channels, (3, 3), activation=None,
-            #           kernel_initializer='he_normal', padding='same') (x)
+            x = Conv2D(channels, (3, 3), activation=None,
+                       kernel_initializer='he_normal', padding='same') (x)
 
             # Factorized kernels
-            x = Conv2D(channels, (1, 3), activation=None,
-                       kernel_initializer='he_normal', padding='same') (x)
-            x = Conv2D(channels, (3, 1), activation=None,
-                       kernel_initializer='he_normal', padding='same') (x)
+            #x = Conv2D(channels, (1, 3), activation=None,
+            #           kernel_initializer='he_normal', padding='same') (x)
+            #x = Conv2D(channels, (3, 1), activation=None,
+            #           kernel_initializer='he_normal', padding='same') (x)
     
         x = Dropout(0.1)(x)
         x = BatchNormalization()(x)
-        x = PReLU() (x)
+        x = PReLU(shared_axes=[1, 2]) (x)
         x = Conv2D(channels, (3, 3), activation=None,
                     kernel_initializer='he_normal', padding='same') (x)
         x = Add()([shortcut_padded, x])
@@ -174,16 +182,17 @@ def encode_block(inp_layer, channels, t_downsmp_layer=4, downsample=False):
 def decode_block(inp_layer, channels, upsample=False):
    
     if upsample == True:    
-        x = Conv2DTranspose(int(channels), (3, 3), activation=None, 
+        x = Conv2DTranspose(channels, (3, 3), activation=None, 
                             strides=(2, 2), padding='same') (inp_layer)
     else:
+        shortcut = Conv2D(channels, kernel_size=(1, 1), padding='same')(inp_layer)
         x = Conv2D(int(channels/4), (1, 1), activation=None,
-               kernel_initializer='he_normal', padding='same')(inp_layer)
+                   kernel_initializer='he_normal', padding='same')(inp_layer)
         x = Conv2D(int(channels/4), (3, 3), activation=None,                           
                    kernel_initializer='he_normal', padding='same')(x)
         x = Conv2D(channels, (1, 1), activation=None,                           
-               kernel_initializer='he_normal', padding='same')(x)
-        x = Add()([inp_layer, x])           
+                   kernel_initializer='he_normal', padding='same')(x)
+        x = Add()([shortcut, x])           
     return x 
 
 
@@ -217,7 +226,6 @@ def sto_downsampling2d(x, t=4):
         x = MaxPooling2D((2, 2)) (x)                                            
         return x                                                                
     else:                                                                       
-        print("AQUI: N: {}".format(N))
         a = np.array([ [ [(c_rows[i], c_cols[j]) for j in range(sv_w*elem)] for i in range(sv_h*elem) ] for j in range(N) ])
         ta = tf.constant(a, dtype=tf.int32)                                     
         ta = tf.transpose(tf.stack([ta for i in range(C)]), [1, 2, 3, 0, 4])    
