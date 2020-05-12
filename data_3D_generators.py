@@ -270,6 +270,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         
             shift_range (float, optional): range to make a shift. It must be a 
             number between 0 and 1. 
+    
+            softmax_out (bool, optional): flag to advice that the output of the 
+            network is a softmax activation. If so one-hot encoded will be done 
+            on the ground truth.
         """
 
         if X.shape != Y.shape:

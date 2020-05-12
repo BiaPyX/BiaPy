@@ -84,6 +84,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             val (bool, optional): advice the generator that the images will be
             to validate the model to not make random crops (as the val. data must
             be the same on each epoch). Valid when random_crops_in_DA is set.
+
+            softmax_out (bool, optional): flag to advice that the output of the
+            network is a softmax activation. If so one-hot encoded will be done
+            on the ground truth.
         """
 
         if rotation_range != 0 and rotation90 == True:
@@ -169,7 +173,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     batch_x[i], batch_y[i])
                 
         if self.softmax_out == True:
-            batch_y_ = np.zeros((len(indexes), ) + self.Y.shape[1:3] + (2,))
+            batch_y_ = np.zeros((len(indexes), ) + self.dim + (2,))
             for i in range(len(indexes)):
                 batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[i]))
 
