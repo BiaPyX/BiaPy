@@ -42,8 +42,8 @@ def U_Net_3D_Xiao(image_shape, lr=0.0001, num_classes=2):
     #inputs = Input(image_shape)
     inputs = Input(dinamic_dim)
         
-    x = Conv3D(3, (3, 3, 3), activation=None,
-               kernel_initializer='he_normal', padding='same')(inputs)
+    x = Conv3D(3, (3, 3, 3), activation=None, kernel_initializer='he_normal', 
+               padding='same', kernel_regularizer=l2(0.01))(inputs)
     x = BatchNormalization()(x)
     x = ELU() (x)
 
@@ -59,7 +59,7 @@ def U_Net_3D_Xiao(image_shape, lr=0.0001, num_classes=2):
     # Decoder 
     x = UpSampling3D((1, 2, 2)) (x)
     x = Conv3D(64, (1, 1, 1), activation=None, kernel_initializer='he_normal', 
-               padding='same')(x)
+               padding='same', kernel_regularizer=l2(0.01))(x)
     x = BatchNormalization()(x)
     x = ELU() (x)
     x = Add()([s3, x])
@@ -77,7 +77,7 @@ def U_Net_3D_Xiao(image_shape, lr=0.0001, num_classes=2):
 
 
     x = Conv3D(48, (1, 1, 1), activation=None, kernel_initializer='he_normal', 
-               padding='same')(x)
+               padding='same', kernel_regularizer=l2(0.01))(x)
     x = BatchNormalization()(x)
     x = ELU() (x)
     x = Add()([s2, x])
@@ -85,7 +85,7 @@ def U_Net_3D_Xiao(image_shape, lr=0.0001, num_classes=2):
     x = residual_block(x, 48)
     x = UpSampling3D((1, 2, 2)) (x)
     x = Conv3D(32, (1, 1, 1), activation=None, kernel_initializer='he_normal', 
-               padding='same')(x)
+               padding='same', kernel_regularizer=l2(0.01))(x)
     x = BatchNormalization()(x)
     x = ELU() (x)
 
@@ -106,7 +106,8 @@ def U_Net_3D_Xiao(image_shape, lr=0.0001, num_classes=2):
 
     # Adapt the output to use softmax pixel-wise 
     x = Conv3D(num_classes, (1, 1, 1), activation=None, 
-               kernel_initializer='he_normal', padding='same')(x)
+               kernel_initializer='he_normal', padding='same', 
+               kernel_regularizer=l2(0.01))(x)
     outputs = Activation('softmax')(x)
    
     model = Model(inputs=[inputs], outputs=[outputs])
@@ -122,16 +123,19 @@ def U_Net_3D_Xiao(image_shape, lr=0.0001, num_classes=2):
 def residual_block(inp_layer, channels):
 
     a = Conv3D(channels, (1, 1, 1), activation=None,
-           kernel_initializer='he_normal', padding='same')(inp_layer)
+               kernel_initializer='he_normal', padding='same',
+               kernel_regularizer=l2(0.01))(inp_layer)
     a = BatchNormalization()(a)
     a = ELU() (a)
 
     b = Conv3D(channels, (3, 3, 3), activation=None,
-               kernel_initializer='he_normal', padding='same')(inp_layer)
+               kernel_initializer='he_normal', padding='same',
+               kernel_regularizer=l2(0.01))(inp_layer)
     b = BatchNormalization()(b)
     b = ELU() (b)
     b = Conv3D(channels, (3, 3, 3), activation=None,
-               kernel_initializer='he_normal', padding='same')(b)
+               kernel_initializer='he_normal', padding='same',
+               kernel_regularizer=l2(0.01))(b)
     b = BatchNormalization()(b)
     b = ELU() (b)
 
