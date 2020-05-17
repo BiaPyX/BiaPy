@@ -672,7 +672,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
 
 
 def merge_data_with_overlap(data, original_shape, window_size, subdivision, 
-                            out_dir, ov_map=True, ov_data_img=0):
+                            out_dir=None, ov_map=True, ov_data_img=0):
     """Merge data with an amount of overlap. Used to undo the crop made by the 
        function crop_data_with_overlap.
 
@@ -686,7 +686,7 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
 
             subdivision (int): number of crops to merge.
 
-            out_dir (string): directory where the images will be save.
+            out_dir (str, optional): directory where the images will be save.
 
             ov_map (bool, optional): whether to create overlap map.
 
@@ -789,7 +789,7 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
     # Save a copy of the merged data with the overlapped regions colored as: 
     # green when 2 crops overlap, yellow when (2 < x < 8) and red when more than 
     # 7 overlaps are merged 
-    if ov_map == True:
+    if out_dir is not None and ov_map:
         ov_map_matrix[ np.where(ov_map_matrix >= 8) ] = -1
         ov_map_matrix[ np.where(ov_map_matrix >= 3) ] = -2
         ov_map_matrix[ np.where(ov_map_matrix >= 2) ] = -3

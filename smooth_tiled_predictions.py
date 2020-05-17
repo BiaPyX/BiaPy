@@ -348,13 +348,13 @@ def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, nb_c
         plt.show()
     return prd
 
-def predict_img_with_overlap(input_img, window_size, subdivisions, nb_classes, pred_func):
+def predict_img_with_overlap(input_img, window_size, subdivisions, nb_classes, pred_func, softmax=False):
     """Based on predict_img_with_smooth_windowing but works just with the 
        original image instead of creating 8 new ones.
     """
     pad = _pad_img(input_img, window_size, subdivisions)
 
-    sd = _windowed_subdivs(pad, window_size, subdivisions, nb_classes, pred_func)
+    sd = _windowed_subdivs(pad, window_size, subdivisions, nb_classes, pred_func, softmax=softmax)
     one_padded_result = _recreate_from_subdivs(sd, window_size, subdivisions,
                                                padded_out_shape=list(pad.shape[:-1])+[nb_classes])
 

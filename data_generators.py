@@ -1431,6 +1431,8 @@ def random_crop(image, mask, random_crop_size, val=False,
             else: 
                 x -= int(random_crop_size[1]/2)
         else:
+            ox = 0
+            oy = 0
             x = np.random.randint(0, width - dx + 1)                                
             y = np.random.randint(0, height - dy + 1)
 
