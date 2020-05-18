@@ -62,15 +62,13 @@ from data_3D_generators import VoxelDataGenerator
 from networks.unet_3d import U_Net_3D
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
-from itertools import chain
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.models import load_model
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap,\
                                      smooth_3d_predictions
-from tensorflow.utils.vis_utils import plot_model
-from callbacks import ModelCheckpoint
+from tensorflow.utils.utils import plot_model
 
 
 ############
@@ -80,7 +78,7 @@ from callbacks import ModelCheckpoint
 print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
-print("Keras        : {}".format(keras.__version__))
+print("Keras        : {}".format(tf.keras.__version__))
 print("Tensorflow   : {}".format(tf.__version__))
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_selected;

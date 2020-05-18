@@ -1,3 +1,6 @@
+# Script based on 3D_template.py
+
+
 ##########################
 #   ARGS COMPROBATION    #
 ##########################
@@ -61,7 +64,6 @@ from data_3D_generators import VoxelDataGenerator
 from unet_3d_xiao import U_Net_3D_Xiao
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
-from itertools import chain
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.models import load_model
 from tqdm import tqdm
@@ -184,8 +186,6 @@ learning_rate_value = 0.0001
 epochs_value = 30
 # Number of epochs to stop the training process after no improvement
 patience = 10 
-# Define time callback                                                          
-time_callback = TimeHistory()
 
 
 ### Network architecture specific parameters
@@ -221,6 +221,19 @@ smooth_no_bin_dir = os.path.join(result_dir, 'smooth_no_bin')
 char_dir = os.path.join(result_dir, 'charts')
 # Folder where smaples of DA will be stored
 da_samples_dir = os.path.join(result_dir, 'aug')
+
+
+### Callbacks
+# To measure the time
+time_callback = TimeHistory()
+# Stop early and restore the best model weights when finished the training
+earlystopper = EarlyStopping(
+    patience=patience, verbose=1, restore_best_weights=True)
+# Save the best model into a h5 file in case one need again the weights learned
+os.makedirs(h5_dir, exist_ok=True)
+checkpointer = ModelCheckpoint(
+    os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
+    verbose=1, save_best_only=True)
 
 
 #####################
@@ -338,14 +351,6 @@ model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 #plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
-    earlystopper = EarlyStopping(patience=patience, verbose=1, 
-                                 restore_best_weights=True)
-    
-    os.makedirs(h5_dir, exist_ok=True)
-    checkpointer = ModelCheckpoint(
-        os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
-        verbose=1, save_best_only=True)
-    
     if fine_tunning == True:                                                    
         h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
                              + '_' + str(args.run_id) + '.h5')     
