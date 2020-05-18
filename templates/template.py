@@ -57,7 +57,7 @@ import time
 import tensorflow as tf
 from data_manipulation import load_data, crop_data, merge_data_without_overlap,\
                               crop_data_with_overlap, merge_data_with_overlap, \
-                              check_binary_masks
+                              check_binary_masks, img_to_onehot_encoding
 from data_generators import keras_da_generator, ImageDataGenerator,\
                             keras_gen_samples, calculate_z_filtering
 from networks.unet import U_Net
@@ -202,10 +202,10 @@ custom_da = False
 # Create samples of the DA made. Useful to check the output images made. 
 # This option is available for both Keras and custom DA
 aug_examples = True 
-# Flag to shuffle the training data on every epoch 
-#(Best options: Keras->False, Custom->True)
+# Flag to shuffle the training data on every epoch:
+# (Best options: Keras->False, Custom->True)
 shuffle_train_data_each_epoch = custom_da
-# Flag to shuffle the validation data on every epoch
+# Flag to shuffle the validation data on every epoch:
 # (Best option: False in both cases)
 shuffle_val_data_each_epoch = False
 # Make a bit of zoom in the images. Only available in Keras DA
@@ -288,6 +288,9 @@ num_init_channels = 32
 spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
 fixed_dropout_value = 0.0 
+# Active flag if softmax is used as the last layer of the network. Custom DA 
+# needed.
+softmax_out = True
 
 
 ### Post-processing
@@ -327,6 +330,8 @@ result_bin_dir_50ov = os.path.join(result_dir, 'binarized_50ov')
 result_no_bin_dir_50ov = os.path.join(result_dir, 'no_binarized_50ov')
 # Folder where the smoothed images will be stored
 smooth_dir = os.path.join(result_dir, 'smooth')
+# Folder where the smoothed images (no binarized) will be stored
+smooth_no_bin_dir = os.path.join(result_dir, 'smooth_no_bin')
 # Folder where the images with the z-filter applied will be stored
 zfil_dir = os.path.join(result_dir, 'zfil')
 # Folder where the images with smoothing and z-filter applied will be stored
@@ -541,7 +546,7 @@ else:
         train_prob = np.float32(train_prob)
 
         print("Calculating the probability map . . .")
-        for i in range(train_prob.shape[0]):
+        for i in tqdm(range(train_prob.shape[0])):
             pdf = train_prob[i]
         
             # Remove artifacts connected to image border
@@ -561,16 +566,16 @@ else:
         dim=(img_height,img_width), n_channels=1,              
         shuffle=shuffle_train_data_each_epoch, da=True, e_prob=0.0, 
         elastic=False, vflip=flips, hflip=flips, rotation90=False, 
-        rotation_range=180, brightness_range=brightness_range, 
+        rotation_range=rotation_range, brightness_range=brightness_range, 
         median_filter_size=median_filter_size, 
         random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
-        prob_map=probability_map, train_prob=train_prob)                            
+        prob_map=probability_map, train_prob=train_prob, softmax_out=softmax_out)                            
     data_gen_val_args = dict(
         X=X_val, Y=Y_val, batch_size=batch_size_value, 
         dim=(img_height,img_width), n_channels=1, 
         shuffle=shuffle_val_data_each_epoch, da=False, 
         random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
-        val=True)              
+        val=True, softmax_out=softmax_out)
     train_generator = ImageDataGenerator(**data_gen_args)                       
     val_generator = ImageDataGenerator(**data_gen_val_args)                     
                                                                                 
@@ -633,8 +638,14 @@ if random_crops_in_DA == True:
     X_test, Y_test = crop_data_with_overlap(
         X_test, Y_test, crop_shape[0], test_ov_crops)
 
-Y_test /= 255 if np.max(Y_test) > 1 else Y_test
-X_test /= 255 if np.max(X_test) > 1 else X_test
+# Prepare test data for its use
+Y_test /= 255 if np.max(Y_test) > 2 else Y_test
+X_test /= 255 if np.max(X_test) > 2 else X_test
+if softmax_out == True:
+    Y_test_one_hot = np.zeros(Y_test.shape[:3] + (2,))
+    for i in range(Y_test.shape[0]):
+        Y_test_one_hot[i] = np.asarray(img_to_onehot_encoding(Y_test[i]))
+    Y_test = Y_test_one_hot
 
 print("Evaluating test data . . .")
 score = model.evaluate(X_test, Y_test, batch_size=batch_size_value, verbose=1)
@@ -643,8 +654,12 @@ jac_per_crop = score[1]
 print("Making the predictions on test data . . .")
 preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
+if softmax_out == True:
+    preds_test = np.expand_dims(preds_test[...,1], -1)
+    Y_test = np.expand_dims(Y_test[...,1], -1)
+
 # Reconstruct the data to the original shape
-if make_crops == True:
+if make_crops == True or (random_crops_in_DA and test_ov_crops == 1):
     h_num = math.ceil(orig_test_shape[1]/preds_test.shape[1])
     v_num = math.ceil(orig_test_shape[2]/preds_test.shape[2]) 
 
@@ -656,16 +671,20 @@ if make_crops == True:
     Y_test = merge_data_without_overlap(
         Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
         out_shape=[h_num, v_num], grid=False)
-    
     print("Reconstruct preds_test . . .")
     preds_test = merge_data_without_overlap(
         preds_test, math.ceil(preds_test.shape[0]/(h_num*v_num)),
         out_shape=[h_num, v_num], grid=False)
-
-elif random_crops_in_DA == True and test_ov_crops > 1:
+elif random_crops_in_DA and test_ov_crops > 1:
+    print("Reconstruct X_test . . .")
+    X_test = merge_data_with_overlap(
+        X_test, orig_test_shape, crop_shape[0], test_ov_crops)
+    print("Reconstruct Y_test . . .")
+    Y_test = merge_data_with_overlap(
+        Y_test, orig_test_shape, crop_shape[0], test_ov_crops)
     print("Reconstruct preds_test . . .")
     preds_test = merge_data_with_overlap(
-        preds_test, orig_test_shape, crop_shape[0], test_ov_crops, result_dir)
+        preds_test, orig_test_shape, crop_shape[0], test_ov_crops)
 
 print("Saving predicted images . . .")
 save_img(Y=(preds_test > 0.5).astype(np.uint8), 
@@ -690,7 +709,8 @@ if make_crops == True or random_crops_in_DA == True:
         predictions_smooth = predict_img_with_overlap(
             X_test[i,:,:,:], window_size=crop_shape[0], subdivisions=2, 
             nb_classes=1, pred_func=(
-                lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
+                lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
+            softmax=softmax_out)
         Y_test_50ov[i] = predictions_smooth
 
     print("Saving 50% overlap predicted images . . .")
@@ -725,75 +745,79 @@ if (post_process == True and make_crops == True) or (random_crops_in_DA == True)
 
     print("1) SMOOTH")
 
-    Y_test_smooth = np.zeros(X_test.shape, dtype=(np.uint8))
+    Y_test_smooth = np.zeros(X_test.shape, dtype=(np.float32))
 
     # Extract the number of digits to create the image names
     d = len(str(X_test.shape[0]))
 
     os.makedirs(smooth_dir, exist_ok=True)
+    os.makedirs(smooth_no_bin_dir, exist_ok=True)
 
     print("Smoothing crops . . .")
     for i in tqdm(range(X_test.shape[0])):
         predictions_smooth = predict_img_with_smooth_windowing(
-            X_test[i,:,:,:], window_size=crop_shape[0], subdivisions=2,  
+            X_test[i], window_size=crop_shape[0], subdivisions=2,  
             nb_classes=1, pred_func=(
-                lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
+            lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
+            softmax=softmax_out)
+        Y_test_smooth[i] = predictions_smooth
 
-        Y_test_smooth[i] = (predictions_smooth > 0.5).astype(np.uint8)
-
-        im = Image.fromarray(predictions_smooth[:,:,0]*255)
-        im = im.convert('L')
-        im.save(os.path.join(smooth_dir,"test_out_smooth_" + str(i).zfill(d) 
-                                        + ".png"))
+    print("Saving smooth predicted images . . .")
+    save_img(Y=Y_test_smooth, mask_dir=smooth_no_bin_dir,
+             prefix="test_out_smooth_no_bin")
+    save_img(Y=(Y_test_smooth > 0.5).astype(np.uint8), mask_dir=smooth_dir,
+             prefix="test_out_smooth")
 
     # Metrics (Jaccard + VOC + DET)
     print("Calculate metrics . . .")
-    smooth_score = jaccard_index_numpy(Y_test, Y_test_smooth)
-    smooth_voc = voc_calculation(Y_test, Y_test_smooth, smooth_score)
-    smooth_det = DET_calculation(Y_test, Y_test_smooth, det_eval_ge_path,
-                                 det_eval_post_path, det_bin, n_dig, args.job_id)
+    smooth_score = jaccard_index_numpy(
+        Y_test, (Y_test_smooth > 0.5).astype(np.uint8))
+    smooth_voc = voc_calculation(
+        Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smooth_score)
+    smooth_det = DET_calculation(
+        Y_test, (Y_test_smooth > 0.5).astype(np.uint8), det_eval_ge_path,
+        det_eval_post_path, det_bin, n_dig, args.job_id)
+    smooth_det = -1
 
 zfil_preds_test = None
 smooth_zfil_preds_test = None
 if post_process == True and not extra_datasets_data_list:
     print("2) Z-FILTERING")
 
-    if random_crops_in_DA == False:
-        print("Applying Z-filter . . .")
-        zfil_preds_test = calculate_z_filtering((preds_test > 0.5).astype(np.uint8))
-    else:
-        if test_ov_crops > 1:
-            print("Applying Z-filter . . .")
-            zfil_preds_test = calculate_z_filtering(merged_preds_test)
+    print("Applying Z-filter . . .")
+    zfil_preds_test = calculate_z_filtering(preds_test)
 
-    if zfil_preds_test is not None:
-        print("Saving Z-filtered images . . .")
-        save_img(Y=zfil_preds_test, mask_dir=zfil_dir, prefix="test_out_zfil")
- 
-        print("Calculate metrics for the Z-filtered data . . .")
-        zfil_score = jaccard_index_numpy(Y_test, zfil_preds_test)
-        zfil_voc = voc_calculation(Y_test, zfil_preds_test, zfil_score)
-        zfil_det = DET_calculation(Y_test, zfil_preds_test, det_eval_ge_path,
-                                   det_eval_post_path, det_bin, n_dig, 
-                                   args.job_id)
+    print("Saving Z-filtered images . . .")
+    save_img(Y=zfil_preds_test, mask_dir=zfil_dir, prefix="test_out_zfil")
+
+    print("Calculate metrics for the Z-filtered data . . .")
+    zfil_score = jaccard_index_numpy(
+        Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
+    zfil_voc = voc_calculation(
+        Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_score)
+    zfil_det = DET_calculation(
+        Y_test, (zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
+        det_eval_post_path, det_bin, n_dig, args.job_id)
 
     if Y_test_smooth is not None:
         print("Applying Z-filter to the smoothed data . . .")
         smooth_zfil_preds_test = calculate_z_filtering(Y_test_smooth)
 
         print("Saving smoothed + Z-filtered images . . .")
-        save_img(Y=smooth_zfil_preds_test, mask_dir=smoo_zfil_dir, 
+        save_img(Y=smooth_zfil_preds_test, mask_dir=smoo_zfil_dir,
                  prefix="test_out_smoo_zfil")
 
         print("Calculate metrics for the smoothed + Z-filtered data . . .")
-        smo_zfil_score = jaccard_index_numpy(Y_test, smooth_zfil_preds_test)
+        smo_zfil_score = jaccard_index_numpy(
+            Y_test, (smooth_zfil_preds_test > 0.5).astype(np.uint8))
         smo_zfil_voc = voc_calculation(
-            Y_test, smooth_zfil_preds_test, smo_zfil_score)
+            Y_test, (smooth_zfil_preds_test > 0.5).astype(np.uint8),
+            smo_zfil_score)
         smo_zfil_det = DET_calculation(
-                Y_test, smooth_zfil_preds_test, det_eval_ge_path, 
-                det_eval_post_path, det_bin, n_dig, args.job_id)
+            Y_test, (smooth_zfil_preds_test > 0.5).astype(np.uint8),
+            det_eval_ge_path, det_eval_post_path, det_bin, n_dig, args.job_id)
 
-print("Finish post-processing") 
+print("Finish post-processing")
 
 
 ####################################
@@ -831,7 +855,10 @@ if load_previous_weights == False:
     smo_zfil_score = -1 if 'smo_zfil_score' not in globals() else smo_zfil_score
     smo_zfil_voc = -1 if 'smo_zfil_voc' not in globals() else smo_zfil_voc
     smo_zfil_det = -1 if 'smo_zfil_det' not in globals() else smo_zfil_det
-    jac_per_crop = -1 if 'jac_per_crop' not in globals() else jac_per_crop
+    jac_per_crop = -1 if 'jac_per_crop' not in globals() else jac_per_crop  
+    jac_per_img_50ov = -1 if 'jac_per_img_50ov' not in globals() else jac_per_img_50ov
+    voc_per_img_50ov = -1 if 'voc_per_img_50ov' not in globals() else voc_per_img_50ov
+    det_per_img_50ov = -1 if 'det_per_img_50ov' not in globals() else det_per_img_50ov
 
     store_history(
         results, jac_per_crop, score, jac_per_img_50ov, voc, voc_per_img_50ov, 
