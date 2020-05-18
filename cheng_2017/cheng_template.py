@@ -202,7 +202,7 @@ custom_da = True
 # This option is available for both Keras and custom DA
 aug_examples = True 
 # Flag to shuffle the training data on every epoch 
-#(Best options: Keras->False, Custom->True)
+# (Best options: Keras->False, Custom->True)
 shuffle_train_data_each_epoch = custom_da
 # Flag to shuffle the validation data on every epoch
 # (Best option: False in both cases)
@@ -290,7 +290,8 @@ num_init_channels = 16
 spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
 fixed_dropout_value = 0.1 
-# Active flag if softmax is used as the last layer of the network. Custom DA needed.
+# Active flag if softmax is used as the last layer of the network. Custom DA 
+# needed
 softmax_out = True
 
 
@@ -684,11 +685,13 @@ if make_crops == True or (random_crops_in_DA and test_ov_crops == 1):
         preds_test, math.ceil(preds_test.shape[0]/(h_num*v_num)),
         out_shape=[h_num, v_num], grid=False)
 elif random_crops_in_DA and test_ov_crops > 1:
-    print("Reconstruct preds_test . . .")
+    print("Reconstruct X_test . . .")
     X_test = merge_data_with_overlap(
         X_test, orig_test_shape, crop_shape[0], test_ov_crops)
+    print("Reconstruct Y_test . . .")
     Y_test = merge_data_with_overlap(
         Y_test, orig_test_shape, crop_shape[0], test_ov_crops)
+    print("Reconstruct preds_test . . .")
     preds_test = merge_data_with_overlap(
         preds_test, orig_test_shape, crop_shape[0], test_ov_crops)
 
