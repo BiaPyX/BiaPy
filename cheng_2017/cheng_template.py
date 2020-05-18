@@ -62,7 +62,6 @@ from data_generators import keras_da_generator, ImageDataGenerator,\
 from cheng_network import asymmetric_network
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
-from itertools import chain
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
 from PIL import Image
