@@ -9,18 +9,17 @@ from sklearn.model_selection import train_test_split
 from PIL import Image
 from util import foreground_percentage
 
-def load_data(train_path, train_mask_path, test_path, test_mask_path, 
+
+def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
               val_split=0.1, shuffle_val=True, seedValue=42, e_d_data=[], 
               e_d_mask=[], e_d_data_dim=[], e_d_dis=[], num_crops_per_dataset=0, 
               make_crops=True, crop_shape=None, check_crop=True, 
-              check_crop_path="check_crop", d_percentage=0, 
-              prepare_subvolumes=False, train_subvol_shape=None, 
-              test_subvol_shape=None):         
+              check_crop_path="check_crop", d_percentage=0):         
 
-    """Load train, validation and test data from the given paths. If the images 
-       to be loaded are smaller than the given dimension it will be sticked in 
-       the (0, 0).
+    """Load train, validation and test images from the given paths to create 2D
+       data. If the images to be loaded are smaller than the given dimension it 
+       will be sticked in the (0, 0).
                                                                         
        Args:                                                            
             train_path (str): path to the training data.                
@@ -36,7 +35,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             image_test_shape (array of 3 int): dimensions of the images.     
 
             create_val (bool, optional): if true validation data is created.                                                    
-
             val_split (float, optional): % of the train data used as    
 
             validation (value between 0 and 1).
@@ -75,15 +73,6 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             that have less foreground pixels than the given number will be
             discarded.
 
-            prepare_subvolumes (bool, optional): flag to prepare 3D subvolumes 
-            (use this option only to train a 3D network). 
-
-            train_subvol_shape (Tuple, optional): shape of the train subvolumes 
-            to create. 
-
-            test_subvol_shape (Tuple, optional): shape of the test subvolumes 
-            to create. 
-
        Returns:                                                         
             X_train (4D Numpy array): train images. 
             E.g. (image_number, x, y, channels).
@@ -102,29 +91,14 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
             Y_test (4D Numpy array): test images' mask.                
             E.g. (image_number, x, y, channels).
+        
+            orig_test_shape (tuple of ints): test data original shape.
 
             norm_value (int): normalization value calculated.
 
             crop_made (bool): True if crops have been made.
     """      
    
-    if make_crops == True and prepare_subvolumes == True:
-        raise ValueError("'make_crops' and 'prepare_subvolumes' both enabled are"
-                         " incompatible")
-    if prepare_subvolumes == True:
-        if e_d_data:
-            raise ValueError("No extra datasets can be used when "
-                             "'prepare_subvolumes' is enabled")
-        if train_subvol_shape is None:
-            raise ValueError("'train_subvol_shape' must be provided if "
-                             "'prepare_subvolumes' is enabled")
-        if test_subvol_shape is None:
-            raise ValueError("'test_subvol_shape' must be provided if "
-                             "'prepare_subvolumes' is enabled")
-        if shuffle_val == True:
-            raise ValueError("'shuffle_val' can not be enabled when "
-                             "'prepare_subvolumes' is also enabled")
-
     print("### LOAD ###")
                                                                         
     tr_shape = (image_train_shape[1], image_train_shape[0], image_train_shape[2])
@@ -145,26 +119,15 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
     orig_test_shape = tuple(Y_test.shape[i] for i in [0, 2, 1, 3])
 
-    # Used for 3D networks. This must be done before create the validation split
-    # as the amount of images that will be in validation will not be enough to 
-    # create 3D data subvolumes
-    if prepare_subvolumes == True:                                              
-        print("Preparing train data subvolumes . . .")
-        X_train, Y_train, = prepare_subvolume_data(
-            X_train, Y_train, train_subvol_shape)
-        print("Preparing test data subvolumes . . .")
-        X_test, Y_test = prepare_subvolume_data(
-            X_test, Y_test, test_subvol_shape, test=True)
-
     # Create validation data splitting the train
-    if create_val == True:
+    if create_val:
         X_train, X_val, \
         Y_train, Y_val = train_test_split(
             X_train, Y_train, test_size=val_split, shuffle=shuffle_val,
             random_state=seedValue)
 
     # Crop the data
-    if make_crops == True:
+    if make_crops:
         print("4) Crop data activated . . .")
         print("4.1) Cropping train data . . .")
         X_train, Y_train, _ = crop_data(
@@ -173,12 +136,12 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         print("4.2) Cropping test data . . .")
         X_test, Y_test, _ = crop_data(X_test, crop_shape, data_mask=Y_test)
         
-        if create_val == True:
+        if create_val:
             print("4.3) Cropping validation data . . .")
             X_val, Y_val, _ = crop_data(
                 X_val, crop_shape, data_mask=Y_val, d_percentage=d_percentage)
 
-        if check_crop == True:
+        if check_crop:
             print("4.4) Checking the crops . . .")
             check_crops(X_train, (image_test_shape[0], image_test_shape[1]),
                         num_examples=3, out_dir=check_crop_path, suffix="_x_", 
@@ -235,7 +198,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
                     e_X_train = e_X_train[:num_crops_per_dataset]
                     e_Y_train = e_Y_train[:num_crops_per_dataset]
 
-                if check_crop == True:
+                if check_crop:
                     print("5.{}) Checking the crops of the extra dataset . . ."\
                           .format(i))
                     check_crops(e_X_train, (d_dim[0], d_dim[1]), num_examples=3, 
@@ -249,7 +212,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
             X_train = np.vstack((X_train, e_X_train))
             Y_train = np.vstack((Y_train, e_Y_train))
 
-    if create_val == True:                                            
+    if create_val:
         print("*** Loaded train data shape is: {}".format(X_train.shape))
         print("*** Loaded validation data shape is: {}".format(X_val.shape))
         print("*** Loaded test data shape is: {}".format(X_test.shape))
@@ -260,7 +223,7 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
 
         return X_train, Y_train, X_val, Y_val, X_test, Y_test, orig_test_shape, \
                norm_value, crop_made
-    else:                                                               
+    else:
         print("*** Loaded train data shape is: {}".format(X_train.shape))
         print("*** Loaded test data shape is: {}".format(X_test.shape))
         print("### END LOAD ###")
@@ -269,7 +232,124 @@ def load_data(train_path, train_mask_path, test_path, test_mask_path,
         norm_value = np.mean(X_train)
 
         return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value, \
-               crop_made                         
+               crop_made
+
+
+def load_and_prepare_3D_data(train_path, train_mask_path, test_path, 
+                             test_mask_path, image_train_shape, image_test_shape, 
+                             create_val=True, val_split=0.1, seedValue=42, 
+                             train_subvol_shape=None, test_subvol_shape=None,
+                             random_subvolumes_in_DA=False, ov_test=0.5):         
+
+    """Load train, validation and test images from the given paths to create 2D
+       data. If the images to be loaded are smaller than the given dimension it
+       will be sticked in the (0, 0).
+                                                                        
+       Args:                                                            
+            train_path (str): path to the training data.                
+
+            train_mask_path (str): path to the training data masks.     
+
+            test_path (str): path to the test data.                     
+
+            test_mask_path (str): path to the test data masks.          
+
+            image_train_shape (array of 3 int): dimensions of the images.     
+
+            image_test_shape (array of 3 int): dimensions of the images.     
+
+            create_val (bool, optional): if true validation data is created.                                                    
+
+            val_split (float, optional): % of the train data used as    
+            validation (value between 0 and 1).
+
+            seedValue (int, optional): seed value.
+
+            train_subvol_shape (Tuple, optional): shape of the train subvolumes 
+            to create. 
+
+            test_subvol_shape (Tuple, optional): shape of the test subvolumes 
+            to create. 
+
+            random_subvolumes_in_DA (bool, optional): flag to advice the method 
+            that not preparation of the data must be done, as random subvolumes
+            will be created on DA, and the whole volume will be used for that.
+
+       Returns:                                                         
+            X_train (4D Numpy array): train images. 
+            E.g. (image_number, x, y, channels).
+
+            Y_train (4D Numpy array): train images' mask.              
+            E.g. (image_number, x, y, channels).
+
+            X_val (4D Numpy array, optional): validation images (create_val==True).
+            E.g. (image_number, x, y, channels).
+
+            Y_val (4D Numpy array, optional): validation images' mask 
+            (create_val==True). E.g. (image_number, x, y, channels).
+
+            X_test (4D Numpy array): test images. 
+            E.g. (image_number, x, y, channels).
+
+            Y_test (4D Numpy array): test images' mask.                
+            E.g. (image_number, x, y, channels).
+        
+            orig_test_shape (tuple of ints): test data original shape.
+
+            norm_value (int): normalization value calculated.
+    """      
+   
+    print("### LOAD ###")
+                                                                        
+    tr_shape = (image_train_shape[1], image_train_shape[0], image_train_shape[2])
+    print("0) Loading train images . . .")
+    X_train = load_data_from_dir(train_path, tr_shape)
+    print("1) Loading train masks . . .")
+    Y_train = load_data_from_dir(train_mask_path, tr_shape)
+
+    te_shape = (image_test_shape[1], image_test_shape[0], image_test_shape[2])
+    print("2) Loading test images . . .")
+    X_test = load_data_from_dir(test_path, te_shape)
+    print("3) Loading test masks . . .")
+    Y_test = load_data_from_dir(test_mask_path, te_shape)
+
+    orig_test_shape = tuple(Y_test.shape[i] for i in [0, 2, 1, 3])
+
+    if random_subvolumes_in_DA == False:
+        print("Preparing train data subvolumes . . .")
+        X_train, Y_train, = prepare_3D_volume_data(
+            X_train, Y_train, train_subvol_shape)
+    print("Preparing test data subvolumes . . .")
+    X_test, Y_test = prepare_3D_volume_data(
+        X_test, Y_test, test_subvol_shape, overlap=True, ov=ov_test)
+
+    # Create validation data splitting the train
+    if create_val:
+        X_train, X_val, \
+        Y_train, Y_val = train_test_split(
+            X_train, Y_train, test_size=val_split, shuffle=shuffle_val,
+            random_state=seedValue)
+
+    if create_val:
+        print("*** Loaded train data shape is: {}".format(X_train.shape))
+        print("*** Loaded validation data shape is: {}".format(X_val.shape))
+        print("*** Loaded test data shape is: {}".format(X_test.shape))
+        print("### END LOAD ###")
+
+        # Calculate normalization value
+        norm_value = np.mean(X_train)
+
+        return X_train, Y_train, X_val, Y_val, X_test, Y_test, orig_test_shape, \
+               norm_value
+    else:                                                               
+        print("*** Loaded train data shape is: {}".format(X_train.shape))
+        print("*** Loaded test data shape is: {}".format(X_test.shape))
+        print("### END LOAD ###")
+
+        # Calculate normalization value
+        norm_value = np.mean(X_train)
+
+        return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value
 
 
 def load_data_from_dir(data_dir, shape):
@@ -545,7 +625,7 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
 
 
 def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
-    """Crop 3D data into smaller volumes with the minimun overlap.
+    """Crop 3D data into smaller volumes with the minimun overlap in z.
        Reverse function of merge_3D_data_with_overlap().
 
        Args:
@@ -585,30 +665,38 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
     if vol_shape[2] > data.shape[2]:
         raise ValueError("'vol_shape[2]' {} greater than {}"
                          .format(vol_shape[2], data.shape[2]))
+   
+    # Minimun overlap
+    if overlap_z == 0: 
+        vols_per_z = math.ceil(data.shape[0]/vol_shape[0])
+        excess_z = (vols_per_z*vol_shape[0])-data.shape[0]
+        step_z = vol_shape[0]-int(excess_z/(vols_per_z-1))
+        last_z = excess_z%(vols_per_z-1) 
+        r_div = vol_shape[0]-last_z
+    else: 
+        overlap_z = 1-overlap_z
+        vols_per_z = math.ceil(data.shape[0]/(vol_shape[0]*overlap_z))  
+        step_z = int(vol_shape[0]*overlap_z)
+        r_div = int(vol_shape[0]-(data.shape[0]%(vol_shape[0]*overlap_z)))
 
-    vols_per_z = math.ceil(data.shape[0]/(vol_shape[0]*overlap_z))
     vols_per_x = math.ceil(data.shape[1]/vol_shape[1])
     vols_per_y = math.ceil(data.shape[2]/vol_shape[2])
-    r_div = int(vol_shape[0]-(data.shape[0]%(vol_shape[0]*overlap_z)))
+    ov_x = (vol_shape[1]*vols_per_x)-data.shape[1]
+    ov_y = (vol_shape[2]*vols_per_y)-data.shape[2]
     
     print("{},{},{} patches per z,x,y axis"
           .format(vols_per_z, vols_per_x, vols_per_y))
     
     if r_div != 0:
-        print("WARNING: The last volumes {} in z will be filled with the last "
-              "images in as mirror to complete the volume with the shape {} "
+        print("WARNING: The last volumes in z will be filled with the last "
+              "images in mirror mode to complete the volume with the shape "
               "provided, so be careful and resize the data before run the "
-              "metrics on it!".format(r_div, vol_shape[0]))
+              "metrics on it!")
 
     total_vol = vols_per_z*vols_per_x*vols_per_y
     cropped_data = np.zeros((total_vol,) + vol_shape)
     if data_mask is not None:
         cropped_data_mask = np.zeros((total_vol,) + vol_shape)
-
-    # Calculate the overlap
-    step_z = int(vol_shape[0]*overlap_z)
-    ov_x = (vol_shape[1]*vols_per_x)-data.shape[1]
-    ov_y = (vol_shape[2]*vols_per_y)-data.shape[2]
 
     c = 0
     f_z = 0
@@ -617,13 +705,12 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
             for y in range(vols_per_y):
                 ov_x_ = ov_x if x != 0 else 0
                 ov_y_ = ov_y if y != 0 else 0
-
+               
                 if (z*step_z)+vol_shape[0] < data.shape[0]:
                     cropped_data[c] = \
                         data[z*step_z:(z*step_z)+vol_shape[0], 
                              (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
                              (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
-    
                     if data_mask is not None:
                         cropped_data_mask[c] = \
                             data_mask[z*step_z:(z*step_z)+vol_shape[0],
@@ -636,13 +723,11 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
                         data[z*step_z:(z*step_z)+vol_shape[0],
                              (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
                              (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
-
                     if data_mask is not None:
                         cropped_data_mask[c,0:r_div-(f_z*step_z)] = \
                             data_mask[z*step_z:(z*step_z)+vol_shape[0],
                                       (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
                                       (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
-
 
                     for s in range(vol_shape[0]-(r_div-(f_z*step_z))):
                         cropped_data[c,(r_div-(f_z*step_z))+s:vol_shape[0]]  = \
@@ -655,7 +740,6 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
                                 data_mask[data.shape[0]-1-s,
                                           (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
                                           (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
-    
                 c += 1
 
         # To adjust the final volumes in z
@@ -712,7 +796,7 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
     # paint the overlapping map
     overlap_matrix = np.zeros((original_shape[2], original_shape[1],
                              data.shape[3]), dtype=np.float32)
-    if ov_map == True:
+    if ov_map:
         ov_map_matrix = np.zeros((original_shape[2], original_shape[1],
                                    data.shape[3]), dtype=np.float32)
 
@@ -757,11 +841,11 @@ def merge_data_with_overlap(data, original_shape, window_size, subdivision,
             d_x = 0 if (j+window_size) < original_shape[1] else r_x
 
             overlap_matrix[i-d_y:i+window_size, j-d_x:j+window_size, :] += 1
-            if ov_map == True:
+            if ov_map:
                 ov_map_matrix[i-d_y:i+window_size, j-d_x:j+window_size, :] += 1
 
     # Mark the border of each crop in the map
-    if ov_map == True:
+    if ov_map:
         for i in range(0, original_shape[2]-y_ov, step_y):
             for j in range(0, original_shape[1]-x_ov, step_x):
                 d_y = 0 if (i+window_size) < original_shape[2] else r_y
@@ -882,7 +966,7 @@ def merge_data_without_overlap(data, num, out_shape=(1, 1), grid=True):
                 mixed_data[img_num, (i*width):((i+1)*height), 
                            (j*width):((j+1)*height)] = data[cont]
                 
-                if grid == True:
+                if grid:
                     mixed_data[
                         img_num,(i*width):((i+1)*height)-1, (j*width)] = 255
                     mixed_data[
@@ -1048,7 +1132,7 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
     else:
         total = total*num_examples
 
-    if include_crops == True:
+    if include_crops:
         print("0) Saving cropped data images . . .")
         for i in tqdm(range(0, total)):
             # grayscale images
@@ -1100,7 +1184,7 @@ def check_binary_masks(path):
                 .format(os.path.join(path, ids[i]), values))
 
 
-def prepare_subvolume_data(X, Y, shape=(82, 256, 256, 1), test=False):                          
+def prepare_3D_volume_data(X, Y, shape=(82, 256, 256, 1), overlap=False, ov=0.5):                          
     """Prepare given data into 3D subvolumes to train a 3D network.
 
        Args:
@@ -1110,11 +1194,15 @@ def prepare_subvolume_data(X, Y, shape=(82, 256, 256, 1), test=False):
                                                                                 
             shape (4D int tuple, optional): dimension of the desired images.           
 
-            test (bool, optional): to advice the method that the input data is 
-            for test. If True no prepation of the data wil be done if the shape
-            selected forces to discard samples, as all test volume should be 
-            needed for evaluation. 
-    
+            overlap (bool, optional): flag to create subvolumes with overlap
+            forcing to use all the data. If False as much as possible subvolumes 
+            of the desired shape will be created with the available data, and 
+            the rest of images will be dropped out. Activate it when dealing with 
+            test data, as all the images must be present.
+            
+            ov (float, optional): amount of overlap on z dimension. The value 
+            must be on range [0, 1), that is, 0% or 99% of overlap.
+
        Returns:
             X_prep (Numpy 5D array): X data separated in different subvolumes 
             with the desired shape. E.g. (subvolume_number, ) + shape
@@ -1129,21 +1217,22 @@ def prepare_subvolume_data(X, Y, shape=(82, 256, 256, 1), test=False):
         raise ValueError("X or Y must be a 4D Numpy array")                     
     if len(shape) != 4:
         raise ValueError("'shape' must be 4D")
-    if test == False and (X.shape[1] % shape[1] != 0 or X.shape[2] % shape[2] != 0):                
+    if overlap == False and (X.shape[1] % shape[1] != 0 or X.shape[2] % shape[2] != 0):                
         raise ValueError("Shape must be divisible by the shape of X" )          
                                                                                 
     # Calculate the rest                                                        
     rest = X.shape[0] % shape[0]                                                
-    if rest != 0:                                                               
-        if test == True:
-            print("As {} images should be discarded and data is for test, "
-                  "overlap cropping will be done".format(rest))
-            X, Y = crop_3D_data_with_overlap(X, shape, data_mask=Y)
-            return X, Y
 
+    if overlap:
+        print("Overlap cropping selected")
+
+        X, Y = crop_3D_data_with_overlap(X, shape, data_mask=Y, overlap_z=ov)
+        return X, Y
+
+    if rest != 0:                                                               
         print("As the number of images required to form a stack 3D is not "
-              "multiple of images provided, {} last image(s) will be unused"\
-              .format(rest))
+              "multiple of images provided and no overlap is selected, the last "
+              "{} image(s) will be unused".format(rest))
                                                                                 
     # Calculate crops are per axis                                      
     h_num = int(X.shape[1]/shape[1])
