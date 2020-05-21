@@ -202,7 +202,7 @@ class VoxelDataGeneratorFromDisk(tf.keras.utils.Sequence):
             if j % self.dim[2] == 0:
                 j = 0
 
-                if self.da == True:
+                if self.da:
                 # Make data augmentation
                     batch_x[cont] = img_stack
                     if self.mask_dir is not None:
@@ -236,20 +236,23 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
     """Custom ImageDataGenerator for 3D images.
     """
 
-    def __init__(self, X, Y, random_subvolumes_in_DA=True, seed=42, 
-                 shuffle_each_epoch=False, batch_size=32, da=True, 
+    def __init__(self, X, Y, random_subvolumes_in_DA=False, subvol_shape=None,
+                 seed=42, shuffle_each_epoch=False, batch_size=32, da=True, 
                  rotation_range=0, square_rotations=True, flip=True, 
-                 shift_range=0, softmax_out=False):
+                 shift_range=0, softmax_out=False, val=False, prob_map=None):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
-            X (Numpy 4D array): data. E.g. (image_number, x, y, channels).
+            X (Numpy 5D array): data. E.g. (image_number, z, x, y, channels).
 
-            Y (Numpy 4D array): mask data.  E.g. (image_number, x, y, channels).
+            Y (Numpy 5D array): mask data. E.g. (image_number, z, x, y, channels).
 
             random_subvolumes_in_DA (bool, optional): flag to extract random 
             subvolumes from the given data. If not, the data must be 5D and is 
             assumed that the subvolumes are prepared. 
+    
+            subvol_shape (4D tuple of ints, optional): shape of the subvolume to
+            be extracted randomly from the data. E. g. (z, x, y, channels).
             
             seed (int, optional): seed for random functions.
                 
@@ -274,19 +277,33 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             softmax_out (bool, optional): flag to advice that the output of the 
             network is a softmax activation. If so one-hot encoded will be done 
             on the ground truth.
+    
+            val (bool, optional): advice the generator that the volumes will be
+            used to validate the model to not make random crops (as the val. 
+            data must be the same on each epoch). Valid when 
+            random_subvolumes_in_DA is set.
+
+            prob_map (5D Numpy array, optional): probability map used to make
+            random crops when random_subvolumes_in_DA is set.
         """
 
         if X.shape != Y.shape:
             raise ValueError("The shape of X and Y must be the same")
-        if (X.ndim != 4 and X.ndim != 5) or (Y.ndim != 4 and Y.ndim != 5):
-            raise ValueError("X and Y must be a 4D/5D Numpy array")
-        if X.ndim == 5 and random_subvolumes_in_DA == True:
-            raise ValueError("Data must be 4D to generate random subvolumes")
+        if X.ndim != 5 or Y.ndim != 5:
+            raise ValueError("X and Y must be a 5D Numpy array")
+        if random_subvolumes_in_DA:
+            if subvol_shape is None:
+                raise ValueError("'subvol_shape' must be provided when "
+                                 "'random_subvolumes_in_DAi is enabled")         
+            if subvol_shape[0] > X.shape[1] or subvol_shape[1] > X.shape[2] or \
+               subvol_shape[2] > X.shape[3]:
+                raise ValueError("Given 'subvol_shape' is bigger than the data "
+                                 "provided")
         if rotation_range > 180:
             raise ValueError("'rotation_range' must be a number between 0 and 180")
         if shift_range < 0 or shift_range > 1:
             raise ValueError("'shift_range' must be a float between 0 and 1")
-        if square_rotations == True and rotation_range != 0:
+        if square_rotations and rotation_range != 0:
             raise ValueError("'square_rotations' or 'rotation_range' can not be "
                              " selected at the same time")
 
@@ -297,10 +314,16 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.seed = seed
         self.shuffle_each_epoch = shuffle_each_epoch
         self.da = da
+        self.val = val
         self.batch_size = batch_size
         self.square_rotations = square_rotations
         self.rotation_range = rotation_range
-        if X.shape[1]  == X.shape[2] == X.shape[3]:
+        self.prob_map = prob_map
+        if random_subvolumes_in_DA:
+            self.shape = subvol_shape
+        else:
+            self.shape = X.shape[1:]
+        if self.shape[1] == self.shape[2] == self.shape[3]:
             self.is_cube = True
         else:
             self.is_cube = False
@@ -332,13 +355,14 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         """
 
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        batch_x = np.zeros((len(indexes), ) +  self.X.shape[1:])
-        batch_y = np.zeros((len(indexes), ) +  self.Y.shape[1:])
+        batch_x = np.zeros((len(indexes), ) +  self.shape)
+        batch_y = np.zeros((len(indexes), ) +  self.shape)
 
         for i, j in zip(range(len(indexes)), indexes):
-            if self.random_subvolumes_in_DA == True:
-                # Random crop here
-                print("Random crop here")
+            if self.random_subvolumes_in_DA:
+                batch_x[i], batch_y[i] = random_3D_crop(
+                    self.X[j], self.Y[j], self.shape, self.val, 
+                    vol_prob=(self.prob_map[j] if self.prob_map is not None else None))
             else:
                 im = np.copy(self.X[j])
                 mask = np.copy(self.Y[j])
@@ -349,8 +373,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             else:
                 batch_x[i], batch_y[i], _ = self.apply_transform(im, mask)
 
-        if self.softmax_out == True:
-            batch_y_ = np.zeros((len(indexes), ) + self.Y.shape[1:4] + (2,))
+        if self.softmax_out:
+            batch_y_ = np.zeros((len(indexes), ) + self.shape[:3] + (2,))
             for i in range(len(indexes)):
                 batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[i]))
 
@@ -363,7 +387,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         """Updates indexes after each epoch."""
 
         self.indexes = np.arange(self.X.shape[0])
-        if self.shuffle_each_epoch == True:
+        if self.shuffle_each_epoch:
             random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
 
     def apply_transform(self, image, mask, grid=False):
@@ -396,17 +420,17 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         #
         # x axis flip
         prob = random.uniform(0, 1)
-        if self.flip == True and prob < 0.25:
+        if self.flip and prob < 0.25:
             trans_image = np.flip(trans_image, 0)
             trans_mask = np.flip(trans_mask, 0)
             transform_string = '_xf'
         # y axis flip
-        elif self.flip == True and 0.25 <= prob < 0.5:
+        elif self.flip and 0.25 <= prob < 0.5:
             trans_image = np.flip(trans_image, 1)
             trans_mask = np.flip(trans_mask, 1)
             transform_string = '_yf'
         # z axis flip
-        elif self.flip == True and 0.5 <= prob < 0.75:
+        elif self.flip and 0.5 <= prob < 0.75:
             trans_image = np.flip(trans_image, 2)                               
             trans_mask = np.flip(trans_mask, 2)
             transform_string = '_zf'
@@ -424,7 +448,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             #  [0.5-1]: nothing
             prob = random.uniform(0, 1) 
             theta = np.random.uniform(-self.rotation_range, self.rotation_range)
-            if self.is_cube == True:
+            if self.is_cube:
                 # x axis rotation
                 if self.rotation_range != 0 and prob < 0.25:
                     trans_image = rotate(trans_image, axes=(0, 2), angle=theta, 
@@ -537,30 +561,155 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 examples will be stored. 
         """    
 
-        sample_x = np.zeros((num_examples, ) +  self.X.shape[1:])
-        sample_y = np.zeros((num_examples, ) +  self.Y.shape[1:])
+        sample_x = np.zeros((num_examples, ) +  self.shape)
+        sample_y = np.zeros((num_examples, ) +  self.shape)
 
         # Generate the examples 
         print("0) Creating samples of data augmentation . . .")
         for i in tqdm(range(0,num_examples)):
-            if random_images == True:
+            if random_images:
                 pos = random.randint(1,self.X.shape[0]-1) 
             else:
                 pos = i
 
+            if self.random_subvolumes_in_DA:
+                vol, vol_mask, oz, ox, oy,\
+                s_z, s_x, s_y= random_3D_crop(
+                    self.X[pos], self.Y[pos], self.shape, self.val,
+                    draw_prob_map_points=True,
+                    vol_prob=(self.prob_map[pos] if self.prob_map is not None else None))
+            else:
+                vol = np.copy(self.X[pos])
+                vol_mask = np.copy(self.Y[pos])
+
             if self.da == False:
-                sample_x[i] = self.X[pos]
-                sample_y[i] = self.Y[pos]
+                sample_x[i] = vol
+                sample_y[i] = vol_mask
                 t_str = ''
             else:
                 sample_x[i], sample_y[i], t_str = \
-                    self.apply_transform(self.X[pos], self.Y[pos])
+                    self.apply_transform(vol, vol_mask)
 
-            # Save transformed 3d volumes 
-            if save_to_dir == True:
+            # Save transformed 3D volumes 
+            if save_to_dir:
                 save_img(X=sample_x[i], data_dir=out_dir, Y=sample_y[i], 
                          mask_dir=out_dir, prefix="aug_3d_smp_" + str(pos) + t_str)
 
+                # Save the original images with a red point and a blue square 
+                # that represents the point selected with the probability map 
+                # and the random volume extracted from the original data
+                if self.random_crops_in_DA and self.train_prob is not None:
+                    rc_out_dir = os.path.join(out_dir, 'rd_crop')
+                    os.makedirs(rc_out_dir, exist_ok=True)
+
+                    print("The selected point on the random crop was [{},{},{}]"
+                          .format(z,x,y))
+
+                    for i in self.X.shape[0]:
+                        im = Image.fromarray(self.X[i,...,0]*255) 
+                        im = im.convert('RGB')                                                  
+                        px = im.load()                                                          
+                        mask = Image.fromarray(self.Y[i,...,0]*255)
+                        mask = mask.convert('RGB')
+                        py = mask.load()
+                       
+                        if i == oz:
+                            # Paint the selected point in red
+                            p_size=6
+                            for col in range(oy-p_size,oy+p_size):
+                                for row in range(ox-p_size,ox+p_size): 
+                                    if col >= 0 and col < self.X.shape[1] and \
+                                       row >= 0 and row < self.X.shape[2]:
+                                       px[row, col] = (255, 0, 0) 
+                                       py[row, col] = (255, 0, 0) 
+                   
+                        if i >= s_z and i < s_z+self.shape[0]: 
+                            # Paint a blue square that represents the crop made 
+                            for row in range(s_x, s_x+self.crop_length):
+                                px[row, s_y] = (0, 0, 255)
+                                px[row, s_y+self.crop_length-1] = (0, 0, 255)
+                                py[row, s_y] = (0, 0, 255)
+                                py[row, s_y+self.crop_length-1] = (0, 0, 255)
+                            for col in range(s_y, s_y+self.crop_length):                    
+                                px[s_x, col] = (0, 0, 255)
+                                px[s_x+self.crop_length-1, col] = (0, 0, 255)
+                                py[s_x, col] = (0, 0, 255)
+                                py[s_x+self.crop_length-1, col] = (0, 0, 255)
+                         
+                        im.save(os.path.join(
+                                    rc_out_dir, 'rc_x_' + str(pos) + '.png'))
+                        mask.save(os.path.join(
+                                      rc_out_dir, 'rc_y_' + str(pos) + '.png'))          
         return sample_x, sample_y
 
 
+def random_3D_crop(vol, vol_mask, random_crop_size, val=False, vol_prob=None, 
+                   weights_on_data=False, weight_map=None,
+                   draw_prob_map_points=False):
+    """Random 3D crop """
+
+    deep, rows, cols = vol.shape[0], vol.shape[1], vol.shape[2]
+    dz, dx, dy, c = random_crop_size
+    if val:
+        z = 0
+        x = 0
+        y = 0
+        oz = 0
+        ox = 0
+        oy = 0
+    else:
+        if vol_prob is not None:
+            prob = vol_prob.ravel() 
+            
+            # Generate the random coordinates based on the distribution
+            choices = np.prod(vol_prob.shape)
+            index = np.random.choice(choices, size=1, p=prob)
+            coordinates = np.unravel_index(index, shape=vol_prob.shape)
+            z = int(coordinates[0])
+            x = int(coordinates[1])
+            y = int(coordinates[2])
+            oz = int(coordinates[0])
+            ox = int(coordinates[1])
+            oy = int(coordinates[2])
+            
+            # Adjust the coordinates to be the origin of the crop and control to
+            # not be out of the volume
+            if z < int(random_crop_size[0]/2):
+                z = 0
+            elif z > vol.shape[0] - int(random_crop_size[0]/2):
+                z = vol.shape[0] - random_crop_size[0]
+            else: 
+                z -= int(random_crop_size[0]/2)
+            
+            if x < int(random_crop_size[1]/2):
+                x = 0
+            elif x > vol.shape[1] - int(random_crop_size[1]/2):
+                x = vol.shape[1] - random_crop_size[1]
+            else:
+                x -= int(random_crop_size[1]/2)
+
+            if y < int(random_crop_size[2]/2):
+                y = 0
+            elif y > vol.shape[2] - int(random_crop_size[2]/2):
+                y = vol.shape[2] - random_crop_size[2]
+            else:
+                y -= int(random_crop_size[2]/2)
+        else:
+            oz = 0
+            ox = 0
+            oy = 0
+            z = np.random.randint(0, deep - dz + 1)                                
+            x = np.random.randint(0, rows - dx + 1)                                
+            y = np.random.randint(0, cols - dy + 1)
+
+    if draw_prob_map_points:
+        return vol[z:(z+dz), x:(x+dx), y:(y+dy), :], \
+               vol_mask[z:(z+dz), x:(x+dx), y:(y+dy), :], oz, ox, oy, z, x, y
+    else:
+        if weights_on_data:
+            return vol[z:(z+dz), x:(x+dx), y:(y+dy), :], \
+                   vol_mask[z:(z+dz), x:(x+dx), y:(y+dy), :],\
+                   weight_map[z:(z+dz), x:(x+dx), y:(y+dy), :]         
+        else:
+            return vol[z:(z+dz), x:(x+dx), y:(y+dy), :], \
+                   vol_mask[z:(z+dz), x:(x+dx), y:(y+dy), :]
