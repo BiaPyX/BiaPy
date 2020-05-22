@@ -10,6 +10,7 @@ from tqdm import tqdm
 import copy
 from skimage import measure
 import scipy.ndimage
+from skimage.segmentation import clear_border
 import tensorflow as tf 
 
 
@@ -771,3 +772,108 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="",
     prefix += "_" if prefix != "" else prefix
     plt.savefig(os.path.join(out_dir, prefix + 'f_layer' + str(l_num) + '.png'))
     plt.clf()
+
+
+def calculate_2D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
+                                 save_file=None):
+    """Calculate the probability map of the given 2D data.
+
+       Args:
+            Y (4D Numpy array): data to calculate the probability map from.
+            E. g. (num_subvolumes, x, y, channel)
+
+            w_foreground (float, optional): weight of the foreground. This value
+            plus w_background must be equal 1.
+
+            w_background (float, optional): weight of the background. This value
+            plus w_foreground must be equal 1.
+
+            save_file (str, optional): path to the file where the probability
+            map will be stored.
+
+        Return:
+            prob_map (4D Numpy array): probability map of the given data.
+    """
+
+    if Y.ndim != 4:
+        raise ValueError("'Y' must be a 4D Numpy array")
+
+    if w_foreground + w_background > 1:
+        raise ValueError("'w_foreground' plus 'w_background' can not be greater "
+                         "than one")
+
+    prob_map = np.copy(Y[...,0])
+
+    print("Constructing the probability map . . .")
+    for i in tqdm(range(prob_map.shape[0])):
+        pdf = prob_map[i]
+    
+        # Remove artifacts connected to image border
+        pdf = clear_border(pdf)
+
+        foreground_pixels = (pdf == 255).sum()
+        background_pixels = (pdf == 0).sum()
+
+        pdf[np.where(pdf == 255)] = w_foreground/foreground_pixels
+        pdf[np.where(pdf == 0)] = w_background/background_pixels
+        pdf /= pdf.sum() # Necessary to get all probs sum 1
+        prob_map[i] = pdf
+
+    if save_file is not None:
+        os.makedirs(os.path.dirname(save_file), exist_ok=True)
+        print("Saving the probability map in {}".format(save_file))
+        np.save(save_file, prob_map)
+
+    return prob_map
+
+
+def calculate_3D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
+                                 save_file=None):
+    """Calculate the probability map of the given 3D data.
+       
+       Args: 
+            Y (5D Numpy array): data to calculate the probability map from.
+            E. g. (num_subvolumes, z, x, y, channel) 
+       
+            w_foreground (float, optional): weight of the foreground. This value
+            plus w_background must be equal 1.
+            
+            w_background (float, optional): weight of the background. This value
+            plus w_foreground must be equal 1.
+
+            save_file (str, optional): path to the file where the probability
+            map will be stored.
+
+        Return:
+            prob_map (5D Numpy array): probability map of the given data.
+    """
+
+    if Y.ndim != 5:
+        raise ValueError("'Y' must be a 5D Numpy array")
+
+    if w_foreground + w_background > 1:
+        raise ValueError("'w_foreground' plus 'w_background' can not be greater "
+                         "than one")
+
+    prob_map = np.copy(Y[..., 0])
+    
+    print("Constructing the probability map . . .")
+    for i in range(prob_map.shape[0]):
+        for j in tqdm(range(prob_map[i].shape[0])):
+            # Remove artifacts connected to image border
+            prob_map[i, j] = clear_border(prob_map[i, j])
+
+        foreground_pixels = (prob_map[i] == 255).sum()
+        background_pixels = (prob_map[i] == 0).sum()
+
+        prob_map[i][np.where(prob_map[i] == 255)] = w_foreground/foreground_pixels
+        prob_map[i][np.where(prob_map[i] == 0)] = w_background/background_pixels
+        prob_map[i] /= prob_map[i].sum() # Necessary to get all probs sum 1
+
+    if save_file is not None:
+        os.makedirs(os.path.dirname(save_file), exist_ok=True)
+        print("Saving the probability map in {}".format(save_file))
+        np.save(save_file, prob_map)
+
+    return np.expand_dims(prob_map, -1)
+
