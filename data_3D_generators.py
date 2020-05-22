@@ -9,7 +9,7 @@ from util import array_to_img, img_to_array, save_img
 from scipy.ndimage import rotate
 from scipy.ndimage.interpolation import shift
 from data_manipulation import img_to_onehot_encoding
-
+from PIL import Image
 
 class VoxelDataGeneratorFromDisk(tf.keras.utils.Sequence):
     """Custom ImageDataGenerator for 3D images loaded from the disk.
@@ -566,9 +566,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
         # Generate the examples 
         print("0) Creating samples of data augmentation . . .")
-        for i in tqdm(range(0,num_examples)):
+        for i in tqdm(range(num_examples)):
             if random_images:
-                pos = random.randint(1,self.X.shape[0]-1) 
+                pos = random.randint(0,self.X.shape[0]-1) 
             else:
                 pos = i
 
@@ -598,48 +598,48 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 # Save the original images with a red point and a blue square 
                 # that represents the point selected with the probability map 
                 # and the random volume extracted from the original data
-                if self.random_crops_in_DA and self.train_prob is not None:
-                    rc_out_dir = os.path.join(out_dir, 'rd_crop')
+                if self.random_subvolumes_in_DA and self.prob_map is not None:
+                    rc_out_dir = os.path.join(out_dir, 'rd_crop' + str(pos))
                     os.makedirs(rc_out_dir, exist_ok=True)
 
                     print("The selected point on the random crop was [{},{},{}]"
-                          .format(z,x,y))
+                          .format(oz,ox,oy))
 
-                    for i in self.X.shape[0]:
-                        im = Image.fromarray(self.X[i,...,0]*255) 
+                    for i in range(self.X[pos].shape[0]):
+                        im = Image.fromarray((self.X[pos,i,...,0]*255).astype(np.uint8)) 
                         im = im.convert('RGB')                                                  
                         px = im.load()                                                          
-                        mask = Image.fromarray(self.Y[i,...,0]*255)
+                        mask = Image.fromarray((self.Y[pos,i,...,0]*255).astype(np.uint8))
                         mask = mask.convert('RGB')
                         py = mask.load()
                        
                         if i == oz:
                             # Paint the selected point in red
                             p_size=6
-                            for col in range(oy-p_size,oy+p_size):
-                                for row in range(ox-p_size,ox+p_size): 
-                                    if col >= 0 and col < self.X.shape[1] and \
-                                       row >= 0 and row < self.X.shape[2]:
+                            for row in range(oy-p_size,oy+p_size):
+                                for col in range(ox-p_size,ox+p_size): 
+                                    if col >= 0 and col < self.X[pos].shape[1] and \
+                                       row >= 0 and row < self.X[pos].shape[2]:
                                        px[row, col] = (255, 0, 0) 
                                        py[row, col] = (255, 0, 0) 
                    
                         if i >= s_z and i < s_z+self.shape[0]: 
                             # Paint a blue square that represents the crop made 
-                            for row in range(s_x, s_x+self.crop_length):
-                                px[row, s_y] = (0, 0, 255)
-                                px[row, s_y+self.crop_length-1] = (0, 0, 255)
-                                py[row, s_y] = (0, 0, 255)
-                                py[row, s_y+self.crop_length-1] = (0, 0, 255)
-                            for col in range(s_y, s_y+self.crop_length):                    
-                                px[s_x, col] = (0, 0, 255)
-                                px[s_x+self.crop_length-1, col] = (0, 0, 255)
-                                py[s_x, col] = (0, 0, 255)
-                                py[s_x+self.crop_length-1, col] = (0, 0, 255)
+                            for col in range(s_x, s_x+self.shape[1]):
+                                px[s_y, col] = (0, 0, 255)
+                                px[s_y+self.shape[1]-1, col] = (0, 0, 255)
+                                py[s_y, col] = (0, 0, 255)
+                                py[s_y+self.shape[1]-1, col] = (0, 0, 255)
+                            for row in range(s_y, s_y+self.shape[2]):                    
+                                px[row, s_x] = (0, 0, 255)
+                                px[row, s_x+self.shape[2]-1] = (0, 0, 255)
+                                py[row, s_x] = (0, 0, 255)
+                                py[row, s_x+self.shape[2]-1] = (0, 0, 255)
                          
                         im.save(os.path.join(
-                                    rc_out_dir, 'rc_x_' + str(pos) + '.png'))
+                                    rc_out_dir, 'rc_x_' + str(i) + '.png'))
                         mask.save(os.path.join(
-                                      rc_out_dir, 'rc_y_' + str(pos) + '.png'))          
+                                      rc_out_dir, 'rc_y_' + str(i) + '.png'))          
         return sample_x, sample_y
 
 
