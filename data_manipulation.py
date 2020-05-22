@@ -237,8 +237,9 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
 
 def load_and_prepare_3D_data(train_path, train_mask_path, test_path, 
                              test_mask_path, image_train_shape, image_test_shape, 
-                             create_val=True, val_split=0.1, seedValue=42, 
-                             train_subvol_shape=None, test_subvol_shape=None,
+                             create_val=True, shuffle_val=True, val_split=0.1, 
+                             seedValue=42, train_subvol_shape=None, 
+                             test_subvol_shape=None, 
                              random_subvolumes_in_DA=False, ov_test=0.5):         
 
     """Load train, validation and test images from the given paths to create 2D
@@ -259,6 +260,9 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
             image_test_shape (array of 3 int): dimensions of the images.     
 
             create_val (bool, optional): if true validation data is created.                                                    
+    
+            shuffle_val (bool, optional): take random training examples to      
+            create validation data.
 
             val_split (float, optional): % of the train data used as    
             validation (value between 0 and 1).
