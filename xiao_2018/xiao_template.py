@@ -57,20 +57,21 @@ import numpy as np
 import math
 import time
 import tensorflow as tf
-from data_manipulation import load_data, check_binary_masks, \
+from data_manipulation import load_and_prepare_3D_data, check_binary_masks, \
                               crop_3D_data_with_overlap, \
                               merge_3D_data_with_overlap
 from data_3D_generators import VoxelDataGenerator
 from unet_3d_xiao import U_Net_3D_Xiao
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap,\
                                      smooth_3d_predictions
 from tensorflow.keras.utils import plot_model
+from callbacks import ModelCheckpoint
 
 
 ############
@@ -117,6 +118,10 @@ test_3d_desired_shape = (20, 448, 576, 1)
 # Flag to use all the images to create the 3D subvolumes. If it is False random
 # subvolumes from the whole data will be generated instead.
 use_all_volume = True
+# Percentage of overlap made to create subvolumes of the defined shape based on
+# test data. Fix in 0.0 to calculate the minimun overlap needed to satisfy the
+# shape.
+ov_test = 0.0
 
 
 ### Normalization
@@ -254,12 +259,11 @@ print("##################\n#    LOAD DATA   #\n##################\n")
 
 X_train, Y_train, X_val,\
 Y_val, X_test, Y_test,\
-orig_test_shape, norm_value, _ = load_data(
+orig_test_shape, norm_value = load_and_prepare_3D_data(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
-    img_test_shape, val_split=perc_used_as_val, shuffle_val=False,
-    make_crops=False, prepare_subvolumes=use_all_volume,
-    train_subvol_shape=train_3d_desired_shape,
-    test_subvol_shape=test_3d_desired_shape)
+    img_test_shape, val_split=perc_used_as_val, create_val=True,
+    shuffle_val=False, train_subvol_shape=train_3d_desired_shape,
+    test_subvol_shape=test_3d_desired_shape, ov_test=ov_test)
 
 # Normalize the data
 if normalize_data == True:
@@ -309,6 +313,13 @@ if extra_train_data != 0:
 
 print("##################\n#    DATA AUG    #\n##################\n")
 
+print("Preparing validation data generator . . .")
+val_generator = VoxelDataGenerator(
+    X_val, Y_val, random_subvolumes_in_DA=random_subvolumes_in_DA,
+    shuffle_each_epoch=shuffle_val_data_each_epoch, batch_size=batch_size_value,
+    da=False, softmax_out=softmax_out)
+del X_val, Y_val
+
 print("Preparing train data generator . . .")
 train_generator = VoxelDataGenerator(
     X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,
@@ -316,12 +327,7 @@ train_generator = VoxelDataGenerator(
     batch_size=batch_size_value, da=da, flip=flips, shift_range=shift_range, 
     rotation_range=rotation_range, square_rotations=square_rotations,
     softmax_out=softmax_out)
-
-print("Preparing validation data generator . . .")
-val_generator = VoxelDataGenerator(
-    X_val, Y_val, random_subvolumes_in_DA=random_subvolumes_in_DA,
-    shuffle_each_epoch=shuffle_val_data_each_epoch, batch_size=batch_size_value,
-    da=False, softmax_out=softmax_out)
+del X_train, Y_train
 
 # Create the test data generator without DA
 print("Preparing test data generator . . .")
@@ -420,7 +426,7 @@ if post_process == True:
     for i in tqdm(range(X_test.shape[0])):
         predictions_smooth = smooth_3d_predictions(X_test[i],
             pred_func=(lambda img_batch_subdiv: \
-                           model.predict_generator(img_batch_subdiv)))
+                           model.predict(img_batch_subdiv)))
 
         Y_test_smooth[i] = predictions_smooth
 
