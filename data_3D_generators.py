@@ -364,13 +364,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     self.X[j], self.Y[j], self.shape, self.val, 
                     vol_prob=(self.prob_map[j] if self.prob_map is not None else None))
             else:
-                im = np.copy(self.X[j])
-                mask = np.copy(self.Y[j])
+                batch_x[i] = np.copy(self.X[j])
+                batch_x[i] = np.copy(self.Y[j])
 
-            if self.da == False:
-                batch_x[i] = im
-                batch_y[i] = mask
-            else:
+            if self.da:
                 batch_x[i], batch_y[i], _ = self.apply_transform(im, mask)
 
         if self.softmax_out:
