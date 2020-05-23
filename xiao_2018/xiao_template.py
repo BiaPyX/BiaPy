@@ -98,7 +98,7 @@ train_mask_path = os.path.join(args.data_dir, 'train', 'y')
 test_path = os.path.join(args.data_dir, 'test', 'x')
 test_mask_path = os.path.join(args.data_dir, 'test', 'y')
 # Percentage of the training data used as validation                            
-perc_used_as_val = 0.2
+perc_used_as_val = 0.1
 
 
 ### Dataset shape
@@ -121,7 +121,7 @@ use_all_volume = True
 # Percentage of overlap made to create subvolumes of the defined shape based on
 # test data. Fix in 0.0 to calculate the minimun overlap needed to satisfy the
 # shape.
-ov_test = 0.0
+ov_test = 0.5
 
 
 ### Normalization
