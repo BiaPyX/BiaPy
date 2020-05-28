@@ -398,7 +398,7 @@ if softmax_out == True:
 
 # Merge the volumes and convert them into 2D data
 recons_pred_test, Y_test = merge_3D_data_with_overlap(
-    preds_test, orig_test_shape, data_mask=Y_test)
+    preds_test, orig_test_shape, data_mask=Y_test, overlap_z=ov_test)
 
 print("Saving predicted images . . .")
 save_img(Y=(recons_pred_test > 0.5).astype(np.uint8), mask_dir=result_bin_dir,
