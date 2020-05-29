@@ -175,10 +175,6 @@ fine_tunning = False
 fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.c_human_'
-# Name of the folder where weights files will be stored/loaded from. This folder
-# must be located inside the directory pointed by "args.base_work_dir" variable. 
-# If there is no such directory, it will be created for the first time
-h5_dir = os.path.join(args.result_dir, 'h5_files')
 
 
 ### Experiment main parameters
@@ -265,6 +261,10 @@ loss_weight_dir = os.path.join(result_dir, 'loss_weights')
 da_samples_dir = os.path.join(result_dir, 'aug')
 # Folder where crop samples will be stored
 check_crop_path = os.path.join(result_dir, 'check_crop')
+# Name of the folder where weights files will be stored/loaded from. This folder
+# must be located inside the directory pointed by "args.base_work_dir" variable.
+# If there is no such directory, it will be created for the first time
+h5_dir = os.path.join(args.result_dir, 'h5_files')
 
 
 ### Callbacks
@@ -618,7 +618,7 @@ if load_previous_weights == False:
 
     store_history(
         results, jac_per_crop, score, jac_per_img_50ov, voc, voc_per_img_50ov, 
-        det, det_per_img_50ov, time_callback, result_dir, job_identifier, 
+        det, det_per_img_50ov, time_callback, args.result_dir, job_identifier, 
         smooth_score, smooth_voc, smooth_det, zfil_score, zfil_voc, zfil_det, 
         smo_zfil_score, smo_zfil_voc, smo_zfil_det)
 

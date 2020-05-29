@@ -36,7 +36,8 @@ os.chdir(args.base_work_dir)
 
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
-                 TimeHistory, threshold_plots, save_img
+                 TimeHistory, threshold_plots, save_img, \
+                 calculate_3D_volume_prob_map
 limit_threads()
 
 # Try to generate the results as reproducible as possible
@@ -55,9 +56,9 @@ import numpy as np
 import math
 import time
 import tensorflow as tf
-from data_manipulation import load_data, check_binary_masks, \
+from data_manipulation import load_and_prepare_3D_data, check_binary_masks, \
                               crop_3D_data_with_overlap, \
-                              merge_3D_data_with_overlap
+                              merge_3D_data_with_overlap, img_to_onehot_encoding
 from data_3D_generators import VoxelDataGenerator
 from networks.unet_3d import U_Net_3D
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
@@ -68,7 +69,7 @@ from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap,\
                                      smooth_3d_predictions
-from tensorflow.utils.utils import plot_model
+from tensorflow.keras.utils import plot_model
 
 
 ############
@@ -115,6 +116,10 @@ test_3d_desired_shape = (20, 448, 576, 1)
 # Flag to use all the images to create the 3D subvolumes. If it is False random
 # subvolumes from the whole data will be generated instead.
 use_all_volume = True
+# Percentage of overlap made to create subvolumes of the defined shape based on
+# test data. Fix in 0.0 to calculate the minimun overlap needed to satisfy the
+# shape.
+ov_test = 0.0
 
 
 ### Normalization
@@ -145,11 +150,17 @@ flips = False
 # Flag to extract random subvolumnes during the DA. Not compatible with 
 # 'use_all_volume' as it forces the data preparation into subvolumes
 random_subvolumes_in_DA = False
+# Calculate probability map to make random subvolumes to be extracted with high
+# probability of having a mitochondria on the middle of it. Useful to avoid
+# extracting a subvolume which less mitochondria information.
+probability_map = True # Only active with random_subvolumes_in_DA
+w_foreground = 0.94 # Only active with probability_map
+w_background = 0.06 # Only active with probability_map
 
 
 ### Extra train data generation
-# Number of times to duplicate the train data. Useful when "random_crops_in_DA"
-# is made, as more original train data can be cover
+# Number of times to duplicate the train data. Useful when
+# "random_subvolumes_in_DA" is made, as more original train data can be cover
 duplicate_train = 0
 # Extra number of images to add to the train data. Applied after duplicate_train
 extra_train_data = 0
@@ -167,10 +178,6 @@ fine_tunning = False
 fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
-# Name of the folder where weights files will be stored/loaded from. This folder 
-# must be located inside the directory pointed by "args.base_work_dir" variable. 
-# If there is no such directory, it will be created for the first time
-h5_dir = os.path.join(args.result_dir, 'h5_files')
 
 
 ### Experiment main parameters
@@ -218,6 +225,13 @@ smooth_no_bin_dir = os.path.join(result_dir, 'smooth_no_bin')
 char_dir = os.path.join(result_dir, 'charts')
 # Folder where smaples of DA will be stored
 da_samples_dir = os.path.join(result_dir, 'aug')
+# Name of the folder where weights files will be stored/loaded from. This folder
+# must be located inside the directory pointed by "args.base_work_dir" variable.
+# If there is no such directory, it will be created for the first time
+h5_dir = os.path.join(args.result_dir, 'h5_files')
+# Name of the folder to store the probability map to avoid recalculating it on
+# every run
+prob_map_dir = os.path.join(args.result_dir, 'prob_map')
 
 
 ### Callbacks
@@ -251,12 +265,12 @@ print("##################\n#    LOAD DATA   #\n##################\n")
 
 X_train, Y_train, X_val,\
 Y_val, X_test, Y_test,\
-orig_test_shape, norm_value, _ = load_data(
+orig_test_shape, norm_value = load_and_prepare_3D_data(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
     img_test_shape, val_split=perc_used_as_val, shuffle_val=False,
     make_crops=False, prepare_subvolumes=use_all_volume,
     train_subvol_shape=train_3d_desired_shape,
-    test_subvol_shape=test_3d_desired_shape)
+    test_subvol_shape=test_3d_desired_shape, ov_test=ov_test)
 
 # Normalize the data
 if normalize_data == True:
@@ -306,13 +320,24 @@ if extra_train_data != 0:
 
 print("##################\n#    DATA AUG    #\n##################\n")
 
+# Calculate the probability map per image
+train_prob = None
+if probability_map == True:
+    prob_map_file = os.path.join(prob_map_dir, 'prob_map.npy')
+    if os.path.exists(prob_map_dir):
+        train_prob = np.load(prob_map_file)
+    else:
+        train_prob = calculate_3D_volume_prob_map(
+            Y_train, w_foreground, w_background, save_file=prob_map_file)
+
 print("Preparing train data generator . . .")
 train_generator = VoxelDataGenerator(
     X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,
-    shuffle_each_epoch=shuffle_train_data_each_epoch, 
+    subvol_shape=train_3d_desired_shape,
+    shuffle_each_epoch=shuffle_train_data_each_epoch,
     batch_size=batch_size_value, da=da, flip=flips, shift_range=shift_range, 
     rotation_range=rotation_range, square_rotations=square_rotations,
-    softmax_out=softmax_out)
+    softmax_out=softmax_out, prob_map=train_prob)
 
 print("Preparing validation data generator . . .")
 val_generator = VoxelDataGenerator(
@@ -375,6 +400,10 @@ else:
 
 print("##################\n#    INFERENCE   #\n##################\n")
 
+# Prepare test data for its use
+Y_test /= 255 if np.max(Y_test) > 2 else Y_test
+X_test /= 255 if np.max(X_test) > 2 else X_test
+
 # Evaluate to obtain the loss value and the Jaccard index
 print("Evaluating test data . . .")
 score = model.evaluate_generator(test_generator, verbose=1)
@@ -383,10 +412,6 @@ jac_per_subvolume = score[1]
 # Predict on test
 print("Making the predictions on test data . . .")
 preds_test = model.predict_generator(test_generator, verbose=1)
-
-# Divide the test data into 255 if it is going to be used
-Y_test /= 255 if np.max(Y_test) > 1 else Y_test
-X_test /= 255 if np.max(X_test) > 1 else X_test
 
 if softmax_out == True:
     preds_test = np.expand_dims(preds_test[...,1], -1)
@@ -483,7 +508,7 @@ if load_previous_weights == False:
 
     store_history(
         results, jac_per_subvolume, score, jac_per_img_50ov, voc, 
-        voc_per_img_50ov, det, det_per_img_50ov, time_callback, result_dir,
+        voc_per_img_50ov, det, det_per_img_50ov, time_callback, args.result_dir,
         job_identifier, smooth_score, smooth_voc, smooth_det, zfil_score, 
         zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det,
         metric="jaccard_index")

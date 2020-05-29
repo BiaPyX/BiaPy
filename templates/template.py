@@ -36,7 +36,8 @@ os.chdir(args.base_work_dir)
 
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
-                 TimeHistory, threshold_plots, save_img
+                 TimeHistory, threshold_plots, save_img, \
+                 calculate_2D_volume_prob_map
 limit_threads()
 
 # Try to generate the results as reproducible as possible
@@ -55,7 +56,8 @@ import numpy as np
 import math
 import time
 import tensorflow as tf
-from data_manipulation import load_data, crop_data, merge_data_without_overlap,\
+from data_manipulation import load_and_prepare_2D_data, crop_data,\
+                              merge_data_without_overlap,\
                               crop_data_with_overlap, merge_data_with_overlap, \
                               check_binary_masks, img_to_onehot_encoding
 from data_generators import keras_da_generator, ImageDataGenerator,\
@@ -69,7 +71,6 @@ from PIL import Image
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap
-from skimage.segmentation import clear_border
 from tensorflow.keras.utils import plot_model
 from callbacks import ModelCheckpoint
 
@@ -250,10 +251,6 @@ fine_tunning = False
 fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
-# Name of the folder where weights files will be stored/loaded from. This folder 
-# must be located inside the directory pointed by "args.base_work_dir" variable. 
-# If there is no such directory, it will be created for the first time
-h5_dir = os.path.join(args.result_dir, 'h5_files')
 
 
 ### Experiment main parameters
@@ -345,6 +342,13 @@ loss_weight_dir = os.path.join(result_dir, 'loss_weights', args.job_id)
 da_samples_dir = os.path.join(result_dir, 'aug')
 # Folder where crop samples will be stored
 check_crop_path = os.path.join(result_dir, 'check_crop')
+# Name of the folder where weights files will be stored/loaded from. This folder
+# must be located inside the directory pointed by "args.base_work_dir" variable.
+# If there is no such directory, it will be created for the first time
+h5_dir = os.path.join(args.result_dir, 'h5_files')
+# Name of the folder to store the probability map to avoid recalculating it on
+# every run
+prob_map_dir = os.path.join(args.result_dir, 'prob_map')
 
 
 ### Callbacks
@@ -388,7 +392,7 @@ if discard_cropped_images == True and make_crops == True \
     X_train, Y_train, \
     X_test, Y_test, \
     orig_test_shape, norm_value, \
-    crops_made = load_data(
+    crops_made = load_and_prepare_2D_data(
         train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
         img_test_shape, create_val=False, job_id=args.job_id, crop_shape=crop_shape, 
         check_crop=check_crop, check_crop_path=check_crop_path, 
@@ -436,7 +440,7 @@ print("##################\n#    LOAD DATA   #\n##################\n")
 
 X_train, Y_train, X_val,\
 Y_val, X_test, Y_test,\
-orig_test_shape, norm_value, crops_made = load_data(
+orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
     img_test_shape, val_split=perc_used_as_val, shuffle_val=random_val_data,
     e_d_data=extra_datasets_data_list, e_d_mask=extra_datasets_mask_list, 
@@ -541,23 +545,12 @@ else:
     # Calculate the probability map per image
     train_prob = None
     if probability_map == True:
-        train_prob = np.copy(Y_train[:,:,:,0])
-        train_prob = np.float32(train_prob)
-
-        print("Calculating the probability map . . .")
-        for i in tqdm(range(train_prob.shape[0])):
-            pdf = train_prob[i]
-        
-            # Remove artifacts connected to image border
-            pdf = clear_border(pdf)
-
-            foreground_pixels = (pdf == 255).sum()
-            background_pixels = (pdf == 0).sum()
-
-            pdf[np.where(pdf == 255)] = w_foreground/foreground_pixels
-            pdf[np.where(pdf == 0)] = w_background/background_pixels
-            pdf /= pdf.sum() # Necessary to get all probs sum 1
-            train_prob[i] = pdf
+        prob_map_file = os.path.join(prob_map_dir, 'prob_map.npy')
+        if os.path.exists(prob_map_dir):
+            train_prob = np.load(prob_map_file)
+        else:
+            train_prob = calculate_2D_volume_prob_map(
+                Y_train, w_foreground, w_background, save_file=prob_map_file)
 
     # Custom Data Augmentation                                                  
     data_gen_args = dict(
@@ -861,7 +854,7 @@ if load_previous_weights == False:
 
     store_history(
         results, jac_per_crop, score, jac_per_img_50ov, voc, voc_per_img_50ov, 
-        det, det_per_img_50ov, time_callback, result_dir, job_identifier, 
+        det, det_per_img_50ov, time_callback, args.result_dir, job_identifier, 
         smooth_score, smooth_voc, smooth_det, zfil_score, zfil_voc, zfil_det, 
         smo_zfil_score, smo_zfil_voc, smo_zfil_det)
 
