@@ -368,7 +368,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 batch_x[i] = np.copy(self.Y[j])
 
             if self.da:
-                batch_x[i], batch_y[i], _ = self.apply_transform(im, mask)
+                batch_x[i], batch_y[i], _ = self.apply_transform(batch_x[i], batch_y[i])
 
         if self.softmax_out:
             batch_y_ = np.zeros((len(indexes), ) + self.shape[:3] + (2,))
