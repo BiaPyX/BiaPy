@@ -81,14 +81,6 @@ def asymmetric_3D_network(image_shape, numInitChannels=16, fixed_dropout=0.0,
         x = encode_block(x, channels, t_downsmp_layer=t_downsmp_layer,
                          fixed_dropout=fixed_dropout)
 
-    # Last encode blocks   
-    #channels += 16
-    #x = encode_block(x, channels, t_downsmp_layer=t_downsmp_layer,
-    #                 fixed_dropout=fixed_dropout)
-    #channels += 8
-    #x = encode_block(x, channels, t_downsmp_layer=t_downsmp_layer,
-    #                 fixed_dropout=fixed_dropout)
-
     # 1st upsample block 
     channels = 64
     x = decode_block(x, channels, upsample=True) 
@@ -141,7 +133,6 @@ def encode_block(inp_layer, channels, t_downsmp_layer=4, downsample=False,
         
         if downsample == True:
             shortcut_padded = StochasticDownsampling3D() (inp_layer, t_downsmp_layer)
-            #shortcut_padded = MaxPooling3D((2, 2, 2))(inp_layer)
             shortcut_padded = Conv3D(channels, (1, 1, 1), activation=None, 
                                      kernel_regularizer=l2(0.01)) (shortcut_padded)
         else:
