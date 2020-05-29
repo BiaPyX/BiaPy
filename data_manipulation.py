@@ -1025,18 +1025,27 @@ def merge_3D_data_with_overlap(data, o_vol_shape, data_mask=None,
     h_num = data.shape[2]
     v_num = data.shape[3]
 
-    vols_per_z = math.ceil(orig_vol_shape[0]/(d_num*overlap_z))
-    vols_per_x = math.ceil(orig_vol_shape[1]/h_num)
-    vols_per_y = math.ceil(orig_vol_shape[2]/v_num)
+    # Minimun overlap
+    if overlap_z == 0:
+        vols_per_z = math.ceil(orig_vol_shape[0]/vol_shape[0])
+        excess_z = (vols_per_z*vol_shape[0])-orig_vol_shape[0]
+        step_z = vol_shape[0]-int(excess_z/(vols_per_z-1))
+        last_z = excess_z%(vols_per_z-1) 
+        r_div = vol_shape[0]-last_z 
+    else:
+        overlap_z = 1-overlap_z
+        vols_per_z = math.ceil(orig_vol_shape[0]/(d_num*overlap_z))
+        vols_per_x = math.ceil(orig_vol_shape[1]/h_num)
+        vols_per_y = math.ceil(orig_vol_shape[2]/v_num)
+        step_z = int(d_num*overlap_z)
+        r_div = int(d_num-(orig_vol_shape[0]%(d_num*overlap_z)))
 
-    r_div = int(d_num-(orig_vol_shape[0]%(d_num*overlap_z)))
     if r_div != 0:
         print("WARNING: Is assumed that the last {} slices in z have been filled"
               " with the last image to complete the volume, so they will be "
               "discarded".format(r_div))
 
     # Calculating overlap
-    step_z = int(d_num*overlap_z)
     ov_x = (h_num*vols_per_x)-orig_vol_shape[1]
     ov_y = (v_num*vols_per_y)-orig_vol_shape[2]
 
