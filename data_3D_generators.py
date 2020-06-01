@@ -365,7 +365,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     vol_prob=(self.prob_map[j] if self.prob_map is not None else None))
             else:
                 batch_x[i] = np.copy(self.X[j])
-                batch_x[i] = np.copy(self.Y[j])
+                batch_y[i] = np.copy(self.Y[j])
 
             if self.da:
                 batch_x[i], batch_y[i], _ = self.apply_transform(batch_x[i], batch_y[i])
