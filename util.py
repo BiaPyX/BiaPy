@@ -75,6 +75,9 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
 
     os.makedirs(chartOutDir, exist_ok=True)
 
+    # For matplotlib errors in display
+    os.environ['QT_QPA_PLATFORM']='offscreen'
+
     # Loss
     plt.plot(results.history['loss'])
     plt.plot(results.history['val_loss'])
