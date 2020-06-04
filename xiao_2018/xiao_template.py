@@ -431,7 +431,8 @@ if post_process == True:
         Y_test_smooth[i] = predictions_smooth
 
     # Merge the volumes and convert them into 2D data
-    Y_test_smooth = merge_3D_data_with_overlap(Y_test_smooth, orig_test_shape)
+    Y_test_smooth = merge_3D_data_with_overlap(
+        Y_test_smooth, orig_test_shape, overlap_z=ov_test)
 
     print("Saving smooth predicted images . . .")
     save_img(Y=Y_test_smooth, mask_dir=smooth_no_bin_dir,
