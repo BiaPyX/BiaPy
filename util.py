@@ -466,7 +466,9 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
         else:       
             print("Not data_dir provided so no image will be saved!")
             return
-        
+
+        print("Saving images in {}".format(data_dir))
+
         v = 1 if np.max(X) > 2 else 255 
         if X.ndim > 4:
             d = len(str(X.shape[0]*X.shape[1]))
@@ -490,6 +492,8 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
             print("Not mask_dir provided so no image will be saved!")
             return
         
+        print("Saving images in {}".format(mask_dir))
+
         v = 1 if np.max(Y) > 2 else 255
         if Y.ndim > 4:
             d = len(str(Y.shape[0]*Y.shape[1]))
