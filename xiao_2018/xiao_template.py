@@ -390,8 +390,8 @@ print("Making the predictions on test data . . .")
 preds_test = model.predict_generator(test_generator, verbose=1)
 
 # Divide the test data into 255 if it is going to be used
-Y_test /= 255 if np.max(Y_test) > 1 else Y_test
-X_test /= 255 if np.max(X_test) > 1 else X_test
+Y_test /= 255 if np.max(Y_test) > 2 else Y_test
+X_test /= 255 if np.max(X_test) > 2 else X_test
 
 if softmax_out == True:
     preds_test = np.expand_dims(preds_test[...,1], -1)
