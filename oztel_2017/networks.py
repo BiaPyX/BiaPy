@@ -166,7 +166,7 @@ def FCN8_VGG16(image_shape, activation='relu', lr=0.1,
     o2 = Add() ([u2, u_p3])
 
     outputs = Conv2DTranspose(2, kernel_size=(16, 16), strides=(8, 8),
-                              use_bias=False, padding='same') (o2)
+                              use_bias=False, padding='same', activation="sigmoid") (o2)
 
     model_fcn = Model(inputs=[inputs], outputs=[outputs])
 
