@@ -169,22 +169,52 @@ def store_history(results, jac_per_crop, test_score, jac_per_img_50ov, voc,
     except OSError:
         pass
     f = open(csv_file, 'x')
-    f.write(str(np.min(results.history['loss'])) + ','
-            + str(np.min(results.history['val_loss'])) + ','
-            + str(test_score[0]) + ',' 
-            + str(np.max(results.history[metric])) + ',' 
-            + str(np.max(results.history['val_'+metric])) + ',' 
-            + str(jac_per_crop) + ',' + str(test_score[1]) + ',' 
-            + str(jac_per_img_50ov) + ',' + str(smooth_score) + ','
-            + str(zfil_score) + ',' + str(smo_zfil_score) + ','
-            + str(voc) + ',' + str(voc_per_img_50ov) + ','
-            + str(smooth_voc) + ',' + str(zfil_voc) + ','
-            + str(smo_zfil_voc) + ',' + str(det) + ','
-            + str(det_per_img_50ov) + ',' + str(smooth_det) + ','
-            + str(zfil_det) + ',' + str(smo_zfil_det) + ','
-            + str(len(results.history['val_loss'])) + ',' 
-            + str(np.mean(time_callback.times)) + ','
-            + str(np.sum(time_callback.times)) + '\n')
+
+    s = ""
+    s += str(np.min(results.history['loss'])) + ','
+    s += str(np.min(results.history['val_loss'])) + ','
+    s += str(score['loss_per_crop']) + ','
+    s += str(np.max(results.history[metric])) + ','
+    s += str(np.max(results.history['val_'+metric])) + ','
+    s += str(score['jac_per_crop']) + ','
+    s += str(score['jac_per_image']) + ','
+    s += str(score['jac_50ov']) + ','
+    s += str(score['jac_full']) + ','
+    s += str(score['smo_score_per_image']) + ','
+    s += str(score['zfil_score_per_image']) + ','
+    s += str(score['smo_zfil_score_per_image']) + ','
+    s += str(score['smo_score_full']) + ','
+    s += str(score['zfil_score_full']) + ','
+    s += str(score['spu_score_full']) + ','
+    s += str(score['wa_score_full']) + ','
+    s += str(score['spu_wa_zfil_score_full']) + ','
+    s += str(score['voc_per_image']) + ','
+    s += str(score['voc_50ov']) + ','
+    s += str(score['voc_full']) + ','
+    s += str(score['smo_voc_per_image']) + ','
+    s += str(score['zfil_voc_per_image']) + ','
+    s += str(score['smo_zfil_voc_per_image']) + ','
+    s += str(score['smo_voc_full']) + ','
+    s += str(score['zfil_voc_full']) + ','
+    s += str(score['spu_voc_full']) + ','
+    s += str(score['wa_voc_full']) + ','
+    s += str(score['spu_wa_zfil_voc_full']) + ','
+    s += str(score['det_per_image']) + ','
+    s += str(score['det_50ov']) + ','
+    s += str(score['det_full']) + ','
+    s += str(score['smo_det_per_image']) + ','
+    s += str(score['zfil_det_per_image']) + ','
+    s += str(score['smo_zfil_det_per_image']) + ','
+    s += str(score['smo_det_full']) + ','
+    s += str(score['zfil_det_full']) + ','
+    s += str(score['spu_det_full']) + ','
+    s += str(score['wa_det_full']) + ','
+    s += str(score['spu_wa_zfil_det_full']) + ','
+    s += str(len(results.history['val_loss'])) + ','
+    s += str(np.mean(time_callback.times)) + ','
+    s += str(np.sum(time_callback.times)) + '\n'
+
+    f.write(s)
     f.close()
 
     # Save all the values in case we need them in the future
@@ -193,48 +223,84 @@ def store_history(results, jac_per_crop, test_score, jac_per_img_50ov, voc,
     except OSError:
         pass
     f = open(history_file, 'x')
-    f.write('############## TRAIN LOSS ############## \n')
-    f.write(str(results.history['loss']) + '\n')
-    f.write('############## VALIDATION LOSS ############## \n')
-    f.write(str(results.history['val_loss']) + '\n')
-    f.write('############## TEST LOSS ############## \n')
-    f.write(str(test_score[0]) + '\n')
-    f.write('############## TRAIN JACCARD INDEX ############## \n')
-    f.write(str(results.history[metric]) + '\n')
-    f.write('############## VALIDATION JACCARD INDEX ############## \n')
-    f.write(str(results.history[metric]) + '\n')
-    f.write('############## TEST JACCARD INDEX (per crop) ############## \n')
-    f.write(str(jac_per_crop) + '\n')
-    f.write('############## TEST JACCARD INDEX (per image) ############## \n')
-    f.write(str(test_score[1]) + '\n')
-    f.write('############## TEST JACCARD INDEX (per image with 50% ov) ############## \n')
-    f.write(str(jac_per_img_50ov) + '\n')
-    f.write('############## TEST JACCARD INDEX SMOOTH ############## \n')
-    f.write(str(smooth_score) + '\n')
-    f.write('############## TEST JACCARD INDEX Z-FILTERING ############## \n')
-    f.write(str(zfil_score) + '\n')
-    f.write('############## TEST JACCARD INDEX SMOOTH+Z-FILTERING ############## \n')
-    f.write(str(smo_zfil_score) + '\n')
-    f.write('############## VOC (per image) ############## \n')
-    f.write(str(voc) + '\n')
-    f.write('############## VOC (per image with 50% ov) ############## \n')
-    f.write(str(voc_per_img_50ov) + '\n')
-    f.write('############## VOC SMOOTH ############## \n')
-    f.write(str(smooth_voc) + '\n')
-    f.write('############## VOC Z-FILTERING ############## \n')
-    f.write(str(zfil_voc) + '\n')
-    f.write('############## VOC SMOOTH+Z-FILTERING ############## \n')
-    f.write(str(smo_zfil_voc) + '\n')
-    f.write('############## DET (per image) ############## \n')
-    f.write(str(det) + '\n')
-    f.write('############## DET (per image with 50% ov) ############## \n')
-    f.write(str(det_per_img_50ov) + '\n')
-    f.write('############## DET SMOOTH ############## \n')
-    f.write(str(smooth_det) + '\n')
-    f.write('############## DET Z-FILTERING ############## \n')
-    f.write(str(zfil_det) + '\n')
-    f.write('############## DET SMOOTH+Z-FILTERING ############## \n')
-    f.write(str(smo_zfil_det) + '\n')
+    s = ""
+    s += '### TRAIN LOSS ### \n'
+    s += str(results.history['loss']) + '\n'
+    s += '### VALIDATION LOSS ### \n'
+    s += str(results.history['val_loss']) + '\n'
+    s += '### TEST LOSS ### \n'
+    s += str(score['loss_per_crop']) + '\n'
+    s += '### TRAIN JACCARD INDEX ### \n'
+    s += str(results.history[metric]) + '\n'
+    s += '### VALIDATION JACCARD INDEX ### \n'
+    s += str(results.history['val_'+metric]) + '\n'
+    s += '### TEST JACCARD INDEX (per crop) ### \n'
+    s += str(score['jac_per_crop']) + '\n'
+    s += '### TEST JACCARD INDEX (per image) ### \n'
+    s += str(score['jac_per_image']) + '\n'
+    s += '### TEST JACCARD INDEX (per image with 50% ov) ### \n'
+    s += str(score['jac_50ov']) + '\n'
+    s += '### TEST JACCARD INDEX (full) ### \n'
+    s += str(score['jac_full']) + '\n'
+    s += '### TEST JACCARD INDEX SMOOTH (per image) ### \n'
+    s += str(score['smo_score_per_image']) + '\n'
+    s += '### TEST JACCARD INDEX Z-FILTERING (per image) ### \n'
+    s += str(score['zfil_score_per_image']) + '\n'
+    s += '### TEST JACCARD INDEX SMOOTH+Z-FILTERING (per image) ### \n'
+    s += str(score['smo_zfil_score_per_image']) + '\n'
+    s += '### TEST JACCARD INDEX 8-ENSEMBLE (full) ### \n'
+    s += str(score['smo_score_full']) + '\n'
+    s += '### TEST JACCARD INDEX Z-FILTERING (full) ### \n'
+    s += str(score['zfil_score_full']) + '\n'
+    s += '### TEST JACCARD INDEX SPURIOUS (full) ### \n'
+    s += str(score['spu_score_full']) + '\n'
+    s += '### TEST JACCARD INDEX WATERSHED (full) ### \n'
+    s += str(score['wa_score_full']) + '\n'
+    s += '### TEST JACCARD INDEX SPURIOUS+WATERSHED+Z-FILTERING (full) ### \n'
+    s += str(score['spu_wa_zfil_score_full']) + '\n'
+    s += '### VOC (per image) ### \n'
+    s += str(score['voc_per_image']) + '\n'
+    s += '### VOC (per image with 50% ov) ### \n'
+    s += str(score['voc_50ov']) + '\n'
+    s += '### VOC (full) ### \n'
+    s += str(score['voc_full']) + '\n'
+    s += '### VOC SMOOTH ### \n'
+    s += str(score['smo_voc_per_image']) + '\n'
+    s += '### VOC Z-FILTERING ### \n'
+    s += str(score['zfil_voc_per_image']) + '\n'
+    s += '### VOC SMOOTH+Z-FILTERING ### \n'
+    s += str(score['smo_zfil_voc_per_image']) + '\n'
+    s += '### VOC INDEX 8-ENSEMBLE (full) ### \n'
+    s += str(score['smo_voc_full']) + '\n'
+    s += '### VOC INDEX Z-FILTERING (full) ### \n'
+    s += str(score['zfil_voc_full']) + '\n'
+    s += '### VOC INDEX SPURIOUS (full) ### \n'
+    s += str(score['spu_voc_full']) + '\n'
+    s += '### VOC INDEX WATERSHED (full) ### \n'
+    s += str(score['wa_voc_full']) + '\n'
+    s += '### VOC INDEX SPURIOUS+WATERSHED+Z-FILTERING (full) ### \n'
+    s += str(score['spu_wa_zfil_voc_full']) + '\n'
+    s += '### DET (per image) ### \n'
+    s += str(score['det_per_image']) + '\n'
+    s += '### DET (per image with 50% ov) ### \n'
+    s += str(score['det_50ov']) + '\n'
+    s += '### DET SMOOTH ### \n'
+    s += str(score['smo_det_per_image']) + '\n'
+    s += '### DET Z-FILTERING ### \n'
+    s += str(score['zfil_det_per_image']) + '\n'
+    s += '### DET SMOOTH+Z-FILTERING ### \n'
+    s += str(score['smo_zfil_det_per_image']) + '\n'
+    s += '### DET INDEX 8-ENSEMBLE (full) ### \n'
+    s += str(score['smo_det_full']) + '\n'
+    s += '### DET INDEX Z-FILTERING (full) ### \n'
+    s += str(score['zfil_det_full']) + '\n'
+    s += '### DET INDEX SPURIOUS (full) ### \n'
+    s += str(score['spu_det_full']) + '\n'
+    s += '### DET INDEX WATERSHED (full) ### \n'
+    s += str(score['wa_det_full']) + '\n'
+    s += '### DET INDEX SPURIOUS+WATERSHED+Z-FILTERING (full) ### \n'
+    s += str(score['spu_wa_zfil_det_full']) + '\n'
+    f.write(s)
     f.close()
 
 
