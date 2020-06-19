@@ -86,8 +86,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             be the same on each epoch). Valid when random_crops_in_DA is set.
 
             softmax_out (bool, optional): flag to advice that the output of the
-            network is a softmax activation. If so one-hot encoded will be done
-            on the ground truth.
+            network has in the last layer a softmax activation or one channel 
+            per class. If so one-hot encoded will be done on the ground truth.
         """
 
         if rotation_range != 0 and rotation90 == True:

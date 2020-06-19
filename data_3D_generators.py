@@ -274,10 +274,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             shift_range (float, optional): range to make a shift. It must be a 
             number between 0 and 1. 
     
-            softmax_out (bool, optional): flag to advice that the output of the 
-            network is a softmax activation. If so one-hot encoded will be done 
-            on the ground truth.
-    
+            softmax_out (bool, optional): flag to advice that the output of the
+            network has in the last layer a softmax activation or one channel
+            per class. If so one-hot encoded will be done on the ground truth.
+
             val (bool, optional): advice the generator that the volumes will be
             used to validate the model to not make random crops (as the val. 
             data must be the same on each epoch). Valid when 
