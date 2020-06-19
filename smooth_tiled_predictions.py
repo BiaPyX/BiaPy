@@ -453,9 +453,73 @@ def round_predictions(prd, nb_channels_out, thresholds):
     return prd
 
 
+def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, 
+                             softmax_output=True):
+    aug_img = []
+        
+    # Convert into square image to make the rotations properly
+    pad_to_square = o_img.shape[0] - o_img.shape[1]
+   
+    if pad_to_square < 0:
+        img = np.pad(o_img, [(abs(pad_to_square), 0), (0, 0), (0, 0)], 'reflect') 
+    else:
+        img = np.pad(o_img, [(0, 0), (pad_to_square, 0), (0, 0)], 'reflect')
+    
+    # Make 8 different combinations of the img 
+    aug_img.append(img) 
+    aug_img.append(np.rot90(img, axes=(0, 1), k=1))
+    aug_img.append(np.rot90(img, axes=(0, 1), k=2))
+    aug_img.append(np.rot90(img, axes=(0, 1), k=3))
+    aug_img.append(img[:, ::-1])
+    img_aux = img[:, ::-1]
+    aug_img.append(np.rot90(img_aux, axes=(0, 1), k=1))
+    aug_img.append(np.rot90(img_aux, axes=(0, 1), k=2))
+    aug_img.append(np.rot90(img_aux, axes=(0, 1), k=3))
+
+    aug_img = np.array(aug_img)
+    decoded_aug_img = np.zeros(aug_img.shape)
+
+    for i in range(aug_img.shape[0]):
+        if softmax_output == True:
+            decoded_aug_img[i] = np.expand_dims(pred_func(np.expand_dims(aug_img[i], 0))[...,1], -1)
+        else:
+            decoded_aug_img[i] = pred_func(np.expand_dims(aug_img[i], 0))
+
+    # Undo the combinations of the img
+    out_img = []
+    out_img.append(decoded_aug_img[0])
+    out_img.append(np.rot90(decoded_aug_img[1], axes=(0, 1), k=3))
+    out_img.append(np.rot90(decoded_aug_img[2], axes=(0, 1), k=2))
+    out_img.append(np.rot90(decoded_aug_img[3], axes=(0, 1), k=1))
+    out_img.append(decoded_aug_img[4][:, ::-1])
+    out_img.append(np.rot90(decoded_aug_img[5], axes=(0, 1), k=3)[:, ::-1])
+    out_img.append(np.rot90(decoded_aug_img[6], axes=(0, 1), k=2)[:, ::-1])
+    out_img.append(np.rot90(decoded_aug_img[7], axes=(0, 1), k=1)[:, ::-1])
+
+    # Create the output data
+    out_img = np.array(out_img) 
+    if pad_to_square != 0:
+        if pad_to_square < 0:
+            out = np.zeros((out_img.shape[0], img.shape[0]+pad_to_square, 
+                            img.shape[1], img.shape[2]))
+        else:
+            out = np.zeros((out_img.shape[0], img.shape[0], 
+                            img.shape[1]-pad_to_square, img.shape[2]))
+    else:
+        out = np.zeros(out_img.shape)
+
+    # Undo the padding
+    for i in range(out_img.shape[0]):
+        if pad_to_square < 0:
+            out[i] = out_img[i,abs(pad_to_square):,:]
+        else:
+            out[i] = out_img[i,:,abs(pad_to_square):]
+
+    return np.mean(out, axis=0)
+
+
 def smooth_3d_predictions(vol, pred_func, batch_size_value=1, 
                           softmax_output=True):
-   
     aug_vols = []
         
     # Convert into square image to make the rotations properly
