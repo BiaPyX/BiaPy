@@ -3,8 +3,13 @@ from skimage import measure
 import cv2
 import os
 from tqdm import tqdm
+from scipy import ndimage as ndi
+from skimage.morphology import disk
+from skimage.segmentation import watershed
+from skimage.filters import rank
 
-def spuriuous_detection_filter(Y, low_score_th=0.65, th=0.5):
+
+def spuriuous_detection_filter(Y, low_score_th=0.6, th=0.4):
     """Based on the first post-processing method proposed in Oztel et al. where 
        removes the artifacts with low class score.
        
@@ -84,7 +89,7 @@ def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
         
         # Finding sure foreground area
         if erode:
-            sure_fg = cv2.erode(pred, kernel, iterations=5)
+            sure_fg = cv2.erode(pred, kernel, iterations=3)
         else:
             dist_transform = cv2.distanceTransform(a, cv2.DIST_L2, 5)
             ret, sure_fg = cv2.threshold(
@@ -116,4 +121,58 @@ def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
     watershed_predictions[watershed_predictions>1] = 1
     watershed_predictions[watershed_predictions==-1] = 0
 
+    return np.expand_dims(watershed_predictions, -1)
+
+
+def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
+    """Apply watershed to the given predictions with the goal of refine the 
+       boundaries of the artifacts. This function was implemented using scikit
+       instead of opencv as 'boundary_refinement_watershed'.
+
+       Args:
+            X (4D Numpy array): original data to guide the watershed.
+            E.g. (img_number, x, y, channels).
+
+            Y_pred (4D Numpy array): predicted data to refine the boundaries.
+            E.g. (img_number, x, y, channels).
+
+            save_marks_dir (str, optional): directory to save the markers used 
+            to make the watershed. Useful for debugging. 
+
+        Return:
+            watershed_predictions (4D Numpy array): refined boundaries of the 
+            predictions.  E.g. (img_number, x, y, channels).
+    """
+
+    if save_marks_dir is not None:
+        os.makedirs(save_marks_dir, exist_ok=True)
+
+    watershed_predictions = np.zeros(Y_pred.shape[:3], dtype=np.uint8)
+    d = len(str(X.shape[0]))
+
+    for i in tqdm(range(X.shape[0])):
+        
+        im = (X[i,...,0]*255).astype(np.uint8)
+        pred = (Y_pred[i,...,0]*255).astype(np.uint8)
+        
+        # find continuous region
+        markers = rank.gradient(pred, disk(12)) < 10
+        markers = ndi.label(markers)[0]
+
+        # local gradient (disk(2) is used to keep edges thin)
+        gradient = rank.gradient(im, disk(2))
+
+        # process the watershed
+        labels = watershed(gradient, markers)
+
+        if save_marks_dir is not None:
+            f = os.path.join(save_marks_dir, "mark_" + str(i).zfill(d) + ".png")
+            cv2.imwrite(f, markers)
+       
+        watershed_predictions[i] = labels
+
+    # Label all artifacts into 1 and the background with 0
+    watershed_predictions[watershed_predictions==1] = 0
+    watershed_predictions[watershed_predictions>1] = 1
+    
     return np.expand_dims(watershed_predictions, -1)
