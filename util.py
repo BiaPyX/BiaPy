@@ -99,10 +99,7 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
     plt.clf()
 
 
-def store_history(results, jac_per_crop, test_score, jac_per_img_50ov, voc, 
-                  voc_per_img_50ov, det, det_per_img_50ov, time_callback, log_dir, 
-                  job_file, smooth_score, smooth_voc, smooth_det, zfil_score, 
-                  zfil_voc, zfil_det, smo_zfil_score, smo_zfil_voc, smo_zfil_det,
+def store_history(results, score, time_callback, log_dir, job_file, 
                   metric='jaccard_index'):
     """Stores the results obtained as csv to manipulate them later 
        and labeled in another file as historic results.
@@ -111,50 +108,10 @@ def store_history(results, jac_per_crop, test_score, jac_per_img_50ov, voc,
             results (history object): record of training loss values and metrics 
             values at successive epochs.
 
-            jac_per_crop (float): Jaccard index obtained per crop. 
-
-            test_score (array of 2 int): loss and Jaccard index obtained with 
-            the test data.
-
-            jac_per_img_50ov (float): Jaccard index obtained per image with an 
-            overlap of 50%.
-
-            voc (float): VOC score value per image without overlap.
-
-            voc_per_img_50ov (float): VOC score value per image with an overlap 
-            of 50%.
-
-            det (float): DET score value per image without overlap.
-
-            det_per_img_50ov (float): DET score value per image with an overlap
-            of 50%.
+            score (Dictionary): contains all metrics values extracted from 
+            training and inference. 
 
             time_callback: time structure with the time of each epoch.
-
-            csv_file (str): path where the csv file will be stored.
-
-            history_file (str): path where the historic results will be stored.
-
-            smooth_score (float): main metric obtained with smooth results.
-
-            smooth_voc (float): VOC metric obtained with smooth results.
-
-            smooth_det (float): DET metric obtained with smooth results.
-
-            zfil_score (float): main metric obtained with Z-filtering results.
-
-            zfil_voc (float): VOC metric obtained with Z-filtering results.
-
-            zfil_det (float): DET metric obtained with Z-filtering results.
-
-            smo_zfil_score (float): main metric obtained with smooth and 
-            Z-filtering results.
-
-            smo_zfil_voc (float): VOC metric obtained with smooth and 
-            Z-filtering results.
-
-            smo_zfil_det (float): DET metric obtained with smooth and 
-            Z-filtering results.
     """
 
     # Create folders and construct file names
