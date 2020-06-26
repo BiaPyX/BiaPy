@@ -9,7 +9,7 @@ from skimage.segmentation import watershed
 from skimage.filters import rank
 
 
-def spuriuous_detection_filter(Y, low_score_th=0.6, th=0.4):
+def spuriuous_detection_filter(Y, low_score_th=0.6, th=0.45):
     """Based on the first post-processing method proposed in Oztel et al. where 
        removes the artifacts with low class score.
        
@@ -34,20 +34,21 @@ def spuriuous_detection_filter(Y, low_score_th=0.6, th=0.4):
     if th < 0 or th > 1:
         raise ValueError("'th' must be a float between 0 and 1")
 
-    class_Y = np.zeros(Y.shape)
-    class_Y[Y[...,1]>th] = 1 
+    class_Y = np.zeros(Y.shape[:3], dtype=np.uint8)
+    class_Y[Y[...,0]>th] = 1 
     
     for i in range(class_Y.shape[0]):
-        im = class_Y[i,...,0]
+        im = class_Y[i]
         im, num = measure.label(im, connectivity=2, background=0, return_num=True)
     
-        for j in range(num):
-            c_conf = np.mean(Y[i,...,1][im==j])
+        for j in range(1,num):
+            c_conf = np.mean(Y[i,...,0][im==j])
             if c_conf < low_score_th:
-                print("Slice {}: removing artifact {}".format(i, j))
-                class_Y[i,...,0][im==j] = 0
+                print("Slice {}: removing artifact {} - pixels: {}"
+                      .format(i, j, np.count_nonzero(Y[i,...,0][im==j])))
+                class_Y[i][im==j] = 0
 
-    return class_Y
+    return np.expand_dims(class_Y, -1)
 
 
 def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
@@ -176,3 +177,34 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
     watershed_predictions[watershed_predictions>1] = 1
     
     return np.expand_dims(watershed_predictions, -1)
+
+
+def calculate_z_filtering(data, mf_size=5):
+    """Applies a median filtering in the z dimension of the provided data.
+
+       Args:
+            data (4D Numpy array): data to apply the filter to.
+            E.g. (image_number, x, y, channels).
+
+            mf_size (int, optional): size of the median filter. Must be an odd
+            number.
+
+       Returns:
+            out_data (4D Numpy array): data resulting from the application of
+            the median filter. E.g. (image_number, x, y, channels).
+    """
+
+    out_data = np.copy(data)
+    out_data = np.squeeze(out_data)
+
+    # Must be odd
+    if mf_size % 2 == 0:
+       mf_size += 1
+
+    for i in range(data.shape[2]):
+        sl = (data[:, :, i, 0]).astype(np.float32)
+        sl = cv2.medianBlur(sl, mf_size)
+        out_data[:, :, i] = sl
+
+    return np.expand_dims(out_data, axis=-1)
+

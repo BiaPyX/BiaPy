@@ -1446,35 +1446,6 @@ def random_crop(image, mask, random_crop_size, val=False,
             return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :]
 
 
-def calculate_z_filtering(data, mf_size=5):
-    """Applies a median filtering in the z dimension of the provided data.
-
-       Args:
-            data (4D Numpy array): data to apply the filter to.
-            E.g. (image_number, x, y, channels).
-
-            mf_size (int, optional): size of the median filter. Must be an odd 
-            number.
-
-       Returns:
-            out_data (4D Numpy array): data resulting from the application of   
-            the median filter. E.g. (image_number, x, y, channels).
-    """
-   
-    out_data = np.copy(data) 
-
-    # Must be odd
-    if mf_size % 2 == 0:
-       mf_size += 1
-
-    for i in range(0, data.shape[2]):
-        sl = data[:, :, i, 0]     
-        sl = cv2.medianBlur(sl, mf_size)
-        out_data[:, :, i] = np.expand_dims(sl, axis=-1)
-        
-    return out_data
-
-
 def elastic_transform(image, alpha, sigma, alpha_affine, seed=None):
     """Elastic deformation of images as described in [Simard2003]_ (with i
        modifications).
