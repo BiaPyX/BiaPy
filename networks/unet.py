@@ -41,7 +41,9 @@ def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0,
        Returns:
             model (Keras model): model containing the U-Net created.
     """
-    inputs = Input((image_shape[0], image_shape[1], image_shape[2]))
+    dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
+    inputs = Input(dinamic_dim)
+    #inputs = Input((image_shape[0], image_shape[1], image_shape[2]))
         
     if loss_type == "w_bce":
         weights = Input((image_shape[0], image_shape[1], image_shape[2]))
