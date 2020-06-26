@@ -478,7 +478,7 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1,
 
     aug_img = np.array(aug_img)
     decoded_aug_img = np.zeros(aug_img.shape)
-
+    
     for i in range(aug_img.shape[0]):
         if softmax_output == True:
             decoded_aug_img[i] = np.expand_dims(pred_func(np.expand_dims(aug_img[i], 0))[...,1], -1)

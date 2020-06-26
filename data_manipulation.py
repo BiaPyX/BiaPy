@@ -1323,7 +1323,7 @@ def prepare_3D_volume_data(X, Y, shape=(82, 256, 256, 1), overlap=False,
     if rest != 0 and use_rest:
         if rest*2 < shape[0]:
             print("As mirroring will be used at least the rest of the images need"
-                  "to be half of the size in z provided. Rest={} ; z-images={}"
+                  " to be half of the size in z provided. Rest={} ; z-images={}"
                   .format(rest, shape[0]))
         else:
             mirrored_subvols = crops_per_image
