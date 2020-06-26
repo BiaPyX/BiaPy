@@ -61,7 +61,7 @@ from data_manipulation import load_and_prepare_2D_data, crop_data,\
                               crop_data_with_overlap, merge_data_with_overlap, \
                               check_binary_masks, img_to_onehot_encoding
 from data_generators import keras_da_generator, ImageDataGenerator,\
-                            keras_gen_samples, calculate_z_filtering
+                            keras_gen_samples
 from networks.unet import U_Net
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
@@ -73,8 +73,8 @@ from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap
 from tensorflow.keras.utils import plot_model
 from callbacks import ModelCheckpoint
-from post_processing import spuriuous_detection_filter, boundary_refinement_watershed2
-
+from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
+                            boundary_refinement_watershed2
 
 
 ############
@@ -396,6 +396,7 @@ if extra_datasets_mask_list:
     for i in range(len(extra_datasets_mask_list)):
         check_binary_masks(extra_datasets_mask_list[i])
 
+
 print("##########################################\n"
       "#  PREPARE DATASET IF DISCARD IS ACTIVE  #\n"
       "##########################################\n")
@@ -526,6 +527,7 @@ if extra_train_data != 0:
     print("{} extra train data generated, the new shape of the train now is {}"\
           .format(extra_train_data, X_train.shape))
 
+
 print("#######################\n"
       "#  DATA AUGMENTATION  #\n"
       "#######################\n")
@@ -545,7 +547,6 @@ if custom_da == False:
         shear_range=shear_range, brightness_range=brightness_range,
         weights_on_data=weights_on_data, weights_path=loss_weight_dir,
         hflip=flips, vflip=flips)
-        
 else:                                                                           
     print("Custom DA selected")
 
@@ -609,7 +610,7 @@ if load_previous_weights == False:
     if fine_tunning:                                                    
         h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
                              + '_' + args.run_id + '.h5')     
-        print("Fine-tunning: loading model weights from h5_file: {}"\
+        print("Fine-tunning: loading model weights from h5_file: {}"
               .format(h5_file))
         model.load_weights(h5_file)                                             
    
@@ -642,7 +643,6 @@ print("##########################\n"
       "#  INFERENCE (per crop)  #\n"
       "##########################\n")
 
-# Divide the test data to fit into crop shape used to train
 if random_crops_in_DA:
     X_test, Y_test = crop_data_with_overlap(
         X_test, Y_test, crop_shape[0], test_ov_crops)
@@ -819,10 +819,7 @@ print("Making the predictions on test data . . .")
 preds_test_full = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
 if softmax_out:
-    o_preds_test_full = preds_test_full
     preds_test_full = np.expand_dims(preds_test_full[...,1], -1)
-else:
-    o_preds_test_full = preds_test_full
 
 print("Saving predicted images . . .")
 save_img(Y=(preds_test_full > 0.5).astype(np.uint8),
@@ -880,7 +877,7 @@ zfil_det_full = DET_calculation(
 del zfil_preds_test
 
 print("~~~~ Spurious Detection (full image) ~~~~")
-spu_preds_test = spuriuous_detection_filter(o_preds_test_full)
+spu_preds_test = spuriuous_detection_filter(preds_test_full)
 
 print("Saving spurious detection filtering resulting images . . .")
 save_img(Y=(spu_preds_test).astype(np.uint8), mask_dir=spu_dir_full,
@@ -891,7 +888,6 @@ spu_score_full = jaccard_index_numpy(Y_test, spu_preds_test)
 spu_voc_full = voc_calculation(Y_test, spu_preds_test, spu_score_full)
 spu_det_full = DET_calculation(Y_test, spu_preds_test, det_eval_ge_path,
                                det_eval_post_path, det_bin, n_dig, args.job_id)
-del o_preds_test_full
 
 print("~~~~ Watershed (full image) ~~~~")
 wa_preds_test = boundary_refinement_watershed2(
@@ -975,21 +971,21 @@ print("Post-process: Z-Filtering - Test DET (merge with 50% overlap): {}".format
 print("Test IoU (full): {}".format(jac_full))
 print("Test VOC (full): {}".format(voc_full))
 print("Test DET (full): {}".format(det_full))
-print("Post-process: Ensemble8 - Test IoU (full): {}".format(smo_score_full))
-print("Post-process: Ensemble8 - Test VOC (full): {}".format(smo_voc_full))
-print("Post-process: Ensemble8 - Test DET (full): {}".format(smo_det_full))
+print("Post-process: Ensemble - Test IoU (full): {}".format(smo_score_full))
+print("Post-process: Ensemble - Test VOC (full): {}".format(smo_voc_full))
+print("Post-process: Ensemble - Test DET (full): {}".format(smo_det_full))
 print("Post-process: Z-Filtering - Test IoU (full): {}".format(zfil_score_full))
 print("Post-process: Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
 print("Post-process: Z-Filtering - Test DET (full): {}".format(zfil_det_full))
-print("Post-process: Spurious Detection - Test IoU: {}".format(spu_score_full))
-print("Post-process: Spurious Detection - VOC: {}".format(spu_voc_full))
-print("Post-process: Spurious Detection - DET: {}".format(spu_det_full))
-print("Post-process: Watershed - Test IoU: {}".format(wa_score_full))
-print("Post-process: Watershed - VOC: {}".format(wa_voc_full))
-print("Post-process: Watershed - DET: {}".format(wa_det_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test IoU: {}".format(spu_wa_zfil_score_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test VOC: {}".format(spu_wa_zfil_voc_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test DET: {}".format(spu_wa_zfil_det_full))
+print("Post-process: Spurious Detection - Test IoU (full): {}".format(spu_score_full))
+print("Post-process: Spurious Detection - VOC (full): {}".format(spu_voc_full))
+print("Post-process: Spurious Detection - DET (full): {}".format(spu_det_full))
+print("Post-process: Watershed - Test IoU (full): {}".format(wa_score_full))
+print("Post-process: Watershed - VOC (full): {}".format(wa_voc_full))
+print("Post-process: Watershed - DET (full): {}".format(wa_det_full))
+print("Post-process: Spurious + Watershed + Z-Filtering - Test IoU (full): {}".format(spu_wa_zfil_score_full))
+print("Post-process: Spurious + Watershed + Z-Filtering - Test VOC (full): {}".format(spu_wa_zfil_voc_full))
+print("Post-process: Spurious + Watershed + Z-Filtering - Test DET (full): {}".format(spu_wa_zfil_det_full))
 
 if not load_previous_weights:
     scores = {}
