@@ -293,6 +293,9 @@ print("###################\n"
 check_binary_masks(train_mask_path)
 check_binary_masks(test_mask_path)
 
+if not softmax_out and custom_da:
+    raise ValuError("'custom_da' needed when 'softmax_out' is active")
+
 
 print("###############\n"
       "#  LOAD DATA  #\n"

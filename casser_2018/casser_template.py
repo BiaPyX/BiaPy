@@ -396,6 +396,9 @@ if extra_datasets_mask_list:
     for i in range(len(extra_datasets_mask_list)):
         check_binary_masks(extra_datasets_mask_list[i])
 
+if not softmax_out and custom_da:
+    raise ValuError("'custom_da' needed when 'softmax_out' is active")
+
 
 print("##########################################\n"
       "#  PREPARE DATASET IF DISCARD IS ACTIVE  #\n"
@@ -840,7 +843,8 @@ Y_test_smooth = np.zeros(X_test.shape, dtype=(np.float32))
 
 for i in tqdm(range(X_test.shape[0])):
     predictions_smooth = ensemble8_2d_predictions(X_test[i],
-        pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
+        pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
+        softmax_output=softmax_out)
     Y_test_smooth[i] = predictions_smooth
 
 print("Saving smooth predicted images . . .")
