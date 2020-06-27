@@ -575,7 +575,7 @@ def crop_data_with_overlap(data, data_mask, window_size, subdivision):
     cropped_data = np.zeros((total_cropped, window_size, window_size,
                              data.shape[3]), dtype=np.float32)
     cropped_data_mask = np.zeros((total_cropped, window_size, window_size,
-                             data.shape[3]), dtype=np.float32)
+                                 data_mask.shape[3]), dtype=np.float32)
 
     # Find the mininum overlap configuration with the number of crops to create
     min_d = sys.maxsize
