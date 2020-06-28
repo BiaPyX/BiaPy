@@ -63,7 +63,7 @@ from data_manipulation import load_and_prepare_2D_data, crop_data, \
                               check_binary_masks, img_to_onehot_encoding
 from data_generators import keras_da_generator, ImageDataGenerator,\
                             keras_gen_samples
-from vgg_fcn_approximations.networks import FCN_VGG16
+from networks.fcn_vgg import FCN_VGG16
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from tensorflow.keras.callbacks import EarlyStopping
