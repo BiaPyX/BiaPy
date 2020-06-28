@@ -40,7 +40,9 @@ def asymmetric_network(image_shape, numInitChannels=16, fixed_dropout=0.0,
             model (Keras model): model containing the U-Net created.
     """
 
-    inputs = Input((image_shape[0], image_shape[1], image_shape[2]))
+    dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
+    inputs = Input(dinamic_dim)
+    #inputs = Input((image_shape[0], image_shape[1], image_shape[2]))
         
     # Input block
     channels = numInitChannels
@@ -139,7 +141,15 @@ def encode_block(inp_layer, channels, t_downsmp_layer=4, downsample=False,
                  fixed_dropout=0.1):
         
         if downsample == True:
-            shortcut_padded = StochasticDownsampling2D() (inp_layer, t_downsmp_layer)
+            if inp_layer.shape[1] is None:
+                tf.print("MaxPooling2D")
+                print("MaxPooling2D")
+                shortcut_padded = MaxPooling2D((2,2)) (inp_layer)
+            else:
+                tf.print("StochasticDownsampling2D")
+                print("StochasticDownsampling2D")
+                shortcut_padded = StochasticDownsampling2D() (inp_layer, t_downsmp_layer)
+
             shortcut_padded = Conv2D(channels, (1, 1), activation=None, 
                                      kernel_regularizer=l2(0.01)) (shortcut_padded)
         else:

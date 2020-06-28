@@ -31,6 +31,7 @@ args = parser.parse_args()
 import os
 import sys
 sys.path.insert(0, args.base_work_dir)
+sys.path.insert(0, "cheng_2017")
 
 # Working dir
 os.chdir(args.base_work_dir)
@@ -61,7 +62,7 @@ from data_manipulation import load_and_prepare_3D_data, check_binary_masks, \
                               crop_3D_data_with_overlap, \
                               merge_3D_data_with_overlap
 from data_3D_generators import VoxelDataGenerator
-from networks.unet_3d import U_Net_3D
+from cheng_3D_network import asymmetric_3D_network
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.models import load_model
@@ -114,9 +115,9 @@ img_test_shape = (1024, 768, 1)
 
 ### 3D volume variables
 # Train shape of the 3D subvolumes
-train_3d_desired_shape = (20, 256, 256, 1)
+train_3d_desired_shape = (96, 128, 128, 1)
 # Train shape of the 3D subvolumes
-test_3d_desired_shape = (20, 256, 256, 1)
+test_3d_desired_shape = (96, 128, 128, 1)
 # Percentage of overlap made to create subvolumes of the defined shape based on
 # test data. Fix in 0.0 to calculate the minimun overlap needed to satisfy the
 # shape.
@@ -133,11 +134,11 @@ norm_value_forced = -1
 
 ### Data augmentation (DA) variables
 # Flag to activate DA
-da = True
+da = False
 # Create samples of the DA made. Useful to check the output images made.
-aug_examples = True
+aug_examples = False
 # Flag to shuffle the training data on every epoch 
-shuffle_train_data_each_epoch = True
+shuffle_train_data_each_epoch = False
 # Flag to shuffle the validation data on every epoch
 shuffle_val_data_each_epoch = False
 # Shift range to appply to the subvolumes 
@@ -147,7 +148,7 @@ rotation_range = 0
 # Square rotations (90º, -90º and 180º) intead of using a range
 square_rotations = True
 # Flag to make flips on the subvolumes 
-flips = True
+flips = False
 # Flag to extract random subvolumnes during the DA
 random_subvolumes_in_DA = False
 # Calculate probability map to make random subvolumes to be extracted with high
@@ -161,7 +162,7 @@ w_background = 0.06 # Only active with probability_map
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when 
 # "random_subvolumes_in_DA" is made, as more original train data can be cover
-duplicate_train = 0
+duplicate_train = 12
 # Extra number of images to add to the train data. Applied after duplicate_train
 extra_train_data = 0
 
@@ -182,24 +183,24 @@ weight_files_prefix = 'model.fibsem_'
 
 ### Experiment main parameters
 # Batch size value
-batch_size_value = 2
+batch_size_value = 3
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "adam"
 # Learning rate used by the optimization method
 learning_rate_value = 0.0001
 # Number of epochs to train the network
-epochs_value = 30
+epochs_value = 200
 # Number of epochs to stop the training process after no improvement
-patience = 10 
+patience = 100
 
 
 ### Network architecture specific parameters
 # Number of channels in the first initial layer of the network
-num_init_channels = 32
+num_init_channels = 16
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
 spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
-fixed_dropout_value = 0.0 
+fixed_dropout_value = 0.1
 # Active flag if softmax is used as the last layer of the network
 softmax_out = True
 
@@ -283,6 +284,12 @@ os.makedirs(h5_dir, exist_ok=True)
 checkpointer = ModelCheckpoint(
     os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
     verbose=1, save_best_only=True)
+def scheduler(epoch, lr):
+    if epoch == 200 or epoch == 300:
+        return lr*0.1
+    else:
+        return lr
+lr_cb = tf.keras.callbacks.LearningRateScheduler(scheduler, verbose=1)
 
 
 print("###################\n"
@@ -392,9 +399,10 @@ print("#################################\n"
       "#################################\n")
 
 print("Creating the network . . .")
-model = U_Net_3D(train_3d_desired_shape, numInitChannels=num_init_channels,
-                 spatial_dropout=spatial_dropout, lr=learning_rate_value,
-                 fixed_dropout=fixed_dropout_value, optimizer=optimizer)
+model = asymmetric_3D_network(
+    train_3d_desired_shape, numInitChannels=num_init_channels,
+    fixed_dropout=fixed_dropout_value, optimizer=optimizer,
+    lr=learning_rate_value)
 
 # Check the network created
 model.summary(line_length=150)
