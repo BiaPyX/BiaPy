@@ -437,9 +437,9 @@ print("##########################\n"
 
 # Evaluate to obtain the loss value and the Jaccard index
 print("Evaluating test data . . .")
-score_per_subvolume = model.evaluate(test_generator, verbose=1)
-loss_per_subvolume = score_per_subvolume[0]
-jac_per_subvolume = score_per_subvolume[1]
+score_per_crop = model.evaluate(test_generator, verbose=1)
+loss_per_crop = score_per_crop[0]
+jac_per_crop = score_per_crop[1]
 
 print("Making the predictions on test data . . .")
 preds_test = model.predict(test_generator, verbose=1)
@@ -559,8 +559,7 @@ print("~~~~ Spurious Detection (full image) ~~~~")
 spu_preds_test = spuriuous_detection_filter(preds_test)
 
 print("Saving spurious detection filtering resulting images . . .")
-save_img(Y=(spu_preds_test).astype(np.uint8), mask_dir=spu_dir_full,
-         prefix="test_out_spu")
+save_img(Y=spu_preds_test, mask_dir=spu_dir_full, prefix="test_out_spu")
 
 print("Calculate metrics (Spurious + full image) . . .")
 spu_score_full = jaccard_index_numpy(Y_test, spu_preds_test)
@@ -619,8 +618,8 @@ if load_previous_weights == False:
     print("Validation loss: {}".format(np.min(results.history['val_loss'])))
     print("Validation IoU: {}".format(np.max(results.history['val_jaccard_index_softmax'])))
 
-print("Test loss: {}".format(loss_per_subvolume))
-print("Test IoU (per crop): {}".format(jac_per_subvolume))
+print("Test loss: {}".format(loss_per_crop))
+print("Test IoU (per crop): {}".format(jac_per_crop))
 
 print("Test IoU (merge into complete image): {}".format(jac_per_image))
 print("Test VOC (merge into complete image): {}".format(voc_per_image))

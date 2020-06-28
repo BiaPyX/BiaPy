@@ -885,8 +885,7 @@ print("~~~~ Spurious Detection (full image) ~~~~")
 spu_preds_test = spuriuous_detection_filter(preds_test_full)
 
 print("Saving spurious detection filtering resulting images . . .")
-save_img(Y=(spu_preds_test).astype(np.uint8), mask_dir=spu_dir_full,
-         prefix="test_out_spu")
+save_img(Y=spu_preds_test, mask_dir=spu_dir_full, prefix="test_out_spu")
 
 print("Calculate metrics (Spurious + full image) . . .")
 spu_score_full = jaccard_index_numpy(Y_test, spu_preds_test)
