@@ -732,6 +732,10 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
     if save_examples == True:
         print("Saving some samples of the train generator . . .")        
         os.makedirs(out_dir, exist_ok=True)
+        
+        if random_crops_in_DA:
+            print("WARNING: aug samples generated will not have the shape "
+                  "specified by crop_length, as it is not implemented")
 
         if ld_img_from_disk == False:
             i = 0
