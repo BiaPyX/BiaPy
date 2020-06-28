@@ -70,7 +70,8 @@ from tensorflow.keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
-                                     predict_img_with_overlap
+                                     predict_img_with_overlap,\
+                                     ensemble8_2d_predictions
 from tensorflow.keras.utils import plot_model
 from callbacks import ModelCheckpoint
 from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
@@ -262,7 +263,7 @@ weight_files_prefix = 'model.fibsem_'
 # this template type: please use big_data_template.py instead.
 loss_type = "bce"
 # Batch size value
-batch_size_value = 6
+batch_size_value = 4
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "adam"
 # Learning rate used by the optimization method
@@ -270,18 +271,18 @@ learning_rate_value = 0.0005
 # Number of epochs to train the network
 epochs_value = 360
 # Number of epochs to stop the training process after no improvement
-patience = 50 
+patience = epochs_value
 # If weights on data are going to be applied. To true when loss_type is 'w_bce' 
 weights_on_data = True if loss_type == "w_bce" else False
 
 
 ### Network architecture specific parameters
 # Number of channels in the first initial layer of the network
-num_init_channels = 32 
+num_init_channels = 16
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
 spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
-fixed_dropout_value = 0.0 
+fixed_dropout_value = 0.2 
 # Active flag if softmax or one channel per class is used as the last layer of
 # the network. Custom DA needed.
 softmax_out = False
@@ -395,9 +396,6 @@ check_binary_masks(test_mask_path)
 if extra_datasets_mask_list: 
     for i in range(len(extra_datasets_mask_list)):
         check_binary_masks(extra_datasets_mask_list[i])
-
-if not softmax_out and custom_da:
-    raise ValuError("'custom_da' needed when 'softmax_out' is active")
 
 
 print("##########################################\n"
@@ -884,8 +882,7 @@ print("~~~~ Spurious Detection (full image) ~~~~")
 spu_preds_test = spuriuous_detection_filter(preds_test_full)
 
 print("Saving spurious detection filtering resulting images . . .")
-save_img(Y=(spu_preds_test).astype(np.uint8), mask_dir=spu_dir_full,
-         prefix="test_out_spu")
+save_img(Y=spu_preds_test, mask_dir=spu_dir_full, prefix="test_out_spu")
 
 print("Calculate metrics (Spurious + full image) . . .")
 spu_score_full = jaccard_index_numpy(Y_test, spu_preds_test)
