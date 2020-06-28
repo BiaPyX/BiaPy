@@ -70,18 +70,6 @@ def FCN_VGG16(image_shape, activation='relu', lr=0.1,
 
     model_fcn = Model(inputs=[inputs], outputs=[outputs])
 
-#    # Load the weights of VGG model
-#    for layer in model_vgg.layers:
-#        name = layer.name
-#        
-#        # Break when the last convolutional block is reached, as it differs with
-#        # the VGG and any weights could be loaded
-#        if 'fc1' == name: break
-#
-#        if 'conv' in name:
-#            model_fcn.get_layer(name).set_weights(
-#                model_vgg.get_layer(name).get_weights())
-
     # Select the optimizer
     if optimizer == "sgd":
         opt = tf.keras.optimizers.SGD(lr=lr, momentum=0.99, decay=0.0,
