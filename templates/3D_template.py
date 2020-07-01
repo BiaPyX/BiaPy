@@ -114,9 +114,9 @@ img_test_shape = (1024, 768, 1)
 
 ### 3D volume variables
 # Train shape of the 3D subvolumes
-train_3d_desired_shape = (20, 256, 256, 1)
+train_3d_desired_shape = (16, 256, 256, 1)
 # Train shape of the 3D subvolumes
-test_3d_desired_shape = (20, 256, 256, 1)
+test_3d_desired_shape = (16, 256, 256, 1)
 # Percentage of overlap made to create subvolumes of the defined shape based on
 # test data. Fix in 0.0 to calculate the minimun overlap needed to satisfy the
 # shape.
@@ -188,9 +188,9 @@ optimizer = "adam"
 # Learning rate used by the optimization method
 learning_rate_value = 0.0001
 # Number of epochs to train the network
-epochs_value = 30
+epochs_value = 300
 # Number of epochs to stop the training process after no improvement
-patience = 10 
+patience = 50 
 
 
 ### Network architecture specific parameters
@@ -201,7 +201,7 @@ spatial_dropout = False
 # Fixed value to make the dropout. Ignored if the value is zero
 fixed_dropout_value = 0.0 
 # Active flag if softmax is used as the last layer of the network
-softmax_out = True
+softmax_out = False
 
 
 ### Paths of the results                                             
@@ -471,7 +471,8 @@ print("~~~~ 16-Ensemble (per image) ~~~~")
 Y_test_smooth = np.zeros(X_test.shape, dtype=np.float32)                        
 for i in tqdm(range(X_test.shape[0])):                                          
     predictions_smooth = smooth_3d_predictions(X_test[i],                       
-        pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)))   
+        pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
+        softmax=softmax_out)   
                                                                                 
     Y_test_smooth[i] = predictions_smooth                                       
                                                                                 
@@ -612,9 +613,9 @@ if load_previous_weights == False:
     print("Epoch number: {}".format(len(results.history['val_loss'])))
     print("Train time (s): {}".format(np.sum(time_callback.times)))
     print("Train loss: {}".format(np.min(results.history['loss'])))
-    print("Train IoU: {}".format(np.max(results.history['jaccard_index_softmax'])))
+    print("Train IoU: {}".format(np.max(results.history['jaccard_index'])))
     print("Validation loss: {}".format(np.min(results.history['val_loss'])))
-    print("Validation IoU: {}".format(np.max(results.history['val_jaccard_index_softmax'])))
+    print("Validation IoU: {}".format(np.max(results.history['val_jaccard_index'])))
 
 print("Test loss: {}".format(loss_per_crop))
 print("Test IoU (per crop): {}".format(jac_per_crop))
@@ -666,7 +667,7 @@ if not load_previous_weights:
             scores[name] = eval(name)
 
     store_history(results, scores, time_callback, args.result_dir, job_identifier, 
-                  metric="jaccard_index_softmax")
-    create_plots(results, job_identifier, char_dir, metric="jaccard_index_softmax")
+                  metric="jaccard_index")
+    create_plots(results, job_identifier, char_dir, metric="jaccard_index")
 
 print("FINISHED JOB {} !!".format(job_identifier))

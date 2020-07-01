@@ -1,49 +1,52 @@
-from keras.models import Model
-from keras.layers import Input
-from keras.layers.core import Dropout, Lambda, SpatialDropout3D
-from keras.layers.convolutional import Conv3D, Conv3DTranspose
-from keras.layers.pooling import MaxPooling3D
-from keras.layers.merge import concatenate
-import keras 
-from metrics import binary_crossentropy_weighted, jaccard_index
+import tensorflow as tf
+from tensorflow.keras import Model, Input
+from tensorflow.keras.layers import Dropout, Lambda, SpatialDropout3D, Conv3D, \
+                                    Conv3DTranspose, MaxPooling3D, concatenate
+from metrics import binary_crossentropy_weighted, jaccard_index, \
+                    weighted_bce_dice_loss
 
-def U_Net_3D(image_shape, activation='elu', numInitChannels=16, 
-             fixed_dropout=0.0, spatial_dropout=False, optimizer="sgd", 
-             weighted_loss=False, lr=0.001):
-    """Create 3D U-Net.
+def U_Net_3D(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0, 
+          spatial_dropout=False, loss_type="bce", optimizer="sgd", lr=0.001,
+          fine_tunning=False):
+    """Create the U-Net
 
        Args:
-            image_shape (array of 3 int): dimensions of the input image.
+            image_shape (3D tuple): dimensions of the input image.
 
             activation (str, optional): Keras available activation type.
 
-            numInitChannels (int, optional): number of convolution channels to 
-            start with. In each downsampling/upsampling the number of filters 
+            numInitChannels (int, optional): number of convolution channels to
+            start with. In each downsampling/upsampling the number of filters
             are multiplied/divided by 2.
 
-            fixed_dropout (float, optional): dropout value to be fixed. If no 
-            value is provided the default behaviour will be to select a 
+            fixed_dropout (float, optional): dropout value to be fixed. If no
+            value is provided the default behaviour will be to select a
             piramidal value stating from 0.1 and reaching 0.3 value.
 
             spatial_dropout (bool, optional): use spatial dropout instead of the
-            "normal" dropout. 
+            "normal" dropout.
 
-            optimizer (str, optional): optimizer used to minimize the loss 
+            loss_type (str, optional): loss type to use, three type available: 
+            "bce" (Binary Cross Entropy) , "w_bce" (Weighted BCE, based on
+            weigth maps) and "w_bce_dice" (Weighted loss: weight1*BCE + weight2*Dice). 
+
+            optimizer (str, optional): optimizer used to minimize the loss
             function. Posible options: 'sgd' or 'adam'.
-        
-            weighted_loss (bool, optional): flag to control if a weighted loss 
-            is going to be used.
 
             lr (float, optional): learning rate value.
-    
+        
+            fine_tunning (bool, optional): flag to freeze the encoder part for 
+            fine tuning.
+
        Returns:
             model (Keras model): model containing the U-Net created.
     """
-
+    #dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
+    #inputs = Input(dinamic_dim)
     inputs = Input(image_shape)
         
-    if weighted_loss == True:
-        weights = Input((image_shape[0], image_shape[1], image_shape[2]))
+    if loss_type == "w_bce":
+        weights = Input(image_shape)
 
     c1 = Conv3D(numInitChannels, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (inputs)
@@ -54,7 +57,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
 
     c1 = Conv3D(numInitChannels, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c1)
-    p1 = MaxPooling3D((1, 2, 2), padding='same') (c1)
+    p1 = MaxPooling3D((2, 2, 2)) (c1)
     
     c2 = Conv3D(numInitChannels*2, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (p1)
@@ -64,7 +67,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
         c2 = SpatialDropout3D(fixed_dropout) (c2) if spatial_dropout == True else Dropout(fixed_dropout) (c2)
     c2 = Conv3D(numInitChannels*2, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c2)
-    p2 = MaxPooling3D((1, 2, 2), padding='same') (c2)
+    p2 = MaxPooling3D((2, 2, 2)) (c2)
     
     c3 = Conv3D(numInitChannels*4, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (p2)
@@ -74,7 +77,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
         c3 = SpatialDropout3D(fixed_dropout) (c3) if spatial_dropout == True else Dropout(fixed_dropout) (c3)
     c3 = Conv3D(numInitChannels*4, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c3)
-    p3 = MaxPooling3D((1, 2, 2), padding='same') (c3)
+    p3 = MaxPooling3D((2, 2, 2)) (c3)
     
     c4 = Conv3D(numInitChannels*8, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (p3)
@@ -84,7 +87,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
         c4 = SpatialDropout3D(fixed_dropout) (c4) if spatial_dropout == True else Dropout(fixed_dropout) (c4)
     c4 = Conv3D(numInitChannels*8, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c4)
-    p4 = MaxPooling3D((1, 2, 2), padding='same') (c4)
+    p4 = MaxPooling3D(pool_size=(2, 2, 2)) (c4)
     
     c5 = Conv3D(numInitChannels*16, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (p4)
@@ -95,7 +98,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
     c5 = Conv3D(numInitChannels*16, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c5)
     
-    u6 = Conv3DTranspose(numInitChannels*8, (1, 2, 2), strides=(1, 2, 2),
+    u6 = Conv3DTranspose(numInitChannels*8, (2, 2, 2), strides=(2, 2, 2),
                          padding='same') (c5)
     u6 = concatenate([u6, c4])
     c6 = Conv3D(numInitChannels*8, (3, 3, 3), activation=activation,
@@ -107,7 +110,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
     c6 = Conv3D(numInitChannels*8, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c6)
     
-    u7 = Conv3DTranspose(numInitChannels*4, (1, 2, 2), strides=(1, 2, 2),
+    u7 = Conv3DTranspose(numInitChannels*4, (2, 2, 2), strides=(2, 2, 2),
                          padding='same') (c6)
     u7 = concatenate([u7, c3])
     c7 = Conv3D(numInitChannels*4, (3, 3, 3), activation=activation,
@@ -119,7 +122,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
     c7 = Conv3D(numInitChannels*4, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c7)
     
-    u8 = Conv3DTranspose(numInitChannels*2, (1, 2, 2), strides=(1, 2, 2),
+    u8 = Conv3DTranspose(numInitChannels*2, (2, 2, 2), strides=(2, 2, 2),
                          padding='same') (c7)
     u8 = concatenate([u8, c2])
     c8 = Conv3D(numInitChannels*2, (3, 3, 3), activation=activation,
@@ -131,7 +134,7 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
     c8 = Conv3D(numInitChannels*2, (3, 3, 3), activation=activation,
                 kernel_initializer='he_normal', padding='same') (c8)
     
-    u9 = Conv3DTranspose(numInitChannels, (1, 2, 2), strides=(1, 2, 2),
+    u9 = Conv3DTranspose(numInitChannels, (2, 2, 2), strides=(2, 2, 2),
                          padding='same') (c8)
     u9 = concatenate([u9, c1])
     c9 = Conv3D(numInitChannels, (3, 3, 3), activation=activation,
@@ -144,26 +147,44 @@ def U_Net_3D(image_shape, activation='elu', numInitChannels=16,
                 kernel_initializer='he_normal', padding='same') (c9)
     
     outputs = Conv3D(1, (1, 1, 1), activation='sigmoid') (c9)
-   
-    if weighted_loss == True:
+  
+    # Loss type 
+    if loss_type == "w_bce":
         model = Model(inputs=[inputs, weights], outputs=[outputs]) 
     else:
         model = Model(inputs=[inputs], outputs=[outputs])
     
+    # Select the optimizer
     if optimizer == "sgd":
-        opt = keras.optimizers.SGD(lr=lr, momentum=0.99, decay=0.0, 
-                                   nesterov=False)
+        opt = tf.keras.optimizers.SGD(
+            lr=lr, momentum=0.99, decay=0.0, nesterov=False)
     elif optimizer == "adam":
-        opt = keras.optimizers.Adam(lr=lr, beta_1=0.9, beta_2=0.999, 
-                                    epsilon=None, decay=0.0, amsgrad=False)
+        opt = tf.keras.optimizers.Adam(
+            lr=lr, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, 
+            amsgrad=False)
     else:
         raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
         
-    if weighted_loss == True:
-        model.compile(optimizer=opt, loss=binary_crossentropy_weighted(weights), 
-                      metrics=[jaccard_index])
-    else:
+    # Fine tunning: freeze the enconder part
+    if fine_tunning == True:
+        print("Freezing the contracting path of the U-Net for fine tunning . . .")
+        for layer in model.layers[:20]:
+            layer.trainable = False
+        for layer in model.layers:
+            print("{}: {}".format(layer, layer.trainable))
+
+    # Compile the model
+    if loss_type == "bce":
         model.compile(optimizer=opt, loss='binary_crossentropy', 
                       metrics=[jaccard_index])
+    elif loss_type == "w_bce":
+        model.compile(optimizer=opt, loss=binary_crossentropy_weighted(weights), 
+                      metrics=[jaccard_index])
+    elif loss_type == "w_bce_dice":
+        model.compile(optimizer=opt, 
+                      loss=weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33),
+                      metrics=[jaccard_index])
+    else:
+        raise ValueError("'loss_type' must be 'bce', 'w_bce' or 'w_bce_dice'")
 
     return model
