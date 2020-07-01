@@ -519,7 +519,7 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1,
 
 
 def smooth_3d_predictions(vol, pred_func, batch_size_value=1, 
-                          softmax_output=True):
+                          softmax=True):
     aug_vols = []
         
     # Convert into square image to make the rotations properly
@@ -556,7 +556,7 @@ def smooth_3d_predictions(vol, pred_func, batch_size_value=1,
     decoded_aug_vols = np.zeros(aug_vols.shape)
 
     for i in range(aug_vols.shape[0]):
-        if softmax_output == True:
+        if softmax == True:
             decoded_aug_vols[i] = np.expand_dims(pred_func(np.expand_dims(aug_vols[i], 0))[...,1], -1)
         else:
             decoded_aug_vols[i] = pred_func(np.expand_dims(aug_vols[i], 0))
