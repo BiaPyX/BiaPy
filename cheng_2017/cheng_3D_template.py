@@ -479,7 +479,8 @@ print("~~~~ 16-Ensemble (per image) ~~~~")
 Y_test_smooth = np.zeros(X_test.shape, dtype=np.float32)                        
 for i in tqdm(range(X_test.shape[0])):                                          
     predictions_smooth = smooth_3d_predictions(X_test[i],                       
-        pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)))   
+        pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
+        softmax=softmax_out)   
                                                                                 
     Y_test_smooth[i] = predictions_smooth                                       
                                                                                 
