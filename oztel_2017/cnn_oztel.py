@@ -59,7 +59,7 @@ def cnn_oztel(image_shape, activation='relu', lr=0.1, optimizer="sgd"):
 
 
 def cnn_oztel_test(model, image_shape, activation='relu', lr=0.1, 
-                        optimizer="sgd"):
+                   optimizer="sgd"):
     """Create the CNN proposed by Oztel et. al for testing, where the full image
        will be fed to the network.
 
