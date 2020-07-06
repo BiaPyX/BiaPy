@@ -1,0 +1,3 @@
+[submodule "LRFinder"]
+	path = LRFinder
+	url = https://github.com/danifranco/LRFinder.git
