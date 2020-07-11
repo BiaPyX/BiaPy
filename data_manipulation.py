@@ -1253,8 +1253,6 @@ def prepare_3D_volume_data(X, Y, shape=(82, 256, 256, 1), overlap=False,
         raise ValueError("X or Y must be a 4D Numpy array")                     
     if len(shape) != 4:
         raise ValueError("'shape' must be 4D")
-    if overlap == False and (X.shape[1] % shape[1] != 0 or X.shape[2] % shape[2] != 0):                
-        raise ValueError("Shape must be divisible by the shape of X" )          
     
     # Calculate the rest                                                        
     rest = X.shape[0] % shape[0]                                                
