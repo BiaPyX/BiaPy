@@ -907,3 +907,45 @@ def calculate_3D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
 
     return np.expand_dims(prob_map, -1)
 
+
+def grayscale_2D_image_to_3D(X, Y, th=127):
+    """Creates 3D surface from each image in X based on the grayscale of each
+       image.
+    
+       Args:
+            X (4D numpy array): data that contains the images to create the
+            surfaces from. E.g. (image_number, x, y, channels)
+
+            Y (4D numpy array): data mask of the same shape of X that will be 
+            converted into 3D volume, stacking multiple times each image. Useful 
+            if you need the two data arrays to be of the same shape. 
+            E.g. (image_number, x, y, channels)
+
+            th (int, optional): values to ommit when creating the surfaces. 
+            Useful to reduce the amount of data in z to be created and reduce 
+            computational time.
+
+        Returns:
+            X_3D (5D numpy array): 3D surface of each image provided.
+            E.g. (image_number, z, x, y, channels)
+            Y_3D (5D numpy array): 3D stack of each mask provided.
+            E.g. (image_number, z, x, y, channels)
+    """
+
+    print("Creating 3D surface for each image . . .")
+
+    _th = 255 - th
+    X_3D = np.zeros((X.shape[0], _th) + X.shape[1:], dtype=np.int32) 
+    Y_3D = np.zeros((Y.shape[0], _th) + Y.shape[1:], dtype=np.int32) 
+
+    for i in tqdm(range(X.shape[0])): 
+        for x in range(X.shape[1]):
+            for y in range(X.shape[2]):
+                pos = int(X[i, x, y, 0])-_th if int(X[i, x, y, 0]) >_th else 0
+                X_3D[i, 0:pos, x, y, 0] = 1
+                pos = int(Y[i, x, y, 0])*255
+                Y_3D[i, 0:pos, x, y, 0] = 1
+
+    print("*** New surface 3D data shape is now: {}".format(X_3D.shape))
+
+    return X_3D, Y_3D
