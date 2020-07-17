@@ -99,7 +99,7 @@ def U_Net_3D_Xiao(image_shape, lr=0.0001, num_classes=2):
                                    epsilon=1e-8, decay=0.0, amsgrad=False)
         
     model.compile(optimizer=opt, loss=custom_loss(a1, a2),
-                  metrics=[jaccard_index_softmax], experimental_run_tf_function=False)
+                  metrics=[jaccard_index_softmax])
 
     return model
 
