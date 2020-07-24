@@ -384,7 +384,7 @@ def load_data_from_dir(data_dir, shape):
     """
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
-    data = np.zeros((len(ids), ) + shape, dtype=np.float32)
+    data = np.zeros(shape[:2] + (len(ids), shape[2]), dtype=np.float32)
 
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         img = imread(os.path.join(data_dir, id_))
@@ -397,7 +397,7 @@ def load_data_from_dir(data_dir, shape):
         if len(img.shape) == 2:
             img = np.expand_dims(img, axis=-1)
 
-        data[n] = img
+        data[...,n,:] = img
 
     return data
 
@@ -686,24 +686,24 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
    
     # Minimun overlap
     if overlap_z == 0: 
-        vols_per_z = math.ceil(data.shape[0]/vol_shape[0])
-        excess_z = (vols_per_z*vol_shape[0])-data.shape[0]
-        step_z = vol_shape[0]-int(excess_z/(vols_per_z-1))
+        vols_per_z = math.ceil(data.shape[2]/vol_shape[2])
+        excess_z = (vols_per_z*vol_shape[2])-data.shape[2]
+        step_z = vol_shape[2]-int(excess_z/(vols_per_z-1))
         last_z = excess_z%(vols_per_z-1) 
-        r_div = vol_shape[0]-last_z
+        r_div = vol_shape[2]-last_z
     else: 
         overlap_z = 1-overlap_z
-        vols_per_z = math.ceil(data.shape[0]/(vol_shape[0]*overlap_z))  
-        step_z = int(vol_shape[0]*overlap_z)
-        r_div = int(vol_shape[0]-(data.shape[0]%(vol_shape[0]*overlap_z)))
+        vols_per_z = math.ceil(data.shape[2]/(vol_shape[2]*overlap_z))  
+        step_z = int(vol_shape[2]*overlap_z)
+        r_div = int(vol_shape[2]-(data.shape[2]%(vol_shape[2]*overlap_z)))
 
-    vols_per_x = math.ceil(data.shape[1]/vol_shape[1])
-    vols_per_y = math.ceil(data.shape[2]/vol_shape[2])
-    ov_x = (vol_shape[1]*vols_per_x)-data.shape[1]
-    ov_y = (vol_shape[2]*vols_per_y)-data.shape[2]
+    vols_per_x = math.ceil(data.shape[0]/vol_shape[0])
+    vols_per_y = math.ceil(data.shape[1]/vol_shape[1])
+    ov_x = (vol_shape[0]*vols_per_x)-data.shape[0]
+    ov_y = (vol_shape[1]*vols_per_y)-data.shape[1]
    
-    print("{},{},{} patches per z,x,y axis"
-          .format(vols_per_z, vols_per_x, vols_per_y))
+    print("{},{},{} patches per x,y,z axis"
+          .format(vols_per_x, vols_per_y, vols_per_z))
     
     if r_div != 0:
         print("WARNING: The last volumes in z will be filled with the last "
@@ -711,7 +711,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
               "provided, so be careful and resize the data before run the "
               "metrics on it!")
 
-    total_vol = vols_per_z*vols_per_x*vols_per_y
+    total_vol = vols_per_x*vols_per_y*vols_per_z
     cropped_data = np.zeros((total_vol,) + vol_shape)
     if data_mask is not None:
         cropped_data_mask = np.zeros((total_vol,) + vol_shape)
@@ -724,44 +724,44 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
                 ov_x_ = ov_x if x != 0 else 0
                 ov_y_ = ov_y if y != 0 else 0
                
-                if (z*step_z)+vol_shape[0] < data.shape[0]:
+                if (z*step_z)+vol_shape[2] < data.shape[2]:
                     cropped_data[c] = \
-                        data[z*step_z:(z*step_z)+vol_shape[0], 
-                             (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
-                             (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
+                        data[(x*vol_shape[0])-ov_x_:((x+1)*vol_shape[0])-ov_x_,
+                             (y*vol_shape[1])-ov_y_:((y+1)*vol_shape[1])-ov_y_, 
+                             z*step_z:(z*step_z)+vol_shape[2]]
                     if data_mask is not None:
                         cropped_data_mask[c] = \
-                            data_mask[z*step_z:(z*step_z)+vol_shape[0],
-                                      (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
-                                      (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
+                            data_mask[(x*vol_shape[0])-ov_x_:((x+1)*vol_shape[0])-ov_x_,
+                                      (y*vol_shape[1])-ov_y_:((y+1)*vol_shape[1])-ov_y_,
+                                      z*step_z:(z*step_z)+vol_shape[2]]
     
                 # Fill the final volumes in z with the rests of the data
                 else:
-                    cropped_data[c,0:r_div-(f_z*step_z)] = \
-                        data[z*step_z:(z*step_z)+vol_shape[0],
-                             (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
-                             (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
+                    cropped_data[c,:,:,0:r_div-(f_z*step_z)] = \
+                        data[(x*vol_shape[0])-ov_x_:((x+1)*vol_shape[0])-ov_x_,
+                             (y*vol_shape[1])-ov_y_:((y+1)*vol_shape[1])-ov_y_,
+                             z*step_z:(z*step_z)+vol_shape[2]]
                     if data_mask is not None:
-                        cropped_data_mask[c,0:r_div-(f_z*step_z)] = \
-                            data_mask[z*step_z:(z*step_z)+vol_shape[0],
-                                      (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
-                                      (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
+                        cropped_data_mask[c,:,:,0:r_div-(f_z*step_z)] = \
+                            data_mask[(x*vol_shape[0])-ov_x_:((x+1)*vol_shape[0])-ov_x_,
+                                      (y*vol_shape[1])-ov_y_:((y+1)*vol_shape[1])-ov_y_,
+                                      z*step_z:(z*step_z)+vol_shape[2]]
 
-                    for s in range(vol_shape[0]-(r_div-(f_z*step_z))):
-                        cropped_data[c,(r_div-(f_z*step_z))+s:vol_shape[0]]  = \
-                            data[data.shape[0]-1-s,
-                                 (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
-                                 (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
+                    for s in range(vol_shape[2]-(r_div-(f_z*step_z))):
+                        cropped_data[c,:,:,(r_div-(f_z*step_z))+s:vol_shape[2],0]  = \
+                            data[(x*vol_shape[0])-ov_x_:((x+1)*vol_shape[0])-ov_x_,
+                                 (y*vol_shape[1])-ov_y_:((y+1)*vol_shape[1])-ov_y_,
+                                 data.shape[2]-1-s]
                     
                         if data_mask is not None:
-                            cropped_data_mask[c,(r_div-(f_z*step_z))+s:vol_shape[0]] = \
-                                data_mask[data.shape[0]-1-s,
-                                          (x*vol_shape[1])-ov_x_:((x+1)*vol_shape[1])-ov_x_,
-                                          (y*vol_shape[2])-ov_y_:((y+1)*vol_shape[2])-ov_y_]
+                            cropped_data_mask[c,:,:,(r_div-(f_z*step_z))+s:vol_shape[2],0] = \
+                                data_mask[(x*vol_shape[0])-ov_x_:((x+1)*vol_shape[0])-ov_x_,
+                                          (y*vol_shape[1])-ov_y_:((y+1)*vol_shape[1])-ov_y_,
+                                          data.shape[2]-1-s]
                 c += 1
 
         # To adjust the final volumes in z
-        if (z*step_z)+vol_shape[0] > data.shape[0]:
+        if (z*step_z)+vol_shape[2] > data.shape[2]:
             f_z += 1
 
     print("**** New data shape is: {}".format(cropped_data.shape))
@@ -1035,25 +1035,25 @@ def merge_3D_data_with_overlap(data, o_vol_shape, data_mask=None,
         merged_data_mask = np.zeros((orig_vol_shape))
     ov_map_counter = np.zeros((orig_vol_shape))
 
-    d_num = data.shape[1]
-    h_num = data.shape[2]
-    v_num = data.shape[3]
+    h_num = data.shape[1]
+    v_num = data.shape[2]
+    d_num = data.shape[3]
 
     # Minimun overlap
     if overlap_z == 0:
-        vols_per_z = math.ceil(orig_vol_shape[0]/d_num)
-        excess_z = (vols_per_z*d_num)-orig_vol_shape[0]
+        vols_per_z = math.ceil(orig_vol_shape[2]/d_num)
+        excess_z = (vols_per_z*d_num)-orig_vol_shape[2]
         step_z = d_num-int(excess_z/(vols_per_z-1))
         last_z = excess_z%(vols_per_z-1) 
         r_div = d_num-last_z 
     else:
         overlap_z = 1-overlap_z
-        vols_per_z = math.ceil(orig_vol_shape[0]/(d_num*overlap_z))
+        vols_per_z = math.ceil(orig_vol_shape[2]/(d_num*overlap_z))
         step_z = int(d_num*overlap_z)
-        r_div = int(d_num-(orig_vol_shape[0]%(d_num*overlap_z)))
+        r_div = int(d_num-(orig_vol_shape[2]%(d_num*overlap_z)))
 
-    vols_per_x = math.ceil(orig_vol_shape[1]/h_num)
-    vols_per_y = math.ceil(orig_vol_shape[2]/v_num) 
+    vols_per_x = math.ceil(orig_vol_shape[0]/h_num)
+    vols_per_y = math.ceil(orig_vol_shape[1]/v_num) 
     
     if r_div != 0:
         print("WARNING: Is assumed that the last {} slices in z have been filled"
@@ -1061,8 +1061,8 @@ def merge_3D_data_with_overlap(data, o_vol_shape, data_mask=None,
               "discarded".format(r_div))
 
     # Calculating overlap
-    ov_x = (h_num*vols_per_x)-orig_vol_shape[1]
-    ov_y = (v_num*vols_per_y)-orig_vol_shape[2]
+    ov_x = (h_num*vols_per_x)-orig_vol_shape[0]
+    ov_y = (v_num*vols_per_y)-orig_vol_shape[1]
 
     c = 0
     f_z = 0
@@ -1071,38 +1071,38 @@ def merge_3D_data_with_overlap(data, o_vol_shape, data_mask=None,
             for y in range(vols_per_y):     
                 ov_x_ = ov_x if x != 0 else 0
                 ov_y_ = ov_y if y != 0 else 0
-                if (z*step_z)+d_num < orig_vol_shape[0]:
-                    merged_data[z*step_z:(z*step_z)+d_num, 
-                                (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_, 
-                                (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] +=  data[c]
+                if (z*step_z)+d_num < orig_vol_shape[2]:
+                    merged_data[(x*h_num)-ov_x_:((x+1)*h_num)-ov_x_, 
+                                (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_,
+                                z*step_z:(z*step_z)+d_num] += data[c]
    
                     if data_mask is not None: 
-                        merged_data_mask[z*step_z:(z*step_z)+d_num,
-                                         (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
-                                         (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] += \
+                        merged_data_mask[(x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
+                                         (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_,
+                                         z*step_z:(z*step_z)+d_num] += \
                                             data_mask[c]
 
-                    ov_map_counter[z*step_z:(z*step_z)+d_num,
-                                   (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
-                                   (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] += 1
+                    ov_map_counter[(x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
+                                   (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_,
+                                   z*step_z:(z*step_z)+d_num] += 1
                 else:
-                    merged_data[z*step_z:orig_vol_shape[0],
-                                (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
-                                (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] +=  \
-                        data[c, 0:r_div-(f_z*step_z)] 
+                    merged_data[(x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
+                                (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_,
+                                z*step_z:orig_vol_shape[2]] +=  \
+                        data[c,:,:,0:r_div-(f_z*step_z)] 
                     if data_mask is not None:
-                        merged_data_mask[z*step_z:orig_vol_shape[0],
-                                         (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
-                                         (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] +=  \
-                            data_mask[c, 0:r_div-(f_z*step_z)]
+                        merged_data_mask[(x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
+                                         (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_,
+                                         z*step_z:orig_vol_shape[2]] +=  \
+                            data_mask[c,:,:,0:r_div-(f_z*step_z)]
 
-                    ov_map_counter[z*step_z:orig_vol_shape[0],
-                                   (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
-                                   (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] += 1
+                    ov_map_counter[(x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
+                                   (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_,
+                                   z*step_z:orig_vol_shape[2]] += 1
                 c += 1
                     
         # To adjust the final volumes in z
-        if (z*step_z)+d_num > orig_vol_shape[0]:
+        if (z*step_z)+d_num > orig_vol_shape[2]:
             f_z += 1
 
     print("**** New data shape is: {}".format(merged_data.shape))
@@ -1212,16 +1212,16 @@ def check_binary_masks(path):
                 .format(os.path.join(path, ids[i]), values))
 
 
-def prepare_3D_volume_data(X, Y, shape=(82, 256, 256, 1), overlap=False,
+def prepare_3D_volume_data(X, Y, shape=(256, 256, 82), overlap=False,
                            use_rest=True, ov=0.5):                          
     """Prepare given data into 3D subvolumes to train a 3D network.
 
        Args:
-            X (Numpy 4D array): data. E.g. (image_number, x, y, channels).      
+            X (Numpy 4D array): data. E.g. (x, y, image_number, channels).      
                                                                                 
-            Y (Numpy 4D array): mask data.  E.g. (image_number, x, y, channels).
+            Y (Numpy 4D array): mask data.  E.g. (x, y, image_number, channels).
                                                                                 
-            shape (4D int tuple, optional): dimension of the desired images.           
+            shape (3D int tuple, optional): dimension of the desired images.           
 
             overlap (bool, optional): flag to create subvolumes with overlap
             forcing to use all the data. If False as much as possible subvolumes 
@@ -1251,11 +1251,12 @@ def prepare_3D_volume_data(X, Y, shape=(82, 256, 256, 1), overlap=False,
         raise ValueError("The shape of X and Y must be the same")               
     if X.ndim != 4 or Y.ndim != 4:                                              
         raise ValueError("X or Y must be a 4D Numpy array")                     
+    print("shape: {}".format(shape))
     if len(shape) != 4:
         raise ValueError("'shape' must be 4D")
     
     # Calculate the rest                                                        
-    rest = X.shape[0] % shape[0]                                                
+    rest = X.shape[2] % shape[2]                                                
 
     mirrored_subvols = 0
     if overlap:
@@ -1272,33 +1273,31 @@ def prepare_3D_volume_data(X, Y, shape=(82, 256, 256, 1), overlap=False,
               " the last {} image(s) will be unused".format(rest))
                                                                                 
     # Calculate crops are per axis                                      
-    h_num = int(X.shape[1]/shape[1])
-    v_num = int(X.shape[2]/shape[2])
+    h_num = int(X.shape[0]/shape[0])
+    v_num = int(X.shape[1]/shape[1])
     crops_per_image = h_num*v_num                                               
                                                                                 
-    num_sub_volum = int(math.floor(X.shape[0]/shape[0])*crops_per_image)             
-    print("{} subvolumes of {} will be created".format(num_sub_volum,           
-          shape[-3:]))                                                          
+    num_sub_volum = int(math.floor(X.shape[2]/shape[2])*crops_per_image)             
                                                                                 
-    X_prep = np.zeros((num_sub_volum, ) + shape)                                
-    Y_prep = np.zeros((num_sub_volum, ) + shape)                                
+    X_prep = np.zeros((num_sub_volum, ) + shape)
+    Y_prep = np.zeros((num_sub_volum, ) + shape)
                                                                                 
     # Reshape the data to generate desired 3D subvolumes                        
     print("Generating 3D subvolumes . . .")                                     
     print("Converting {} data to {}".format(X.shape, X_prep.shape))             
     print("Filling [0:{}] subvolumes with [0:{}] images . . ."                  
-          .format(crops_per_image-1, shape[0]-1))                               
+          .format(crops_per_image-1, shape[2]-1))                               
     subvolume = 0                                                               
     vol_slice = 0                                                               
     total_subvol_filled = 0                                                     
-    for k in range(X.shape[0]-rest):                                                 
+    for k in range(X.shape[2]-rest):                                                 
         for i in range(h_num):                                                  
             for j in range(v_num):                                              
-                im = X[k, (i*shape[1]):((i+1)*shape[2]),(j*shape[1]):((j+1)*shape[2])]
-                mask = Y[k, (i*shape[1]):((i+1)*shape[2]),(j*shape[1]):((j+1)*shape[2])]
+                im = X[(i*shape[0]):((i+1)*shape[1]),(j*shape[0]):((j+1)*shape[1]),k]
+                mask = Y[(i*shape[0]):((i+1)*shape[1]),(j*shape[0]):((j+1)*shape[1]),k]
                   
-                X_prep[subvolume, vol_slice] = im                               
-                Y_prep[subvolume, vol_slice] = mask                             
+                X_prep[subvolume, ..., vol_slice, :] = im                               
+                Y_prep[subvolume, ..., vol_slice, :] = mask                             
                                                                                 
                 subvolume += 1                                                  
                 if subvolume == (total_subvol_filled+crops_per_image):
@@ -1307,7 +1306,7 @@ def prepare_3D_volume_data(X, Y, shape=(82, 256, 256, 1), overlap=False,
                                                                                 
                     # Reached this point we will have filled part of            
                     # the subvolumes                                            
-                    if vol_slice == shape[0] and (k+1) != (X.shape[0]-rest):                                   
+                    if vol_slice == shape[2] and (k+1) != (X.shape[2]-rest):                                   
                         total_subvol_filled += crops_per_image                  
                         subvolume = total_subvol_filled
                         vol_slice = 0                                           
@@ -1315,14 +1314,14 @@ def prepare_3D_volume_data(X, Y, shape=(82, 256, 256, 1), overlap=False,
                         print("Filling [{}:{}] subvolumes with [{}:{}] "        
                               "images . . .".format(total_subvol_filled,        
                               total_subvol_filled+crops_per_image-1, k+1,       
-                              k+shape[0]-1))
+                              k+shape[2]-1))
     print("Data prepared shape: {}".format(X_prep.shape))
 
     if rest != 0 and use_rest:
-        if rest*2 < shape[0]:
+        if rest*2 < shape[2]:
             print("As mirroring will be used at least the rest of the images need"
                   " to be half of the size in z provided. Rest={} ; z-images={}"
-                  .format(rest, shape[0]))
+                  .format(rest, shape[2]))
         else:
             mirrored_subvols = crops_per_image
             print("Last {} images will be used to create {} more subvolumes "
@@ -1331,20 +1330,20 @@ def prepare_3D_volume_data(X, Y, shape=(82, 256, 256, 1), overlap=False,
             X_prep2 = np.zeros((crops_per_image, ) + shape)
             Y_prep2 = np.zeros((crops_per_image, ) + shape)
             
-            img_to_mirror = shape[0]-rest
+            img_to_mirror = shape[2]-rest
             subvolume = 0
             vol_slice = 0
             s = 0
-            for k in range(X.shape[0]-rest, X.shape[0]+img_to_mirror):
-                if k >= X.shape[0]:
+            for k in range(X.shape[2]-rest, X.shape[2]+img_to_mirror):
+                if k >= X.shape[2]:
                     s += 1
                 for i in range(h_num):
                     for j in range(v_num):
-                        im = X[k-s, (i*shape[1]):((i+1)*shape[2]),(j*shape[1]):((j+1)*shape[2])]
-                        mask = Y[k-s, (i*shape[1]):((i+1)*shape[2]),(j*shape[1]):((j+1)*shape[2])]
+                        im = X[k-s, (i*shape[0]):((i+1)*shape[1]),(j*shape[0]):((j+1)*shape[1])]
+                        mask = Y[k-s, (i*shape[0]):((i+1)*shape[1]),(j*shape[0]):((j+1)*shape[1])]
 
-                        X_prep2[subvolume, vol_slice] = im
-                        Y_prep2[subvolume, vol_slice] = mask
+                        X_prep2[subvolume, ..., vol_slice] = im
+                        Y_prep2[subvolume, ..., vol_slice] = mask
                         
                         subvolume += 1
                         if subvolume == crops_per_image:
