@@ -5,10 +5,10 @@ import math
 import os
 from tqdm import tqdm
 from skimage.io import imread
-from util_inv import array_to_img, img_to_array, save_img
+from util import array_to_img, img_to_array, save_img
 from scipy.ndimage import rotate
 from scipy.ndimage.interpolation import shift
-from data_manipulation_inv import img_to_onehot_encoding
+from data_manipulation import img_to_onehot_encoding
 from PIL import Image
 import imageio
 from imgaug import augmenters as iaa
@@ -26,7 +26,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                  hist_eq=False, flip=False, rotation=False, elastic=False,
                  g_blur=False, gamma_contrast=False, softmax_out=False, val=False, 
                  prob_map=None):
-        """ImageDataGenerator constructor.
+        """ImageDataGenerator constructor. Based on transformations from 
+           https://github.com/aleju/imgaug.
                                                                                 
        Args:                                                                    
             X (Numpy 5D array): data. E.g. (image_number, z, x, y, channels).
@@ -49,17 +50,20 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             
             da (bool, optional): flag to activate the data augmentation.
             
-            rotation_range (int, optional): degrees of rotation from 0. It must 
-            be les equal 180. 
-                
-            square_rotations (bool, optional): flag to make square rotations of
-            90º, -90º and 180º instead of using 'rotation_range'.
-            
+            hist_eq (bool, optional): flag to make histogram equalization on 
+            images.
+
             flip (bool, optional): flag to activate flips.
         
-            shift_range (float, optional): range to make a shift. It must be a 
-            number between 0 and 1. 
-    
+            rotation (bool, optional): flag to make 90º, 180º or 270º rotations.
+
+            elastic (bool, optional): flag to make elastic deformations.
+            
+            g_blur (bool, optional): flag to insert gaussian blur on the images.
+
+            gamma_contrast (bool, optional): flag to insert gamma constrast 
+            changes on images. 
+
             softmax_out (bool, optional): flag to advice that the output of the
             network has in the last layer a softmax activation or one channel
             per class. If so one-hot encoded will be done on the ground truth.
