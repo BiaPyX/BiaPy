@@ -141,7 +141,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.da_options.append(iaa.Sometimes(0.5,iaa.ElasticTransformation(alpha=(0, 5.0), sigma=0.25)))
 
             self.da_names.append("elastic")
-            self.da_forced.append(iaa.ElasticTransformation(alpha=(0, 5.0), sigma=0.25))
+            self.da_forced.append(iaa.ElasticTransformation(alpha=(0, 5.0), sigma=4))
 
         if g_blur:
             self.da_options.append(iaa.Sometimes(0.5,iaa.GaussianBlur(sigma=(0.0, 2.0))))
