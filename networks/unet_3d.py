@@ -44,7 +44,7 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
             optimizer (str, optional): optimizer used to minimize the loss
             function. Posible options: 'sgd' or 'adam'.
 
-            lr (float, optional): learning .dd(Input(image_shape))
+            lr (float, optional): learning rate value.
 
        Returns:
             model (Keras model): model containing the U-Net created.

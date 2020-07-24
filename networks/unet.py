@@ -8,7 +8,8 @@ from metrics import binary_crossentropy_weighted, jaccard_index, \
 def U_Net(image_shape, activation='elu', numInitChannels=16, fixed_dropout=0.0, 
           spatial_dropout=False, loss_type="bce", optimizer="sgd", lr=0.001,
           fine_tunning=False):
-    """Create the U-Net
+
+    """Create the U-Net.
 
        Args:
             image_shape (3D tuple): dimensions of the input image.
