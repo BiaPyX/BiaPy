@@ -20,8 +20,8 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
 
             activation (str, optional): Keras available activation type.
 
-            feature_maps (int, optional): feature maps to use on each level. Must
-            have the same length as the depth+1.
+            feature_maps (array of ints, optional): feature maps to use on each 
+            level. Must have the same length as the depth+1.
         
             depth (int, optional): depth of the network.
 
