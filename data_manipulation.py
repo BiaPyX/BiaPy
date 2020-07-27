@@ -705,8 +705,8 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
     ov_x = (vol_shape[1]*vols_per_x)-data.shape[1]
     ov_y = (vol_shape[2]*vols_per_y)-data.shape[2]
    
-    print("{},{},{} patches per z,x,y axis"
-          .format(vols_per_z, vols_per_x, vols_per_y))
+    print("{},{},{} patches per x,y,z axis"
+          .format(vols_per_x, vols_per_y, vols_per_z))
     
     if r_div != 0:
         print("WARNING: The last volumes in z will be filled with the last "

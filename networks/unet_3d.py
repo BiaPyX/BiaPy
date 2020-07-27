@@ -1,10 +1,9 @@
 import tensorflow as tf
-from tensorflow.keras.layers import Dropout, Lambda, SpatialDropout3D, Conv3D,\
+from tensorflow.keras.layers import Dropout, SpatialDropout3D, Conv3D,\
                                     Conv3DTranspose, MaxPooling3D, concatenate,\
                                     ELU, BatchNormalization, Activation, \
                                     ZeroPadding3D
 from tensorflow.keras import Model, Input
-from tensorflow.keras.activations import relu
 from metrics import binary_crossentropy_weighted, jaccard_index, \
                     weighted_bce_dice_loss
 
@@ -104,7 +103,7 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
         x = Conv3DTranspose(feature_maps[i], (2, 2, 2), 
                             strides=(2, 2, 2), padding='same') (x)
 
-        # Adjust shape if need introducing zero padding to allow the concatenation
+        # Adjust shape introducing zero padding to allow the concatenation
         a = x.shape[1]
         b = l[i].shape[1]
         s = a - b

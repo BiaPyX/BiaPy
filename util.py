@@ -475,7 +475,6 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
 
             prefix (str, optional): path to store the charts generated.                 
     """   
-
     if prefix is "":
         p_x = "x_"
         p_y = "y_"
@@ -524,7 +523,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
                 for j in range(Y.shape[3]):
                     im = Image.fromarray(Y[i,:,:,j,0]*v)
                     im = im.convert('L')
-                    im.save(os.path.join(mask_dir, p_x + str(i).zfill(d) + "_" \
+                    im.save(os.path.join(mask_dir, p_y + str(i).zfill(d) + "_" \
                                          + str(j).zfill(d) + ".png"))
         else:
             d = len(str(Y.shape[0]))
