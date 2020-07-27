@@ -455,6 +455,10 @@ def round_predictions(prd, nb_channels_out, thresholds):
 
 def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, 
                              softmax_output=True):
+    """ Outputs the mean prediction of a given image generating its 8 possible 
+        rotations/flips and blending them.
+    """
+
     aug_img = []
         
     # Convert into square image to make the rotations properly
@@ -520,15 +524,19 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1,
 
 def smooth_3d_predictions(vol, pred_func, batch_size_value=1, 
                           softmax=True):
+    """ Outputs the mean prediction of a given subvolume generating its 16 
+        possible rotations/flips and blending them.
+    """
+
     aug_vols = []
         
     # Convert into square image to make the rotations properly
-    pad_to_square = vol.shape[1] - vol.shape[2]
+    pad_to_square = vol.shape[0] - vol.shape[1]
    
     if pad_to_square < 0:
-        volume = np.pad(vol, [(0, 0), (abs(pad_to_square), 0), (0, 0), (0, 0)], 'reflect') 
+        volume = np.pad(vol, [(abs(pad_to_square),0), (0,0), (0,0), (0,0)], 'reflect') 
     else:
-        volume = np.pad(vol, [(0, 0), (0, 0), (pad_to_square, 0), (0, 0)], 'reflect')
+        volume = np.pad(vol, [(0,0), (pad_to_square,0), (0,0), (0,0)], 'reflect')
     
     # Make 16 different combinations of the volume 
     aug_vols.append(volume) 
@@ -555,11 +563,11 @@ def smooth_3d_predictions(vol, pred_func, batch_size_value=1,
     aug_vols = np.array(aug_vols)
     decoded_aug_vols = np.zeros(aug_vols.shape)
 
-    for i in range(aug_vols.shape[0]):
+    for i in range(aug_vols.shape[2]):
         if softmax == True:
-            decoded_aug_vols[i] = np.expand_dims(pred_func(np.expand_dims(aug_vols[i], 0))[...,1], -1)
+            decoded_aug_vols[:,:,i] = np.expand_dims(pred_func(np.expand_dims(aug_vols[:,:,i], 0))[...,1], -1)
         else:
-            decoded_aug_vols[i] = pred_func(np.expand_dims(aug_vols[i], 0))
+            decoded_aug_vols[:,:,i] = pred_func(np.expand_dims(aug_vols[:,:,i], 0))
 
     # Undo the combinations of the volume
     out_vols = []
@@ -584,20 +592,20 @@ def smooth_3d_predictions(vol, pred_func, batch_size_value=1,
     out_vols = np.array(out_vols) 
     if pad_to_square != 0:
         if pad_to_square < 0:
-            out = np.zeros((out_vols.shape[0], volume.shape[0], 
-                            volume.shape[1]+pad_to_square, 
-                            volume.shape[2], volume.shape[3]))
+            out = np.zeros((out_vols.shape[0], volume.shape[0]+pad_to_square, 
+                            volume.shape[1], volume.shape[2], volume.shape[3]))
         else:
-            out = np.zeros((out_vols.shape[0], volume.shape[0], volume.shape[1],
-                            volume.shape[2]-pad_to_square, volume.shape[3]))
+            out = np.zeros((out_vols.shape[0], volume.shape[0], 
+                            volume.shape[1]-pad_to_square, volume.shape[2], 
+                            volume.shape[3]))
     else:
         out = np.zeros(out_vols.shape)
 
     # Undo the padding
-    for i in range(out_vols.shape[0]):
+    for i in range(out_vols.shape[2]):
         if pad_to_square < 0:
-            out[i] = out_vols[i,:,abs(pad_to_square):,:,:]
+            out[i] = out_vols[i,abs(pad_to_square):,:,:,:]
         else:
-            out[i] = out_vols[i,:,:,abs(pad_to_square):,:]
+            out[i] = out_vols[i,:,abs(pad_to_square):,:,:]
 
     return np.mean(out, axis=0)
