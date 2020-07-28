@@ -12,7 +12,7 @@ def ResUNet_3D(image_shape, activation='elu', k_init='he_normal', drop_value=0.0
                batch_norm=False, feature_maps=[16,32,64,128,256], depth=4,
                loss_type="bce", optimizer="sgd", lr=0.001):
 
-    """Create the ResU-Net (with proper residual add).
+    """Create 3D Residual_U-Net.
 
        Args:
             image_shape (array of 3 int): dimensions of the input image.
