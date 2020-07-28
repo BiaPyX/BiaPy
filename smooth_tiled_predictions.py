@@ -563,11 +563,11 @@ def smooth_3d_predictions(vol, pred_func, batch_size_value=1,
     aug_vols = np.array(aug_vols)
     decoded_aug_vols = np.zeros(aug_vols.shape)
 
-    for i in range(aug_vols.shape[2]):
+    for i in range(aug_vols.shape[0]):
         if softmax == True:
-            decoded_aug_vols[:,:,i] = np.expand_dims(pred_func(np.expand_dims(aug_vols[:,:,i], 0))[...,1], -1)
+            decoded_aug_vols[i] = np.expand_dims(pred_func(np.expand_dims(aug_vols[i], 0))[...,1], -1)
         else:
-            decoded_aug_vols[:,:,i] = pred_func(np.expand_dims(aug_vols[:,:,i], 0))
+            decoded_aug_vols[i] = pred_func(np.expand_dims(aug_vols[i], 0))
 
     # Undo the combinations of the volume
     out_vols = []
@@ -602,7 +602,7 @@ def smooth_3d_predictions(vol, pred_func, batch_size_value=1,
         out = np.zeros(out_vols.shape)
 
     # Undo the padding
-    for i in range(out_vols.shape[2]):
+    for i in range(out_vols.shape[0]):
         if pad_to_square < 0:
             out[i] = out_vols[i,abs(pad_to_square):,:,:,:]
         else:
