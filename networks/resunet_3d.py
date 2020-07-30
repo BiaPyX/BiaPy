@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import Dropout, Lambda, SpatialDropout3D, Conv3D, \
                                     Conv3DTranspose, MaxPooling3D, Concatenate,\
-                                    Add, BatchNormalization, ELU
+                                    Add, BatchNormalization, ELU, ZeroPadding3D
 from tensorflow.keras.activations import relu
 from metrics import binary_crossentropy_weighted, jaccard_index, \
                     weighted_bce_dice_loss
@@ -124,7 +124,17 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_value,
         x = level_block(x, depth-1, f_maps, filter_size, activation, k_init, 
                         drop_value, batch_norm, False)                          
         x = Conv3DTranspose(f_maps[depth], (2, 2, 2), strides=(2, 2, 2), padding='same') (x)
+
+        # Adjust shape introducing zero padding to allow the concatenation
+        a = x.shape[1]
+        b = r.shape[1]
+        s = a - b
+        if s > 0:
+            r = ZeroPadding3D(padding=((s,0), (s,0), (s,0))) (r)
+        elif s < 0:
+            x = ZeroPadding3D(padding=((abs(s),0), (abs(s),0), (abs(s),0))) (x)
         x = Concatenate()([r, x])                                               
+
         x = residual_block(x, f_maps[depth], filter_size, activation, k_init,           
                            drop_value, batch_norm, False)                       
     else:                                                                       

@@ -125,11 +125,11 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.trans_made += '_elastic'
             self.imgaug = True
         if g_blur:
-            da_options.append(iaa.Sometimes(0.5,iaa.GaussianBlur(sigma=(0.0, 2.0))))
+            da_options.append(iaa.Sometimes(0.5,iaa.GaussianBlur(sigma=(1.0, 2.0))))
             self.trans_made += '_gblur'
             self.imgaug = True
         if gamma_contrast:
-            da_options.append(iaa.Sometimes(0.5,iaa.GammaContrast((0.5, 2.0))))
+            da_options.append(iaa.Sometimes(0.5,iaa.GammaContrast((1.25, 1.75))))
             self.trans_made += '_gcontrast'
             self.imgaug = True
         self.seq = iaa.Sequential(da_options)
