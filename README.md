@@ -17,11 +17,13 @@ conda env create -f DL_EM_base_env.yml
 ### Choose a template
 In [templates](templates/) directory are located a few different templates that could be used to start your project. Each one is suited to different settings:
 
-- [template.py](templates/template.py): use this template as a baseline to make segmantic segmentation with an 2D U-Net on small datasets.
+- [U-Net_2D_template.py](templates/U-Net_2D_template.py): use this template as a baseline to make segmantic segmentation with an 2D U-Net on small datasets.
+- [Residual_U-Net_2D_template.py](templates/Residual_U-Net_2D_template.py): use this template as a baseline to make segmantic segmentation with a Residual 2D U-Net on small datasets.
+- [U-Net_3D_template.py](templates/U-Net_2D_template.py): use this template as a baseline to make segmantic segmentation with an 3D U-Net on small datasets.
+- [Residual_U-Net_3D_template.py](templates/Residual_U-Net_3D_template.py): use this template as a baseline to make segmantic segmentation with a Residual 3D U-Net on small datasets.
 - [big_data_template.py](templates/big_data_template.py): same as the first, but should be used with large datasets, as it makes use of `flow_from_directory()` instead of `flow()` method. Notice that the dataset directory structure changes.
-- [3D_template.py](templates/3D_template.py): use this template as a baseline to make segmantic segmentation with a 3D U-Net on small datasets.
 
-In case you are interested in reproducing one of the state-of-the-art works implemented in this project, you can use the template prepared on each case: [xiao_template.py](xiao_2018/xiao_template.py), [cheng_template.py](cheng_2017/cheng_template.py), [oztel_template.py](oztel_2017/oztel_template.py) or [casser__template.py](casser_2018/casser_template.py). 
+In case you are interested in reproducing one of the state-of-the-art works implemented in this project, you can use the template prepared on each case: [xiao_template.py](xiao_2018/xiao_template.py), [cheng_template.py](cheng_2017/cheng_template.py), [oztel_template.py](oztel_2017/oztel_template.py) or [casser_template.py](casser_2018/casser_template.py). 
 
 ### Data structure
 
