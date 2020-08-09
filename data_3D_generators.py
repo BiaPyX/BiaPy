@@ -51,12 +51,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             
             shift_range (float, optional): range to make a shift. It must be a 
             number between 0 and 1. 
+
             hist_eq (bool, optional): flag to make histogram equalization on 
             images.
     
-            hist_eq (bool, optional): flag to make histogram equalization on 
-            images.
-
             flip (bool, optional): flag to activate flips.
         
             rotation (bool, optional): flag to make 90º, 180º or 270º rotations.
