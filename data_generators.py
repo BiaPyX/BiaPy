@@ -16,6 +16,11 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator as kerasDA
 from util import array_to_img, img_to_array, do_save_wm, make_weight_map
 from data_manipulation  import img_to_onehot_encoding
 
+import imageio
+from imgaug import augmenters as iaa
+from imgaug.augmentables.segmaps import SegmentationMapsOnImage
+import imgaug as ia
+from imgaug import parameters as iap
 
 class ImageDataGenerator(tf.keras.utils.Sequence):
     """Custom ImageDataGenerator.
@@ -26,11 +31,13 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
     """
 
     def __init__(self, X, Y, batch_size=32, dim=(256,256), n_channels=1, 
-                 shuffle=False, da=True, e_prob=0.0, elastic=False, vflip=False,
-                 hflip=False, rotation90=False, rotation_range=0.0, 
-                 brightness_range=None, median_filter_size=[0, 0], 
-                 random_crops_in_DA=False, crop_length=0, prob_map=False, 
-                 train_prob=None, val=False, softmax_out=False):
+                 shuffle=False, da=True, vflip=False, hflip=False, 
+                 rotation90=False, rotation_range=0.0, brightness_range=None, 
+                 median_filter_size=[0, 0], hist_eq=False, elastic=False, 
+                 g_blur=False, gamma_contrast=False, random_crops_in_DA=False, 
+                 crop_length=0, prob_map=False, train_prob=None, val=False, 
+                 softmax_out=False):
+
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
@@ -51,11 +58,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
             da (bool, optional): to activate the data augmentation. 
 
-            e_prob (float, optional): probability of making elastic
-            transformations. 
-
-            elastic (bool, optional): to make elastic transformations.
-
             vflip (bool, optional): if true vertical flip are made.
 
             hflip (bool, optional): if true horizontal flips are made.
@@ -69,6 +71,13 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
             median_filter_size (int, optional): size of the median filter. If 0 
             no median filter will be applied. 
+
+            hist_eq (bool, optional): flag to make histogram equalization on 
+            images.
+            
+            g_blur (bool, optional): flag to insert gaussian blur on the images.
+            gamma_contrast (bool, optional): flag to insert gamma constrast 
+            changes on images. 
 
             random_crops_in_DA (bool, optional): decide to make random crops in 
             DA (before transformations).
@@ -96,12 +105,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
         self.dim = dim
         self.batch_size = batch_size
-        self.X = X/255 if np.max(X) > 1 else X
-        self.Y = Y/255 if np.max(Y) > 1 else Y
+        self.divide = True if np.max(X) > 1 else False
+        self.X = (X).astype(np.uint8)
+        self.Y = (Y).astype(np.uint8)
         self.n_channels = n_channels
         self.shuffle = shuffle
         self.da = da
-        self.e_prob = e_prob
         self.elastic = elastic
         self.vflip = vflip
         self.hflip = hflip
@@ -126,12 +135,28 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             if rotation90 == True:
                 print("[AUG] Images not square, only 180 rotations will be done.")
 
-        # Create a list which will hold a counter of the number of times a 
-        # transformation is performed. 
-        self.t_counter = [0 ,0 ,0 ,0 ,0 ,0] 
-
         if self.random_crops_in_DA == True:
             self.dim = (self.crop_length, self.crop_length)
+
+        da_options = []
+        self.trans_made = ''
+        if hist_eq:
+            da_options.append(iaa.HistogramEqualization())
+            self.trans_made += '_heq'
+            self.imgaug = True
+        if elastic:
+            da_options.append(iaa.Sometimes(0.5,iaa.ElasticTransformation(alpha=(240, 250), sigma=25, mode="reflect")))
+            self.trans_made += '_elastic' 
+            self.imgaug = True
+        if g_blur:
+            da_options.append(iaa.Sometimes(0.5,iaa.GaussianBlur(sigma=(1.0, 2.0))))
+            self.trans_made += '_gblur'
+            self.imgaug = True
+        if gamma_contrast:
+            da_options.append(iaa.Sometimes(0.5,iaa.GammaContrast((1.25, 1.75))))
+            self.trans_made += '_gcontrast'
+            self.imgaug = True
+        self.seq = iaa.Sequential(da_options)
 
     def __len__(self):
         """Defines the number of batches per epoch."""
@@ -154,8 +179,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
 
-        batch_x = np.empty((len(indexes), *self.dim, self.n_channels))
-        batch_y = np.empty((len(indexes), *self.dim, self.n_channels))
+        batch_x = np.empty((len(indexes), *self.dim, self.n_channels), dtype=np.uint8)
+        batch_y = np.empty((len(indexes), *self.dim, self.n_channels), dtype=np.uint8)
 
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
@@ -172,6 +197,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 batch_x[i], batch_y[i], _ = self.apply_transform(
                     batch_x[i], batch_y[i])
                 
+        # Need to divide before transformations as some imgaug library functions
+        # need uint8 datatype
+        if self.divide:
+            batch_x = batch_x/255
+            batch_y = batch_y/255
+
         if self.softmax_out == True:
             batch_y_ = np.zeros((len(indexes), ) + self.dim + (2,))
             for i in range(len(indexes)):
@@ -180,16 +211,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             batch_y = batch_y_
 
         return batch_x, batch_y
-
-    def print_da_stats(self):
-        """Print the counter of the transformations made in a table."""
-
-        t = Texttable()
-        t.add_rows([['Elastic', 'V. flip', 'H. flip', '90º rot.', '180º rot.',
-                     '270º rot.'], [self.t_counter[0], self.t_counter[1],
-                     self.t_counter[2], self.t_counter[3], self.t_counter[4], 
-                     self.t_counter[5]] ])
-        print(t.draw())
 
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
@@ -240,26 +261,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         transform_string = '' 
         transformed = False
 
-        # Elastic transformation
-        prob = random.uniform(0, 1)
-        if self.elastic == True and prob < self.e_prob:
-
-            if grid == True:
-                self.__draw_grid(trans_image)
-                self.__draw_grid(trans_mask)
-
-            im_concat = np.concatenate((trans_image, trans_mask), axis=2)            
-
-            im_concat_r = elastic_transform(
-                im_concat, im_concat.shape[1]*2, im_concat.shape[1]*0.08,
-                im_concat.shape[1]*0.08)
-
-            trans_image = np.expand_dims(im_concat_r[...,0], axis=-1)
-            trans_mask = np.expand_dims(im_concat_r[...,1], axis=-1)
-            transform_string = '_e'
-            transformed = True
-            self.t_counter[0] += 1
-     
  
         # [0-0.25): vertical flip
         # [0.25-0.5): horizontal flip
@@ -273,14 +274,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             trans_mask = np.flip(trans_mask, 0)
             transform_string = transform_string + '_vf'
             transformed = True 
-            self.t_counter[1] += 1
         # Horizontal flip
         elif self.hflip == True and 0.25 <= prob < 0.5:
             trans_image = np.flip(trans_image, 1)
             trans_mask = np.flip(trans_mask, 1)
             transform_string = transform_string + '_hf'
             transformed = True
-            self.t_counter[2] += 1 
         # Vertical and horizontal flip
         elif self.hflip == True and 0.5 <= prob < 0.75:
             trans_image = np.flip(trans_image, 0)                               
@@ -289,8 +288,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             trans_mask = np.flip(trans_mask, 1)
             transform_string = transform_string + '_hfvf'
             transformed = True
-            self.t_counter[1] += 1
-            self.t_counter[2] += 1
             
         # Free rotation from -range to range (in degrees)
         if self.rotation_range != 0:
@@ -316,28 +313,24 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 trans_mask = np.rot90(trans_mask)
                 transform_string = transform_string + '_r90'
                 transformed = True 
-                self.t_counter[3] += 1
             # 180 degree rotation
             elif self.rotation90 == True and 0.25 <= prob < 0.5:
                 trans_image = np.rot90(trans_image, 2)
                 trans_mask = np.rot90(trans_mask, 2)
                 transform_string = transform_string + '_r180'
                 transformed = True 
-                self.t_counter[4] += 1
             # 270 degree rotation
             elif self.rotation90 == True and 0.5 <= prob < 0.75:
                 trans_image = np.rot90(trans_image, 3)
                 trans_mask = np.rot90(trans_mask, 3)
                 transform_string = transform_string + '_r270'
                 transformed = True 
-                self.t_counter[5] += 1
         else:
             if self.rotation90 == True and 0 <= prob < 0.5:
                 trans_image = np.rot90(trans_image, 2)                          
                 trans_mask = np.rot90(trans_mask, 2)                            
                 transform_string = transform_string + '_r180'                   
                 transformed = True                                              
-                self.t_counter[4] += 1
 
         # Brightness
         if self.brightness_range != [1.0, 1.0]:
@@ -359,6 +352,15 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             trans_image = cv2.medianBlur(trans_image.astype('int16'), mf_size)
             trans_image = np.expand_dims(trans_image, axis=-1).astype('float32') 
             transform_string = transform_string + '_mf' + str(mf_size)
+            transformed = True
+
+        if self.imgaug:
+            segmap = SegmentationMapsOnImage(trans_mask[...,0], shape=trans_mask[...,0].shape)
+            trans_image, t_mask = self.seq(image=trans_image[...,0], segmentation_maps=segmap)
+            trans_mask = t_mask.get_arr()
+            trans_image = np.expand_dims(trans_image, axis=-1)
+            trans_mask = np.expand_dims(trans_mask, axis=-1)
+            transform_string += self.trans_made
             transformed = True
 
         if transformed == False:
@@ -416,12 +418,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
         if self.random_crops_in_DA == True and force_full_images == False:
             batch_x = np.zeros((num_examples, self.crop_length, self.crop_length,
-                                self.X.shape[3]), dtype=np.float32)                                  
+                                self.X.shape[3]), dtype=np.uint8)
             batch_y = np.zeros((num_examples, self.crop_length, self.crop_length,
-                                self.Y.shape[3]), dtype=np.float32)
+                                self.Y.shape[3]), dtype=np.uint8)
         else:
-            batch_x = np.zeros((num_examples,) + self.X.shape[1:], dtype=np.float32)
-            batch_y = np.zeros((num_examples,) + self.Y.shape[1:], dtype=np.float32)
+            batch_x = np.zeros((num_examples,) + self.X.shape[1:], dtype=np.uint8)
+            batch_y = np.zeros((num_examples,) + self.Y.shape[1:], dtype=np.uint8)
 
         if save_to_dir == True:
             prefix = ""
@@ -451,17 +453,16 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             else:
                 batch_x[i] = self.X[pos]
                 batch_y[i] = self.Y[pos]
-
             batch_x[i], batch_y[i], t_str = self.apply_transform(
                 batch_x[i], batch_y[i], grid=grid)
 
             # Save transformed images
             if save_to_dir == True:    
-                im = Image.fromarray(batch_x[i,:,:,0]*255)
+                im = Image.fromarray(batch_x[i,:,:,0])
                 im = im.convert('L')
                 im.save(os.path.join(
                             out_dir, prefix + 'x_' + str(pos) + t_str + ".png"))
-                mask = Image.fromarray(batch_y[i,:,:,0]*255)
+                mask = Image.fromarray(batch_y[i,:,:,0])
                 mask = mask.convert('L')
                 mask.save(os.path.join(
                               out_dir, prefix + 'y_' + str(pos) + t_str + ".png"))
@@ -470,7 +471,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 # selected coordinates to be the center of the crop
                 if self.random_crops_in_DA == True and self.train_prob is not None\
                    and force_full_images == False:
-                    im = Image.fromarray(self.X[pos,:,:,0]*255) 
+                    im = Image.fromarray(self.X[pos,:,:,0]) 
                     im = im.convert('RGB')                                                  
                     px = im.load()                                                          
                         
@@ -494,7 +495,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                                 out_dir, prefix + 'mark_x_' + str(pos) + t_str 
                                 + '.png'))
                    
-                    mask = Image.fromarray(self.Y[pos,:,:,0]*255) 
+                    mask = Image.fromarray(self.Y[pos,:,:,0]) 
                     mask = mask.convert('RGB')                                      
                     px = mask.load()                                              
                         
@@ -519,14 +520,14 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 
                 # Save also the original images if an elastic transformation 
                 # was made
-                if original_elastic == True and '_e' in t_str: 
-                    im = Image.fromarray(self.X[i,:,:,0]*255)
+                if original_elastic == True and '_elastic' in t_str: 
+                    im = Image.fromarray(self.X[pos,:,:,0])
                     im = im.convert('L')
                     im.save(os.path.join(
                                 out_dir, prefix + 'x_' + str(pos) + t_str 
                                 + '_original.png'))
     
-                    mask = Image.fromarray(self.Y[i,:,:,0]*255)
+                    mask = Image.fromarray(self.Y[pos,:,:,0])
                     mask = mask.convert('L')
                     mask.save(os.path.join(
                                   out_dir, prefix + 'y_' + str(pos) + t_str 
