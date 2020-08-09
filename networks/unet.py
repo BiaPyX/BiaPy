@@ -58,9 +58,9 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 512]
     if len(drop_values) != depth+1:
         raise ValueError("'drop_values' dimension must be equal depth+1")
 
-    #dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
-    #inputs = Input(dinamic_dim)
-    x = Input(image_shape)
+    dinamic_dim = (None,)*(len(image_shape)-1) + (1,)                           
+    x = Input(dinamic_dim)                                                      
+    #x = Input(image_shape)                                                     
     inputs = x
         
     if loss_type == "w_bce":
@@ -108,17 +108,7 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 512]
     for i in range(depth-1, -1, -1):
         x = Conv2DTranspose(feature_maps[i], (2, 2), 
                             strides=(2, 2), padding='same') (x)
-
-        # Adjust shape introducing zero padding to allow the concatenation
-        a = x.shape[1]
-        b = l[i].shape[1]
-        s = a - b
-        if s > 0:
-            l[i] = ZeroPadding2D(padding=((s,0), (s,0), (s,0))) (l[i])
-        elif s < 0:
-            x = ZeroPadding2D(padding=((abs(s),0), (abs(s),0), (abs(s),0))) (x)
         x = concatenate([x, l[i]])
-
         x = Conv2D(feature_maps[i], (3, 3), activation=None,
                    kernel_initializer=k_init, padding='same') (x)
         x = BatchNormalization() (x) if batch_norm else x
