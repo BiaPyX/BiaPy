@@ -25,7 +25,7 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 512]
         
             depth (int, optional): depth of the network.
 
-            drop_value (float, optional): dropout value to be fixed. If no
+            drop_values (float, optional): dropout value to be fixed. If no
             value is provided the default behaviour will be to select a
             piramidal value stating from 0.1 and reaching 0.3 value.
 

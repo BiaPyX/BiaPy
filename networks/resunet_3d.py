@@ -8,9 +8,10 @@ from metrics import binary_crossentropy_weighted, jaccard_index, \
                     weighted_bce_dice_loss
 
 
-def ResUNet_3D(image_shape, activation='elu', k_init='he_normal', drop_value=0.0, 
-               batch_norm=False, feature_maps=[16,32,64,128,256], depth=4,
-               loss_type="bce", optimizer="sgd", lr=0.001):
+def ResUNet_3D(image_shape, activation='elu', k_init='he_normal', 
+               drop_values=[0.1,0.1,0.1,0.1,0.1], batch_norm=False, 
+               feature_maps=[16,32,64,128,256], depth=4, loss_type="bce", 
+               optimizer="sgd", lr=0.001):
 
     """Create 3D Residual_U-Net.
 
@@ -21,7 +22,7 @@ def ResUNet_3D(image_shape, activation='elu', k_init='he_normal', drop_value=0.0
 
             k_init (str, optional): Keras available kernel initializer type.
 
-            drop_value (real value, optional): dropout value.
+            drop_values (array of floats, optional): dropout value to be fixed.
 
             batch_norm (bool, optional): use batch normalization.
 
@@ -45,13 +46,15 @@ def ResUNet_3D(image_shape, activation='elu', k_init='he_normal', drop_value=0.0
 
     if len(feature_maps) != depth+1:                                            
         raise ValueError("feature_maps dimension must be equal depth+1")
+    if len(drop_values) != depth+1:
+        raise ValueError("'drop_values' dimension must be equal depth+1")
 
     fm = feature_maps[::-1]
 
     inputs = Input(image_shape)
 
-    x = level_block(inputs, depth, fm, 3, activation, k_init,
-                    drop_value, batch_norm, True)
+    x = level_block(inputs, depth, fm, 3, activation, k_init, drop_values, 
+                    batch_norm, True)
 
     outputs = Conv3D(1, (1, 1, 1), activation='sigmoid') (x)
 
@@ -85,7 +88,7 @@ def ResUNet_3D(image_shape, activation='elu', k_init='he_normal', drop_value=0.0
     return model
 
 
-def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_value,   
+def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values,   
                 batch_norm, first_block):                                       
 
     """Produces a level of the network. It calls itself recursively.
@@ -105,7 +108,7 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_value,
                                                                                 
             k_init (str, optional): Keras available kernel initializer type.    
                                                                                 
-            drop_value (real value, optional): dropout value.                   
+            drop_values (array of floats, optional): dropout value to be fixed.
                                                                                 
             batch_norm (bool, optional): flag to use batch normalization.                       
                                                                                 
@@ -119,10 +122,10 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_value,
                                                                                 
     if depth > 0:                                                               
         r = residual_block(x, f_maps[depth], filter_size, activation, k_init,           
-                           drop_value, batch_norm, first_block)                 
+                           drop_values[depth], batch_norm, first_block)                 
         x = MaxPooling3D((2, 2, 2)) (r)                                         
         x = level_block(x, depth-1, f_maps, filter_size, activation, k_init, 
-                        drop_value, batch_norm, False)                          
+                        drop_values, batch_norm, False)                          
         x = Conv3DTranspose(f_maps[depth], (2, 2, 2), strides=(2, 2, 2), padding='same') (x)
 
         # Adjust shape introducing zero padding to allow the concatenation
@@ -136,10 +139,10 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_value,
         x = Concatenate()([r, x])                                               
 
         x = residual_block(x, f_maps[depth], filter_size, activation, k_init,           
-                           drop_value, batch_norm, False)                       
+                           drop_values[depth], batch_norm, False)                       
     else:                                                                       
         x = residual_block(x, f_maps[depth], filter_size, activation, k_init,           
-                           drop_value, batch_norm, False)                       
+                           drop_values[depth], batch_norm, False)                       
     return x 
 
 
@@ -160,7 +163,7 @@ def residual_block(x, f_maps, filter_size, activation='elu', k_init='he_normal',
                                                                                 
             k_init (str, optional): Keras available kernel initializer type.    
                                                                                 
-            drop_value (real value, optional): dropout value.                   
+            drop_value (float, optional): dropout value to be fixed.
                                                                                 
             bn (bool, optional): use batch normalization.               
                                                                                 
