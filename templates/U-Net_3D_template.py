@@ -209,8 +209,9 @@ feature_maps = [28, 36, 48, 64]
 depth = 3
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
 spatial_dropout = False
-# Fixed value to make the dropout. Ignored if the value is zero
-fixed_dropout_value = 0.0
+# Values to make the dropout with. It's dimension must be equal depth+1. Set to
+# 0 to prevent dropout
+dropout_values = [0.1, 0.1, 0.1, 0.1]
 # Flag to active batch normalization
 batch_normalization = False
 # Kernel type to use on convolution layers
@@ -418,7 +419,7 @@ print("#################################\n"
 
 print("Creating the network . . .")
 model = U_Net_3D(train_3d_desired_shape, activation=activation, depth=depth,
-                 feature_maps=feature_maps, drop_value=fixed_dropout_value,
+                 feature_maps=feature_maps, drop_values=dropout_values,
                  spatial_dropout=spatial_dropout, batch_norm=batch_normalization,
                  k_init=kernel_init, optimizer=optimizer, lr=learning_rate_value)
 

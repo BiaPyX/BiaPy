@@ -62,7 +62,7 @@ from data_manipulation import load_and_prepare_2D_data, crop_data,\
                               check_binary_masks, img_to_onehot_encoding
 from data_generators import keras_da_generator, ImageDataGenerator,\
                             keras_gen_samples
-from networks.unet import U_Net_2D
+from networks.resunet import ResUNet_2D
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from tensorflow.keras.callbacks import EarlyStopping
@@ -232,6 +232,14 @@ median_filter_size = [0, 0]
 rotation_range = 180
 # Flag to make flips on the subvolumes. Available for both Keras and custom DA.
 flips = True
+# Histogram equalization. Option only available in custom DA                    
+hist_eq = False                                                                 
+# Elastic transformations. Option only available in custom DA                   
+elastic = False                                                                 
+# Gaussian blur. Option only available in custom DA                             
+g_blur = False                                                                  
+# Gamma contrast. Option only available in custom DA                            
+gamma_contrast = False   
 
 
 ### Extra train data generation
@@ -288,8 +296,8 @@ depth = 4
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
 spatial_dropout = False
 # Values to make the dropout with. It's dimension must be equal depth+1. Set to
-# None to prevent dropout 
-dropout_values = [0.1, 0.1, 0.2, 0.2, 0.3]
+# 0 to prevent dropout 
+dropout_values = [0.1, 0.1, 0.1, 0.1, 0.1]
 # Flag to active batch normalization
 batch_normalization = False
 # Kernel type to use on convolution layers
@@ -417,7 +425,7 @@ if extra_datasets_mask_list:
     for i in range(len(extra_datasets_mask_list)):
         check_binary_masks(extra_datasets_mask_list[i])
 
-if not softmax_out and custom_da:
+if softmax_out and not custom_da:
     raise ValuError("'custom_da' needed when 'softmax_out' is active")
 
 
@@ -531,15 +539,17 @@ if extra_train_data != 0:
             batch_size_value=batch_size_value, zoom=keras_zoom, 
             w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range,
             brightness_range=brightness_range, rotation_range=rotation_range,
-            hflip=flips, vflip=flips)
+            hflip=flips, vflip=flips, median_filter_size=median_filter_size, 
+            hist_eq=hist_eq, elastic=elastic, g_blur=g_blur, 
+            gamma_contrast=gamma_contrast)
     else:
         # Custom DA generated extra data
         extra_gen_args = dict(
             X=X_train, Y=Y_train, batch_size=batch_size_value,
             dim=(img_height,img_width), n_channels=1, shuffle=True, da=True, 
-            e_prob=0.0, elastic=False, vflip=flips, hflip=flips, 
-            rotation90=False, random_crops_in_DA=random_crops_in_DA, 
-            crop_length=crop_shape[0], rotation_range=rotation_range)
+            elastic=elastic, vflip=flips, hflip=flips, rotation90=False, 
+            random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
+            rotation_range=rotation_range)
 
         extra_generator = ImageDataGenerator(**extra_gen_args)
 
@@ -588,12 +598,13 @@ else:
     data_gen_args = dict(
         X=X_train, Y=Y_train, batch_size=batch_size_value,     
         dim=(img_height,img_width), n_channels=1,              
-        shuffle=shuffle_train_data_each_epoch, da=True, e_prob=0.0, 
-        elastic=False, vflip=flips, hflip=flips, rotation90=False, 
-        rotation_range=rotation_range, brightness_range=brightness_range, 
-        median_filter_size=median_filter_size, 
-        random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
-        prob_map=probability_map, train_prob=train_prob, softmax_out=softmax_out)                            
+        shuffle=shuffle_train_data_each_epoch, da=True, vflip=flips, hflip=flips,
+        rotation90=False, rotation_range=rotation_range,                        
+        brightness_range=brightness_range, median_filter_size=median_filter_size,
+        hist_eq=hist_eq, elastic=elastic, g_blur=g_blur, gamma_contrast=gamma_contrast,
+        random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0],       
+        prob_map=probability_map, train_prob=train_prob, softmax_out=softmax_out)
+
     data_gen_val_args = dict(
         X=X_val, Y=Y_val, batch_size=batch_size_value, 
         dim=(img_height,img_width), n_channels=1, 
@@ -618,12 +629,10 @@ print("#################################\n"
       "#################################\n")
 
 print("Creating the network . . .")
-model = U_Net_2D([img_height, img_width, img_channels], activation=activation,
-                 feature_maps=feature_maps, depth=depth, 
-                 drop_values=dropout_values, spatial_dropout=spatial_dropout,
-                 batch_norm=batch_normalization, k_init=kernel_init,
-                 loss_type=loss_type, optimizer=optimizer, 
-                 lr=learning_rate_value, fine_tunning=fine_tunning)
+model = ResUNet_2D([img_height, img_width, img_channels], activation=activation, 
+                   depth=depth, feature_maps=feature_maps, optimizer=optimizer,
+                   drop_values=dropout_values, batch_norm=batch_normalization, 
+                   k_init=kernel_init, lr=learning_rate_value)
 
 # Check the network created
 model.summary(line_length=150)

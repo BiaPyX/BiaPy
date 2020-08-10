@@ -56,10 +56,9 @@ import numpy as np
 import math
 import time
 import tensorflow as tf
-from data_manipulation import load_and_prepare_2D_data, crop_data,\
-                              merge_data_without_overlap,\
-                              crop_data_with_overlap, merge_data_with_overlap, \
-                              check_binary_masks, img_to_onehot_encoding
+from data_manipulation import load_data_from_dir, merge_data_without_overlap,\
+                              merge_data_with_overlap, check_binary_masks, \
+                              img_to_onehot_encoding
 from data_generators import keras_da_generator, ImageDataGenerator,\
                             keras_gen_samples
 from networks.unet import U_Net_2D
@@ -99,8 +98,12 @@ os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_selected;
 # Main dataset data/mask paths
 train_path = os.path.join(args.data_dir, 'train', 'x')
 train_mask_path = os.path.join(args.data_dir, 'train', 'y')
-test_path = os.path.join(args.data_dir, 'test', 'x')
-test_mask_path = os.path.join(args.data_dir, 'test', 'y')
+val_path = os.path.join(args.data_dir, 'val', 'x')                              
+val_mask_path = os.path.join(args.data_dir, 'val', 'y')                         
+test_path = os.path.join(args.data_dir, 'test', 'x')                            
+test_mask_path = os.path.join(args.data_dir, 'test', 'y')                       
+complete_test_path = os.path.join(args.data_dir, '..', '..', 'test', 'x')       
+complete_test_mask_path = os.path.join(args.data_dir, '..', '..', 'test', 'y')  
 # Percentage of the training data used as validation                            
 perc_used_as_val = 0.1
 # Create the validation data with random images of the training data. If False
@@ -113,89 +116,21 @@ random_val_data = True
 # making the predictions. Be sure to take care of this if you are not going to
 # use "crop_data()" with the arg force_shape, as this function resolves the 
 # problem creating always crops of the same dimension
-img_train_shape = (1024, 768, 1)
-img_test_shape = (1024, 768, 1)
+img_train_shape = (256, 256, 1)
+img_test_shape = (256, 256, 1)
+orig_test_shape = (4096, 4096, 1)                                           
 
 
-### Extra datasets variables
-# Paths, shapes and discard values for the extra dataset used together with the
-# main train dataset, provided by train_path and train_mask_path variables, to 
-# train the network with. If the shape of the datasets differ the best option
-# to normalize them is to make crops ("make_crops" variable)
-extra_datasets_data_list = []
-extra_datasets_mask_list = []
-extra_datasets_data_dim_list = []
-extra_datasets_discard = []
-### Example of use:
-# Path to the data:
-# extra_datasets_data_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'x'))
-# Path to the mask: 
-# extra_datasets_mask_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'y'))
-# Shape of the images:
-# extra_datasets_data_dim_list.append((877, 967, 1))
-# Discard value to apply in the dataset (see "Discard variables" for more details):
-# extra_datasets_discard.append(0.05)                                             
-#
-# Number of crop to take form each dataset to train the network. If 0, the      
-# variable will be ignored                                                      
-num_crops_per_dataset = 0
-
-
-### Crop variables
-# Shape of the crops
-crop_shape = (256, 256, 1)
-# Flag to make crops on the train data
-make_crops = True
-# Flag to check the crops. Useful to ensure that the crops have been made 
-# correctly. Note: if "discard_cropped_images" is True only the run that 
-# prepare the discarded data will check the crops, as the future runs only load 
-# the crops stored by this first run
-check_crop = True 
-# Instead of make the crops before the network training, this flag activates
-# the option to extract a random crop of each train image during data 
-# augmentation (with a crop shape defined by "crop_shape" variable). This flag
-# is not compatible with "make_crops" variable
-random_crops_in_DA = False 
-# NEEDED CODE REFACTORING OF THIS SECTION
-test_ov_crops = 8 # Only active with random_crops_in_DA
-probability_map = False # Only active with random_crops_in_DA                       
-w_foreground = 0.94 # Only active with probability_map
-w_background = 0.06 # Only active with probability_map
-
-
-### Discard variables
-# Flag to activate the discards in the main train data. Only active when 
-# "make_crops" variable is True
-discard_cropped_images = False
-# Percentage of pixels labeled with the foreground class necessary to not 
-# discard the image 
-d_percentage_value = 0.05
-# Path where the train discarded data will be stored to be loaded by future runs 
-# instead of make again the process
-train_crop_discard_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'train', 'x')
-# Path where the train discarded masks will be stored                           
-train_crop_discard_mask_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'train', 'y')
-# The discards are NOT done in the test data, but this will store the test data,
-# which will be cropped, into the pointed path to be loaded by future runs      
-# together with the train discarded data and masks                              
-test_crop_discard_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'test', 'x')
-test_crop_discard_mask_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'test', 'y')
-
-
-### Normalization
-# Flag to normalize the data dividing by the mean pixel value
-normalize_data = False                                                          
-# Force the normalization value to the given number instead of the mean pixel 
-# value
-norm_value_forced = -1                                                          
+### Big data variables                                                          
+data_paths = []                                                                 
+data_paths.append(train_path)                                                   
+data_paths.append(train_mask_path)                                              
+data_paths.append(val_path)                                                     
+data_paths.append(val_mask_path)                                                
+data_paths.append(test_path)                                                    
+data_paths.append(test_mask_path)                                               
+data_paths.append(complete_test_path)                                           
+data_paths.append(complete_test_mask_path)
 
 
 ### Data augmentation (DA) variables
@@ -232,22 +167,6 @@ median_filter_size = [0, 0]
 rotation_range = 180
 # Flag to make flips on the subvolumes. Available for both Keras and custom DA.
 flips = True
-# Histogram equalization. Option only available in custom DA
-hist_eq = False
-# Elastic transformations. Option only available in custom DA 
-elastic = False
-# Gaussian blur. Option only available in custom DA 
-g_blur = False
-# Gamma contrast. Option only available in custom DA 
-gamma_contrast = False
-
-
-### Extra train data generation
-# Number of times to duplicate the train data. Useful when "random_crops_in_DA"
-# is made, as more original train data can be cover
-duplicate_train = 0
-# Extra number of images to add to the train data. Applied after duplicate_train 
-extra_train_data = 0
 
 
 ### Load previously generated model weigths
@@ -261,7 +180,7 @@ fine_tunning = False
 # ID of the previous weigths to load the weigths from to make the fine tunning 
 fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
-weight_files_prefix = 'model.fibsem_'
+weight_files_prefix = 'model.c_human_'
 # Wheter to find the best learning rate plot. If this options is selected the
 # training will stop when 5 epochs are done
 use_LRFinder = False
@@ -296,7 +215,7 @@ depth = 4
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
 spatial_dropout = False
 # Values to make the dropout with. It's dimension must be equal depth+1. Set to
-# 0 to prevent dropout 
+# None to prevent dropout 
 dropout_values = [0.1, 0.1, 0.2, 0.2, 0.3]
 # Flag to active batch normalization
 batch_normalization = False
@@ -425,141 +344,8 @@ if extra_datasets_mask_list:
     for i in range(len(extra_datasets_mask_list)):
         check_binary_masks(extra_datasets_mask_list[i])
 
-if softmax_out and not custom_da:
+if not softmax_out and custom_da:
     raise ValuError("'custom_da' needed when 'softmax_out' is active")
-
-
-print("##########################################\n"
-      "#  PREPARE DATASET IF DISCARD IS ACTIVE  #\n"
-      "##########################################\n")
-
-# The first time the dataset will be prepared for future runs if it is not 
-# created yet
-if discard_cropped_images and make_crops \
-   and not os.path.exists(train_crop_discard_path):
-    # Load data
-    X_train, Y_train, \
-    X_test, Y_test, \
-    orig_test_shape, norm_value, \
-    crops_made = load_and_prepare_2D_data(
-        train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
-        img_test_shape, create_val=False, job_id=args.job_id, crop_shape=crop_shape, 
-        check_crop=check_crop, check_crop_path=check_crop_path, 
-        d_percentage=d_percentage_value)
-
-    # Create folders and save the images for future runs 
-    print("Saving cropped images for future runs . . .")
-    save_img(X=X_train, data_dir=train_crop_discard_path, Y=Y_train,            
-             mask_dir=train_crop_discard_mask_path)                             
-    save_img(X=X_test, data_dir=test_crop_discard_path, Y=Y_test,               
-             mask_dir=test_crop_discard_mask_path)
-
-    del X_train, Y_train, X_test, Y_test
-   
-    # Update shapes 
-    img_train_shape = crop_shape
-    img_test_shape = crop_shape
-    discard_made_run = True
-else:
-    discard_made_run = False
-
-# Disable the crops if the run is not the one that have prepared the discarded 
-# data as it will work with cropped images instead of the original ones, 
-# rewriting the needed images 
-if discard_cropped_images and discard_made_run == False:
-    check_crop = False
-
-# For the rest of runs that are not the first that prepares the dataset when 
-# discard is active some variables must be set as if it would made the crops
-if make_crops and discard_cropped_images:
-    train_path = train_crop_discard_path
-    train_mask_path = train_crop_discard_mask_path
-    test_path = test_crop_discard_path
-    test_mask_path = test_crop_discard_mask_path
-    img_train_shape = crop_shape
-    img_test_shape = crop_shape
-    crops_made = True
-
-
-print("###############\n"
-      "#  LOAD DATA  #\n"
-      "###############\n")
-
-X_train, Y_train, X_val,\
-Y_val, X_test, Y_test,\
-orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(
-    train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
-    img_test_shape, val_split=perc_used_as_val, shuffle_val=random_val_data,
-    e_d_data=extra_datasets_data_list, e_d_mask=extra_datasets_mask_list, 
-    e_d_data_dim=extra_datasets_data_dim_list, e_d_dis=extra_datasets_discard, 
-    num_crops_per_dataset=num_crops_per_dataset, make_crops=make_crops, 
-    crop_shape=crop_shape, check_crop=check_crop, 
-    check_crop_path=check_crop_path)
-
-# Normalize the data
-if normalize_data:
-    if norm_value_forced != -1: 
-        print("Forced normalization value to {}".format(norm_value_forced))
-        norm_value = norm_value_forced
-    else:
-        print("Normalization value calculated: {}".format(norm_value))
-    X_train -= int(norm_value)
-    X_val -= int(norm_value)
-    X_test -= int(norm_value)
-    
-# Crop the data to the desired size
-if make_crops and crops_made:
-    img_width = crop_shape[0]
-    img_height = crop_shape[1]
-    img_channels = crop_shape[2]
-else:                                                                           
-    img_width = img_train_shape[0]
-    img_height = img_train_shape[1]                                               
-    img_channels = img_train_shape[2]
-
-
-print("###########################\n"
-      "#  EXTRA DATA GENERATION  #\n"
-      "###########################\n")
-
-# Duplicate train data N times
-if duplicate_train != 0:
-    X_train = np.vstack([X_train]*duplicate_train)
-    Y_train = np.vstack([Y_train]*duplicate_train)
-    print("Train data replicated {} times. Its new shape is: {}"
-          .format(duplicate_train, X_train.shape))
-
-# Add extra train data generated with DA
-if extra_train_data != 0:
-    if custom_da == False:
-        # Keras DA generated extra data
-
-        extra_x, extra_y = keras_gen_samples(
-            extra_train_data, X_data=X_train, Y_data=Y_train, 
-            batch_size_value=batch_size_value, zoom=keras_zoom, 
-            w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range,
-            brightness_range=brightness_range, rotation_range=rotation_range,
-            hflip=flips, vflip=flips, median_filter_size=median_filter_size, 
-            hist_eq=hist_eq, elastic=elastic, g_blur=g_blur, 
-            gamma_contrast=gamma_contrast)
-    else:
-        # Custom DA generated extra data
-        extra_gen_args = dict(
-            X=X_train, Y=Y_train, batch_size=batch_size_value,
-            dim=(img_height,img_width), n_channels=1, shuffle=True, da=True, 
-            elastic=elastic, vflip=flips, hflip=flips, rotation90=False, 
-            random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
-            rotation_range=rotation_range)
-
-        extra_generator = ImageDataGenerator(**extra_gen_args)
-
-        extra_x, extra_y = extra_generator.get_transformed_samples(
-            extra_train_data, force_full_images=True)
-
-    X_train = np.vstack((X_train, extra_x*255))
-    Y_train = np.vstack((Y_train, extra_y*255))
-    print("{} extra train data generated, the new shape of the train now is {}"\
-          .format(extra_train_data, X_train.shape))
 
 
 print("#######################\n"
@@ -567,60 +353,28 @@ print("#######################\n"
       "#######################\n")
 
 if custom_da == False:                                                          
-    print("Keras DA selected")
-
+    print("Keras DA selected")                                                  
+                                                                                
     # Keras Data Augmentation                                                   
-    train_generator, \
-    val_generator = keras_da_generator(
-        X_train=X_train, Y_train=Y_train, X_val=X_val, Y_val=Y_val, 
-        batch_size_value=batch_size_value, save_examples=aug_examples,
-        out_dir=da_samples_dir, shuffle_train=shuffle_train_data_each_epoch, 
-        shuffle_val=shuffle_val_data_each_epoch, zoom=keras_zoom, 
-        rotation_range=rotation_range, random_crops_in_DA=random_crops_in_DA,
-        crop_length=crop_shape[0], w_shift_r=w_shift_r, h_shift_r=h_shift_r,    
-        shear_range=shear_range, brightness_range=brightness_range,
-        weights_on_data=weights_on_data, weights_path=loss_weight_dir,
-        hflip=flips, vflip=flips)
+    train_generator, val_generator, \                                           
+    X_test_augmented, Y_test_augmented, \                                       
+    W_test_augmented, X_complete_aug, \                                         
+    Y_complete_aug, W_complete_aug, \                                           
+    n_train_samples, n_val_samples, \                                           
+    n_test_samples  = keras_da_generator(                                       
+        ld_img_from_disk=True, data_paths=data_paths,                           
+        target_size=(img_train_shape[0], img_train_shape[1]),                   
+        c_target_size=(orig_test_shape[0], orig_test_shape[1]),         
+        batch_size_value=batch_size_value, save_examples=aug_examples,          
+        out_dir=da_samples_dir, shuffle_train=shuffle_train_data_each_epoch,    
+        shuffle_val=shuffle_val_data_each_epoch, zoom=keras_zoom,               
+        rotation_range=rotation_range, w_shift_r=w_shift_r, h_shift_r=h_shift_r,
+        shear_range=shear_range, brightness_range=brightness_range,             
+        weights_on_data=weights_on_data, weights_path=loss_weight_dir,          
+        hflip=flips, vflip=flips)                                               
 else:                                                                           
-    print("Custom DA selected")
-
-    # Calculate the probability map per image
-    train_prob = None
-    if probability_map:
-        prob_map_file = os.path.join(prob_map_dir, 'prob_map.npy')
-        if os.path.exists(prob_map_dir):
-            train_prob = np.load(prob_map_file)
-        else:
-            train_prob = calculate_2D_volume_prob_map(
-                Y_train, w_foreground, w_background, save_file=prob_map_file)
-
-    # Custom Data Augmentation                                                  
-    data_gen_args = dict(
-        X=X_train, Y=Y_train, batch_size=batch_size_value,     
-        dim=(img_height,img_width), n_channels=1,              
-        shuffle=shuffle_train_data_each_epoch, da=True, vflip=flips, hflip=flips, 
-        rotation90=False, rotation_range=rotation_range, 
-        brightness_range=brightness_range, median_filter_size=median_filter_size, 
-        hist_eq=hist_eq, elastic=elastic, g_blur=g_blur, gamma_contrast=gamma_contrast, 
-        random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
-        prob_map=probability_map, train_prob=train_prob, softmax_out=softmax_out)                            
-    data_gen_val_args = dict(
-        X=X_val, Y=Y_val, batch_size=batch_size_value, 
-        dim=(img_height,img_width), n_channels=1, 
-        shuffle=shuffle_val_data_each_epoch, da=False, 
-        random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
-        val=True, softmax_out=softmax_out)
-    train_generator = ImageDataGenerator(**data_gen_args)                       
-    val_generator = ImageDataGenerator(**data_gen_val_args)                     
-                                                                                
-    # Generate examples of data augmentation                                    
-    if aug_examples:                                                    
-        train_generator.get_transformed_samples(
-            10, save_to_dir=True, train=False, out_dir=da_samples_dir)
-                                                                                
-if random_crops_in_DA:
-    img_width = crop_shape[0]
-    img_height = crop_shape[1]
+    print("Custom DA selected")                                                 
+    # NOT IMPLEMENTED YET #  
 
 
 print("#################################\n"
@@ -651,17 +405,24 @@ if load_previous_weights == False:
    
     if use_LRFinder:
         print("Training just for 10 epochs . . .")
+        results = model.fit_generator(
+            train_generator, validation_data=val_generator,
+            validation_steps=math.ceil(n_val_samples/batch_size_value),
+            steps_per_epoch=math.ceil(n_train_samples/batch_size_value),
+            epochs=epochs_value,
+            callbacks=[earlystopper, checkpointer, time_callback])
+
         results = model.fit(x=train_generator, validation_data=val_generator,
-            validation_steps=math.ceil(X_val.shape[0]/batch_size_value),
-            steps_per_epoch=math.ceil(X_train.shape[0]/batch_size_value),
+            validation_steps=math.ceil(n_val_samples/batch_size_value),
+            steps_per_epoch=math.ceil(n_train_samples/batch_size_value),
             epochs=5, callbacks=[lr_finder])
 
         print("Finish LRFinder. Check the plot in {}".format(lrfinder_dir))
         sys.exit(0)
     else:
         results = model.fit(x=train_generator, validation_data=val_generator,
-            validation_steps=math.ceil(X_val.shape[0]/batch_size_value),
-            steps_per_epoch=math.ceil(X_train.shape[0]/batch_size_value),
+            validation_steps=math.ceil(n_val_samples/batch_size_value),
+            steps_per_epoch=math.ceil(n_train_samples/batch_size_value),
             epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
@@ -670,73 +431,69 @@ else:
     model.load_weights(h5_file)
 
 
-print("################################\n"
-      "#  PREPARE DATA FOR INFERENCE  #\n"
-      "################################\n")
-
-# Prepare test data for its use
-Y_test /= 255 if np.max(Y_test) > 2 else Y_test
-X_test /= 255 if np.max(X_test) > 2 else X_test
-if softmax_out:
-    Y_test_one_hot = np.zeros(Y_test.shape[:3] + (2,))
-    for i in range(Y_test.shape[0]):
-        Y_test_one_hot[i] = np.asarray(img_to_onehot_encoding(Y_test[i]))
-    Y_test = Y_test_one_hot
-
-
 print("##########################\n"
       "#  INFERENCE (per crop)  #\n"
       "##########################\n")
 
-if random_crops_in_DA:
-    X_test, Y_test = crop_data_with_overlap(
-        X_test, Y_test, crop_shape[0], test_ov_crops)
-
-print("Evaluating test data . . .")
-score_per_crop = model.evaluate(
-    X_test, Y_test, batch_size=batch_size_value, verbose=1)
-loss_per_crop = score_per_crop[0]
+print("Evaluating test data . . .")                                             
+if loss_type == "w_bce":                                                        
+    gen = combine_generators(X_test_augmented, Y_test_augmented, W_test_augmented)
+    score_per_crop = model.evaluate(                                                     
+        gen, steps=math.ceil(n_test_samples/batch_size_value), verbose=1)       
+else:                                                                           
+    score_per_crop = model.evaluate(                                                     
+        zip(X_test_augmented, Y_test_augmented),                                
+        steps=math.ceil(n_test_samples/batch_size_value), verbose=1)            
+loss_per_crop = score_per_crop[0]                                               
 jac_per_crop = score_per_crop[1]
-
-print("Making the predictions on test data . . .")
-preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
+                                                                                
+X_test_augmented.reset()                                                        
+Y_test_augmented.reset()                                                        
+                                                                                
+print("Making the predictions on test data . . .")                              
+if loss_type == "w_bce":                                                        
+    gen = combine_generators(X_test_augmented, Y_test_augmented, W_test_augmented)
+    preds_test = model.predict(
+        gen, steps=math.ceil(n_test_samples/batch_size_value), 
+        batch_size=batch_size_value, verbose=1)       
+else:                                                                           
+    preds_test = model.predict(                                                 
+        zip(X_test_augmented, Y_test_augmented), 
+        steps=math.ceil(n_test_samples/batch_size_value), 
+        batch_size=batch_size_value, verbose=1) 
 
 if softmax_out:
     preds_test = np.expand_dims(preds_test[...,1], -1)
-    Y_test = np.expand_dims(Y_test[...,1], -1)
+
+
+print("################\n"                              
+      "#  Load Y_test #\n"
+      "################\n")
+
+# Load Y_test to calculate the metrics                                          
+print("Loading test masks to make the predictions . . .")                       
+Y_test = load_data_from_dir(os.path.join(test_mask_path, 'y'),                  
+    (img_test_shape[1], img_test_shape[0], img_test_shape[2]))                  
+Y_test = (Y_test/255).astype(np.uint8)   
 
 
 print("########################################\n"
       "#  Metrics (per image, merging crops)  #\n"
       "########################################\n")
 
-# Merge crops
-if make_crops or (random_crops_in_DA and test_ov_crops == 1):
-    h_num = math.ceil(orig_test_shape[1]/preds_test.shape[1])
-    v_num = math.ceil(orig_test_shape[2]/preds_test.shape[2])
-
-    print("Reconstruct preds_test . . .")
-    preds_test = merge_data_without_overlap(
-        preds_test, math.ceil(preds_test.shape[0]/(h_num*v_num)),
-        out_shape=[h_num, v_num], grid=False)
-    print("Reconstruct X_test . . .")
-    X_test = merge_data_without_overlap(
-        X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
-        out_shape=[h_num, v_num], grid=False)
-    print("Reconstruct Y_test . . .")
-    Y_test = merge_data_without_overlap(
-        Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
-        out_shape=[h_num, v_num], grid=False)
-elif random_crops_in_DA and test_ov_crops > 1:
-    print("Reconstruct X_test . . .")
-    X_test = merge_data_with_overlap(
-        X_test, orig_test_shape, crop_shape[0], test_ov_crops)
-    print("Reconstruct Y_test . . .")
-    Y_test = merge_data_with_overlap(
-        Y_test, orig_test_shape, crop_shape[0], test_ov_crops)
-    print("Reconstruct preds_test . . .")
-    preds_test = merge_data_with_overlap(
-        preds_test, orig_test_shape, crop_shape[0], test_ov_crops)
+# Calculate number of crops per dimension to reconstruct the full images        
+h_num = math.ceil(orig_test_shape[0]/preds_test.shape[1])                   
+v_num = math.ceil(orig_test_shape[1]/preds_test.shape[2])                   
+                                                                                
+# Reconstruct the predict and Y_test images                                     
+print("Reconstruct preds_test . . .")
+preds_test = merge_data_without_overlap(
+    preds_test, math.ceil(preds_test.shape[0]/(h_num*v_num)),
+    out_shape=[h_num, v_num], grid=False)
+print("Reconstruct Y_test . . .")
+Y_test = merge_data_without_overlap(
+    Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
+    out_shape=[h_num, v_num], grid=False)
 
 print("Saving predicted images . . .")
 save_img(Y=(preds_test > 0.5).astype(np.uint8),
@@ -754,7 +511,15 @@ det_per_image = DET_calculation(
 
 print("~~~~ Smooth (per image) ~~~~")
 Y_test_smooth = np.zeros(X_test.shape, dtype=np.float32)
-for i in tqdm(range(X_test.shape[0])):
+cont = 0
+for i in tqdm(range(X_complete_aug.n)):
+    if cont == 0:                                                               
+        images = next(X_complete_aug)                                           
+                                                                                
+        if loss_type == "w_bce":                                                
+            masks = next(Y_complete_aug)                                        
+            maps = next(W_complete_aug)
+
     predictions_smooth = predict_img_with_smooth_windowing(
         X_test[i], window_size=crop_shape[0], subdivisions=2, nb_classes=1,
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
@@ -766,6 +531,36 @@ save_img(Y=Y_test_smooth, mask_dir=smo_no_bin_dir_per_image,
          prefix="test_out_smo_no_bin")
 save_img(Y=(Y_test_smooth > 0.5).astype(np.uint8), mask_dir=smo_bin_dir_per_image,
          prefix="test_out_smo")
+
+# Per image with 50% overlap                                                    
+Y_test_50ov = np.zeros(Y_test.shape, dtype=(np.float32))                        
+cont = 0                                                                        
+for i in tqdm(range(X_complete_aug.n)):                                         
+    if cont == 0:                                                               
+        images = next(X_complete_aug)                                           
+                                                                                
+        if loss_type == "w_bce":                                                
+            masks = next(Y_complete_aug)                                        
+            maps = next(W_complete_aug)                                         
+                                                                                
+    if weights_on_data == False:                                                
+        predictions_smooth = predict_img_with_overlap(                          
+            images[cont], window_size=img_train_shape[0], subdivisions=2,       
+            nb_classes=1, pred_func=(                                           
+                lambda img_batch_subdiv: model.predict(img_batch_subdiv)))      
+    else:                                                                       
+        predictions_smooth = predict_img_with_overlap_weighted(                 
+            images[cont], masks[cont], maps[cont], batch_size_value,            
+            window_size=img_train_shape[0], subdivisions=2, nb_classes=1,       
+            pred_func=(                                                         
+                lambda img_batch_subdiv,                                        
+                       steps: model.predict_generator(img_batch_subdiv, steps)))
+                                                                                
+    Y_test_50ov[i] = predictions_smooth                                         
+                                                                                
+    cont += 1                                                                   
+    if cont == batch_size_value:                                                
+        cont = 0   
 
 print("Calculate metrics (smooth + per crop) . . .")
 smo_score_per_image = jaccard_index_numpy(
@@ -888,6 +683,7 @@ for i in tqdm(range(X_test.shape[0])):
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
         softmax_output=softmax_out)
     Y_test_smooth[i] = predictions_smooth
+del X_test
 
 print("Saving smooth predicted images . . .")
 save_img(Y=Y_test_smooth, mask_dir=smo_no_bin_dir_full,
@@ -973,7 +769,7 @@ spu_wa_zfil_voc_full = voc_calculation(
 spu_wa_zfil_det_full = DET_calculation(
     Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
     det_eval_post_path, det_bin, n_dig, args.job_id)
-del spu_wa_zfil_preds_test, spu_preds_test
+del spu_wa_zfil_preds_test, spu_preds_test, Y_test
 
 
 print("####################################\n"
