@@ -1392,3 +1392,74 @@ def img_to_onehot_encoding(img, num_classes=2):
             encoded_image[:,:,i] = np.all(img.reshape((-1,1)) == i, axis=1).reshape(shape[:2])
 
     return encoded_image
+
+
+def random_crop(image, mask, random_crop_size, val=False,                       
+                draw_prob_map_points=False, img_prob=None, weights_on_data=False,
+                weight_map=None):                                               
+    """Random crop.                                                             
+                                                                                
+       Based on:                                                                
+           https://jkjung-avt.github.io/keras-image-cropping/                   
+    """                                                                         
+                                                                                
+    if weights_on_data == True and weight_map is None:                          
+        raise ValueError("When 'weights_on_data' is selected weight_map must be "
+                         " provided")                                           
+                                                                                
+    if weights_on_data == True:                                                 
+        img, we = image                                                         
+    else:                                                                       
+        img = image                                                             
+                                                                                
+    height, width = img.shape[0], img.shape[1]                                  
+    dy, dx = random_crop_size                                                   
+    if val == True:                                                             
+        x = 0                                                                   
+        y = 0                                                                   
+        ox = 0                                                                  
+        oy = 0                                                                  
+    else:                                                                       
+        if img_prob is not None:                                                
+            prob = img_prob.ravel()                                             
+                                                                                
+            # Generate the random coordinates based on the distribution         
+            choices = np.prod(img_prob.shape)                                   
+            index = np.random.choice(choices, size=1, p=prob)                   
+            coordinates = np.unravel_index(index, dims=img_prob.shape)          
+            x = int(coordinates[1][0])                                          
+            y = int(coordinates[0][0])                                          
+            ox = int(coordinates[1][0])                                         
+            oy = int(coordinates[0][0])                                         
+                                                                                
+            # Adjust the coordinates to be the origin of the crop and control to
+            # not be out of the image                                           
+            if y < int(random_crop_size[0]/2):                                  
+                y = 0                                                           
+            elif y > img.shape[0] - int(random_crop_size[0]/2):                 
+                y = img.shape[0] - random_crop_size[0]                          
+            else:                                                               
+                y -= int(random_crop_size[0]/2)                                 
+                                                                                
+            if x < int(random_crop_size[1]/2):                                  
+                x = 0                                                           
+            elif x > img.shape[1] - int(random_crop_size[1]/2):                 
+                x = img.shape[1] - random_crop_size[1]                          
+            else:                                                               
+                x -= int(random_crop_size[1]/2)                                 
+        else:                                                                   
+            ox = 0                                                              
+            oy = 0                                                              
+            x = np.random.randint(0, width - dx + 1)                            
+            y = np.random.randint(0, height - dy + 1)                           
+                                                                                
+    if draw_prob_map_points == True:                                            
+        return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :], ox, oy, x, y
+    else:                                                                       
+        if weights_on_data == True:                                             
+            return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :],\    
+                   weight_map[y:(y+dy), x:(x+dx), :]                            
+        else:                                                                   
+            return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :]      
+                                                                                
+
