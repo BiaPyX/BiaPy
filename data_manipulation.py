@@ -1457,7 +1457,7 @@ def random_crop(image, mask, random_crop_size, val=False,
         return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :], ox, oy, x, y
     else:                                                                       
         if weights_on_data == True:                                             
-            return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :],\    
+            return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :],\
                    weight_map[y:(y+dy), x:(x+dx), :]                            
         else:                                                                   
             return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :]      
