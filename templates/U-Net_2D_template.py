@@ -60,22 +60,23 @@ from data_manipulation import load_and_prepare_2D_data, crop_data,\
                               merge_data_without_overlap,\
                               crop_data_with_overlap, merge_data_with_overlap, \
                               check_binary_masks, img_to_onehot_encoding
-from data_generators import keras_da_generator, ImageDataGenerator,\
-                            keras_gen_samples
+from custom_da_gen import ImageDataGenerator
+from data_generators import keras_da_generator, keras_gen_samples
 from networks.unet import U_Net_2D
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
-from tensorflow.keras.callbacks import EarlyStopping
-from tensorflow.keras.models import load_model
+from keras.callbacks import EarlyStopping
+from keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap,\
                                      ensemble8_2d_predictions
-from tensorflow.keras.utils import plot_model
+from keras.utils import plot_model
 from callbacks import ModelCheckpoint
 from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
                             boundary_refinement_watershed2
+import keras
 
 
 ############
@@ -85,7 +86,7 @@ from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
 print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
-print("Keras        : {}".format(tf.keras.__version__))
+print("Keras        : {}".format(keras.__version__))
 print("Tensorflow   : {}".format(tf.__version__))
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_selected;
@@ -121,7 +122,7 @@ img_test_shape = (1024, 768, 1)
 # Paths, shapes and discard values for the extra dataset used together with the
 # main train dataset, provided by train_path and train_mask_path variables, to 
 # train the network with. If the shape of the datasets differ the best option
-# to normalize them is to make crops ("make_crops" variable)
+# To normalize them is to make crops ("make_crops" variable)
 extra_datasets_data_list = []
 extra_datasets_mask_list = []
 extra_datasets_data_dim_list = []
@@ -144,9 +145,9 @@ num_crops_per_dataset = 0
 ### Crop variables
 # Shape of the crops
 crop_shape = (256, 256, 1)
-# Flag to make crops on the train data
+# To make crops on the train data
 make_crops = True
-# Flag to check the crops. Useful to ensure that the crops have been made 
+# To check the crops. Useful to ensure that the crops have been made 
 # correctly. Note: if "discard_cropped_images" is True only the run that 
 # prepare the discarded data will check the crops, as the future runs only load 
 # the crops stored by this first run
@@ -156,15 +157,14 @@ check_crop = True
 # augmentation (with a crop shape defined by "crop_shape" variable). This flag
 # is not compatible with "make_crops" variable
 random_crops_in_DA = False 
-# NEEDED CODE REFACTORING OF THIS SECTION
-test_ov_crops = 8 # Only active with random_crops_in_DA
+test_ov_crops = 16 # Only active with random_crops_in_DA
 probability_map = False # Only active with random_crops_in_DA                       
 w_foreground = 0.94 # Only active with probability_map
 w_background = 0.06 # Only active with probability_map
 
 
 ### Discard variables
-# Flag to activate the discards in the main train data. Only active when 
+# To activate the discards in the main train data. Only active when 
 # "make_crops" variable is True
 discard_cropped_images = False
 # Percentage of pixels labeled with the foreground class necessary to not 
@@ -181,7 +181,7 @@ train_crop_discard_mask_path = \
                  + str(d_percentage_value), 'train', 'y')
 # The discards are NOT done in the test data, but this will store the test data,
 # which will be cropped, into the pointed path to be loaded by future runs      
-# together with the train discarded data and masks                              
+# Together with the train discarded data and masks                              
 test_crop_discard_path = \
     os.path.join(args.result_dir, 'data_d', job_identifier 
                  + str(d_percentage_value), 'test', 'x')
@@ -191,7 +191,7 @@ test_crop_discard_mask_path = \
 
 
 ### Normalization
-# Flag to normalize the data dividing by the mean pixel value
+# To normalize the data dividing by the mean pixel value
 normalize_data = False                                                          
 # Force the normalization value to the given number instead of the mean pixel 
 # value
@@ -199,47 +199,53 @@ norm_value_forced = -1
 
 
 ### Data augmentation (DA) variables
-# Flag to decide which type of DA implementation will be used. Select False to 
+# To decide which type of DA implementation will be used. Select False to 
 # use Keras API provided DA, otherwise, a custom implementation will be used
 custom_da = False
 # Create samples of the DA made. Useful to check the output images made. 
 # This option is available for both Keras and custom DA
 aug_examples = True 
-# Flag to shuffle the training data on every epoch:
+# To shuffle the training data on every epoch:
 # (Best options: Keras->False, Custom->True)
 shuffle_train_data_each_epoch = custom_da
-# Flag to shuffle the validation data on every epoch:
+# To shuffle the validation data on every epoch:
 # (Best option: False in both cases)
 shuffle_val_data_each_epoch = False
-# Make a bit of zoom in the images. Only available in Keras DA
-keras_zoom = False 
-# width_shift_range (more details in Keras ImageDataGenerator class). Only 
-# available in Keras DA
-w_shift_r = 0.0
-# height_shift_range (more details in Keras ImageDataGenerator class). Only      
-# available in Keras DA
-h_shift_r = 0.0
-# shear_range (more details in Keras ImageDataGenerator class). Only      
-# available in Keras DA
-shear_range = 0.0 
-# Range to pick a brightness value from to apply in the images. Available for 
-# both Keras and custom DA. Example of use: brightness_range = [1.0, 1.0]
-brightness_range = None 
-# Range to pick a median filter size value from to apply in the images. Option
-# only available in custom DA
-median_filter_size = [0, 0]
-# Range of rotation
-rotation_range = 180
-# Flag to make flips on the subvolumes. Available for both Keras and custom DA.
-flips = True
-# Histogram equalization. Option only available in custom DA
-hist_eq = False
-# Elastic transformations. Option only available in custom DA 
+
+### Options available for Keras Data Augmentation
+# Make a bit of zoom in the images
+k_zoom = False 
+# widtk_h_shift_range (more details in Keras ImageDataGenerator class)
+k_w_shift_r = 0.0
+# height_shift_range (more details in Keras ImageDataGenerator class)
+k_h_shift_r = 0.0
+# k_shear_range (more details in Keras ImageDataGenerator class)
+k_shear_range = 0.0 
+# Range to pick a brightness value from to apply in the images. Available in 
+# Keras. Example of use: k_brightness_range = [1.0, 1.0]
+k_brightness_range = None 
+
+### Options available for Custom Data Augmentation 
+# Histogram equalization
+hist_eq = False  
+# Elastic transformations
 elastic = False
-# Gaussian blur. Option only available in custom DA 
-g_blur = False
-# Gamma contrast. Option only available in custom DA 
-gamma_contrast = False
+# Median blur                                                             
+median_blur = False
+# Gaussian blur
+g_blur = False                                                                  
+# Gamma contrast
+gamma_contrast = False      
+
+### Options available for both, Custom and Kera Data Augmentation
+# Rotation of 90, 180 or 270
+rotation90 = False
+# Range of rotation. Set to 0 to disable it
+rotation_range = 180
+# To make vertical flips 
+vflips = True
+# To make horizontal flips
+hflips = True
 
 
 ### Extra train data generation
@@ -251,12 +257,12 @@ extra_train_data = 0
 
 
 ### Load previously generated model weigths
-# Flag to activate the load of a previous training weigths instead of train 
+# To activate the load of a previous training weigths instead of train 
 # the network again
 load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
-# Flag to activate the fine tunning
+# To activate the fine tunning
 fine_tunning = False
 # ID of the previous weigths to load the weigths from to make the fine tunning 
 fine_tunning_weigths = args.job_id
@@ -293,12 +299,12 @@ weights_on_data = True if loss_type == "w_bce" else False
 feature_maps = [32, 64, 128, 256, 512]
 # Depth of the network
 depth = 4
-# Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
+# To activate the Spatial Dropout instead of use the "normal" dropout layer
 spatial_dropout = False
 # Values to make the dropout with. It's dimension must be equal depth+1. Set to
 # 0 to prevent dropout 
 dropout_values = [0.1, 0.1, 0.2, 0.2, 0.3]
-# Flag to active batch normalization
+# To active batch normalization
 batch_normalization = False
 # Kernel type to use on convolution layers
 kernel_init = 'he_normal'
@@ -508,7 +514,7 @@ if normalize_data:
     X_test -= int(norm_value)
     
 # Crop the data to the desired size
-if make_crops and crops_made:
+if (make_crops and crops_made) or random_crops_in_DA:
     img_width = crop_shape[0]
     img_height = crop_shape[1]
     img_channels = crop_shape[2]
@@ -536,28 +542,29 @@ if extra_train_data != 0:
 
         extra_x, extra_y = keras_gen_samples(
             extra_train_data, X_data=X_train, Y_data=Y_train, 
-            batch_size_value=batch_size_value, zoom=keras_zoom, 
-            w_shift_r=w_shift_r, h_shift_r=h_shift_r, shear_range=shear_range,
-            brightness_range=brightness_range, rotation_range=rotation_range,
-            hflip=flips, vflip=flips, median_filter_size=median_filter_size, 
+            batch_size_value=batch_size_value, zoom=k_zoom, 
+            k_w_shift_r=k_w_shift_r, k_h_shift_r=k_h_shift_r, k_shear_range=k_shear_range,
+            k_brightness_range=k_brightness_range, rotation_range=rotation_range,
+            vflip=vflips, hflip=hflips, median_filter_size=median_filter_size, 
             hist_eq=hist_eq, elastic=elastic, g_blur=g_blur, 
             gamma_contrast=gamma_contrast)
     else:
         # Custom DA generated extra data
         extra_gen_args = dict(
             X=X_train, Y=Y_train, batch_size=batch_size_value,
-            dim=(img_height,img_width), n_channels=1, shuffle=True, da=True, 
-            elastic=elastic, vflip=flips, hflip=flips, rotation90=False, 
-            random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
-            rotation_range=rotation_range)
+            shape=(img_height,img_width,img_channels), shuffle=True, da=True, 
+            hist_eq=hist_eq, rotation90=rotation90, rotation_range=rotation_range,                   
+            vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,             
+            median_blur=median_blur, gamma_contrast=gamma_contrast,                 
+            random_crops_in_DA=random_crops_in_DA)
 
         extra_generator = ImageDataGenerator(**extra_gen_args)
 
         extra_x, extra_y = extra_generator.get_transformed_samples(
             extra_train_data, force_full_images=True)
 
-    X_train = np.vstack((X_train, extra_x*255))
-    Y_train = np.vstack((Y_train, extra_y*255))
+    X_train = np.vstack((X_train, extra_x))
+    Y_train = np.vstack((Y_train, extra_y))
     print("{} extra train data generated, the new shape of the train now is {}"\
           .format(extra_train_data, X_train.shape))
 
@@ -575,12 +582,12 @@ if custom_da == False:
         X_train=X_train, Y_train=Y_train, X_val=X_val, Y_val=Y_val, 
         batch_size_value=batch_size_value, save_examples=aug_examples,
         out_dir=da_samples_dir, shuffle_train=shuffle_train_data_each_epoch, 
-        shuffle_val=shuffle_val_data_each_epoch, zoom=keras_zoom, 
+        shuffle_val=shuffle_val_data_each_epoch, zoom=k_zoom, 
         rotation_range=rotation_range, random_crops_in_DA=random_crops_in_DA,
-        crop_length=crop_shape[0], w_shift_r=w_shift_r, h_shift_r=h_shift_r,    
-        shear_range=shear_range, brightness_range=brightness_range,
+        crop_length=crop_shape[0], w_shift_r=k_w_shift_r, h_shift_r=k_h_shift_r,    
+        shear_range=k_shear_range, brightness_range=k_brightness_range,
         weights_on_data=weights_on_data, weights_path=loss_weight_dir,
-        hflip=flips, vflip=flips)
+        vflip=vflips, hflip=hflips)
 else:                                                                           
     print("Custom DA selected")
 
@@ -597,19 +604,18 @@ else:
     # Custom Data Augmentation                                                  
     data_gen_args = dict(
         X=X_train, Y=Y_train, batch_size=batch_size_value,     
-        dim=(img_height,img_width), n_channels=1,              
-        shuffle=shuffle_train_data_each_epoch, da=True, vflip=flips, hflip=flips, 
-        rotation90=False, rotation_range=rotation_range, 
-        brightness_range=brightness_range, median_filter_size=median_filter_size, 
-        hist_eq=hist_eq, elastic=elastic, g_blur=g_blur, gamma_contrast=gamma_contrast, 
-        random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
-        prob_map=probability_map, train_prob=train_prob, softmax_out=softmax_out)                            
+        shape=(img_height,img_width,img_channels),
+        shuffle=shuffle_train_data_each_epoch, da=True, hist_eq=hist_eq,
+        rotation90=rotation90, rotation_range=rotation_range,
+        vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,
+        median_blur=median_blur, gamma_contrast=gamma_contrast,
+        random_crops_in_DA=random_crops_in_DA, prob_map=probability_map, 
+        train_prob=train_prob, softmax_out=softmax_out)
     data_gen_val_args = dict(
         X=X_val, Y=Y_val, batch_size=batch_size_value, 
-        dim=(img_height,img_width), n_channels=1, 
+        shape=(img_height,img_width,img_channels), 
         shuffle=shuffle_val_data_each_epoch, da=False, 
-        random_crops_in_DA=random_crops_in_DA, crop_length=crop_shape[0], 
-        val=True, softmax_out=softmax_out)
+        random_crops_in_DA=random_crops_in_DA, val=True, softmax_out=softmax_out)
     train_generator = ImageDataGenerator(**data_gen_args)                       
     val_generator = ImageDataGenerator(**data_gen_val_args)                     
                                                                                 
@@ -617,10 +623,6 @@ else:
     if aug_examples:                                                    
         train_generator.get_transformed_samples(
             10, save_to_dir=True, train=False, out_dir=da_samples_dir)
-                                                                                
-if random_crops_in_DA:
-    img_width = crop_shape[0]
-    img_height = crop_shape[1]
 
 
 print("#################################\n"
@@ -639,7 +641,7 @@ model = U_Net_2D([img_height, img_width, img_channels], activation=activation,
 model.summary(line_length=150)
 os.makedirs(char_dir, exist_ok=True)
 model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
-plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
+#plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
     if fine_tunning:                                                    
@@ -659,7 +661,7 @@ if load_previous_weights == False:
         print("Finish LRFinder. Check the plot in {}".format(lrfinder_dir))
         sys.exit(0)
     else:
-        results = model.fit(x=train_generator, validation_data=val_generator,
+        results = model.fit_generator(train_generator, validation_data=val_generator,
             validation_steps=math.ceil(X_val.shape[0]/batch_size_value),
             steps_per_epoch=math.ceil(X_train.shape[0]/batch_size_value),
             epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
