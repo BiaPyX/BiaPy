@@ -51,7 +51,10 @@ def ResUNet_2D(image_shape, activation='elu', k_init='he_normal',
 
     fm = feature_maps[::-1]
 
-    inputs = Input(image_shape)
+    dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
+    inputs = Input(dinamic_dim)
+    #inputs = Input(image_shape)
+    x = inputs 
 
     x = level_block(inputs, depth, fm, 3, activation, k_init, drop_values, 
                     batch_norm, True)
