@@ -61,22 +61,21 @@ from data_manipulation import load_and_prepare_2D_data, crop_data,\
                               crop_data_with_overlap, merge_data_with_overlap, \
                               check_binary_masks, img_to_onehot_encoding
 from custom_da_gen import ImageDataGenerator
-from data_generators import keras_da_generator, keras_gen_samples
+from keras_da_gen import keras_da_generator, keras_gen_samples
 from networks.unet import U_Net_2D
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
-from keras.callbacks import EarlyStopping
-from keras.models import load_model
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap,\
                                      ensemble8_2d_predictions
-from keras.utils import plot_model
+from tensorflow.keras.utils import plot_model
 from callbacks import ModelCheckpoint
 from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
                             boundary_refinement_watershed2
-import keras
 
 
 ############
@@ -86,7 +85,7 @@ import keras
 print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
-print("Keras        : {}".format(keras.__version__))
+print("Keras        : {}".format(tf.keras.__version__))
 print("Tensorflow   : {}".format(tf.__version__))
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_selected;
@@ -661,7 +660,7 @@ if load_previous_weights == False:
         print("Finish LRFinder. Check the plot in {}".format(lrfinder_dir))
         sys.exit(0)
     else:
-        results = model.fit_generator(train_generator, validation_data=val_generator,
+        results = model.fit(train_generator, validation_data=val_generator,
             validation_steps=math.ceil(X_val.shape[0]/batch_size_value),
             steps_per_epoch=math.ceil(X_train.shape[0]/batch_size_value),
             epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
