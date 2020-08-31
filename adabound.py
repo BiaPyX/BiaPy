@@ -1,15 +1,14 @@
-from keras import backend as K
-from keras.optimizers import Optimizer
+"Adabound optmizer. Code fully stracted from: `https://github.com/Luolc/AdaBound <https://github.com/Luolc/AdaBound>`_."
 
-#
-# CODE EXTRACTED FROM: https://github.com/Luolc/AdaBound
-#
+from tensorflow.keras import backend as K
+from tensorflow.keras.optimizers import Optimizer
+
 class AdaBound(Optimizer):
     """AdaBound optimizer.
 
     Default parameters follow those provided in the original paper.
 
-    # Arguments
+    Args:
         lr: float >= 0. Learning rate.
         final_lr: float >= 0. Final learning rate.
         beta_1: float, 0 < beta < 1. Generally close to 1.
@@ -21,7 +20,7 @@ class AdaBound(Optimizer):
         amsbound: boolean. Whether to apply the AMSBound variant of this
             algorithm.
 
-    # References
+    References:
         - [Adaptive Gradient Methods with Dynamic Bound of Learning Rate]
           (https://openreview.net/forum?id=Bkg3g2R9FX)
         - [Adam - A Method for Stochastic Optimization]

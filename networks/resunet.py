@@ -3,7 +3,6 @@ from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import Dropout, Lambda, SpatialDropout2D, Conv2D, \
                                     Conv2DTranspose, MaxPooling2D, Concatenate,\
                                     Add, BatchNormalization, ELU
-from tensorflow.keras.activations import relu
 from metrics import binary_crossentropy_weighted, jaccard_index, \
                     weighted_bce_dice_loss
 
@@ -27,21 +26,37 @@ def ResUNet_2D(image_shape, activation='elu', k_init='he_normal',
             batch_norm (bool, optional): use batch normalization.
 
             feature_maps (array of ints, optional): feature maps to use on each 
-            level. Must have the same length as the depth+1.
+                level. Must have the same length as the ``depth+1``.
             
             depth (int, optional): depth of the network.                        
                                                                                 
             loss_type (str, optional): loss type to use, three type available:  
-            "bce" (Binary Cross Entropy) , "w_bce" (Weighted BCE, based on      
-            weigth maps) and "w_bce_dice" (Weighted loss: weight1*BCE + weight2*Dice). 
+                ``bce`` (Binary Cross Entropy), ``w_bce`` (Weighted BCE, based on      
+                weigth maps) and ``w_bce_dice`` (Weighted loss: ``weight1*BCE + 
+                weight2*Dice``). 
                                                                                 
             optimizer (str, optional): optimizer used to minimize the loss      
-            function. Posible options: 'sgd' or 'adam'.                         
+                function. Posible options: ``sgd`` or ``adam``.                         
                                                                                 
             lr (float, optional): learning rate value.
 
        Returns:
-            model (Keras model): model containing the U-Net created.
+            model (Keras model): model containing the U-Net.
+
+       Calling this function with its default parameters returns the following
+       network:
+
+       .. image:: img/resunet.png
+           :width: 100%
+           :align: center
+
+       Where each green layer represents a residual block as the following:
+        
+       .. image:: img/res_block.png
+           :width: 45%
+           :align: center
+
+       Images created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
     """
 
     if len(feature_maps) != depth+1:                                            
@@ -53,8 +68,6 @@ def ResUNet_2D(image_shape, activation='elu', k_init='he_normal',
 
     dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
     inputs = Input(dinamic_dim)
-    #inputs = Input(image_shape)
-    x = inputs 
 
     x = level_block(inputs, depth, fm, 3, activation, k_init, drop_values, 
                     batch_norm, True)
@@ -99,13 +112,13 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values,
        Args:                                                                    
             x (Keras layer): input layer of the block.                          
                                                                                 
-            depth (int): depth of the network. This value determines 
-            how many times the function will be called recursively.
+            depth (int): depth of the network. This value determines how many
+                times the function will be called recursively.
 
             f_maps (array of ints): feature maps to use.                        
                                                                                 
             filter_size (3 int tuple): height, width and depth of the convolution
-            window.                                                             
+                window.                                                             
                                                                                 
             activation (str, optional): Keras available activation type.        
                                                                                 
@@ -115,9 +128,9 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values,
                                                                                 
             batch_norm (bool, optional): flag to use batch normalization.                       
                                                                                 
-            first_block (float, optional): to advice the function that ir it    
-            the first residual block of the network, which avoids Full          
-            Pre-Activation layers.                                              
+            first_block (float, optional): to advice the function that it is the    
+                first residual block of the network, which avoids Full          
+                Pre-Activation layers.                                              
                                                                                 
        Returns:                                                                 
             x (Keras layer): last layer of the levels.
@@ -150,7 +163,7 @@ def residual_block(x, f_maps, filter_size, activation='elu', k_init='he_normal',
             f_maps (array of ints): feature maps to use.
             
             filter_size (3 int tuple): height, width and depth of the convolution
-            window. 
+                window. 
 
             activation (str, optional): Keras available activation type.        
                                                                                 
@@ -160,9 +173,9 @@ def residual_block(x, f_maps, filter_size, activation='elu', k_init='he_normal',
                                                                                 
             bn (bool, optional): use batch normalization.               
                                                                                 
-            first_block (float, optional): to advice the function that ir it
-            the first residual block of the network, which avoids Full 
-            Pre-Activation layers.
+            first_block (float, optional): to advice the function that it is the
+                first residual block of the network, which avoids Full 
+                Pre-Activation layers.
                                                                                 
        Returns:                                                                 
             x (Keras layer): last layer of the block.

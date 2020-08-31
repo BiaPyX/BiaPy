@@ -1,0 +1,271 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Callbacks &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Adabound" href="adabound.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Callbacks</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Callbacks</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-callbacks">
+<span id="callbacks"></span><h1>Callbacks<a class="headerlink" href="#module-callbacks" title="Permalink to this headline">¶</a></h1>
+<p>Code copied from <a class="reference external" href="https://github.com/tensorflow/tensorflow/blob/b36436b087bd8e8701ef51718179037cccdfc26e/tensorflow/python/keras/callbacks.py#L1057">Tensorflow/keras/callbacks.py</a> just inserting a few lines on the prints to avoid this <a class="reference external" href="https://github.com/tensorflow/tensorflow/issues/35100">error</a>.</p>
+<dl class="py class">
+<dt id="callbacks.ModelCheckpoint">
+<em class="property">class </em><code class="sig-prename descclassname">callbacks.</code><code class="sig-name descname">ModelCheckpoint</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">filepath</span></em>, <em class="sig-param"><span class="n">monitor</span><span class="o">=</span><span class="default_value">'val_loss'</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">save_best_only</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">save_weights_only</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">mode</span><span class="o">=</span><span class="default_value">'auto'</span></em>, <em class="sig-param"><span class="n">period</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/callbacks.html#ModelCheckpoint"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#callbacks.ModelCheckpoint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.callbacks.Callback</span></code></p>
+<p>Save the model after every epochimport tensorflow.keras.callbacks.Callback .
+<cite>filepath</cite> can contain named formatting options,
+which will be filled with the values of <cite>epoch</cite> and
+keys in <cite>logs</cite> (passed in <cite>on_epoch_end</cite>).
+For example: if <cite>filepath</cite> is <cite>weights.{epoch:02d}-{val_loss:.2f}.hdf5</cite>,
+then the model checkpoints will be saved with the epoch number and
+the validation loss in the filename.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>filepath</strong> – string, path to save the model file.</p></li>
+<li><p><strong>monitor</strong> – quantity to monitor.</p></li>
+<li><p><strong>verbose</strong> – verbosity mode, 0 or 1.</p></li>
+<li><p><strong>save_best_only</strong> – if <cite>save_best_only=True</cite>,
+the latest best model according to
+the quantity monitored will not be overwritten.</p></li>
+<li><p><strong>save_weights_only</strong> – if True, then only the model’s weights will be
+saved (<cite>model.save_weights(filepath)</cite>), else the full model
+is saved (<cite>model.save(filepath)</cite>).</p></li>
+<li><p><strong>mode</strong> – one of {auto, min, max}.
+If <cite>save_best_only=True</cite>, the decision
+to overwrite the current save file is made
+based on either the maximization or the
+minimization of the monitored quantity. For <cite>val_acc</cite>,
+this should be <cite>max</cite>, for <cite>val_loss</cite> this should
+be <cite>min</cite>, etc. In <cite>auto</cite> mode, the direction is
+automatically inferred from the name of the monitored quantity.</p></li>
+<li><p><strong>period</strong> – Interval (number of epochs) between checkpoints.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="callbacks.ModelCheckpoint.on_epoch_end">
+<code class="sig-name descname">on_epoch_end</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">epoch</span></em>, <em class="sig-param"><span class="n">logs</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/callbacks.html#ModelCheckpoint.on_epoch_end"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#callbacks.ModelCheckpoint.on_epoch_end" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called at the end of an epoch.</p>
+<p>Subclasses should override for any actions to run. This function should only
+be called during TRAIN mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>epoch</strong> – integer, index of epoch.</p></li>
+<li><p><strong>logs</strong> – dict, metric results for this training epoch, and for the
+validation epoch if validation is performed. Validation result keys
+are prefixed with <cite>val_</cite>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="adabound.html" class="btn btn-neutral float-left" title="Adabound" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

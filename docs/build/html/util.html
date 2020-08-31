@@ -1,0 +1,663 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Util &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Adabound" href="adabound.html" />
+    <link rel="prev" title="Metrics" href="metrics.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Util</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-util">
+<span id="util"></span><h1>Util<a class="headerlink" href="#module-util" title="Permalink to this headline">¶</a></h1>
+<dl class="py class">
+<dt id="util.TimeHistory">
+<em class="property">class </em><code class="sig-prename descclassname">util.</code><code class="sig-name descname">TimeHistory</code><a class="reference internal" href="_modules/util.html#TimeHistory"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.TimeHistory" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.callbacks.Callback</span></code></p>
+<p>Class to record each epoch time.</p>
+<dl class="py method">
+<dt id="util.TimeHistory.on_epoch_begin">
+<code class="sig-name descname">on_epoch_begin</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">batch</span></em>, <em class="sig-param"><span class="n">logs</span><span class="o">=</span><span class="default_value">{}</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#TimeHistory.on_epoch_begin"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.TimeHistory.on_epoch_begin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called at the start of an epoch.</p>
+<p>Subclasses should override for any actions to run. This function should only
+be called during TRAIN mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>epoch</strong> – integer, index of epoch.</p></li>
+<li><p><strong>logs</strong> – dict. Currently no data is passed to this argument for this method
+but that may change in the future.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="util.TimeHistory.on_epoch_end">
+<code class="sig-name descname">on_epoch_end</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">batch</span></em>, <em class="sig-param"><span class="n">logs</span><span class="o">=</span><span class="default_value">{}</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#TimeHistory.on_epoch_end"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.TimeHistory.on_epoch_end" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called at the end of an epoch.</p>
+<p>Subclasses should override for any actions to run. This function should only
+be called during TRAIN mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>epoch</strong> – integer, index of epoch.</p></li>
+<li><p><strong>logs</strong> – dict, metric results for this training epoch, and for the
+validation epoch if validation is performed. Validation result keys
+are prefixed with <cite>val_</cite>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="util.TimeHistory.on_train_begin">
+<code class="sig-name descname">on_train_begin</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">logs</span><span class="o">=</span><span class="default_value">{}</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#TimeHistory.on_train_begin"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.TimeHistory.on_train_begin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called at the beginning of training.</p>
+<p>Subclasses should override for any actions to run.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>logs</strong> – dict. Currently no data is passed to this argument for this method
+but that may change in the future.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.array_to_img">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">array_to_img</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">data_format</span><span class="o">=</span><span class="default_value">'channels_last'</span></em>, <em class="sig-param"><span class="n">scale</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">dtype</span><span class="o">=</span><span class="default_value">'float32'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#array_to_img"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.array_to_img" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts a 3D Numpy array to a PIL Image instance.</p>
+<p>As the Keras array_to_img function in:</p>
+<blockquote>
+<div><p><a class="reference external" href="https://github.com/keras-team/keras-preprocessing/blob/28b8c9a57703b60ea7d23a196c59da1edf987ca0/keras_preprocessing/image/utils.py#L230">keras_preprocessing/image/utils.py</a></p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.calculate_2D_volume_prob_map">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">calculate_2D_volume_prob_map</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">w_foreground</span><span class="o">=</span><span class="default_value">0.94</span></em>, <em class="sig-param"><span class="n">w_background</span><span class="o">=</span><span class="default_value">0.06</span></em>, <em class="sig-param"><span class="n">save_file</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#calculate_2D_volume_prob_map"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.calculate_2D_volume_prob_map" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate the probability map of the given 2D data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Y</strong> (<em>4D Numpy array</em>) – data to calculate the probability map from.
+E. g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channel)</span></code></p></li>
+<li><p><strong>w_foreground</strong> (<em>float</em><em>, </em><em>optional</em>) – weight of the foreground. This value
+plus w_background must be equal 1.</p></li>
+<li><p><strong>w_background</strong> (<em>float</em><em>, </em><em>optional</em>) – weight of the background. This value
+plus w_foreground must be equal 1.</p></li>
+<li><p><strong>save_file</strong> (<em>str</em><em>, </em><em>optional</em>) – path to the file where the probability
+map will be stored.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>probability map of the given data.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>4D Numpy array</p>
+</dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">Y</span></code> does not have 4 dimensions.</p></li>
+<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">w_foreground</span> <span class="pre">+</span> <span class="pre">w_background</span> <span class="pre">&gt;</span> <span class="pre">1</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.calculate_3D_volume_prob_map">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">calculate_3D_volume_prob_map</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">w_foreground</span><span class="o">=</span><span class="default_value">0.94</span></em>, <em class="sig-param"><span class="n">w_background</span><span class="o">=</span><span class="default_value">0.06</span></em>, <em class="sig-param"><span class="n">save_file</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#calculate_3D_volume_prob_map"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.calculate_3D_volume_prob_map" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate the probability map of the given 3D data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Y</strong> (<em>5D Numpy array</em>) – data to calculate the probability map from.
+E. g. <code class="docutils literal notranslate"><span class="pre">(num_subvolumes,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channel)</span></code></p></li>
+<li><p><strong>w_foreground</strong> (<em>float</em><em>, </em><em>optional</em>) – weight of the foreground. This value
+plus w_background must be equal 1.</p></li>
+<li><p><strong>w_background</strong> (<em>float</em><em>, </em><em>optional</em>) – weight of the background. This value
+plus w_foreground must be equal 1.</p></li>
+<li><p><strong>save_file</strong> (<em>str</em><em>, </em><em>optional</em>) – path to the file where the probability
+map will be stored.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>probability map of the given data.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>5D Numpy array</p>
+</dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">Y</span></code> does not have 5 dimensions.</p></li>
+<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">w_foreground</span> <span class="pre">+</span> <span class="pre">w_background</span> <span class="pre">&gt;</span> <span class="pre">1</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.create_plots">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">create_plots</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">results</span></em>, <em class="sig-param"><span class="n">job_id</span></em>, <em class="sig-param"><span class="n">chartOutDir</span></em>, <em class="sig-param"><span class="n">metric</span><span class="o">=</span><span class="default_value">'jaccard_index'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#create_plots"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.create_plots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create loss and main metric plots with the given results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> (<em>Keras History object</em>) – record of training loss values and
+metrics values at successive epochs. History object is returned
+by Keras <a class="reference external" href="https://keras.io/api/models/model_training_apis/#fit-method">fit()</a> method.</p></li>
+<li><p><strong>job_id</strong> (<em>str</em>) – jod identifier.</p></li>
+<li><p><strong>chartOutDir</strong> (<em>str</em>) – path where the charts will be stored into.</p></li>
+<li><p><strong>metric</strong> (<em>str</em><em>, </em><em>optional</em>) – metric used.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><div class="figure align-center" id="id2">
+<a class="reference internal image-reference" href="_images/chart_loss.png"><img alt="_images/chart_loss.png" src="_images/chart_loss.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Loss values on each epoch</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+<td><div class="figure align-center" id="id3">
+<a class="reference internal image-reference" href="_images/chart_jaccard_index.png"><img alt="_images/chart_jaccard_index.png" src="_images/chart_jaccard_index.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Jaccard index values on each epoch</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.divide_images_on_classes">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">divide_images_on_classes</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">data_mask</span></em>, <em class="sig-param"><span class="n">out_dir</span></em>, <em class="sig-param"><span class="n">num_classes</span><span class="o">=</span><span class="default_value">2</span></em>, <em class="sig-param"><span class="n">th</span><span class="o">=</span><span class="default_value">0.8</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#divide_images_on_classes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.divide_images_on_classes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a folder for each class where the images that have more pixels
+labeled as the class (in percentage) than the given threshold will be
+stored.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>4D numpy array</em>) – data to save as images. The first dimension
+must be the number of images. <code class="docutils literal notranslate"><span class="pre">E.g.</span> <span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>data_mask</strong> (<em>4D numpy array</em>) – data mask to save as images.  The first
+dimension must be the number of images. <code class="docutils literal notranslate"><span class="pre">E.g.</span> <span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>out_dir</strong> (<em>str</em>) – path to save the images.</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em><em>, </em><em>optional</em>) – number of classes.</p></li>
+<li><p><strong>th</strong> (<em>float</em><em>, </em><em>optional</em>) – percentage of the pixels that must be labeled
+as a class to save it inside that class folder.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.do_save_wm">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">do_save_wm</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">labels</span></em>, <em class="sig-param"><span class="n">path</span></em>, <em class="sig-param"><span class="n">binary</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">w0</span><span class="o">=</span><span class="default_value">10</span></em>, <em class="sig-param"><span class="n">sigma</span><span class="o">=</span><span class="default_value">5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#do_save_wm"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.do_save_wm" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieves the label images, applies the weight-map algorithm and save the
+weight maps in a folder. Uses internally <a class="reference internal" href="#util.make_weight_map" title="util.make_weight_map"><code class="xref py py-meth docutils literal notranslate"><span class="pre">util.make_weight_map()</span></code></a>.</p>
+<p>Based on <a class="reference external" href="https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py">deepimagejunet/py_files/helpers.py</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>labels</strong> (<em>4D numpy array</em>) – corresponds to given label images.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>path</strong> (<em>str</em>) – refers to the path where the weight maps should be saved.</p></li>
+<li><p><strong>binary</strong> (<em>bool</em><em>, </em><em>optional</em>) – corresponds to whether or not the labels are
+binary.</p></li>
+<li><p><strong>w0</strong> (<em>float</em><em>, </em><em>optional</em>) – controls for the importance of separating tightly
+associated entities.</p></li>
+<li><p><strong>sigma</strong> (<em>int</em><em>, </em><em>optional</em>) – represents the standard deviation of the Gaussian
+used for the weight map.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.foreground_percentage">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">foreground_percentage</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">mask</span></em>, <em class="sig-param"><span class="n">class_tag</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#foreground_percentage"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.foreground_percentage" title="Permalink to this definition">¶</a></dt>
+<dd><p>Percentage of pixels that corresponds to the class in the given image.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mask</strong> (<em>2D Numpy array</em>) – image mask to analize.</p></li>
+<li><p><strong>class_tag</strong> (<em>int</em>) – class to find in the image.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>percentage of pixels that corresponds to the class. Value between 0 and 1.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.grayscale_2D_image_to_3D">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">grayscale_2D_image_to_3D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span></em>, <em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">th</span><span class="o">=</span><span class="default_value">127</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#grayscale_2D_image_to_3D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.grayscale_2D_image_to_3D" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates 3D surface from each image in X based on the grayscale of each
+image.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>4D numpy array</em>) – data that contains the images to create the
+surfaces from. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y</strong> (<em>4D numpy array</em>) – data mask of the same shape of X that will be
+converted into 3D volume, stacking multiple times each image.
+Useful if you need the two data arrays to be of the same shape.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>th</strong> (<em>int</em><em>, </em><em>optional</em>) – values to ommit when creating the surfaces.
+Useful to reduce the amount of data in z to be created and
+reduce computational time.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>Multiple elements</p>
+<ul class="simple">
+<li><p><strong>5D numpy array</strong>: 3D surface of each image provided.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>5D numpy array</strong>: 3D stack of each mask provided.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.img_to_array">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">img_to_array</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">img</span></em>, <em class="sig-param"><span class="n">data_format</span><span class="o">=</span><span class="default_value">'channels_last'</span></em>, <em class="sig-param"><span class="n">dtype</span><span class="o">=</span><span class="default_value">'float32'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#img_to_array"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.img_to_array" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts a PIL Image instance to a Numpy array.</p>
+<p>It’s a copy of the function <a class="reference external" href="https://github.com/keras-team/keras-preprocessing/blob/28b8c9a57703b60ea7d23a196c59da1edf987ca0/keras_preprocessing/image/utils.py#L288">keras_preprocessing/image/utils.py</a>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.limit_threads">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">limit_threads</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">threads_number</span><span class="o">=</span><span class="default_value">'1'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#limit_threads"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.limit_threads" title="Permalink to this definition">¶</a></dt>
+<dd><p>Limits the number of threads for a python process.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>threads_number</strong> (<em>int</em><em>, </em><em>optional</em>) – number of threads.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.make_weight_map">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">make_weight_map</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">label</span></em>, <em class="sig-param"><span class="n">binary</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">w0</span><span class="o">=</span><span class="default_value">10</span></em>, <em class="sig-param"><span class="n">sigma</span><span class="o">=</span><span class="default_value">5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#make_weight_map"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.make_weight_map" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates a weight map in order to make the U-Net learn better the
+borders of cells and distinguish individual cells that are tightly packed.
+These weight maps follow the methodology of the original U-Net paper.</p>
+<p>Based on <a class="reference external" href="https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py">unet/py_files/helpers.py</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label</strong> (<em>3D numpy array</em>) – corresponds to a label image.
+E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>binary</strong> (<em>bool</em><em>, </em><em>optional</em>) – corresponds to whether or not the labels are
+binary.</p></li>
+<li><p><strong>w0</strong> (<em>float</em><em>, </em><em>optional</em>) – controls for the importance of separating tightly
+associated entities.</p></li>
+<li><p><strong>sigma</strong> (<em>int</em><em>, </em><em>optional</em>) – represents the standard deviation of the Gaussian
+used for the weight map.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<p>Notice that weight has been defined where the objects are almost touching
+each other.</p>
+<a class="reference internal image-reference" href="_images/weight_map.png"><img alt="_images/weight_map.png" class="align-center" src="_images/weight_map.png" style="width: 650px;" /></a>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.save_filters_of_convlayer">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">save_filters_of_convlayer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">model</span></em>, <em class="sig-param"><span class="n">out_dir</span></em>, <em class="sig-param"><span class="n">l_num</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">name</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">prefix</span><span class="o">=</span><span class="default_value">''</span></em>, <em class="sig-param"><span class="n">img_per_row</span><span class="o">=</span><span class="default_value">8</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#save_filters_of_convlayer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.save_filters_of_convlayer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an image of the filters learned by a convolutional layer. One can
+identify the layer with ‘l_num’ or ‘name’ args. If both are passed ‘name’
+will be prioritized.</p>
+<p>Inspired by <a class="reference external" href="https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks/">https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks/</a></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<em>Keras Model</em>) – model where the layers are stored.</p></li>
+<li><p><strong>out_dir</strong> (<em>str</em>) – path where the image will be stored.</p></li>
+<li><p><strong>l_num</strong> (<em>int</em><em>, </em><em>optional</em>) – number of the layer to extract filters from.</p></li>
+<li><p><strong>name</strong> (<em>str</em><em>, </em><em>optional</em>) – name of the layer to extract filters from.</p></li>
+<li><p><strong>prefix</strong> (<em>str</em><em>, </em><em>optional</em>) – prefix to add to the output image name.</p></li>
+<li><p><strong>img_per_row</strong> (<em>int</em><em>, </em><em>optional</em>) – filters per row on the image.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">l_num</span></code> and <code class="docutils literal notranslate"><span class="pre">name</span></code> not provided.</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>To save the filters learned by the layer called <code class="docutils literal notranslate"><span class="pre">conv1</span></code> one can call
+the function as follows</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">save_filters_of_convlayer</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">char_dir</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;conv1&quot;</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;model&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>That will save in <code class="docutils literal notranslate"><span class="pre">out_dir</span></code> an image like this:</p>
+<a class="reference internal image-reference" href="_images/save_filters.png"><img alt="_images/save_filters.png" class="align-center" src="_images/save_filters.png" style="width: 60%;" /></a>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.save_img">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">save_img</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">data_dir</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">Y</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">mask_dir</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#save_img"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.save_img" title="Permalink to this definition">¶</a></dt>
+<dd><p>Save images in the given directory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>4D numpy array</em><em>, </em><em>optional</em>) – data to save as images. The first
+dimension must be the number of images.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>data_dir</strong> (<em>str</em><em>, </em><em>optional</em>) – path to store X images.</p></li>
+<li><p><strong>Y</strong> (<em>4D numpy array</em><em>, </em><em>optional</em>) – masks to save as images. The first
+dimension must be the number of images.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>mask_dir</strong> (<em>str</em><em>, </em><em>optional</em>) – path to store Y images.</p></li>
+<li><p><strong>prefix</strong> (<em>str</em><em>, </em><em>optional</em>) – path to store generated charts.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.set_seed">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">set_seed</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seedValue</span><span class="o">=</span><span class="default_value">42</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#set_seed"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.set_seed" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sets the seed on multiple python modules to obtain results as
+reproducible as possible.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seedValue</strong> (<em>int</em><em>, </em><em>optional</em>) – seed value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.store_history">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">store_history</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">results</span></em>, <em class="sig-param"><span class="n">score</span></em>, <em class="sig-param"><span class="n">time_callback</span></em>, <em class="sig-param"><span class="n">log_dir</span></em>, <em class="sig-param"><span class="n">job_file</span></em>, <em class="sig-param"><span class="n">metric</span><span class="o">=</span><span class="default_value">'jaccard_index'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#store_history"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.store_history" title="Permalink to this definition">¶</a></dt>
+<dd><p>Stores the results obtained as csv to manipulate them later
+and labeled in another file as historic results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> (<em>history object</em>) – record of training loss values and metrics
+values at successive epochs.</p></li>
+<li><p><strong>score</strong> (<em>Dictionary</em>) – contains all metrics values extracted from
+training and inference.</p></li>
+<li><p><strong>time_callback</strong> (<a class="reference internal" href="#util.TimeHistory" title="util.TimeHistory"><em>util.TimeHistory</em></a>) – time structure with the time of
+each epoch.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.threshold_plots">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">threshold_plots</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">preds_test</span></em>, <em class="sig-param"><span class="n">Y_test</span></em>, <em class="sig-param"><span class="n">det_eval_ge_path</span></em>, <em class="sig-param"><span class="n">det_eval_path</span></em>, <em class="sig-param"><span class="n">det_bin</span></em>, <em class="sig-param"><span class="n">n_dig</span></em>, <em class="sig-param"><span class="n">job_id</span></em>, <em class="sig-param"><span class="n">job_file</span></em>, <em class="sig-param"><span class="n">char_dir</span></em>, <em class="sig-param"><span class="n">r_val</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#threshold_plots"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.threshold_plots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a plot with the different metric values binarizing the prediction
+with different thresholds, from 0.1 to 0.9.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>preds_test</strong> (<em>4D Numpy array</em>) – predictions made by the model.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_test</strong> (<em>4D Numpy array</em>) – ground truth of the data.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>det_eval_ge_path</strong> (<em>str</em>) – path where the ground truth is stored for
+the DET calculation.</p></li>
+<li><p><strong>det_eval_path</strong> (<em>str</em>) – path where the evaluation of the metric will be done.</p></li>
+<li><p><strong>det_bin</strong> (<em>str</em>) – path to the DET binary.</p></li>
+<li><p><strong>n_dig</strong> (<em>int</em>) – The number of digits used for encoding temporal indices
+(e.g. <code class="docutils literal notranslate"><span class="pre">3</span></code>). Used by the DET calculation binary.</p></li>
+<li><p><strong>job_id</strong> (<em>str</em>) – id of the job.</p></li>
+<li><p><strong>job_file</strong> (<em>str</em>) – id and run number of the job.</p></li>
+<li><p><strong>char_dir</strong> (<em>str</em>) – path to store the charts generated.</p></li>
+<li><p><strong>r_val</strong> (<em>float</em><em>, </em><em>optional</em>) – threshold values to return.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>Multiple elements</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><strong>t_jac</strong> (<em>float</em>): value of the Jaccard index when the
+threshold is <code class="docutils literal notranslate"><span class="pre">r_val</span></code>.</p></li>
+<li><p><strong>t_voc</strong> (<em>float</em>): value of VOC when the threshold is <code class="docutils literal notranslate"><span class="pre">r_val</span></code>.</p></li>
+<li><p><strong>t_det</strong> (<em>float</em>): value of DET when the threshold is <code class="docutils literal notranslate"><span class="pre">r_val</span></code>.</p></li>
+</ul>
+</div></blockquote>
+</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">jac</span><span class="p">,</span> <span class="n">voc</span><span class="p">,</span> <span class="n">det</span> <span class="o">=</span> <span class="n">threshold_plots</span><span class="p">(</span>
+    <span class="n">preds_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span> <span class="n">det_eval_ge_path</span><span class="p">,</span> <span class="n">det_eval_path</span><span class="p">,</span> <span class="n">det_bin</span><span class="p">,</span>
+    <span class="n">n_dig</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">job_id</span><span class="p">,</span> <span class="s1">&#39;278_3&#39;</span><span class="p">,</span> <span class="n">char_dir</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Will generate 3 charts, one per each metric: IoU, VOC and DET. In the x
+axis represents the 9 different thresholds applied, that is: <code class="docutils literal notranslate"><span class="pre">0.1,</span> <span class="pre">0.2,</span>
+<span class="pre">0.3,</span> <span class="pre">...,</span> <span class="pre">0.9</span></code>. The y axis is the value of the metric in each chart. For
+instance, the Jaccard/IoU chart will look like this:</p>
+<a class="reference internal image-reference" href="_images/278_3_threshold_Jaccard.png"><img alt="_images/278_3_threshold_Jaccard.png" class="align-center" src="_images/278_3_threshold_Jaccard.png" style="width: 60%;" /></a>
+<p>In this example, the best value, <code class="docutils literal notranslate"><span class="pre">0.868</span></code>, is obtained with a threshold
+of <code class="docutils literal notranslate"><span class="pre">0.4</span></code>.</p>
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="adabound.html" class="btn btn-neutral float-right" title="Adabound" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="metrics.html" class="btn btn-neutral float-left" title="Metrics" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

@@ -13,7 +13,7 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
              batch_norm=False, k_init='he_normal', loss_type="bce",
              optimizer="sgd", lr=0.001):
              
-    """Create the U-Net3D.
+    """Create 3D U-Net.
 
        Args:
             image_shape (3D tuple): dimensions of the input image.
@@ -21,31 +21,41 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
             activation (str, optional): Keras available activation type.
 
             feature_maps (array of ints, optional): feature maps to use on each 
-            level. Must have the same length as the depth+1.
+                level. Must have the same length as the ``depth+1``.
         
             depth (int, optional): depth of the network.
 
             drop_values (float, optional): dropout value to be fixed. 
 
             spatial_dropout (bool, optional): use spatial dropout instead of the
-            "normal" dropout.
+                `normal` dropout.
 
             batch_norm (bool, optional): flag to make batch normalization.
     
             k_init (string, optional): kernel initialization for convolutional 
-            layers.
+                layers.
 
             loss_type (str, optional): loss type to use, three type available: 
-            "bce" (Binary Cross Entropy) , "w_bce" (Weighted BCE, based on
-            weigth maps) and "w_bce_dice" (Weighted loss: weight1*BCE + weight2*Dice). 
+                ``bce`` (Binary Cross Entropy) , ``w_bce`` (Weighted BCE, based on
+                weigth maps) and ``w_bce_dice`` (Weighted loss: ``weight1*BCE + 
+                weight2*Dice``). 
 
             optimizer (str, optional): optimizer used to minimize the loss
-            function. Posible options: 'sgd' or 'adam'.
+                function. Posible options: ``sgd`` or ``adam``.
 
             lr (float, optional): learning rate value.
 
        Returns:
-            model (Keras model): model containing the U-Net created.
+            model (Keras model): model containing the U-Net.
+    
+       Calling this function with its default parameters returns the following
+       network:
+
+       .. image:: img/unet_3d.png
+           :width: 100%
+           :align: center
+
+       Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
     """
 
     if len(feature_maps) != depth+1:

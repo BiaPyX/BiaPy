@@ -1,0 +1,411 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>networks.resunet &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks.html">Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../callbacks.html">Callbacks</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+        
+      <li>networks.resunet</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for networks.resunet</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras</span> <span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Input</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras.layers</span> <span class="kn">import</span> <span class="n">Dropout</span><span class="p">,</span> <span class="n">Lambda</span><span class="p">,</span> <span class="n">SpatialDropout2D</span><span class="p">,</span> <span class="n">Conv2D</span><span class="p">,</span> \
+                                    <span class="n">Conv2DTranspose</span><span class="p">,</span> <span class="n">MaxPooling2D</span><span class="p">,</span> <span class="n">Concatenate</span><span class="p">,</span>\
+                                    <span class="n">Add</span><span class="p">,</span> <span class="n">BatchNormalization</span><span class="p">,</span> <span class="n">ELU</span>
+<span class="kn">from</span> <span class="nn">metrics</span> <span class="kn">import</span> <span class="n">binary_crossentropy_weighted</span><span class="p">,</span> <span class="n">jaccard_index</span><span class="p">,</span> \
+                    <span class="n">weighted_bce_dice_loss</span>
+
+
+<div class="viewcode-block" id="ResUNet_2D"><a class="viewcode-back" href="../../networks_resunet.html#networks.resunet.ResUNet_2D">[docs]</a><span class="k">def</span> <span class="nf">ResUNet_2D</span><span class="p">(</span><span class="n">image_shape</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;elu&#39;</span><span class="p">,</span> <span class="n">k_init</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span>
+               <span class="n">drop_values</span><span class="o">=</span><span class="p">[</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">],</span> <span class="n">batch_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+               <span class="n">feature_maps</span><span class="o">=</span><span class="p">[</span><span class="mi">16</span><span class="p">,</span><span class="mi">32</span><span class="p">,</span><span class="mi">64</span><span class="p">,</span><span class="mi">128</span><span class="p">,</span><span class="mi">256</span><span class="p">],</span> <span class="n">depth</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">loss_type</span><span class="o">=</span><span class="s2">&quot;bce&quot;</span><span class="p">,</span> 
+               <span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;sgd&quot;</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.001</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;Create 2D Residual_U-Net.</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">            image_shape (array of 3 int): dimensions of the input image.</span>
+
+<span class="sd">            activation (str, optional): Keras available activation type.</span>
+
+<span class="sd">            k_init (str, optional): Keras available kernel initializer type.</span>
+
+<span class="sd">            drop_values (array of floats, optional): dropout value to be fixed.</span>
+
+<span class="sd">            batch_norm (bool, optional): use batch normalization.</span>
+
+<span class="sd">            feature_maps (array of ints, optional): feature maps to use on each </span>
+<span class="sd">                level. Must have the same length as the ``depth+1``.</span>
+<span class="sd">            </span>
+<span class="sd">            depth (int, optional): depth of the network.                        </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            loss_type (str, optional): loss type to use, three type available:  </span>
+<span class="sd">                ``bce`` (Binary Cross Entropy), ``w_bce`` (Weighted BCE, based on      </span>
+<span class="sd">                weigth maps) and ``w_bce_dice`` (Weighted loss: ``weight1*BCE + </span>
+<span class="sd">                weight2*Dice``). </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            optimizer (str, optional): optimizer used to minimize the loss      </span>
+<span class="sd">                function. Posible options: ``sgd`` or ``adam``.                         </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            lr (float, optional): learning rate value.</span>
+
+<span class="sd">       Returns:</span>
+<span class="sd">            model (Keras model): model containing the U-Net.</span>
+
+<span class="sd">       Calling this function with its default parameters returns the following</span>
+<span class="sd">       network:</span>
+
+<span class="sd">       .. image:: img/resunet.png</span>
+<span class="sd">           :width: 100%</span>
+<span class="sd">           :align: center</span>
+
+<span class="sd">       Where each green layer represents a residual block as the following:</span>
+<span class="sd">        </span>
+<span class="sd">       .. image:: img/res_block.png</span>
+<span class="sd">           :width: 45%</span>
+<span class="sd">           :align: center</span>
+
+<span class="sd">       Images created with `PlotNeuralNet &lt;https://github.com/HarisIqbal88/PlotNeuralNet&gt;`_.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">feature_maps</span><span class="p">)</span> <span class="o">!=</span> <span class="n">depth</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span>                                            
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;feature_maps dimension must be equal depth+1&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">drop_values</span><span class="p">)</span> <span class="o">!=</span> <span class="n">depth</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;drop_values&#39; dimension must be equal depth+1&quot;</span><span class="p">)</span>
+
+    <span class="n">fm</span> <span class="o">=</span> <span class="n">feature_maps</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="n">inputs</span> <span class="o">=</span> <span class="n">Input</span><span class="p">(</span><span class="n">image_shape</span><span class="p">)</span>
+
+    <span class="n">x</span> <span class="o">=</span> <span class="n">level_block</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">depth</span><span class="p">,</span> <span class="n">fm</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span><span class="p">,</span> <span class="n">k_init</span><span class="p">,</span> <span class="n">drop_values</span><span class="p">,</span> 
+                    <span class="n">batch_norm</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">outputs</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;sigmoid&#39;</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Model</span><span class="p">(</span><span class="n">inputs</span><span class="o">=</span><span class="p">[</span><span class="n">inputs</span><span class="p">],</span> <span class="n">outputs</span><span class="o">=</span><span class="p">[</span><span class="n">outputs</span><span class="p">])</span>
+
+    <span class="c1"># Select the optimizer</span>
+    <span class="k">if</span> <span class="n">optimizer</span> <span class="o">==</span> <span class="s2">&quot;sgd&quot;</span><span class="p">:</span>
+        <span class="n">opt</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span>
+            <span class="n">lr</span><span class="o">=</span><span class="n">lr</span><span class="p">,</span> <span class="n">momentum</span><span class="o">=</span><span class="mf">0.99</span><span class="p">,</span> <span class="n">decay</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">nesterov</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">optimizer</span> <span class="o">==</span> <span class="s2">&quot;adam&quot;</span><span class="p">:</span>
+        <span class="n">opt</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span>
+            <span class="n">lr</span><span class="o">=</span><span class="n">lr</span><span class="p">,</span> <span class="n">beta_1</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">beta_2</span><span class="o">=</span><span class="mf">0.999</span><span class="p">,</span> <span class="n">epsilon</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">decay</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+            <span class="n">amsgrad</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Error: optimizer value must be &#39;sgd&#39; or &#39;adam&#39;&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Compile the model</span>
+    <span class="k">if</span> <span class="n">loss_type</span> <span class="o">==</span> <span class="s2">&quot;bce&quot;</span><span class="p">:</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;binary_crossentropy&#39;</span><span class="p">,</span>
+                      <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">loss_type</span> <span class="o">==</span> <span class="s2">&quot;w_bce&quot;</span><span class="p">:</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="n">binary_crossentropy_weighted</span><span class="p">(</span><span class="n">weights</span><span class="p">),</span>
+                      <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">loss_type</span> <span class="o">==</span> <span class="s2">&quot;w_bce_dice&quot;</span><span class="p">:</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span>
+                      <span class="n">loss</span><span class="o">=</span><span class="n">weighted_bce_dice_loss</span><span class="p">(</span><span class="n">w_dice</span><span class="o">=</span><span class="mf">0.66</span><span class="p">,</span> <span class="n">w_bce</span><span class="o">=</span><span class="mf">0.33</span><span class="p">),</span>
+                      <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;loss_type&#39; must be &#39;bce&#39;, &#39;w_bce&#39; or &#39;w_bce_dice&#39;&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">model</span></div>
+
+
+<div class="viewcode-block" id="level_block"><a class="viewcode-back" href="../../networks_resunet.html#networks.resunet.level_block">[docs]</a><span class="k">def</span> <span class="nf">level_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">depth</span><span class="p">,</span> <span class="n">f_maps</span><span class="p">,</span> <span class="n">filter_size</span><span class="p">,</span> <span class="n">activation</span><span class="p">,</span> <span class="n">k_init</span><span class="p">,</span> <span class="n">drop_values</span><span class="p">,</span>   
+                <span class="n">batch_norm</span><span class="p">,</span> <span class="n">first_block</span><span class="p">):</span>                                       
+
+    <span class="sd">&quot;&quot;&quot;Produces a level of the network. It calls itself recursively.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Args:                                                                    </span>
+<span class="sd">            x (Keras layer): input layer of the block.                          </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            depth (int): depth of the network. This value determines how many</span>
+<span class="sd">                times the function will be called recursively.</span>
+
+<span class="sd">            f_maps (array of ints): feature maps to use.                        </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            filter_size (3 int tuple): height, width and depth of the convolution</span>
+<span class="sd">                window.                                                             </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            activation (str, optional): Keras available activation type.        </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            k_init (str, optional): Keras available kernel initializer type.    </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            drop_values (array of floats, optional): dropout value to be fixed.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">            batch_norm (bool, optional): flag to use batch normalization.                       </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            first_block (float, optional): to advice the function that it is the    </span>
+<span class="sd">                first residual block of the network, which avoids Full          </span>
+<span class="sd">                Pre-Activation layers.                                              </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Returns:                                                                 </span>
+<span class="sd">            x (Keras layer): last layer of the levels.</span>
+<span class="sd">    &quot;&quot;&quot;</span>  
+                                                                                
+    <span class="k">if</span> <span class="n">depth</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>                                                               
+        <span class="n">r</span> <span class="o">=</span> <span class="n">residual_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">f_maps</span><span class="p">[</span><span class="n">depth</span><span class="p">],</span> <span class="n">filter_size</span><span class="p">,</span> <span class="n">activation</span><span class="p">,</span> <span class="n">k_init</span><span class="p">,</span>           
+                           <span class="n">drop_values</span><span class="p">[</span><span class="n">depth</span><span class="p">],</span> <span class="n">batch_norm</span><span class="p">,</span> <span class="n">first_block</span><span class="p">)</span>                 
+        <span class="n">x</span> <span class="o">=</span> <span class="n">MaxPooling2D</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="p">(</span><span class="n">r</span><span class="p">)</span>                                         
+        <span class="n">x</span> <span class="o">=</span> <span class="n">level_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">depth</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">f_maps</span><span class="p">,</span> <span class="n">filter_size</span><span class="p">,</span> <span class="n">activation</span><span class="p">,</span> <span class="n">k_init</span><span class="p">,</span> 
+                        <span class="n">drop_values</span><span class="p">,</span> <span class="n">batch_norm</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>                          
+        <span class="n">x</span> <span class="o">=</span> <span class="n">Conv2DTranspose</span><span class="p">(</span><span class="n">f_maps</span><span class="p">[</span><span class="n">depth</span><span class="p">],</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">strides</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">Concatenate</span><span class="p">()([</span><span class="n">r</span><span class="p">,</span> <span class="n">x</span><span class="p">])</span>                                               
+        <span class="n">x</span> <span class="o">=</span> <span class="n">residual_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">f_maps</span><span class="p">[</span><span class="n">depth</span><span class="p">],</span> <span class="n">filter_size</span><span class="p">,</span> <span class="n">activation</span><span class="p">,</span> <span class="n">k_init</span><span class="p">,</span>           
+                           <span class="n">drop_values</span><span class="p">[</span><span class="n">depth</span><span class="p">],</span> <span class="n">batch_norm</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>                       
+    <span class="k">else</span><span class="p">:</span>                                                                       
+        <span class="n">x</span> <span class="o">=</span> <span class="n">residual_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">f_maps</span><span class="p">[</span><span class="n">depth</span><span class="p">],</span> <span class="n">filter_size</span><span class="p">,</span> <span class="n">activation</span><span class="p">,</span> <span class="n">k_init</span><span class="p">,</span>           
+                           <span class="n">drop_values</span><span class="p">[</span><span class="n">depth</span><span class="p">],</span> <span class="n">batch_norm</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>                       
+    <span class="k">return</span> <span class="n">x</span> </div>
+
+
+<div class="viewcode-block" id="residual_block"><a class="viewcode-back" href="../../networks_resunet.html#networks.resunet.residual_block">[docs]</a><span class="k">def</span> <span class="nf">residual_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">f_maps</span><span class="p">,</span> <span class="n">filter_size</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;elu&#39;</span><span class="p">,</span> <span class="n">k_init</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> 
+                   <span class="n">drop_value</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">bn</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">first_block</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>                                          
+
+    <span class="sd">&quot;&quot;&quot;Residual block.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Args:                                                                    </span>
+<span class="sd">            x (Keras layer): input layer of the block.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">            f_maps (array of ints): feature maps to use.</span>
+<span class="sd">            </span>
+<span class="sd">            filter_size (3 int tuple): height, width and depth of the convolution</span>
+<span class="sd">                window. </span>
+
+<span class="sd">            activation (str, optional): Keras available activation type.        </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            k_init (str, optional): Keras available kernel initializer type.    </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            drop_value (float, optional): dropout value to be fixed. </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            bn (bool, optional): use batch normalization.               </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            first_block (float, optional): to advice the function that it is the</span>
+<span class="sd">                first residual block of the network, which avoids Full </span>
+<span class="sd">                Pre-Activation layers.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Returns:                                                                 </span>
+<span class="sd">            x (Keras layer): last layer of the block.</span>
+<span class="sd">    &quot;&quot;&quot;</span> 
+                                                                                
+    <span class="c1"># Create shorcut                                                            </span>
+    <span class="n">shortcut</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">f_maps</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>           
+                      <span class="n">kernel_initializer</span><span class="o">=</span><span class="n">k_init</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span>                             
+                                                                                
+    <span class="c1"># Main path                                                                 </span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">first_block</span><span class="p">:</span>                                                         
+        <span class="n">x</span> <span class="o">=</span> <span class="n">BatchNormalization</span><span class="p">()(</span><span class="n">x</span><span class="p">)</span> <span class="k">if</span> <span class="n">bn</span> <span class="k">else</span> <span class="n">x</span>                                
+        <span class="n">x</span> <span class="o">=</span> <span class="n">ELU</span><span class="p">(</span><span class="n">alpha</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>                                                  
+                                                                                
+    <span class="n">x</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">f_maps</span><span class="p">,</span> <span class="n">filter_size</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>                            
+               <span class="n">kernel_initializer</span><span class="o">=</span><span class="n">k_init</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>                   
+                                                                                
+    <span class="n">x</span> <span class="o">=</span> <span class="n">Dropout</span><span class="p">(</span><span class="n">drop_value</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">if</span> <span class="n">drop_value</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">x</span>                        
+    <span class="n">x</span> <span class="o">=</span> <span class="n">BatchNormalization</span><span class="p">()(</span><span class="n">x</span><span class="p">)</span> <span class="k">if</span> <span class="n">bn</span> <span class="k">else</span> <span class="n">x</span>                                    
+    <span class="n">x</span> <span class="o">=</span> <span class="n">ELU</span><span class="p">(</span><span class="n">alpha</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>                                                      
+                                                                                
+    <span class="n">x</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">f_maps</span><span class="p">,</span> <span class="n">filter_size</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>                            
+               <span class="n">kernel_initializer</span><span class="o">=</span><span class="n">k_init</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>                   
+    <span class="n">x</span> <span class="o">=</span> <span class="n">BatchNormalization</span><span class="p">()(</span><span class="n">x</span><span class="p">)</span> <span class="k">if</span> <span class="n">bn</span> <span class="k">else</span> <span class="n">x</span>                                    
+                                                                                
+    <span class="c1"># Add shortcut value to main path                                           </span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">Add</span><span class="p">()([</span><span class="n">shortcut</span><span class="p">,</span> <span class="n">x</span><span class="p">])</span>                                                    
+                                                                                
+    <span class="k">return</span> <span class="n">x</span>         </div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

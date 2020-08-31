@@ -1,0 +1,537 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>metrics &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples.html">Example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks.html">Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../callbacks.html">Callbacks</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="index.html">Module code</a> &raquo;</li>
+        
+      <li>metrics</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for metrics</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras</span> <span class="kn">import</span> <span class="n">backend</span> <span class="k">as</span> <span class="n">K</span>
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">skimage</span> <span class="kn">import</span> <span class="n">measure</span>
+<span class="kn">import</span> <span class="nn">distutils</span>
+<span class="kn">from</span> <span class="nn">distutils</span> <span class="kn">import</span> <span class="n">dir_util</span>
+<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras</span> <span class="kn">import</span> <span class="n">losses</span>
+
+<div class="viewcode-block" id="jaccard_index_numpy"><a class="viewcode-back" href="../metrics.html#metrics.jaccard_index_numpy">[docs]</a><span class="k">def</span> <span class="nf">jaccard_index_numpy</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Define Jaccard index.</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">            y_true (N dim Numpy array): ground truth masks.</span>
+<span class="sd">                E.g. ``(image_number, x, y, channels)`` for 2D images or </span>
+<span class="sd">                ``(volume_number, z, x, y, channels)`` for 3D volumes.</span>
+
+<span class="sd">            y_pred (N dim Numpy array): predicted masks.</span>
+<span class="sd">                E.g. ``(image_number, x, y, channels)`` for 2D images or</span>
+<span class="sd">                ``(volume_number, z, x, y, channels)`` for 3D volumes.</span>
+
+<span class="sd">       Return:</span>
+<span class="sd">            float: Jaccard index value.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">TP</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">y_pred</span> <span class="o">*</span> <span class="n">y_true</span><span class="p">)</span>
+    <span class="n">FP</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">y_pred</span> <span class="o">*</span> <span class="p">(</span><span class="n">y_true</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">FN</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">((</span><span class="n">y_pred</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">y_true</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">TP</span> <span class="o">+</span> <span class="n">FP</span> <span class="o">+</span> <span class="n">FN</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">jac</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">jac</span> <span class="o">=</span> <span class="n">TP</span> <span class="o">/</span> <span class="p">(</span><span class="n">TP</span> <span class="o">+</span> <span class="n">FP</span> <span class="o">+</span> <span class="n">FN</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">jac</span></div>
+
+
+<div class="viewcode-block" id="jaccard_index"><a class="viewcode-back" href="../metrics.html#metrics.jaccard_index">[docs]</a><span class="k">def</span> <span class="nf">jaccard_index</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Define Jaccard index.</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">            y_true (tensor): ground truth masks.</span>
+
+<span class="sd">            y_pred (tensor): predicted masks.</span>
+
+<span class="sd">            t (float, optional): threshold to be applied.</span>
+
+<span class="sd">       Return:</span>
+<span class="sd">            tensor: Jaccard index value</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">y_pred_</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">y_pred</span> <span class="o">&gt;</span> <span class="n">t</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="n">y_true</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+
+    <span class="n">TP</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">y_pred_</span> <span class="o">*</span> <span class="n">y_true</span><span class="p">)</span>
+    <span class="n">FP</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">y_pred_</span> <span class="o">*</span> <span class="p">(</span><span class="n">y_true</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">FN</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">((</span><span class="n">y_pred_</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">y_true</span><span class="p">)</span>
+
+    <span class="n">jac</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cond</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">greater</span><span class="p">((</span><span class="n">TP</span> <span class="o">+</span> <span class="n">FP</span> <span class="o">+</span> <span class="n">FN</span><span class="p">),</span> <span class="mi">0</span><span class="p">),</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">TP</span> <span class="o">/</span> <span class="p">(</span><span class="n">TP</span> <span class="o">+</span> <span class="n">FP</span> <span class="o">+</span> <span class="n">FN</span><span class="p">),</span>
+                  <span class="k">lambda</span><span class="p">:</span> <span class="n">K</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="mf">0.000</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float64&#39;</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">jac</span></div>
+
+
+<div class="viewcode-block" id="jaccard_index_softmax"><a class="viewcode-back" href="../metrics.html#metrics.jaccard_index_softmax">[docs]</a><span class="k">def</span> <span class="nf">jaccard_index_softmax</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Define Jaccard index.</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">            y_true (tensor): ground truth masks.</span>
+
+<span class="sd">            y_pred (tensor): predicted masks.</span>
+
+<span class="sd">            t (float, optional): threshold to be applied.</span>
+
+<span class="sd">       Return:</span>
+<span class="sd">            tensor: Jaccard index value</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">y_pred_</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">y_pred</span> <span class="o">&gt;</span> <span class="n">t</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="n">y_pred_</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">y_pred_</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>    
+    
+    <span class="n">y_true_</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="n">y_true_</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">y_true_</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">TP</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">y_pred_</span> <span class="o">*</span> <span class="n">y_true_</span><span class="p">)</span>
+    <span class="n">FP</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">y_pred_</span> <span class="o">*</span> <span class="p">(</span><span class="n">y_true_</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">FN</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">((</span><span class="n">y_pred_</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">y_true_</span><span class="p">)</span>
+
+    <span class="n">jac</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cond</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">greater</span><span class="p">((</span><span class="n">TP</span> <span class="o">+</span> <span class="n">FP</span> <span class="o">+</span> <span class="n">FN</span><span class="p">),</span> <span class="mi">0</span><span class="p">),</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">TP</span> <span class="o">/</span> <span class="p">(</span><span class="n">TP</span> <span class="o">+</span> <span class="n">FP</span> <span class="o">+</span> <span class="n">FN</span><span class="p">),</span>
+                  <span class="k">lambda</span><span class="p">:</span> <span class="n">K</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="mf">0.000</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float64&#39;</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">jac</span></div>
+
+
+
+<div class="viewcode-block" id="jaccard_loss"><a class="viewcode-back" href="../metrics.html#metrics.jaccard_loss">[docs]</a><span class="k">def</span> <span class="nf">jaccard_loss</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Define Jaccard index.</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">            y_true (tensor): ground truth masks.</span>
+
+<span class="sd">            y_pred (tensor): predicted masks.</span>
+
+<span class="sd">       Return:</span>
+<span class="sd">            float: Jaccard loss score.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">numerator</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reduce_sum</span><span class="p">(</span><span class="n">y_true</span> <span class="o">*</span> <span class="n">y_pred</span><span class="p">)</span>
+    <span class="n">denominator</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reduce_sum</span><span class="p">(</span><span class="n">y_true</span> <span class="o">+</span> <span class="n">y_pred</span><span class="p">)</span> <span class="o">-</span> <span class="n">numerator</span> 
+
+    <span class="n">jac</span> <span class="o">=</span>  <span class="n">numerator</span> <span class="o">/</span> <span class="p">(</span><span class="n">denominator</span> <span class="o">+</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">epsilon</span><span class="p">())</span>
+
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">jac</span></div>
+
+
+<div class="viewcode-block" id="dice_coeff"><a class="viewcode-back" href="../metrics.html#metrics.dice_coeff">[docs]</a><span class="k">def</span> <span class="nf">dice_coeff</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Dice coefficient.</span>
+<span class="sd">        </span>
+<span class="sd">       Based on `image_segmentation.ipynb &lt;https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb&gt;`_.</span>
+<span class="sd">    </span>
+<span class="sd">       Args:                                                                    </span>
+<span class="sd">            y_true (tensor): ground truth masks.                                </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            y_pred (tensor): predicted masks.</span>
+
+<span class="sd">       Return:                                                                  </span>
+<span class="sd">           Tensor: Dice coefficient value.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">smooth</span> <span class="o">=</span> <span class="mf">1.</span>
+    <span class="c1"># Flatten</span>
+    <span class="n">y_true_f</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">y_pred_f</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">y_pred</span><span class="p">,</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">intersection</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reduce_sum</span><span class="p">(</span><span class="n">y_true_f</span> <span class="o">*</span> <span class="n">y_pred_f</span><span class="p">)</span>
+    <span class="n">score</span> <span class="o">=</span> <span class="p">(</span><span class="mf">2.</span> <span class="o">*</span> <span class="n">intersection</span> <span class="o">+</span> <span class="n">smooth</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">reduce_sum</span><span class="p">(</span><span class="n">y_true_f</span><span class="p">)</span> <span class="o">+</span> <span class="n">tf</span><span class="o">.</span><span class="n">reduce_sum</span><span class="p">(</span><span class="n">y_pred_f</span><span class="p">)</span> <span class="o">+</span> <span class="n">smooth</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">score</span></div>
+
+
+<div class="viewcode-block" id="dice_loss"><a class="viewcode-back" href="../metrics.html#metrics.dice_loss">[docs]</a><span class="k">def</span> <span class="nf">dice_loss</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Dice loss.</span>
+
+<span class="sd">       Based on `image_segmentation.ipynb &lt;https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb&gt;`_.</span>
+
+<span class="sd">       Args:                                                                    </span>
+<span class="sd">            y_true (tensor): ground truth masks.                                </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            y_pred (tensor): predicted masks.</span>
+
+<span class="sd">       Return:                                                                  </span>
+<span class="sd">           Tensor: loss value.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">loss</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">dice_coeff</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">loss</span></div>
+
+
+<div class="viewcode-block" id="bce_dice_loss"><a class="viewcode-back" href="../metrics.html#metrics.bce_dice_loss">[docs]</a><span class="k">def</span> <span class="nf">bce_dice_loss</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Loss function based on the combination of BCE and Dice.                  </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Based on `image_segmentation.ipynb &lt;https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb&gt;`_.</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">           y_true (Numpy array): ground truth.</span>
+
+<span class="sd">           y_pred (Numpy array): predictions. </span>
+
+<span class="sd">       Return:</span>
+<span class="sd">           Tensor: loss value.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">loss</span> <span class="o">=</span> <span class="n">losses</span><span class="o">.</span><span class="n">binary_crossentropy</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">)</span> <span class="o">+</span> <span class="n">dice_loss</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">loss</span></div>
+
+
+<div class="viewcode-block" id="weighted_bce_dice_loss"><a class="viewcode-back" href="../metrics.html#metrics.weighted_bce_dice_loss">[docs]</a><span class="k">def</span> <span class="nf">weighted_bce_dice_loss</span><span class="p">(</span><span class="n">w_dice</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">w_bce</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Loss function based on the combination of BCE and Dice weighted.</span>
+
+<span class="sd">       Inspired by `https://medium.com/@Bloomore post &lt;https://medium.com/@Bloomore/how-to-write-a-custom-loss-function-with-additional-arguments-in-keras-5f193929f7a0&gt;`_.</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">           w_dice (float, optional): weight to be applied to Dice loss.</span>
+
+<span class="sd">           w_bce (float, optional): weight to be applied to BCE.</span>
+
+<span class="sd">       Return:                                                                  </span>
+<span class="sd">           Tensor: loss value.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">loss</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">losses</span><span class="o">.</span><span class="n">binary_crossentropy</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">)</span> <span class="o">*</span> <span class="n">w_bce</span> <span class="o">+</span> <span class="n">dice_loss</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">)</span> <span class="o">*</span> <span class="n">w_dice</span>
+    <span class="k">return</span> <span class="n">loss</span></div>
+
+
+<div class="viewcode-block" id="voc_calculation"><a class="viewcode-back" href="../metrics.html#metrics.voc_calculation">[docs]</a><span class="k">def</span> <span class="nf">voc_calculation</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">foreground</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Calculate VOC metric value.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            y_true (4D Numpy array): ground truth masks.</span>
+<span class="sd">                E.g. ``(image_number, x, y, channels)``.</span>
+
+<span class="sd">            y_pred (4D Numpy array): predicted masks.</span>
+<span class="sd">                E.g. ``(image_number, x, y, channels)``.</span>
+
+<span class="sd">            foreground (float): foreground Jaccard index score.</span>
+
+<span class="sd">        Return:</span>
+<span class="sd">            float: VOC score value.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Invert the arrays</span>
+    <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">y_pred</span><span class="p">[</span><span class="n">y_pred</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">y_pred</span><span class="p">[</span><span class="n">y_pred</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">y_pred</span><span class="p">[</span><span class="n">y_pred</span> <span class="o">==</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="n">y_true</span><span class="p">[</span><span class="n">y_true</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span> 
+    <span class="n">y_true</span><span class="p">[</span><span class="n">y_true</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">y_true</span><span class="p">[</span><span class="n">y_true</span> <span class="o">==</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="n">background</span> <span class="o">=</span> <span class="n">jaccard_index_numpy</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">)</span>
+    <span class="n">voc</span> <span class="o">=</span> <span class="p">(</span><span class="nb">float</span><span class="p">)(</span><span class="n">foreground</span> <span class="o">+</span> <span class="n">background</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span>
+
+    <span class="c1"># Revert the changes</span>
+    <span class="n">y_pred</span><span class="p">[</span><span class="n">y_pred</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">y_pred</span><span class="p">[</span><span class="n">y_pred</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">y_pred</span><span class="p">[</span><span class="n">y_pred</span> <span class="o">==</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="n">y_true</span><span class="p">[</span><span class="n">y_true</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">y_true</span><span class="p">[</span><span class="n">y_true</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">y_true</span><span class="p">[</span><span class="n">y_true</span> <span class="o">==</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="k">return</span> <span class="n">voc</span></div>
+
+
+<div class="viewcode-block" id="DET_calculation"><a class="viewcode-back" href="../metrics.html#metrics.DET_calculation">[docs]</a><span class="k">def</span> <span class="nf">DET_calculation</span><span class="p">(</span><span class="n">Y_test</span><span class="p">,</span> <span class="n">preds_test</span><span class="p">,</span> <span class="n">ge_path</span><span class="p">,</span> <span class="n">eval_path</span><span class="p">,</span> <span class="n">det_bin</span><span class="p">,</span> <span class="n">n_dig</span><span class="p">,</span>
+                    <span class="n">job_id</span><span class="o">=</span><span class="s2">&quot;0&quot;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Cell tracking challenge detection accuracy (DET) calculation. This</span>
+<span class="sd">       function uses the binary provided by the challente to detect the cell and</span>
+<span class="sd">       it needs to store the images into some folders. </span>
+
+<span class="sd">       To obtain more info please visit the followin link:</span>
+
+<span class="sd">           http://celltrackingchallenge.net/evaluation-methodology/</span>
+
+<span class="sd">       The name of the folders that are here created follow the conventions listed</span>
+<span class="sd">       in this `link &lt;https://public.celltrackingchallenge.net/documents/Naming%20and%20file%20content%20conventions.pdf&gt;`_.</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">           Y_test (4D Numpy array): ground truth mask. </span>
+<span class="sd">               E.g. ``(image_number, x, y, channels)``.</span>
+
+<span class="sd">           preds_test (4D Numpy array): predicted mask.</span>
+<span class="sd">               E.g. ``(image_number, x, y, channels)``.</span>
+
+<span class="sd">           ge_path (str): path where the ground truth is stored. If the folder</span>
+<span class="sd">                does not exist it will be created with the Y_test ground truth.</span>
+
+<span class="sd">           eval_path (str): path where the evaluation of the metric will be done.</span>
+
+<span class="sd">           det_bin (str): path to the DET binary provided by the cell tracking</span>
+<span class="sd">               challenge.      </span>
+
+<span class="sd">           n_dig (int): The number of digits used for encoding temporal indices</span>
+<span class="sd">               (e.g., ``3``). Used by the DET calculation binary, more info </span>
+<span class="sd">               `here &lt;https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf&gt;`_.</span>
+
+<span class="sd">           job_id (str, optional): id of the job. Necessary to store the images</span>
+<span class="sd">               on a location based on this string.</span>
+<span class="sd">           </span>
+<span class="sd">       Returns:</span>
+<span class="sd">           float: DET accuracy.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Create the ground truth directory to be reused in future runs if it is not</span>
+    <span class="c1"># created yet</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">ge_path</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No ground truth folder detected. Creating it . . .&quot;</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">ge_path</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    
+        <span class="n">gt_labels</span> <span class="o">=</span> <span class="n">measure</span><span class="o">.</span><span class="n">label</span><span class="p">(</span><span class="n">Y_test</span><span class="p">[:,:,:,</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">gt_labels</span><span class="p">)):</span>
+            <span class="n">i_dig</span> <span class="o">=</span> <span class="s2">&quot;{:0&quot;</span> <span class="o">+</span> <span class="n">n_dig</span> <span class="o">+</span> <span class="s2">&quot;d}&quot;</span>
+            <span class="n">i_dig</span>  <span class="o">=</span> <span class="n">i_dig</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">gt_labels</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;uint8&#39;</span><span class="p">))</span>
+            <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;I;16&#39;</span><span class="p">)</span>
+            <span class="n">im</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">ge_path</span><span class="p">,</span> <span class="s2">&quot;man_track&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i_dig</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.tif&quot;</span><span class="p">))</span>
+   
+    <span class="c1"># Copy ground truth folder</span>
+    <span class="n">gt_eval_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">eval_path</span><span class="p">,</span> <span class="n">job_id</span> <span class="o">+</span> <span class="s1">&#39;_GT&#39;</span><span class="p">,</span> <span class="s1">&#39;TRA&#39;</span><span class="p">)</span>
+    <span class="n">distutils</span><span class="o">.</span><span class="n">dir_util</span><span class="o">.</span><span class="n">copy_tree</span><span class="p">(</span><span class="n">ge_path</span><span class="p">,</span> <span class="n">gt_eval_path</span><span class="p">)</span>
+  
+    <span class="c1"># Create results folder </span>
+    <span class="n">res_eval_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">eval_path</span><span class="p">,</span> <span class="n">job_id</span> <span class="o">+</span> <span class="s1">&#39;_RES&#39;</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">res_eval_path</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    
+    <span class="n">res_labels</span> <span class="o">=</span> <span class="n">measure</span><span class="o">.</span><span class="n">label</span><span class="p">(</span><span class="n">preds_test</span><span class="p">[:,:,:,</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">res_labels</span><span class="p">)):</span>
+        <span class="n">i_dig</span> <span class="o">=</span> <span class="s2">&quot;{:0&quot;</span> <span class="o">+</span> <span class="n">n_dig</span> <span class="o">+</span> <span class="s2">&quot;d}&quot;</span>
+        <span class="n">i_dig</span>  <span class="o">=</span> <span class="n">i_dig</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+        <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">res_labels</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;uint8&#39;</span><span class="p">))</span>
+        <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;I;16&#39;</span><span class="p">)</span>
+        <span class="n">im</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">res_eval_path</span><span class="p">,</span> <span class="s2">&quot;mask&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i_dig</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.tif&quot;</span><span class="p">))</span>
+   
+    <span class="c1"># Execute the metric with the given binary path </span>
+    <span class="n">det_cmd</span> <span class="o">=</span> <span class="n">det_bin</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">eval_path</span> <span class="o">+</span>  <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">job_id</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">n_dig</span>
+    <span class="n">det_out</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">popen</span><span class="p">(</span><span class="n">det_cmd</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+
+    <span class="n">det</span> <span class="o">=</span> <span class="n">det_out</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">2</span><span class="p">]</span> 
+    <span class="k">return</span> <span class="n">det</span></div>
+
+
+<div class="viewcode-block" id="binary_crossentropy_weighted"><a class="viewcode-back" href="../metrics.html#metrics.binary_crossentropy_weighted">[docs]</a><span class="k">def</span> <span class="nf">binary_crossentropy_weighted</span><span class="p">(</span><span class="n">weights</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Custom binary cross entropy loss. The weights are used to multiply          </span>
+<span class="sd">       the results of the usual cross-entropy loss in order to give more weight    </span>
+<span class="sd">       to areas between cells close to one another.</span>
+<span class="sd">     </span>
+<span class="sd">       Args:</span>
+<span class="sd">           weights (float): weigth to multiply the BCE value by.   </span>
+<span class="sd">       </span>
+<span class="sd">       Based on:</span>
+
+<span class="sd">           https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py</span>
+
+<span class="sd">       Return:                                                                  </span>
+<span class="sd">           Tensor: loss value.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="k">def</span> <span class="nf">loss</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">):</span> 
+        <span class="k">return</span> <span class="n">K</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">weights</span> <span class="o">*</span> <span class="n">K</span><span class="o">.</span><span class="n">binary_crossentropy</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">),</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">loss</span></div>
+
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

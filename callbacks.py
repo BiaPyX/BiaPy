@@ -1,7 +1,4 @@
-# Code copied from https://github.com/keras-team/keras/blob/master/keras/callbacks/callbacks.py#L633
-# just inserting a few lines on the prints to avoid the error cited in
-# https://github.com/tensorflow/tensorflow/issues/35100 overlap the messages of
-# this callback.
+"Code copied from `Tensorflow/keras/callbacks.py <https://github.com/tensorflow/tensorflow/blob/b36436b087bd8e8701ef51718179037cccdfc26e/tensorflow/python/keras/callbacks.py#L1057>`_ just inserting a few lines on the prints to avoid this `error <https://github.com/tensorflow/tensorflow/issues/35100>`_."
 
 import warnings
 import tensorflow as tf
@@ -15,7 +12,8 @@ class ModelCheckpoint(tf.keras.callbacks.Callback):
     For example: if `filepath` is `weights.{epoch:02d}-{val_loss:.2f}.hdf5`,
     then the model checkpoints will be saved with the epoch number and
     the validation loss in the filename.
-    # Arguments
+
+    Args:
         filepath: string, path to save the model file.
         monitor: quantity to monitor.
         verbose: verbosity mode, 0 or 1.

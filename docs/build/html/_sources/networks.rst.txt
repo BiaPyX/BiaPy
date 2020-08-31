@@ -1,0 +1,12 @@
+Networks
+========
+
+.. toctree::
+   :maxdepth: 6
+    
+
+   networks_unet
+   networks_unet_3d
+   networks_resunet
+   networks_resunet_3d
+   networks_fcn

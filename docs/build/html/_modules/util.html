@@ -1,0 +1,1208 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>util &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples.html">Example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks.html">Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../callbacks.html">Callbacks</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="index.html">Module code</a> &raquo;</li>
+        
+      <li>util</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for util</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">mkl</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">ImageEnhance</span><span class="p">,</span> <span class="n">Image</span>
+<span class="kn">from</span> <span class="nn">tqdm</span> <span class="kn">import</span> <span class="n">tqdm</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">from</span> <span class="nn">skimage</span> <span class="kn">import</span> <span class="n">measure</span>
+<span class="kn">import</span> <span class="nn">scipy.ndimage</span>
+<span class="kn">from</span> <span class="nn">skimage.segmentation</span> <span class="kn">import</span> <span class="n">clear_border</span>
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span> 
+<span class="kn">from</span> <span class="nn">metrics</span> <span class="kn">import</span> <span class="n">jaccard_index</span><span class="p">,</span> <span class="n">jaccard_index_numpy</span><span class="p">,</span> <span class="n">voc_calculation</span><span class="p">,</span> \
+                    <span class="n">DET_calculation</span>
+
+
+<div class="viewcode-block" id="limit_threads"><a class="viewcode-back" href="../util.html#util.limit_threads">[docs]</a><span class="k">def</span> <span class="nf">limit_threads</span><span class="p">(</span><span class="n">threads_number</span><span class="o">=</span><span class="s1">&#39;1&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Limits the number of threads for a python process.</span>
+<span class="sd">       </span>
+<span class="sd">       Args: </span>
+<span class="sd">            threads_number (int, optional): number of threads.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Python process limited to </span><span class="si">{}</span><span class="s2"> thread&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">threads_number</span><span class="p">))</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;MKL_NUM_THREADS&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;1&#39;</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;OPENBLAS_NUM_THREADS&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;1&#39;</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;MKL_DYNAMIC&quot;</span><span class="p">]</span><span class="o">=</span><span class="s2">&quot;FALSE&quot;</span><span class="p">;</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;NUMEXPR_NUM_THREADS&quot;</span><span class="p">]</span><span class="o">=</span><span class="s1">&#39;1&#39;</span><span class="p">;</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;VECLIB_MAXIMUM_THREADS&quot;</span><span class="p">]</span><span class="o">=</span><span class="s1">&#39;1&#39;</span><span class="p">;</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;OMP_NUM_THREADS&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;1&#39;</span><span class="p">;</span>
+    <span class="n">mkl</span><span class="o">.</span><span class="n">set_num_threads</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="set_seed"><a class="viewcode-back" href="../util.html#util.set_seed">[docs]</a><span class="k">def</span> <span class="nf">set_seed</span><span class="p">(</span><span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Sets the seed on multiple python modules to obtain results as </span>
+<span class="sd">       reproducible as possible.</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">           seedValue (int, optional): seed value.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">random</span><span class="o">.</span><span class="n">seed</span> <span class="o">=</span> <span class="n">seedValue</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+    <span class="n">tf</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">set_seed</span><span class="p">(</span><span class="n">seedValue</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;PYTHONHASHSEED&quot;</span><span class="p">]</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">seedValue</span><span class="p">);</span></div>
+
+
+<div class="viewcode-block" id="TimeHistory"><a class="viewcode-back" href="../util.html#util.TimeHistory">[docs]</a><span class="k">class</span> <span class="nc">TimeHistory</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">callbacks</span><span class="o">.</span><span class="n">Callback</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Class to record each epoch time.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="TimeHistory.on_train_begin"><a class="viewcode-back" href="../util.html#util.TimeHistory.on_train_begin">[docs]</a>    <span class="k">def</span> <span class="nf">on_train_begin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">logs</span><span class="o">=</span><span class="p">{}):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">times</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+<div class="viewcode-block" id="TimeHistory.on_epoch_begin"><a class="viewcode-back" href="../util.html#util.TimeHistory.on_epoch_begin">[docs]</a>    <span class="k">def</span> <span class="nf">on_epoch_begin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">logs</span><span class="o">=</span><span class="p">{}):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">epoch_time_start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="TimeHistory.on_epoch_end"><a class="viewcode-back" href="../util.html#util.TimeHistory.on_epoch_end">[docs]</a>    <span class="k">def</span> <span class="nf">on_epoch_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">logs</span><span class="o">=</span><span class="p">{}):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">times</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">epoch_time_start</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="create_plots"><a class="viewcode-back" href="../util.html#util.create_plots">[docs]</a><span class="k">def</span> <span class="nf">create_plots</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">chartOutDir</span><span class="p">,</span> <span class="n">metric</span><span class="o">=</span><span class="s1">&#39;jaccard_index&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create loss and main metric plots with the given results.</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">            results (Keras History object): record of training loss values and </span>
+<span class="sd">                metrics values at successive epochs. History object is returned</span>
+<span class="sd">                by Keras `fit() &lt;https://keras.io/api/models/model_training_apis/#fit-method&gt;`_ method.</span>
+
+<span class="sd">            job_id (str): jod identifier.</span>
+
+<span class="sd">            chartOutDir (str): path where the charts will be stored into.</span>
+<span class="sd">            </span>
+<span class="sd">            metric (str, optional): metric used.</span>
+
+<span class="sd">       Examples</span>
+<span class="sd">       --------</span>
+<span class="sd">       </span>
+<span class="sd">       +-----------------------------------------+-----------------------------------------+</span>
+<span class="sd">       | .. figure:: img/chart_loss.png          | .. figure:: img/chart_jaccard_index.png |</span>
+<span class="sd">       |   :width: 80%                           |   :width: 80%                           |</span>
+<span class="sd">       |   :align: center                        |   :align: center                        |</span>
+<span class="sd">       |                                         |                                         |</span>
+<span class="sd">       |   Loss values on each epoch             |   Jaccard index values on each epoch    |</span>
+<span class="sd">       +-----------------------------------------+-----------------------------------------+</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">chartOutDir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># For matplotlib errors in display</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;QT_QPA_PLATFORM&#39;</span><span class="p">]</span><span class="o">=</span><span class="s1">&#39;offscreen&#39;</span>
+
+    <span class="c1"># Loss</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;loss&#39;</span><span class="p">])</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_loss&#39;</span><span class="p">])</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Model JOBID=&#39;</span> <span class="o">+</span> <span class="n">job_id</span> <span class="o">+</span> <span class="s1">&#39; loss&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Value&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Epoch&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">([</span><span class="s1">&#39;Train loss&#39;</span><span class="p">,</span> <span class="s1">&#39;Val. loss&#39;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="s1">&#39;upper left&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">chartOutDir</span><span class="p">,</span> <span class="n">job_id</span> <span class="o">+</span> <span class="s1">&#39;_loss.png&#39;</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">clf</span><span class="p">()</span>
+
+    <span class="c1"># Jaccard index</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="n">metric</span><span class="p">])</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_&#39;</span> <span class="o">+</span> <span class="n">metric</span><span class="p">])</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Model JOBID=&#39;</span> <span class="o">+</span> <span class="n">job_id</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">metric</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Value&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Epoch&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">([</span><span class="s1">&#39;Train metric&#39;</span><span class="p">,</span> <span class="s1">&#39;Val. metric&#39;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="s1">&#39;upper left&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">chartOutDir</span><span class="p">,</span> <span class="n">job_id</span> <span class="o">+</span> <span class="s1">&#39;_&#39;</span> <span class="o">+</span> <span class="n">metric</span> <span class="o">+</span><span class="s1">&#39;.png&#39;</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">clf</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="store_history"><a class="viewcode-back" href="../util.html#util.store_history">[docs]</a><span class="k">def</span> <span class="nf">store_history</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">score</span><span class="p">,</span> <span class="n">time_callback</span><span class="p">,</span> <span class="n">log_dir</span><span class="p">,</span> <span class="n">job_file</span><span class="p">,</span> 
+                  <span class="n">metric</span><span class="o">=</span><span class="s1">&#39;jaccard_index&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Stores the results obtained as csv to manipulate them later </span>
+<span class="sd">       and labeled in another file as historic results.</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">            results (history object): record of training loss values and metrics </span>
+<span class="sd">                values at successive epochs.</span>
+
+<span class="sd">            score (Dictionary): contains all metrics values extracted from </span>
+<span class="sd">                training and inference. </span>
+
+<span class="sd">            time_callback (util.TimeHistory): time structure with the time of </span>
+<span class="sd">                each epoch.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Create folders and construct file names</span>
+    <span class="n">csv_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">log_dir</span><span class="p">,</span> <span class="s1">&#39;formatted&#39;</span><span class="p">,</span> <span class="n">job_file</span><span class="p">)</span>          
+    <span class="n">history_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">log_dir</span><span class="p">,</span> <span class="s1">&#39;history_of_values&#39;</span><span class="p">,</span> <span class="n">job_file</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">log_dir</span><span class="p">,</span> <span class="s1">&#39;formatted&#39;</span><span class="p">),</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">log_dir</span><span class="p">,</span> <span class="s1">&#39;history_of_values&#39;</span><span class="p">),</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    
+    <span class="c1"># Store the results as csv</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">csv_file</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+        <span class="k">pass</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">csv_file</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">)</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;loss&#39;</span><span class="p">]))</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_loss&#39;</span><span class="p">]))</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;loss_per_crop&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="n">metric</span><span class="p">]))</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_&#39;</span><span class="o">+</span><span class="n">metric</span><span class="p">]))</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;jac_per_crop&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;jac_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;jac_50ov&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_score_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_score_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_zfil_score_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;wa_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_wa_zfil_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;voc_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;voc_50ov&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_voc_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_voc_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_zfil_voc_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;wa_voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_wa_zfil_voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;det_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;det_50ov&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;det_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_det_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_det_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_zfil_det_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_det_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_det_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_det_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;wa_det_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_wa_zfil_det_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_loss&#39;</span><span class="p">]))</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">time_callback</span><span class="o">.</span><span class="n">times</span><span class="p">))</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">time_callback</span><span class="o">.</span><span class="n">times</span><span class="p">))</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+
+    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+    <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="c1"># Save all the values in case we need them in the future</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">history_file</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+        <span class="k">pass</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">history_file</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">)</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TRAIN LOSS ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;loss&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VALIDATION LOSS ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_loss&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST LOSS ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;loss_per_crop&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TRAIN JACCARD INDEX ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="n">metric</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VALIDATION JACCARD INDEX ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_&#39;</span><span class="o">+</span><span class="n">metric</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX (per crop) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;jac_per_crop&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX (per image) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;jac_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX (per image with 50</span><span class="si">% o</span><span class="s1">v) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;jac_50ov&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX SMOOTH (per image) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_score_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX Z-FILTERING (per image) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_score_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX SMOOTH+Z-FILTERING (per image) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_zfil_score_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX 8-ENSEMBLE (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX Z-FILTERING (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX SPURIOUS (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX WATERSHED (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;wa_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX SPURIOUS+WATERSHED+Z-FILTERING (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_wa_zfil_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC (per image) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;voc_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC (per image with 50</span><span class="si">% o</span><span class="s1">v) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;voc_50ov&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC SMOOTH ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_voc_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC Z-FILTERING ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_voc_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC SMOOTH+Z-FILTERING ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_zfil_voc_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC INDEX 8-ENSEMBLE (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC INDEX Z-FILTERING (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC INDEX SPURIOUS (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC INDEX WATERSHED (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;wa_voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC INDEX SPURIOUS+WATERSHED+Z-FILTERING (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_wa_zfil_voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### DET (per image) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;det_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### DET (per image with 50</span><span class="si">% o</span><span class="s1">v) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;det_50ov&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### DET SMOOTH ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_det_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### DET Z-FILTERING ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_det_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### DET SMOOTH+Z-FILTERING ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_zfil_det_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### DET INDEX 8-ENSEMBLE (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_det_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### DET INDEX Z-FILTERING (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_det_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### DET INDEX SPURIOUS (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_det_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### DET INDEX WATERSHED (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;wa_det_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### DET INDEX SPURIOUS+WATERSHED+Z-FILTERING (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_wa_zfil_det_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+    <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="threshold_plots"><a class="viewcode-back" href="../util.html#util.threshold_plots">[docs]</a><span class="k">def</span> <span class="nf">threshold_plots</span><span class="p">(</span><span class="n">preds_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span> <span class="n">det_eval_ge_path</span><span class="p">,</span> <span class="n">det_eval_path</span><span class="p">,</span>
+                    <span class="n">det_bin</span><span class="p">,</span> <span class="n">n_dig</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">job_file</span><span class="p">,</span> <span class="n">char_dir</span><span class="p">,</span> <span class="n">r_val</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create a plot with the different metric values binarizing the prediction</span>
+<span class="sd">       with different thresholds, from 0.1 to 0.9.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Args:                                                                    </span>
+<span class="sd">           preds_test (4D Numpy array): predictions made by the model. </span>
+<span class="sd">               E.g. ``(image_number, x, y, channels)``.</span>
+
+<span class="sd">           Y_test (4D Numpy array): ground truth of the data.</span>
+<span class="sd">               E.g. ``(image_number, x, y, channels)``.</span>
+
+<span class="sd">           det_eval_ge_path (str): path where the ground truth is stored for </span>
+<span class="sd">               the DET calculation.</span>
+
+<span class="sd">           det_eval_path (str): path where the evaluation of the metric will be done.</span>
+
+<span class="sd">           det_bin (str): path to the DET binary.</span>
+
+<span class="sd">           n_dig (int): The number of digits used for encoding temporal indices</span>
+<span class="sd">               (e.g. ``3``). Used by the DET calculation binary.</span>
+
+<span class="sd">           job_id (str): id of the job.</span>
+
+<span class="sd">           job_file (str): id and run number of the job.</span>
+
+<span class="sd">           char_dir (str): path to store the charts generated.</span>
+
+<span class="sd">           r_val (float, optional): threshold values to return. </span>
+
+<span class="sd">       Returns:</span>
+<span class="sd">           Multiple elements</span>
+<span class="sd">            </span>
+<span class="sd">               - **t_jac** (*float*): value of the Jaccard index when the </span>
+<span class="sd">                 threshold is ``r_val``.</span>
+
+<span class="sd">               - **t_voc** (*float*): value of VOC when the threshold is ``r_val``.</span>
+
+<span class="sd">               - **t_det** (*float*): value of DET when the threshold is ``r_val``.</span>
+
+<span class="sd">       Examples</span>
+<span class="sd">       -------- </span>
+<span class="sd">       ::</span>
+<span class="sd">       </span>
+<span class="sd">           jac, voc, det = threshold_plots(</span>
+<span class="sd">               preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin, </span>
+<span class="sd">               n_dig, args.job_id, &#39;278_3&#39;, char_dir)</span>
+
+<span class="sd">       Will generate 3 charts, one per each metric: IoU, VOC and DET. In the x</span>
+<span class="sd">       axis represents the 9 different thresholds applied, that is: ``0.1, 0.2, </span>
+<span class="sd">       0.3, ..., 0.9``. The y axis is the value of the metric in each chart. For </span>
+<span class="sd">       instance, the Jaccard/IoU chart will look like this:</span>
+
+<span class="sd">       .. image:: img/278_3_threshold_Jaccard.png</span>
+<span class="sd">           :width: 60%</span>
+<span class="sd">           :align: center</span>
+
+<span class="sd">       In this example, the best value, ``0.868``, is obtained with a threshold </span>
+<span class="sd">       of ``0.4``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">char_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">char_dir</span><span class="p">,</span> <span class="s2">&quot;t_&quot;</span> <span class="o">+</span> <span class="n">job_file</span><span class="p">)</span>
+
+    <span class="n">t_jac</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>                                                         
+    <span class="n">t_voc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>                                                         
+    <span class="n">t_det</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>                                                         
+    <span class="n">objects</span> <span class="o">=</span> <span class="p">[]</span>                                                                
+    <span class="n">r_val_pos</span> <span class="o">=</span> <span class="mi">0</span>
+                                                                                
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">0.1</span><span class="p">)):</span>                              
+    
+        <span class="k">if</span> <span class="n">t</span> <span class="o">==</span> <span class="n">r_val</span><span class="p">:</span>
+            <span class="n">r_val_pos</span> <span class="o">=</span> <span class="n">i</span>
+
+        <span class="n">objects</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%.2f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">float</span><span class="p">(</span><span class="n">t</span><span class="p">)))</span>                                                  
+                                                                                
+        <span class="c1"># Threshold images                                                      </span>
+        <span class="n">bin_preds_test</span> <span class="o">=</span> <span class="p">(</span><span class="n">preds_test</span> <span class="o">&gt;</span> <span class="n">t</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>                      
+                                                                                
+        <span class="c1"># Metrics (Jaccard + VOC + DET)                                             </span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Calculate metrics . . .&quot;</span><span class="p">)</span>                                        
+        <span class="n">t_jac</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">jaccard_index_numpy</span><span class="p">(</span><span class="n">Y_test</span><span class="p">,</span> <span class="n">bin_preds_test</span><span class="p">)</span>
+        <span class="n">t_voc</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">voc_calculation</span><span class="p">(</span><span class="n">Y_test</span><span class="p">,</span> <span class="n">bin_preds_test</span><span class="p">,</span> <span class="n">t_jac</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>         
+        <span class="n">t_det</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">DET_calculation</span><span class="p">(</span>
+            <span class="n">Y_test</span><span class="p">,</span> <span class="n">bin_preds_test</span><span class="p">,</span> <span class="n">det_eval_ge_path</span><span class="p">,</span> <span class="n">det_eval_path</span><span class="p">,</span> 
+            <span class="n">det_bin</span><span class="p">,</span> <span class="n">n_dig</span><span class="p">,</span> <span class="n">job_id</span><span class="p">)</span>       
+                                                                                
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;t_jac[</span><span class="si">{}</span><span class="s2">]: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">t_jac</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>                        
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;t_voc[</span><span class="si">{}</span><span class="s2">]: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">t_voc</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>                        
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;t_det[</span><span class="si">{}</span><span class="s2">]: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">t_det</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+
+    <span class="c1"># For matplotlib errors in display                                          </span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;QT_QPA_PLATFORM&#39;</span><span class="p">]</span><span class="o">=</span><span class="s1">&#39;offscreen&#39;</span>                                   
+    
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">char_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+  
+    <span class="c1"># Plot Jaccard values   </span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">clf</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">objects</span><span class="p">,</span> <span class="n">t_jac</span><span class="p">)</span>                                   
+    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Model JOBID=&#39;</span> <span class="o">+</span> <span class="n">job_file</span> <span class="o">+</span> <span class="s1">&#39; Jaccard&#39;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mf">1.08</span><span class="p">)</span>                 
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Value&#39;</span><span class="p">)</span>                                                         
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Threshold&#39;</span><span class="p">)</span>                                                     
+    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">point</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">objects</span><span class="p">,</span> <span class="n">t_jac</span><span class="p">)):</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">point</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">point</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s1">&#39;</span><span class="si">%.3f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">float</span><span class="p">(</span><span class="n">t_jac</span><span class="p">[</span><span class="n">k</span><span class="p">]))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">char_dir</span><span class="p">,</span> <span class="n">job_file</span> <span class="o">+</span> <span class="s1">&#39;_threshold_Jaccard.png&#39;</span><span class="p">))</span>    
+    <span class="n">plt</span><span class="o">.</span><span class="n">clf</span><span class="p">()</span>                                                                   
+                                                                                
+    <span class="c1"># Plot VOC values                                                           </span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">objects</span><span class="p">,</span> <span class="n">t_voc</span><span class="p">)</span>                                                    
+    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Model JOBID=&#39;</span> <span class="o">+</span> <span class="n">job_file</span> <span class="o">+</span> <span class="s1">&#39; VOC&#39;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mf">1.08</span><span class="p">)</span>                   
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Value&#39;</span><span class="p">)</span>                                                         
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Threshold&#39;</span><span class="p">)</span>                                                     
+    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">point</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">objects</span><span class="p">,</span> <span class="n">t_voc</span><span class="p">)):</span>                              
+        <span class="n">plt</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">point</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">point</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s1">&#39;</span><span class="si">%.3f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">float</span><span class="p">(</span><span class="n">t_voc</span><span class="p">[</span><span class="n">k</span><span class="p">]))</span>                  
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">char_dir</span><span class="p">,</span> <span class="n">job_file</span> <span class="o">+</span> <span class="s1">&#39;_threshold_VOC.png&#39;</span><span class="p">))</span>    
+    <span class="n">plt</span><span class="o">.</span><span class="n">clf</span><span class="p">()</span>
+                                                                                
+    <span class="c1"># Plot DET values                                                           </span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">objects</span><span class="p">,</span> <span class="n">t_det</span><span class="p">)</span>                                                    
+    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Model JOBID=&#39;</span> <span class="o">+</span> <span class="n">job_file</span> <span class="o">+</span> <span class="s1">&#39; DET&#39;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mf">1.08</span><span class="p">)</span>                       
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Value&#39;</span><span class="p">)</span>                                                         
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Threshold&#39;</span><span class="p">)</span>                                                     
+    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">point</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">objects</span><span class="p">,</span> <span class="n">t_det</span><span class="p">)):</span>                              
+        <span class="n">plt</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">point</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">point</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s1">&#39;</span><span class="si">%.3f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">float</span><span class="p">(</span><span class="n">t_det</span><span class="p">[</span><span class="n">k</span><span class="p">]))</span>                  
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">char_dir</span><span class="p">,</span> <span class="n">job_file</span> <span class="o">+</span> <span class="s1">&#39;_threshold_DET.png&#39;</span><span class="p">))</span>        
+    <span class="n">plt</span><span class="o">.</span><span class="n">clf</span><span class="p">()</span>
+
+    <span class="k">return</span>  <span class="n">t_jac</span><span class="p">[</span><span class="n">r_val_pos</span><span class="p">],</span> <span class="n">t_voc</span><span class="p">[</span><span class="n">r_val_pos</span><span class="p">],</span> <span class="n">t_det</span><span class="p">[</span><span class="n">r_val_pos</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="array_to_img"><a class="viewcode-back" href="../util.html#util.array_to_img">[docs]</a><span class="k">def</span> <span class="nf">array_to_img</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">data_format</span><span class="o">=</span><span class="s1">&#39;channels_last&#39;</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts a 3D Numpy array to a PIL Image instance.</span>
+
+<span class="sd">       As the Keras array_to_img function in:</span>
+
+<span class="sd">            `keras_preprocessing/image/utils.py &lt;https://github.com/keras-team/keras-preprocessing/blob/28b8c9a57703b60ea7d23a196c59da1edf987ca0/keras_preprocessing/image/utils.py#L230&gt;`_</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">Image</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s1">&#39;Could not import PIL.Image. &#39;</span>
+                          <span class="s1">&#39;The use of `array_to_img` requires PIL.&#39;</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Expected image array to have rank 3 (single image). &#39;</span>
+                         <span class="s1">&#39;Got array with shape: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">,))</span>
+
+    <span class="k">if</span> <span class="n">data_format</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">{</span><span class="s1">&#39;channels_first&#39;</span><span class="p">,</span> <span class="s1">&#39;channels_last&#39;</span><span class="p">}:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Invalid data_format: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">data_format</span><span class="p">)</span>
+
+    <span class="c1"># Original Numpy array x has format (height, width, channel)</span>
+    <span class="c1"># or (channel, height, width)</span>
+    <span class="c1"># but target PIL image has format (width, height, channel)</span>
+    <span class="k">if</span> <span class="n">data_format</span> <span class="o">==</span> <span class="s1">&#39;channels_first&#39;</span><span class="p">:</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">scale</span><span class="p">:</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x_max</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">x_max</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">/=</span> <span class="n">x_max</span>
+        <span class="n">x</span> <span class="o">*=</span> <span class="mi">255</span>
+    <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+        <span class="c1"># RGBA</span>
+        <span class="k">return</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;uint8&#39;</span><span class="p">),</span> <span class="s1">&#39;RGBA&#39;</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="c1"># RGB</span>
+        <span class="k">return</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;uint8&#39;</span><span class="p">),</span> <span class="s1">&#39;RGB&#39;</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="c1"># grayscale</span>
+        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">255</span><span class="p">:</span>
+            <span class="c1"># 32-bit signed integer grayscale image. PIL mode &quot;I&quot;</span>
+            <span class="k">return</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">x</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;int32&#39;</span><span class="p">),</span> <span class="s1">&#39;I&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">x</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;uint8&#39;</span><span class="p">),</span> <span class="s1">&#39;L&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Unsupported channel number: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],))</span></div>
+
+
+<div class="viewcode-block" id="img_to_array"><a class="viewcode-back" href="../util.html#util.img_to_array">[docs]</a><span class="k">def</span> <span class="nf">img_to_array</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">data_format</span><span class="o">=</span><span class="s1">&#39;channels_last&#39;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts a PIL Image instance to a Numpy array.</span>
+
+<span class="sd">       It&#39;s a copy of the function `keras_preprocessing/image/utils.py &lt;https://github.com/keras-team/keras-preprocessing/blob/28b8c9a57703b60ea7d23a196c59da1edf987ca0/keras_preprocessing/image/utils.py#L288&gt;`_.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">data_format</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">{</span><span class="s1">&#39;channels_first&#39;</span><span class="p">,</span> <span class="s1">&#39;channels_last&#39;</span><span class="p">}:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Unknown data_format: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">data_format</span><span class="p">)</span>
+    <span class="c1"># Numpy array x has format (height, width, channel)</span>
+    <span class="c1"># or (channel, height, width)</span>
+    <span class="c1"># but original PIL image has format (width, height, channel)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">data_format</span> <span class="o">==</span> <span class="s1">&#39;channels_first&#39;</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">data_format</span> <span class="o">==</span> <span class="s1">&#39;channels_first&#39;</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Unsupported image shape: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">,))</span>
+    <span class="k">return</span> <span class="n">x</span></div>
+
+
+<div class="viewcode-block" id="save_img"><a class="viewcode-back" href="../util.html#util.save_img">[docs]</a><span class="k">def</span> <span class="nf">save_img</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mask_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Save images in the given directory. </span>
+
+<span class="sd">       Args:                                                                    </span>
+<span class="sd">            X (4D numpy array, optional): data to save as images. The first </span>
+<span class="sd">                dimension must be the number of images.</span>
+<span class="sd">                E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">    </span>
+<span class="sd">            data_dir (str, optional): path to store X images.</span>
+
+<span class="sd">            Y (4D numpy array, optional): masks to save as images. The first </span>
+<span class="sd">                dimension must be the number of images.</span>
+<span class="sd">                E.g. ``(image_number, x, y, channels)``.</span>
+
+<span class="sd">            mask_dir (str, optional): path to store Y images. </span>
+
+<span class="sd">            prefix (str, optional): path to store generated charts.</span>
+<span class="sd">    &quot;&quot;&quot;</span>   
+
+    <span class="k">if</span> <span class="n">prefix</span> <span class="ow">is</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+        <span class="n">p_x</span> <span class="o">=</span> <span class="s2">&quot;x_&quot;</span>
+        <span class="n">p_y</span> <span class="o">=</span> <span class="s2">&quot;y_&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">p_x</span> <span class="o">=</span> <span class="n">prefix</span> <span class="o">+</span> <span class="s2">&quot;_x_&quot;</span>
+        <span class="n">p_y</span> <span class="o">=</span> <span class="n">prefix</span> <span class="o">+</span> <span class="s2">&quot;_y_&quot;</span>
+ 
+    <span class="k">if</span> <span class="n">X</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">data_dir</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>                                                    
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>       
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Not data_dir provided so no image will be saved!&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Saving images in </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))</span>
+
+        <span class="n">v</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="k">else</span> <span class="mi">255</span> 
+        <span class="k">if</span> <span class="n">X</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&gt;</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]))</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]):</span>
+                    <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">v</span><span class="p">)</span>
+                    <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>
+                    <span class="n">im</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">p_x</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">.</span><span class="n">zfill</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_&quot;</span> \
+                                         <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">j</span><span class="p">)</span><span class="o">.</span><span class="n">zfill</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.png&quot;</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+                <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">v</span><span class="p">)</span>         
+                <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>                                                
+                <span class="n">im</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">p_x</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">.</span><span class="n">zfill</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.png&quot;</span><span class="p">))</span> 
+
+    <span class="k">if</span> <span class="n">Y</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">mask_dir</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>                                                    
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">mask_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Not mask_dir provided so no image will be saved!&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+        
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Saving images in </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">mask_dir</span><span class="p">))</span>
+
+        <span class="n">v</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">Y</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="k">else</span> <span class="mi">255</span>
+        <span class="k">if</span> <span class="n">Y</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&gt;</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]))</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]):</span>
+                    <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">Y</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">v</span><span class="p">)</span>
+                    <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>
+                    <span class="n">im</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">mask_dir</span><span class="p">,</span> <span class="n">p_y</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">.</span><span class="n">zfill</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_&quot;</span> \
+                                         <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">j</span><span class="p">)</span><span class="o">.</span><span class="n">zfill</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.png&quot;</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+                <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">Y</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">v</span><span class="p">)</span>         
+                <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>                                                
+                <span class="n">im</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">mask_dir</span><span class="p">,</span> <span class="n">p_y</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">.</span><span class="n">zfill</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.png&quot;</span><span class="p">))</span> </div>
+       
+
+<div class="viewcode-block" id="make_weight_map"><a class="viewcode-back" href="../util.html#util.make_weight_map">[docs]</a><span class="k">def</span> <span class="nf">make_weight_map</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">binary</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">w0</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span> <span class="n">sigma</span> <span class="o">=</span> <span class="mi">5</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generates a weight map in order to make the U-Net learn better the          </span>
+<span class="sd">    borders of cells and distinguish individual cells that are tightly packed.  </span>
+<span class="sd">    These weight maps follow the methodology of the original U-Net paper.</span>
+
+<span class="sd">    Based on `unet/py_files/helpers.py &lt;https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py&gt;`_.</span>
+
+<span class="sd">    Args:</span>
+
+<span class="sd">        label (3D numpy array): corresponds to a label image. </span>
+<span class="sd">            E.g. ``(x, y, channels)``.</span>
+
+<span class="sd">        binary (bool, optional): corresponds to whether or not the labels are   </span>
+<span class="sd">            binary.                                                             </span>
+<span class="sd">                                                                                </span>
+<span class="sd">        w0 (float, optional): controls for the importance of separating tightly </span>
+<span class="sd">            associated entities.                                                </span>
+<span class="sd">                                                                                </span>
+<span class="sd">        sigma (int, optional): represents the standard deviation of the Gaussian</span>
+<span class="sd">            used for the weight map.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+
+<span class="sd">    Notice that weight has been defined where the objects are almost touching </span>
+<span class="sd">    each other.</span>
+
+<span class="sd">    .. image:: img/weight_map.png</span>
+<span class="sd">        :width: 650</span>
+<span class="sd">        :align: center</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="c1"># Initialization.</span>
+    <span class="n">lab</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+    <span class="n">lab_multi</span> <span class="o">=</span> <span class="n">lab</span>
+       
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">lab</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="n">lab</span> <span class="o">=</span> <span class="n">lab</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1"># Get shape of label.</span>
+    <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span> <span class="o">=</span> <span class="n">lab</span><span class="o">.</span><span class="n">shape</span>
+    
+    <span class="k">if</span> <span class="n">binary</span><span class="p">:</span>
+        
+        <span class="c1"># Converts the label into a binary image with background = 0</span>
+        <span class="c1"># and cells = 1.</span>
+        <span class="n">lab</span><span class="p">[</span><span class="n">lab</span> <span class="o">==</span> <span class="mi">255</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        
+        <span class="c1"># Builds w_c which is the class balancing map. In our case, we want </span>
+        <span class="c1"># cells to have weight 2 as they are more important than background </span>
+        <span class="c1"># which is assigned weight 1.</span>
+        <span class="n">w_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">lab</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+        <span class="n">w_c</span><span class="p">[</span><span class="n">w_c</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">w_c</span><span class="p">[</span><span class="n">w_c</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.5</span>
+    
+        <span class="c1"># Converts the labels to have one class per object (cell).</span>
+        <span class="n">lab_multi</span> <span class="o">=</span> <span class="n">measure</span><span class="o">.</span><span class="n">label</span><span class="p">(</span><span class="n">lab</span><span class="p">,</span> <span class="n">neighbors</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span> <span class="n">background</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        
+        <span class="c1"># Converts the label into a binary image with background = 0.</span>
+        <span class="c1"># and cells = 1.</span>
+        <span class="n">lab</span><span class="p">[</span><span class="n">lab</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        
+        <span class="c1"># Builds w_c which is the class balancing map. In our case, we want </span>
+        <span class="c1"># cells to have weight 2 as they are more important than background </span>
+        <span class="c1"># which is assigned weight 1.</span>
+        <span class="n">w_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">lab</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+        <span class="n">w_c</span><span class="p">[</span><span class="n">w_c</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">w_c</span><span class="p">[</span><span class="n">w_c</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.5</span>
+    <span class="n">components</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">lab_multi</span><span class="p">)</span>
+    
+    <span class="n">n_comp</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">components</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span>
+    
+    <span class="n">maps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_comp</span><span class="p">,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">))</span>
+    
+    <span class="n">map_weight</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">))</span>
+    
+    <span class="k">if</span> <span class="n">n_comp</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_comp</span><span class="p">):</span>
+            
+            <span class="c1"># Only keeps current object.</span>
+            <span class="n">tmp</span> <span class="o">=</span> <span class="p">(</span><span class="n">lab_multi</span> <span class="o">==</span> <span class="n">components</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">])</span>
+            
+            <span class="c1"># Invert tmp so that it can have the correct distance.</span>
+            <span class="c1"># transform</span>
+            <span class="n">tmp</span> <span class="o">=</span> <span class="o">~</span><span class="n">tmp</span>
+            
+            <span class="c1"># For each pixel, computes the distance transform to</span>
+            <span class="c1"># each object.</span>
+            <span class="n">maps</span><span class="p">[</span><span class="n">i</span><span class="p">][:][:]</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">ndimage</span><span class="o">.</span><span class="n">distance_transform_edt</span><span class="p">(</span><span class="n">tmp</span><span class="p">)</span>
+    
+        <span class="n">maps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">maps</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        
+        <span class="c1"># Get distance to the closest object (d1) and the distance to the second</span>
+        <span class="c1"># object (d2).</span>
+        <span class="n">d1</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">][:][:]</span>
+        <span class="n">d2</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">][:][:]</span>
+        
+        <span class="n">map_weight</span> <span class="o">=</span> <span class="n">w0</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">((</span><span class="n">d1</span><span class="o">+</span><span class="n">d2</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="n">sigma</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span> <span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">lab</span><span class="o">==</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">);</span>
+
+    <span class="n">map_weight</span> <span class="o">+=</span> <span class="n">w_c</span>
+    
+    <span class="k">return</span> <span class="n">map_weight</span></div>
+
+
+<div class="viewcode-block" id="do_save_wm"><a class="viewcode-back" href="../util.html#util.do_save_wm">[docs]</a><span class="k">def</span> <span class="nf">do_save_wm</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">binary</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">w0</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span> <span class="n">sigma</span> <span class="o">=</span> <span class="mi">5</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Retrieves the label images, applies the weight-map algorithm and save the</span>
+<span class="sd">    weight maps in a folder. Uses internally :meth:`util.make_weight_map`.</span>
+
+<span class="sd">    Based on `deepimagejunet/py_files/helpers.py &lt;https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py&gt;`_.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        labels (4D numpy array): corresponds to given label images.</span>
+<span class="sd">            E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">    </span>
+<span class="sd">        path (str): refers to the path where the weight maps should be saved.</span>
+<span class="sd">    </span>
+<span class="sd">        binary (bool, optional): corresponds to whether or not the labels are</span>
+<span class="sd">            binary. </span>
+<span class="sd">    </span>
+<span class="sd">        w0 (float, optional): controls for the importance of separating tightly </span>
+<span class="sd">            associated entities. </span>
+<span class="sd">        </span>
+<span class="sd">        sigma (int, optional): represents the standard deviation of the Gaussian</span>
+<span class="sd">            used for the weight map.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="c1"># Copy labels.</span>
+    <span class="n">labels_</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">labels</span><span class="p">)</span>
+    
+    <span class="c1"># Perform weight maps.</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">labels_</span><span class="p">)):</span>
+        <span class="n">labels_</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">make_weight_map</span><span class="p">(</span><span class="n">labels</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span> <span class="n">binary</span><span class="p">,</span> <span class="n">w0</span><span class="p">,</span> <span class="n">sigma</span><span class="p">)</span>
+    
+    <span class="n">maps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">labels_</span><span class="p">)</span>
+    
+    <span class="n">n</span><span class="p">,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span> <span class="o">=</span> <span class="n">maps</span><span class="o">.</span><span class="n">shape</span>
+    
+    <span class="c1"># Resize correctly the maps so that it can be used in the model.</span>
+    <span class="n">maps</span> <span class="o">=</span> <span class="n">maps</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+    
+    <span class="c1"># Count number of digits in n. This is important for the number</span>
+    <span class="c1"># of leading zeros in the name of the maps.</span>
+    <span class="n">n_digits</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
+    
+    <span class="c1"># Save path with correct leading zeros.</span>
+    <span class="n">path_to_save</span> <span class="o">=</span> <span class="n">path</span> <span class="o">+</span> <span class="s2">&quot;weight/{b:0&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">n_digits</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;d}.npy&quot;</span>
+    
+    <span class="c1"># Saving files as .npy files.</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">labels_</span><span class="p">)):</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">path_to_save</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">b</span><span class="o">=</span><span class="n">i</span><span class="p">),</span> <span class="n">labels_</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        
+    <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="foreground_percentage"><a class="viewcode-back" href="../util.html#util.foreground_percentage">[docs]</a><span class="k">def</span> <span class="nf">foreground_percentage</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">class_tag</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Percentage of pixels that corresponds to the class in the given image.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">             mask (2D Numpy array): image mask to analize.</span>
+
+<span class="sd">             class_tag (int): class to find in the image.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            float: percentage of pixels that corresponds to the class. Value between 0 and 1.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="k">if</span> <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">class_tag</span><span class="p">:</span>
+                <span class="n">c</span> <span class="o">=</span> <span class="n">c</span> <span class="o">+</span> <span class="mi">1</span>
+
+    <span class="k">return</span> <span class="n">c</span><span class="o">/</span><span class="p">(</span><span class="n">mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="divide_images_on_classes"><a class="viewcode-back" href="../util.html#util.divide_images_on_classes">[docs]</a><span class="k">def</span> <span class="nf">divide_images_on_classes</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">data_mask</span><span class="p">,</span> <span class="n">out_dir</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">th</span><span class="o">=</span><span class="mf">0.8</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create a folder for each class where the images that have more pixels </span>
+<span class="sd">       labeled as the class (in percentage) than the given threshold will be </span>
+<span class="sd">       stored. </span>
+<span class="sd">    </span>
+<span class="sd">       Args:</span>
+<span class="sd">            data (4D numpy array): data to save as images. The first dimension</span>
+<span class="sd">                must be the number of images. ``E.g. (image_number, x, y, channels)``.</span>
+
+<span class="sd">            data_mask (4D numpy array): data mask to save as images.  The first </span>
+<span class="sd">                dimension must be the number of images. ``E.g. (image_number, x, y, channels)``.</span>
+
+<span class="sd">            out_dir (str): path to save the images.</span>
+
+<span class="sd">            num_classes (int, optional): number of classes. </span>
+
+<span class="sd">            th (float, optional): percentage of the pixels that must be labeled</span>
+<span class="sd">                as a class to save it inside that class folder. </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+        
+    <span class="c1"># Create the directories</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_classes</span><span class="p">):</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="s2">&quot;class&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)),</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="s2">&quot;y&quot;</span><span class="p">,</span> <span class="s2">&quot;class&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)),</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Dividing provided data into </span><span class="si">{}</span><span class="s2"> classes . . .&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">num_classes</span><span class="p">))</span>
+    <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+        <span class="c1"># Assign the image to a class if it has, in percentage, more pixels of </span>
+        <span class="c1"># that class than the given threshold </span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_classes</span><span class="p">):</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="n">foreground_percentage</span><span class="p">(</span><span class="n">data_mask</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">j</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">t</span> <span class="o">&gt;</span> <span class="n">th</span><span class="p">:</span>
+                <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="mi">0</span><span class="p">])</span>
+                <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>
+                <span class="n">im</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="s2">&quot;class&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">j</span><span class="p">)),</span> 
+                        <span class="s2">&quot;im_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">.</span><span class="n">zfill</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.png&quot;</span><span class="p">))</span>
+                <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">data_mask</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="mi">255</span><span class="p">)</span>
+                <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>
+                <span class="n">im</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="s2">&quot;y&quot;</span><span class="p">,</span> <span class="s2">&quot;class&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">j</span><span class="p">)),</span> 
+                        <span class="s2">&quot;mask_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">.</span><span class="n">zfill</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.png&quot;</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="save_filters_of_convlayer"><a class="viewcode-back" href="../util.html#util.save_filters_of_convlayer">[docs]</a><span class="k">def</span> <span class="nf">save_filters_of_convlayer</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">out_dir</span><span class="p">,</span> <span class="n">l_num</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+                              <span class="n">img_per_row</span><span class="o">=</span><span class="mi">8</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;Create an image of the filters learned by a convolutional layer. One can </span>
+<span class="sd">       identify the layer with &#39;l_num&#39; or &#39;name&#39; args. If both are passed &#39;name&#39;</span>
+<span class="sd">       will be prioritized. </span>
+<span class="sd">    </span>
+<span class="sd">       Inspired by https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks/</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">            model (Keras Model): model where the layers are stored.</span>
+
+<span class="sd">            out_dir (str): path where the image will be stored.</span>
+<span class="sd">        </span>
+<span class="sd">            l_num (int, optional): number of the layer to extract filters from. </span>
+<span class="sd">            </span>
+<span class="sd">            name (str, optional): name of the layer to extract filters from.</span>
+
+<span class="sd">            prefix (str, optional): prefix to add to the output image name. </span>
+<span class="sd">        </span>
+<span class="sd">            img_per_row (int, optional): filters per row on the image.</span>
+
+<span class="sd">       Raises:</span>
+<span class="sd">           ValueError: if ``l_num`` and ``name`` not provided.     </span>
+
+<span class="sd">       Examples</span>
+<span class="sd">       --------</span>
+<span class="sd">       To save the filters learned by the layer called ``conv1`` one can call </span>
+<span class="sd">       the function as follows ::</span>
+
+<span class="sd">           save_filters_of_convlayer(model, char_dir, name=&quot;conv1&quot;, prefix=&quot;model&quot;)</span>
+
+<span class="sd">       That will save in ``out_dir`` an image like this:</span>
+
+<span class="sd">       .. image:: img/save_filters.png </span>
+<span class="sd">           :width: 60%</span>
+<span class="sd">           :align: center </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">l_num</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;One between &#39;l_num&#39; or &#39;name&#39; must be provided&quot;</span><span class="p">)</span>
+    
+    <span class="c1"># For matplotlib errors in display</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;QT_QPA_PLATFORM&#39;</span><span class="p">]</span><span class="o">=</span><span class="s1">&#39;offscreen&#39;</span>
+
+    <span class="c1"># Find layer number of the layer named by &#39;name&#39; variable</span>
+    <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">pos</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">layers</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="n">layer</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="n">pos</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">l_num</span> <span class="o">=</span> <span class="n">pos</span>
+
+    <span class="n">filters</span><span class="p">,</span> <span class="n">biases</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="n">l_num</span><span class="p">]</span><span class="o">.</span><span class="n">get_weights</span><span class="p">()</span>
+    
+    <span class="c1"># normalize filter values to 0-1 so we can visualize them</span>
+    <span class="n">f_min</span><span class="p">,</span> <span class="n">f_max</span> <span class="o">=</span> <span class="n">filters</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span> <span class="n">filters</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+    <span class="n">filters</span> <span class="o">=</span> <span class="p">(</span><span class="n">filters</span> <span class="o">-</span> <span class="n">f_min</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">f_max</span> <span class="o">-</span> <span class="n">f_min</span><span class="p">)</span>
+    
+    <span class="n">rows</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">filters</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">/</span><span class="n">img_per_row</span><span class="p">))</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rows</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">img_per_row</span><span class="p">):</span>
+            <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">img_per_row</span><span class="p">,</span> <span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">ax</span><span class="o">.</span><span class="n">set_xticks</span><span class="p">([])</span>
+            <span class="n">ax</span><span class="o">.</span><span class="n">set_yticks</span><span class="p">([])</span>
+            <span class="n">f</span> <span class="o">=</span> <span class="n">filters</span><span class="p">[:,:,</span><span class="mi">0</span><span class="p">,</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">filters</span><span class="p">[:,:,</span><span class="mi">0</span><span class="p">,</span><span class="n">i</span><span class="p">],</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">)</span>
+
+            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="n">prefix</span> <span class="o">+=</span> <span class="s2">&quot;_&quot;</span> <span class="k">if</span> <span class="n">prefix</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span> <span class="k">else</span> <span class="n">prefix</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">prefix</span> <span class="o">+</span> <span class="s1">&#39;f_layer&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">l_num</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.png&#39;</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">clf</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="calculate_2D_volume_prob_map"><a class="viewcode-back" href="../util.html#util.calculate_2D_volume_prob_map">[docs]</a><span class="k">def</span> <span class="nf">calculate_2D_volume_prob_map</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">w_foreground</span><span class="o">=</span><span class="mf">0.94</span><span class="p">,</span> <span class="n">w_background</span><span class="o">=</span><span class="mf">0.06</span><span class="p">,</span>
+                                 <span class="n">save_file</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Calculate the probability map of the given 2D data.</span>
+
+<span class="sd">       Args:</span>
+<span class="sd">            Y (4D Numpy array): data to calculate the probability map from.</span>
+<span class="sd">                E. g. ``(image_number, x, y, channel)``</span>
+<span class="sd">            w_foreground (float, optional): weight of the foreground. This value</span>
+<span class="sd">                plus w_background must be equal 1.</span>
+<span class="sd">            w_background (float, optional): weight of the background. This value</span>
+<span class="sd">                plus w_foreground must be equal 1.</span>
+<span class="sd">            save_file (str, optional): path to the file where the probability</span>
+<span class="sd">                map will be stored.</span>
+
+<span class="sd">       Return:</span>
+<span class="sd">           4D Numpy array: probability map of the given data.</span>
+
+<span class="sd">       Raises:</span>
+<span class="sd">           ValueError: if ``Y`` does not have 4 dimensions.</span>
+<span class="sd">           ValueError: if ``w_foreground + w_background &gt; 1``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">Y</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;Y&#39; must be a 4D Numpy array&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">w_foreground</span> <span class="o">+</span> <span class="n">w_background</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;w_foreground&#39; plus &#39;w_background&#39; can not be greater &quot;</span>
+                         <span class="s2">&quot;than one&quot;</span><span class="p">)</span>
+
+    <span class="n">prob_map</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">Y</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Constructing the probability map . . .&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">prob_map</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+        <span class="n">pdf</span> <span class="o">=</span> <span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    
+        <span class="c1"># Remove artifacts connected to image border</span>
+        <span class="n">pdf</span> <span class="o">=</span> <span class="n">clear_border</span><span class="p">(</span><span class="n">pdf</span><span class="p">)</span>
+
+        <span class="n">foreground_pixels</span> <span class="o">=</span> <span class="p">(</span><span class="n">pdf</span> <span class="o">==</span> <span class="mi">255</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+        <span class="n">background_pixels</span> <span class="o">=</span> <span class="p">(</span><span class="n">pdf</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+        <span class="n">pdf</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">pdf</span> <span class="o">==</span> <span class="mi">255</span><span class="p">)]</span> <span class="o">=</span> <span class="n">w_foreground</span><span class="o">/</span><span class="n">foreground_pixels</span>
+        <span class="n">pdf</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">pdf</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)]</span> <span class="o">=</span> <span class="n">w_background</span><span class="o">/</span><span class="n">background_pixels</span>
+        <span class="n">pdf</span> <span class="o">/=</span> <span class="n">pdf</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="c1"># Necessary to get all probs sum 1</span>
+        <span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">pdf</span>
+
+    <span class="k">if</span> <span class="n">save_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">save_file</span><span class="p">),</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Saving the probability map in </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">save_file</span><span class="p">))</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">save_file</span><span class="p">,</span> <span class="n">prob_map</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">prob_map</span></div>
+
+
+<div class="viewcode-block" id="calculate_3D_volume_prob_map"><a class="viewcode-back" href="../util.html#util.calculate_3D_volume_prob_map">[docs]</a><span class="k">def</span> <span class="nf">calculate_3D_volume_prob_map</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">w_foreground</span><span class="o">=</span><span class="mf">0.94</span><span class="p">,</span> <span class="n">w_background</span><span class="o">=</span><span class="mf">0.06</span><span class="p">,</span>
+                                 <span class="n">save_file</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Calculate the probability map of the given 3D data.</span>
+<span class="sd">       </span>
+<span class="sd">       Args: </span>
+<span class="sd">            Y (5D Numpy array): data to calculate the probability map from.</span>
+<span class="sd">                E. g. ``(num_subvolumes, x, y, z, channel)``</span>
+<span class="sd">            w_foreground (float, optional): weight of the foreground. This value</span>
+<span class="sd">                plus w_background must be equal 1.</span>
+<span class="sd">            w_background (float, optional): weight of the background. This value</span>
+<span class="sd">                plus w_foreground must be equal 1.</span>
+<span class="sd">            save_file (str, optional): path to the file where the probability</span>
+<span class="sd">                map will be stored.</span>
+
+<span class="sd">       Return:</span>
+<span class="sd">           5D Numpy array: probability map of the given data.</span>
+
+<span class="sd">       Raises:</span>
+<span class="sd">           ValueError: if ``Y`` does not have 5 dimensions.</span>
+<span class="sd">           ValueError: if ``w_foreground + w_background &gt; 1``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">Y</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">5</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;Y&#39; must be a 5D Numpy array&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">w_foreground</span> <span class="o">+</span> <span class="n">w_background</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;w_foreground&#39; plus &#39;w_background&#39; can not be greater &quot;</span>
+                         <span class="s2">&quot;than one&quot;</span><span class="p">)</span>
+
+    <span class="n">prob_map</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">Y</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+    
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Constructing the probability map . . .&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">prob_map</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])):</span>
+            <span class="c1"># Remove artifacts connected to image border</span>
+            <span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">clear_border</span><span class="p">(</span><span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="n">j</span><span class="p">])</span>
+
+        <span class="n">foreground_pixels</span> <span class="o">=</span> <span class="p">(</span><span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mi">255</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+        <span class="n">background_pixels</span> <span class="o">=</span> <span class="p">(</span><span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+        <span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mi">255</span><span class="p">)]</span> <span class="o">=</span> <span class="n">w_foreground</span><span class="o">/</span><span class="n">foreground_pixels</span>
+        <span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)]</span> <span class="o">=</span> <span class="n">w_background</span><span class="o">/</span><span class="n">background_pixels</span>
+        <span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">/=</span> <span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="c1"># Necessary to get all probs sum 1</span>
+
+    <span class="k">if</span> <span class="n">save_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">save_file</span><span class="p">),</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Saving the probability map in </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">save_file</span><span class="p">))</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">save_file</span><span class="p">,</span> <span class="n">prob_map</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">prob_map</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="grayscale_2D_image_to_3D"><a class="viewcode-back" href="../util.html#util.grayscale_2D_image_to_3D">[docs]</a><span class="k">def</span> <span class="nf">grayscale_2D_image_to_3D</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">th</span><span class="o">=</span><span class="mi">127</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Creates 3D surface from each image in X based on the grayscale of each</span>
+<span class="sd">       image.</span>
+<span class="sd">    </span>
+<span class="sd">       Args:</span>
+<span class="sd">           X (4D numpy array): data that contains the images to create the</span>
+<span class="sd">               surfaces from. E.g. ``(image_number, x, y, channels)``.</span>
+
+<span class="sd">           Y (4D numpy array): data mask of the same shape of X that will be </span>
+<span class="sd">               converted into 3D volume, stacking multiple times each image. </span>
+<span class="sd">               Useful if you need the two data arrays to be of the same shape. </span>
+<span class="sd">               E.g. ``(image_number, x, y, channels)``.</span>
+
+<span class="sd">           th (int, optional): values to ommit when creating the surfaces. </span>
+<span class="sd">               Useful to reduce the amount of data in z to be created and </span>
+<span class="sd">               reduce computational time.</span>
+
+<span class="sd">       Returns:</span>
+<span class="sd">            Multiple elements</span>
+
+<span class="sd">           - **5D numpy array**: 3D surface of each image provided.</span>
+<span class="sd">             E.g. ``(image_number, z, x, y, channels)``.</span>
+<span class="sd">           - **5D numpy array**: 3D stack of each mask provided.                  </span>
+<span class="sd">             E.g. ``(image_number, z, x, y, channels)``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Creating 3D surface for each image . . .&quot;</span><span class="p">)</span>
+
+    <span class="n">_th</span> <span class="o">=</span> <span class="mi">255</span> <span class="o">-</span> <span class="n">th</span>
+    <span class="n">X_3D</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">_th</span><span class="p">,</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]),</span> 
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span> 
+    <span class="n">Y_3D</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">_th</span><span class="p">,</span> <span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]),</span>
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span> 
+        <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]):</span>
+                <span class="n">pos</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span><span class="o">-</span><span class="n">_th</span> <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span> <span class="o">&gt;</span><span class="n">_th</span> <span class="k">else</span> <span class="mi">0</span>
+                <span class="n">X_3D</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">pos</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+                <span class="n">pos</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">Y</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">pos</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span><span class="o">*</span><span class="mi">255</span>
+                <span class="n">Y_3D</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">pos</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;*** New surface 3D data shape is now: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">X_3D</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">X_3D</span><span class="p">,</span> <span class="n">Y_3D</span></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

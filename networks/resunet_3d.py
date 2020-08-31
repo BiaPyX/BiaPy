@@ -3,7 +3,6 @@ from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import Dropout, Lambda, SpatialDropout3D, Conv3D, \
                                     Conv3DTranspose, MaxPooling3D, Concatenate,\
                                     Add, BatchNormalization, ELU, ZeroPadding3D
-from tensorflow.keras.activations import relu
 from metrics import binary_crossentropy_weighted, jaccard_index, \
                     weighted_bce_dice_loss
 
@@ -27,21 +26,37 @@ def ResUNet_3D(image_shape, activation='elu', k_init='he_normal',
             batch_norm (bool, optional): use batch normalization.
 
             feature_maps (array of ints, optional): feature maps to use on each 
-            level. Must have the same length as the depth+1.
+                level. Must have the same length as the ``depth+1``.
             
             depth (int, optional): depth of the network.                        
                                                                                 
             loss_type (str, optional): loss type to use, three type available:  
-            "bce" (Binary Cross Entropy) , "w_bce" (Weighted BCE, based on      
-            weigth maps) and "w_bce_dice" (Weighted loss: weight1*BCE + weight2*Dice). 
+                ``bce`` (Binary Cross Entropy), ``w_bce`` (Weighted BCE, based on
+                weigth maps) and ``w_bce_dice`` (Weighted loss: ``weight1*BCE + 
+                weight2*Dice``). 
                                                                                 
             optimizer (str, optional): optimizer used to minimize the loss      
-            function. Posible options: 'sgd' or 'adam'.                         
+                function. Posible options: ``sgd`` or ``adam``.                         
                                                                                 
             lr (float, optional): learning rate value.
 
        Returns:
-            model (Keras model): model containing the U-Net created.
+            model (Keras model): model containing the U-Net.
+
+       Calling this function with its default parameters returns the following
+       network:
+
+       .. image:: img/resunet_3d.png
+           :width: 100%
+           :align: center
+
+       Where each green layer represents a residual block as the following:
+
+       .. image:: img/res_block.png
+           :width: 45%
+           :align: center
+
+       Images created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
     """
 
     if len(feature_maps) != depth+1:                                            

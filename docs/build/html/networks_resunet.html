@@ -1,0 +1,326 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>2D Residual U-Net &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="3D Residual U-Net" href="networks_resunet_3d.html" />
+    <link rel="prev" title="3D U-Net" href="networks_unet_3d.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Example</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="networks.html">Networks</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">2D Residual U-Net</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="networks.html">Networks</a> &raquo;</li>
+        
+      <li>2D Residual U-Net</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-networks.resunet">
+<span id="d-residual-u-net"></span><h1>2D Residual U-Net<a class="headerlink" href="#module-networks.resunet" title="Permalink to this headline">¶</a></h1>
+<dl class="py function">
+<dt id="networks.resunet.ResUNet_2D">
+<code class="sig-prename descclassname">networks.resunet.</code><code class="sig-name descname">ResUNet_2D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">drop_values</span><span class="o">=</span><span class="default_value">[0.1, 0.1, 0.1, 0.1, 0.1]</span></em>, <em class="sig-param"><span class="n">batch_norm</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">feature_maps</span><span class="o">=</span><span class="default_value">[16, 32, 64, 128, 256]</span></em>, <em class="sig-param"><span class="n">depth</span><span class="o">=</span><span class="default_value">4</span></em>, <em class="sig-param"><span class="n">loss_type</span><span class="o">=</span><span class="default_value">'bce'</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'sgd'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.001</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/resunet.html#ResUNet_2D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.resunet.ResUNet_2D" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create 2D Residual_U-Net.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image_shape</strong> (<em>array of 3 int</em>) – dimensions of the input image.</p></li>
+<li><p><strong>activation</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available activation type.</p></li>
+<li><p><strong>k_init</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available kernel initializer type.</p></li>
+<li><p><strong>drop_values</strong> (<em>array of floats</em><em>, </em><em>optional</em>) – dropout value to be fixed.</p></li>
+<li><p><strong>batch_norm</strong> (<em>bool</em><em>, </em><em>optional</em>) – use batch normalization.</p></li>
+<li><p><strong>feature_maps</strong> (<em>array of ints</em><em>, </em><em>optional</em>) – feature maps to use on each
+level. Must have the same length as the <code class="docutils literal notranslate"><span class="pre">depth+1</span></code>.</p></li>
+<li><p><strong>depth</strong> (<em>int</em><em>, </em><em>optional</em>) – depth of the network.</p></li>
+<li><p><strong>loss_type</strong> (<em>str</em><em>, </em><em>optional</em>) – loss type to use, three type available:
+<code class="docutils literal notranslate"><span class="pre">bce</span></code> (Binary Cross Entropy), <code class="docutils literal notranslate"><span class="pre">w_bce</span></code> (Weighted BCE, based on
+weigth maps) and <code class="docutils literal notranslate"><span class="pre">w_bce_dice</span></code> (Weighted loss: <code class="docutils literal notranslate"><span class="pre">weight1*BCE</span> <span class="pre">+</span>
+<span class="pre">weight2*Dice</span></code>).</p></li>
+<li><p><strong>optimizer</strong> (<em>str</em><em>, </em><em>optional</em>) – optimizer used to minimize the loss
+function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p></li>
+<li><p><strong>lr</strong> (<em>float</em><em>, </em><em>optional</em>) – learning rate value.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>model containing the U-Net.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>model (Keras model)</p>
+</dd>
+</dl>
+<p>Calling this function with its default parameters returns the following
+network:</p>
+<a class="reference internal image-reference" href="_images/resunet.png"><img alt="_images/resunet.png" class="align-center" src="_images/resunet.png" style="width: 100%;" /></a>
+<p>Where each green layer represents a residual block as the following:</p>
+<a class="reference internal image-reference" href="_images/res_block.png"><img alt="_images/res_block.png" class="align-center" src="_images/res_block.png" style="width: 45%;" /></a>
+<p>Images created with <a class="reference external" href="https://github.com/HarisIqbal88/PlotNeuralNet">PlotNeuralNet</a>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="networks.resunet.level_block">
+<code class="sig-prename descclassname">networks.resunet.</code><code class="sig-name descname">level_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">depth</span></em>, <em class="sig-param"><span class="n">f_maps</span></em>, <em class="sig-param"><span class="n">filter_size</span></em>, <em class="sig-param"><span class="n">activation</span></em>, <em class="sig-param"><span class="n">k_init</span></em>, <em class="sig-param"><span class="n">drop_values</span></em>, <em class="sig-param"><span class="n">batch_norm</span></em>, <em class="sig-param"><span class="n">first_block</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/resunet.html#level_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.resunet.level_block" title="Permalink to this definition">¶</a></dt>
+<dd><p>Produces a level of the network. It calls itself recursively.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>Keras layer</em>) – input layer of the block.</p></li>
+<li><p><strong>depth</strong> (<em>int</em>) – depth of the network. This value determines how many
+times the function will be called recursively.</p></li>
+<li><p><strong>f_maps</strong> (<em>array of ints</em>) – feature maps to use.</p></li>
+<li><p><strong>filter_size</strong> (<em>3 int tuple</em>) – height, width and depth of the convolution
+window.</p></li>
+<li><p><strong>activation</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available activation type.</p></li>
+<li><p><strong>k_init</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available kernel initializer type.</p></li>
+<li><p><strong>drop_values</strong> (<em>array of floats</em><em>, </em><em>optional</em>) – dropout value to be fixed.</p></li>
+<li><p><strong>batch_norm</strong> (<em>bool</em><em>, </em><em>optional</em>) – flag to use batch normalization.</p></li>
+<li><p><strong>first_block</strong> (<em>float</em><em>, </em><em>optional</em>) – to advice the function that it is the
+first residual block of the network, which avoids Full
+Pre-Activation layers.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>last layer of the levels.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>x (Keras layer)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="networks.resunet.residual_block">
+<code class="sig-prename descclassname">networks.resunet.</code><code class="sig-name descname">residual_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">f_maps</span></em>, <em class="sig-param"><span class="n">filter_size</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">drop_value</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">bn</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">first_block</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/resunet.html#residual_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.resunet.residual_block" title="Permalink to this definition">¶</a></dt>
+<dd><p>Residual block.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>Keras layer</em>) – input layer of the block.</p></li>
+<li><p><strong>f_maps</strong> (<em>array of ints</em>) – feature maps to use.</p></li>
+<li><p><strong>filter_size</strong> (<em>3 int tuple</em>) – height, width and depth of the convolution
+window.</p></li>
+<li><p><strong>activation</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available activation type.</p></li>
+<li><p><strong>k_init</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available kernel initializer type.</p></li>
+<li><p><strong>drop_value</strong> (<em>float</em><em>, </em><em>optional</em>) – dropout value to be fixed.</p></li>
+<li><p><strong>bn</strong> (<em>bool</em><em>, </em><em>optional</em>) – use batch normalization.</p></li>
+<li><p><strong>first_block</strong> (<em>float</em><em>, </em><em>optional</em>) – to advice the function that it is the
+first residual block of the network, which avoids Full
+Pre-Activation layers.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>last layer of the block.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>x (Keras layer)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="networks_resunet_3d.html" class="btn btn-neutral float-right" title="3D Residual U-Net" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="networks_unet_3d.html" class="btn btn-neutral float-left" title="3D U-Net" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
