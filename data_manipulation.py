@@ -158,7 +158,7 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
     if e_d_data:
         print("5) Loading extra datasets . . .")
         for i in range(len(e_d_data)):
-            print("5.{}) extra dataset in {} . . .".formated(i, e_d_data[i])) 
+            print("5.{}) extra dataset in {} . . .".format(i, e_d_data[i])) 
             train_ids = sorted(next(os.walk(e_d_data[i]))[2])
             train_mask_ids = sorted(next(os.walk(e_d_mask[i]))[2])
 
@@ -671,6 +671,8 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
     print("Cropping {} images into {} with overlapping. . ."
           .format(data.shape, vol_shape))
 
+    vol_shape = tuple(vol_shape[i] for i in [2, 0, 1, 3])
+
     if overlap_z >= 1 or overlap_z < 0:
         raise ValueError("'overlap_z' must be a float on range [0, 1)")
     if len(vol_shape) != 4:
@@ -685,8 +687,6 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
         raise ValueError("'vol_shape[2]' {} greater than {}"
                          .format(vol_shape[2], data.shape[2]))
    
-    vol_shape = tuple(vol_shape[i] for i in [2, 1, 0, 3])
-
     # Minimun overlap
     if overlap_z == 0: 
         vols_per_z = math.ceil(data.shape[0]/vol_shape[0])
@@ -1034,7 +1034,7 @@ def merge_3D_data_with_overlap(data, o_vol_shape, data_mask=None, overlap_z=0.5)
     print("### MERGE-3D-OV-CROP ###")
 
 
-    orig_vol_shape = tuple(o_vol_shape[i] for i in [2, 1, 0, 3]) 
+    orig_vol_shape = tuple(o_vol_shape[i] for i in [2, 0, 1, 3]) 
 
     merged_data = np.zeros((orig_vol_shape))
     if data_mask is not None:
