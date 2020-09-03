@@ -29,16 +29,16 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            https://github.com/aleju/imgaug.
                                                                                 
        Args:                                                                    
-            X (Numpy 5D array): data. E.g. (image_number, z, x, y, channels).
+            X (Numpy 5D array): data. E.g. (image_number, x, y, z, channels).
 
-            Y (Numpy 5D array): mask data. E.g. (image_number, z, x, y, channels).
+            Y (Numpy 5D array): mask data. E.g. (image_number, x, y, z, channels).
 
             random_subvolumes_in_DA (bool, optional): flag to extract random 
             subvolumes from the given data. If not, the data must be 5D and is 
             assumed that the subvolumes are prepared. 
     
             subvol_shape (4D tuple of ints, optional): shape of the subvolume to
-            be extracted randomly from the data. E. g. (z, x, y, channels).
+            be extracted randomly from the data. E. g. (x, y, z, channels).
             
             seed (int, optional): seed for random functions.
                 
@@ -135,7 +135,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.on_epoch_end()
 
     def __len__(self):
-        """Defines the number of batches per epoch."""
+        """Defines the length of the generator"""
     
         return int(np.ceil(self.X.shape[0]/self.batch_size))
 
@@ -153,8 +153,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         """
 
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        batch_x = np.zeros((len(indexes), ) +  self.shape, dtype=np.uint8)
-        batch_y = np.zeros((len(indexes), ) +  self.shape, dtype=np.uint8)
+        batch_x = np.zeros((len(indexes), ) + self.shape, dtype=np.uint8)
+        batch_y = np.zeros((len(indexes), ) + self.shape, dtype=np.uint8)
 
         for i, j in zip(range(len(indexes)), indexes):
             if self.random_subvolumes_in_DA:
