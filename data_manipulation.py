@@ -317,7 +317,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
     print("3) Loading test masks . . .")
     Y_test = load_data_from_dir(test_mask_path, te_shape)
 
-    orig_test_shape = tuple(Y_test.shape[i] for i in [0, 2, 1, 3])
+    orig_test_shape = tuple(Y_test.shape[i] for i in [0, 1, 2, 3])
 
     # Force 3D data preparation if create_val is selected 
     mirrored_subvols = 0
@@ -726,7 +726,6 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap_z=0.5):
             for y in range(vols_per_y):
                 ov_x_ = ov_x if x != 0 else 0
                 ov_y_ = ov_y if y != 0 else 0
-               
                 if (z*step_z)+vol_shape[0] < data.shape[0]:
                     cropped_data[c] = \
                         data[z*step_z:(z*step_z)+vol_shape[0], 
@@ -1006,7 +1005,8 @@ def merge_data_without_overlap(data, num, out_shape=(1, 1), grid=True):
     return mixed_data
 
 
-def merge_3D_data_with_overlap(data, o_vol_shape, data_mask=None, overlap_z=0.5):
+def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, 
+                               overlap_z=0.5):
     """Merge 3D smaller volumes in a 3D full volume with a defined overlap.
        Reverse operation of crop_3D_data_with_overlap().
 
@@ -1033,9 +1033,6 @@ def merge_3D_data_with_overlap(data, o_vol_shape, data_mask=None, overlap_z=0.5)
  
     print("### MERGE-3D-OV-CROP ###")
 
-
-    orig_vol_shape = tuple(o_vol_shape[i] for i in [2, 0, 1, 3]) 
-
     merged_data = np.zeros((orig_vol_shape))
     if data_mask is not None:
         merged_data_mask = np.zeros((orig_vol_shape))
@@ -1047,19 +1044,19 @@ def merge_3D_data_with_overlap(data, o_vol_shape, data_mask=None, overlap_z=0.5)
 
     # Minimun overlap
     if overlap_z == 0:
-        vols_per_z = math.ceil(orig_vol_shape[2]/d_num)
-        excess_z = (vols_per_z*d_num)-orig_vol_shape[2]
+        vols_per_z = math.ceil(orig_vol_shape[0]/d_num)
+        excess_z = (vols_per_z*d_num)-orig_vol_shape[0]
         step_z = d_num-int(excess_z/(vols_per_z-1))
         last_z = excess_z%(vols_per_z-1) 
         r_div = d_num-last_z 
     else:
         overlap_z = 1-overlap_z
-        vols_per_z = math.ceil(orig_vol_shape[2]/(d_num*overlap_z))
+        vols_per_z = math.ceil(orig_vol_shape[0]/(d_num*overlap_z))
         step_z = int(d_num*overlap_z)
-        r_div = int(d_num-(orig_vol_shape[2]%(d_num*overlap_z)))
+        r_div = int(d_num-(orig_vol_shape[0]%(d_num*overlap_z)))
 
-    vols_per_x = math.ceil(orig_vol_shape[0]/h_num)
-    vols_per_y = math.ceil(orig_vol_shape[1]/v_num) 
+    vols_per_x = math.ceil(orig_vol_shape[1]/h_num)
+    vols_per_y = math.ceil(orig_vol_shape[2]/v_num) 
     
     if r_div != 0:
         print("WARNING: Is assumed that the last {} slices in z have been filled"
@@ -1067,8 +1064,8 @@ def merge_3D_data_with_overlap(data, o_vol_shape, data_mask=None, overlap_z=0.5)
               "discarded".format(r_div))
 
     # Calculating overlap
-    ov_x = (h_num*vols_per_x)-orig_vol_shape[0]
-    ov_y = (v_num*vols_per_y)-orig_vol_shape[1]
+    ov_x = (h_num*vols_per_x)-orig_vol_shape[1]
+    ov_y = (v_num*vols_per_y)-orig_vol_shape[2]
 
     c = 0
     f_z = 0
@@ -1077,49 +1074,47 @@ def merge_3D_data_with_overlap(data, o_vol_shape, data_mask=None, overlap_z=0.5)
             for y in range(vols_per_y):     
                 ov_x_ = ov_x if x != 0 else 0
                 ov_y_ = ov_y if y != 0 else 0
-                if (z*step_z)+d_num < orig_vol_shape[2]:
-                    merged_data[(x*h_num)-ov_x_:((x+1)*h_num)-ov_x_, 
-                                (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_,
-                                z*step_z:(z*step_z)+d_num] += data[c]
+                if (z*step_z)+d_num < orig_vol_shape[0]:
+                    merged_data[z*step_z:(z*step_z)+d_num, 
+                                (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_, 
+                                (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] +=  data[c].transpose(2,0,1,3)
    
                     if data_mask is not None: 
-                        merged_data_mask[(x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
-                                         (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_,
-                                         z*step_z:(z*step_z)+d_num] += \
-                                            data_mask[c]
+                        merged_data_mask[z*step_z:(z*step_z)+d_num,
+                                         (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
+                                         (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] += \
+                                            data_mask[c].transpose(2,0,1,3)
 
-                    ov_map_counter[(x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
-                                   (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_,
-                                   z*step_z:(z*step_z)+d_num] += 1
+                    ov_map_counter[z*step_z:(z*step_z)+d_num,
+                                   (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
+                                   (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] += 1
                 else:
-                    merged_data[(x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
-                                (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_,
-                                z*step_z:orig_vol_shape[2]] +=  \
-                        data[c,:,:,0:r_div-(f_z*step_z)] 
+                    merged_data[z*step_z:orig_vol_shape[0],
+                                (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
+                                (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] +=  \
+                        data[c,:,:,0:r_div-(f_z*step_z)].transpose(2,0,1,3) 
                     if data_mask is not None:
-                        merged_data_mask[(x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
-                                         (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_,
-                                         z*step_z:orig_vol_shape[2]] +=  \
-                            data_mask[c,:,:,0:r_div-(f_z*step_z)]
+                        merged_data_mask[z*step_z:orig_vol_shape[0],
+                                         (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
+                                         (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] +=  \
+                            data_mask[c,:,:,0:r_div-(f_z*step_z)].transpose(2,0,1,3)
 
-                    ov_map_counter[(x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
-                                   (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_,
-                                   z*step_z:orig_vol_shape[2]] += 1
+                    ov_map_counter[z*step_z:orig_vol_shape[0],
+                                   (x*h_num)-ov_x_:((x+1)*h_num)-ov_x_,
+                                   (y*v_num)-ov_y_:((y+1)*v_num)-ov_y_] += 1
                 c += 1
                     
         # To adjust the final volumes in z
-        if (z*step_z)+d_num > orig_vol_shape[2]:
+        if (z*step_z)+d_num > orig_vol_shape[0]:
             f_z += 1
 
     merged_data = np.true_divide(merged_data, ov_map_counter)
-    merged_data = merged_data.transpose(2,0,1,3)
 
     print("**** New data shape is: {}".format(merged_data.shape))
     print("### END MERGE-3D-OV-CROP ###")        
 
     if data_mask is not None: 
         merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter)
-        merged_data_mask = merged_data_mask.transpose(2,0,1,3)
         return merged_data, merged_data_mask
     else:
         return merged_data
