@@ -24,7 +24,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                  rotation_range=0.0, vflip=False, hflip=False, elastic=False,
                  g_blur=False, median_blur=False, gamma_contrast=False,
                  random_crops_in_DA=False, prob_map=False, train_prob=None, 
-                 val=False, softmax_out=False):
+                 val=False, softmax_out=False, extra_data_factor=1):
 
         """ImageDataGenerator constructor.
                                                                                 
@@ -80,6 +80,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             softmax_out (bool, optional): to advice that the output of the
             network has in the last layer a softmax activation or one channel 
             per class. If so one-hot encoded will be done on the ground truth.
+
+            extra_data_factor (int, optional): factor to multiply the batches 
+            yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated
+            ``extra_data_factor`` times.
         """
 
         if rotation_range != 0 and rotation90:
@@ -103,6 +107,9 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         self.train_prob = train_prob
         self.val = val
         self.softmax_out = softmax_out 
+        self.extra_data_factor = extra_data_factor
+        self.o_indexes = np.arange(len(self.X))
+        self.o_indexes = np.concatenate([self.o_indexes]*self.extra_data_factor)
         self.on_epoch_end()
         
         da_options = []
@@ -144,7 +151,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
     def __len__(self):
         """Defines the number of batches per epoch."""
     
-        return int(np.ceil(self.X.shape[0]/self.batch_size))
+        return int(np.ceil(self.X.shape[0]*self.extra_data_factor/self.batch_size))
 
 
     def __getitem__(self, index):
@@ -207,7 +214,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
 
-        self.indexes = np.arange(len(self.X))
+        self.indexes = self.o_indexes
         if self.shuffle:
             np.random.shuffle(self.indexes)
 

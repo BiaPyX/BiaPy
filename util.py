@@ -34,18 +34,23 @@ def limit_threads(threads_number='1'):
     mkl.set_num_threads(1)
 
 
-def set_seed(seedValue=42):
+def set_seed(seedValue=42, determinism=False):
     """Sets the seed on multiple python modules to obtain results as 
        reproducible as possible.
 
        Args:
            seedValue (int, optional): seed value.
+        
+           determinism (bool, optional): to force determism. 
     """
+
     random.seed = seedValue
     np.random.seed(seed=seedValue)
     tf.random.set_seed(seedValue)
     os.environ["PYTHONHASHSEED"]=str(seedValue);
-
+    if determinism:    
+        os.environ['TF_DETERMINISTIC_OPS'] = '1'
+    
 
 class TimeHistory(tf.keras.callbacks.Callback):
     """Class to record each epoch time.
