@@ -11,24 +11,15 @@ This documentation tries to explain better the code of the project `EM Image Seg
 Some of state-of-the-art approaches have been reproduced and implemented to compare our method in a more robust way, with the goal of supplement the lack of information in some of those works.
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
    :caption: Contents:
 
-   installation
-   examples
+   quick_example
+   how_to_run  
    networks
    post_processing
    metrics
    util
    adabound
    callbacks
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-
 

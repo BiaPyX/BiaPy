@@ -82,8 +82,8 @@
             
               <p class="caption"><span class="caption-text">Contents:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quick_example.html">Quick example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run.html">How to run</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../post_processing.html">Post processing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../metrics.html">Metrics</a></li>
@@ -222,7 +222,8 @@
 
     <span class="n">fm</span> <span class="o">=</span> <span class="n">feature_maps</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
 
-    <span class="n">inputs</span> <span class="o">=</span> <span class="n">Input</span><span class="p">(</span><span class="n">image_shape</span><span class="p">)</span>
+    <span class="n">dinamic_dim</span> <span class="o">=</span> <span class="p">(</span><span class="kc">None</span><span class="p">,)</span><span class="o">*</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">image_shape</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+    <span class="n">inputs</span> <span class="o">=</span> <span class="n">Input</span><span class="p">(</span><span class="n">dinamic_dim</span><span class="p">)</span>
 
     <span class="n">x</span> <span class="o">=</span> <span class="n">level_block</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">depth</span><span class="p">,</span> <span class="n">fm</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span><span class="p">,</span> <span class="n">k_init</span><span class="p">,</span> <span class="n">drop_values</span><span class="p">,</span> 
                     <span class="n">batch_norm</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>

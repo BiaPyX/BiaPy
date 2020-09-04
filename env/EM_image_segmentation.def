@@ -1,0 +1,42 @@
+Bootstrap: docker
+From: ubuntu:16.04
+
+%setup
+    mkdir ${SINGULARITY_ROOTFS}/wd
+    mkdir ${SINGULARITY_ROOTFS}/installations
+    mkdir ${SINGULARITY_ROOTFS}/out_dir
+    mkdir ${SINGULARITY_ROOTFS}/code
+    mkdir ${SINGULARITY_ROOTFS}/data
+
+%files
+    DL_EM_base_env.yml /installations
+    Anaconda3-2020.07-Linux-x86_64.sh /installations
+
+%environment
+    . /installations/anaconda3/etc/profile.d/conda.sh
+    conda activate DL_EM_base_env
+
+%post
+    cd /installations
+    
+    # Install Anaconda and its dependencies 
+    apt-get update 
+    apt-get install -y libgl1-mesa-glx libegl1-mesa libxrandr2 libxrandr2 libxss1 libxcursor1 libxcomposite1 libasound2 libxi6 libxtst6
+    bash Anaconda3-2020.07-Linux-x86_64.sh -b -p /installations/anaconda3
+    
+    # Prepare environment
+    . /installations/anaconda3/etc/profile.d/conda.sh
+    conda env create -f DL_EM_base_env.yml
+    conda init bash
+    apt-get install -y graphviz
+
+%test
+    . /installations/anaconda3/etc/profile.d/conda.sh
+    conda env list
+    conda activate DL_EM_base_env
+    python -c "import tensorflow as tf; import sys; import numpy as np; print('Python       : {}'.format(sys.version.split('\n')[0])); print('Numpy        : {}'.format(np.__version__))
+print('Keras        : {}'.format(tf.keras.__version__)); print('Tensorflow   : {}'.format(tf.__version__))"
+
+%labels
+    Author Daniel Franco
+
