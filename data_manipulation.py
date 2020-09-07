@@ -1344,8 +1344,8 @@ def prepare_3D_volume_data(X, Y, shape=(256, 256, 82), overlap=False,
                         im = X[k-s,(i*shape[0]):((i+1)*shape[1]),(j*shape[0]):((j+1)*shape[1])]
                         mask = Y[k-s,(i*shape[0]):((i+1)*shape[1]),(j*shape[0]):((j+1)*shape[1])]
 
-                        X_prep2[subvolume, ..., vol_slice] = im
-                        Y_prep2[subvolume, ..., vol_slice] = mask
+                        X_prep2[subvolume,:,:,vol_slice] = im
+                        Y_prep2[subvolume,:,:,vol_slice] = mask
                         
                         subvolume += 1
                         if subvolume == crops_per_image:
