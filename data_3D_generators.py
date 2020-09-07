@@ -24,7 +24,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                  seed=42, shuffle_each_epoch=False, batch_size=32, da=True, 
                  shift_range=0, hist_eq=False, flip=False, rotation=False, 
                  elastic=False, g_blur=False, gamma_contrast=False, 
-                 softmax_out=False, val=False, prob_map=None):
+                 softmax_out=False, val=False, prob_map=None, extra_data_factor=1):
         """ImageDataGenerator constructor. Based on transformations from 
            https://github.com/aleju/imgaug.
                                                                                 
@@ -77,6 +77,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
             prob_map (5D Numpy array, optional): probability map used to make
             random crops when random_subvolumes_in_DA is set.
+            
+            extra_data_factor (int, optional): factor to multiply the batches
+            yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated
+            ``extra_data_factor`` times.
         """
 
         if X.shape != Y.shape:
@@ -101,6 +105,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.da = da
         self.val = val
         self.batch_size = batch_size
+        self.extra_data_factor = extra_data_factor
+        self.o_indexes = np.arange(len(self.X))
+        self.o_indexes = np.concatenate([self.o_indexes]*self.extra_data_factor)
         self.prob_map = prob_map
         if random_subvolumes_in_DA:
             self.shape = subvol_shape
@@ -137,7 +144,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
     def __len__(self):
         """Defines the length of the generator"""
     
-        return int(np.ceil(self.X.shape[0]/self.batch_size))
+        return int(np.ceil(self.X.shape[0]*self.extra_data_factor/self.batch_size))
 
     def __getitem__(self, index):
         """Generation of one batch of data. 
@@ -187,7 +194,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
 
-        self.indexes = np.arange(self.X.shape[0])
+        self.indexes = self.o_indexes
         if self.shuffle_each_epoch:
             random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
 
