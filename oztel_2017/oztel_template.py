@@ -30,7 +30,6 @@ args = parser.parse_args()
 import os
 import sys
 sys.path.insert(0, args.base_work_dir)
-sys.path.insert(0, os.path.join(args.base_work_dir, 'oztel_2017'))
 
 # Working dir
 os.chdir(args.base_work_dir)
@@ -43,7 +42,7 @@ from util import limit_threads, set_seed, create_plots, store_history,\
 limit_threads()
 
 # Try to generate the results as reproducible as possible
-seed_value = 42
+seed_value = 42                                                                 
 set_seed(42)
 
 crops_made = False
@@ -54,6 +53,7 @@ job_identifier = args.job_id + '_' + str(args.run_id)
 #        IMPORTS         #
 ##########################
 
+import datetime
 import random
 import numpy as np
 import math
@@ -62,11 +62,11 @@ import tensorflow as tf
 from data_manipulation import load_and_prepare_2D_data, crop_data,\
                               merge_data_without_overlap,\
                               crop_data_with_overlap, merge_data_with_overlap, \
-                              check_binary_masks, img_to_onehot_encoding, \
+                              check_binary_masks, img_to_onehot_encoding,\
                               load_data_from_dir
-from data_generators import keras_da_generator, ImageDataGenerator,\
-                            keras_gen_samples
-from cnn_oztel import cnn_oztel, cnn_oztel_test
+from custom_da_gen import ImageDataGenerator
+from keras_da_gen import keras_da_generator, keras_gen_samples
+from oztel_2017.cnn_oztel import cnn_oztel, cnn_oztel_test
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from tensorflow.keras.callbacks import EarlyStopping
@@ -80,8 +80,8 @@ from tensorflow.keras.utils import plot_model
 from callbacks import ModelCheckpoint
 from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
                             boundary_refinement_watershed2
-import shutil
-from tensorflow.keras.preprocessing.image import ImageDataGenerator as kerasDA
+import shutil                                                                   
+from tensorflow.keras.preprocessing.image import ImageDataGenerator as kerasDA  
 from sklearn.metrics import classification_report, confusion_matrix
 
 
@@ -89,6 +89,8 @@ from sklearn.metrics import classification_report, confusion_matrix
 #  CHECKS  #
 ############
 
+now = datetime.datetime.now()
+print("Date : {}".format(now.strftime("%Y-%m-%d %H:%M:%S")))
 print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
@@ -128,7 +130,7 @@ img_test_shape = (1024, 768, 1)
 # Paths, shapes and discard values for the extra dataset used together with the
 # main train dataset, provided by train_path and train_mask_path variables, to 
 # train the network with. If the shape of the datasets differ the best option
-# to normalize them is to make crops ("make_crops" variable)
+# To normalize them is to make crops ("make_crops" variable)
 extra_datasets_data_list = []
 extra_datasets_mask_list = []
 extra_datasets_data_dim_list = []
@@ -151,9 +153,9 @@ num_crops_per_dataset = 0
 ### Crop variables
 # Shape of the crops
 crop_shape = (32, 32, 1)
-# Flag to make crops on the train data
-make_crops = False
-# Flag to check the crops. Useful to ensure that the crops have been made 
+# To make crops on the train data
+make_crops = True
+# To check the crops. Useful to ensure that the crops have been made 
 # correctly. Note: if "discard_cropped_images" is True only the run that 
 # prepare the discarded data will check the crops, as the future runs only load 
 # the crops stored by this first run
@@ -163,42 +165,14 @@ check_crop = True
 # augmentation (with a crop shape defined by "crop_shape" variable). This flag
 # is not compatible with "make_crops" variable
 random_crops_in_DA = False 
-# NEEDED CODE REFACTORING OF THIS SECTION
-test_ov_crops = 8 # Only active with random_crops_in_DA
+test_ov_crops = 16 # Only active with random_crops_in_DA
 probability_map = False # Only active with random_crops_in_DA                       
 w_foreground = 0.94 # Only active with probability_map
 w_background = 0.06 # Only active with probability_map
 
 
-### Discard variables
-# Flag to activate the discards in the main train data. Only active when 
-# "make_crops" variable is True
-discard_cropped_images = False
-# Percentage of pixels labeled with the foreground class necessary to not 
-# discard the image 
-d_percentage_value = 0.05
-# Path where the train discarded data will be stored to be loaded by future runs 
-# instead of make again the process
-train_crop_discard_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'train', 'x')
-# Path where the train discarded masks will be stored                           
-train_crop_discard_mask_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'train', 'y')
-# The discards are NOT done in the test data, but this will store the test data,
-# which will be cropped, into the pointed path to be loaded by future runs      
-# together with the train discarded data and masks                              
-test_crop_discard_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'test', 'x')
-test_crop_discard_mask_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'test', 'y')
-
-
 ### Normalization
-# Flag to normalize the data dividing by the mean pixel value
+# To normalize the data dividing by the mean pixel value
 normalize_data = False                                                          
 # Force the normalization value to the given number instead of the mean pixel 
 # value
@@ -206,62 +180,71 @@ norm_value_forced = -1
 
 
 ### Data augmentation (DA) variables
-# Flag to decide which type of DA implementation will be used. Select False to 
+# To decide which type of DA implementation will be used. Select False to 
 # use Keras API provided DA, otherwise, a custom implementation will be used
 custom_da = False
 # Create samples of the DA made. Useful to check the output images made. 
 # This option is available for both Keras and custom DA
 aug_examples = True 
-# Flag to shuffle the training data on every epoch:
+# To shuffle the training data on every epoch:
 # (Best options: Keras->False, Custom->True)
-shuffle_train_data_each_epoch = True
-# Flag to shuffle the validation data on every epoch:
+shuffle_train_data_each_epoch = custom_da
+# To shuffle the validation data on every epoch:
 # (Best option: False in both cases)
 shuffle_val_data_each_epoch = False
-# Make a bit of zoom in the images. Only available in Keras DA
-keras_zoom = False 
-# width_shift_range (more details in Keras ImageDataGenerator class). Only 
-# available in Keras DA
-w_shift_r = 0.0
-# height_shift_range (more details in Keras ImageDataGenerator class). Only      
-# available in Keras DA
-h_shift_r = 0.0
-# shear_range (more details in Keras ImageDataGenerator class). Only      
-# available in Keras DA
-shear_range = 0.0 
-# Range to pick a brightness value from to apply in the images. Available for 
-# both Keras and custom DA. Example of use: brightness_range = [1.0, 1.0]
-brightness_range = None 
-# Range to pick a median filter size value from to apply in the images. Option
-# only available in custom DA
-median_filter_size = [0, 0]
-# Range of rotation
+
+### Options available for Keras Data Augmentation
+# Make a bit of zoom in the images
+k_zoom = False 
+# widtk_h_shift_range (more details in Keras ImageDataGenerator class)
+k_w_shift_r = 0.0
+# height_shift_range (more details in Keras ImageDataGenerator class)
+k_h_shift_r = 0.0
+# k_shear_range (more details in Keras ImageDataGenerator class)
+k_shear_range = 0.0 
+# Range to pick a brightness value from to apply in the images. Available in 
+# Keras. Example of use: k_brightness_range = [1.0, 1.0]
+k_brightness_range = None 
+
+### Options available for Custom Data Augmentation 
+# Histogram equalization
+hist_eq = False  
+# Elastic transformations
+elastic = False
+# Median blur                                                             
+median_blur = False
+# Gaussian blur
+g_blur = False                                                                  
+# Gamma contrast
+gamma_contrast = False      
+
+### Options available for both, Custom and Kera Data Augmentation
+# Rotation of 90, 180 or 270
+rotation90 = False
+# Range of rotation. Set to 0 to disable it
 rotation_range = 180
-# Flag to make flips on the subvolumes. Available for both Keras and custom DA.
-flips = True
-
-
-### Extra train data generation
-# Number of times to duplicate the train data. Useful when "random_crops_in_DA"
-# is made, as more original train data can be cover
-duplicate_train = 0
-# Extra number of images to add to the train data. Applied after duplicate_train 
-extra_train_data = 0
+# To make vertical flips 
+vflips = True
+# To make horizontal flips
+hflips = True
 
 
 ### Load previously generated model weigths
-# Flag to activate the load of a previous training weigths instead of train 
+# To activate the load of a previous training weigths instead of train 
 # the network again
-load_previous_weights = False
-load_previous_weights_ft = False
+load_previous_weights = True
+load_previous_weights_ft = True
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
-# Flag to activate the fine tunning
+# To activate the fine tunning
 fine_tunning = False
 # ID of the previous weigths to load the weigths from to make the fine tunning 
 fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
+# Wheter to find the best learning rate plot. If this options is selected the
+# training will stop when 5 epochs are done
+use_LRFinder = False
 
 
 ### Experiment main parameters
@@ -285,12 +268,22 @@ weights_on_data = True if loss_type == "w_bce" else False
 
 
 ### Network architecture specific parameters
-# Number of channels in the first initial layer of the network
-num_init_channels = 32 
-# Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
+# Number of feature maps on each level of the network. It's dimension must be 
+# equal depth+1.
+feature_maps = [32, 64, 128, 256, 512]
+# Depth of the network
+depth = 4
+# To activate the Spatial Dropout instead of use the "normal" dropout layer
 spatial_dropout = False
-# Fixed value to make the dropout. Ignored if the value is zero
-fixed_dropout_value = 0.0 
+# Values to make the dropout with. It's dimension must be equal depth+1. Set to
+# 0 to prevent dropout 
+dropout_values = [0.1, 0.1, 0.2, 0.2, 0.3]
+# To active batch normalization
+batch_normalization = False
+# Kernel type to use on convolution layers
+kernel_init = 'he_normal'
+# Activation function to use                                                    
+activation = "relu" 
 # Active flag if softmax or one channel per class is used as the last layer of
 # the network. Custom DA needed.
 softmax_out = True
@@ -380,6 +373,8 @@ h5_dir = os.path.join(args.result_dir, 'h5_files')
 # Name of the folder to store the probability map to avoid recalculating it on
 # every run
 prob_map_dir = os.path.join(args.result_dir, 'prob_map')
+# Folder where LRFinder callback will store its plot
+lrfinder_dir = os.path.join(result_dir, 'LRFinder')
 
 
 ### Callbacks
@@ -393,6 +388,11 @@ os.makedirs(h5_dir, exist_ok=True)
 checkpointer = ModelCheckpoint(
     os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
     verbose=1, save_best_only=True)
+# Check the best learning rate using the code from:
+#  https://github.com/WittmannF/LRFinder
+if use_LRFinder:
+    lr_finder = LRFinder(min_lr=10e-9, max_lr=10e-3, lrfinder_dir=lrfinder_dir)
+    os.makedirs(lrfinder_dir, exist_ok=True)
 
 
 print("###################\n"
@@ -405,216 +405,214 @@ if extra_datasets_mask_list:
     for i in range(len(extra_datasets_mask_list)):
         check_binary_masks(extra_datasets_mask_list[i])
 
-if not softmax_out and custom_da:
-    raise ValuError("'custom_da' needed when 'softmax_out' is active")
+#if softmax_out and not custom_da:
+#    raise ValuError("'custom_da' needed when 'softmax_out' is active")
 
 
-print("##################################\n"
-      "#  OZTEL TRAIN DATA PREPARATION  #\n"
-      "##################################\n")
-
-# Train directories
-p_train = os.path.join(args.result_dir, "prep_data", "train")
-p_train_cls = os.path.join(p_train, "classification")
-p_train_ss = os.path.join(p_train, "semantic_seg")
-p_train_ss_x = os.path.join(p_train_ss, "x")
-p_train_ss_y = os.path.join(p_train_ss, "y")
-
-# Validation directories
-p_val = os.path.join(args.result_dir, "prep_data", "val")
-p_val_ss = os.path.join(p_val, "semantic_seg")
-p_val_ss_x = os.path.join(p_val_ss, "x")
-p_val_ss_y = os.path.join(p_val_ss, "y")
-
-# Variable to control the number of background samples to add into the training
+print("##################################\n"                                    
+      "#  OZTEL TRAIN DATA PREPARATION  #\n"                                    
+      "##################################\n")                                   
+                                                                                
+# Train directories                                                             
+p_train = os.path.join(args.result_dir, "prep_data", "train")                   
+p_train_cls = os.path.join(p_train, "classification")                           
+p_train_ss = os.path.join(p_train, "semantic_seg")                              
+p_train_ss_x = os.path.join(p_train_ss, "x")                                    
+p_train_ss_y = os.path.join(p_train_ss, "y")                                    
+                                                                                
+# Validation directories                                                        
+p_val = os.path.join(args.result_dir, "prep_data", "val")                       
+p_val_ss = os.path.join(p_val, "semantic_seg")                                  
+p_val_ss_x = os.path.join(p_val_ss, "x")                                        
+p_val_ss_y = os.path.join(p_val_ss, "y")                                        
+                                                                                
+# Variable to control the number of background samples to add into the training 
 # data. This is done because as the problem is not balanced, maybe one decide to
 # drop some background data. Set a high value (like 100) to ensure all background
-# images will be used 
-train_B_samples_times_M = 100
-
-# To create more mitocondria class images. 
+# images will be used                                                           
+train_B_samples_times_M = 100                                                   
+                                                                                
+# To create more mitocondria class images.                                      
 # Total images = mitochondria_class_images + (mul_mito*mitochondria_class_images)
-mul_mito = 2
-
-if os.path.exists(p_train) == False:
-
-    print("#################################\n"
-          "#  Divide the data into clases  #\n"
-          "#################################\n")
-
-    X_train = load_data_from_dir(
+mul_mito = 2                                              
+if not os.path.exists(p_train):                                            
+                                                                                
+    print("#################################\n"                                 
+          "#  Divide the data into clases  #\n"                                 
+          "#################################\n")                                
+                                                                                
+    X_train = load_data_from_dir(                                               
         train_path, (img_train_shape[1], img_train_shape[0], img_train_shape[2]))
-    Y_train = load_data_from_dir(
-        train_mask_path, (img_train_shape[1], img_train_shape[0],
-        img_train_shape[2]))
-    print("*** Loaded train data shape is: {}".format(X_train.shape))
-
-    X_train, Y_train, _ = crop_data(X_train, crop_shape, data_mask=Y_train)
-    divide_images_on_classes(X_train, Y_train/255, p_train, th=0.8)
-
-    # Path were divide_images_on_classes stored the data
-    p_train_x_b = os.path.join(p_train, "x", "class0")
-    p_train_x_m = os.path.join(p_train, "x", "class1")
-    p_train_y_b = os.path.join(p_train, "y", "class0")
-    p_train_y_m = os.path.join(p_train, "y", "class1")
-
-
-
-    print("################################\n"
-          "#  Create the validation data  #\n"
-          "################################\n")
-    if os.path.exists(p_val) == False:
-        print("Creating validation data . . .")
-        p_val_x_b = os.path.join(p_val, "x", "class0")
-        p_val_x_m = os.path.join(p_val, "x", "class1")
-        p_val_y_b = os.path.join(p_val, "y", "class0")
-        p_val_y_m = os.path.join(p_val, "y", "class1")
-        os.makedirs(p_val_x_b, exist_ok=True)
-        os.makedirs(p_val_x_m, exist_ok=True)
-        os.makedirs(p_val_y_b, exist_ok=True)
-        os.makedirs(p_val_y_m, exist_ok=True)
-
-        # Choose randomly selected images from train to generate the validation
-        c1_samples = len(next(os.walk(p_train_x_m))[2])
-        c1_num_val_samples = int(c1_samples*perc_used_as_val)
-        c0_samples = len(next(os.walk(p_train_x_b))[2])
-        c0_num_val_samples = int(c0_samples*perc_used_as_val)
-
-        f = random.sample(os.listdir(p_train_x_b), c0_num_val_samples)
-        for i in tqdm(range(c0_num_val_samples)):
-            shutil.move(os.path.join(p_train_x_b, f[i]),
-                        os.path.join(p_val_x_b, f[i]))
-            shutil.move(os.path.join(p_train_y_b, f[i].replace("im", "mask")),
-                        os.path.join(p_val_y_b, f[i].replace("im", "mask")))
-
-        f = random.sample(os.listdir(p_train_x_m), c1_num_val_samples)
-        for i in tqdm(range(c1_num_val_samples)):
-            shutil.move(os.path.join(p_train_x_m, f[i]),
-                        os.path.join(p_val_x_m, f[i]))
-            shutil.move(os.path.join(p_train_y_m, f[i].replace("im", "mask")),
-                        os.path.join(p_val_y_m, f[i].replace("im", "mask")))
-
-        # Create directory for semantic segmentation and copy the data there
-        os.makedirs(p_val_ss_x, exist_ok=True)
-        os.makedirs(p_val_ss_y, exist_ok=True)
-        for item in os.listdir(p_val_x_b):
-            shutil.copy2(os.path.join(p_val_x_b, item), p_val_ss_x)
-        for item in os.listdir(p_val_x_m):
-            shutil.copy2(os.path.join(p_val_x_m, item), p_val_ss_x)
-        for item in os.listdir(p_val_y_b):
-            shutil.copy2(os.path.join(p_val_y_b, item), p_val_ss_y)
-        for item in os.listdir(p_val_y_m):
-            shutil.copy2(os.path.join(p_val_y_m, item), p_val_ss_y)
-
-    del X_train, Y_train
-
-
-    print("############################################################\n"
-          "#  Balance the classes to have the same amount of samples  #\n"
-          "############################################################\n")
-
-    p_train_e_x = os.path.join(p_train, "x", "class1-extra")
-    p_train_e_y = os.path.join(p_train, "y", "class1-extra")
-
-    # Load mitochondria class labeled samples
-    mito_data = load_data_from_dir(p_train_x_m, crop_shape)
-    mito_mask_data = load_data_from_dir(p_train_y_m, crop_shape)
-
-    background_ids = len(next(os.walk(p_train_x_b))[2])
-    num_samples_extra = mul_mito*mito_data.shape[0]
-
-    # Create a generator
-    mito_gen_args = dict(
-        X=mito_data, Y=mito_mask_data, batch_size=batch_size_value,
-        dim=(crop_shape[0],crop_shape[1]), n_channels=1, shuffle=False, da=False,
-        rotation_range=0)
-    mito_generator = ImageDataGenerator(**mito_gen_args)
-
-    # Create the new samples
+    Y_train = load_data_from_dir(                                               
+        train_mask_path, (img_train_shape[1], img_train_shape[0],               
+        img_train_shape[2]))                                                    
+    print("*** Loaded train data shape is: {}".format(X_train.shape))           
+                                                                                
+    X_train, Y_train, _ = crop_data(X_train, crop_shape, data_mask=Y_train)     
+    divide_images_on_classes(X_train, Y_train/255, p_train, th=0.8)             
+                                                                                
+    # Path were divide_images_on_classes stored the data                        
+    p_train_x_b = os.path.join(p_train, "x", "class0")                          
+    p_train_x_m = os.path.join(p_train, "x", "class1")                          
+    p_train_y_b = os.path.join(p_train, "y", "class0")                          
+    p_train_y_m = os.path.join(p_train, "y", "class1")                          
+                                                                                
+                                                                                
+                                                                                
+    print("################################\n"                                  
+          "#  Create the validation data  #\n"                                  
+          "################################\n")                                 
+    if not os.path.exists(p_val):
+        print("Creating validation data . . .")                                 
+        p_val_x_b = os.path.join(p_val, "x", "class0")                          
+        p_val_x_m = os.path.join(p_val, "x", "class1")                          
+        p_val_y_b = os.path.join(p_val, "y", "class0")                          
+        p_val_y_m = os.path.join(p_val, "y", "class1")                          
+        os.makedirs(p_val_x_b, exist_ok=True)                                   
+        os.makedirs(p_val_x_m, exist_ok=True)                                   
+        os.makedirs(p_val_y_b, exist_ok=True)                                   
+        os.makedirs(p_val_y_m, exist_ok=True)                                   
+                                                                                
+        # Choose randomly selected images from train to generate the validation 
+        c1_samples = len(next(os.walk(p_train_x_m))[2])                         
+        c1_num_val_samples = int(c1_samples*perc_used_as_val)                   
+        c0_samples = len(next(os.walk(p_train_x_b))[2])                         
+        c0_num_val_samples = int(c0_samples*perc_used_as_val)                   
+        f = random.sample(os.listdir(p_train_x_b), c0_num_val_samples)          
+        for i in tqdm(range(c0_num_val_samples)):                               
+            shutil.move(os.path.join(p_train_x_b, f[i]),                        
+                        os.path.join(p_val_x_b, f[i]))                          
+            shutil.move(os.path.join(p_train_y_b, f[i].replace("im", "mask")),  
+                        os.path.join(p_val_y_b, f[i].replace("im", "mask")))    
+                                                                                
+        f = random.sample(os.listdir(p_train_x_m), c1_num_val_samples)          
+        for i in tqdm(range(c1_num_val_samples)):                               
+            shutil.move(os.path.join(p_train_x_m, f[i]),                        
+                        os.path.join(p_val_x_m, f[i]))                          
+            shutil.move(os.path.join(p_train_y_m, f[i].replace("im", "mask")),  
+                        os.path.join(p_val_y_m, f[i].replace("im", "mask")))    
+                                                                                
+        # Create directory for semantic segmentation and copy the data there    
+        os.makedirs(p_val_ss_x, exist_ok=True)                                  
+        os.makedirs(p_val_ss_y, exist_ok=True)                                  
+        for item in os.listdir(p_val_x_b):                                      
+            shutil.copy2(os.path.join(p_val_x_b, item), p_val_ss_x)             
+        for item in os.listdir(p_val_x_m):                                      
+            shutil.copy2(os.path.join(p_val_x_m, item), p_val_ss_x)             
+        for item in os.listdir(p_val_y_b):                                      
+            shutil.copy2(os.path.join(p_val_y_b, item), p_val_ss_y)             
+        for item in os.listdir(p_val_y_m):                                      
+            shutil.copy2(os.path.join(p_val_y_m, item), p_val_ss_y)             
+                                                                                
+    del X_train, Y_train                                                        
+                                                                                
+                                                                                
+    print("############################################################\n"      
+          "#  Balance the classes to have the same amount of samples  #\n"      
+          "############################################################\n")     
+                                                                                
+    p_train_e_x = os.path.join(p_train, "x", "class1-extra")                    
+    p_train_e_y = os.path.join(p_train, "y", "class1-extra")                    
+                                                                                
+    # Load mitochondria class labeled samples                                   
+    mito_data = load_data_from_dir(p_train_x_m, crop_shape)                     
+    mito_mask_data = load_data_from_dir(p_train_y_m, crop_shape)                
+                                                                                
+    background_ids = len(next(os.walk(p_train_x_b))[2])                         
+    num_samples_extra = mul_mito*mito_data.shape[0]                             
+                                                                                
+    # Create a generator                                                        
+    mito_gen_args = dict(                                                       
+        X=mito_data, Y=mito_mask_data, batch_size=batch_size_value,             
+        shape=(crop_shape[0],crop_shape[1],1), shuffle=False, da=False,
+        rotation_range=0)                                                       
+    mito_generator = ImageDataGenerator(**mito_gen_args)                        
+                                                                                
+    # Create the new samples                                                    
     extra_x, extra_y = mito_generator.get_transformed_samples(num_samples_extra)
-    save_img(X=extra_x, data_dir=p_train_e_x, Y=extra_y, mask_dir=p_train_e_y,
-             prefix="e")
+    save_img(X=extra_x, data_dir=p_train_e_x, Y=extra_y, mask_dir=p_train_e_y,  
+             prefix="e")                                                        
+                                                                                
+    print("####################################################\n"              
+          "#  Create train directory tree for classification  #\n"              
+          "####################################################\n")             
+                                                                                
+    p_train_cls_b = os.path.join(p_train_cls, "class0")                         
+    p_train_cls_m = os.path.join(p_train_cls, "class1")                         
+    print("Gathering all train samples into one folder . . .")                  
+    shutil.copytree(p_train_x_m, p_train_cls_m)                                 
+    for item in tqdm(os.listdir(p_train_e_x)):                                  
+        shutil.copy2(os.path.join(p_train_e_x, item), p_train_cls_m)            
+                                                                                
+    # Take the same amount of background and mitochondria samples               
+    os.makedirs(p_train_cls_b, exist_ok=True)                                   
+    c1_samples = len(next(os.walk(p_train_cls_m))[2])                           
+    c0_samples = len(next(os.walk(p_train_x_b))[2])                             
+    if c0_samples < c1_samples*train_B_samples_times_M:                         
+        total_samples = c0_samples                                              
+    else:                                                                       
+        total_samples = c1_samples*train_B_samples_times_M                      
+    f = random.sample(os.listdir(p_train_x_b), total_samples)                   
+    for i in tqdm(range(total_samples)):                                        
+        shutil.copy2(os.path.join(p_train_x_b, f[i]),                           
+                     os.path.join(p_train_cls_b, f[i]))                         
+                                                                                
+    print("###########################################################\n"       
+          "#  Create train directory tree for semantic segmentation  #\n"       
+          "###########################################################\n")      
+                                                                                
+    if not os.path.exists(p_train_ss):                                     
+        os.makedirs(p_train_ss_x, exist_ok=True)                                
+        os.makedirs(p_train_ss_y, exist_ok=True)                                
+        for item in os.listdir(p_train_x_b):                                    
+            shutil.copy2(os.path.join(p_train_x_b, item), p_train_ss_x)         
+        for item in os.listdir(p_train_x_m):                                    
+            shutil.copy2(os.path.join(p_train_x_m, item), p_train_ss_x)         
+        for item in os.listdir(p_train_e_x):                                    
+            shutil.copy2(os.path.join(p_train_e_x, item), p_train_ss_x)         
+        for item in os.listdir(p_train_y_b):                                    
+            shutil.copy2(os.path.join(p_train_y_b, item), p_train_ss_y)         
+        for item in os.listdir(p_train_y_m):                                    
+            shutil.copy2(os.path.join(p_train_y_m, item), p_train_ss_y)         
+        for item in os.listdir(p_train_e_y):                                    
+            shutil.copy2(os.path.join(p_train_e_y, item), p_train_ss_y)         
+                                                                                
+    del mito_data, mito_mask_data                                               
+                                                                                
+orig_test_shape = img_test_shape                                                
+                                                                                
+# Finally load test data                                                        
+X_test = load_data_from_dir(                                                    
+    test_path, (img_test_shape[1], img_test_shape[0], img_test_shape[2]))       
+Y_test = load_data_from_dir(                                                    
+    test_mask_path, (img_test_shape[1], img_test_shape[0], img_test_shape[2]))  
+print("*** Loaded test data shape is: {}".format(X_test.shape))                 
 
-    print("####################################################\n"
-          "#  Create train directory tree for classification  #\n"
-          "####################################################\n")
 
-    p_train_cls_b = os.path.join(p_train_cls, "class0")
-    p_train_cls_m = os.path.join(p_train_cls, "class1")
-    print("Gathering all train samples into one folder . . .")
-    shutil.copytree(p_train_x_m, p_train_cls_m)
-    for item in tqdm(os.listdir(p_train_e_x)):
-        shutil.copy2(os.path.join(p_train_e_x, item), p_train_cls_m)
+print("###########################\n"
+      "#  EXTRA DATA GENERATION  #\n"
+      "###########################\n")
 
-    # Take the same amount of background and mitochondria samples
-    os.makedirs(p_train_cls_b, exist_ok=True)
-    c1_samples = len(next(os.walk(p_train_cls_m))[2])
-    c0_samples = len(next(os.walk(p_train_x_b))[2])
-    if c0_samples < c1_samples*train_B_samples_times_M:
-        total_samples = c0_samples
-    else:
-        total_samples = c1_samples*train_B_samples_times_M
-    f = random.sample(os.listdir(p_train_x_b), total_samples)
-    for i in tqdm(range(total_samples)):
-        shutil.copy2(os.path.join(p_train_x_b, f[i]),
-                     os.path.join(p_train_cls_b, f[i]))
-
-    print("###########################################################\n"
-          "#  Create train directory tree for semantic segmentation  #\n"
-          "###########################################################\n")
-
-    if os.path.exists(p_train_ss) == False:
-        os.makedirs(p_train_ss_x, exist_ok=True)
-        os.makedirs(p_train_ss_y, exist_ok=True)
-        for item in os.listdir(p_train_x_b):
-            shutil.copy2(os.path.join(p_train_x_b, item), p_train_ss_x)
-        for item in os.listdir(p_train_x_m):
-            shutil.copy2(os.path.join(p_train_x_m, item), p_train_ss_x)
-        for item in os.listdir(p_train_e_x):
-            shutil.copy2(os.path.join(p_train_e_x, item), p_train_ss_x)
-        for item in os.listdir(p_train_y_b):
-            shutil.copy2(os.path.join(p_train_y_b, item), p_train_ss_y)
-        for item in os.listdir(p_train_y_m):
-            shutil.copy2(os.path.join(p_train_y_m, item), p_train_ss_y)
-        for item in os.listdir(p_train_e_y):
-            shutil.copy2(os.path.join(p_train_e_y, item), p_train_ss_y)
-
-    del mito_data, mito_mask_data
-
-orig_test_shape = img_test_shape
-
-# Finally load test data
-X_test = load_data_from_dir(
-    test_path, (img_test_shape[1], img_test_shape[0], img_test_shape[2]))
-Y_test = load_data_from_dir(
-    test_mask_path, (img_test_shape[1], img_test_shape[0], img_test_shape[2]))
-print("*** Loaded test data shape is: {}".format(X_test.shape))
-
-
-print("#######################\n"
-      "#  DATA AUGMENTATION  #\n"
-      "#######################\n")
-
-# Train generator based on the new prepared training data on the last section
-datagen = kerasDA(rescale=1./255, rotation_range=180)
-train_generator = datagen.flow_from_directory(
-    p_train_cls, target_size=crop_shape[:2], class_mode="binary",
-    color_mode="grayscale", batch_size=batch_size_value,
-    shuffle=shuffle_train_data_each_epoch, seed=seed_value)
-
-# Validation generator based on the validation images previously prepared
-datagen = kerasDA(rescale=1./255)
-val_generator = datagen.flow_from_directory(
-    os.path.join(p_val, "x"), target_size=crop_shape[:2], class_mode="binary",
-    color_mode="grayscale", batch_size=batch_size_value,
-    shuffle=shuffle_val_data_each_epoch, seed=seed_value)
-
-# Test generator based on X_test and Y_test
-data_gen_test_args = dict(
-    X=X_test, Y=Y_test, batch_size=batch_size_value,
-    dim=(img_test_shape[1], img_test_shape[0]), n_channels=1, shuffle=False,
-    da=False, softmax_out=softmax_out)
-test_generator = ImageDataGenerator(**data_gen_test_args)
+# Train generator based on the new prepared training data on the last section   
+datagen = kerasDA(rescale=1./255, rotation_range=180)                           
+train_generator = datagen.flow_from_directory(                                  
+    p_train_cls, target_size=crop_shape[:2], class_mode="binary",               
+    color_mode="grayscale", batch_size=batch_size_value,                        
+    shuffle=shuffle_train_data_each_epoch, seed=seed_value)                     
+                                                                                
+# Validation generator based on the validation images previously prepared       
+datagen = kerasDA(rescale=1./255)                                               
+val_generator = datagen.flow_from_directory(                                    
+    os.path.join(p_val, "x"), target_size=crop_shape[:2], class_mode="binary",  
+    color_mode="grayscale", batch_size=batch_size_value,                        
+    shuffle=shuffle_val_data_each_epoch, seed=seed_value)                       
+                                                                                
+# Test generator based on X_test and Y_test                                     
+data_gen_test_args = dict(                                                      
+    X=X_test, Y=Y_test, batch_size=batch_size_value,                            
+    shape=(img_test_shape[1],img_test_shape[0],1), shuffle=False,    
+    da=False, softmax_out=softmax_out)                                          
+test_generator = ImageDataGenerator(**data_gen_test_args)                       
 
 
 print("#################################\n"
@@ -622,7 +620,8 @@ print("#################################\n"
       "#################################\n")
 
 print("Creating the network . . .")
-model = cnn_oztel(crop_shape, lr=learning_rate_value, optimizer=optimizer)
+model = cnn_oztel(crop_shape, lr=learning_rate_value, activation=activation, 
+                  optimizer=optimizer)      
 
 # Check the network created
 model.summary(line_length=150)
@@ -630,7 +629,7 @@ os.makedirs(char_dir, exist_ok=True)
 model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 #plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
-if load_previous_weights == False:
+if not load_previous_weights:
     if fine_tunning:                                                    
         h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
                              + '_' + args.run_id + '.h5')     
@@ -638,81 +637,90 @@ if load_previous_weights == False:
               .format(h5_file))
         model.load_weights(h5_file)                                             
    
-    results = model.fit(x=train_generator, validation_data=val_generator,
-        validation_steps=math.ceil(val_generator.n/batch_size_value),
-        steps_per_epoch=math.ceil(train_generator.n/batch_size_value),
-        epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
+    if use_LRFinder:
+        print("Training just for 10 epochs . . .")
+        results = model.fit(x=train_generator, validation_data=val_generator,
+            validation_steps=math.ceil(X_val.shape[0]/batch_size_value),
+            steps_per_epoch=math.ceil(X_train.shape[0]/batch_size_value),
+            epochs=5, callbacks=[lr_finder])
 
-    print("Epoch average time: {}".format(np.mean(time_callback.times)))
-    print("Epoch number: {}".format(len(results.history['val_loss'])))
-    print("Train time (s): {}".format(np.sum(time_callback.times)))
-    print("Train loss: {}".format(np.min(results.history['loss'])))
-    print("Train accuracy: {}"
-          .format(np.max(results.history['accuracy'])))
-    print("Validation loss: {}".format(np.min(results.history['val_loss'])))
-    print("Validation accuracy: {}"
-          .format(np.max(results.history['val_accuracy'])))
+        print("Finish LRFinder. Check the plot in {}".format(lrfinder_dir))
+        sys.exit(0)
+    else:
+        results = model.fit(train_generator, validation_data=val_generator,
+            validation_steps=math.ceil(val_generator.n/batch_size_value),
+            steps_per_epoch=math.ceil(train_generator.n/batch_size_value),
+            epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
 
+        print("Epoch average time: {}".format(np.mean(time_callback.times)))        
+        print("Epoch number: {}".format(len(results.history['val_loss'])))          
+        print("Train time (s): {}".format(np.sum(time_callback.times)))             
+        print("Train loss: {}".format(np.min(results.history['loss'])))             
+        print("Train accuracy: {}"                                                  
+              .format(np.max(results.history['accuracy'])))                         
+        print("Validation loss: {}".format(np.min(results.history['val_loss'])))    
+        print("Validation accuracy: {}"                                             
+              .format(np.max(results.history['val_accuracy'])))
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
                          + '_' + str(args.run_id) + '.h5')
     print("Loading model weights from h5_file: {}".format(h5_file))
     model.load_weights(h5_file)
 
-# Print confusion matrix and some metrics
-target_names = ['Background', 'Mitochondria']
-print('Validation-Confusion Matrix')
-preds_val = model.predict(val_generator, steps=len(val_generator), verbose=1)
-print(confusion_matrix(
-          val_generator.classes, (preds_val>0.5).astype('uint8')))
-print(classification_report(
-          val_generator.classes, (preds_val>0.5).astype('uint8'),
-          target_names=target_names))
+# Print confusion matrix and some metrics                                       
+target_names = ['Background', 'Mitochondria']                                   
+print('Validation-Confusion Matrix')                                            
+preds_val = model.predict(val_generator, steps=len(val_generator), verbose=1)   
+print(confusion_matrix(                                                         
+          val_generator.classes, (preds_val>0.5).astype('uint8')))              
+print(classification_report(                                                    
+          val_generator.classes, (preds_val>0.5).astype('uint8'),               
+          target_names=target_names))                                           
 
 
-print("############################################\n"
-      "#  FINE TUNNING FOR SEMANTIC SEGMENTATION  #\n"
-      "############################################\n")
-
-model_test_ft = cnn_oztel_test(model, crop_shape, lr=learning_rate_value,
-                               optimizer=optimizer)
-# Check the network created
-model_test_ft.summary(line_length=150)
-save_filters_of_convlayer(model, char_dir, name="conv1", prefix="model")
+print("############################################\n"                          
+      "#  FINE TUNNING FOR SEMANTIC SEGMENTATION  #\n"                          
+      "############################################\n")                         
+                                                                                
+model_test_ft = cnn_oztel_test(model, crop_shape, lr=learning_rate_value,       
+                               optimizer=optimizer)                             
+# Check the network created                                                     
+model_test_ft.summary(line_length=150)                                          
+save_filters_of_convlayer(model, char_dir, name="conv1", prefix="model")        
 save_filters_of_convlayer(model_test_ft, char_dir, name="conv1", prefix="model_test_ft")
-
-h5_file=os.path.join(h5_dir, weight_files_prefix + job_identifier + '_ft.h5')
-
-# Prepare the train/val generator with softmax output
-X_train = load_data_from_dir(p_train_ss_x, crop_shape)
-Y_train = load_data_from_dir(p_train_ss_y, crop_shape)
-X_val = load_data_from_dir(p_val_ss_x, crop_shape)
-Y_val = load_data_from_dir(p_val_ss_y, crop_shape)
-
-data_gen_args = dict(
-    X=X_train, Y=Y_train, batch_size=batch_size_value,
-    dim=(crop_shape[0],crop_shape[1]), n_channels=1,
-    shuffle=shuffle_train_data_each_epoch, da=False, softmax_out=softmax_out)
-
-data_gen_val_args = dict(
-    X=X_val, Y=Y_val, batch_size=batch_size_value,
-    dim=(crop_shape[0],crop_shape[1]), n_channels=1,
-    shuffle=shuffle_val_data_each_epoch, da=False, softmax_out=softmax_out)
-
-train_generator = ImageDataGenerator(**data_gen_args)
-val_generator = ImageDataGenerator(**data_gen_val_args)
-
-if load_previous_weights_ft == False:
-    checkpointer = ModelCheckpoint(
+                                                                                
+h5_file=os.path.join(h5_dir, weight_files_prefix + job_identifier + '_ft.h5')   
+                                                                                
+# Prepare the train/val generator with softmax output                           
+X_train = load_data_from_dir(p_train_ss_x, crop_shape)                          
+Y_train = load_data_from_dir(p_train_ss_y, crop_shape)                          
+X_val = load_data_from_dir(p_val_ss_x, crop_shape)                              
+Y_val = load_data_from_dir(p_val_ss_y, crop_shape)                              
+                                                                                
+data_gen_args = dict(                                                           
+    X=X_train, Y=Y_train, batch_size=batch_size_value,                          
+    shape=(crop_shape[0],crop_shape[1],1),                            
+    shuffle=shuffle_train_data_each_epoch, da=False, softmax_out=softmax_out)   
+                                                                                
+data_gen_val_args = dict(                                                       
+    X=X_val, Y=Y_val, batch_size=batch_size_value,                              
+    shape=(crop_shape[0],crop_shape[1],1),
+    shuffle=shuffle_val_data_each_epoch, da=False, softmax_out=softmax_out)     
+                                                                                
+train_generator = ImageDataGenerator(**data_gen_args)                           
+val_generator = ImageDataGenerator(**data_gen_val_args)                         
+                                                                                
+if not load_previous_weights_ft:                                           
+    checkpointer = ModelCheckpoint(                                             
             os.path.join(h5_dir, weight_files_prefix + job_identifier + '_ft.h5'),
-            verbose=1, save_best_only=True)
-    results = model_test_ft.fit(
-        train_generator, validation_data=val_generator,
+            verbose=1, save_best_only=True)                                     
+    results = model_test_ft.fit(                                                
+        train_generator, validation_data=val_generator,                         
         validation_steps=len(val_generator), steps_per_epoch=len(train_generator),
         epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
-else:
-    print("Loading model_test_ft weights from h5_file: {}".format(h5_file))
-    model_test_ft.load_weights(h5_file)
+else:                                                                           
+    print("Loading model_test_ft weights from h5_file: {}".format(h5_file))     
+    model_test_ft.load_weights(h5_file)   
 
 
 print("################################\n"
@@ -1025,15 +1033,15 @@ print("####################################\n"
       "#  PRINT AND SAVE SCORES OBTAINED  #\n"
       "####################################\n")
 
-if load_previous_weights == False:
+if not load_previous_weights:
     print("Epoch average time: {}".format(np.mean(time_callback.times)))
     print("Epoch number: {}".format(len(results.history['val_loss'])))
     print("Train time (s): {}".format(np.sum(time_callback.times)))
     print("Train loss: {}".format(np.min(results.history['loss'])))
-    print("Train IoU: {}".format(np.max(results.history['jaccard_index_softmax'])))
+    print("Train IoU: {}".format(np.max(results.history['jaccard_index'])))
     print("Validation loss: {}".format(np.min(results.history['val_loss'])))
     print("Validation IoU: {}"
-          .format(np.max(results.history['val_jaccard_index_softmax'])))
+          .format(np.max(results.history['val_jaccard_index'])))
 
 print("Test loss: {}".format(loss_per_crop))
 print("Test IoU (per crop): {}".format(jac_per_crop))
@@ -1084,9 +1092,8 @@ if not load_previous_weights:
         or "_per_image" in name or "_full" in name):
             scores[name] = eval(name)
 
-    store_history(results, scores, time_callback, args.result_dir, job_identifier,
-                  metric="jaccard_index_softmax")
-    create_plots(results, job_identifier, char_dir, metric="jaccard_index_softmax")
+    store_history(results, scores, time_callback, args.result_dir, job_identifier)
+    create_plots(results, job_identifier, char_dir)
 
 print("FINISHED JOB {} !!".format(job_identifier))
 

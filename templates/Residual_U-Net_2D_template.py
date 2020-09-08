@@ -51,6 +51,7 @@ job_identifier = args.job_id + '_' + str(args.run_id)
 #        IMPORTS         #
 ##########################
 
+import datetime
 import random
 import numpy as np
 import math
@@ -63,8 +64,7 @@ from data_manipulation import load_and_prepare_2D_data, crop_data,\
 from custom_da_gen import ImageDataGenerator
 from keras_da_gen import keras_da_generator, keras_gen_samples
 from networks.resunet import ResUNet_2D
-from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
-                    DET_calculation
+from metrics import jaccard_index_numpy, voc_calculation, DET_calculation
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
 from PIL import Image
@@ -82,6 +82,8 @@ from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
 #  CHECKS  #
 ############
 
+now = datetime.datetime.now()
+print("Date : {}".format(now.strftime("%Y-%m-%d %H:%M:%S")))
 print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
@@ -430,9 +432,6 @@ if extra_datasets_mask_list:
     for i in range(len(extra_datasets_mask_list)):
         check_binary_masks(extra_datasets_mask_list[i])
 
-if softmax_out and not custom_da:
-    raise ValuError("'custom_da' needed when 'softmax_out' is active")
-
 
 print("##########################################\n"
       "#  PREPARE DATASET IF DISCARD IS ACTIVE  #\n"
@@ -527,12 +526,13 @@ print("###########################\n"
       "#  EXTRA DATA GENERATION  #\n"
       "###########################\n")
 
-# Duplicate train data N times
+# Calculate the steps_per_epoch value to train in case
 if duplicate_train != 0:
-    X_train = np.vstack([X_train]*duplicate_train)
-    Y_train = np.vstack([Y_train]*duplicate_train)
-    print("Train data replicated {} times. Its new shape is: {}"
-          .format(duplicate_train, X_train.shape))
+    steps_per_epoch_value = int((duplicate_train*X_train.shape[0])/batch_size_value)
+    print("Data doubled by {} ; Steps per epoch = {}".format(duplicate_train,
+          steps_per_epoch_value))
+else:
+    steps_per_epoch_value = int(X_train.shape[0]/batch_size_value)
 
 # Add extra train data generated with DA
 if extra_train_data != 0:
@@ -609,7 +609,8 @@ else:
         vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,
         median_blur=median_blur, gamma_contrast=gamma_contrast,
         random_crops_in_DA=random_crops_in_DA, prob_map=probability_map, 
-        train_prob=train_prob, softmax_out=softmax_out)
+        train_prob=train_prob, softmax_out=softmax_out,
+        extra_data_factor=duplicate_train)
     data_gen_val_args = dict(
         X=X_val, Y=Y_val, batch_size=batch_size_value, 
         shape=(img_height,img_width,img_channels), 
@@ -660,8 +661,8 @@ if load_previous_weights == False:
     else:
         results = model.fit(train_generator, validation_data=val_generator,
             validation_steps=math.ceil(X_val.shape[0]/batch_size_value),
-            steps_per_epoch=math.ceil(X_train.shape[0]/batch_size_value),
-            epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
+            steps_per_epoch=steps_per_epoch_value, epochs=epochs_value,
+            callbacks=[earlystopper, checkpointer, time_callback])
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
                          + '_' + str(args.run_id) + '.h5')

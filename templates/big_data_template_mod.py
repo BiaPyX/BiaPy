@@ -62,8 +62,7 @@ from data_manipulation import load_data_from_dir, merge_data_without_overlap,\
 from data_generators import keras_da_generator, ImageDataGenerator,\
                             keras_gen_samples
 from networks.unet import U_Net_2D
-from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
-                    DET_calculation
+from metrics import jaccard_index_numpy, voc_calculation, DET_calculation
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
 from PIL import Image
@@ -343,9 +342,6 @@ check_binary_masks(test_mask_path)
 if extra_datasets_mask_list: 
     for i in range(len(extra_datasets_mask_list)):
         check_binary_masks(extra_datasets_mask_list[i])
-
-if not softmax_out and custom_da:
-    raise ValuError("'custom_da' needed when 'softmax_out' is active")
 
 
 print("#######################\n"

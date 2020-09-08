@@ -104,7 +104,7 @@ def ResUNet_2D(image_shape, activation='elu', k_init='he_normal',
     return model
 
 
-def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values,   
+def level_block(x, depth, f_maps, f_size, activation, k_init, drop_values,   
                 batch_norm, first_block):                                       
 
     """Produces a level of the network. It calls itself recursively.
@@ -117,8 +117,7 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values,
 
             f_maps (array of ints): feature maps to use.                        
                                                                                 
-            filter_size (3 int tuple): height, width and depth of the convolution
-                window.                                                             
+            f_size (int): convolution window.                                                             
                                                                                 
             activation (str, optional): Keras available activation type.        
                                                                                 
@@ -137,22 +136,22 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values,
     """  
                                                                                 
     if depth > 0:                                                               
-        r = residual_block(x, f_maps[depth], filter_size, activation, k_init,           
+        r = residual_block(x, f_maps[depth], f_size, activation, k_init,           
                            drop_values[depth], batch_norm, first_block)                 
         x = MaxPooling2D((2, 2)) (r)                                         
-        x = level_block(x, depth-1, f_maps, filter_size, activation, k_init, 
+        x = level_block(x, depth-1, f_maps, f_size, activation, k_init, 
                         drop_values, batch_norm, False)                          
         x = Conv2DTranspose(f_maps[depth], (2, 2), strides=(2, 2), padding='same') (x)
         x = Concatenate()([r, x])                                               
-        x = residual_block(x, f_maps[depth], filter_size, activation, k_init,           
+        x = residual_block(x, f_maps[depth], f_size, activation, k_init,           
                            drop_values[depth], batch_norm, False)                       
     else:                                                                       
-        x = residual_block(x, f_maps[depth], filter_size, activation, k_init,           
+        x = residual_block(x, f_maps[depth], f_size, activation, k_init,           
                            drop_values[depth], batch_norm, False)                       
     return x 
 
 
-def residual_block(x, f_maps, filter_size, activation='elu', k_init='he_normal', 
+def residual_block(x, f_maps, f_size, activation='elu', k_init='he_normal', 
                    drop_value=0.0, bn=False, first_block=False):                                          
 
     """Residual block.
@@ -162,8 +161,7 @@ def residual_block(x, f_maps, filter_size, activation='elu', k_init='he_normal',
                                                                                 
             f_maps (array of ints): feature maps to use.
             
-            filter_size (3 int tuple): height, width and depth of the convolution
-                window. 
+            f_size (int): convolution window. 
 
             activation (str, optional): Keras available activation type.        
                                                                                 
@@ -190,14 +188,14 @@ def residual_block(x, f_maps, filter_size, activation='elu', k_init='he_normal',
         x = BatchNormalization()(x) if bn else x                                
         x = ELU(alpha=1.0) (x)                                                  
                                                                                 
-    x = Conv2D(f_maps, filter_size, activation=None,                            
+    x = Conv2D(f_maps, f_size, activation=None,                            
                kernel_initializer=k_init, padding='same') (x)                   
                                                                                 
     x = Dropout(drop_value) (x) if drop_value > 0 else x                        
     x = BatchNormalization()(x) if bn else x                                    
     x = ELU(alpha=1.0) (x)                                                      
                                                                                 
-    x = Conv2D(f_maps, filter_size, activation=None,                            
+    x = Conv2D(f_maps, f_size, activation=None,                            
                kernel_initializer=k_init, padding='same') (x)                   
     x = BatchNormalization()(x) if bn else x                                    
                                                                                 

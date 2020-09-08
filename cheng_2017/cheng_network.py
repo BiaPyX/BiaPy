@@ -8,8 +8,8 @@ from tensorflow.keras.layers import Input, BatchNormalization, Dropout, Lambda,\
 from tensorflow.keras.layers import PReLU
 from tensorflow.keras.regularizers import l2
 from metrics import jaccard_index_softmax
-from loss import jaccard_loss_cheng2017
-from StochasticDownsamplig2D import StochasticDownsampling2D
+from .loss import jaccard_loss_cheng2017
+from .StochasticDownsamplig2D import StochasticDownsampling2D
 
 
 def asymmetric_network(image_shape, numInitChannels=16, fixed_dropout=0.0, 

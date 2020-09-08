@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras import Input, Model
 from tensorflow.keras.layers import Conv2D, Conv2DTranspose, MaxPooling2D, Add,\
-                                    Cropping2D
+                                    Cropping2D, Dropout
 from metrics import jaccard_index_softmax, jaccard_index
 
 

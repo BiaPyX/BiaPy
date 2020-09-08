@@ -144,14 +144,14 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values,
         x = Conv3DTranspose(f_maps[depth], (2, 2, 2), strides=(2, 2, 2), padding='same') (x)
 
         # Adjust shape introducing zero padding to allow the concatenation
-        a = x.shape[1]
-        b = r.shape[1]
+        a = x.shape[3]
+        b = r.shape[3]
         s = a - b
         if s > 0:
-            r = ZeroPadding3D(padding=((s,0), (s,0), (s,0))) (r)
+            r = ZeroPadding3D(padding=((0,0), (0,0), (s,0))) (r)
         elif s < 0:
-            x = ZeroPadding3D(padding=((abs(s),0), (abs(s),0), (abs(s),0))) (x)
-        x = Concatenate()([r, x])                                               
+            x = ZeroPadding3D(padding=((0,0), (0,0), (abs(s),0))) (x)
+        x = Concatenate()([x, r])                                               
 
         x = residual_block(x, f_maps[depth], filter_size, activation, k_init,           
                            drop_values[depth], batch_norm, False)                       

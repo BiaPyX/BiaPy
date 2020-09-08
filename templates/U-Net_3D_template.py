@@ -52,17 +52,17 @@ job_identifier = args.job_id + '_' + str(args.run_id)
 #        IMPORTS         #
 ##########################
 
+import datetime
 import random
 import numpy as np
 import math
 import time
 import tensorflow as tf
 from data_manipulation import load_and_prepare_3D_data, check_binary_masks, \
-                              crop_3D_data_with_overlap, \
                               merge_3D_data_with_overlap
 from data_3D_generators import VoxelDataGenerator
 from networks.unet_3d import U_Net_3D
-from metrics import jaccard_index, jaccard_index_numpy, voc_calculation
+from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.models import load_model
 from tqdm import tqdm
@@ -79,6 +79,8 @@ from LRFinder.keras_callback import LRFinder
 #  CHECKS  #
 ############
 
+now = datetime.datetime.now()
+print("Date : {}".format(now.strftime("%Y-%m-%d %H:%M:%S")))
 print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
@@ -211,7 +213,7 @@ depth = 3
 spatial_dropout = False
 # Values to make the dropout with. It's dimension must be equal depth+1. Set to
 # 0 to prevent dropout
-dropout_values = [0.1, 0.1, 0.1, 0.1]
+dropout_values = [0, 0, 0, 0]
 # Flag to active batch normalization
 batch_normalization = False
 # Kernel type to use on convolution layers
@@ -347,12 +349,13 @@ print("###########################\n"
       "#  EXTRA DATA GENERATION  #\n"
       "###########################\n")
 
-# Duplicate train data N times
+# Calculate the steps_per_epoch value to train in case
 if duplicate_train != 0:
-    X_train = np.vstack([X_train]*duplicate_train)
-    Y_train = np.vstack([Y_train]*duplicate_train)
-    print("Train data replicated {} times. Its new shape is: {}"
-          .format(duplicate_train, X_train.shape))
+    steps_per_epoch_value = int((duplicate_train*X_train.shape[0])/batch_size_value)
+    print("Data doubled by {} ; Steps per epoch = {}".format(duplicate_train,
+          steps_per_epoch_value))
+else:
+    steps_per_epoch_value = int(X_train.shape[0]/batch_size_value)
 
 # Add extra train data generated with DA
 if extra_train_data != 0:
@@ -398,7 +401,8 @@ train_generator = VoxelDataGenerator(
     shuffle_each_epoch=shuffle_train_data_each_epoch, 
     batch_size=batch_size_value, da=da, hist_eq=hist_eq, flip=flips, 
     rotation=rotation, elastic=elastic, g_blur=g_blur, 
-    gamma_contrast=gamma_contrast, softmax_out=softmax_out, prob_map=train_prob)
+    gamma_contrast=gamma_contrast, softmax_out=softmax_out, prob_map=train_prob,
+    extra_data_factor=duplicate_train)
 del X_train, Y_train
 
 # Create the test data generator without DA
@@ -447,8 +451,9 @@ if load_previous_weights == False:
         sys.exit(0)
     else:
         results = model.fit(x=train_generator, validation_data=val_generator,
-            validation_steps=len(val_generator), steps_per_epoch=len(train_generator),
-            epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
+            validation_steps=len(val_generator), 
+            steps_per_epoch=steps_per_epoch_value, epochs=epochs_value,
+            callbacks=[earlystopper, checkpointer, time_callback])
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
                                  + '_' + str(args.run_id) + '.h5')

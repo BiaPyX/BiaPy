@@ -10,10 +10,10 @@ from metrics import binary_crossentropy_weighted, jaccard_index, \
 def FC_DenseNet103(image_shape, n_filters_first_conv=48, n_pool=4, 
                    growth_rate=12, n_layers_per_block=5, dropout_p=0.2,
                    loss_type="bce", optimizer="sgd", lr=0.001):
-    """Create FC-DenseNet103 (tiramisu network) proposed in `The One Hundred 
+    """Create FC-DenseNet103 (Tiramisu network) proposed in `The One Hundred 
        Layers Tiramisu: Fully Convolutional DenseNets for Semantic Segmentation <https://arxiv.org/pdf/1611.09326.pdf>`_ . 
-       Code copied from `FC-DenseNet103 <https://github.com/SimJeg/FC-DenseNet/blob/master/FC-DenseNet.py>`_.
-       Just adapted from Lasagne to Keras.
+       Code copied from `FC-DenseNet103 <https://github.com/SimJeg/FC-DenseNet/blob/master/FC-DenseNet.py>`_
+       and just adapted from Lasagne to Keras.
 
        The network consist of a downsampling path, where dense blocks and 
        transition down are applied, followed by an upsampling path where

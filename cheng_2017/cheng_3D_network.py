@@ -2,15 +2,15 @@ import tensorflow as tf
 import numpy as np
 import math
 from tensorflow.keras import backend as K
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, BatchNormalization, Dropout, Lambda,\
+from tensorflow.keras import Model, Input
+from tensorflow.keras.layers import BatchNormalization, Dropout, Lambda,\
                                     SpatialDropout3D, Conv3D, Conv3DTranspose, \
                                     MaxPooling3D, concatenate, Add
 from tensorflow.keras.layers import PReLU
 from tensorflow.keras.regularizers import l2
 from metrics import jaccard_index_softmax
-from loss import jaccard_loss_cheng2017
-from StochasticDownsamplig3D import StochasticDownsampling3D
+from .loss import jaccard_loss_cheng2017
+from .StochasticDownsamplig3D import StochasticDownsampling3D
 
 
 def asymmetric_3D_network(image_shape, numInitChannels=16, fixed_dropout=0.0, 

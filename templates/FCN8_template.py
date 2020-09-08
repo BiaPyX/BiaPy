@@ -63,7 +63,7 @@ from data_manipulation import load_and_prepare_2D_data, crop_data,\
                               check_binary_masks, img_to_onehot_encoding
 from custom_da_gen import ImageDataGenerator
 from keras_da_gen import keras_da_generator, keras_gen_samples
-from networks.unet import U_Net_2D
+from networks.fcn_vgg import FCN8_VGG16
 from metrics import jaccard_index_numpy, voc_calculation, DET_calculation
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
@@ -107,7 +107,7 @@ test_mask_path = os.path.join(args.data_dir, 'test', 'y')
 perc_used_as_val = 0.1
 # Create the validation data with random images of the training data. If False
 # the validation data will be the last portion of training images.
-random_val_data = False
+random_val_data = True
 
 
 ### Dataset shape
@@ -145,9 +145,9 @@ num_crops_per_dataset = 0
 
 ### Crop variables
 # Shape of the crops
-crop_shape = (512, 512, 1)
+crop_shape = (256, 256, 1)
 # To make crops on the train data
-make_crops = False
+make_crops = True
 # To check the crops. Useful to ensure that the crops have been made 
 # correctly. Note: if "discard_cropped_images" is True only the run that 
 # prepare the discarded data will check the crops, as the future runs only load 
@@ -157,8 +157,8 @@ check_crop = True
 # the option to extract a random crop of each train image during data 
 # augmentation (with a crop shape defined by "crop_shape" variable). This flag
 # is not compatible with "make_crops" variable
-random_crops_in_DA = True
-test_ov_crops = 1 # Only active with random_crops_in_DA
+random_crops_in_DA = False 
+test_ov_crops = 16 # Only active with random_crops_in_DA
 probability_map = False # Only active with random_crops_in_DA                       
 w_foreground = 0.94 # Only active with probability_map
 w_background = 0.06 # Only active with probability_map
@@ -281,39 +281,23 @@ use_LRFinder = False
 # this template type: please use big_data_template.py instead.
 loss_type = "bce"
 # Batch size value
-batch_size_value = 4
+batch_size_value = 6
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "adam"
 # Learning rate used by the optimization method
-learning_rate_value = 0.0005
+learning_rate_value = 0.0001
 # Number of epochs to train the network
 epochs_value = 360
 # Number of epochs to stop the training process after no improvement
-patience = 360
+patience = 50 
 # If weights on data are going to be applied. To true when loss_type is 'w_bce' 
 weights_on_data = True if loss_type == "w_bce" else False
 
 
 ### Network architecture specific parameters
-# Number of feature maps on each level of the network. It's dimension must be 
-# equal depth+1.
-feature_maps = [16, 32, 64, 128, 256]
-# Depth of the network
-depth = 4
-# To activate the Spatial Dropout instead of use the "normal" dropout layer
-spatial_dropout = False
-# Values to make the dropout with. It's dimension must be equal depth+1. Set to
-# 0 to prevent dropout 
-dropout_values = [0.2, 0.2, 0.2, 0.2, 0.2]
-# To active batch normalization
-batch_normalization = False
-# Kernel type to use on convolution layers
-kernel_init = 'he_normal'
-# Activation function to use                                                    
-activation = "elu" 
 # Active flag if softmax or one channel per class is used as the last layer of
-# the network. Custom DA needed.
-softmax_out = False
+# the network. Custom DA needed
+softmax_out = True
 
 
 ### DET metric variables
@@ -532,7 +516,7 @@ if duplicate_train != 0:
     print("Data doubled by {} ; Steps per epoch = {}".format(duplicate_train,
           steps_per_epoch_value))
 else:
-    steps_per_epoch_value = X_train.shape[0]
+    steps_per_epoch_value = int(X_train.shape[0]/batch_size_value)
 
 # Add extra train data generated with DA
 if extra_train_data != 0:
@@ -630,12 +614,7 @@ print("#################################\n"
       "#################################\n")
 
 print("Creating the network . . .")
-model = U_Net_2D([img_height, img_width, img_channels], activation=activation,
-                 feature_maps=feature_maps, depth=depth, 
-                 drop_values=dropout_values, spatial_dropout=spatial_dropout,
-                 batch_norm=batch_normalization, k_init=kernel_init,
-                 loss_type=loss_type, optimizer=optimizer, 
-                 lr=learning_rate_value, fine_tunning=fine_tunning)
+model = FCN8_VGG16(crop_shape, lr=learning_rate_value, optimizer=optimizer)
 
 # Check the network created
 model.summary(line_length=150)
