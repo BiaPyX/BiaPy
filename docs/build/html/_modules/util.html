@@ -190,18 +190,23 @@
     <span class="n">mkl</span><span class="o">.</span><span class="n">set_num_threads</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="set_seed"><a class="viewcode-back" href="../util.html#util.set_seed">[docs]</a><span class="k">def</span> <span class="nf">set_seed</span><span class="p">(</span><span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">):</span>
+<div class="viewcode-block" id="set_seed"><a class="viewcode-back" href="../util.html#util.set_seed">[docs]</a><span class="k">def</span> <span class="nf">set_seed</span><span class="p">(</span><span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">determinism</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Sets the seed on multiple python modules to obtain results as </span>
 <span class="sd">       reproducible as possible.</span>
 
 <span class="sd">       Args:</span>
 <span class="sd">           seedValue (int, optional): seed value.</span>
+<span class="sd">        </span>
+<span class="sd">           determinism (bool, optional): to force determism. </span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
     <span class="n">random</span><span class="o">.</span><span class="n">seed</span> <span class="o">=</span> <span class="n">seedValue</span>
     <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
     <span class="n">tf</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">set_seed</span><span class="p">(</span><span class="n">seedValue</span><span class="p">)</span>
-    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;PYTHONHASHSEED&quot;</span><span class="p">]</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">seedValue</span><span class="p">);</span></div>
-
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;PYTHONHASHSEED&quot;</span><span class="p">]</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">seedValue</span><span class="p">);</span>
+    <span class="k">if</span> <span class="n">determinism</span><span class="p">:</span>    
+        <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;TF_DETERMINISTIC_OPS&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;1&#39;</span></div>
+    
 
 <div class="viewcode-block" id="TimeHistory"><a class="viewcode-back" href="../util.html#util.TimeHistory">[docs]</a><span class="k">class</span> <span class="nc">TimeHistory</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">callbacks</span><span class="o">.</span><span class="n">Callback</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Class to record each epoch time.</span>

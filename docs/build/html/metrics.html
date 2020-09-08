@@ -84,8 +84,8 @@
             
               <p class="caption"><span class="caption-text">Contents:</span></p>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="examples.html">Example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_example.html">Quick example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Metrics</a></li>
@@ -158,38 +158,22 @@
   <div class="section" id="module-metrics">
 <span id="metrics"></span><h1>Metrics<a class="headerlink" href="#module-metrics" title="Permalink to this headline">¶</a></h1>
 <dl class="py function">
-<dt id="metrics.DET_calculation">
-<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">DET_calculation</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">Y_test</span></em>, <em class="sig-param"><span class="n">preds_test</span></em>, <em class="sig-param"><span class="n">ge_path</span></em>, <em class="sig-param"><span class="n">eval_path</span></em>, <em class="sig-param"><span class="n">det_bin</span></em>, <em class="sig-param"><span class="n">n_dig</span></em>, <em class="sig-param"><span class="n">job_id</span><span class="o">=</span><span class="default_value">'0'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#DET_calculation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.DET_calculation" title="Permalink to this definition">¶</a></dt>
-<dd><p>Cell tracking challenge detection accuracy (DET) calculation. This
-function uses the binary provided by the challente to detect the cell and
-it needs to store the images into some folders.</p>
-<p>To obtain more info please visit the followin link:</p>
-<blockquote>
-<div><p><a class="reference external" href="http://celltrackingchallenge.net/evaluation-methodology/">http://celltrackingchallenge.net/evaluation-methodology/</a></p>
-</div></blockquote>
-<p>The name of the folders that are here created follow the conventions listed
-in this <a class="reference external" href="https://public.celltrackingchallenge.net/documents/Naming%20and%20file%20content%20conventions.pdf">link</a>.</p>
+<dt id="metrics.jaccard_index_numpy">
+<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">jaccard_index_numpy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#jaccard_index_numpy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.jaccard_index_numpy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Define Jaccard index.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>Y_test</strong> (<em>4D Numpy array</em>) – ground truth mask.
-E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>preds_test</strong> (<em>4D Numpy array</em>) – predicted mask.
-E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>ge_path</strong> (<em>str</em>) – path where the ground truth is stored. If the folder
-does not exist it will be created with the Y_test ground truth.</p></li>
-<li><p><strong>eval_path</strong> (<em>str</em>) – path where the evaluation of the metric will be done.</p></li>
-<li><p><strong>det_bin</strong> (<em>str</em>) – path to the DET binary provided by the cell tracking
-challenge.</p></li>
-<li><p><strong>n_dig</strong> (<em>int</em>) – The number of digits used for encoding temporal indices
-(e.g., <code class="docutils literal notranslate"><span class="pre">3</span></code>). Used by the DET calculation binary, more info
-<a class="reference external" href="https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf">here</a>.</p></li>
-<li><p><strong>job_id</strong> (<em>str</em><em>, </em><em>optional</em>) – id of the job. Necessary to store the images
-on a location based on this string.</p></li>
+<li><p><strong>y_true</strong> (<em>N dim Numpy array</em>) – ground truth masks.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 2D images or
+<code class="docutils literal notranslate"><span class="pre">(volume_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 3D volumes.</p></li>
+<li><p><strong>y_pred</strong> (<em>N dim Numpy array</em>) – predicted masks.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 2D images or
+<code class="docutils literal notranslate"><span class="pre">(volume_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 3D volumes.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>DET accuracy.</p>
+<dd class="field-even"><p>Jaccard index value.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>float</p>
@@ -198,47 +182,63 @@ on a location based on this string.</p></li>
 </dd></dl>
 
 <dl class="py function">
-<dt id="metrics.bce_dice_loss">
-<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">bce_dice_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#bce_dice_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.bce_dice_loss" title="Permalink to this definition">¶</a></dt>
-<dd><p>Loss function based on the combination of BCE and Dice.</p>
-<p>Based on <a class="reference external" href="https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb">image_segmentation.ipynb</a>.</p>
+<dt id="metrics.jaccard_index">
+<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">jaccard_index</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em>, <em class="sig-param"><span class="n">t</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#jaccard_index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.jaccard_index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Define Jaccard index.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>y_true</strong> (<em>Numpy array</em>) – ground truth.</p></li>
-<li><p><strong>y_pred</strong> (<em>Numpy array</em>) – predictions.</p></li>
+<li><p><strong>y_true</strong> (<em>tensor</em>) – ground truth masks.</p></li>
+<li><p><strong>y_pred</strong> (<em>tensor</em>) – predicted masks.</p></li>
+<li><p><strong>t</strong> (<em>float</em><em>, </em><em>optional</em>) – threshold to be applied.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>loss value.</p>
+<dd class="field-even"><p>Jaccard index value</p>
 </dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>Tensor</p>
+<dd class="field-odd"><p>tensor</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py function">
-<dt id="metrics.binary_crossentropy_weighted">
-<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">binary_crossentropy_weighted</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">weights</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#binary_crossentropy_weighted"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.binary_crossentropy_weighted" title="Permalink to this definition">¶</a></dt>
-<dd><p>Custom binary cross entropy loss. The weights are used to multiply
-the results of the usual cross-entropy loss in order to give more weight
-to areas between cells close to one another.</p>
+<dt id="metrics.jaccard_index_softmax">
+<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">jaccard_index_softmax</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em>, <em class="sig-param"><span class="n">t</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#jaccard_index_softmax"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.jaccard_index_softmax" title="Permalink to this definition">¶</a></dt>
+<dd><p>Define Jaccard index.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>weights</strong> (<em>float</em>) – weigth to multiply the BCE value by.</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>y_true</strong> (<em>tensor</em>) – ground truth masks.</p></li>
+<li><p><strong>y_pred</strong> (<em>tensor</em>) – predicted masks.</p></li>
+<li><p><strong>t</strong> (<em>float</em><em>, </em><em>optional</em>) – threshold to be applied.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Jaccard index value</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tensor</p>
 </dd>
 </dl>
-<p>Based on:</p>
-<blockquote>
-<div><p><a class="reference external" href="https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py">https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py</a></p>
-</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt id="metrics.jaccard_loss">
+<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">jaccard_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#jaccard_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.jaccard_loss" title="Permalink to this definition">¶</a></dt>
+<dd><p>Define Jaccard index.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Returns</dt>
-<dd class="field-odd"><p>loss value.</p>
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>y_true</strong> (<em>tensor</em>) – ground truth masks.</p></li>
+<li><p><strong>y_pred</strong> (<em>tensor</em>) – predicted masks.</p></li>
+</ul>
 </dd>
-<dt class="field-even">Return type</dt>
-<dd class="field-even"><p>Tensor</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Jaccard loss score.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>float</p>
 </dd>
 </dl>
 </dd></dl>
@@ -286,87 +286,43 @@ to areas between cells close to one another.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="metrics.jaccard_index">
-<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">jaccard_index</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em>, <em class="sig-param"><span class="n">t</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#jaccard_index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.jaccard_index" title="Permalink to this definition">¶</a></dt>
-<dd><p>Define Jaccard index.</p>
+<dt id="metrics.bce_dice_loss">
+<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">bce_dice_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#bce_dice_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.bce_dice_loss" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loss function based on the combination of BCE and Dice.</p>
+<p>Based on <a class="reference external" href="https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb">image_segmentation.ipynb</a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>y_true</strong> (<em>tensor</em>) – ground truth masks.</p></li>
-<li><p><strong>y_pred</strong> (<em>tensor</em>) – predicted masks.</p></li>
-<li><p><strong>t</strong> (<em>float</em><em>, </em><em>optional</em>) – threshold to be applied.</p></li>
+<li><p><strong>y_true</strong> (<em>Numpy array</em>) – ground truth.</p></li>
+<li><p><strong>y_pred</strong> (<em>Numpy array</em>) – predictions.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>Jaccard index value</p>
+<dd class="field-even"><p>loss value.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>tensor</p>
+<dd class="field-odd"><p>Tensor</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py function">
-<dt id="metrics.jaccard_index_numpy">
-<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">jaccard_index_numpy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#jaccard_index_numpy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.jaccard_index_numpy" title="Permalink to this definition">¶</a></dt>
-<dd><p>Define Jaccard index.</p>
+<dt id="metrics.weighted_bce_dice_loss">
+<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">weighted_bce_dice_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">w_dice</span><span class="o">=</span><span class="default_value">0.5</span></em>, <em class="sig-param"><span class="n">w_bce</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#weighted_bce_dice_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.weighted_bce_dice_loss" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loss function based on the combination of BCE and Dice weighted.</p>
+<p>Inspired by <a class="reference external" href="https://medium.com/&#64;Bloomore/how-to-write-a-custom-loss-function-with-additional-arguments-in-keras-5f193929f7a0">https://medium.com/&#64;Bloomore post</a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>y_true</strong> (<em>N dim Numpy array</em>) – ground truth masks.
-E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 2D images or
-<code class="docutils literal notranslate"><span class="pre">(volume_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 3D volumes.</p></li>
-<li><p><strong>y_pred</strong> (<em>N dim Numpy array</em>) – predicted masks.
-E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 2D images or
-<code class="docutils literal notranslate"><span class="pre">(volume_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 3D volumes.</p></li>
+<li><p><strong>w_dice</strong> (<em>float</em><em>, </em><em>optional</em>) – weight to be applied to Dice loss.</p></li>
+<li><p><strong>w_bce</strong> (<em>float</em><em>, </em><em>optional</em>) – weight to be applied to BCE.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>Jaccard index value.</p>
+<dd class="field-even"><p>loss value.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>float</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt id="metrics.jaccard_index_softmax">
-<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">jaccard_index_softmax</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em>, <em class="sig-param"><span class="n">t</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#jaccard_index_softmax"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.jaccard_index_softmax" title="Permalink to this definition">¶</a></dt>
-<dd><p>Define Jaccard index.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>y_true</strong> (<em>tensor</em>) – ground truth masks.</p></li>
-<li><p><strong>y_pred</strong> (<em>tensor</em>) – predicted masks.</p></li>
-<li><p><strong>t</strong> (<em>float</em><em>, </em><em>optional</em>) – threshold to be applied.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>Jaccard index value</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>tensor</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt id="metrics.jaccard_loss">
-<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">jaccard_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#jaccard_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.jaccard_loss" title="Permalink to this definition">¶</a></dt>
-<dd><p>Define Jaccard index.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>y_true</strong> (<em>tensor</em>) – ground truth masks.</p></li>
-<li><p><strong>y_pred</strong> (<em>tensor</em>) – predicted masks.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>Jaccard loss score.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>float</p>
+<dd class="field-odd"><p>Tensor</p>
 </dd>
 </dl>
 </dd></dl>
@@ -395,22 +351,66 @@ E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,
 </dd></dl>
 
 <dl class="py function">
-<dt id="metrics.weighted_bce_dice_loss">
-<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">weighted_bce_dice_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">w_dice</span><span class="o">=</span><span class="default_value">0.5</span></em>, <em class="sig-param"><span class="n">w_bce</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#weighted_bce_dice_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.weighted_bce_dice_loss" title="Permalink to this definition">¶</a></dt>
-<dd><p>Loss function based on the combination of BCE and Dice weighted.</p>
-<p>Inspired by <a class="reference external" href="https://medium.com/&#64;Bloomore/how-to-write-a-custom-loss-function-with-additional-arguments-in-keras-5f193929f7a0">https://medium.com/&#64;Bloomore post</a>.</p>
+<dt id="metrics.DET_calculation">
+<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">DET_calculation</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">Y_test</span></em>, <em class="sig-param"><span class="n">preds_test</span></em>, <em class="sig-param"><span class="n">ge_path</span></em>, <em class="sig-param"><span class="n">eval_path</span></em>, <em class="sig-param"><span class="n">det_bin</span></em>, <em class="sig-param"><span class="n">n_dig</span></em>, <em class="sig-param"><span class="n">job_id</span><span class="o">=</span><span class="default_value">'0'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#DET_calculation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.DET_calculation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Cell tracking challenge detection accuracy (DET) calculation. This
+function uses the binary provided by the challente to detect the cell and
+it needs to store the images into some folders.</p>
+<p>To obtain more info please visit the followin link:</p>
+<blockquote>
+<div><p><a class="reference external" href="http://celltrackingchallenge.net/evaluation-methodology/">http://celltrackingchallenge.net/evaluation-methodology/</a></p>
+</div></blockquote>
+<p>The name of the folders that are here created follow the conventions listed
+in this <a class="reference external" href="https://public.celltrackingchallenge.net/documents/Naming%20and%20file%20content%20conventions.pdf">link</a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>w_dice</strong> (<em>float</em><em>, </em><em>optional</em>) – weight to be applied to Dice loss.</p></li>
-<li><p><strong>w_bce</strong> (<em>float</em><em>, </em><em>optional</em>) – weight to be applied to BCE.</p></li>
+<li><p><strong>Y_test</strong> (<em>4D Numpy array</em>) – ground truth mask.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>preds_test</strong> (<em>4D Numpy array</em>) – predicted mask.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>ge_path</strong> (<em>str</em>) – path where the ground truth is stored. If the folder
+does not exist it will be created with the Y_test ground truth.</p></li>
+<li><p><strong>eval_path</strong> (<em>str</em>) – path where the evaluation of the metric will be done.</p></li>
+<li><p><strong>det_bin</strong> (<em>str</em>) – path to the DET binary provided by the cell tracking
+challenge.</p></li>
+<li><p><strong>n_dig</strong> (<em>int</em>) – The number of digits used for encoding temporal indices
+(e.g., <code class="docutils literal notranslate"><span class="pre">3</span></code>). Used by the DET calculation binary, more info
+<a class="reference external" href="https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf">here</a>.</p></li>
+<li><p><strong>job_id</strong> (<em>str</em><em>, </em><em>optional</em>) – id of the job. Necessary to store the images
+on a location based on this string.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>loss value.</p>
+<dd class="field-even"><p>DET accuracy.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>Tensor</p>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="metrics.binary_crossentropy_weighted">
+<code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">binary_crossentropy_weighted</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">weights</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#binary_crossentropy_weighted"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.binary_crossentropy_weighted" title="Permalink to this definition">¶</a></dt>
+<dd><p>Custom binary cross entropy loss. The weights are used to multiply
+the results of the usual cross-entropy loss in order to give more weight
+to areas between cells close to one another.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>weights</strong> (<em>float</em>) – weigth to multiply the BCE value by.</p>
+</dd>
+</dl>
+<p>Based on:</p>
+<blockquote>
+<div><p><a class="reference external" href="https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py">https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py</a></p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>loss value.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>Tensor</p>
 </dd>
 </dl>
 </dd></dl>

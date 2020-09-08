@@ -10,3 +10,4 @@ Networks
    networks_resunet
    networks_resunet_3d
    networks_fcn
+   networks_fc_densetnet103

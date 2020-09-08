@@ -37,7 +37,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Metrics" href="metrics.html" />
-    <link rel="prev" title="FCN" href="networks_fcn.html" /> 
+    <link rel="prev" title="Tiramisu (FC-DenseNet103)" href="networks_fc_densetnet103.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -84,8 +84,8 @@
             
               <p class="caption"><span class="caption-text">Contents:</span></p>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="examples.html">Example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_example.html">Quick example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Post processing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
@@ -157,6 +157,39 @@
             
   <div class="section" id="module-post_processing">
 <span id="post-processing"></span><h1>Post processing<a class="headerlink" href="#module-post_processing" title="Permalink to this headline">¶</a></h1>
+<dl class="py function">
+<dt id="post_processing.spuriuous_detection_filter">
+<code class="sig-prename descclassname">post_processing.</code><code class="sig-name descname">spuriuous_detection_filter</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">low_score_th</span><span class="o">=</span><span class="default_value">0.6</span></em>, <em class="sig-param"><span class="n">th</span><span class="o">=</span><span class="default_value">0.45</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/post_processing.html#spuriuous_detection_filter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#post_processing.spuriuous_detection_filter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Based on the first post-processing method proposed in <cite>Oztel et al.</cite> where
+removes the artifacts with low class score.</p>
+<p>Based on post-processing made in <a class="reference external" href="https://ieeexplore.ieee.org/abstract/document/8217827?casa_token=ga4A1VzvnykAAAAA:U7iBJ2H0qD4MU4Z1JzdzobNx_vCxwM89fzy39IwAPT8TsRuESFu_rFzKKHspp6-EKTGRoOHh2g">Oztel et al</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Y</strong> (<em>4D Numpy array</em>) – data to apply the filter.
+E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>low_score_th</strong> (<em>float</em><em>, </em><em>optional</em>) – the minimun class score that the
+artifact must have to not be discarded. Must be a value between
+<code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
+<li><p><strong>th</strong> (<em>float</em><em>, </em><em>optional</em>) – threshold applied to binarize the given images.
+Must be a vaue between <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>filtered data. E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>4D Numpy array</p>
+</dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">low_score_th</span></code> not in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code></p></li>
+<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">th</span></code> not in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code></p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="py function">
 <dt id="post_processing.boundary_refinement_watershed">
 <code class="sig-prename descclassname">post_processing.</code><code class="sig-name descname">boundary_refinement_watershed</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span></em>, <em class="sig-param"><span class="n">Y_pred</span></em>, <em class="sig-param"><span class="n">erode</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">save_marks_dir</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/post_processing.html#boundary_refinement_watershed"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#post_processing.boundary_refinement_watershed" title="Permalink to this definition">¶</a></dt>
@@ -271,39 +304,6 @@ number.</p></li>
 </dl>
 </dd></dl>
 
-<dl class="py function">
-<dt id="post_processing.spuriuous_detection_filter">
-<code class="sig-prename descclassname">post_processing.</code><code class="sig-name descname">spuriuous_detection_filter</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">low_score_th</span><span class="o">=</span><span class="default_value">0.6</span></em>, <em class="sig-param"><span class="n">th</span><span class="o">=</span><span class="default_value">0.45</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/post_processing.html#spuriuous_detection_filter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#post_processing.spuriuous_detection_filter" title="Permalink to this definition">¶</a></dt>
-<dd><p>Based on the first post-processing method proposed in <cite>Oztel et al.</cite> where
-removes the artifacts with low class score.</p>
-<p>Based on post-processing made in <a class="reference external" href="https://ieeexplore.ieee.org/abstract/document/8217827?casa_token=ga4A1VzvnykAAAAA:U7iBJ2H0qD4MU4Z1JzdzobNx_vCxwM89fzy39IwAPT8TsRuESFu_rFzKKHspp6-EKTGRoOHh2g">Oztel et al</a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>Y</strong> (<em>4D Numpy array</em>) – data to apply the filter.
-E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>low_score_th</strong> (<em>float</em><em>, </em><em>optional</em>) – the minimun class score that the
-artifact must have to not be discarded. Must be a value between
-<code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-<li><p><strong>th</strong> (<em>float</em><em>, </em><em>optional</em>) – threshold applied to binarize the given images.
-Must be a vaue between <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>filtered data. E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>4D Numpy array</p>
-</dd>
-<dt class="field-even">Raises</dt>
-<dd class="field-even"><ul class="simple">
-<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">low_score_th</span></code> not in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code></p></li>
-<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">th</span></code> not in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code></p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
 </div>
 
 
@@ -317,7 +317,7 @@ Must be a vaue between <code class="docutils literal notranslate"><span class="p
         <a href="metrics.html" class="btn btn-neutral float-right" title="Metrics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="networks_fcn.html" class="btn btn-neutral float-left" title="FCN" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="networks_fc_densetnet103.html" class="btn btn-neutral float-left" title="Tiramisu (FC-DenseNet103)" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

@@ -53,6 +53,8 @@ html_static_path = ['_static']
 
 html_show_sourcelink = False
 
+autodoc_member_order = 'bysource'
+
 # The master toctree document.
 master_doc = 'index'
 

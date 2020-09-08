@@ -84,14 +84,15 @@
             
               <p class="caption"><span class="caption-text">Contents:</span></p>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="examples.html">Example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_example.html">Quick example</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="networks.html">Networks</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">2D Residual U-Net</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
@@ -207,7 +208,7 @@ network:</p>
 
 <dl class="py function">
 <dt id="networks.resunet.level_block">
-<code class="sig-prename descclassname">networks.resunet.</code><code class="sig-name descname">level_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">depth</span></em>, <em class="sig-param"><span class="n">f_maps</span></em>, <em class="sig-param"><span class="n">filter_size</span></em>, <em class="sig-param"><span class="n">activation</span></em>, <em class="sig-param"><span class="n">k_init</span></em>, <em class="sig-param"><span class="n">drop_values</span></em>, <em class="sig-param"><span class="n">batch_norm</span></em>, <em class="sig-param"><span class="n">first_block</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/resunet.html#level_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.resunet.level_block" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">networks.resunet.</code><code class="sig-name descname">level_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">depth</span></em>, <em class="sig-param"><span class="n">f_maps</span></em>, <em class="sig-param"><span class="n">f_size</span></em>, <em class="sig-param"><span class="n">activation</span></em>, <em class="sig-param"><span class="n">k_init</span></em>, <em class="sig-param"><span class="n">drop_values</span></em>, <em class="sig-param"><span class="n">batch_norm</span></em>, <em class="sig-param"><span class="n">first_block</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/resunet.html#level_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.resunet.level_block" title="Permalink to this definition">¶</a></dt>
 <dd><p>Produces a level of the network. It calls itself recursively.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -216,8 +217,7 @@ network:</p>
 <li><p><strong>depth</strong> (<em>int</em>) – depth of the network. This value determines how many
 times the function will be called recursively.</p></li>
 <li><p><strong>f_maps</strong> (<em>array of ints</em>) – feature maps to use.</p></li>
-<li><p><strong>filter_size</strong> (<em>3 int tuple</em>) – height, width and depth of the convolution
-window.</p></li>
+<li><p><strong>f_size</strong> (<em>int</em>) – convolution window.</p></li>
 <li><p><strong>activation</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available activation type.</p></li>
 <li><p><strong>k_init</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available kernel initializer type.</p></li>
 <li><p><strong>drop_values</strong> (<em>array of floats</em><em>, </em><em>optional</em>) – dropout value to be fixed.</p></li>
@@ -238,15 +238,14 @@ Pre-Activation layers.</p></li>
 
 <dl class="py function">
 <dt id="networks.resunet.residual_block">
-<code class="sig-prename descclassname">networks.resunet.</code><code class="sig-name descname">residual_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">f_maps</span></em>, <em class="sig-param"><span class="n">filter_size</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">drop_value</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">bn</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">first_block</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/resunet.html#residual_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.resunet.residual_block" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">networks.resunet.</code><code class="sig-name descname">residual_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">f_maps</span></em>, <em class="sig-param"><span class="n">f_size</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">drop_value</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">bn</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">first_block</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/resunet.html#residual_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.resunet.residual_block" title="Permalink to this definition">¶</a></dt>
 <dd><p>Residual block.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>x</strong> (<em>Keras layer</em>) – input layer of the block.</p></li>
 <li><p><strong>f_maps</strong> (<em>array of ints</em>) – feature maps to use.</p></li>
-<li><p><strong>filter_size</strong> (<em>3 int tuple</em>) – height, width and depth of the convolution
-window.</p></li>
+<li><p><strong>f_size</strong> (<em>int</em>) – convolution window.</p></li>
 <li><p><strong>activation</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available activation type.</p></li>
 <li><p><strong>k_init</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available kernel initializer type.</p></li>
 <li><p><strong>drop_value</strong> (<em>float</em><em>, </em><em>optional</em>) – dropout value to be fixed.</p></li>
