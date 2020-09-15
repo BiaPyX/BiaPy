@@ -31,7 +31,7 @@ args = parser.parse_args()
 import os
 import sys
 sys.path.insert(0, args.base_work_dir)
-sys.path.insert(0, "cheng_2017")
+sys.path.insert(0, "sota_implementations", "cheng_2017")
 
 # Working dir
 os.chdir(args.base_work_dir)

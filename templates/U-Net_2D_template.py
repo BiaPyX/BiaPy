@@ -641,7 +641,7 @@ model = U_Net_2D([img_height, img_width, img_channels], activation=activation,
 model.summary(line_length=150)
 os.makedirs(char_dir, exist_ok=True)
 model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
-#plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
+plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
     if fine_tunning:                                                    
