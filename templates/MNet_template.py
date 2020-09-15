@@ -61,8 +61,7 @@ from data_manipulation import load_and_prepare_2D_data, crop_data,\
                               merge_data_without_overlap,\
                               crop_data_with_overlap, merge_data_with_overlap, \
                               check_binary_masks, img_to_onehot_encoding
-from custom_da_gen_MNet import ImageDataGenerator
-from keras_da_gen import keras_da_generator, keras_gen_samples
+from generators.custom_da_gen_MNet import ImageDataGenerator
 from networks.MNet import MNet
 from metrics import jaccard_index_numpy, voc_calculation, DET_calculation
 from tensorflow.keras.callbacks import EarlyStopping
@@ -201,15 +200,12 @@ norm_value_forced = -1
 
 
 ### Data augmentation (DA) variables
-# To decide which type of DA implementation will be used. Select False to 
-# use Keras API provided DA, otherwise, a custom implementation will be used
-custom_da = True
 # Create samples of the DA made. Useful to check the output images made. 
 # This option is available for both Keras and custom DA
 aug_examples = True 
 # To shuffle the training data on every epoch:
 # (Best options: Keras->False, Custom->True)
-shuffle_train_data_each_epoch = custom_da
+shuffle_train_data_each_epoch = True
 # To shuffle the validation data on every epoch:
 # (Best option: False in both cases)
 shuffle_val_data_each_epoch = False
@@ -521,93 +517,65 @@ else:
 
 # Add extra train data generated with DA
 if extra_train_data != 0:
-    if custom_da == False:
-        # Keras DA generated extra data
+    # Custom DA generated extra data
+    extra_gen_args = dict(
+        X=X_train, Y=Y_train, batch_size=batch_size_value,
+        shape=(img_height,img_width,img_channels), shuffle=True, da=True, 
+        hist_eq=hist_eq, rotation90=rotation90, rotation_range=rotation_range,                   
+        vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,             
+        median_blur=median_blur, gamma_contrast=gamma_contrast,                 
+        random_crops_in_DA=random_crops_in_DA)
 
-        extra_x, extra_y = keras_gen_samples(
-            extra_train_data, X_data=X_train, Y_data=Y_train, 
-            batch_size_value=batch_size_value, zoom=k_zoom, 
-            k_w_shift_r=k_w_shift_r, k_h_shift_r=k_h_shift_r, k_shear_range=k_shear_range,
-            k_brightness_range=k_brightness_range, rotation_range=rotation_range,
-            vflip=vflips, hflip=hflips, median_filter_size=median_filter_size, 
-            hist_eq=hist_eq, elastic=elastic, g_blur=g_blur, 
-            gamma_contrast=gamma_contrast)
-    else:
-        # Custom DA generated extra data
-        extra_gen_args = dict(
-            X=X_train, Y=Y_train, batch_size=batch_size_value,
-            shape=(img_height,img_width,img_channels), shuffle=True, da=True, 
-            hist_eq=hist_eq, rotation90=rotation90, rotation_range=rotation_range,                   
-            vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,             
-            median_blur=median_blur, gamma_contrast=gamma_contrast,                 
-            random_crops_in_DA=random_crops_in_DA)
+    extra_generator = ImageDataGenerator(**extra_gen_args)
 
-        extra_generator = ImageDataGenerator(**extra_gen_args)
+    extra_x, extra_y = extra_generator.get_transformed_samples(
+        extra_train_data, force_full_images=True)
 
-        extra_x, extra_y = extra_generator.get_transformed_samples(
-            extra_train_data, force_full_images=True)
-
-    X_train = np.vstack((X_train, extra_x))
-    Y_train = np.vstack((Y_train, extra_y))
-    print("{} extra train data generated, the new shape of the train now is {}"\
-          .format(extra_train_data, X_train.shape))
+X_train = np.vstack((X_train, extra_x))
+Y_train = np.vstack((Y_train, extra_y))
+print("{} extra train data generated, the new shape of the train now is {}"\
+      .format(extra_train_data, X_train.shape))
 
 
 print("#######################\n"
       "#  DATA AUGMENTATION  #\n"
       "#######################\n")
 
-if custom_da == False:                                                          
-    print("Keras DA selected")
+print("Custom DA selected")
 
-    # Keras Data Augmentation                                                   
-    train_generator, \
-    val_generator = keras_da_generator(
-        X_train=X_train, Y_train=Y_train, X_val=X_val, Y_val=Y_val, 
-        batch_size_value=batch_size_value, save_examples=aug_examples,
-        out_dir=da_samples_dir, shuffle_train=shuffle_train_data_each_epoch, 
-        shuffle_val=shuffle_val_data_each_epoch, zoom=k_zoom, 
-        rotation_range=rotation_range, random_crops_in_DA=random_crops_in_DA,
-        crop_length=crop_shape[0], w_shift_r=k_w_shift_r, h_shift_r=k_h_shift_r,    
-        shear_range=k_shear_range, brightness_range=k_brightness_range,
-        weights_on_data=weights_on_data, weights_path=loss_weight_dir,
-        vflip=vflips, hflip=hflips)
-else:                                                                           
-    print("Custom DA selected")
+# Calculate the probability map per image
+train_prob = None
+if probability_map:
+    prob_map_file = os.path.join(prob_map_dir, 'prob_map.npy')
+    if os.path.exists(prob_map_dir):
+        train_prob = np.load(prob_map_file)
+    else:
+        train_prob = calculate_2D_volume_prob_map(
+            Y_train, w_foreground, w_background, save_file=prob_map_file)
 
-    # Calculate the probability map per image
-    train_prob = None
-    if probability_map:
-        prob_map_file = os.path.join(prob_map_dir, 'prob_map.npy')
-        if os.path.exists(prob_map_dir):
-            train_prob = np.load(prob_map_file)
-        else:
-            train_prob = calculate_2D_volume_prob_map(
-                Y_train, w_foreground, w_background, save_file=prob_map_file)
-
-    # Custom Data Augmentation                                                  
-    data_gen_args = dict(
-        X=X_train, Y=Y_train, batch_size=batch_size_value,     
-        shape=(img_height,img_width,img_channels),
-        shuffle=shuffle_train_data_each_epoch, da=True, hist_eq=hist_eq,
-        rotation90=rotation90, rotation_range=rotation_range,
-        vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,
-        median_blur=median_blur, gamma_contrast=gamma_contrast,
-        random_crops_in_DA=random_crops_in_DA, prob_map=probability_map, 
-        train_prob=train_prob, softmax_out=softmax_out,
-        extra_data_factor=duplicate_train)
-    data_gen_val_args = dict(
-        X=X_val, Y=Y_val, batch_size=batch_size_value, 
-        shape=(img_height,img_width,img_channels), 
-        shuffle=shuffle_val_data_each_epoch, da=False, 
-        random_crops_in_DA=random_crops_in_DA, val=True, softmax_out=softmax_out)
-    train_generator = ImageDataGenerator(**data_gen_args)                       
-    val_generator = ImageDataGenerator(**data_gen_val_args)                     
-                                                                                
-    # Generate examples of data augmentation                                    
-    if aug_examples:                                                    
-        train_generator.get_transformed_samples(
-            10, save_to_dir=True, train=False, out_dir=da_samples_dir)
+# Custom Data Augmentation                                                  
+data_gen_args = dict(
+    X=X_train, Y=Y_train, batch_size=batch_size_value,     
+    shape=(img_height,img_width,img_channels),
+    shuffle=shuffle_train_data_each_epoch, da=True, hist_eq=hist_eq,
+    rotation90=rotation90, rotation_range=rotation_range,
+    vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,
+    median_blur=median_blur, gamma_contrast=gamma_contrast,
+    random_crops_in_DA=random_crops_in_DA, prob_map=probability_map, 
+    train_prob=train_prob, softmax_out=softmax_out,
+    extra_data_factor=duplicate_train)
+data_gen_val_args = dict(
+    X=X_val, Y=Y_val, batch_size=batch_size_value, 
+    shape=(img_height,img_width,img_channels), 
+    shuffle=shuffle_val_data_each_epoch, da=False, 
+    random_crops_in_DA=random_crops_in_DA, val=True, softmax_out=softmax_out)
+train_generator = ImageDataGenerator(**data_gen_args)                       
+val_generator = ImageDataGenerator(**data_gen_val_args)                     
+                                                                            
+# Generate examples of data augmentation                                    
+if aug_examples:                                                    
+    train_generator.get_transformed_samples(
+        10, save_to_dir=True, train=False, out_dir=da_samples_dir)
 
 
 print("#################################\n"

@@ -61,8 +61,8 @@ from data_manipulation import load_and_prepare_2D_data, crop_data,\
                               merge_data_without_overlap,\
                               crop_data_with_overlap, merge_data_with_overlap, \
                               check_binary_masks, img_to_onehot_encoding
-from data_generators import keras_da_generator, ImageDataGenerator,\
-                            keras_gen_samples
+from generators.custom_da_gen import ImageDataGenerator
+from generators.keras_da_gen import keras_da_generator, keras_gen_samples
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from tensorflow.keras.callbacks import EarlyStopping

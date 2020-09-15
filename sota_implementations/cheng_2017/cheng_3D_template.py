@@ -31,7 +31,6 @@ args = parser.parse_args()
 import os
 import sys
 sys.path.insert(0, args.base_work_dir)
-sys.path.insert(0, "sota_implementations", "cheng_2017")
 
 # Working dir
 os.chdir(args.base_work_dir)
@@ -53,17 +52,17 @@ job_identifier = args.job_id + '_' + str(args.run_id)
 #        IMPORTS         #
 ##########################
 
+import datetime
 import random
 import numpy as np
 import math
 import time
 import tensorflow as tf
 from data_manipulation import load_and_prepare_3D_data, check_binary_masks, \
-                              crop_3D_data_with_overlap, \
                               merge_3D_data_with_overlap
-from data_3D_generators import VoxelDataGenerator
-from cheng_3D_network import asymmetric_3D_network
-from metrics import jaccard_index, jaccard_index_numpy, voc_calculation
+from generators.data_3D_generators import VoxelDataGenerator
+from cheng_2017.cheng_3D_network import asymmetric_3D_network
+from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.models import load_model
 from tqdm import tqdm
@@ -73,11 +72,15 @@ from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
 from tensorflow.keras.utils import plot_model
 from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
                             boundary_refinement_watershed2
+from LRFinder.keras_callback import LRFinder
+
 
 ############
 #  CHECKS  #
 ############
 
+now = datetime.datetime.now()
+print("Date : {}".format(now.strftime("%Y-%m-%d %H:%M:%S")))
 print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
@@ -101,7 +104,7 @@ test_mask_path = os.path.join(args.data_dir, 'test', 'y')
 perc_used_as_val = 0.1
 # Create the validation data with random images of the training data. If False
 # the validation data will be the last portion of training images.
-random_val_data = True
+random_val_data = False
 
 
 ### Dataset shape
@@ -115,9 +118,9 @@ img_test_shape = (1024, 768, 1)
 
 ### 3D volume variables
 # Train shape of the 3D subvolumes
-train_3d_desired_shape = (96, 128, 128, 1)
+train_3d_desired_shape = (128, 128, 96, 1)
 # Train shape of the 3D subvolumes
-test_3d_desired_shape = (96, 128, 128, 1)
+test_3d_desired_shape = (128, 128, 96, 1)
 # Percentage of overlap made to create subvolumes of the defined shape based on
 # test data. Fix in 0.0 to calculate the minimun overlap needed to satisfy the
 # shape.
@@ -132,23 +135,27 @@ normalize_data = False
 norm_value_forced = -1                                                          
 
 
-### Data augmentation (DA) variables
+### Data augmentation (DA) variables. Based on https://github.com/aleju/imgaug
 # Flag to activate DA
-da = False
+da = True
 # Create samples of the DA made. Useful to check the output images made.
-aug_examples = False
+aug_examples = True
 # Flag to shuffle the training data on every epoch 
-shuffle_train_data_each_epoch = False
+shuffle_train_data_each_epoch = True
 # Flag to shuffle the validation data on every epoch
 shuffle_val_data_each_epoch = False
-# Shift range to appply to the subvolumes 
-shift_range = 0.0
-# Range of rotation to the subvolumes
-rotation_range = 0
-# Square rotations (90º, -90º and 180º) intead of using a range
-square_rotations = True
-# Flag to make flips on the subvolumes 
+# Histogram equalization
+hist_eq = False
+# Rotation of 90º to the subvolumes
+rotation = True
+# Flag to make flips on the subvolumes (horizontal and vertical)
 flips = False
+# Elastic transformations
+elastic = False
+# Gaussian blur
+g_blur = False
+# Gamma contrast 
+gamma_contrast = False
 # Flag to extract random subvolumnes during the DA
 random_subvolumes_in_DA = False
 # Calculate probability map to make random subvolumes to be extracted with high
@@ -179,6 +186,9 @@ fine_tunning = False
 fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
+# Wheter to find the best learning rate plot. If this options is selected the 
+# training will stop when 5 epochs are done
+use_LRFinder = False
 
 
 ### Experiment main parameters
@@ -271,6 +281,8 @@ h5_dir = os.path.join(args.result_dir, 'h5_files')
 # Name of the folder to store the probability map to avoid recalculating it on
 # every run
 prob_map_dir = os.path.join(args.result_dir, 'prob_map')
+# Folder where LRFinder callback will store its plot
+lrfinder_dir = os.path.join(result_dir, 'LRFinder')
 
 
 ### Callbacks
@@ -284,12 +296,11 @@ os.makedirs(h5_dir, exist_ok=True)
 checkpointer = ModelCheckpoint(
     os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
     verbose=1, save_best_only=True)
-def scheduler(epoch, lr):
-    if epoch == 200 or epoch == 300:
-        return lr*0.1
-    else:
-        return lr
-lr_cb = tf.keras.callbacks.LearningRateScheduler(scheduler, verbose=1)
+# Check the best learning rate using the code from:
+#  https://github.com/WittmannF/LRFinder
+if use_LRFinder:
+    lr_finder = LRFinder(min_lr=10e-9, max_lr=10e-3, lrfinder_dir=lrfinder_dir)
+    os.makedirs(lrfinder_dir, exist_ok=True)
 
 
 print("###################\n"
@@ -329,19 +340,21 @@ print("###########################\n"
       "#  EXTRA DATA GENERATION  #\n"
       "###########################\n")
 
-# Duplicate train data N times
+# Calculate the steps_per_epoch value to train in case
 if duplicate_train != 0:
-    X_train = np.vstack([X_train]*duplicate_train)
-    Y_train = np.vstack([Y_train]*duplicate_train)
-    print("Train data replicated {} times. Its new shape is: {}"
-          .format(duplicate_train, X_train.shape))
+    steps_per_epoch_value = int((duplicate_train*X_train.shape[0])/batch_size_value)
+    print("Data doubled by {} ; Steps per epoch = {}".format(duplicate_train,
+          steps_per_epoch_value))
+else:
+    steps_per_epoch_value = int(X_train.shape[0]/batch_size_value)
 
 # Add extra train data generated with DA
 if extra_train_data != 0:
     extra_generator = VoxelDataGenerator(
         X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,
-        shuffle_each_epoch=True, batch_size=batch_size_value,
-        da=True, flip=True, shift_range=0.0, rotation_range=0)
+        shuffle_each_epoch=True, batch_size=batch_size_value, da=da, 
+        hist_eq=hist_eq, flip=flips, rotation=rotation, elastic=elastic, 
+        g_blur=g_blur, gamma_contrast=gamma_contrast)
 
     extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
 
@@ -377,9 +390,10 @@ print("Preparing train data generator . . .")
 train_generator = VoxelDataGenerator(
     X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,
     shuffle_each_epoch=shuffle_train_data_each_epoch, 
-    batch_size=batch_size_value, da=da, flip=flips, shift_range=shift_range, 
-    rotation_range=rotation_range, square_rotations=square_rotations,
-    softmax_out=softmax_out, prob_map=train_prob)
+    batch_size=batch_size_value, da=da, hist_eq=hist_eq, flip=flips, 
+    rotation=rotation, elastic=elastic, g_blur=g_blur, 
+    gamma_contrast=gamma_contrast, softmax_out=softmax_out, prob_map=train_prob,
+    extra_data_factor=duplicate_train)
 del X_train, Y_train
 
 # Create the test data generator without DA
@@ -391,7 +405,7 @@ test_generator = VoxelDataGenerator(
 # Generate examples of data augmentation
 if aug_examples == True:
     train_generator.get_transformed_samples(
-        10, random_images=True, save_to_dir=True, out_dir=da_samples_dir)
+        5, random_images=False, save_to_dir=True, out_dir=da_samples_dir)
 
 
 print("#################################\n"
@@ -418,9 +432,19 @@ if load_previous_weights == False:
               .format(h5_file))   
         model.load_weights(h5_file)                                             
 
-    results = model.fit(x=train_generator, validation_data=val_generator,
-        validation_steps=len(val_generator), steps_per_epoch=len(train_generator),
-        epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
+    if use_LRFinder:
+        print("Training just for 10 epochs . . .")
+        results = model.fit(x=train_generator, validation_data=val_generator,
+                            validation_steps=len(val_generator), 
+                            steps_per_epoch=len(train_generator), epochs=5, 
+                            callbacks=[lr_finder])
+        print("Finish LRFinder. Check the plot in {}".format(lrfinder_dir))
+        sys.exit(0)
+    else:
+        results = model.fit(x=train_generator, validation_data=val_generator,
+            validation_steps=len(val_generator), 
+            steps_per_epoch=steps_per_epoch_value, epochs=epochs_value,
+            callbacks=[earlystopper, checkpointer, time_callback])
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
                                  + '_' + str(args.run_id) + '.h5')

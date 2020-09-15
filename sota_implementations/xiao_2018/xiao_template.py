@@ -61,7 +61,7 @@ import tensorflow as tf
 from data_manipulation import load_and_prepare_3D_data, check_binary_masks, \
                               crop_3D_data_with_overlap, \
                               merge_3D_data_with_overlap
-from data_3D_generators import VoxelDataGenerator
+from generators.data_3D_generators import VoxelDataGenerator
 from unet_3d_xiao import U_Net_3D_Xiao
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint

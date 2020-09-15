@@ -60,7 +60,7 @@ import time
 import tensorflow as tf
 from data_manipulation import load_and_prepare_3D_data, check_binary_masks, \
                               merge_3D_data_with_overlap
-from data_3D_generators import VoxelDataGenerator
+from generators.data_3D_generators import VoxelDataGenerator
 from networks.unet_3d import U_Net_3D
 from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
