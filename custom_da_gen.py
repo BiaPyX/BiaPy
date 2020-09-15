@@ -107,9 +107,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         self.train_prob = train_prob
         self.val = val
         self.softmax_out = softmax_out 
-        self.extra_data_factor = extra_data_factor
         self.o_indexes = np.arange(len(self.X))
-        self.o_indexes = np.concatenate([self.o_indexes]*self.extra_data_factor)
+        if extra_data_factor > 1:
+            self.extra_data_factor = extra_data_factor
+            self.o_indexes = np.concatenate([self.o_indexes]*extra_data_factor)
+        else:
+            self.extra_data_factor = 1
         self.on_epoch_end()
         
         da_options = []
