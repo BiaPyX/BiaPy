@@ -1,31 +1,37 @@
+"""
+Code fully extracted from `MultiResUNet <https://github.com/nibtehaz/MultiResUNet>`_.
+"""
+
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose,\
                                     concatenate, BatchNormalization, Activation, \
                                     add
 from tensorflow.keras.models import Model
 
-"""
-Code fully extracted from ``MultiResUNet <https://github.com/nibtehaz/MultiResUNet>``_.
-"""
 
-def conv2d_bn(x, filters, num_row, num_col, padding='same', strides=(1, 1), activation='relu', name=None):
-    '''
-    2D Convolutional layers
+def conv2d_bn(x, filters, num_row, num_col, padding='same', strides=(1, 1), 
+              activation='relu', name=None):
+    """2D Convolutional layers.
     
-    Arguments:
-        x {keras layer} -- input layer 
-        filters {int} -- number of filters
-        num_row {int} -- number of rows in filters
-        num_col {int} -- number of columns in filters
+       Args:
+           x (keras layer): input layer.
+
+           filters (int): number of filters.
+
+           num_row (int): number of rows in filters.
+
+           num_col (int): number of columns in filters.
+
+           padding (str, optional): mode of padding. 
+
+           strides (tuple, optional): stride of convolution operation.
+
+           activation (str, optional): activation function.
+  
+           name (str, optional): name of the layer.
     
-    Keyword Arguments:
-        padding {str} -- mode of padding (default: {'same'})
-        strides {tuple} -- stride of convolution operation (default: {(1, 1)})
-        activation {str} -- activation function (default: {'relu'})
-        name {str} -- name of the layer (default: {None})
-    
-    Returns:
-        [keras layer] -- [output layer]
-    '''
+       Returns:
+           Keras layer: output layer.
+    """
 
     x = Conv2D(filters, (num_row, num_col), strides=strides, padding=padding, use_bias=False)(x)
     x = BatchNormalization(axis=3, scale=False)(x)
@@ -39,23 +45,26 @@ def conv2d_bn(x, filters, num_row, num_col, padding='same', strides=(1, 1), acti
 
 
 def trans_conv2d_bn(x, filters, num_row, num_col, padding='same', strides=(2, 2), name=None):
-    '''
-    2D Transposed Convolutional layers
+    """2D Transposed Convolutional layers.
     
-    Arguments:
-        x {keras layer} -- input layer 
-        filters {int} -- number of filters
-        num_row {int} -- number of rows in filters
-        num_col {int} -- number of columns in filters
+       Args:
+           x (keras layer): input layer.
+
+           filters (int): number of filters.
+  
+           num_row (int): number of rows in filters.
+
+           num_col (int): number of columns in filters.
+
+           padding (str, optional): mode of padding.
+
+           strides (tuple, optional): stride of convolution operation.
+
+           name (str, optional): name of the layer.
     
-    Keyword Arguments:
-        padding {str} -- mode of padding (default: {'same'})
-        strides {tuple} -- stride of convolution operation (default: {(2, 2)})
-        name {str} -- name of the layer (default: {None})
-    
-    Returns:
-        [keras layer] -- [output layer]
-    '''
+       Returns:
+           Keras layer: output layer.
+    """
 
     x = Conv2DTranspose(filters, (num_row, num_col), strides=strides, padding=padding)(x)
     x = BatchNormalization(axis=3, scale=False)(x)
@@ -64,16 +73,16 @@ def trans_conv2d_bn(x, filters, num_row, num_col, padding='same', strides=(2, 2)
 
 
 def MultiResBlock(U, inp, alpha = 1.67):
-    '''
-    MultiRes Block
+    """MultiRes Block.
     
-    Arguments:
-        U {int} -- Number of filters in a corrsponding UNet stage
-        inp {keras layer} -- input layer 
-    
-    Returns:
-        [keras layer] -- [output layer]
-    '''
+       Args:
+           U (int): Number of filters in a corrsponding UNet stage.
+
+           inp (keras layer): input layer.
+
+       Returns:
+           Keras layer: output layer.
+    """
 
     W = alpha * U
 
@@ -102,18 +111,18 @@ def MultiResBlock(U, inp, alpha = 1.67):
 
 
 def ResPath(filters, length, inp):
-    '''
-    ResPath
+    """ResPath.
     
-    Arguments:
-        filters {int} -- [description]
-        length {int} -- length of ResPath
-        inp {keras layer} -- input layer 
-    
-    Returns:
-        [keras layer] -- [output layer]
-    '''
+       Args:
+           filters (int): description.
 
+           length (int): length of ResPath.
+
+           inp (keras layer): input layer.
+    
+       Returns:
+           Keras layer: output layer.
+    """
 
     shortcut = inp
     shortcut = conv2d_bn(shortcut, filters, 1, 1,
@@ -141,18 +150,18 @@ def ResPath(filters, length, inp):
 
 
 def MultiResUnet(height, width, n_channels):
-    '''
-    MultiResUNet
+    """MultiResUNet.
     
-    Arguments:
-        height {int} -- height of image 
-        width {int} -- width of image 
-        n_channels {int} -- number of channels in image
-    
-    Returns:
-        [keras model] -- MultiResUNet model
-    '''
+       Args:
+           height (int): height of image.
 
+           width (int): width of image.
+
+           n_channels (int): number of channels in image.
+    
+       Returns:
+           Keras model: MultiResUNet model.
+    """
 
     inputs = Input((height, width, n_channels))
 

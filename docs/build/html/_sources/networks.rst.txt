@@ -2,7 +2,7 @@ Networks
 ========
 
 .. toctree::
-   :maxdepth: 6
+   :maxdepth: 2
     
 
    networks_unet
@@ -11,3 +11,4 @@ Networks
    networks_resunet_3d
    networks_fcn
    networks_fc_densetnet103
+   networks_multiresunet

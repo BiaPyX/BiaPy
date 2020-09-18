@@ -82,7 +82,6 @@
             
               <p class="caption"><span class="caption-text">Contents:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../quick_example.html">Quick example</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../how_to_run.html">How to run</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../post_processing.html">Post processing</a></li>
@@ -168,54 +167,53 @@
              <span class="n">depth</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">drop_values</span><span class="o">=</span><span class="p">[</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.2</span><span class="p">,</span><span class="mf">0.2</span><span class="p">,</span><span class="mf">0.3</span><span class="p">],</span> <span class="n">spatial_dropout</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
              <span class="n">batch_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">k_init</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> <span class="n">loss_type</span><span class="o">=</span><span class="s2">&quot;bce&quot;</span><span class="p">,</span> 
              <span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;sgd&quot;</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">fine_tunning</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-             
-    <span class="sd">&quot;&quot;&quot;Create 2D U-Net.</span>
-
-<span class="sd">       Args:</span>
-<span class="sd">            image_shape (2D tuple): dimensions of the input image.</span>
-
-<span class="sd">            activation (str, optional): Keras available activation type.</span>
-
+    <span class="sd">&quot;&quot;&quot;Create 2D U-Net.                                                         </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Args:                                                                    </span>
+<span class="sd">            image_shape (2D tuple): dimensions of the input image.              </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            activation (str, optional): Keras available activation type.        </span>
+<span class="sd">                                                                                </span>
 <span class="sd">            feature_maps (array of ints, optional): feature maps to use on each </span>
-<span class="sd">                level. Must have the same length as the ``depth+1``.</span>
-<span class="sd">        </span>
-<span class="sd">            depth (int, optional): depth of the network.</span>
-
-<span class="sd">            drop_values (float, optional): dropout value to be fixed. If no</span>
-<span class="sd">                value is provided the default behaviour will be to select a</span>
-<span class="sd">                piramidal value stating from ``0.1`` and reaching ``0.3`` value.</span>
-
+<span class="sd">                level. Must have the same length as the ``depth+1``.            </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            depth (int, optional): depth of the network.                        </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            drop_values (float, optional): dropout value to be fixed. If no     </span>
+<span class="sd">                value is provided the default behaviour will be to select a     </span>
+<span class="sd">                piramidal value starting from ``0.1`` and reaching ``0.3`` value.</span>
+<span class="sd">                                                                                </span>
 <span class="sd">            spatial_dropout (bool, optional): use spatial dropout instead of the</span>
-<span class="sd">                `normal` dropout.</span>
-
-<span class="sd">            batch_norm (bool, optional): flag to make batch normalization.</span>
-<span class="sd">    </span>
-<span class="sd">            k_init (string, optional): kernel initialization for convolutional </span>
-<span class="sd">                layers.</span>
-
-<span class="sd">            loss_type (str, optional): loss type to use, three type available: </span>
+<span class="sd">                `normal` dropout.                                               </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            batch_norm (bool, optional): flag to make batch normalization.      </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            k_init (string, optional): kernel initialization for convolutional  </span>
+<span class="sd">                layers.                                                         </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            loss_type (str, optional): loss type to use, three type available:  </span>
 <span class="sd">                ``bce`` (Binary Cross Entropy) , ``w_bce`` (Weighted BCE, based </span>
 <span class="sd">                on weigth maps) and ``w_bce_dice`` (Weighted loss: ``weight1*BCE </span>
-<span class="sd">                + weight2*Dice``). </span>
+<span class="sd">                + weight2*Dice``).                                              </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            optimizer (str, optional): optimizer used to minimize the loss      </span>
+<span class="sd">                function. Posible options: ``sgd`` or ``adam``.                 </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            lr (float, optional): learning rate value.                          </span>
+<span class="sd">                                                                                </span>
+<span class="sd">            fine_tunning (bool, optional): flag to freeze the encoder part for  </span>
+<span class="sd">                fine tuning.                                                    </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Returns:                                                                 </span>
+<span class="sd">            Keras model: model containing the U-Net.              </span>
 
-<span class="sd">            optimizer (str, optional): optimizer used to minimize the loss</span>
-<span class="sd">                function. Posible options: ``sgd`` or ``adam``.</span>
-
-<span class="sd">            lr (float, optional): learning rate value.</span>
-
-<span class="sd">            fine_tunning (bool, optional): flag to freeze the encoder part for</span>
-<span class="sd">                fine tuning.</span>
-
-<span class="sd">       Returns:</span>
-<span class="sd">            Keras model: model containing the U-Net.</span>
-
-<span class="sd">       Calling this function with its default parameters returns the following </span>
-<span class="sd">       network:</span>
-
-<span class="sd">       .. image:: img/unet.png</span>
-<span class="sd">           :width: 100%</span>
-<span class="sd">           :align: center</span>
-
+<span class="sd">       Calling this function with its default parameters returns the following  </span>
+<span class="sd">       network:                                                                 </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       .. image:: img/unet.png                                                  </span>
+<span class="sd">           :width: 100%                                                         </span>
+<span class="sd">           :align: center                                                       </span>
+<span class="sd">                                                                                </span>
 <span class="sd">       Image created with `PlotNeuralNet &lt;https://github.com/HarisIqbal88/PlotNeuralNet&gt;`_.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
