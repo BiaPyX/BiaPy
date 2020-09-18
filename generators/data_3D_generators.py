@@ -105,9 +105,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.da = da
         self.val = val
         self.batch_size = batch_size
-        self.extra_data_factor = extra_data_factor
         self.o_indexes = np.arange(len(self.X))
-        self.o_indexes = np.concatenate([self.o_indexes]*self.extra_data_factor)
+        if extra_data_factor > 1:
+            self.extra_data_factor = extra_data_factor
+            self.o_indexes = np.concatenate([self.o_indexes]*extra_data_factor)
+        else:
+            self.extra_data_factor = 1
         self.prob_map = prob_map
         if random_subvolumes_in_DA:
             self.shape = subvol_shape
