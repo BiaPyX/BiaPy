@@ -12,10 +12,10 @@ from util import foreground_percentage
 
 def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
-              val_split=0.1, shuffle_val=True, seedValue=42, gray=True, 
-              e_d_data=[], e_d_mask=[], e_d_data_dim=[], e_d_dis=[], 
-              num_crops_per_dataset=0, make_crops=True, crop_shape=None, 
-              check_crop=True, check_crop_path="check_crop", d_percentage=0):         
+              val_split=0.1, shuffle_val=True, seedValue=42, e_d_data=[],
+              e_d_mask=[], e_d_data_dim=[], e_d_dis=[], num_crops_per_dataset=0, 
+              make_crops=True, crop_shape=None, check_crop=True, 
+              check_crop_path="check_crop", d_percentage=0):         
 
     """Load train, validation and test images from the given paths to create 2D
        data. 
@@ -40,9 +40,6 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
                (value between 0 and 1).
 
            seedValue (int, optional): seed value.
-
-           gray (bool, optional): convert the image into grayscale ignoring the
-                channels.
 
            shuffle_val (bool, optional): take random training examples to create 
                validation data.
@@ -90,10 +87,10 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
                  E.g. ``(image_number, x, y, channels)``.
         
                - **X_val** (*4D Numpy array, optional*): validation images 
-                 (create_val==True). E.g. ``(image_number, x, y, channels)``.
+                 (``create_val==True``). E.g. ``(image_number, x, y, channels)``.
 
                - **Y_val** (*4D Numpy array, optional*): validation images' mask 
-                 (create_val==True). E.g. ``(image_number, x, y, channels)``.
+                 (``create_val==True``). E.g. ``(image_number, x, y, channels)``.
 
                - **X_test** (*4D Numpy array*): test images. 
                  E.g. ``(image_number, x, y, channels)``.
@@ -130,7 +127,7 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
                img_test_shape, val_split=0.1, shuffle_val=True, make_crops=True,
                crop_shape=(256, 256, 1), check_crop=True, check_crop_path="check_folder")
 
-           # The function will print the shapes of the generated arrays. E.g. :
+           # The function will print the shapes of the generated arrays. In this example:
            #    *** Loaded train data shape is: (1776, 256, 256, 1)
            #    *** Loaded validation data shape is: (204, 256, 256, 1)
            #    *** Loaded test data shape is: (1980, 256, 256, 1)
@@ -319,45 +316,48 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
             create_val (bool, optional): if true validation data is created.                                                    
     
             shuffle_val (bool, optional): take random training examples to      
-            create validation data.
+                create validation data.
 
             val_split (float, optional): % of the train data used as    
-            validation (value between 0 and 1).
+                validation (value between ``0`` and ``1``).
 
             seedValue (int, optional): seed value.
 
-            train_subvol_shape (Tuple, optional): shape of the train subvolumes 
-            to create. 
+            train_subvol_shape (tuple, optional): shape of the train subvolumes 
+                to create. 
 
-            test_subvol_shape (Tuple, optional): shape of the test subvolumes 
-            to create. 
-
+            test_subvol_shape (tuple, optional): shape of the test subvolumes 
+                to create. 
+    
             random_subvolumes_in_DA (bool, optional): flag to advice the method 
-            that not preparation of the data must be done, as random subvolumes
-            will be created on DA, and the whole volume will be used for that.
+                that not preparation of the data must be done, as random 
+                subvolumes will be created on DA, and the whole volume will be 
+                used for that.
 
        Returns:                                                         
-            X_train (4D Numpy array): train images. 
-            E.g. (image_number, x, y, channels).
+           Multiple elements
 
-            Y_train (4D Numpy array): train images' mask.              
-            E.g. (image_number, x, y, channels).
+               - **X_train** (*4D Numpy array*): train images.
+                 E.g. ``(image_number, x, y, channels)``.
 
-            X_val (4D Numpy array, optional): validation images (create_val==True).
-            E.g. (image_number, x, y, channels).
+               - **Y_train** (*4D Numpy array*): train images' mask.
+                 E.g. ``(image_number, x, y, channels)``.
 
-            Y_val (4D Numpy array, optional): validation images' mask 
-            (create_val==True). E.g. (image_number, x, y, channels).
+               - **X_val** (*4D Numpy array, optional*): validation images
+                 (``create_val==True``). E.g. ``(image_number, x, y, channels)``.
 
-            X_test (4D Numpy array): test images. 
-            E.g. (image_number, x, y, channels).
+               - **Y_val** (*4D Numpy array, optional*): validation images' mask
+                 (``create_val==True``). E.g. ``(image_number, x, y, channels)``.
 
-            Y_test (4D Numpy array): test images' mask.                
-            E.g. (image_number, x, y, channels).
-        
-            orig_test_shape (tuple of ints): test data original shape.
+               - **X_test** (*4D Numpy array*): test images.
+                 E.g. ``(image_number, x, y, channels)``.
 
-            norm_value (int): normalization value calculated.
+               - **Y_test** (*4D Numpy array*): test images' mask.
+                 E.g. ``(image_number, x, y, channels)``.
+
+               - **orig_test_shape** (*tuple of ints*): test data original shape.
+
+               - **norm_value** (*int*): normalization value calculated.
     """      
    
     print("### LOAD ###")
@@ -426,39 +426,24 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
 
         return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value
 
-
-def load_data_from_dir(data_dir, shape, gray=True):
+def load_data_from_dir(data_dir, shape):
     """Load data from a directory.
-        
+
        Args:
             data_dir (str): path to read the data from.
 
             shape (3D int tuple): shape of the data.
-
-            gray (bool, optional): convert the image into grayscale ignoring the
-                channel of ``shape``.
-
+            
        Return:
-            data (4D Numpy array): data loaded. 
+            data (4D Numpy array): data loaded.
                 E.g. ``(image_number, x, y, channels)``.
     """
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
-
-    # Force grayscale
-    if gray:
-        s = shape[:2] + (1,) if shape[2] != 1 else shape
-    else:
-        s = shape 
-    data = np.zeros((len(ids), ) + s, dtype=np.float32)
+    data = np.zeros((len(ids), ) + shape, dtype=np.float32)
 
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         img = imread(os.path.join(data_dir, id_))
-
-        # Convert the image into grayscale
-        if len(img.shape) >= 3 and gray:
-            img = img[:, :, 0]
-            img = np.expand_dims(img, axis=-1)
 
         if len(img.shape) == 2:
             img = np.expand_dims(img, axis=-1)
