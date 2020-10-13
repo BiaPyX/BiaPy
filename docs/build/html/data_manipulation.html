@@ -1,0 +1,696 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Data manipulation &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Metrics" href="metrics.html" />
+    <link rel="prev" title="Post processing" href="post_processing.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Data manipulation</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-data_manipulation">
+<span id="data-manipulation"></span><h1>Data manipulation<a class="headerlink" href="#module-data_manipulation" title="Permalink to this headline">¶</a></h1>
+<dl class="py function">
+<dt id="data_manipulation.load_and_prepare_2D_data">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">load_and_prepare_2D_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">train_path</span></em>, <em class="sig-param"><span class="n">train_mask_path</span></em>, <em class="sig-param"><span class="n">test_path</span></em>, <em class="sig-param"><span class="n">test_mask_path</span></em>, <em class="sig-param"><span class="n">image_train_shape</span></em>, <em class="sig-param"><span class="n">image_test_shape</span></em>, <em class="sig-param"><span class="n">create_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">val_split</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">shuffle_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">seedValue</span><span class="o">=</span><span class="default_value">42</span></em>, <em class="sig-param"><span class="n">gray</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">e_d_data</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_mask</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_data_dim</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_dis</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">num_crops_per_dataset</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">make_crops</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">crop_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">check_crop</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">check_crop_path</span><span class="o">=</span><span class="default_value">'check_crop'</span></em>, <em class="sig-param"><span class="n">d_percentage</span><span class="o">=</span><span class="default_value">0</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#load_and_prepare_2D_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.load_and_prepare_2D_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load train, validation and test images from the given paths to create 2D
+data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>train_path</strong> (<em>str</em>) – path to the training data.</p></li>
+<li><p><strong>train_mask_path</strong> (<em>str</em>) – path to the training data masks.</p></li>
+<li><p><strong>test_path</strong> (<em>str</em>) – path to the test data.</p></li>
+<li><p><strong>test_mask_path</strong> (<em>str</em>) – path to the test data masks.</p></li>
+<li><p><strong>image_train_shape</strong> (<em>array of 3 int</em>) – dimensions of the images.</p></li>
+<li><p><strong>image_test_shape</strong> (<em>array of 3 int</em>) – dimensions of the images.</p></li>
+<li><p><strong>create_val</strong> (<em>bool</em><em>, </em><em>optional</em>) – if true validation data is created (from
+the train data).</p></li>
+<li><p><strong>val_split</strong> (<em>float</em><em>, </em><em>optional</em>) – % of the train data used as validation
+(value between 0 and 1).</p></li>
+<li><p><strong>seedValue</strong> (<em>int</em><em>, </em><em>optional</em>) – seed value.</p></li>
+<li><p><strong>gray</strong> (<em>bool</em><em>, </em><em>optional</em>) – convert the image into grayscale ignoring the
+channels.</p></li>
+<li><p><strong>shuffle_val</strong> (<em>bool</em><em>, </em><em>optional</em>) – take random training examples to create
+validation data.</p></li>
+<li><p><strong>e_d_data</strong> (<em>list of str</em><em>, </em><em>optional</em>) – list of paths where the extra data
+of other datasets are stored. If <code class="docutils literal notranslate"><span class="pre">make_crops</span></code> is not enabled,
+these extra datasets must have the same image shape as the main
+dataset since they are going to be stacked in a unique array.</p></li>
+<li><p><strong>e_d_mask</strong> (<em>list of str</em><em>, </em><em>optional</em>) – list of paths where the extra data
+mask of other datasets are stored. Same constraints as
+<code class="docutils literal notranslate"><span class="pre">e_d_data</span></code>.</p></li>
+<li><p><strong>e_d_data_dim</strong> (<em>list of 3D int tuple</em><em>, </em><em>optional</em>) – list of shapes of the
+extra datasets provided. Same constraints as <code class="docutils literal notranslate"><span class="pre">e_d_data</span></code>.</p></li>
+<li><p><strong>e_d_dis</strong> (<em>list of float</em><em>, </em><em>optional</em>) – discard percentages of the extra
+datasets provided. Values between 0 and 1. Same constraints as
+<code class="docutils literal notranslate"><span class="pre">e_d_data</span></code>.</p></li>
+<li><p><strong>num_crops_per_dataset</strong> (<em>int</em><em>, </em><em>optional</em>) – number of crops per extra
+dataset to take into account. Useful to ensure that all the datasets
+have the same weight during network trainning.</p></li>
+<li><p><strong>make_crops</strong> (<em>bool</em><em>, </em><em>optional</em>) – flag to make crops on data.</p></li>
+<li><p><strong>crop_shape</strong> (<em>3D int tuple</em><em>, </em><em>optional</em>) – shape of the crops.</p></li>
+<li><p><strong>check_crop</strong> (<em>bool</em><em>, </em><em>optional</em>) – to save the crops made to ensure they
+are generating as one wish.</p></li>
+<li><p><strong>check_crop_path</strong> (<em>str</em><em>, </em><em>optional</em>) – path to save the crop samples.</p></li>
+<li><p><strong>d_percentage</strong> (<em>int</em><em>, </em><em>optional</em>) – number between 0 and 100. The images
+having less percentage of foreground pixels than the given
+percentage are discarded.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>Multiple elements</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><strong>X_train</strong> (<em>4D Numpy array</em>): train images.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_train</strong> (<em>4D Numpy array</em>): train images’ mask.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>X_val</strong> (<em>4D Numpy array, optional</em>): validation images
+(create_val==True). E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_val</strong> (<em>4D Numpy array, optional</em>): validation images’ mask
+(create_val==True). E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>X_test</strong> (<em>4D Numpy array</em>): test images.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_test</strong> (<em>4D Numpy array</em>): test images’ mask.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>orig_test_shape</strong> (<em>tuple of ints</em>). test data original shape.</p></li>
+<li><p><strong>norm_value</strong> (<em>int</em>): mean of the train data in case we need
+to make a normalization.</p></li>
+<li><p><strong>crop_made</strong> (<em>bool</em>): True if crops have been made.</p></li>
+</ul>
+</div></blockquote>
+</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
+<span class="c1"># Case where we need to load the data, creating a validation split, and dividing them</span>
+<span class="c1"># into patches</span>
+<span class="n">train_path</span> <span class="o">=</span> <span class="s2">&quot;data/train/x&quot;</span>
+<span class="n">train_mask_path</span> <span class="o">=</span> <span class="s2">&quot;data/train/y&quot;</span>
+<span class="n">test_path</span> <span class="o">=</span> <span class="s2">&quot;data/test/y&quot;</span>
+<span class="n">test_mask_path</span> <span class="o">=</span> <span class="s2">&quot;data/test/y&quot;</span>
+
+<span class="n">img_train_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">img_test_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span>
+<span class="n">Y_val</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span>
+<span class="n">orig_test_shape</span><span class="p">,</span> <span class="n">norm_value</span><span class="p">,</span> <span class="n">crops_made</span> <span class="o">=</span> <span class="n">load_and_prepare_2D_data</span><span class="p">(</span>
+    <span class="n">train_path</span><span class="p">,</span> <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">test_path</span><span class="p">,</span> <span class="n">test_mask_path</span><span class="p">,</span> <span class="n">img_train_shape</span><span class="p">,</span>
+    <span class="n">img_test_shape</span><span class="p">,</span> <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">make_crops</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">crop_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">check_crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">check_crop_path</span><span class="o">=</span><span class="s2">&quot;check_folder&quot;</span><span class="p">)</span>
+
+<span class="c1"># The function will print the shapes of the generated arrays. E.g. :</span>
+<span class="c1">#    *** Loaded train data shape is: (1776, 256, 256, 1)</span>
+<span class="c1">#    *** Loaded validation data shape is: (204, 256, 256, 1)</span>
+<span class="c1">#    *** Loaded test data shape is: (1980, 256, 256, 1)</span>
+
+<span class="c1"># EXAMPLE 2</span>
+<span class="c1"># Same as the first example but definig extra datasets to be loaded and stacked together</span>
+<span class="c1"># with the main dataset. Extra variables to be defined:</span>
+<span class="n">extra_datasets_data_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;/data2/train/x&#39;</span><span class="p">)</span>
+<span class="n">extra_datasets_mask_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;/data2/train/y&#39;</span><span class="p">)</span>
+<span class="n">extra_datasets_data_dim_list</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="mi">877</span><span class="p">,</span> <span class="mi">967</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">extra_datasets_discard</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="c1"># To not discard any image</span>
+
+<span class="c1"># The call should be this:</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span>
+<span class="n">Y_val</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span>
+<span class="n">orig_test_shape</span><span class="p">,</span> <span class="n">norm_value</span><span class="p">,</span> <span class="n">crops_made</span> <span class="o">=</span> <span class="n">load_and_prepare_2D_data</span><span class="p">(</span>
+    <span class="n">train_path</span><span class="p">,</span> <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">test_path</span><span class="p">,</span> <span class="n">test_mask_path</span><span class="p">,</span> <span class="n">img_train_shape</span><span class="p">,</span>
+    <span class="n">mg_test_shape</span><span class="p">,</span> <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">make_crops</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">crop_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">check_crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">check_crop_path</span><span class="o">=</span><span class="s2">&quot;check_folder&quot;</span>
+    <span class="n">e_d_data</span><span class="o">=</span><span class="n">extra_datasets_data_list</span><span class="p">,</span> <span class="n">e_d_mask</span><span class="o">=</span><span class="n">extra_datasets_mask_list</span><span class="p">,</span>
+    <span class="n">e_d_data_dim</span><span class="o">=</span><span class="n">extra_datasets_data_dim_list</span><span class="p">,</span> <span class="n">e_d_dis</span><span class="o">=</span><span class="n">extra_datasets_discard</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.load_and_prepare_3D_data">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">load_and_prepare_3D_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">train_path</span></em>, <em class="sig-param"><span class="n">train_mask_path</span></em>, <em class="sig-param"><span class="n">test_path</span></em>, <em class="sig-param"><span class="n">test_mask_path</span></em>, <em class="sig-param"><span class="n">image_train_shape</span></em>, <em class="sig-param"><span class="n">image_test_shape</span></em>, <em class="sig-param"><span class="n">create_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">shuffle_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">val_split</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">seedValue</span><span class="o">=</span><span class="default_value">42</span></em>, <em class="sig-param"><span class="n">train_subvol_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">test_subvol_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">random_subvolumes_in_DA</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">ov_test</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#load_and_prepare_3D_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.load_and_prepare_3D_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load train, validation and test images from the given paths to create 2D
+data. If the images to be loaded are smaller than the given dimension it
+will be sticked in the (0, 0).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>train_path</strong> (<em>str</em>) – path to the training data.</p></li>
+<li><p><strong>train_mask_path</strong> (<em>str</em>) – path to the training data masks.</p></li>
+<li><p><strong>test_path</strong> (<em>str</em>) – path to the test data.</p></li>
+<li><p><strong>test_mask_path</strong> (<em>str</em>) – path to the test data masks.</p></li>
+<li><p><strong>image_train_shape</strong> (<em>array of 3 int</em>) – dimensions of the images.</p></li>
+<li><p><strong>image_test_shape</strong> (<em>array of 3 int</em>) – dimensions of the images.</p></li>
+<li><p><strong>create_val</strong> (<em>bool</em><em>, </em><em>optional</em>) – if true validation data is created.</p></li>
+<li><p><strong>shuffle_val</strong> (<em>bool</em><em>, </em><em>optional</em>) – take random training examples to</p></li>
+<li><p><strong>validation data.</strong> (<em>create</em>) – </p></li>
+<li><p><strong>val_split</strong> (<em>float</em><em>, </em><em>optional</em>) – % of the train data used as</p></li>
+<li><p><strong>validation</strong> (<em>value between 0 and 1</em>) – </p></li>
+<li><p><strong>seedValue</strong> (<em>int</em><em>, </em><em>optional</em>) – seed value.</p></li>
+<li><p><strong>train_subvol_shape</strong> (<em>Tuple</em><em>, </em><em>optional</em>) – shape of the train subvolumes</p></li>
+<li><p><strong>create.</strong> (<em>to</em>) – </p></li>
+<li><p><strong>test_subvol_shape</strong> (<em>Tuple</em><em>, </em><em>optional</em>) – shape of the test subvolumes</p></li>
+<li><p><strong>create.</strong> – </p></li>
+<li><p><strong>random_subvolumes_in_DA</strong> (<em>bool</em><em>, </em><em>optional</em>) – flag to advice the method</p></li>
+<li><p><strong>not preparation of the data must be done</strong><strong>, </strong><strong>as random subvolumes</strong> (<em>that</em>) – </p></li>
+<li><p><strong>be created on DA</strong><strong>, </strong><strong>and the whole volume will be used for that.</strong> (<em>will</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>train images.
+E.g. (image_number, x, y, channels).</p>
+<p>Y_train (4D Numpy array): train images’ mask.
+E.g. (image_number, x, y, channels).</p>
+<p>X_val (4D Numpy array, optional): validation images (create_val==True).
+E.g. (image_number, x, y, channels).</p>
+<p>Y_val (4D Numpy array, optional): validation images’ mask
+(create_val==True). E.g. (image_number, x, y, channels).</p>
+<p>X_test (4D Numpy array): test images.
+E.g. (image_number, x, y, channels).</p>
+<p>Y_test (4D Numpy array): test images’ mask.
+E.g. (image_number, x, y, channels).</p>
+<p>orig_test_shape (tuple of ints): test data original shape.</p>
+<p>norm_value (int): normalization value calculated.</p>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>X_train (4D Numpy array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.load_data_from_dir">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">load_data_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span></em>, <em class="sig-param"><span class="n">gray</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#load_data_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.load_data_from_dir" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load data from a directory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_dir</strong> (<em>str</em>) – path to read the data from.</p></li>
+<li><p><strong>shape</strong> (<em>3D int tuple</em>) – shape of the data.</p></li>
+<li><p><strong>gray</strong> (<em>bool</em><em>, </em><em>optional</em>) – convert the image into grayscale ignoring the
+channel of <code class="docutils literal notranslate"><span class="pre">shape</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>data loaded.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>data (4D Numpy array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.crop_data">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">crop_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">crop_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">force_shape</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">d_percentage</span><span class="o">=</span><span class="default_value">0</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#crop_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.crop_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Crop data into smaller pieces.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>4D Numpy array</em>) – data to crop.</p></li>
+<li><p><strong>E.g.</strong> (<em>image_number</em><em>, </em><em>x</em><em>, </em><em>y</em><em>, </em><em>channels</em>) – </p></li>
+<li><p><strong>crop_shape</strong> (<em>3D int tuple</em>) – output image shape.</p></li>
+<li><p><strong>E.g.</strong> – </p></li>
+<li><p><strong>data_mask</strong> (<em>4D Numpy array</em><em>, </em><em>optional</em>) – data masks to crop.</p></li>
+<li><p><strong>E.g.</strong> – </p></li>
+<li><p><strong>force_shape</strong> (<em>2D int tuple</em><em>, </em><em>optional</em>) – force horizontal and vertical</p></li>
+<li><p><strong>to the given numbers.</strong> (<em>crops</em>) – </p></li>
+<li><p><strong>d_percentage</strong> (<em>int</em><em>, </em><em>optional</em>) – number between 0 and 100. The images</p></li>
+<li><p><strong>have less foreground pixels than the given number will be</strong> (<em>that</em>) – </p></li>
+<li><p><strong>Only available if data_mask is provided.</strong> (<em>discarded.</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>cropped data images.</p>
+<p>cropped_data_mask (4D Numpy array): cropped data masks.</p>
+<p>force_shape (2D int tuple): number of horizontal and vertical crops
+made. Useful for future crop calls.</p>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>cropped_data (4D Numpy array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.crop_data_with_overlap">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">crop_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">data_mask</span></em>, <em class="sig-param"><span class="n">window_size</span></em>, <em class="sig-param"><span class="n">subdivision</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#crop_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.crop_data_with_overlap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Crop data into smaller pieces with the minimun overlap.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>4D Numpy array</em>) – data to crop.</p></li>
+<li><p><strong>E.g.</strong> (<em>image_number</em><em>, </em><em>x</em><em>, </em><em>y</em><em>, </em><em>channels</em>) – </p></li>
+<li><p><strong>data_mask</strong> (<em>4D Numpy array</em>) – data mask to crop.</p></li>
+<li><p><strong>E.g.</strong> – </p></li>
+<li><p><strong>window_size</strong> (<em>int</em>) – crop size.</p></li>
+<li><p><strong>subdivision</strong> (<em>int</em>) – number of crops to create.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>cropped image data.
+E.g. (image_number, x, y, channels).</p>
+<p>cropped_data_mask (4D Numpy array): cropped image data masks.
+E.g. (image_number, x, y, channels).</p>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>cropped_data (4D Numpy array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.crop_3D_data_with_overlap">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">crop_3D_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">vol_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap_z</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#crop_3D_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.crop_3D_data_with_overlap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Crop 3D data into smaller volumes with the minimun overlap in z.
+Reverse function of merge_3D_data_with_overlap().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>4D Numpy array</em>) – data to crop.</p></li>
+<li><p><strong>E.g.</strong> (<em>image_number</em><em>, </em><em>x</em><em>, </em><em>y</em><em>, </em><em>channels</em>) – </p></li>
+<li><p><strong>vol_shape</strong> (<em>4D int tuple</em>) – shape of the desired volumes to be created.</p></li>
+<li><p><strong>data_mask</strong> (<em>4D Numpy array</em><em>, </em><em>optional</em>) – data mask to crop.</p></li>
+<li><p><strong>E.g.</strong> – </p></li>
+<li><p><strong>overlap_z</strong> (<em>float</em><em>, </em><em>optional</em>) – amount of overlap on z dimension. The</p></li>
+<li><p><strong>must be on range</strong><strong> [</strong><strong>0</strong><strong>, </strong><strong>1</strong><strong>)</strong><strong>, </strong><strong>that is</strong><strong>, </strong><strong>0%</strong><strong> or </strong><strong>99% of overlap.</strong> (<em>value</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>cropped image data.
+E.g. (vol_number, x, y, z, channels).</p>
+<p>cropped_data_mask (5D Numpy array, optional): cropped image data
+masks. E.g. (vol_number, x, y, z, channels).</p>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>cropped_data (5D Numpy array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.merge_data_with_overlap">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">merge_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">original_shape</span></em>, <em class="sig-param"><span class="n">window_size</span></em>, <em class="sig-param"><span class="n">subdivision</span></em>, <em class="sig-param"><span class="n">out_dir</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">ov_map</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">ov_data_img</span><span class="o">=</span><span class="default_value">0</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#merge_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.merge_data_with_overlap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Merge data with an amount of overlap. Used to undo the crop made by the
+function crop_data_with_overlap.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>4D Numpy array</em>) – data to merge.</p></li>
+<li><p><strong>E.g.</strong> (<em>image_number</em><em>, </em><em>x</em><em>, </em><em>y</em><em>, </em><em>channels</em>) – </p></li>
+<li><p><strong>original_shape</strong> (<em>4D int tuple</em>) – original dimensions to reconstruct.</p></li>
+<li><p><strong>window_size</strong> (<em>int</em>) – crop size.</p></li>
+<li><p><strong>subdivision</strong> (<em>int</em>) – number of crops to merge.</p></li>
+<li><p><strong>out_dir</strong> (<em>str</em><em>, </em><em>optional</em>) – directory where the images will be save.</p></li>
+<li><p><strong>ov_map</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to create overlap map.</p></li>
+<li><p><strong>ov_data_img</strong> (<em>int</em><em>, </em><em>optional</em>) – number of the image on the data to</p></li>
+<li><p><strong>the overlappng map.</strong> (<em>create</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>merged image data.
+E.g. (image_number, x, y, channels).</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>merged_data (4D Numpy array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.merge_data_without_overlap">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">merge_data_without_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">num</span></em>, <em class="sig-param"><span class="n">out_shape</span><span class="o">=</span><span class="default_value">1, 1</span></em>, <em class="sig-param"><span class="n">grid</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#merge_data_without_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.merge_data_without_overlap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Combine images from input data into a bigger one given shape. It is the
+opposite function of crop_data().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>4D Numpy array</em>) – data to crop.</p></li>
+<li><p><strong>E.g.</strong> (<em>image_number</em><em>, </em><em>x</em><em>, </em><em>y</em><em>, </em><em>channels</em>) – </p></li>
+<li><p><strong>num</strong> (<em>int</em><em>, </em><em>optional</em>) – number of examples to convert.</p></li>
+<li><p><strong>out_shape</strong> (<em>2D int tuple</em><em>, </em><em>optional</em>) – number of horizontal and</p></li>
+<li><p><strong>images to combine in a single one.</strong> (<em>vertical</em>) – </p></li>
+<li><p><strong>grid</strong> (<em>bool</em><em>, </em><em>optional</em>) – make the grid in the output image.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>mixed data images.
+E.g. (image_number, x, y, channels).</p>
+<p>mixed_data_mask (4D Numpy array): mixed data masks.
+E.g. (image_number, x, y, channels).</p>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>mixed_data (4D Numpy array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.merge_3D_data_with_overlap">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">merge_3D_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">orig_vol_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap_z</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#merge_3D_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.merge_3D_data_with_overlap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Merge 3D smaller volumes in a 3D full volume with a defined overlap.
+Reverse operation of crop_3D_data_with_overlap().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>5D Numpy array</em>) – data to crop.</p></li>
+<li><p><strong>E.g.</strong> (<em>volume_number</em><em>, </em><em>x</em><em>, </em><em>y</em><em>, </em><em>z</em><em>, </em><em>channels</em>) – </p></li>
+<li><p><strong>orig_vol_shape</strong> (<em>4D int tuple</em>) – shape of the desired volumes to be</p></li>
+<li><p><strong>created.</strong> – </p></li>
+<li><p><strong>data_mask</strong> (<em>4D Numpy array</em><em>, </em><em>optional</em>) – data mask to crop.</p></li>
+<li><p><strong>E.g.</strong> – </p></li>
+<li><p><strong>overlap_z</strong> (<em>float</em><em>, </em><em>optional</em>) – amount of overlap on z dimension. The</p></li>
+<li><p><strong>must be on range</strong><strong> [</strong><strong>0</strong><strong>, </strong><strong>1</strong><strong>)</strong><strong>, </strong><strong>that is</strong><strong>, </strong><strong>0%</strong><strong> or </strong><strong>99% of overlap.</strong> (<em>value</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>cropped image data.
+E.g. (image_number, x, y, channels).</p>
+<p>merged_data_mask (5D Numpy array, optional): cropped image data
+masks. E.g. (image_number, x, y, channels).</p>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>merged_data (4D Numpy array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.check_crops">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">check_crops</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">out_dim</span></em>, <em class="sig-param"><span class="n">num_examples</span><span class="o">=</span><span class="default_value">2</span></em>, <em class="sig-param"><span class="n">include_crops</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">out_dir</span><span class="o">=</span><span class="default_value">'check_crops'</span></em>, <em class="sig-param"><span class="n">suffix</span><span class="o">=</span><span class="default_value">'_none_'</span></em>, <em class="sig-param"><span class="n">grid</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#check_crops"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.check_crops" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check cropped images by the function crop_data().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>4D Numpy array</em>) – data to crop.</p></li>
+<li><p><strong>E.g.</strong> (<em>image_number</em><em>, </em><em>x</em><em>, </em><em>y</em><em>, </em><em>channels</em>) – </p></li>
+<li><p><strong>out_dim</strong> (<em>int 2D tuple</em>) – width and height of the image to be</p></li>
+<li><p><strong>constructed.</strong> – </p></li>
+<li><p><strong>num_examples</strong> (<em>int</em><em>, </em><em>optional</em>) – number of examples to create.</p></li>
+<li><p><strong>include_crops</strong> (<em>bool</em><em>, </em><em>optional</em>) – to save cropped images or only the</p></li>
+<li><p><strong>to contruct.</strong> (<em>image</em>) – </p></li>
+<li><p><strong>out_dir</strong> (<em>string</em><em>, </em><em>optional</em>) – directory where the images will be save.</p></li>
+<li><p><strong>suffix</strong> (<em>string</em><em>, </em><em>optional</em>) – suffix to add in image names.</p></li>
+<li><p><strong>grid</strong> (<em>bool</em><em>, </em><em>optional</em>) – make the grid in the output image.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.check_binary_masks">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">check_binary_masks</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#check_binary_masks"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.check_binary_masks" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check wheter the data masks is binary checking the a few random images of
+the given path. If the function gives no error one should assume that the
+masks are correct.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>path</strong> (<em>str</em>) – path to the data mask.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.prepare_3D_volume_data">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">prepare_3D_volume_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span></em>, <em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">shape</span><span class="o">=</span><span class="default_value">256, 256, 82</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">use_rest</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">ov</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#prepare_3D_volume_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.prepare_3D_volume_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prepare given data into 3D subvolumes to train a 3D network.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>Numpy 4D array</em>) – data. E.g. (image_number, x, y, channels).</p></li>
+<li><p><strong>Y</strong> (<em>Numpy 4D array</em>) – mask data.  E.g. (image_number, x, y, channels).</p></li>
+<li><p><strong>shape</strong> (<em>3D int tuple</em><em>, </em><em>optional</em>) – dimension of the desired images.</p></li>
+<li><p><strong>overlap</strong> (<em>bool</em><em>, </em><em>optional</em>) – flag to create subvolumes with overlap</p></li>
+<li><p><strong>to use all the data. If False as much as possible subvolumes</strong> (<em>forcing</em>) – </p></li>
+<li><p><strong>the desired shape will be created with the available data</strong><strong>, </strong><strong>and</strong> (<em>of</em>) – </p></li>
+<li><p><strong>rest of images will be dropped out</strong> (<em>the</em>) – </p></li>
+<li><p><strong>it when dealing with test data</strong><strong>, </strong><strong>as all the images must be</strong> (<em>Activate</em>) – </p></li>
+<li><p><strong>present.</strong> – </p></li>
+<li><p><strong>use_rest</strong> (<em>bool</em><em>, </em><em>optional</em>) – flag to try to use the rest of the images</p></li>
+<li><p><strong>create more training data using mirroring.</strong> (<em>to</em>) – </p></li>
+<li><p><strong>ov</strong> (<em>float</em><em>, </em><em>optional</em>) – amount of overlap on z dimension. The value</p></li>
+<li><p><strong>be on range</strong><strong> [</strong><strong>0</strong><strong>, </strong><strong>1</strong><strong>)</strong><strong>, </strong><strong>that is</strong><strong>, </strong><strong>0%</strong><strong> or </strong><strong>99% of overlap.</strong> (<em>must</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>X data separated in different subvolumes
+with the desired shape. E.g. (subvolume_number, ) + shape</p>
+<p>Y_prep (Numpy 5D array): Y data separated in different subvolumes
+with the desired shape. E.g. (subvolume_number, ) + shape</p>
+<p>mirrored_subvols (int): number of subvolumes created with the rest
+of the images. A valid value is returned when ‘use_rest’ is True.</p>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>X_prep (Numpy 5D array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.img_to_onehot_encoding">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">img_to_onehot_encoding</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">img</span></em>, <em class="sig-param"><span class="n">num_classes</span><span class="o">=</span><span class="default_value">2</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#img_to_onehot_encoding"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.img_to_onehot_encoding" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts image given into one-hot encode format.
+:param img: data. E.g. (x, y, z, channels).
+:type img: Numpy 4D array
+:param num_classes: number of classes to distinguish.
+:type num_classes: int, optional</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>data one-hot encoded.
+E.g. (x, y, z, num_classes)</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>one_hot_labels (Numpy 4D array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data_manipulation.random_crop">
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">random_crop</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image</span></em>, <em class="sig-param"><span class="n">mask</span></em>, <em class="sig-param"><span class="n">random_crop_size</span></em>, <em class="sig-param"><span class="n">val</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">draw_prob_map_points</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">img_prob</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">weights_on_data</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">weight_map</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#random_crop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.random_crop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Random crop.</p>
+<dl class="simple">
+<dt>Based on:</dt><dd><p><a class="reference external" href="https://jkjung-avt.github.io/keras-image-cropping/">https://jkjung-avt.github.io/keras-image-cropping/</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="metrics.html" class="btn btn-neutral float-right" title="Metrics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="post_processing.html" class="btn btn-neutral float-left" title="Post processing" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

@@ -17,6 +17,7 @@ Some of state-of-the-art approaches have been reproduced and implemented to comp
    how_to_run  
    networks
    post_processing
+   data_manipulation 
    metrics
    util
    adabound

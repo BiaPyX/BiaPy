@@ -12,91 +12,148 @@ from util import foreground_percentage
 
 def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_path, 
               image_train_shape, image_test_shape, create_val=True, 
-              val_split=0.1, shuffle_val=True, seedValue=42, e_d_data=[], 
-              e_d_mask=[], e_d_data_dim=[], e_d_dis=[], num_crops_per_dataset=0, 
-              make_crops=True, crop_shape=None, check_crop=True, 
-              check_crop_path="check_crop", d_percentage=0):         
+              val_split=0.1, shuffle_val=True, seedValue=42, gray=True, 
+              e_d_data=[], e_d_mask=[], e_d_data_dim=[], e_d_dis=[], 
+              num_crops_per_dataset=0, make_crops=True, crop_shape=None, 
+              check_crop=True, check_crop_path="check_crop", d_percentage=0):         
 
     """Load train, validation and test images from the given paths to create 2D
-       data. If the images to be loaded are smaller than the given dimension it 
-       will be sticked in the (0, 0).
+       data. 
                                                                         
        Args:                                                            
-            train_path (str): path to the training data.                
+           train_path (str): path to the training data.                
 
-            train_mask_path (str): path to the training data masks.     
+           train_mask_path (str): path to the training data masks.     
 
-            test_path (str): path to the test data.                     
+           test_path (str): path to the test data.                     
 
-            test_mask_path (str): path to the test data masks.          
+           test_mask_path (str): path to the test data masks.          
 
-            image_train_shape (array of 3 int): dimensions of the images.     
+           image_train_shape (array of 3 int): dimensions of the images.     
 
-            image_test_shape (array of 3 int): dimensions of the images.     
+           image_test_shape (array of 3 int): dimensions of the images.     
 
-            create_val (bool, optional): if true validation data is created.                                                    
-            val_split (float, optional): % of the train data used as    
+           create_val (bool, optional): if true validation data is created (from
+               the train data).                                                    
 
-            validation (value between 0 and 1).
+           val_split (float, optional): % of the train data used as validation
+               (value between 0 and 1).
 
-            seedValue (int, optional): seed value.
+           seedValue (int, optional): seed value.
 
-            shuffle_val (bool, optional): take random training examples to      
-            create validation data.
+           gray (bool, optional): convert the image into grayscale ignoring the
+                channels.
 
-            e_d_data (list of str, optional): list of paths where the extra data
-            of other datasets are stored.
+           shuffle_val (bool, optional): take random training examples to create 
+               validation data.
 
-            e_d_mask (list of str, optional): list of paths where the extra data
-            mask of other datasets are stored.
+           e_d_data (list of str, optional): list of paths where the extra data
+               of other datasets are stored. If ``make_crops`` is not enabled, 
+               these extra datasets must have the same image shape as the main 
+               dataset since they are going to be stacked in a unique array.
 
-            e_d_data_dim (list of 3D int tuple, optional): list of shapes of the 
-            extra datasets provided. 
+           e_d_mask (list of str, optional): list of paths where the extra data
+               mask of other datasets are stored. Same constraints as 
+               ``e_d_data``.  
 
-            e_d_dis (list of float, optional): discard percentages of the extra
-            datasets provided. Values between 0 and 1.
+           e_d_data_dim (list of 3D int tuple, optional): list of shapes of the 
+               extra datasets provided. Same constraints as ``e_d_data``.
 
-            num_crops_per_dataset (int, optional): number of crops per extra
-            dataset to take into account. Useful to ensure that all the datasets
-            have the same weight during network trainning. 
+           e_d_dis (list of float, optional): discard percentages of the extra
+               datasets provided. Values between 0 and 1. Same constraints as 
+               ``e_d_data``.
 
-            make_crops (bool, optional): flag to make crops on data.
+           num_crops_per_dataset (int, optional): number of crops per extra
+               dataset to take into account. Useful to ensure that all the datasets
+               have the same weight during network trainning. 
 
-            crop_shape (3D int tuple, optional): shape of the crops.
+           make_crops (bool, optional): flag to make crops on data.
 
-            check_crop (bool, optional): to save the crops made to ensure they
-            are generating as one wish.
+           crop_shape (3D int tuple, optional): shape of the crops.
 
-            check_crop_path (str, optional): path to save the crop samples.
+           check_crop (bool, optional): to save the crops made to ensure they
+               are generating as one wish.
 
-            d_percentage (int, optional): number between 0 and 100. The images
-            that have less foreground pixels than the given number will be
-            discarded.
+           check_crop_path (str, optional): path to save the crop samples.
+
+           d_percentage (int, optional): number between 0 and 100. The images 
+               having less percentage of foreground pixels than the given 
+               percentage are discarded.
 
        Returns:                                                         
-            X_train (4D Numpy array): train images. 
-            E.g. (image_number, x, y, channels).
-
-            Y_train (4D Numpy array): train images' mask.              
-            E.g. (image_number, x, y, channels).
-
-            X_val (4D Numpy array, optional): validation images (create_val==True).
-            E.g. (image_number, x, y, channels).
-
-            Y_val (4D Numpy array, optional): validation images' mask 
-            (create_val==True). E.g. (image_number, x, y, channels).
-
-            X_test (4D Numpy array): test images. 
-            E.g. (image_number, x, y, channels).
-
-            Y_test (4D Numpy array): test images' mask.                
-            E.g. (image_number, x, y, channels).
+           Multiple elements
+ 
+               - **X_train** (*4D Numpy array*): train images. 
+                 E.g. ``(image_number, x, y, channels)``.
+            
+               - **Y_train** (*4D Numpy array*): train images' mask.              
+                 E.g. ``(image_number, x, y, channels)``.
         
-            orig_test_shape (tuple of ints): test data original shape.
+               - **X_val** (*4D Numpy array, optional*): validation images 
+                 (create_val==True). E.g. ``(image_number, x, y, channels)``.
 
-            norm_value (int): normalization value calculated.
+               - **Y_val** (*4D Numpy array, optional*): validation images' mask 
+                 (create_val==True). E.g. ``(image_number, x, y, channels)``.
 
-            crop_made (bool): True if crops have been made.
+               - **X_test** (*4D Numpy array*): test images. 
+                 E.g. ``(image_number, x, y, channels)``.
+
+               - **Y_test** (*4D Numpy array*): test images' mask.                
+                 E.g. ``(image_number, x, y, channels)``.
+        
+               - **orig_test_shape** (*tuple of ints*). test data original shape.
+        
+               - **norm_value** (*int*): mean of the train data in case we need 
+                 to make a normalization.
+
+               - **crop_made** (*bool*): True if crops have been made.
+
+       Examples
+       --------
+       ::
+        
+           # EXAMPLE 1 
+           # Case where we need to load the data, creating a validation split, and dividing them 
+           # into patches
+           train_path = "data/train/x"
+           train_mask_path = "data/train/y"
+           test_path = "data/test/y"
+           test_mask_path = "data/test/y"
+
+           img_train_shape = (1024, 768, 1)
+           img_test_shape = (1024, 768, 1)
+
+           X_train, Y_train, X_val,
+           Y_val, X_test, Y_test,
+           orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(
+               train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
+               img_test_shape, val_split=0.1, shuffle_val=True, make_crops=True,
+               crop_shape=(256, 256, 1), check_crop=True, check_crop_path="check_folder")
+
+           # The function will print the shapes of the generated arrays. E.g. :
+           #    *** Loaded train data shape is: (1776, 256, 256, 1)
+           #    *** Loaded validation data shape is: (204, 256, 256, 1)
+           #    *** Loaded test data shape is: (1980, 256, 256, 1)
+
+            
+           # EXAMPLE 2
+           # Same as the first example but definig extra datasets to be loaded and stacked together 
+           # with the main dataset. Extra variables to be defined: 
+           extra_datasets_data_list.append('/data2/train/x')
+           extra_datasets_mask_list.append('/data2/train/y')
+           extra_datasets_data_dim_list.append((877, 967, 1))
+           extra_datasets_discard.append(0) # To not discard any image 
+
+           # The call should be this:
+           X_train, Y_train, X_val,                                             
+           Y_val, X_test, Y_test,                                               
+           orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(  
+               train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
+               mg_test_shape, val_split=0.1, shuffle_val=True, make_crops=True,
+               crop_shape=(256, 256, 1), check_crop=True, check_crop_path="check_folder"
+               e_d_data=extra_datasets_data_list, e_d_mask=extra_datasets_mask_list, 
+               e_d_data_dim=extra_datasets_data_dim_list, e_d_dis=extra_datasets_discard)
+                
     """      
    
     print("### LOAD ###")
@@ -370,7 +427,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
         return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value
 
 
-def load_data_from_dir(data_dir, shape):
+def load_data_from_dir(data_dir, shape, gray=True):
     """Load data from a directory.
         
        Args:
@@ -378,19 +435,28 @@ def load_data_from_dir(data_dir, shape):
 
             shape (3D int tuple): shape of the data.
 
+            gray (bool, optional): convert the image into grayscale ignoring the
+                channel of ``shape``.
+
        Return:
             data (4D Numpy array): data loaded. 
-            E.g. (image_number, x, y, channels).
+                E.g. ``(image_number, x, y, channels)``.
     """
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
-    data = np.zeros((len(ids), ) + shape, dtype=np.float32)
+
+    # Force grayscale
+    if gray:
+        s = shape[:2] + (1,) if shape[2] != 1 else shape
+    else:
+        s = shape 
+    data = np.zeros((len(ids), ) + s, dtype=np.float32)
 
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         img = imread(os.path.join(data_dir, id_))
 
         # Convert the image into grayscale
-        if len(img.shape) >= 3:
+        if len(img.shape) >= 3 and gray:
             img = img[:, :, 0]
             img = np.expand_dims(img, axis=-1)
 
