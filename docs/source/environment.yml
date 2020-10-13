@@ -1,4 +1,4 @@
-name: DL_EM_base_env
+name: prueba_readthedocs
 channels:
   - conda-forge
   - defaults
@@ -13,10 +13,10 @@ dependencies:
   - blas=1.0=mkl
   - blinker=1.4=py36_0
   - c-ares=1.15.0=h7b6447c_1001
-  - ca-certificates=2020.6.24=0
+  - ca-certificates=2020.6.20=hecda079_0
   - cachetools=3.1.1=py_0
   - cairo=1.14.12=h8948797_3
-  - certifi=2020.6.20=py36_0
+  - certifi=2020.6.20=py36h9880bd3_2
   - cffi=1.14.0=py36h2e261b9_0
   - chardet=3.0.4=py36_1003
   - click=7.1.1=py_0
@@ -90,13 +90,13 @@ dependencies:
   - oauthlib=3.1.0=py_0
   - olefile=0.46=py36_0
   - opencv=3.4.1=py36h6fd60c2_1
-  - openssl=1.1.1g=h7b6447c_0
+  - openssl=1.1.1h=h516909a_0
   - opt_einsum=3.1.0=py_0
   - packaging=20.4=py_0
   - pango=1.42.4=h049681c_0
   - pcre=8.43=he6710b0_0
   - pillow=7.0.0=py36hb39fc2d_0
-  - pip=20.0.2=py36_1
+  - pip=20.2.3=py_0
   - pixman=0.38.0=h7b6447c_0
   - protobuf=3.11.4=py36he6710b0_0
   - pyasn1=0.4.8=py_0
@@ -161,5 +161,5 @@ dependencies:
     - sphinx-rtd-theme==0.5.0
     - sphinxcontrib-napoleon==0.7
     - texttable==1.6.2
-prefix: /home/dfranco/anaconda3/envs/DL_EM_base_env
+prefix: /home/dfranco/anaconda3/envs/prueba_readthedocs
 
