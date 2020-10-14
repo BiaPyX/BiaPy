@@ -36,8 +36,8 @@
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Metrics" href="metrics.html" />
-    <link rel="prev" title="Tiramisu (FC-DenseNet103)" href="networks_fc_densetnet103.html" /> 
+    <link rel="next" title="Data manipulation" href="data_manipulation.html" />
+    <link rel="prev" title="MultiResUNet" href="networks_multiresunet.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -87,6 +87,7 @@
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
@@ -162,29 +163,21 @@
 <dd><p>Based on the first post-processing method proposed in <cite>Oztel et al.</cite> where
 removes the artifacts with low class score.</p>
 <p>Based on post-processing made in <a class="reference external" href="https://ieeexplore.ieee.org/abstract/document/8217827?casa_token=ga4A1VzvnykAAAAA:U7iBJ2H0qD4MU4Z1JzdzobNx_vCxwM89fzy39IwAPT8TsRuESFu_rFzKKHspp6-EKTGRoOHh2g">Oztel et al</a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>Y</strong> (<em>4D Numpy array</em>) – data to apply the filter.
-E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>low_score_th</strong> (<em>float</em><em>, </em><em>optional</em>) – the minimun class score that the
-artifact must have to not be discarded. Must be a value between
-<code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-<li><p><strong>th</strong> (<em>float</em><em>, </em><em>optional</em>) – threshold applied to binarize the given images.
-Must be a vaue between <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-</ul>
+<dl class="simple">
+<dt>Args:</dt><dd><dl class="simple">
+<dt>Y (4D Numpy array): data to apply the filter.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>filtered data. E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+<dt>low_score_th (float, optional): the minimun class score that the</dt><dd><p>artifact must have to not be discarded. Must be a value between
+<code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p>
 </dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>4D Numpy array</p>
+<dt>th (float, optional): threshold applied to binarize the given images.</dt><dd><p>Must be a vaue between <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p>
 </dd>
-<dt class="field-even">Raises</dt>
-<dd class="field-even"><ul class="simple">
-<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">low_score_th</span></code> not in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code></p></li>
-<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">th</span></code> not in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code></p></li>
-</ul>
+</dl>
+</dd>
+<dt>Return:</dt><dd><p>4D Numpy array: filtered data. E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt>Raises:</dt><dd><p>ValueError: if <code class="docutils literal notranslate"><span class="pre">low_score_th</span></code> not in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code>
+ValueError: if <code class="docutils literal notranslate"><span class="pre">th</span></code> not in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -195,25 +188,20 @@ Must be a vaue between <code class="docutils literal notranslate"><span class="p
 <dd><p>Apply watershed to the given predictions with the goal of refine the
 boundaries of the artifacts.</p>
 <p>Based on <a class="reference external" href="https://docs.opencv.org/master/d3/db4/tutorial_py_watershed.html">https://docs.opencv.org/master/d3/db4/tutorial_py_watershed.html</a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>X</strong> (<em>4D Numpy array</em>) – original data to guide the watershed.
-E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>Y_pred</strong> (<em>4D Numpy array</em>) – predicted data to refine the boundaries.
-E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>erode</strong> (<em>bool</em><em>, </em><em>optional</em>) – flag to extract the sure foreground eroding
-the artifacts instead of doing with distanceTransform.</p></li>
-<li><p><strong>save_marks_dir</strong> (<em>str</em><em>, </em><em>optional</em>) – directory to save the markers used
-to make the watershed. Useful for debugging.</p></li>
-</ul>
+<dl class="simple">
+<dt>Args:</dt><dd><dl class="simple">
+<dt>X (4D Numpy array): original data to guide the watershed.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>refined boundaries of the predictions.
+<dt>Y_pred (4D Numpy array): predicted data to refine the boundaries.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt>erode (bool, optional): flag to extract the sure foreground eroding</dt><dd><p>the artifacts instead of doing with distanceTransform.</p>
+</dd>
+<dt>save_marks_dir (str, optional): directory to save the markers used</dt><dd><p>to make the watershed. Useful for debugging.</p>
+</dd>
+</dl>
+</dd>
+<dt>Returns:</dt><dd><p>4D Numpy array: refined boundaries of the predictions.
 E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>4D Numpy array</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
@@ -260,23 +248,18 @@ E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</
 boundaries of the artifacts. This function was implemented using scikit
 instead of opencv as <a class="reference internal" href="#post_processing.boundary_refinement_watershed" title="post_processing.boundary_refinement_watershed"><code class="xref py py-meth docutils literal notranslate"><span class="pre">post_processing.boundary_refinement_watershed()</span></code></a>.</p>
 <p>Based on <a class="reference external" href="https://scikit-image.org/docs/dev/auto_examples/segmentation/plot_watershed.html">https://scikit-image.org/docs/dev/auto_examples/segmentation/plot_watershed.html</a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>X</strong> (<em>4D Numpy array</em>) – original data to guide the watershed.
-E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>Y_pred</strong> (<em>4D Numpy array</em>) – predicted data to refine the boundaries.
-E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>save_marks_dir</strong> (<em>str</em><em>, </em><em>optional</em>) – directory to save the markers used
-to make the watershed. Useful for debugging.</p></li>
-</ul>
+<dl class="simple">
+<dt>Args:</dt><dd><dl class="simple">
+<dt>X (4D Numpy array): original data to guide the watershed.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>refined boundaries of the predictions.
+<dt>Y_pred (4D Numpy array): predicted data to refine the boundaries.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt>save_marks_dir (str, optional): directory to save the markers used</dt><dd><p>to make the watershed. Useful for debugging.</p>
+</dd>
+</dl>
+</dd>
+<dt>Returns:</dt><dd><p>4D Numpy array: refined boundaries of the predictions.
 E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>4D Numpy array</p>
 </dd>
 </dl>
 </dd></dl>
@@ -285,20 +268,15 @@ E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</
 <dt id="post_processing.calculate_z_filtering">
 <code class="sig-prename descclassname">post_processing.</code><code class="sig-name descname">calculate_z_filtering</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">mf_size</span><span class="o">=</span><span class="default_value">5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/post_processing.html#calculate_z_filtering"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#post_processing.calculate_z_filtering" title="Permalink to this definition">¶</a></dt>
 <dd><p>Applies a median filtering in the z dimension of the provided data.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>data</strong> (<em>4D Numpy array</em>) – data to apply the filter to.
-E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>mf_size</strong> (<em>int</em><em>, </em><em>optional</em>) – size of the median filter. Must be an odd
-number.</p></li>
-</ul>
+<dl class="simple">
+<dt>Args:</dt><dd><dl class="simple">
+<dt>data (4D Numpy array): data to apply the filter to.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>z filtered data. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+<dt>mf_size (int, optional): size of the median filter. Must be an odd</dt><dd><p>number.</p>
 </dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>4D Numpy array</p>
+</dl>
+</dd>
+<dt>Returns:</dt><dd><p>4D Numpy array: z filtered data. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -313,10 +291,10 @@ number.</p></li>
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="metrics.html" class="btn btn-neutral float-right" title="Metrics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="data_manipulation.html" class="btn btn-neutral float-right" title="Data manipulation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="networks_fc_densetnet103.html" class="btn btn-neutral float-left" title="Tiramisu (FC-DenseNet103)" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="networks_multiresunet.html" class="btn btn-neutral float-left" title="MultiResUNet" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

@@ -87,6 +87,7 @@
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Adabound</a></li>
@@ -163,24 +164,21 @@
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.optimizer_v2.optimizer_v2.OptimizerV2</span></code></p>
 <p>AdaBound optimizer.</p>
 <p>Default parameters follow those provided in the original paper.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>lr</strong> – float &gt;= 0. Learning rate.</p></li>
-<li><p><strong>final_lr</strong> – float &gt;= 0. Final learning rate.</p></li>
-<li><p><strong>beta_1</strong> – float, 0 &lt; beta &lt; 1. Generally close to 1.</p></li>
-<li><p><strong>beta_2</strong> – float, 0 &lt; beta &lt; 1. Generally close to 1.</p></li>
-<li><p><strong>gamma</strong> – float &gt;= 0. Convergence speed of the bound function.</p></li>
-<li><p><strong>epsilon</strong> – float &gt;= 0. Fuzz factor. If <cite>None</cite>, defaults to <cite>K.epsilon()</cite>.</p></li>
-<li><p><strong>decay</strong> – float &gt;= 0. Learning rate decay over each update.</p></li>
-<li><p><strong>weight_decay</strong> – Weight decay weight.</p></li>
-<li><p><strong>amsbound</strong> – boolean. Whether to apply the AMSBound variant of this
-algorithm.</p></li>
-</ul>
+<dl>
+<dt>Args:</dt><dd><p>lr: float &gt;= 0. Learning rate.
+final_lr: float &gt;= 0. Final learning rate.
+beta_1: float, 0 &lt; beta &lt; 1. Generally close to 1.
+beta_2: float, 0 &lt; beta &lt; 1. Generally close to 1.
+gamma: float &gt;= 0. Convergence speed of the bound function.
+epsilon: float &gt;= 0. Fuzz factor. If <cite>None</cite>, defaults to <cite>K.epsilon()</cite>.
+decay: float &gt;= 0. Learning rate decay over each update.
+weight_decay: Weight decay weight.
+amsbound: boolean. Whether to apply the AMSBound variant of this</p>
+<blockquote>
+<div><p>algorithm.</p>
+</div></blockquote>
 </dd>
-</dl>
-<p class="rubric">References</p>
-<ul class="simple">
+<dt>References:</dt><dd><ul class="simple">
 <li><p>[Adaptive Gradient Methods with Dynamic Bound of Learning Rate]
 (<a class="reference external" href="https://openreview.net/forum?id=Bkg3g2R9FX">https://openreview.net/forum?id=Bkg3g2R9FX</a>)</p></li>
 <li><p>[Adam - A Method for Stochastic Optimization]
@@ -188,6 +186,74 @@ algorithm.</p></li>
 <li><p>[On the Convergence of Adam and Beyond]
 (<a class="reference external" href="https://openreview.net/forum?id=ryQu7f-RZ">https://openreview.net/forum?id=ryQu7f-RZ</a>)</p></li>
 </ul>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Attributes</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">iterations</span></code></dt><dd><p>Variable.</p>
+</dd>
+<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">weights</span></code></dt><dd><p>Returns variables of this Optimizer based on the order created.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p class="rubric">Methods</p>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_slot</span></code>(var, slot_name[, initializer])</p></td>
+<td><p>Add a new slot variable for <cite>var</cite>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">apply_gradients</span></code>(grads_and_vars[, name])</p></td>
+<td><p>Apply gradients to variables.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_config</span></code>(config[, custom_objects])</p></td>
+<td><p>Creates an optimizer from its config.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#adabound.AdaBound.get_config" title="adabound.AdaBound.get_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_config</span></code></a>()</p></td>
+<td><p>Returns the config of the optimimizer.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_gradients</span></code>(loss, params)</p></td>
+<td><p>Returns gradients of <cite>loss</cite> with respect to <cite>params</cite>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_slot_names</span></code>()</p></td>
+<td><p>A list of names for this optimizer’s slots.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">minimize</span></code>(loss, var_list[, grad_loss, name])</p></td>
+<td><p>Minimize <cite>loss</cite> by updating <cite>var_list</cite>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_weights</span></code>(weights)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">variables</span></code>()</p></td>
+<td><p>Returns variables of this Optimizer based on the order created.</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 60%" />
+<col style="width: 40%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><strong>add_weight</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_slot</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>get_updates</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_weights</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <dl class="py method">
 <dt id="adabound.AdaBound.get_updates">
 <code class="sig-name descname">get_updates</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">loss</span></em>, <em class="sig-param"><span class="n">params</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/adabound.html#AdaBound.get_updates"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#adabound.AdaBound.get_updates" title="Permalink to this definition">¶</a></dt>
@@ -201,9 +267,8 @@ algorithm.</p></li>
 containing the configuration of an optimizer.
 The same optimizer can be reinstantiated later
 (without any saved state) from this configuration.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns</dt>
-<dd class="field-odd"><p>Python dictionary.</p>
+<dl class="simple">
+<dt>Returns:</dt><dd><p>Python dictionary.</p>
 </dd>
 </dl>
 </dd></dl>

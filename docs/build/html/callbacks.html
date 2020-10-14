@@ -86,6 +86,7 @@
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
@@ -167,44 +168,115 @@ keys in <cite>logs</cite> (passed in <cite>on_epoch_end</cite>).
 For example: if <cite>filepath</cite> is <cite>weights.{epoch:02d}-{val_loss:.2f}.hdf5</cite>,
 then the model checkpoints will be saved with the epoch number and
 the validation loss in the filename.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>filepath</strong> – string, path to save the model file.</p></li>
-<li><p><strong>monitor</strong> – quantity to monitor.</p></li>
-<li><p><strong>verbose</strong> – verbosity mode, 0 or 1.</p></li>
-<li><p><strong>save_best_only</strong> – if <cite>save_best_only=True</cite>,
-the latest best model according to
-the quantity monitored will not be overwritten.</p></li>
-<li><p><strong>save_weights_only</strong> – if True, then only the model’s weights will be
-saved (<cite>model.save_weights(filepath)</cite>), else the full model
-is saved (<cite>model.save(filepath)</cite>).</p></li>
-<li><p><strong>mode</strong> – one of {auto, min, max}.
-If <cite>save_best_only=True</cite>, the decision
+<dl>
+<dt>Args:</dt><dd><p>filepath: string, path to save the model file.
+monitor: quantity to monitor.
+verbose: verbosity mode, 0 or 1.
+save_best_only: if <cite>save_best_only=True</cite>,</p>
+<blockquote>
+<div><p>the latest best model according to
+the quantity monitored will not be overwritten.</p>
+</div></blockquote>
+<dl class="simple">
+<dt>save_weights_only: if True, then only the model’s weights will be</dt><dd><p>saved (<cite>model.save_weights(filepath)</cite>), else the full model
+is saved (<cite>model.save(filepath)</cite>).</p>
+</dd>
+<dt>mode: one of {auto, min, max}.</dt><dd><p>If <cite>save_best_only=True</cite>, the decision
 to overwrite the current save file is made
 based on either the maximization or the
 minimization of the monitored quantity. For <cite>val_acc</cite>,
 this should be <cite>max</cite>, for <cite>val_loss</cite> this should
 be <cite>min</cite>, etc. In <cite>auto</cite> mode, the direction is
-automatically inferred from the name of the monitored quantity.</p></li>
-<li><p><strong>period</strong> – Interval (number of epochs) between checkpoints.</p></li>
-</ul>
+automatically inferred from the name of the monitored quantity.</p>
 </dd>
 </dl>
+<p>period: Interval (number of epochs) between checkpoints.</p>
+</dd>
+</dl>
+<p class="rubric">Methods</p>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_batch_begin</span></code>(batch[, logs])</p></td>
+<td><p>A backwards compatibility alias for <cite>on_train_batch_begin</cite>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_batch_end</span></code>(batch[, logs])</p></td>
+<td><p>A backwards compatibility alias for <cite>on_train_batch_end</cite>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_epoch_begin</span></code>(epoch[, logs])</p></td>
+<td><p>Called at the start of an epoch.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#callbacks.ModelCheckpoint.on_epoch_end" title="callbacks.ModelCheckpoint.on_epoch_end"><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_epoch_end</span></code></a>(epoch[, logs])</p></td>
+<td><p>Called at the end of an epoch.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_predict_batch_begin</span></code>(batch[, logs])</p></td>
+<td><p>Called at the beginning of a batch in <cite>predict</cite> methods.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_predict_batch_end</span></code>(batch[, logs])</p></td>
+<td><p>Called at the end of a batch in <cite>predict</cite> methods.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_predict_begin</span></code>([logs])</p></td>
+<td><p>Called at the beginning of prediction.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_predict_end</span></code>([logs])</p></td>
+<td><p>Called at the end of prediction.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_test_batch_begin</span></code>(batch[, logs])</p></td>
+<td><p>Called at the beginning of a batch in <cite>evaluate</cite> methods.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_test_batch_end</span></code>(batch[, logs])</p></td>
+<td><p>Called at the end of a batch in <cite>evaluate</cite> methods.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_test_begin</span></code>([logs])</p></td>
+<td><p>Called at the beginning of evaluation or validation.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_test_end</span></code>([logs])</p></td>
+<td><p>Called at the end of evaluation or validation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_train_batch_begin</span></code>(batch[, logs])</p></td>
+<td><p>Called at the beginning of a training batch in <cite>fit</cite> methods.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_train_batch_end</span></code>(batch[, logs])</p></td>
+<td><p>Called at the end of a training batch in <cite>fit</cite> methods.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_train_begin</span></code>([logs])</p></td>
+<td><p>Called at the beginning of training.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_train_end</span></code>([logs])</p></td>
+<td><p>Called at the end of training.</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 58%" />
+<col style="width: 42%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><strong>set_model</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>set_params</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <dl class="py method">
 <dt id="callbacks.ModelCheckpoint.on_epoch_end">
 <code class="sig-name descname">on_epoch_end</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">epoch</span></em>, <em class="sig-param"><span class="n">logs</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/callbacks.html#ModelCheckpoint.on_epoch_end"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#callbacks.ModelCheckpoint.on_epoch_end" title="Permalink to this definition">¶</a></dt>
 <dd><p>Called at the end of an epoch.</p>
 <p>Subclasses should override for any actions to run. This function should only
 be called during TRAIN mode.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>epoch</strong> – integer, index of epoch.</p></li>
-<li><p><strong>logs</strong> – dict, metric results for this training epoch, and for the
-validation epoch if validation is performed. Validation result keys
-are prefixed with <cite>val_</cite>.</p></li>
-</ul>
+<dl>
+<dt>Arguments:</dt><dd><p>epoch: integer, index of epoch.
+logs: dict, metric results for this training epoch, and for the</p>
+<blockquote>
+<div><p>validation epoch if validation is performed. Validation result keys
+are prefixed with <cite>val_</cite>.</p>
+</div></blockquote>
 </dd>
 </dl>
 </dd></dl>

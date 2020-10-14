@@ -92,9 +92,11 @@
 <li class="toctree-l2"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
@@ -170,31 +172,28 @@
 <dt id="networks.resunet.ResUNet_2D">
 <code class="sig-prename descclassname">networks.resunet.</code><code class="sig-name descname">ResUNet_2D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">drop_values</span><span class="o">=</span><span class="default_value">[0.1, 0.1, 0.1, 0.1, 0.1]</span></em>, <em class="sig-param"><span class="n">batch_norm</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">feature_maps</span><span class="o">=</span><span class="default_value">[16, 32, 64, 128, 256]</span></em>, <em class="sig-param"><span class="n">depth</span><span class="o">=</span><span class="default_value">4</span></em>, <em class="sig-param"><span class="n">loss_type</span><span class="o">=</span><span class="default_value">'bce'</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'sgd'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.001</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/resunet.html#ResUNet_2D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.resunet.ResUNet_2D" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create 2D Residual_U-Net.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>image_shape</strong> (<em>array of 3 int</em>) – dimensions of the input image.</p></li>
-<li><p><strong>activation</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available activation type.</p></li>
-<li><p><strong>k_init</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available kernel initializer type.</p></li>
-<li><p><strong>drop_values</strong> (<em>array of floats</em><em>, </em><em>optional</em>) – dropout value to be fixed.</p></li>
-<li><p><strong>batch_norm</strong> (<em>bool</em><em>, </em><em>optional</em>) – use batch normalization.</p></li>
-<li><p><strong>feature_maps</strong> (<em>array of ints</em><em>, </em><em>optional</em>) – feature maps to use on each
-level. Must have the same length as the <code class="docutils literal notranslate"><span class="pre">depth+1</span></code>.</p></li>
-<li><p><strong>depth</strong> (<em>int</em><em>, </em><em>optional</em>) – depth of the network.</p></li>
-<li><p><strong>loss_type</strong> (<em>str</em><em>, </em><em>optional</em>) – loss type to use, three type available:
-<code class="docutils literal notranslate"><span class="pre">bce</span></code> (Binary Cross Entropy), <code class="docutils literal notranslate"><span class="pre">w_bce</span></code> (Weighted BCE, based on
+<dl>
+<dt>Args:</dt><dd><p>image_shape (array of 3 int): dimensions of the input image.</p>
+<p>activation (str, optional): Keras available activation type.</p>
+<p>k_init (str, optional): Keras available kernel initializer type.</p>
+<p>drop_values (array of floats, optional): dropout value to be fixed.</p>
+<p>batch_norm (bool, optional): use batch normalization.</p>
+<dl class="simple">
+<dt>feature_maps (array of ints, optional): feature maps to use on each</dt><dd><p>level. Must have the same length as the <code class="docutils literal notranslate"><span class="pre">depth+1</span></code>.</p>
+</dd>
+</dl>
+<p>depth (int, optional): depth of the network.</p>
+<dl class="simple">
+<dt>loss_type (str, optional): loss type to use, three type available:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">bce</span></code> (Binary Cross Entropy), <code class="docutils literal notranslate"><span class="pre">w_bce</span></code> (Weighted BCE, based on
 weigth maps) and <code class="docutils literal notranslate"><span class="pre">w_bce_dice</span></code> (Weighted loss: <code class="docutils literal notranslate"><span class="pre">weight1*BCE</span> <span class="pre">+</span>
-<span class="pre">weight2*Dice</span></code>).</p></li>
-<li><p><strong>optimizer</strong> (<em>str</em><em>, </em><em>optional</em>) – optimizer used to minimize the loss
-function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p></li>
-<li><p><strong>lr</strong> (<em>float</em><em>, </em><em>optional</em>) – learning rate value.</p></li>
-</ul>
+<span class="pre">weight2*Dice</span></code>).</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>model containing the U-Net.</p>
+<dt>optimizer (str, optional): optimizer used to minimize the loss</dt><dd><p>function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p>
 </dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>model (Keras model)</p>
+</dl>
+<p>lr (float, optional): learning rate value.</p>
+</dd>
+<dt>Returns:</dt><dd><p>model (Keras model): model containing the U-Net.</p>
 </dd>
 </dl>
 <p>Calling this function with its default parameters returns the following
@@ -209,28 +208,25 @@ network:</p>
 <dt id="networks.resunet.level_block">
 <code class="sig-prename descclassname">networks.resunet.</code><code class="sig-name descname">level_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">depth</span></em>, <em class="sig-param"><span class="n">f_maps</span></em>, <em class="sig-param"><span class="n">f_size</span></em>, <em class="sig-param"><span class="n">activation</span></em>, <em class="sig-param"><span class="n">k_init</span></em>, <em class="sig-param"><span class="n">drop_values</span></em>, <em class="sig-param"><span class="n">batch_norm</span></em>, <em class="sig-param"><span class="n">first_block</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/resunet.html#level_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.resunet.level_block" title="Permalink to this definition">¶</a></dt>
 <dd><p>Produces a level of the network. It calls itself recursively.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>Keras layer</em>) – input layer of the block.</p></li>
-<li><p><strong>depth</strong> (<em>int</em>) – depth of the network. This value determines how many
-times the function will be called recursively.</p></li>
-<li><p><strong>f_maps</strong> (<em>array of ints</em>) – feature maps to use.</p></li>
-<li><p><strong>f_size</strong> (<em>int</em>) – convolution window.</p></li>
-<li><p><strong>activation</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available activation type.</p></li>
-<li><p><strong>k_init</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available kernel initializer type.</p></li>
-<li><p><strong>drop_values</strong> (<em>array of floats</em><em>, </em><em>optional</em>) – dropout value to be fixed.</p></li>
-<li><p><strong>batch_norm</strong> (<em>bool</em><em>, </em><em>optional</em>) – flag to use batch normalization.</p></li>
-<li><p><strong>first_block</strong> (<em>float</em><em>, </em><em>optional</em>) – to advice the function that it is the
-first residual block of the network, which avoids Full
-Pre-Activation layers.</p></li>
-</ul>
+<dl>
+<dt>Args:</dt><dd><p>x (Keras layer): input layer of the block.</p>
+<dl class="simple">
+<dt>depth (int): depth of the network. This value determines how many</dt><dd><p>times the function will be called recursively.</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>last layer of the levels.</p>
+</dl>
+<p>f_maps (array of ints): feature maps to use.</p>
+<p>f_size (int): convolution window.</p>
+<p>activation (str, optional): Keras available activation type.</p>
+<p>k_init (str, optional): Keras available kernel initializer type.</p>
+<p>drop_values (array of floats, optional): dropout value to be fixed.</p>
+<p>batch_norm (bool, optional): flag to use batch normalization.</p>
+<dl class="simple">
+<dt>first_block (float, optional): to advice the function that it is the</dt><dd><p>first residual block of the network, which avoids Full
+Pre-Activation layers.</p>
 </dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>x (Keras layer)</p>
+</dl>
+</dd>
+<dt>Returns:</dt><dd><p>x (Keras layer): last layer of the levels.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -239,26 +235,21 @@ Pre-Activation layers.</p></li>
 <dt id="networks.resunet.residual_block">
 <code class="sig-prename descclassname">networks.resunet.</code><code class="sig-name descname">residual_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">f_maps</span></em>, <em class="sig-param"><span class="n">f_size</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">drop_value</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">bn</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">first_block</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/resunet.html#residual_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.resunet.residual_block" title="Permalink to this definition">¶</a></dt>
 <dd><p>Residual block.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>Keras layer</em>) – input layer of the block.</p></li>
-<li><p><strong>f_maps</strong> (<em>array of ints</em>) – feature maps to use.</p></li>
-<li><p><strong>f_size</strong> (<em>int</em>) – convolution window.</p></li>
-<li><p><strong>activation</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available activation type.</p></li>
-<li><p><strong>k_init</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available kernel initializer type.</p></li>
-<li><p><strong>drop_value</strong> (<em>float</em><em>, </em><em>optional</em>) – dropout value to be fixed.</p></li>
-<li><p><strong>bn</strong> (<em>bool</em><em>, </em><em>optional</em>) – use batch normalization.</p></li>
-<li><p><strong>first_block</strong> (<em>float</em><em>, </em><em>optional</em>) – to advice the function that it is the
-first residual block of the network, which avoids Full
-Pre-Activation layers.</p></li>
-</ul>
+<dl>
+<dt>Args:</dt><dd><p>x (Keras layer): input layer of the block.</p>
+<p>f_maps (array of ints): feature maps to use.</p>
+<p>f_size (int): convolution window.</p>
+<p>activation (str, optional): Keras available activation type.</p>
+<p>k_init (str, optional): Keras available kernel initializer type.</p>
+<p>drop_value (float, optional): dropout value to be fixed.</p>
+<p>bn (bool, optional): use batch normalization.</p>
+<dl class="simple">
+<dt>first_block (float, optional): to advice the function that it is the</dt><dd><p>first residual block of the network, which avoids Full
+Pre-Activation layers.</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>last layer of the block.</p>
+</dl>
 </dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>x (Keras layer)</p>
+<dt>Returns:</dt><dd><p>x (Keras layer): last layer of the block.</p>
 </dd>
 </dl>
 </dd></dl>

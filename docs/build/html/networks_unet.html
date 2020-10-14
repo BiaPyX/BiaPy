@@ -92,9 +92,11 @@
 <li class="toctree-l2"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
@@ -170,38 +172,39 @@
 <dt id="networks.unet.U_Net_2D">
 <code class="sig-prename descclassname">networks.unet.</code><code class="sig-name descname">U_Net_2D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">feature_maps</span><span class="o">=</span><span class="default_value">[32, 64, 128, 256, 512]</span></em>, <em class="sig-param"><span class="n">depth</span><span class="o">=</span><span class="default_value">4</span></em>, <em class="sig-param"><span class="n">drop_values</span><span class="o">=</span><span class="default_value">[0.1, 0.1, 0.2, 0.2, 0.3]</span></em>, <em class="sig-param"><span class="n">spatial_dropout</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">batch_norm</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">loss_type</span><span class="o">=</span><span class="default_value">'bce'</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'sgd'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.001</span></em>, <em class="sig-param"><span class="n">fine_tunning</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/unet.html#U_Net_2D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.unet.U_Net_2D" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create 2D U-Net.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>image_shape</strong> (<em>2D tuple</em>) – dimensions of the input image.</p></li>
-<li><p><strong>activation</strong> (<em>str</em><em>, </em><em>optional</em>) – Keras available activation type.</p></li>
-<li><p><strong>feature_maps</strong> (<em>array of ints</em><em>, </em><em>optional</em>) – feature maps to use on each
-level. Must have the same length as the <code class="docutils literal notranslate"><span class="pre">depth+1</span></code>.</p></li>
-<li><p><strong>depth</strong> (<em>int</em><em>, </em><em>optional</em>) – depth of the network.</p></li>
-<li><p><strong>drop_values</strong> (<em>float</em><em>, </em><em>optional</em>) – dropout value to be fixed. If no
-value is provided the default behaviour will be to select a
-piramidal value starting from <code class="docutils literal notranslate"><span class="pre">0.1</span></code> and reaching <code class="docutils literal notranslate"><span class="pre">0.3</span></code> value.</p></li>
-<li><p><strong>spatial_dropout</strong> (<em>bool</em><em>, </em><em>optional</em>) – use spatial dropout instead of the
-<cite>normal</cite> dropout.</p></li>
-<li><p><strong>batch_norm</strong> (<em>bool</em><em>, </em><em>optional</em>) – flag to make batch normalization.</p></li>
-<li><p><strong>k_init</strong> (<em>string</em><em>, </em><em>optional</em>) – kernel initialization for convolutional
-layers.</p></li>
-<li><p><strong>loss_type</strong> (<em>str</em><em>, </em><em>optional</em>) – loss type to use, three type available:
-<code class="docutils literal notranslate"><span class="pre">bce</span></code> (Binary Cross Entropy) , <code class="docutils literal notranslate"><span class="pre">w_bce</span></code> (Weighted BCE, based
+<dl>
+<dt>Args:</dt><dd><p>image_shape (2D tuple): dimensions of the input image.</p>
+<p>activation (str, optional): Keras available activation type.</p>
+<dl class="simple">
+<dt>feature_maps (array of ints, optional): feature maps to use on each</dt><dd><p>level. Must have the same length as the <code class="docutils literal notranslate"><span class="pre">depth+1</span></code>.</p>
+</dd>
+</dl>
+<p>depth (int, optional): depth of the network.</p>
+<dl class="simple">
+<dt>drop_values (float, optional): dropout value to be fixed. If no</dt><dd><p>value is provided the default behaviour will be to select a
+piramidal value starting from <code class="docutils literal notranslate"><span class="pre">0.1</span></code> and reaching <code class="docutils literal notranslate"><span class="pre">0.3</span></code> value.</p>
+</dd>
+<dt>spatial_dropout (bool, optional): use spatial dropout instead of the</dt><dd><p><cite>normal</cite> dropout.</p>
+</dd>
+</dl>
+<p>batch_norm (bool, optional): flag to make batch normalization.</p>
+<dl class="simple">
+<dt>k_init (string, optional): kernel initialization for convolutional</dt><dd><p>layers.</p>
+</dd>
+<dt>loss_type (str, optional): loss type to use, three type available:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">bce</span></code> (Binary Cross Entropy) , <code class="docutils literal notranslate"><span class="pre">w_bce</span></code> (Weighted BCE, based
 on weigth maps) and <code class="docutils literal notranslate"><span class="pre">w_bce_dice</span></code> (Weighted loss: <code class="docutils literal notranslate"><span class="pre">weight1*BCE</span>
-<span class="pre">+</span> <span class="pre">weight2*Dice</span></code>).</p></li>
-<li><p><strong>optimizer</strong> (<em>str</em><em>, </em><em>optional</em>) – optimizer used to minimize the loss
-function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p></li>
-<li><p><strong>lr</strong> (<em>float</em><em>, </em><em>optional</em>) – learning rate value.</p></li>
-<li><p><strong>fine_tunning</strong> (<em>bool</em><em>, </em><em>optional</em>) – flag to freeze the encoder part for
-fine tuning.</p></li>
-</ul>
+<span class="pre">+</span> <span class="pre">weight2*Dice</span></code>).</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>model containing the U-Net.</p>
+<dt>optimizer (str, optional): optimizer used to minimize the loss</dt><dd><p>function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p>
 </dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>Keras model</p>
+</dl>
+<p>lr (float, optional): learning rate value.</p>
+<dl class="simple">
+<dt>fine_tunning (bool, optional): flag to freeze the encoder part for</dt><dd><p>fine tuning.</p>
+</dd>
+</dl>
+</dd>
+<dt>Returns:</dt><dd><p>Keras model: model containing the U-Net.</p>
 </dd>
 </dl>
 <p>Calling this function with its default parameters returns the following

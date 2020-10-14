@@ -36,7 +36,7 @@
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Post processing" href="post_processing.html" />
+    <link rel="next" title="MultiResUNet" href="networks_multiresunet.html" />
     <link rel="prev" title="FCN" href="networks_fcn.html" /> 
 </head>
 
@@ -92,9 +92,11 @@
 <li class="toctree-l2"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
@@ -178,34 +180,29 @@ transition down are applied, followed by an upsampling path where
 transition up and dense blocks are applied.  Skip connections are used
 between the downsampling path and the upsampling path Each layer is a
 composite function of BN - ReLU - Conv and the last layer is a softmax layer.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>image_shape</strong> (<em>array of 3 int</em>) – dimensions of the input image.</p></li>
-<li><p><strong>n_filters_first_conv</strong> (<em>int</em><em>, </em><em>optional</em>) – number of filters for the
-first convolution applied.</p></li>
-<li><p><strong>n_pool</strong> (<em>int</em><em>, </em><em>optional</em>) – number of pooling layers = number of
-transition down = number of transition up.</p></li>
-<li><p><strong>growth_rate</strong> (<em>int</em><em>, </em><em>optional</em>) – number of new feature maps created by
-each layer in a dense block.</p></li>
-<li><p><strong>n_layers_per_block</strong> (<em>array of ints</em><em>, </em><em>optional</em>) – number of layers per
-block. Can be an int or a list of size <code class="docutils literal notranslate"><span class="pre">(2*n_pool)+1</span></code>.</p></li>
-<li><p><strong>dropout_p</strong> (<em>float</em><em>, </em><em>optional</em>) – dropout rate applied after each
-convolution (<code class="docutils literal notranslate"><span class="pre">0.0</span></code> for not using).</p></li>
-<li><p><strong>loss_type</strong> (<em>str</em><em>, </em><em>optional</em>) – loss type to use, three type available:
-<code class="docutils literal notranslate"><span class="pre">bce</span></code> (Binary Cross Entropy), <code class="docutils literal notranslate"><span class="pre">w_bce</span></code> (Weighted BCE, based on
+<dl>
+<dt>Args:</dt><dd><p>image_shape (array of 3 int): dimensions of the input image.</p>
+<dl class="simple">
+<dt>n_filters_first_conv (int, optional): number of filters for the</dt><dd><p>first convolution applied.</p>
+</dd>
+<dt>n_pool (int, optional): number of pooling layers = number of</dt><dd><p>transition down = number of transition up.</p>
+</dd>
+<dt>growth_rate (int, optional): number of new feature maps created by</dt><dd><p>each layer in a dense block.</p>
+</dd>
+<dt>n_layers_per_block (array of ints, optional): number of layers per</dt><dd><p>block. Can be an int or a list of size <code class="docutils literal notranslate"><span class="pre">(2*n_pool)+1</span></code>.</p>
+</dd>
+<dt>dropout_p (float, optional): dropout rate applied after each</dt><dd><p>convolution (<code class="docutils literal notranslate"><span class="pre">0.0</span></code> for not using).</p>
+</dd>
+<dt>loss_type (str, optional): loss type to use, three type available:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">bce</span></code> (Binary Cross Entropy), <code class="docutils literal notranslate"><span class="pre">w_bce</span></code> (Weighted BCE, based on
 weigth maps) and <code class="docutils literal notranslate"><span class="pre">w_bce_dice</span></code> (Weighted loss: <code class="docutils literal notranslate"><span class="pre">weight1*BCE</span> <span class="pre">+</span>
-<span class="pre">weight2*Dice</span></code>).</p></li>
-<li><p><strong>optimizer</strong> (<em>str</em><em>, </em><em>optional</em>) – optimizer used to minimize the loss
-function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p></li>
-<li><p><strong>lr</strong> (<em>float</em><em>, </em><em>optional</em>) – learning rate value.</p></li>
-</ul>
+<span class="pre">weight2*Dice</span></code>).</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>model containing the FC_DenseNet103.</p>
+<dt>optimizer (str, optional): optimizer used to minimize the loss</dt><dd><p>function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p>
 </dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>model (Keras model)</p>
+</dl>
+<p>lr (float, optional): learning rate value.</p>
+</dd>
+<dt>Returns:</dt><dd><p>model (Keras model): model containing the FC_DenseNet103.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -241,7 +238,7 @@ with the skip_connection.</p>
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="post_processing.html" class="btn btn-neutral float-right" title="Post processing" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="networks_multiresunet.html" class="btn btn-neutral float-right" title="MultiResUNet" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="networks_fcn.html" class="btn btn-neutral float-left" title="FCN" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

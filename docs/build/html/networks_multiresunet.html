@@ -96,6 +96,7 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
@@ -172,24 +173,17 @@
 <dt id="networks.MultiResUNet.conv2d_bn">
 <code class="sig-prename descclassname">networks.MultiResUNet.</code><code class="sig-name descname">conv2d_bn</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">filters</span></em>, <em class="sig-param"><span class="n">num_row</span></em>, <em class="sig-param"><span class="n">num_col</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">'same'</span></em>, <em class="sig-param"><span class="n">strides</span><span class="o">=</span><span class="default_value">1, 1</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'relu'</span></em>, <em class="sig-param"><span class="n">name</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/MultiResUNet.html#conv2d_bn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.MultiResUNet.conv2d_bn" title="Permalink to this definition">¶</a></dt>
 <dd><p>2D Convolutional layers.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>keras layer</em>) – input layer.</p></li>
-<li><p><strong>filters</strong> (<em>int</em>) – number of filters.</p></li>
-<li><p><strong>num_row</strong> (<em>int</em>) – number of rows in filters.</p></li>
-<li><p><strong>num_col</strong> (<em>int</em>) – number of columns in filters.</p></li>
-<li><p><strong>padding</strong> (<em>str</em><em>, </em><em>optional</em>) – mode of padding.</p></li>
-<li><p><strong>strides</strong> (<em>tuple</em><em>, </em><em>optional</em>) – stride of convolution operation.</p></li>
-<li><p><strong>activation</strong> (<em>str</em><em>, </em><em>optional</em>) – activation function.</p></li>
-<li><p><strong>name</strong> (<em>str</em><em>, </em><em>optional</em>) – name of the layer.</p></li>
-</ul>
+<dl>
+<dt>Args:</dt><dd><p>x (keras layer): input layer.</p>
+<p>filters (int): number of filters.</p>
+<p>num_row (int): number of rows in filters.</p>
+<p>num_col (int): number of columns in filters.</p>
+<p>padding (str, optional): mode of padding.</p>
+<p>strides (tuple, optional): stride of convolution operation.</p>
+<p>activation (str, optional): activation function.</p>
+<p>name (str, optional): name of the layer.</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>output layer.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>Keras layer</p>
+<dt>Returns:</dt><dd><p>Keras layer: output layer.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -198,23 +192,16 @@
 <dt id="networks.MultiResUNet.trans_conv2d_bn">
 <code class="sig-prename descclassname">networks.MultiResUNet.</code><code class="sig-name descname">trans_conv2d_bn</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">filters</span></em>, <em class="sig-param"><span class="n">num_row</span></em>, <em class="sig-param"><span class="n">num_col</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">'same'</span></em>, <em class="sig-param"><span class="n">strides</span><span class="o">=</span><span class="default_value">2, 2</span></em>, <em class="sig-param"><span class="n">name</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/MultiResUNet.html#trans_conv2d_bn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.MultiResUNet.trans_conv2d_bn" title="Permalink to this definition">¶</a></dt>
 <dd><p>2D Transposed Convolutional layers.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>keras layer</em>) – input layer.</p></li>
-<li><p><strong>filters</strong> (<em>int</em>) – number of filters.</p></li>
-<li><p><strong>num_row</strong> (<em>int</em>) – number of rows in filters.</p></li>
-<li><p><strong>num_col</strong> (<em>int</em>) – number of columns in filters.</p></li>
-<li><p><strong>padding</strong> (<em>str</em><em>, </em><em>optional</em>) – mode of padding.</p></li>
-<li><p><strong>strides</strong> (<em>tuple</em><em>, </em><em>optional</em>) – stride of convolution operation.</p></li>
-<li><p><strong>name</strong> (<em>str</em><em>, </em><em>optional</em>) – name of the layer.</p></li>
-</ul>
+<dl>
+<dt>Args:</dt><dd><p>x (keras layer): input layer.</p>
+<p>filters (int): number of filters.</p>
+<p>num_row (int): number of rows in filters.</p>
+<p>num_col (int): number of columns in filters.</p>
+<p>padding (str, optional): mode of padding.</p>
+<p>strides (tuple, optional): stride of convolution operation.</p>
+<p>name (str, optional): name of the layer.</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>output layer.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>Keras layer</p>
+<dt>Returns:</dt><dd><p>Keras layer: output layer.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -223,18 +210,11 @@
 <dt id="networks.MultiResUNet.MultiResBlock">
 <code class="sig-prename descclassname">networks.MultiResUNet.</code><code class="sig-name descname">MultiResBlock</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">U</span></em>, <em class="sig-param"><span class="n">inp</span></em>, <em class="sig-param"><span class="n">alpha</span><span class="o">=</span><span class="default_value">1.67</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/MultiResUNet.html#MultiResBlock"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.MultiResUNet.MultiResBlock" title="Permalink to this definition">¶</a></dt>
 <dd><p>MultiRes Block.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>U</strong> (<em>int</em>) – Number of filters in a corrsponding UNet stage.</p></li>
-<li><p><strong>inp</strong> (<em>keras layer</em>) – input layer.</p></li>
-</ul>
+<dl>
+<dt>Args:</dt><dd><p>U (int): Number of filters in a corrsponding UNet stage.</p>
+<p>inp (keras layer): input layer.</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>output layer.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>Keras layer</p>
+<dt>Returns:</dt><dd><p>Keras layer: output layer.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -243,19 +223,12 @@
 <dt id="networks.MultiResUNet.ResPath">
 <code class="sig-prename descclassname">networks.MultiResUNet.</code><code class="sig-name descname">ResPath</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">filters</span></em>, <em class="sig-param"><span class="n">length</span></em>, <em class="sig-param"><span class="n">inp</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/MultiResUNet.html#ResPath"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.MultiResUNet.ResPath" title="Permalink to this definition">¶</a></dt>
 <dd><p>ResPath.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>filters</strong> (<em>int</em>) – description.</p></li>
-<li><p><strong>length</strong> (<em>int</em>) – length of ResPath.</p></li>
-<li><p><strong>inp</strong> (<em>keras layer</em>) – input layer.</p></li>
-</ul>
+<dl>
+<dt>Args:</dt><dd><p>filters (int): description.</p>
+<p>length (int): length of ResPath.</p>
+<p>inp (keras layer): input layer.</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>output layer.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>Keras layer</p>
+<dt>Returns:</dt><dd><p>Keras layer: output layer.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -264,19 +237,12 @@
 <dt id="networks.MultiResUNet.MultiResUnet">
 <code class="sig-prename descclassname">networks.MultiResUNet.</code><code class="sig-name descname">MultiResUnet</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">height</span></em>, <em class="sig-param"><span class="n">width</span></em>, <em class="sig-param"><span class="n">n_channels</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/MultiResUNet.html#MultiResUnet"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.MultiResUNet.MultiResUnet" title="Permalink to this definition">¶</a></dt>
 <dd><p>MultiResUNet.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>height</strong> (<em>int</em>) – height of image.</p></li>
-<li><p><strong>width</strong> (<em>int</em>) – width of image.</p></li>
-<li><p><strong>n_channels</strong> (<em>int</em>) – number of channels in image.</p></li>
-</ul>
+<dl>
+<dt>Args:</dt><dd><p>height (int): height of image.</p>
+<p>width (int): width of image.</p>
+<p>n_channels (int): number of channels in image.</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>MultiResUNet model.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>Keras model</p>
+<dt>Returns:</dt><dd><p>Keras model: MultiResUNet model.</p>
 </dd>
 </dl>
 </dd></dl>
