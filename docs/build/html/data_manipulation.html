@@ -159,7 +159,7 @@
 <span id="data-manipulation"></span><h1>Data manipulation<a class="headerlink" href="#module-data_manipulation" title="Permalink to this headline">¶</a></h1>
 <dl class="py function">
 <dt id="data_manipulation.load_and_prepare_2D_data">
-<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">load_and_prepare_2D_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">train_path</span></em>, <em class="sig-param"><span class="n">train_mask_path</span></em>, <em class="sig-param"><span class="n">test_path</span></em>, <em class="sig-param"><span class="n">test_mask_path</span></em>, <em class="sig-param"><span class="n">image_train_shape</span></em>, <em class="sig-param"><span class="n">image_test_shape</span></em>, <em class="sig-param"><span class="n">create_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">val_split</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">shuffle_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">seedValue</span><span class="o">=</span><span class="default_value">42</span></em>, <em class="sig-param"><span class="n">gray</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">e_d_data</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_mask</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_data_dim</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_dis</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">num_crops_per_dataset</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">make_crops</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">crop_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">check_crop</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">check_crop_path</span><span class="o">=</span><span class="default_value">'check_crop'</span></em>, <em class="sig-param"><span class="n">d_percentage</span><span class="o">=</span><span class="default_value">0</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#load_and_prepare_2D_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.load_and_prepare_2D_data" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">load_and_prepare_2D_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">train_path</span></em>, <em class="sig-param"><span class="n">train_mask_path</span></em>, <em class="sig-param"><span class="n">test_path</span></em>, <em class="sig-param"><span class="n">test_mask_path</span></em>, <em class="sig-param"><span class="n">image_train_shape</span></em>, <em class="sig-param"><span class="n">image_test_shape</span></em>, <em class="sig-param"><span class="n">create_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">val_split</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">shuffle_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">seedValue</span><span class="o">=</span><span class="default_value">42</span></em>, <em class="sig-param"><span class="n">e_d_data</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_mask</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_data_dim</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_dis</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">num_crops_per_dataset</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">make_crops</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">crop_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">check_crop</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">check_crop_path</span><span class="o">=</span><span class="default_value">'check_crop'</span></em>, <em class="sig-param"><span class="n">d_percentage</span><span class="o">=</span><span class="default_value">0</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#load_and_prepare_2D_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.load_and_prepare_2D_data" title="Permalink to this definition">¶</a></dt>
 <dd><p>Load train, validation and test images from the given paths to create 2D
 data.</p>
 <dl class="field-list simple">
@@ -176,8 +176,6 @@ the train data).</p></li>
 <li><p><strong>val_split</strong> (<em>float</em><em>, </em><em>optional</em>) – % of the train data used as validation
 (value between 0 and 1).</p></li>
 <li><p><strong>seedValue</strong> (<em>int</em><em>, </em><em>optional</em>) – seed value.</p></li>
-<li><p><strong>gray</strong> (<em>bool</em><em>, </em><em>optional</em>) – convert the image into grayscale ignoring the
-channels.</p></li>
 <li><p><strong>shuffle_val</strong> (<em>bool</em><em>, </em><em>optional</em>) – take random training examples to create
 validation data.</p></li>
 <li><p><strong>e_d_data</strong> (<em>list of str</em><em>, </em><em>optional</em>) – list of paths where the extra data
@@ -214,9 +212,9 @@ E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,
 <li><p><strong>Y_train</strong> (<em>4D Numpy array</em>): train images’ mask.
 E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>X_val</strong> (<em>4D Numpy array, optional</em>): validation images
-(create_val==True). E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+(<code class="docutils literal notranslate"><span class="pre">create_val==True</span></code>). E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>Y_val</strong> (<em>4D Numpy array, optional</em>): validation images’ mask
-(create_val==True). E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+(<code class="docutils literal notranslate"><span class="pre">create_val==True</span></code>). E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>X_test</strong> (<em>4D Numpy array</em>): test images.
 E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>Y_test</strong> (<em>4D Numpy array</em>): test images’ mask.
@@ -249,7 +247,7 @@ to make a normalization.</p></li>
     <span class="n">img_test_shape</span><span class="p">,</span> <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">make_crops</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="n">crop_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">check_crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">check_crop_path</span><span class="o">=</span><span class="s2">&quot;check_folder&quot;</span><span class="p">)</span>
 
-<span class="c1"># The function will print the shapes of the generated arrays. E.g. :</span>
+<span class="c1"># The function will print the shapes of the generated arrays. In this example:</span>
 <span class="c1">#    *** Loaded train data shape is: (1776, 256, 256, 1)</span>
 <span class="c1">#    *** Loaded validation data shape is: (204, 256, 256, 1)</span>
 <span class="c1">#    *** Loaded test data shape is: (1980, 256, 256, 1)</span>
@@ -291,62 +289,59 @@ will be sticked in the (0, 0).</p>
 <li><p><strong>image_train_shape</strong> (<em>array of 3 int</em>) – dimensions of the images.</p></li>
 <li><p><strong>image_test_shape</strong> (<em>array of 3 int</em>) – dimensions of the images.</p></li>
 <li><p><strong>create_val</strong> (<em>bool</em><em>, </em><em>optional</em>) – if true validation data is created.</p></li>
-<li><p><strong>shuffle_val</strong> (<em>bool</em><em>, </em><em>optional</em>) – take random training examples to</p></li>
-<li><p><strong>validation data.</strong> (<em>create</em>) – </p></li>
-<li><p><strong>val_split</strong> (<em>float</em><em>, </em><em>optional</em>) – % of the train data used as</p></li>
-<li><p><strong>validation</strong> (<em>value between 0 and 1</em>) – </p></li>
+<li><p><strong>shuffle_val</strong> (<em>bool</em><em>, </em><em>optional</em>) – take random training examples to
+create validation data.</p></li>
+<li><p><strong>val_split</strong> (<em>float</em><em>, </em><em>optional</em>) – % of the train data used as
+validation (value between <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">1</span></code>).</p></li>
 <li><p><strong>seedValue</strong> (<em>int</em><em>, </em><em>optional</em>) – seed value.</p></li>
-<li><p><strong>train_subvol_shape</strong> (<em>Tuple</em><em>, </em><em>optional</em>) – shape of the train subvolumes</p></li>
-<li><p><strong>create.</strong> (<em>to</em>) – </p></li>
-<li><p><strong>test_subvol_shape</strong> (<em>Tuple</em><em>, </em><em>optional</em>) – shape of the test subvolumes</p></li>
-<li><p><strong>create.</strong> – </p></li>
-<li><p><strong>random_subvolumes_in_DA</strong> (<em>bool</em><em>, </em><em>optional</em>) – flag to advice the method</p></li>
-<li><p><strong>not preparation of the data must be done</strong><strong>, </strong><strong>as random subvolumes</strong> (<em>that</em>) – </p></li>
-<li><p><strong>be created on DA</strong><strong>, </strong><strong>and the whole volume will be used for that.</strong> (<em>will</em>) – </p></li>
+<li><p><strong>train_subvol_shape</strong> (<em>tuple</em><em>, </em><em>optional</em>) – shape of the train subvolumes
+to create.</p></li>
+<li><p><strong>test_subvol_shape</strong> (<em>tuple</em><em>, </em><em>optional</em>) – shape of the test subvolumes
+to create.</p></li>
+<li><p><strong>random_subvolumes_in_DA</strong> (<em>bool</em><em>, </em><em>optional</em>) – flag to advice the method
+that not preparation of the data must be done, as random
+subvolumes will be created on DA, and the whole volume will be
+used for that.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p><p>train images.
-E.g. (image_number, x, y, channels).</p>
-<p>Y_train (4D Numpy array): train images’ mask.
-E.g. (image_number, x, y, channels).</p>
-<p>X_val (4D Numpy array, optional): validation images (create_val==True).
-E.g. (image_number, x, y, channels).</p>
-<p>Y_val (4D Numpy array, optional): validation images’ mask
-(create_val==True). E.g. (image_number, x, y, channels).</p>
-<p>X_test (4D Numpy array): test images.
-E.g. (image_number, x, y, channels).</p>
-<p>Y_test (4D Numpy array): test images’ mask.
-E.g. (image_number, x, y, channels).</p>
-<p>orig_test_shape (tuple of ints): test data original shape.</p>
-<p>norm_value (int): normalization value calculated.</p>
+<dd class="field-even"><p><p>Multiple elements</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><strong>X_train</strong> (<em>4D Numpy array</em>): train images.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_train</strong> (<em>4D Numpy array</em>): train images’ mask.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>X_val</strong> (<em>4D Numpy array, optional</em>): validation images
+(<code class="docutils literal notranslate"><span class="pre">create_val==True</span></code>). E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_val</strong> (<em>4D Numpy array, optional</em>): validation images’ mask
+(<code class="docutils literal notranslate"><span class="pre">create_val==True</span></code>). E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>X_test</strong> (<em>4D Numpy array</em>): test images.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_test</strong> (<em>4D Numpy array</em>): test images’ mask.
+E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>orig_test_shape</strong> (<em>tuple of ints</em>): test data original shape.</p></li>
+<li><p><strong>norm_value</strong> (<em>int</em>): normalization value calculated.</p></li>
+</ul>
+</div></blockquote>
 </p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>X_train (4D Numpy array)</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py function">
 <dt id="data_manipulation.load_data_from_dir">
-<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">load_data_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span></em>, <em class="sig-param"><span class="n">gray</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#load_data_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.load_data_from_dir" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">data_manipulation.</code><code class="sig-name descname">load_data_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_manipulation.html#load_data_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_manipulation.load_data_from_dir" title="Permalink to this definition">¶</a></dt>
 <dd><p>Load data from a directory.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data_dir</strong> (<em>str</em>) – path to read the data from.</p></li>
 <li><p><strong>shape</strong> (<em>3D int tuple</em>) – shape of the data.</p></li>
-<li><p><strong>gray</strong> (<em>bool</em><em>, </em><em>optional</em>) – convert the image into grayscale ignoring the
-channel of <code class="docutils literal notranslate"><span class="pre">shape</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p><dl class="simple">
-<dt>data loaded.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-</dl>
-</p>
+<dd class="field-even"><p>data loaded. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>data (4D Numpy array)</p>

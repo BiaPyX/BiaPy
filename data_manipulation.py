@@ -19,6 +19,7 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
 
     """Load train, validation and test images from the given paths to create 2D
        data. 
+
                                                                         
        Args:                                                            
            train_path (str): path to the training data.                
@@ -429,14 +430,13 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
 def load_data_from_dir(data_dir, shape):
     """Load data from a directory.
 
-       Args:
-            data_dir (str): path to read the data from.
+    Args:
+        data_dir (str): path to read the data from.
 
-            shape (3D int tuple): shape of the data.
+        shape (3D int tuple): shape of the data.
             
-       Return:
-            data (4D Numpy array): data loaded.
-                E.g. ``(image_number, x, y, channels)``.
+    Return:
+        data (4D Numpy array): data loaded. E.g. ``(image_number, x, y, channels)``.
     """
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])

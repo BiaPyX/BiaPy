@@ -168,13 +168,14 @@
 
 <div class="viewcode-block" id="load_and_prepare_2D_data"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.load_and_prepare_2D_data">[docs]</a><span class="k">def</span> <span class="nf">load_and_prepare_2D_data</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">test_path</span><span class="p">,</span> <span class="n">test_mask_path</span><span class="p">,</span> 
               <span class="n">image_train_shape</span><span class="p">,</span> <span class="n">image_test_shape</span><span class="p">,</span> <span class="n">create_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> 
-              <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">gray</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> 
-              <span class="n">e_d_data</span><span class="o">=</span><span class="p">[],</span> <span class="n">e_d_mask</span><span class="o">=</span><span class="p">[],</span> <span class="n">e_d_data_dim</span><span class="o">=</span><span class="p">[],</span> <span class="n">e_d_dis</span><span class="o">=</span><span class="p">[],</span> 
-              <span class="n">num_crops_per_dataset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">make_crops</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
-              <span class="n">check_crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">check_crop_path</span><span class="o">=</span><span class="s2">&quot;check_crop&quot;</span><span class="p">,</span> <span class="n">d_percentage</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>         
+              <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">e_d_data</span><span class="o">=</span><span class="p">[],</span>
+              <span class="n">e_d_mask</span><span class="o">=</span><span class="p">[],</span> <span class="n">e_d_data_dim</span><span class="o">=</span><span class="p">[],</span> <span class="n">e_d_dis</span><span class="o">=</span><span class="p">[],</span> <span class="n">num_crops_per_dataset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> 
+              <span class="n">make_crops</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">check_crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> 
+              <span class="n">check_crop_path</span><span class="o">=</span><span class="s2">&quot;check_crop&quot;</span><span class="p">,</span> <span class="n">d_percentage</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>         
 
     <span class="sd">&quot;&quot;&quot;Load train, validation and test images from the given paths to create 2D</span>
 <span class="sd">       data. </span>
+
 <span class="sd">                                                                        </span>
 <span class="sd">       Args:                                                            </span>
 <span class="sd">           train_path (str): path to the training data.                </span>
@@ -196,9 +197,6 @@
 <span class="sd">               (value between 0 and 1).</span>
 
 <span class="sd">           seedValue (int, optional): seed value.</span>
-
-<span class="sd">           gray (bool, optional): convert the image into grayscale ignoring the</span>
-<span class="sd">                channels.</span>
 
 <span class="sd">           shuffle_val (bool, optional): take random training examples to create </span>
 <span class="sd">               validation data.</span>
@@ -246,10 +244,10 @@
 <span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
 <span class="sd">        </span>
 <span class="sd">               - **X_val** (*4D Numpy array, optional*): validation images </span>
-<span class="sd">                 (create_val==True). E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">                 (``create_val==True``). E.g. ``(image_number, x, y, channels)``.</span>
 
 <span class="sd">               - **Y_val** (*4D Numpy array, optional*): validation images&#39; mask </span>
-<span class="sd">                 (create_val==True). E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">                 (``create_val==True``). E.g. ``(image_number, x, y, channels)``.</span>
 
 <span class="sd">               - **X_test** (*4D Numpy array*): test images. </span>
 <span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
@@ -286,7 +284,7 @@
 <span class="sd">               img_test_shape, val_split=0.1, shuffle_val=True, make_crops=True,</span>
 <span class="sd">               crop_shape=(256, 256, 1), check_crop=True, check_crop_path=&quot;check_folder&quot;)</span>
 
-<span class="sd">           # The function will print the shapes of the generated arrays. E.g. :</span>
+<span class="sd">           # The function will print the shapes of the generated arrays. In this example:</span>
 <span class="sd">           #    *** Loaded train data shape is: (1776, 256, 256, 1)</span>
 <span class="sd">           #    *** Loaded validation data shape is: (204, 256, 256, 1)</span>
 <span class="sd">           #    *** Loaded test data shape is: (1980, 256, 256, 1)</span>
@@ -475,45 +473,48 @@
 <span class="sd">            create_val (bool, optional): if true validation data is created.                                                    </span>
 <span class="sd">    </span>
 <span class="sd">            shuffle_val (bool, optional): take random training examples to      </span>
-<span class="sd">            create validation data.</span>
+<span class="sd">                create validation data.</span>
 
 <span class="sd">            val_split (float, optional): % of the train data used as    </span>
-<span class="sd">            validation (value between 0 and 1).</span>
+<span class="sd">                validation (value between ``0`` and ``1``).</span>
 
 <span class="sd">            seedValue (int, optional): seed value.</span>
 
-<span class="sd">            train_subvol_shape (Tuple, optional): shape of the train subvolumes </span>
-<span class="sd">            to create. </span>
+<span class="sd">            train_subvol_shape (tuple, optional): shape of the train subvolumes </span>
+<span class="sd">                to create. </span>
 
-<span class="sd">            test_subvol_shape (Tuple, optional): shape of the test subvolumes </span>
-<span class="sd">            to create. </span>
-
+<span class="sd">            test_subvol_shape (tuple, optional): shape of the test subvolumes </span>
+<span class="sd">                to create. </span>
+<span class="sd">    </span>
 <span class="sd">            random_subvolumes_in_DA (bool, optional): flag to advice the method </span>
-<span class="sd">            that not preparation of the data must be done, as random subvolumes</span>
-<span class="sd">            will be created on DA, and the whole volume will be used for that.</span>
+<span class="sd">                that not preparation of the data must be done, as random </span>
+<span class="sd">                subvolumes will be created on DA, and the whole volume will be </span>
+<span class="sd">                used for that.</span>
 
 <span class="sd">       Returns:                                                         </span>
-<span class="sd">            X_train (4D Numpy array): train images. </span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">           Multiple elements</span>
 
-<span class="sd">            Y_train (4D Numpy array): train images&#39; mask.              </span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">               - **X_train** (*4D Numpy array*): train images.</span>
+<span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            X_val (4D Numpy array, optional): validation images (create_val==True).</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">               - **Y_train** (*4D Numpy array*): train images&#39; mask.</span>
+<span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            Y_val (4D Numpy array, optional): validation images&#39; mask </span>
-<span class="sd">            (create_val==True). E.g. (image_number, x, y, channels).</span>
+<span class="sd">               - **X_val** (*4D Numpy array, optional*): validation images</span>
+<span class="sd">                 (``create_val==True``). E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            X_test (4D Numpy array): test images. </span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">               - **Y_val** (*4D Numpy array, optional*): validation images&#39; mask</span>
+<span class="sd">                 (``create_val==True``). E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            Y_test (4D Numpy array): test images&#39; mask.                </span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
-<span class="sd">        </span>
-<span class="sd">            orig_test_shape (tuple of ints): test data original shape.</span>
+<span class="sd">               - **X_test** (*4D Numpy array*): test images.</span>
+<span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            norm_value (int): normalization value calculated.</span>
+<span class="sd">               - **Y_test** (*4D Numpy array*): test images&#39; mask.</span>
+<span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
+
+<span class="sd">               - **orig_test_shape** (*tuple of ints*): test data original shape.</span>
+
+<span class="sd">               - **norm_value** (*int*): normalization value calculated.</span>
 <span class="sd">    &quot;&quot;&quot;</span>      
    
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### LOAD ###&quot;</span><span class="p">)</span>
@@ -582,39 +583,23 @@
 
         <span class="k">return</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span> <span class="n">orig_test_shape</span><span class="p">,</span> <span class="n">norm_value</span></div>
 
-
-<div class="viewcode-block" id="load_data_from_dir"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.load_data_from_dir">[docs]</a><span class="k">def</span> <span class="nf">load_data_from_dir</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">gray</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<div class="viewcode-block" id="load_data_from_dir"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.load_data_from_dir">[docs]</a><span class="k">def</span> <span class="nf">load_data_from_dir</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Load data from a directory.</span>
-<span class="sd">        </span>
-<span class="sd">       Args:</span>
-<span class="sd">            data_dir (str): path to read the data from.</span>
 
-<span class="sd">            shape (3D int tuple): shape of the data.</span>
+<span class="sd">    Args:</span>
+<span class="sd">        data_dir (str): path to read the data from.</span>
 
-<span class="sd">            gray (bool, optional): convert the image into grayscale ignoring the</span>
-<span class="sd">                channel of ``shape``.</span>
-
-<span class="sd">       Return:</span>
-<span class="sd">            data (4D Numpy array): data loaded. </span>
-<span class="sd">                E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">        shape (3D int tuple): shape of the data.</span>
+<span class="sd">            </span>
+<span class="sd">    Return:</span>
+<span class="sd">        data (4D Numpy array): data loaded. E.g. ``(image_number, x, y, channels)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Loading data from </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))</span>
     <span class="n">ids</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>
-
-    <span class="c1"># Force grayscale</span>
-    <span class="k">if</span> <span class="n">gray</span><span class="p">:</span>
-        <span class="n">s</span> <span class="o">=</span> <span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span> <span class="k">if</span> <span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">shape</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">s</span> <span class="o">=</span> <span class="n">shape</span> 
-    <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">),</span> <span class="p">)</span> <span class="o">+</span> <span class="n">s</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">),</span> <span class="p">)</span> <span class="o">+</span> <span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
 
     <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">id_</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">ids</span><span class="p">),</span> <span class="n">total</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">)):</span>
         <span class="n">img</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">id_</span><span class="p">))</span>
-
-        <span class="c1"># Convert the image into grayscale</span>
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">3</span> <span class="ow">and</span> <span class="n">gray</span><span class="p">:</span>
-            <span class="n">img</span> <span class="o">=</span> <span class="n">img</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span>
-            <span class="n">img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
             <span class="n">img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
