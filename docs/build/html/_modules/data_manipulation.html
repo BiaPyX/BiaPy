@@ -586,13 +586,18 @@
 <div class="viewcode-block" id="load_data_from_dir"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.load_data_from_dir">[docs]</a><span class="k">def</span> <span class="nf">load_data_from_dir</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Load data from a directory.</span>
 
-<span class="sd">    Args:</span>
-<span class="sd">        data_dir (str): path to read the data from.</span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data_dir : str </span>
+<span class="sd">        path to read the data from.</span>
 
-<span class="sd">        shape (3D int tuple): shape of the data.</span>
-<span class="sd">            </span>
-<span class="sd">    Return:</span>
-<span class="sd">        data (4D Numpy array): data loaded. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">    shape : 3D int tuple</span>
+<span class="sd">        shape of the data.</span>
+<span class="sd">    </span>
+<span class="sd">    Returns</span>
+<span class="sd">    -------        </span>
+<span class="sd">    data : 4D Numpy array</span>
+<span class="sd">        data loaded. E.g. ``(image_number, x, y, channels)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Loading data from </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))</span>
     <span class="n">ids</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>

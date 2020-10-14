@@ -430,13 +430,18 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
 def load_data_from_dir(data_dir, shape):
     """Load data from a directory.
 
-    Args:
-        data_dir (str): path to read the data from.
+    Parameters
+    ----------
+    data_dir : str 
+        path to read the data from.
 
-        shape (3D int tuple): shape of the data.
-            
-    Return:
-        data (4D Numpy array): data loaded. E.g. ``(image_number, x, y, channels)``.
+    shape : 3D int tuple
+        shape of the data.
+    
+    Returns
+    -------        
+    data : 4D Numpy array
+        data loaded. E.g. ``(image_number, x, y, channels)``.
     """
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
