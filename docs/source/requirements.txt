@@ -45,7 +45,7 @@ olefile==0.46
 opencv-python==4.2.0.34
 opt-einsum==0+untagged.49.gdbede45.dirty
 packaging==20.4
-Pillow==7.0.0
+Pillow==7.1.0
 pockets==0.9.1
 protobuf==3.11.4
 pyasn1==0.4.8
