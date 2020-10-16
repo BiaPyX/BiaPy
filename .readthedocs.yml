@@ -7,6 +7,8 @@ version: 2
 sphinx:
   configuration: docs/source/conf.py
 
-# Use a conda environment to build the doc
-conda:
-  environment: docs/source/environment.yml
+python:
+   version: 3.7
+   install:
+      - requirements: docs/source/requirements.txt
+      - method: pip

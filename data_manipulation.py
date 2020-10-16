@@ -1419,13 +1419,13 @@ def prepare_3D_volume_data(X, Y, shape=(256, 256, 82), overlap=False,
 def img_to_onehot_encoding(img, num_classes=2):
     """Converts image given into one-hot encode format.
        Args:
-            img (Numpy 4D array): data. E.g. (x, y, z, channels).
+           img (Numpy 4D array): data. E.g. (x, y, z, channels).
             
-            num_classes (int, optional): number of classes to distinguish.
+           num_classes (int, optional): number of classes to distinguish.
        
        Return: 
-            one_hot_labels (Numpy 4D array): data one-hot encoded. 
-            E.g. (x, y, z, num_classes)
+           one_hot_labels (Numpy 4D array): data one-hot encoded. 
+           E.g. (x, y, z, num_classes)
 
     """
 
