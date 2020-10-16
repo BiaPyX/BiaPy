@@ -15,11 +15,17 @@
 # sys.path.insert(0, os.path.abspath('.'))
 
 
+import sys
+import os
+import datetime
+sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
+
+
 # -- Project information -----------------------------------------------------
 
-project = 'EM Image Segmentation'
-copyright = '2020, Daniel Franco'
-author = 'Daniel Franco'
+project = u'EM Image Segmentation'
+copyright = u'%d, Daniel Franco' % (datetime.datetime.now().year,)
+author = u'Daniel Franco'
 
 
 # -- General configuration ---------------------------------------------------
@@ -69,6 +75,3 @@ autodoc_member_order = 'bysource'
 # The master toctree document.
 master_doc = 'index'
 
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))

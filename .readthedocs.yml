@@ -11,6 +11,3 @@ sphinx:
 formats:
   - pdf
 
-# Use a conda environment to build the doc
-conda:
-  environment: docs/source/environment.yml
