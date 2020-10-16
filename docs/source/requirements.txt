@@ -43,7 +43,6 @@ opencv-python==4.2.0.34
 packaging==20.4
 Pillow==7.1.0
 pockets==0.9.1
-protobuf==3.11.4
 pyasn1==0.4.8
 pyasn1-modules==0.2.7
 pycosat==0.6.3
