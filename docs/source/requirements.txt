@@ -9,3 +9,7 @@ imageio
 Shapely
 numpydoc
 dashtable
+tensorflow==2.1.0
+tqdm
+mkl
+mkl-service
