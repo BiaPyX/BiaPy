@@ -12,17 +12,20 @@ from tensorflow.keras import losses
 def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.
 
-       Args:
-            y_true (N dim Numpy array): ground truth masks.
-                E.g. ``(image_number, x, y, channels)`` for 2D images or 
-                ``(volume_number, z, x, y, channels)`` for 3D volumes.
+       Parameters
+       ----------
+       y_true : N dim Numpy array
+           Ground truth masks. E.g. ``(image_number, x, y, channels)`` for 2D 
+           images or ``(volume_number, z, x, y, channels)`` for 3D volumes.
 
-            y_pred (N dim Numpy array): predicted masks.
-                E.g. ``(image_number, x, y, channels)`` for 2D images or
-                ``(volume_number, z, x, y, channels)`` for 3D volumes.
+       y_pred : N dim Numpy array
+           Predicted masks. E.g. ``(image_number, x, y, channels)`` for 2D 
+           images or ``(volume_number, z, x, y, channels)`` for 3D volumes.
 
-       Return:
-            float: Jaccard index value.
+       Returns
+       -------
+       jac : float
+           Jaccard index value.
     """
 
     TP = np.count_nonzero(y_pred * y_true)
@@ -40,15 +43,21 @@ def jaccard_index_numpy(y_true, y_pred):
 def jaccard_index(y_true, y_pred, t=0.5):
     """Define Jaccard index.
 
-       Args:
-            y_true (tensor): ground truth masks.
+       Parameters
+       ----------
+       y_true : Tensor
+           Ground truth masks.
 
-            y_pred (tensor): predicted masks.
+       y_pred : Tensor
+           Predicted masks.
 
-            t (float, optional): threshold to be applied.
+       t : float, optional
+           Threshold to be applied.
 
-       Return:
-            tensor: Jaccard index value
+       Returns
+       -------
+       jac : Tensor
+           Jaccard index value
     """
 
     y_pred_ = tf.cast(y_pred > t, dtype=tf.int32)
@@ -67,15 +76,21 @@ def jaccard_index(y_true, y_pred, t=0.5):
 def jaccard_index_softmax(y_true, y_pred, t=0.5):
     """Define Jaccard index.
 
-       Args:
-            y_true (tensor): ground truth masks.
+       Parameters
+       ----------
+       y_true : Tensor
+           Ground truth masks.
 
-            y_pred (tensor): predicted masks.
+       y_pred : Tensor
+           Predicted masks.
 
-            t (float, optional): threshold to be applied.
+       t : float, optional
+           Threshold to be applied.
 
-       Return:
-            tensor: Jaccard index value
+       Returns
+       -------
+       jac : Tensor
+           Jaccard index value
     """
 
     y_pred_ = tf.cast(y_pred > t, dtype=tf.int32)
@@ -98,13 +113,18 @@ def jaccard_index_softmax(y_true, y_pred, t=0.5):
 def jaccard_loss(y_true, y_pred):
     """Define Jaccard index.
 
-       Args:
-            y_true (tensor): ground truth masks.
+       Parameters
+       ----------
+       y_true Tensor
+           Ground truth masks.
 
-            y_pred (tensor): predicted masks.
+       y_pred Tensor
+           Predicted masks.
 
-       Return:
-            float: Jaccard loss score.
+       Returns
+       -------
+       jac : float
+           Jaccard loss score.
     """
 
     numerator = tf.reduce_sum(y_true * y_pred)
@@ -120,13 +140,18 @@ def dice_coeff(y_true, y_pred):
         
        Based on `image_segmentation.ipynb <https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb>`_.
     
-       Args:                                                                    
-            y_true (tensor): ground truth masks.                                
+       Parameters
+       ----------                                                                    
+       y_true : Tensor
+           Ground truth masks.                                
                                                                                 
-            y_pred (tensor): predicted masks.
+       y_pred : Tensor
+           Predicted masks.
 
-       Return:                                                                  
-           Tensor: Dice coefficient value.
+       Returns
+       -------                                                                  
+       score : Tensor
+           Dice coefficient value.
     """
 
     smooth = 1.
@@ -143,13 +168,18 @@ def dice_loss(y_true, y_pred):
 
        Based on `image_segmentation.ipynb <https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb>`_.
 
-       Args:                                                                    
-            y_true (tensor): ground truth masks.                                
+       Parameters
+       ----------                                                                    
+       y_true : Tensor
+           Ground truth masks.                                
                                                                                 
-            y_pred (tensor): predicted masks.
+       y_pred : Tensor
+           Predicted masks.
 
-       Return:                                                                  
-           Tensor: loss value.
+       Returns
+       -------                                                                  
+       loss : Tensor
+           Loss value.
     """
 
     loss = 1 - dice_coeff(y_true, y_pred)
@@ -161,13 +191,18 @@ def bce_dice_loss(y_true, y_pred):
                                                                                 
        Based on `image_segmentation.ipynb <https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb>`_.
 
-       Args:
-           y_true (Numpy array): ground truth.
+       Parameters
+       ----------
+       y_true : Numpy array
+           Ground truth.
 
-           y_pred (Numpy array): predictions. 
+       y_pred : Numpy array
+           Predictions. 
 
-       Return:
-           Tensor: loss value.
+       Returns
+       -------
+       loss : Tensor
+           Loss value.
     """
     loss = losses.binary_crossentropy(y_true, y_pred) + dice_loss(y_true, y_pred)
     return loss
@@ -178,13 +213,18 @@ def weighted_bce_dice_loss(w_dice=0.5, w_bce=0.5):
 
        Inspired by `https://medium.com/@Bloomore post <https://medium.com/@Bloomore/how-to-write-a-custom-loss-function-with-additional-arguments-in-keras-5f193929f7a0>`_.
 
-       Args:
-           w_dice (float, optional): weight to be applied to Dice loss.
+       Parameters
+       ----------
+       w_dice : float, optional
+           Weight to be applied to Dice loss.
 
-           w_bce (float, optional): weight to be applied to BCE.
+       w_bce : float, optional
+           Weight to be applied to BCE.
 
-       Return:                                                                  
-           Tensor: loss value.
+       Returns
+       -------                                                                  
+       loss : Tensor
+           Loss value.
     """
     def loss(y_true, y_pred):
         return losses.binary_crossentropy(y_true, y_pred) * w_bce + dice_loss(y_true, y_pred) * w_dice
@@ -194,17 +234,21 @@ def weighted_bce_dice_loss(w_dice=0.5, w_bce=0.5):
 def voc_calculation(y_true, y_pred, foreground):
     """Calculate VOC metric value.
 
-        Args:
-            y_true (4D Numpy array): ground truth masks.
-                E.g. ``(image_number, x, y, channels)``.
+       Parameters
+       ----------
+       y_true : 4D Numpy array
+           Ground truth masks. E.g. ``(image_number, x, y, channels)``.
 
-            y_pred (4D Numpy array): predicted masks.
-                E.g. ``(image_number, x, y, channels)``.
+       y_pred : 4D Numpy array
+           Predicted masks. E.g. ``(image_number, x, y, channels)``.
 
-            foreground (float): foreground Jaccard index score.
+       foreground : float
+           Foreground Jaccard index score.
 
-        Return:
-            float: VOC score value.
+       Returns
+       -------
+       voc : float
+           VOC score value.
     """
 
     # Invert the arrays
@@ -232,43 +276,49 @@ def voc_calculation(y_true, y_pred, foreground):
     return voc
 
 
-def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig,
-                    job_id="0"):
+def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig, job_id="0"):
     """Cell tracking challenge detection accuracy (DET) calculation. This
        function uses the binary provided by the challente to detect the cell and
        it needs to store the images into some folders. 
 
-       To obtain more info please visit the followin link:
+       To obtain more info please visit the following link:
 
            http://celltrackingchallenge.net/evaluation-methodology/
 
        The name of the folders that are here created follow the conventions listed
        in this `link <https://public.celltrackingchallenge.net/documents/Naming%20and%20file%20content%20conventions.pdf>`_.
 
-       Args:
-           Y_test (4D Numpy array): ground truth mask. 
-               E.g. ``(image_number, x, y, channels)``.
+       Parameters
+       ----------
+       Y_test : 4D Numpy array
+           Ground truth mask. E.g. ``(image_number, x, y, channels)``.
 
-           preds_test (4D Numpy array): predicted mask.
-               E.g. ``(image_number, x, y, channels)``.
+       preds_test : 4D Numpy array
+           Predicted mask. E.g. ``(image_number, x, y, channels)``.
 
-           ge_path (str): path where the ground truth is stored. If the folder
-                does not exist it will be created with the Y_test ground truth.
+       ge_path : str
+           Path where the ground truth is stored. If the folder does not exist 
+           it will be created with the Y_test ground truth.
 
-           eval_path (str): path where the evaluation of the metric will be done.
+       eval_path : str
+           Path where the evaluation of the metric will be done.
 
-           det_bin (str): path to the DET binary provided by the cell tracking
-               challenge.      
+       det_bin : str
+           Path to the DET binary provided by the cell tracking challenge.      
 
-           n_dig (int): The number of digits used for encoding temporal indices
-               (e.g., ``3``). Used by the DET calculation binary, more info 
-               `here <https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf>`_.
+       n_dig : int  
+           The number of digits used for encoding temporal indices (e.g., ``3``).
+           Used by the DET calculation binary, more info 
+           `here <https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf>`_.
 
-           job_id (str, optional): id of the job. Necessary to store the images
-               on a location based on this string.
+       job_id : str, optional
+           Id of the job. Necessary to store the images on a location based on 
+           this string.
            
-       Returns:
-           float: DET accuracy.
+       Returns
+       -------
+       det : float
+           DET accuracy.
     """
 
     # Create the ground truth directory to be reused in future runs if it is not
@@ -313,16 +363,18 @@ def binary_crossentropy_weighted(weights):
     """Custom binary cross entropy loss. The weights are used to multiply          
        the results of the usual cross-entropy loss in order to give more weight    
        to areas between cells close to one another.
-     
-       Args:
-           weights (float): weigth to multiply the BCE value by.   
+
+       Based on `unet_weights.py <https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py>`_.
+
+       Parameters
+       ----------
+       weights : float
+           Weigth to multiply the BCE value by.   
        
-       Based on:
-
-           https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py
-
-       Return:                                                                  
-           Tensor: loss value.
+       Returns
+       -------                                                                  
+       loss : Tensor
+           Loss value.
     """
     
     def loss(y_true, y_pred): 

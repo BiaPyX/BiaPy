@@ -168,25 +168,36 @@
               <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;2D Convolutional layers.</span>
 <span class="sd">    </span>
-<span class="sd">       Args:</span>
-<span class="sd">           x (keras layer): input layer.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       x : keras layer</span>
+<span class="sd">           Input layer.</span>
 
-<span class="sd">           filters (int): number of filters.</span>
+<span class="sd">       filters : int</span>
+<span class="sd">           Number of filters.</span>
 
-<span class="sd">           num_row (int): number of rows in filters.</span>
+<span class="sd">       num_row : int</span>
+<span class="sd">           Number of rows in filters.</span>
 
-<span class="sd">           num_col (int): number of columns in filters.</span>
+<span class="sd">       num_col : int</span>
+<span class="sd">           Number of columns in filters.</span>
 
-<span class="sd">           padding (str, optional): mode of padding. </span>
+<span class="sd">       padding : str, optional</span>
+<span class="sd">           Mode of padding. </span>
 
-<span class="sd">           strides (tuple, optional): stride of convolution operation.</span>
+<span class="sd">       strides : tuple, optional</span>
+<span class="sd">           Stride of convolution operation.</span>
 
-<span class="sd">           activation (str, optional): activation function.</span>
+<span class="sd">       activation : str, optional</span>
+<span class="sd">           Activation function.</span>
 <span class="sd">  </span>
-<span class="sd">           name (str, optional): name of the layer.</span>
+<span class="sd">       name : str, optional</span>
+<span class="sd">           Name of the layer.</span>
 <span class="sd">    </span>
-<span class="sd">       Returns:</span>
-<span class="sd">           Keras layer: output layer.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       x : Keras layer</span>
+<span class="sd">           Output layer.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">x</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">filters</span><span class="p">,</span> <span class="p">(</span><span class="n">num_row</span><span class="p">,</span> <span class="n">num_col</span><span class="p">),</span> <span class="n">strides</span><span class="o">=</span><span class="n">strides</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="n">padding</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="kc">False</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span>
@@ -203,23 +214,33 @@
 <div class="viewcode-block" id="trans_conv2d_bn"><a class="viewcode-back" href="../../networks_multiresunet.html#networks.MultiResUNet.trans_conv2d_bn">[docs]</a><span class="k">def</span> <span class="nf">trans_conv2d_bn</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">filters</span><span class="p">,</span> <span class="n">num_row</span><span class="p">,</span> <span class="n">num_col</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">strides</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;2D Transposed Convolutional layers.</span>
 <span class="sd">    </span>
-<span class="sd">       Args:</span>
-<span class="sd">           x (keras layer): input layer.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       x : keras layer</span>
+<span class="sd">           Input layer.</span>
 
-<span class="sd">           filters (int): number of filters.</span>
-<span class="sd">  </span>
-<span class="sd">           num_row (int): number of rows in filters.</span>
-
-<span class="sd">           num_col (int): number of columns in filters.</span>
-
-<span class="sd">           padding (str, optional): mode of padding.</span>
-
-<span class="sd">           strides (tuple, optional): stride of convolution operation.</span>
-
-<span class="sd">           name (str, optional): name of the layer.</span>
+<span class="sd">       filters : int                                                            </span>
+<span class="sd">           Number of filters.                                                   </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       num_row : int                                                            </span>
+<span class="sd">           Number of rows in filters.                                           </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       num_col : int                                                            </span>
+<span class="sd">           Number of columns in filters.                                        </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       padding : str, optional                                                  </span>
+<span class="sd">           Mode of padding.                                                     </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       strides : tuple, optional                                                </span>
+<span class="sd">           Stride of convolution operation.                                     </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       name : str, optional                                                     </span>
+<span class="sd">           Name of the layer.</span>
 <span class="sd">    </span>
-<span class="sd">       Returns:</span>
-<span class="sd">           Keras layer: output layer.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       x : Keras layer</span>
+<span class="sd">           Output layer.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">x</span> <span class="o">=</span> <span class="n">Conv2DTranspose</span><span class="p">(</span><span class="n">filters</span><span class="p">,</span> <span class="p">(</span><span class="n">num_row</span><span class="p">,</span> <span class="n">num_col</span><span class="p">),</span> <span class="n">strides</span><span class="o">=</span><span class="n">strides</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="n">padding</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span>
@@ -231,13 +252,18 @@
 <div class="viewcode-block" id="MultiResBlock"><a class="viewcode-back" href="../../networks_multiresunet.html#networks.MultiResUNet.MultiResBlock">[docs]</a><span class="k">def</span> <span class="nf">MultiResBlock</span><span class="p">(</span><span class="n">U</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">alpha</span> <span class="o">=</span> <span class="mf">1.67</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;MultiRes Block.</span>
 <span class="sd">    </span>
-<span class="sd">       Args:</span>
-<span class="sd">           U (int): Number of filters in a corrsponding UNet stage.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       U : int</span>
+<span class="sd">           Number of filters in a corrsponding UNet stage.</span>
 
-<span class="sd">           inp (keras layer): input layer.</span>
+<span class="sd">       inp : Keras layer</span>
+<span class="sd">           Input layer.</span>
 
-<span class="sd">       Returns:</span>
-<span class="sd">           Keras layer: output layer.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       out : Keras layer</span>
+<span class="sd">           Output layer.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">W</span> <span class="o">=</span> <span class="n">alpha</span> <span class="o">*</span> <span class="n">U</span>
@@ -269,15 +295,21 @@
 <div class="viewcode-block" id="ResPath"><a class="viewcode-back" href="../../networks_multiresunet.html#networks.MultiResUNet.ResPath">[docs]</a><span class="k">def</span> <span class="nf">ResPath</span><span class="p">(</span><span class="n">filters</span><span class="p">,</span> <span class="n">length</span><span class="p">,</span> <span class="n">inp</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;ResPath.</span>
 <span class="sd">    </span>
-<span class="sd">       Args:</span>
-<span class="sd">           filters (int): description.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       filters : int</span>
+<span class="sd">           Description.</span>
 
-<span class="sd">           length (int): length of ResPath.</span>
+<span class="sd">       length : int</span>
+<span class="sd">           Length of ResPath.</span>
 
-<span class="sd">           inp (keras layer): input layer.</span>
+<span class="sd">       inp : Keras layer</span>
+<span class="sd">           Input layer.</span>
 <span class="sd">    </span>
-<span class="sd">       Returns:</span>
-<span class="sd">           Keras layer: output layer.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       out : Keras layer</span>
+<span class="sd">           Output layer.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">shortcut</span> <span class="o">=</span> <span class="n">inp</span>
@@ -308,15 +340,21 @@
 <div class="viewcode-block" id="MultiResUnet"><a class="viewcode-back" href="../../networks_multiresunet.html#networks.MultiResUNet.MultiResUnet">[docs]</a><span class="k">def</span> <span class="nf">MultiResUnet</span><span class="p">(</span><span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">n_channels</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;MultiResUNet.</span>
 <span class="sd">    </span>
-<span class="sd">       Args:</span>
-<span class="sd">           height (int): height of image.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       height : int</span>
+<span class="sd">           Height of image.</span>
 
-<span class="sd">           width (int): width of image.</span>
+<span class="sd">       width : int</span>
+<span class="sd">           Width of image.</span>
 
-<span class="sd">           n_channels (int): number of channels in image.</span>
+<span class="sd">       n_channels : int</span>
+<span class="sd">           Number of channels in image.</span>
 <span class="sd">    </span>
-<span class="sd">       Returns:</span>
-<span class="sd">           Keras model: MultiResUNet model.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       model : Keras model</span>
+<span class="sd">           MultiResUNet model.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">inputs</span> <span class="o">=</span> <span class="n">Input</span><span class="p">((</span><span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">n_channels</span><span class="p">))</span>

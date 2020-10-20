@@ -171,38 +171,50 @@
              
     <span class="sd">&quot;&quot;&quot;Create 3D U-Net.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            image_shape (3D tuple): dimensions of the input image.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       image_shape :3D tuple</span>
+<span class="sd">           Dimensions of the input image.</span>
 
-<span class="sd">            activation (str, optional): Keras available activation type.</span>
+<span class="sd">       activation : str, optional</span>
+<span class="sd">           Keras available activation type.</span>
 
-<span class="sd">            feature_maps (array of ints, optional): feature maps to use on each </span>
-<span class="sd">                level. Must have the same length as the ``depth+1``.</span>
-<span class="sd">        </span>
-<span class="sd">            depth (int, optional): depth of the network.</span>
+<span class="sd">       feature_maps : array of ints, optional</span>
+<span class="sd">           Feature maps to use on each level. Must have the same length as the </span>
+<span class="sd">           ``depth+1``.</span>
+<span class="sd">   </span>
+<span class="sd">       depth : int, optional</span>
+<span class="sd">           Depth of the network.</span>
 
-<span class="sd">            drop_values (float, optional): dropout value to be fixed. </span>
+<span class="sd">       drop_values : float, optional</span>
+<span class="sd">           Dropout value to be fixed. </span>
 
-<span class="sd">            spatial_dropout (bool, optional): use spatial dropout instead of the</span>
-<span class="sd">                `normal` dropout.</span>
+<span class="sd">       spatial_dropout : bool, optional</span>
+<span class="sd">           Use spatial dropout instead of the `normal` dropout.</span>
 
-<span class="sd">            batch_norm (bool, optional): flag to make batch normalization.</span>
+<span class="sd">       batch_norm : bool, optional</span>
+<span class="sd">           Make batch normalization.</span>
 <span class="sd">    </span>
-<span class="sd">            k_init (string, optional): kernel initialization for convolutional </span>
-<span class="sd">                layers.</span>
+<span class="sd">       k_init : string, optional</span>
+<span class="sd">           Kernel initialization for convolutional layers.</span>
 
-<span class="sd">            loss_type (str, optional): loss type to use, three type available: </span>
-<span class="sd">                ``bce`` (Binary Cross Entropy) , ``w_bce`` (Weighted BCE, based on</span>
-<span class="sd">                weigth maps) and ``w_bce_dice`` (Weighted loss: ``weight1*BCE + </span>
-<span class="sd">                weight2*Dice``). </span>
+<span class="sd">       loss_type : str, optional</span>
+<span class="sd">           Loss type to use, three type available: ``bce`` (Binary Cross Entropy) </span>
+<span class="sd">           , ``w_bce`` (Weighted BCE, based on weigth maps) and ``w_bce_dice`` </span>
+<span class="sd">           (Weighted loss: ``weight1*BCE + weight2*Dice``). </span>
 
-<span class="sd">            optimizer (str, optional): optimizer used to minimize the loss</span>
-<span class="sd">                function. Posible options: ``sgd`` or ``adam``.</span>
+<span class="sd">       optimizer : str, optional</span>
+<span class="sd">           Optimizer used to minimize the loss function. Posible options: ``sgd``</span>
+<span class="sd">           or ``adam``.</span>
 
-<span class="sd">            lr (float, optional): learning rate value.</span>
+<span class="sd">       lr : float, optional</span>
+<span class="sd">           Learning rate value.</span>
 
-<span class="sd">       Returns:</span>
-<span class="sd">            model (Keras model): model containing the U-Net.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       model : Keras model</span>
+<span class="sd">           Model containing the U-Net.</span>
+
 <span class="sd">    </span>
 <span class="sd">       Calling this function with its default parameters returns the following</span>
 <span class="sd">       network:</span>

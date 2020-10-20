@@ -8,18 +8,26 @@ from metrics import jaccard_index_softmax, jaccard_index
 def FCN32_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
     """Create FCN32 network based on a VGG16.
 
-       Args:
-            image_shape (2D tuple): dimensions of the input image.
+       Parameters
+       ----------
+       image_shape : 2D tuple
+           Dimensions of the input image.
 
-            activation (str, optional): Keras available activation type.
+       activation : str, optional
+           Keras available activation type.
 
-            lr (float, optional): learning rate value.
+       lr : float, optional
+           Learning rate value.
 
-            optimizer (str, optional): optimizer used to minimize the loss
-                function. Posible options: ``sgd`` or ``adam``.
+       optimizer : str, optional
+           Optimizer used to minimize the loss function. Posible options: ``sgd`` 
+           or ``adam``.
 
-       Returns:
-            Keras model: model containing the FCN32.
+       Returns
+       -------
+       model : Keras model
+           Model containing the FCN32.
+
 
        Calling this function with its default parameters returns the following
        network:
@@ -109,18 +117,26 @@ def FCN32_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
 def FCN8_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
     """Create FCN8 network based on a VGG16.
 
-       Args:
-            image_shape (2D tuple): dimensions of the input image.
+       Parameters
+       ----------
+       image_shape : 2D tuple
+           Dimensions of the input image.
 
-            activation (str, optional): Keras available activation type.
+       activation : str, optional
+           Keras available activation type.
 
-            lr (float, optional): learning rate value.
+       lr : float, optional
+           Learning rate value.
 
-            optimizer (str, optional): optimizer used to minimize the loss
-                function. Posible options: ``sgd`` or ``adam``.
+       optimizer : str, optional
+           Optimizer used to minimize the loss function. Posible options: ``sgd`` 
+           or ``adam``.
 
-       Returns:
-            Keras model: model containing the FCN8.
+       Returns
+       -------
+       model : Keras model
+           Model containing the FCN8.
+
 
        Calling this function with its default parameters returns the following
        network:

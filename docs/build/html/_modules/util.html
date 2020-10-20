@@ -156,7 +156,7 @@
   <h1>Source code for util</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">math</span>
-<span class="kn">import</span> <span class="nn">mkl</span>
+<span class="c1">#import mkl</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">import</span> <span class="nn">time</span>
 <span class="kn">import</span> <span class="nn">random</span>
@@ -175,8 +175,10 @@
 <div class="viewcode-block" id="limit_threads"><a class="viewcode-back" href="../util.html#util.limit_threads">[docs]</a><span class="k">def</span> <span class="nf">limit_threads</span><span class="p">(</span><span class="n">threads_number</span><span class="o">=</span><span class="s1">&#39;1&#39;</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Limits the number of threads for a python process.</span>
 <span class="sd">       </span>
-<span class="sd">       Args: </span>
-<span class="sd">            threads_number (int, optional): number of threads.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ---------- </span>
+<span class="sd">       threads_number : int, optional</span>
+<span class="sd">           Number of threads.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Python process limited to </span><span class="si">{}</span><span class="s2"> thread&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">threads_number</span><span class="p">))</span>
@@ -186,18 +188,21 @@
     <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;MKL_DYNAMIC&quot;</span><span class="p">]</span><span class="o">=</span><span class="s2">&quot;FALSE&quot;</span><span class="p">;</span>
     <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;NUMEXPR_NUM_THREADS&quot;</span><span class="p">]</span><span class="o">=</span><span class="s1">&#39;1&#39;</span><span class="p">;</span>
     <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;VECLIB_MAXIMUM_THREADS&quot;</span><span class="p">]</span><span class="o">=</span><span class="s1">&#39;1&#39;</span><span class="p">;</span>
-    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;OMP_NUM_THREADS&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;1&#39;</span><span class="p">;</span>
-    <span class="n">mkl</span><span class="o">.</span><span class="n">set_num_threads</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span></div>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;OMP_NUM_THREADS&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;1&#39;</span><span class="p">;</span></div>
+    <span class="c1">#mkl.set_num_threads(1)</span>
 
 
 <div class="viewcode-block" id="set_seed"><a class="viewcode-back" href="../util.html#util.set_seed">[docs]</a><span class="k">def</span> <span class="nf">set_seed</span><span class="p">(</span><span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">determinism</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Sets the seed on multiple python modules to obtain results as </span>
 <span class="sd">       reproducible as possible.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">           seedValue (int, optional): seed value.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       seedValue : int, optional</span>
+<span class="sd">           Seed value.</span>
 <span class="sd">        </span>
-<span class="sd">           determinism (bool, optional): to force determism. </span>
+<span class="sd">       determinism : bool, optional</span>
+<span class="sd">           To force determism. </span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">random</span><span class="o">.</span><span class="n">seed</span> <span class="o">=</span> <span class="n">seedValue</span>
@@ -225,16 +230,21 @@
 <div class="viewcode-block" id="create_plots"><a class="viewcode-back" href="../util.html#util.create_plots">[docs]</a><span class="k">def</span> <span class="nf">create_plots</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">chartOutDir</span><span class="p">,</span> <span class="n">metric</span><span class="o">=</span><span class="s1">&#39;jaccard_index&#39;</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Create loss and main metric plots with the given results.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            results (Keras History object): record of training loss values and </span>
-<span class="sd">                metrics values at successive epochs. History object is returned</span>
-<span class="sd">                by Keras `fit() &lt;https://keras.io/api/models/model_training_apis/#fit-method&gt;`_ method.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       results : Keras History object</span>
+<span class="sd">           Record of training loss values and metrics values at successive </span>
+<span class="sd">           epochs. History object is returned by Keras `fit() </span>
+<span class="sd">           &lt;https://keras.io/api/models/model_training_apis/#fit-method&gt;`_ method.</span>
 
-<span class="sd">            job_id (str): jod identifier.</span>
+<span class="sd">       job_id : str</span>
+<span class="sd">           Jod identifier.</span>
 
-<span class="sd">            chartOutDir (str): path where the charts will be stored into.</span>
+<span class="sd">       chartOutDir : str    </span>
+<span class="sd">           Path where the charts will be stored into.</span>
 <span class="sd">            </span>
-<span class="sd">            metric (str, optional): metric used.</span>
+<span class="sd">       metric : str, optional</span>
+<span class="sd">           Metric used.</span>
 
 <span class="sd">       Examples</span>
 <span class="sd">       --------</span>
@@ -279,15 +289,17 @@
     <span class="sd">&quot;&quot;&quot;Stores the results obtained as csv to manipulate them later </span>
 <span class="sd">       and labeled in another file as historic results.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            results (history object): record of training loss values and metrics </span>
-<span class="sd">                values at successive epochs.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       results : Keras History object</span>
+<span class="sd">           Record of training loss values and metrics values at successive </span>
+<span class="sd">           epochs.</span>
 
-<span class="sd">            score (Dictionary): contains all metrics values extracted from </span>
-<span class="sd">                training and inference. </span>
+<span class="sd">       score : Dictionary</span>
+<span class="sd">           Contains all metrics values extracted from training and inference. </span>
 
-<span class="sd">            time_callback (util.TimeHistory): time structure with the time of </span>
-<span class="sd">                each epoch.</span>
+<span class="sd">       time_callback : ``util.TimeHistory``</span>
+<span class="sd">           Time structure with the time of each epoch.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># Create folders and construct file names</span>
@@ -442,40 +454,49 @@
     <span class="sd">&quot;&quot;&quot;Create a plot with the different metric values binarizing the prediction</span>
 <span class="sd">       with different thresholds, from 0.1 to 0.9.</span>
 <span class="sd">                                                                                </span>
-<span class="sd">       Args:                                                                    </span>
-<span class="sd">           preds_test (4D Numpy array): predictions made by the model. </span>
-<span class="sd">               E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------                                                                    </span>
+<span class="sd">       preds_test : 4D Numpy array</span>
+<span class="sd">           Predictions made by the model. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">           Y_test (4D Numpy array): ground truth of the data.</span>
-<span class="sd">               E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       Y_test : 4D Numpy array</span>
+<span class="sd">           Ground truth of the data. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">           det_eval_ge_path (str): path where the ground truth is stored for </span>
-<span class="sd">               the DET calculation.</span>
+<span class="sd">       det_eval_ge_path : str</span>
+<span class="sd">           Path where the ground truth is stored for the DET calculation.</span>
 
-<span class="sd">           det_eval_path (str): path where the evaluation of the metric will be done.</span>
+<span class="sd">       det_eval_path : str</span>
+<span class="sd">           Path where the evaluation of the metric will be done.</span>
 
-<span class="sd">           det_bin (str): path to the DET binary.</span>
+<span class="sd">       det_bin : str </span>
+<span class="sd">           Path to the DET binary.</span>
 
-<span class="sd">           n_dig (int): The number of digits used for encoding temporal indices</span>
-<span class="sd">               (e.g. ``3``). Used by the DET calculation binary.</span>
+<span class="sd">       n_dig : int</span>
+<span class="sd">           The number of digits used for encoding temporal indices (e.g. ``3``).</span>
+<span class="sd">           Used by the DET calculation binary.</span>
 
-<span class="sd">           job_id (str): id of the job.</span>
+<span class="sd">       job_id : str</span>
+<span class="sd">           Id of the job.</span>
 
-<span class="sd">           job_file (str): id and run number of the job.</span>
+<span class="sd">       job_file : str</span>
+<span class="sd">           Id and run number of the job.</span>
 
-<span class="sd">           char_dir (str): path to store the charts generated.</span>
+<span class="sd">       char_dir : str</span>
+<span class="sd">           Path to store the charts generated.</span>
 
-<span class="sd">           r_val (float, optional): threshold values to return. </span>
+<span class="sd">       r_val : float, optional</span>
+<span class="sd">           Threshold values to return. </span>
 
-<span class="sd">       Returns:</span>
-<span class="sd">           Multiple elements</span>
-<span class="sd">            </span>
-<span class="sd">               - **t_jac** (*float*): value of the Jaccard index when the </span>
-<span class="sd">                 threshold is ``r_val``.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       t_jac : float</span>
+<span class="sd">           Value of the Jaccard index when the threshold is ``r_val``.</span>
 
-<span class="sd">               - **t_voc** (*float*): value of VOC when the threshold is ``r_val``.</span>
+<span class="sd">       t_voc : float</span>
+<span class="sd">           Value of VOC when the threshold is ``r_val``.</span>
 
-<span class="sd">               - **t_det** (*float*): value of DET when the threshold is ``r_val``.</span>
+<span class="sd">       t_det : float</span>
+<span class="sd">           Value of DET when the threshold is ``r_val``.</span>
 
 <span class="sd">       Examples</span>
 <span class="sd">       -------- </span>
@@ -640,20 +661,24 @@
 <div class="viewcode-block" id="save_img"><a class="viewcode-back" href="../util.html#util.save_img">[docs]</a><span class="k">def</span> <span class="nf">save_img</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mask_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Save images in the given directory. </span>
 
-<span class="sd">       Args:                                                                    </span>
-<span class="sd">            X (4D numpy array, optional): data to save as images. The first </span>
-<span class="sd">                dimension must be the number of images.</span>
-<span class="sd">                E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------                                                                    </span>
+<span class="sd">       X : 4D numpy array, optional</span>
+<span class="sd">           Data to save as images. The first dimension must be the number of </span>
+<span class="sd">           images. E.g. ``(image_number, x, y, channels)``.</span>
 <span class="sd">    </span>
-<span class="sd">            data_dir (str, optional): path to store X images.</span>
+<span class="sd">       data_dir : str, optional</span>
+<span class="sd">           Path to store X images.</span>
 
-<span class="sd">            Y (4D numpy array, optional): masks to save as images. The first </span>
-<span class="sd">                dimension must be the number of images.</span>
-<span class="sd">                E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       Y : 4D numpy array, optional</span>
+<span class="sd">           Masks to save as images. The first dimension must be the number of </span>
+<span class="sd">           images. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            mask_dir (str, optional): path to store Y images. </span>
+<span class="sd">       mask_dir : str, optional</span>
+<span class="sd">           Path to store Y images. </span>
 
-<span class="sd">            prefix (str, optional): path to store generated charts.</span>
+<span class="sd">       prefix : str, optional</span>
+<span class="sd">           Path to store generated charts.</span>
 <span class="sd">    &quot;&quot;&quot;</span>   
 
     <span class="k">if</span> <span class="n">prefix</span> <span class="ow">is</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
@@ -715,36 +740,36 @@
        
 
 <div class="viewcode-block" id="make_weight_map"><a class="viewcode-back" href="../util.html#util.make_weight_map">[docs]</a><span class="k">def</span> <span class="nf">make_weight_map</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">binary</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">w0</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span> <span class="n">sigma</span> <span class="o">=</span> <span class="mi">5</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Generates a weight map in order to make the U-Net learn better the          </span>
-<span class="sd">    borders of cells and distinguish individual cells that are tightly packed.  </span>
-<span class="sd">    These weight maps follow the methodology of the original U-Net paper.</span>
+    <span class="sd">&quot;&quot;&quot;Generates a weight map in order to make the U-Net learn better the          </span>
+<span class="sd">       borders of cells and distinguish individual cells that are tightly packed.  </span>
+<span class="sd">       These weight maps follow the methodology of the original U-Net paper.</span>
 
-<span class="sd">    Based on `unet/py_files/helpers.py &lt;https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py&gt;`_.</span>
-
-<span class="sd">    Args:</span>
-
-<span class="sd">        label (3D numpy array): corresponds to a label image. </span>
-<span class="sd">            E.g. ``(x, y, channels)``.</span>
-
-<span class="sd">        binary (bool, optional): corresponds to whether or not the labels are   </span>
-<span class="sd">            binary.                                                             </span>
-<span class="sd">                                                                                </span>
-<span class="sd">        w0 (float, optional): controls for the importance of separating tightly </span>
-<span class="sd">            associated entities.                                                </span>
-<span class="sd">                                                                                </span>
-<span class="sd">        sigma (int, optional): represents the standard deviation of the Gaussian</span>
-<span class="sd">            used for the weight map.</span>
-
-<span class="sd">    Example</span>
-<span class="sd">    -------</span>
-
-<span class="sd">    Notice that weight has been defined where the objects are almost touching </span>
-<span class="sd">    each other.</span>
-
-<span class="sd">    .. image:: img/weight_map.png</span>
-<span class="sd">        :width: 650</span>
-<span class="sd">        :align: center</span>
+<span class="sd">       Based on `unet/py_files/helpers.py &lt;https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py&gt;`_.</span>
+<span class="sd">   </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">   </span>
+<span class="sd">       label : 3D numpy array</span>
+<span class="sd">          Corresponds to a label image. E.g. ``(x, y, channels)``.</span>
+<span class="sd">   </span>
+<span class="sd">       binary : bool, optional</span>
+<span class="sd">          Corresponds to whether or not the labels are binary.                                                             </span>
+<span class="sd">                                                                                   </span>
+<span class="sd">       w0 : float, optional</span>
+<span class="sd">          Controls for the importance of separating tightly associated entities.                                                </span>
+<span class="sd">                                                                                   </span>
+<span class="sd">       sigma : int, optional</span>
+<span class="sd">          Represents the standard deviation of the Gaussian used for the weight map.</span>
+<span class="sd">   </span>
+<span class="sd">       Example</span>
+<span class="sd">       -------</span>
+<span class="sd">   </span>
+<span class="sd">       Notice that weight has been defined where the objects are almost touching </span>
+<span class="sd">       each other.</span>
+<span class="sd">   </span>
+<span class="sd">       .. image:: img/weight_map.png</span>
+<span class="sd">           :width: 650</span>
+<span class="sd">           :align: center</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     
     <span class="c1"># Initialization.</span>
@@ -822,24 +847,27 @@
 
 <div class="viewcode-block" id="do_save_wm"><a class="viewcode-back" href="../util.html#util.do_save_wm">[docs]</a><span class="k">def</span> <span class="nf">do_save_wm</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">binary</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">w0</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span> <span class="n">sigma</span> <span class="o">=</span> <span class="mi">5</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Retrieves the label images, applies the weight-map algorithm and save the</span>
-<span class="sd">    weight maps in a folder. Uses internally :meth:`util.make_weight_map`.</span>
-
-<span class="sd">    Based on `deepimagejunet/py_files/helpers.py &lt;https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py&gt;`_.</span>
-
-<span class="sd">    Args:</span>
-<span class="sd">        labels (4D numpy array): corresponds to given label images.</span>
-<span class="sd">            E.g. ``(image_number, x, y, channels)``.</span>
-<span class="sd">    </span>
-<span class="sd">        path (str): refers to the path where the weight maps should be saved.</span>
-<span class="sd">    </span>
-<span class="sd">        binary (bool, optional): corresponds to whether or not the labels are</span>
-<span class="sd">            binary. </span>
-<span class="sd">    </span>
-<span class="sd">        w0 (float, optional): controls for the importance of separating tightly </span>
-<span class="sd">            associated entities. </span>
-<span class="sd">        </span>
-<span class="sd">        sigma (int, optional): represents the standard deviation of the Gaussian</span>
-<span class="sd">            used for the weight map.</span>
+<span class="sd">       weight maps in a folder. Uses internally :meth:`util.make_weight_map`.</span>
+<span class="sd">   </span>
+<span class="sd">       Based on `deepimagejunet/py_files/helpers.py &lt;https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py&gt;`_.</span>
+<span class="sd">   </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       labels : 4D numpy array</span>
+<span class="sd">           Corresponds to given label images. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       </span>
+<span class="sd">       path : str</span>
+<span class="sd">           Refers to the path where the weight maps should be saved.</span>
+<span class="sd">       </span>
+<span class="sd">       binary : bool, optional</span>
+<span class="sd">           Corresponds to whether or not the labels are binary. </span>
+<span class="sd">       </span>
+<span class="sd">       w0 : float, optional</span>
+<span class="sd">           Controls for the importance of separating tightly associated entities. </span>
+<span class="sd">           </span>
+<span class="sd">       sigma : int, optional</span>
+<span class="sd">           Represents the standard deviation of the Gaussian used for the weight </span>
+<span class="sd">           map.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     
     <span class="c1"># Copy labels.</span>
@@ -871,15 +899,21 @@
 
 
 <div class="viewcode-block" id="foreground_percentage"><a class="viewcode-back" href="../util.html#util.foreground_percentage">[docs]</a><span class="k">def</span> <span class="nf">foreground_percentage</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">class_tag</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot; Percentage of pixels that corresponds to the class in the given image.</span>
+    <span class="sd">&quot;&quot;&quot;Percentage of pixels that corresponds to the class in the given image.</span>
 
-<span class="sd">        Args:</span>
-<span class="sd">             mask (2D Numpy array): image mask to analize.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       mask : 2D Numpy array</span>
+<span class="sd">           Image mask to analize.</span>
 
-<span class="sd">             class_tag (int): class to find in the image.</span>
+<span class="sd">       class_tag : int</span>
+<span class="sd">           Class to find in the image.</span>
 
-<span class="sd">        Returns:</span>
-<span class="sd">            float: percentage of pixels that corresponds to the class. Value between 0 and 1.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       x : float</span>
+<span class="sd">           Percentage of pixels that corresponds to the class. Value between ``0`` </span>
+<span class="sd">           and ``1``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
@@ -896,19 +930,25 @@
 <span class="sd">       labeled as the class (in percentage) than the given threshold will be </span>
 <span class="sd">       stored. </span>
 <span class="sd">    </span>
-<span class="sd">       Args:</span>
-<span class="sd">            data (4D numpy array): data to save as images. The first dimension</span>
-<span class="sd">                must be the number of images. ``E.g. (image_number, x, y, channels)``.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       data : 4D numpy array</span>
+<span class="sd">           Data to save as images. The first dimension must be the number of </span>
+<span class="sd">           images. ``E.g. (image_number, x, y, channels)``.</span>
 
-<span class="sd">            data_mask (4D numpy array): data mask to save as images.  The first </span>
-<span class="sd">                dimension must be the number of images. ``E.g. (image_number, x, y, channels)``.</span>
+<span class="sd">       data_mask : 4D numpy array</span>
+<span class="sd">           Data mask to save as images.  The first dimension must be the number </span>
+<span class="sd">           of images. ``E.g. (image_number, x, y, channels)``.</span>
 
-<span class="sd">            out_dir (str): path to save the images.</span>
+<span class="sd">       out_dir : str</span>
+<span class="sd">           Path to save the images.</span>
 
-<span class="sd">            num_classes (int, optional): number of classes. </span>
+<span class="sd">       num_classes : int, optional</span>
+<span class="sd">           Number of classes. </span>
 
-<span class="sd">            th (float, optional): percentage of the pixels that must be labeled</span>
-<span class="sd">                as a class to save it inside that class folder. </span>
+<span class="sd">       th : float, optional</span>
+<span class="sd">           Percentage of the pixels that must be labeled as a class to save it</span>
+<span class="sd">           inside that class folder. </span>
 <span class="sd">    &quot;&quot;&quot;</span>
         
     <span class="c1"># Create the directories</span>
@@ -936,28 +976,36 @@
 
 <div class="viewcode-block" id="save_filters_of_convlayer"><a class="viewcode-back" href="../util.html#util.save_filters_of_convlayer">[docs]</a><span class="k">def</span> <span class="nf">save_filters_of_convlayer</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">out_dir</span><span class="p">,</span> <span class="n">l_num</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
                               <span class="n">img_per_row</span><span class="o">=</span><span class="mi">8</span><span class="p">):</span>
-
     <span class="sd">&quot;&quot;&quot;Create an image of the filters learned by a convolutional layer. One can </span>
-<span class="sd">       identify the layer with &#39;l_num&#39; or &#39;name&#39; args. If both are passed &#39;name&#39;</span>
-<span class="sd">       will be prioritized. </span>
+<span class="sd">       identify the layer with ``l_num`` or ``name`` args. If both are passed </span>
+<span class="sd">       ``name`` will be prioritized. </span>
 <span class="sd">    </span>
-<span class="sd">       Inspired by https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks/</span>
+<span class="sd">       Inspired by https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            model (Keras Model): model where the layers are stored.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       model : Keras Model</span>
+<span class="sd">           Model where the layers are stored.</span>
 
-<span class="sd">            out_dir (str): path where the image will be stored.</span>
+<span class="sd">       out_dir : str</span>
+<span class="sd">           Path where the image will be stored.</span>
 <span class="sd">        </span>
-<span class="sd">            l_num (int, optional): number of the layer to extract filters from. </span>
+<span class="sd">       l_num : int, optional</span>
+<span class="sd">           Number of the layer to extract filters from. </span>
 <span class="sd">            </span>
-<span class="sd">            name (str, optional): name of the layer to extract filters from.</span>
+<span class="sd">       name : str, optional</span>
+<span class="sd">           Name of the layer to extract filters from.</span>
 
-<span class="sd">            prefix (str, optional): prefix to add to the output image name. </span>
+<span class="sd">       prefix : str, optional</span>
+<span class="sd">           Prefix to add to the output image name. </span>
 <span class="sd">        </span>
-<span class="sd">            img_per_row (int, optional): filters per row on the image.</span>
+<span class="sd">       img_per_row : int, optional</span>
+<span class="sd">           Filters per row on the image.</span>
 
-<span class="sd">       Raises:</span>
-<span class="sd">           ValueError: if ``l_num`` and ``name`` not provided.     </span>
+<span class="sd">       Raises   </span>
+<span class="sd">       ------</span>
+<span class="sd">       ValueError</span>
+<span class="sd">           if ``l_num`` and ``name`` not provided.     </span>
 
 <span class="sd">       Examples</span>
 <span class="sd">       --------</span>
@@ -1015,22 +1063,35 @@
                                  <span class="n">save_file</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Calculate the probability map of the given 2D data.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            Y (4D Numpy array): data to calculate the probability map from.</span>
-<span class="sd">                E. g. ``(image_number, x, y, channel)``</span>
-<span class="sd">            w_foreground (float, optional): weight of the foreground. This value</span>
-<span class="sd">                plus w_background must be equal 1.</span>
-<span class="sd">            w_background (float, optional): weight of the background. This value</span>
-<span class="sd">                plus w_foreground must be equal 1.</span>
-<span class="sd">            save_file (str, optional): path to the file where the probability</span>
-<span class="sd">                map will be stored.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       Y : 4D Numpy array</span>
+<span class="sd">           Data to calculate the probability map from. E. g. ``(image_number, x, </span>
+<span class="sd">           y, channel)``</span>
 
-<span class="sd">       Return:</span>
-<span class="sd">           4D Numpy array: probability map of the given data.</span>
+<span class="sd">       w_foreground : float, optional</span>
+<span class="sd">           Weight of the foreground. This value plus ``w_background`` must be </span>
+<span class="sd">           equal ``1``.</span>
 
-<span class="sd">       Raises:</span>
-<span class="sd">           ValueError: if ``Y`` does not have 4 dimensions.</span>
-<span class="sd">           ValueError: if ``w_foreground + w_background &gt; 1``.</span>
+<span class="sd">       w_background : float, optional</span>
+<span class="sd">           Weight of the background. This value plus ``w_foreground`` must be </span>
+<span class="sd">           equal ``1``.</span>
+
+<span class="sd">       save_file : str, optional</span>
+<span class="sd">           Path to the file where the probability map will be stored.</span>
+
+<span class="sd">       Raises</span>
+<span class="sd">       ------</span>
+<span class="sd">       ValueError</span>
+<span class="sd">           if ``Y`` does not have 4 dimensions.                     </span>
+
+<span class="sd">       ValueError</span>
+<span class="sd">           if ``w_foreground + w_background &gt; 1``.</span>
+
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       Array : 4D Numpy array</span>
+<span class="sd">           Probability map of the given data.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">if</span> <span class="n">Y</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
@@ -1069,22 +1130,34 @@
                                  <span class="n">save_file</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Calculate the probability map of the given 3D data.</span>
 <span class="sd">       </span>
-<span class="sd">       Args: </span>
-<span class="sd">            Y (5D Numpy array): data to calculate the probability map from.</span>
-<span class="sd">                E. g. ``(num_subvolumes, x, y, z, channel)``</span>
-<span class="sd">            w_foreground (float, optional): weight of the foreground. This value</span>
-<span class="sd">                plus w_background must be equal 1.</span>
-<span class="sd">            w_background (float, optional): weight of the background. This value</span>
-<span class="sd">                plus w_foreground must be equal 1.</span>
-<span class="sd">            save_file (str, optional): path to the file where the probability</span>
-<span class="sd">                map will be stored.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ---------- </span>
+<span class="sd">       Y : 5D Numpy array</span>
+<span class="sd">           Data to calculate the probability map from. E. g. ``(num_subvolumes,</span>
+<span class="sd">           x, y, z, channel)``</span>
 
-<span class="sd">       Return:</span>
-<span class="sd">           5D Numpy array: probability map of the given data.</span>
+<span class="sd">       w_foreground : float, optional</span>
+<span class="sd">           Weight of the foreground. This value plus ``w_background`` must be </span>
+<span class="sd">           equal ``1``.</span>
 
-<span class="sd">       Raises:</span>
-<span class="sd">           ValueError: if ``Y`` does not have 5 dimensions.</span>
-<span class="sd">           ValueError: if ``w_foreground + w_background &gt; 1``.</span>
+<span class="sd">       w_background : float, optional</span>
+<span class="sd">           Weight of the background. This value plus ``w_foreground`` must be </span>
+<span class="sd">           equal ``1``.</span>
+
+<span class="sd">       save_file : str, optional</span>
+<span class="sd">           Path to the file where the probability map will be stored.</span>
+
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       Array : 5D Numpy array</span>
+<span class="sd">           Probability map of the given data.</span>
+
+<span class="sd">       Raises</span>
+<span class="sd">       ------</span>
+<span class="sd">       ValueError</span>
+<span class="sd">           if ``Y`` does not have 5 dimensions.</span>
+<span class="sd">       ValueError</span>
+<span class="sd">           if ``w_foreground + w_background &gt; 1``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">if</span> <span class="n">Y</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">5</span><span class="p">:</span>
@@ -1121,26 +1194,30 @@
     <span class="sd">&quot;&quot;&quot;Creates 3D surface from each image in X based on the grayscale of each</span>
 <span class="sd">       image.</span>
 <span class="sd">    </span>
-<span class="sd">       Args:</span>
-<span class="sd">           X (4D numpy array): data that contains the images to create the</span>
-<span class="sd">               surfaces from. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       X : 4D numpy array</span>
+<span class="sd">           Data that contains the images to create the surfaces from. E.g. </span>
+<span class="sd">           ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">           Y (4D numpy array): data mask of the same shape of X that will be </span>
-<span class="sd">               converted into 3D volume, stacking multiple times each image. </span>
-<span class="sd">               Useful if you need the two data arrays to be of the same shape. </span>
-<span class="sd">               E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       Y : 4D numpy array</span>
+<span class="sd">           Data mask of the same shape of X that will be converted into 3D volume,</span>
+<span class="sd">           stacking multiple times each image. Useful if you need the two data</span>
+<span class="sd">           arrays to be of the same shape. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">           th (int, optional): values to ommit when creating the surfaces. </span>
-<span class="sd">               Useful to reduce the amount of data in z to be created and </span>
-<span class="sd">               reduce computational time.</span>
+<span class="sd">       th : int, optional</span>
+<span class="sd">           Values to ommit when creating the surfaces. Useful to reduce the</span>
+<span class="sd">           amount of data in z to be created and reduce computational time.</span>
 
-<span class="sd">       Returns:</span>
-<span class="sd">            Multiple elements</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       Array : 5D numpy array</span>
+<span class="sd">           3D surface of each image provided. E.g. ``(image_number, z, x, y, </span>
+<span class="sd">           channels)``.</span>
 
-<span class="sd">           - **5D numpy array**: 3D surface of each image provided.</span>
-<span class="sd">             E.g. ``(image_number, z, x, y, channels)``.</span>
-<span class="sd">           - **5D numpy array**: 3D stack of each mask provided.                  </span>
-<span class="sd">             E.g. ``(image_number, z, x, y, channels)``.</span>
+<span class="sd">       Array : 5D numpy array</span>
+<span class="sd">           3D stack of each mask provided. E.g. ``(image_number, z, x, y, </span>
+<span class="sd">           channels)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Creating 3D surface for each image . . .&quot;</span><span class="p">)</span>

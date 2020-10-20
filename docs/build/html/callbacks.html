@@ -168,29 +168,25 @@ keys in <cite>logs</cite> (passed in <cite>on_epoch_end</cite>).
 For example: if <cite>filepath</cite> is <cite>weights.{epoch:02d}-{val_loss:.2f}.hdf5</cite>,
 then the model checkpoints will be saved with the epoch number and
 the validation loss in the filename.</p>
-<dl>
-<dt>Args:</dt><dd><p>filepath: string, path to save the model file.
-monitor: quantity to monitor.
-verbose: verbosity mode, 0 or 1.
-save_best_only: if <cite>save_best_only=True</cite>,</p>
-<blockquote>
-<div><p>the latest best model according to
-the quantity monitored will not be overwritten.</p>
-</div></blockquote>
-<dl class="simple">
-<dt>save_weights_only: if True, then only the model’s weights will be</dt><dd><p>saved (<cite>model.save_weights(filepath)</cite>), else the full model
-is saved (<cite>model.save(filepath)</cite>).</p>
-</dd>
-<dt>mode: one of {auto, min, max}.</dt><dd><p>If <cite>save_best_only=True</cite>, the decision
-to overwrite the current save file is made
-based on either the maximization or the
-minimization of the monitored quantity. For <cite>val_acc</cite>,
-this should be <cite>max</cite>, for <cite>val_loss</cite> this should
-be <cite>min</cite>, etc. In <cite>auto</cite> mode, the direction is
-automatically inferred from the name of the monitored quantity.</p>
-</dd>
-</dl>
-<p>period: Interval (number of epochs) between checkpoints.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>filepath</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to save the model file.</p></li>
+<li><p><strong>monitor</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Quantity to monitor.</p></li>
+<li><p><strong>verbose</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Verbosity mode, 0 or 1.</p></li>
+<li><p><strong>save_best_only</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If <code class="docutils literal notranslate"><span class="pre">save_best_only=True</span></code>, the latest best model according to the
+quantity monitored will not be overwritten.</p></li>
+<li><p><strong>save_weights_only</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, then only the model’s weights will be saved
+(<code class="docutils literal notranslate"><span class="pre">model.save_weights(filepath)</span></code>), else the full model is saved
+(<code class="docutils literal notranslate"><span class="pre">model.save(filepath)</span></code>).</p></li>
+<li><p><strong>mode</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – One of <code class="docutils literal notranslate"><span class="pre">{auto,</span> <span class="pre">min,</span> <span class="pre">max}</span></code>. If <code class="docutils literal notranslate"><span class="pre">save_best_only=True</span></code>, the decision
+to overwrite the current save file is made based on either the
+maximization or the minimization of the monitored quantity. For
+<code class="docutils literal notranslate"><span class="pre">val_acc</span></code>, this should be <code class="docutils literal notranslate"><span class="pre">max</span></code>, for <code class="docutils literal notranslate"><span class="pre">val_loss</span></code> this should
+be <code class="docutils literal notranslate"><span class="pre">min</span></code>, etc. In <code class="docutils literal notranslate"><span class="pre">auto</span></code> mode, the direction is automatically
+inferred from the name of the monitored quantity.</p></li>
+<li><p><strong>period</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Interval (number of epochs) between checkpoints.</p></li>
+</ul>
 </dd>
 </dl>
 <p class="rubric">Methods</p>

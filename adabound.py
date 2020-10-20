@@ -5,28 +5,42 @@ from tensorflow.keras.optimizers import Optimizer
 
 class AdaBound(Optimizer):
     """AdaBound optimizer.
+       Default parameters follow those provided in the original paper.
 
-    Default parameters follow those provided in the original paper.
+       Parameters
+       ----------
+       lr : float, optional
+           Must be ``>= 0``. Learning rate.
 
-    Args:
-        lr: float >= 0. Learning rate.
-        final_lr: float >= 0. Final learning rate.
-        beta_1: float, 0 < beta < 1. Generally close to 1.
-        beta_2: float, 0 < beta < 1. Generally close to 1.
-        gamma: float >= 0. Convergence speed of the bound function.
-        epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
-        decay: float >= 0. Learning rate decay over each update.
-        weight_decay: Weight decay weight.
-        amsbound: boolean. Whether to apply the AMSBound variant of this
-            algorithm.
+       final_lr : float, optional
+           Must be ``>= 0``. Final learning rate.
 
-    References:
-        - [Adaptive Gradient Methods with Dynamic Bound of Learning Rate]
-          (https://openreview.net/forum?id=Bkg3g2R9FX)
-        - [Adam - A Method for Stochastic Optimization]
-          (https://arxiv.org/abs/1412.6980v8)
-        - [On the Convergence of Adam and Beyond]
-          (https://openreview.net/forum?id=ryQu7f-RZ)
+       beta_1 : float, optional
+           Must be float, ``0 < beta < 1``. Generally close to ``1``.
+
+       beta_2 : float, optional
+           Must be ``0 < beta < 1``. Generally close to ``1``.
+
+       gamma : float, optional
+           Must be ``float >= 0``. Convergence speed of the bound function.
+
+       epsilon : float, optional
+           Must be ``>= 0``. Fuzz factor. If ``None``, defaults to ``K.epsilon()``.
+
+       decay : float, optional
+           Must be ``>= 0``. Learning rate decay over each update. 
+    
+       weight_decay : float, optional
+           Weight decay weight.
+
+       amsbound : boolean, optional
+           Whether to apply the AMSBound variant of this algorithm.
+
+       Notes
+       -----
+       - Adaptive Gradient Methods with Dynamic Bound of Learning Rate (https://openreview.net/forum?id=Bkg3g2R9FX)
+       - Adam - A Method for Stochastic Optimization] (https://arxiv.org/abs/1412.6980v8)
+       - On the Convergence of Adam and Beyond (https://openreview.net/forum?id=ryQu7f-RZ)
     """
 
     def __init__(self, lr=0.001, final_lr=0.1, beta_1=0.9, beta_2=0.999, gamma=1e-3,

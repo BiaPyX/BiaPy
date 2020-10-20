@@ -161,17 +161,20 @@
 <dt id="metrics.jaccard_index_numpy">
 <code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">jaccard_index_numpy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#jaccard_index_numpy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.jaccard_index_numpy" title="Permalink to this definition">¶</a></dt>
 <dd><p>Define Jaccard index.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><dl class="simple">
-<dt>y_true (N dim Numpy array): ground truth masks.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 2D images or
-<code class="docutils literal notranslate"><span class="pre">(volume_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 3D volumes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>y_true</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">N</span> <span class="pre">dim</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Ground truth masks. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 2D
+images or <code class="docutils literal notranslate"><span class="pre">(volume_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 3D volumes.</p></li>
+<li><p><strong>y_pred</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">N</span> <span class="pre">dim</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Predicted masks. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 2D
+images or <code class="docutils literal notranslate"><span class="pre">(volume_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 3D volumes.</p></li>
+</ul>
 </dd>
-<dt>y_pred (N dim Numpy array): predicted masks.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 2D images or
-<code class="docutils literal notranslate"><span class="pre">(volume_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> for 3D volumes.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>jac</strong> – Jaccard index value.</p>
 </dd>
-</dl>
-</dd>
-<dt>Return:</dt><dd><p>float: Jaccard index value.</p>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -180,12 +183,19 @@
 <dt id="metrics.jaccard_index">
 <code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">jaccard_index</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em>, <em class="sig-param"><span class="n">t</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#jaccard_index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.jaccard_index" title="Permalink to this definition">¶</a></dt>
 <dd><p>Define Jaccard index.</p>
-<dl>
-<dt>Args:</dt><dd><p>y_true (tensor): ground truth masks.</p>
-<p>y_pred (tensor): predicted masks.</p>
-<p>t (float, optional): threshold to be applied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>y_true</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code>) – Ground truth masks.</p></li>
+<li><p><strong>y_pred</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code>) – Predicted masks.</p></li>
+<li><p><strong>t</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Threshold to be applied.</p></li>
+</ul>
 </dd>
-<dt>Return:</dt><dd><p>tensor: Jaccard index value</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>jac</strong> – Jaccard index value</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -194,12 +204,19 @@
 <dt id="metrics.jaccard_index_softmax">
 <code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">jaccard_index_softmax</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em>, <em class="sig-param"><span class="n">t</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#jaccard_index_softmax"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.jaccard_index_softmax" title="Permalink to this definition">¶</a></dt>
 <dd><p>Define Jaccard index.</p>
-<dl>
-<dt>Args:</dt><dd><p>y_true (tensor): ground truth masks.</p>
-<p>y_pred (tensor): predicted masks.</p>
-<p>t (float, optional): threshold to be applied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>y_true</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code>) – Ground truth masks.</p></li>
+<li><p><strong>y_pred</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code>) – Predicted masks.</p></li>
+<li><p><strong>t</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Threshold to be applied.</p></li>
+</ul>
 </dd>
-<dt>Return:</dt><dd><p>tensor: Jaccard index value</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>jac</strong> – Jaccard index value</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -208,11 +225,18 @@
 <dt id="metrics.jaccard_loss">
 <code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">jaccard_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#jaccard_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.jaccard_loss" title="Permalink to this definition">¶</a></dt>
 <dd><p>Define Jaccard index.</p>
-<dl>
-<dt>Args:</dt><dd><p>y_true (tensor): ground truth masks.</p>
-<p>y_pred (tensor): predicted masks.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>y_true Tensor</strong> – Ground truth masks.</p></li>
+<li><p><strong>y_pred Tensor</strong> – Predicted masks.</p></li>
+</ul>
 </dd>
-<dt>Return:</dt><dd><p>float: Jaccard loss score.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>jac</strong> – Jaccard loss score.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -222,11 +246,18 @@
 <code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">dice_coeff</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#dice_coeff"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.dice_coeff" title="Permalink to this definition">¶</a></dt>
 <dd><p>Dice coefficient.</p>
 <p>Based on <a class="reference external" href="https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb">image_segmentation.ipynb</a>.</p>
-<dl>
-<dt>Args:</dt><dd><p>y_true (tensor): ground truth masks.</p>
-<p>y_pred (tensor): predicted masks.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>y_true</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code>) – Ground truth masks.</p></li>
+<li><p><strong>y_pred</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code>) – Predicted masks.</p></li>
+</ul>
 </dd>
-<dt>Return:</dt><dd><p>Tensor: Dice coefficient value.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>score</strong> – Dice coefficient value.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -236,11 +267,18 @@
 <code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">dice_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#dice_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.dice_loss" title="Permalink to this definition">¶</a></dt>
 <dd><p>Dice loss.</p>
 <p>Based on <a class="reference external" href="https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb">image_segmentation.ipynb</a>.</p>
-<dl>
-<dt>Args:</dt><dd><p>y_true (tensor): ground truth masks.</p>
-<p>y_pred (tensor): predicted masks.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>y_true</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code>) – Ground truth masks.</p></li>
+<li><p><strong>y_pred</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code>) – Predicted masks.</p></li>
+</ul>
 </dd>
-<dt>Return:</dt><dd><p>Tensor: loss value.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>loss</strong> – Loss value.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -250,11 +288,18 @@
 <code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">bce_dice_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#bce_dice_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.bce_dice_loss" title="Permalink to this definition">¶</a></dt>
 <dd><p>Loss function based on the combination of BCE and Dice.</p>
 <p>Based on <a class="reference external" href="https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb">image_segmentation.ipynb</a>.</p>
-<dl>
-<dt>Args:</dt><dd><p>y_true (Numpy array): ground truth.</p>
-<p>y_pred (Numpy array): predictions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>y_true</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">array</span></code>) – Ground truth.</p></li>
+<li><p><strong>y_pred</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">array</span></code>) – Predictions.</p></li>
+</ul>
 </dd>
-<dt>Return:</dt><dd><p>Tensor: loss value.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>loss</strong> – Loss value.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -264,11 +309,18 @@
 <code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">weighted_bce_dice_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">w_dice</span><span class="o">=</span><span class="default_value">0.5</span></em>, <em class="sig-param"><span class="n">w_bce</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#weighted_bce_dice_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.weighted_bce_dice_loss" title="Permalink to this definition">¶</a></dt>
 <dd><p>Loss function based on the combination of BCE and Dice weighted.</p>
 <p>Inspired by <a class="reference external" href="https://medium.com/&#64;Bloomore/how-to-write-a-custom-loss-function-with-additional-arguments-in-keras-5f193929f7a0">https://medium.com/&#64;Bloomore post</a>.</p>
-<dl>
-<dt>Args:</dt><dd><p>w_dice (float, optional): weight to be applied to Dice loss.</p>
-<p>w_bce (float, optional): weight to be applied to BCE.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>w_dice</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Weight to be applied to Dice loss.</p></li>
+<li><p><strong>w_bce</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Weight to be applied to BCE.</p></li>
+</ul>
 </dd>
-<dt>Return:</dt><dd><p>Tensor: loss value.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>loss</strong> – Loss value.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -277,16 +329,19 @@
 <dt id="metrics.voc_calculation">
 <code class="sig-prename descclassname">metrics.</code><code class="sig-name descname">voc_calculation</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y_true</span></em>, <em class="sig-param"><span class="n">y_pred</span></em>, <em class="sig-param"><span class="n">foreground</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/metrics.html#voc_calculation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#metrics.voc_calculation" title="Permalink to this definition">¶</a></dt>
 <dd><p>Calculate VOC metric value.</p>
-<dl>
-<dt>Args:</dt><dd><dl class="simple">
-<dt>y_true (4D Numpy array): ground truth masks.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>y_true</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Ground truth masks. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>y_pred</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Predicted masks. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>foreground</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>) – Foreground Jaccard index score.</p></li>
+</ul>
 </dd>
-<dt>y_pred (4D Numpy array): predicted masks.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>voc</strong> – VOC score value.</p>
 </dd>
-</dl>
-<p>foreground (float): foreground Jaccard index score.</p>
-</dd>
-<dt>Return:</dt><dd><p>float: VOC score value.</p>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -297,33 +352,33 @@
 <dd><p>Cell tracking challenge detection accuracy (DET) calculation. This
 function uses the binary provided by the challente to detect the cell and
 it needs to store the images into some folders.</p>
-<p>To obtain more info please visit the followin link:</p>
+<p>To obtain more info please visit the following link:</p>
 <blockquote>
 <div><p><a class="reference external" href="http://celltrackingchallenge.net/evaluation-methodology/">http://celltrackingchallenge.net/evaluation-methodology/</a></p>
 </div></blockquote>
 <p>The name of the folders that are here created follow the conventions listed
 in this <a class="reference external" href="https://public.celltrackingchallenge.net/documents/Naming%20and%20file%20content%20conventions.pdf">link</a>.</p>
-<dl>
-<dt>Args:</dt><dd><dl class="simple">
-<dt>Y_test (4D Numpy array): ground truth mask.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Y_test</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Ground truth mask. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>preds_test</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Predicted mask. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>ge_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path where the ground truth is stored. If the folder does not exist
+it will be created with the Y_test ground truth.</p></li>
+<li><p><strong>eval_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path where the evaluation of the metric will be done.</p></li>
+<li><p><strong>det_bin</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the DET binary provided by the cell tracking challenge.</p></li>
+<li><p><strong>n_dig</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – The number of digits used for encoding temporal indices (e.g., <code class="docutils literal notranslate"><span class="pre">3</span></code>).
+Used by the DET calculation binary, more info
+<a class="reference external" href="https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf">here</a>.</p></li>
+<li><p><strong>job_id</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Id of the job. Necessary to store the images on a location based on
+this string.</p></li>
+</ul>
 </dd>
-<dt>preds_test (4D Numpy array): predicted mask.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>det</strong> – DET accuracy.</p>
 </dd>
-<dt>ge_path (str): path where the ground truth is stored. If the folder</dt><dd><p>does not exist it will be created with the Y_test ground truth.</p>
-</dd>
-</dl>
-<p>eval_path (str): path where the evaluation of the metric will be done.</p>
-<dl class="simple">
-<dt>det_bin (str): path to the DET binary provided by the cell tracking</dt><dd><p>challenge.</p>
-</dd>
-<dt>n_dig (int): The number of digits used for encoding temporal indices</dt><dd><p>(e.g., <code class="docutils literal notranslate"><span class="pre">3</span></code>). Used by the DET calculation binary, more info
-<a class="reference external" href="https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf">here</a>.</p>
-</dd>
-<dt>job_id (str, optional): id of the job. Necessary to store the images</dt><dd><p>on a location based on this string.</p>
-</dd>
-</dl>
-</dd>
-<dt>Returns:</dt><dd><p>float: DET accuracy.</p>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -334,16 +389,16 @@ in this <a class="reference external" href="https://public.celltrackingchallenge
 <dd><p>Custom binary cross entropy loss. The weights are used to multiply
 the results of the usual cross-entropy loss in order to give more weight
 to areas between cells close to one another.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>weights (float): weigth to multiply the BCE value by.</p>
+<p>Based on <a class="reference external" href="https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py">unet_weights.py</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>weights</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>) – Weigth to multiply the BCE value by.</p>
 </dd>
-</dl>
-<p>Based on:</p>
-<blockquote>
-<div><p><a class="reference external" href="https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py">https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py</a></p>
-</div></blockquote>
-<dl class="simple">
-<dt>Return:</dt><dd><p>Tensor: loss value.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>loss</strong> – Loss value.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></p>
 </dd>
 </dl>
 </dd></dl>

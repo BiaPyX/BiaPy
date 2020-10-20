@@ -168,17 +168,20 @@
 <div class="viewcode-block" id="jaccard_index_numpy"><a class="viewcode-back" href="../metrics.html#metrics.jaccard_index_numpy">[docs]</a><span class="k">def</span> <span class="nf">jaccard_index_numpy</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Define Jaccard index.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            y_true (N dim Numpy array): ground truth masks.</span>
-<span class="sd">                E.g. ``(image_number, x, y, channels)`` for 2D images or </span>
-<span class="sd">                ``(volume_number, z, x, y, channels)`` for 3D volumes.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       y_true : N dim Numpy array</span>
+<span class="sd">           Ground truth masks. E.g. ``(image_number, x, y, channels)`` for 2D </span>
+<span class="sd">           images or ``(volume_number, z, x, y, channels)`` for 3D volumes.</span>
 
-<span class="sd">            y_pred (N dim Numpy array): predicted masks.</span>
-<span class="sd">                E.g. ``(image_number, x, y, channels)`` for 2D images or</span>
-<span class="sd">                ``(volume_number, z, x, y, channels)`` for 3D volumes.</span>
+<span class="sd">       y_pred : N dim Numpy array</span>
+<span class="sd">           Predicted masks. E.g. ``(image_number, x, y, channels)`` for 2D </span>
+<span class="sd">           images or ``(volume_number, z, x, y, channels)`` for 3D volumes.</span>
 
-<span class="sd">       Return:</span>
-<span class="sd">            float: Jaccard index value.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       jac : float</span>
+<span class="sd">           Jaccard index value.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">TP</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">y_pred</span> <span class="o">*</span> <span class="n">y_true</span><span class="p">)</span>
@@ -196,15 +199,21 @@
 <div class="viewcode-block" id="jaccard_index"><a class="viewcode-back" href="../metrics.html#metrics.jaccard_index">[docs]</a><span class="k">def</span> <span class="nf">jaccard_index</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Define Jaccard index.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            y_true (tensor): ground truth masks.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       y_true : Tensor</span>
+<span class="sd">           Ground truth masks.</span>
 
-<span class="sd">            y_pred (tensor): predicted masks.</span>
+<span class="sd">       y_pred : Tensor</span>
+<span class="sd">           Predicted masks.</span>
 
-<span class="sd">            t (float, optional): threshold to be applied.</span>
+<span class="sd">       t : float, optional</span>
+<span class="sd">           Threshold to be applied.</span>
 
-<span class="sd">       Return:</span>
-<span class="sd">            tensor: Jaccard index value</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       jac : Tensor</span>
+<span class="sd">           Jaccard index value</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">y_pred_</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">y_pred</span> <span class="o">&gt;</span> <span class="n">t</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
@@ -223,15 +232,21 @@
 <div class="viewcode-block" id="jaccard_index_softmax"><a class="viewcode-back" href="../metrics.html#metrics.jaccard_index_softmax">[docs]</a><span class="k">def</span> <span class="nf">jaccard_index_softmax</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Define Jaccard index.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            y_true (tensor): ground truth masks.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       y_true : Tensor</span>
+<span class="sd">           Ground truth masks.</span>
 
-<span class="sd">            y_pred (tensor): predicted masks.</span>
+<span class="sd">       y_pred : Tensor</span>
+<span class="sd">           Predicted masks.</span>
 
-<span class="sd">            t (float, optional): threshold to be applied.</span>
+<span class="sd">       t : float, optional</span>
+<span class="sd">           Threshold to be applied.</span>
 
-<span class="sd">       Return:</span>
-<span class="sd">            tensor: Jaccard index value</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       jac : Tensor</span>
+<span class="sd">           Jaccard index value</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">y_pred_</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">y_pred</span> <span class="o">&gt;</span> <span class="n">t</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
@@ -254,13 +269,18 @@
 <div class="viewcode-block" id="jaccard_loss"><a class="viewcode-back" href="../metrics.html#metrics.jaccard_loss">[docs]</a><span class="k">def</span> <span class="nf">jaccard_loss</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Define Jaccard index.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            y_true (tensor): ground truth masks.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       y_true Tensor</span>
+<span class="sd">           Ground truth masks.</span>
 
-<span class="sd">            y_pred (tensor): predicted masks.</span>
+<span class="sd">       y_pred Tensor</span>
+<span class="sd">           Predicted masks.</span>
 
-<span class="sd">       Return:</span>
-<span class="sd">            float: Jaccard loss score.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       jac : float</span>
+<span class="sd">           Jaccard loss score.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">numerator</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">reduce_sum</span><span class="p">(</span><span class="n">y_true</span> <span class="o">*</span> <span class="n">y_pred</span><span class="p">)</span>
@@ -276,13 +296,18 @@
 <span class="sd">        </span>
 <span class="sd">       Based on `image_segmentation.ipynb &lt;https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb&gt;`_.</span>
 <span class="sd">    </span>
-<span class="sd">       Args:                                                                    </span>
-<span class="sd">            y_true (tensor): ground truth masks.                                </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------                                                                    </span>
+<span class="sd">       y_true : Tensor</span>
+<span class="sd">           Ground truth masks.                                </span>
 <span class="sd">                                                                                </span>
-<span class="sd">            y_pred (tensor): predicted masks.</span>
+<span class="sd">       y_pred : Tensor</span>
+<span class="sd">           Predicted masks.</span>
 
-<span class="sd">       Return:                                                                  </span>
-<span class="sd">           Tensor: Dice coefficient value.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------                                                                  </span>
+<span class="sd">       score : Tensor</span>
+<span class="sd">           Dice coefficient value.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">smooth</span> <span class="o">=</span> <span class="mf">1.</span>
@@ -299,13 +324,18 @@
 
 <span class="sd">       Based on `image_segmentation.ipynb &lt;https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb&gt;`_.</span>
 
-<span class="sd">       Args:                                                                    </span>
-<span class="sd">            y_true (tensor): ground truth masks.                                </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------                                                                    </span>
+<span class="sd">       y_true : Tensor</span>
+<span class="sd">           Ground truth masks.                                </span>
 <span class="sd">                                                                                </span>
-<span class="sd">            y_pred (tensor): predicted masks.</span>
+<span class="sd">       y_pred : Tensor</span>
+<span class="sd">           Predicted masks.</span>
 
-<span class="sd">       Return:                                                                  </span>
-<span class="sd">           Tensor: loss value.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------                                                                  </span>
+<span class="sd">       loss : Tensor</span>
+<span class="sd">           Loss value.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">loss</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">dice_coeff</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">)</span>
@@ -317,13 +347,18 @@
 <span class="sd">                                                                                </span>
 <span class="sd">       Based on `image_segmentation.ipynb &lt;https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb&gt;`_.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">           y_true (Numpy array): ground truth.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       y_true : Numpy array</span>
+<span class="sd">           Ground truth.</span>
 
-<span class="sd">           y_pred (Numpy array): predictions. </span>
+<span class="sd">       y_pred : Numpy array</span>
+<span class="sd">           Predictions. </span>
 
-<span class="sd">       Return:</span>
-<span class="sd">           Tensor: loss value.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       loss : Tensor</span>
+<span class="sd">           Loss value.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">loss</span> <span class="o">=</span> <span class="n">losses</span><span class="o">.</span><span class="n">binary_crossentropy</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">)</span> <span class="o">+</span> <span class="n">dice_loss</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">loss</span></div>
@@ -334,13 +369,18 @@
 
 <span class="sd">       Inspired by `https://medium.com/@Bloomore post &lt;https://medium.com/@Bloomore/how-to-write-a-custom-loss-function-with-additional-arguments-in-keras-5f193929f7a0&gt;`_.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">           w_dice (float, optional): weight to be applied to Dice loss.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       w_dice : float, optional</span>
+<span class="sd">           Weight to be applied to Dice loss.</span>
 
-<span class="sd">           w_bce (float, optional): weight to be applied to BCE.</span>
+<span class="sd">       w_bce : float, optional</span>
+<span class="sd">           Weight to be applied to BCE.</span>
 
-<span class="sd">       Return:                                                                  </span>
-<span class="sd">           Tensor: loss value.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------                                                                  </span>
+<span class="sd">       loss : Tensor</span>
+<span class="sd">           Loss value.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span> <span class="nf">loss</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">losses</span><span class="o">.</span><span class="n">binary_crossentropy</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">)</span> <span class="o">*</span> <span class="n">w_bce</span> <span class="o">+</span> <span class="n">dice_loss</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">)</span> <span class="o">*</span> <span class="n">w_dice</span>
@@ -350,17 +390,21 @@
 <div class="viewcode-block" id="voc_calculation"><a class="viewcode-back" href="../metrics.html#metrics.voc_calculation">[docs]</a><span class="k">def</span> <span class="nf">voc_calculation</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">foreground</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Calculate VOC metric value.</span>
 
-<span class="sd">        Args:</span>
-<span class="sd">            y_true (4D Numpy array): ground truth masks.</span>
-<span class="sd">                E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       y_true : 4D Numpy array</span>
+<span class="sd">           Ground truth masks. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            y_pred (4D Numpy array): predicted masks.</span>
-<span class="sd">                E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       y_pred : 4D Numpy array</span>
+<span class="sd">           Predicted masks. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            foreground (float): foreground Jaccard index score.</span>
+<span class="sd">       foreground : float</span>
+<span class="sd">           Foreground Jaccard index score.</span>
 
-<span class="sd">        Return:</span>
-<span class="sd">            float: VOC score value.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       voc : float</span>
+<span class="sd">           VOC score value.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># Invert the arrays</span>
@@ -388,43 +432,49 @@
     <span class="k">return</span> <span class="n">voc</span></div>
 
 
-<div class="viewcode-block" id="DET_calculation"><a class="viewcode-back" href="../metrics.html#metrics.DET_calculation">[docs]</a><span class="k">def</span> <span class="nf">DET_calculation</span><span class="p">(</span><span class="n">Y_test</span><span class="p">,</span> <span class="n">preds_test</span><span class="p">,</span> <span class="n">ge_path</span><span class="p">,</span> <span class="n">eval_path</span><span class="p">,</span> <span class="n">det_bin</span><span class="p">,</span> <span class="n">n_dig</span><span class="p">,</span>
-                    <span class="n">job_id</span><span class="o">=</span><span class="s2">&quot;0&quot;</span><span class="p">):</span>
+<div class="viewcode-block" id="DET_calculation"><a class="viewcode-back" href="../metrics.html#metrics.DET_calculation">[docs]</a><span class="k">def</span> <span class="nf">DET_calculation</span><span class="p">(</span><span class="n">Y_test</span><span class="p">,</span> <span class="n">preds_test</span><span class="p">,</span> <span class="n">ge_path</span><span class="p">,</span> <span class="n">eval_path</span><span class="p">,</span> <span class="n">det_bin</span><span class="p">,</span> <span class="n">n_dig</span><span class="p">,</span> <span class="n">job_id</span><span class="o">=</span><span class="s2">&quot;0&quot;</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Cell tracking challenge detection accuracy (DET) calculation. This</span>
 <span class="sd">       function uses the binary provided by the challente to detect the cell and</span>
 <span class="sd">       it needs to store the images into some folders. </span>
 
-<span class="sd">       To obtain more info please visit the followin link:</span>
+<span class="sd">       To obtain more info please visit the following link:</span>
 
 <span class="sd">           http://celltrackingchallenge.net/evaluation-methodology/</span>
 
 <span class="sd">       The name of the folders that are here created follow the conventions listed</span>
 <span class="sd">       in this `link &lt;https://public.celltrackingchallenge.net/documents/Naming%20and%20file%20content%20conventions.pdf&gt;`_.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">           Y_test (4D Numpy array): ground truth mask. </span>
-<span class="sd">               E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       Y_test : 4D Numpy array</span>
+<span class="sd">           Ground truth mask. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">           preds_test (4D Numpy array): predicted mask.</span>
-<span class="sd">               E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       preds_test : 4D Numpy array</span>
+<span class="sd">           Predicted mask. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">           ge_path (str): path where the ground truth is stored. If the folder</span>
-<span class="sd">                does not exist it will be created with the Y_test ground truth.</span>
+<span class="sd">       ge_path : str</span>
+<span class="sd">           Path where the ground truth is stored. If the folder does not exist </span>
+<span class="sd">           it will be created with the Y_test ground truth.</span>
 
-<span class="sd">           eval_path (str): path where the evaluation of the metric will be done.</span>
+<span class="sd">       eval_path : str</span>
+<span class="sd">           Path where the evaluation of the metric will be done.</span>
 
-<span class="sd">           det_bin (str): path to the DET binary provided by the cell tracking</span>
-<span class="sd">               challenge.      </span>
+<span class="sd">       det_bin : str</span>
+<span class="sd">           Path to the DET binary provided by the cell tracking challenge.      </span>
 
-<span class="sd">           n_dig (int): The number of digits used for encoding temporal indices</span>
-<span class="sd">               (e.g., ``3``). Used by the DET calculation binary, more info </span>
-<span class="sd">               `here &lt;https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf&gt;`_.</span>
+<span class="sd">       n_dig : int  </span>
+<span class="sd">           The number of digits used for encoding temporal indices (e.g., ``3``).</span>
+<span class="sd">           Used by the DET calculation binary, more info </span>
+<span class="sd">           `here &lt;https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf&gt;`_.</span>
 
-<span class="sd">           job_id (str, optional): id of the job. Necessary to store the images</span>
-<span class="sd">               on a location based on this string.</span>
+<span class="sd">       job_id : str, optional</span>
+<span class="sd">           Id of the job. Necessary to store the images on a location based on </span>
+<span class="sd">           this string.</span>
 <span class="sd">           </span>
-<span class="sd">       Returns:</span>
-<span class="sd">           float: DET accuracy.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       det : float</span>
+<span class="sd">           DET accuracy.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># Create the ground truth directory to be reused in future runs if it is not</span>
@@ -469,16 +519,18 @@
     <span class="sd">&quot;&quot;&quot;Custom binary cross entropy loss. The weights are used to multiply          </span>
 <span class="sd">       the results of the usual cross-entropy loss in order to give more weight    </span>
 <span class="sd">       to areas between cells close to one another.</span>
-<span class="sd">     </span>
-<span class="sd">       Args:</span>
-<span class="sd">           weights (float): weigth to multiply the BCE value by.   </span>
+
+<span class="sd">       Based on `unet_weights.py &lt;https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py&gt;`_.</span>
+
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       weights : float</span>
+<span class="sd">           Weigth to multiply the BCE value by.   </span>
 <span class="sd">       </span>
-<span class="sd">       Based on:</span>
-
-<span class="sd">           https://github.com/deepimagej/python4deepimagej/blob/master/unet/py_files/unet_weights.py</span>
-
-<span class="sd">       Return:                                                                  </span>
-<span class="sd">           Tensor: loss value.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------                                                                  </span>
+<span class="sd">       loss : Tensor</span>
+<span class="sd">           Loss value.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     
     <span class="k">def</span> <span class="nf">loss</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">):</span> 

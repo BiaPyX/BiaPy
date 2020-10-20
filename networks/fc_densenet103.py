@@ -21,36 +21,44 @@ def FC_DenseNet103(image_shape, n_filters_first_conv=48, n_pool=4,
        between the downsampling path and the upsampling path Each layer is a
        composite function of BN - ReLU - Conv and the last layer is a softmax layer.
         
-       Args:
-            image_shape (array of 3 int): dimensions of the input image.
+       Parameters
+       ----------
+       image_shape : array of 3 int
+           Dimensions of the input image.
 
-            n_filters_first_conv (int, optional): number of filters for the 
-                first convolution applied.
+       n_filters_first_conv : int, optional
+           Number of filters for the first convolution applied.
 
-            n_pool (int, optional): number of pooling layers = number of 
-                transition down = number of transition up.
+       n_pool : int, optional
+           Number of pooling layers = number of transition down = number of 
+           transition up.
 
-            growth_rate (int, optional): number of new feature maps created by 
-                each layer in a dense block.
-            
-            n_layers_per_block (array of ints, optional): number of layers per 
-                block. Can be an int or a list of size ``(2*n_pool)+1``.
+       growth_rate : int, optional
+           Number of new feature maps created by each layer in a dense block.
+       
+       n_layers_per_block : array of ints, optional
+           Number of layers per block. Can be an int or a list of size 
+           ``(2*n_pool)+1``.
 
-            dropout_p (float, optional): dropout rate applied after each 
-                convolution (``0.0`` for not using).
+       dropout_p : float, optional
+           Dropout rate applied after each convolution (``0.0`` for not using).
 
-            loss_type (str, optional): loss type to use, three type available:  
-                ``bce`` (Binary Cross Entropy), ``w_bce`` (Weighted BCE, based on      
-                weigth maps) and ``w_bce_dice`` (Weighted loss: ``weight1*BCE + 
-                weight2*Dice``). 
-                                                                                
-            optimizer (str, optional): optimizer used to minimize the loss      
-                function. Posible options: ``sgd`` or ``adam``.                         
-                                                                                
-            lr (float, optional): learning rate value.
+       loss_type : str, optional
+           Loss type to use, three type available: ``bce`` (Binary Cross Entropy),
+           ``w_bce`` (Weighted BCE, based on weigth maps) and ``w_bce_dice``
+           (Weighted loss: ``weight1*BCE + weight2*Dice``). 
+                                                                           
+       optimizer : str, optional
+           Optimizer used to minimize the loss function. Posible options: ``sgd``
+           or ``adam``.                         
+                                                                           
+       lr : float, optional
+           Learning rate value.
 
-       Returns:
-            model (Keras model): model containing the FC_DenseNet103.
+       Returns
+       -------
+       model : Keras model
+           Model containing the FC_DenseNet103.
     """
     
     if type(n_layers_per_block) == list:

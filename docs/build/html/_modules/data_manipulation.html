@@ -172,95 +172,110 @@
               <span class="n">e_d_mask</span><span class="o">=</span><span class="p">[],</span> <span class="n">e_d_data_dim</span><span class="o">=</span><span class="p">[],</span> <span class="n">e_d_dis</span><span class="o">=</span><span class="p">[],</span> <span class="n">num_crops_per_dataset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> 
               <span class="n">make_crops</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">check_crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> 
               <span class="n">check_crop_path</span><span class="o">=</span><span class="s2">&quot;check_crop&quot;</span><span class="p">,</span> <span class="n">d_percentage</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>         
-
     <span class="sd">&quot;&quot;&quot;Load train, validation and test images from the given paths to create 2D</span>
 <span class="sd">       data. </span>
 
-<span class="sd">                                                                        </span>
-<span class="sd">       Args:                                                            </span>
-<span class="sd">           train_path (str): path to the training data.                </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------                                                            </span>
+<span class="sd">       train_path : str</span>
+<span class="sd">           Path to the training data.                </span>
 
-<span class="sd">           train_mask_path (str): path to the training data masks.     </span>
+<span class="sd">       train_mask_path : str</span>
+<span class="sd">           Path to the training data masks.     </span>
 
-<span class="sd">           test_path (str): path to the test data.                     </span>
+<span class="sd">       test_path : str</span>
+<span class="sd">           Path to the test data.                     </span>
 
-<span class="sd">           test_mask_path (str): path to the test data masks.          </span>
+<span class="sd">       test_mask_path : str</span>
+<span class="sd">           Path to the test data masks.          </span>
 
-<span class="sd">           image_train_shape (array of 3 int): dimensions of the images.     </span>
+<span class="sd">       image_train_shape : Array of 3 int</span>
+<span class="sd">           Dimensions of the images.     </span>
 
-<span class="sd">           image_test_shape (array of 3 int): dimensions of the images.     </span>
+<span class="sd">       image_test_shape : Array of 3 int</span>
+<span class="sd">           Dimensions of the images.     </span>
 
-<span class="sd">           create_val (bool, optional): if true validation data is created (from</span>
-<span class="sd">               the train data).                                                    </span>
+<span class="sd">       create_val : bool, optional</span>
+<span class="sd">           If true validation data is created (from the train data).                                                    </span>
 
-<span class="sd">           val_split (float, optional): % of the train data used as validation</span>
-<span class="sd">               (value between 0 and 1).</span>
+<span class="sd">       val_split : float, optional</span>
+<span class="sd">            % of the train data used as validation (value between ``0`` and ``1``).</span>
 
-<span class="sd">           seedValue (int, optional): seed value.</span>
+<span class="sd">       seedValue : int, optional</span>
+<span class="sd">            Seed value.</span>
 
-<span class="sd">           shuffle_val (bool, optional): take random training examples to create </span>
-<span class="sd">               validation data.</span>
+<span class="sd">       shuffle_val : bool, optional</span>
+<span class="sd">            Take random training examples to create validation data.</span>
 
-<span class="sd">           e_d_data (list of str, optional): list of paths where the extra data</span>
-<span class="sd">               of other datasets are stored. If ``make_crops`` is not enabled, </span>
-<span class="sd">               these extra datasets must have the same image shape as the main </span>
-<span class="sd">               dataset since they are going to be stacked in a unique array.</span>
+<span class="sd">       e_d_data : list of str, optional</span>
+<span class="sd">           List of paths where the extra data of other datasets are stored. If</span>
+<span class="sd">           ``make_crops`` is not enabled, these extra datasets must have the </span>
+<span class="sd">           same image shape as the main dataset since they are going to be </span>
+<span class="sd">           stacked in a unique array.</span>
 
-<span class="sd">           e_d_mask (list of str, optional): list of paths where the extra data</span>
-<span class="sd">               mask of other datasets are stored. Same constraints as </span>
-<span class="sd">               ``e_d_data``.  </span>
+<span class="sd">       e_d_mask : list of str, optional</span>
+<span class="sd">           List of paths where the extra data mask of other datasets are stored. </span>
+<span class="sd">           Same constraints as ``e_d_data``.  </span>
 
-<span class="sd">           e_d_data_dim (list of 3D int tuple, optional): list of shapes of the </span>
-<span class="sd">               extra datasets provided. Same constraints as ``e_d_data``.</span>
+<span class="sd">       e_d_data_dim : list of 3D int tuple, optional</span>
+<span class="sd">           List of shapes of the extra datasets provided. Same constraints as </span>
+<span class="sd">           ``e_d_data``.</span>
 
-<span class="sd">           e_d_dis (list of float, optional): discard percentages of the extra</span>
-<span class="sd">               datasets provided. Values between 0 and 1. Same constraints as </span>
-<span class="sd">               ``e_d_data``.</span>
+<span class="sd">       e_d_dis : list of float, optional</span>
+<span class="sd">           Discard percentages of the extra datasets provided. Values between </span>
+<span class="sd">           ``0`` and ``1``. Same constraints as ``e_d_data``.</span>
 
-<span class="sd">           num_crops_per_dataset (int, optional): number of crops per extra</span>
-<span class="sd">               dataset to take into account. Useful to ensure that all the datasets</span>
-<span class="sd">               have the same weight during network trainning. </span>
+<span class="sd">       num_crops_per_dataset : int, optional</span>
+<span class="sd">           Number of crops per extra dataset to take into account. Useful to </span>
+<span class="sd">           ensure that all the datasets have the same weight during network </span>
+<span class="sd">           trainning. </span>
 
-<span class="sd">           make_crops (bool, optional): flag to make crops on data.</span>
+<span class="sd">       make_crops : bool, optional</span>
+<span class="sd">           To make crops on data.</span>
 
-<span class="sd">           crop_shape (3D int tuple, optional): shape of the crops.</span>
+<span class="sd">       crop_shape : 3D int tuple, optional</span>
+<span class="sd">           Shape of the crops.</span>
 
-<span class="sd">           check_crop (bool, optional): to save the crops made to ensure they</span>
-<span class="sd">               are generating as one wish.</span>
+<span class="sd">       check_crop : bool, optional</span>
+<span class="sd">           To save the crops made to ensure they are generating as one wish.</span>
 
-<span class="sd">           check_crop_path (str, optional): path to save the crop samples.</span>
+<span class="sd">       check_crop_path : str, optional</span>
+<span class="sd">           Path to save the crop samples.</span>
 
-<span class="sd">           d_percentage (int, optional): number between 0 and 100. The images </span>
-<span class="sd">               having less percentage of foreground pixels than the given </span>
-<span class="sd">               percentage are discarded.</span>
+<span class="sd">       d_percentage : int, optional</span>
+<span class="sd">           Number between 0 and 100. The images having less percentage of </span>
+<span class="sd">           foreground pixels than the given percentage are discarded.</span>
 
-<span class="sd">       Returns:                                                         </span>
-<span class="sd">           Multiple elements</span>
-<span class="sd"> </span>
-<span class="sd">               - **X_train** (*4D Numpy array*): train images. </span>
-<span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
-<span class="sd">            </span>
-<span class="sd">               - **Y_train** (*4D Numpy array*): train images&#39; mask.              </span>
-<span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------                                                         </span>
+<span class="sd">       X_train : 4D Numpy array</span>
+<span class="sd">           Train images. E.g. ``(image_number, x, y, channels)``.</span>
 <span class="sd">        </span>
-<span class="sd">               - **X_val** (*4D Numpy array, optional*): validation images </span>
-<span class="sd">                 (``create_val==True``). E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       Y_train : 4D Numpy array</span>
+<span class="sd">           Train images&#39; mask. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">               - **Y_val** (*4D Numpy array, optional*): validation images&#39; mask </span>
-<span class="sd">                 (``create_val==True``). E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       X_val : 4D Numpy array, optional</span>
+<span class="sd">           Validation images (``create_val==True``). E.g. ``(image_number, </span>
+<span class="sd">           x, y, channels)``.</span>
 
-<span class="sd">               - **X_test** (*4D Numpy array*): test images. </span>
-<span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       Y_val : 4D Numpy array, optional</span>
+<span class="sd">           Validation images&#39; mask (``create_val==True``). E.g. </span>
+<span class="sd">           ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">               - **Y_test** (*4D Numpy array*): test images&#39; mask.                </span>
-<span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
-<span class="sd">        </span>
-<span class="sd">               - **orig_test_shape** (*tuple of ints*). test data original shape.</span>
-<span class="sd">        </span>
-<span class="sd">               - **norm_value** (*int*): mean of the train data in case we need </span>
-<span class="sd">                 to make a normalization.</span>
+<span class="sd">       X_test : 4D Numpy array</span>
+<span class="sd">           Test images. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">               - **crop_made** (*bool*): True if crops have been made.</span>
+<span class="sd">       Y_test : 4D Numpy array</span>
+<span class="sd">           Test images&#39; mask. E.g. ``(image_number, x, y, channels)``.</span>
+
+<span class="sd">       orig_test_shape : tuple of ints</span>
+<span class="sd">           Test data original shape.</span>
+
+<span class="sd">       norm_value : int</span>
+<span class="sd">           mean of the train data in case we need to make a normalization.</span>
+
+<span class="sd">       crop_made : bool</span>
+<span class="sd">           True if crops have been made.</span>
 
 <span class="sd">       Examples</span>
 <span class="sd">       --------</span>
@@ -452,69 +467,80 @@
                              <span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">train_subvol_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
                              <span class="n">test_subvol_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
                              <span class="n">random_subvolumes_in_DA</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ov_test</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>         
-
     <span class="sd">&quot;&quot;&quot;Load train, validation and test images from the given paths to create 2D</span>
 <span class="sd">       data. If the images to be loaded are smaller than the given dimension it</span>
 <span class="sd">       will be sticked in the (0, 0).</span>
 <span class="sd">                                                                        </span>
-<span class="sd">       Args:                                                            </span>
-<span class="sd">            train_path (str): path to the training data.                </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------                                                            </span>
+<span class="sd">       train_path : str</span>
+<span class="sd">           Path to the training data.                </span>
 
-<span class="sd">            train_mask_path (str): path to the training data masks.     </span>
+<span class="sd">       train_mask_path : str</span>
+<span class="sd">           Path to the training data masks.     </span>
 
-<span class="sd">            test_path (str): path to the test data.                     </span>
+<span class="sd">       test_path : str                                                          </span>
+<span class="sd">           Path to the test data.                                               </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       test_mask_path : str                                                     </span>
+<span class="sd">           Path to the test data masks.                                         </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       image_train_shape : Array of 3 int                                       </span>
+<span class="sd">           Dimensions of the images.                                            </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       image_test_shape : Array of 3 int                                        </span>
+<span class="sd">           Dimensions of the images.                                            </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       create_val : bool, optional                                              </span>
+<span class="sd">           If true validation data is created (from the train data).                                                    </span>
 
-<span class="sd">            test_mask_path (str): path to the test data masks.          </span>
+<span class="sd">       shuffle_val : bool, optional                                             </span>
+<span class="sd">            Take random training examples to create validation data.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">       val_split : float, optional                                              </span>
+<span class="sd">            % of the train data used as validation (value between ``0`` and ``1``).</span>
+<span class="sd">                                                                                </span>
+<span class="sd">       seedValue : int, optional                                                </span>
+<span class="sd">            Seed value.                                                     </span>
 
-<span class="sd">            image_train_shape (array of 3 int): dimensions of the images.     </span>
+<span class="sd">       train_subvol_shape : tuple, optional</span>
+<span class="sd">            Shape of the train subvolumes to create. </span>
 
-<span class="sd">            image_test_shape (array of 3 int): dimensions of the images.     </span>
+<span class="sd">       test_subvol_shape : tuple, optional</span>
+<span class="sd">            Shape of the test subvolumes to create. </span>
 
-<span class="sd">            create_val (bool, optional): if true validation data is created.                                                    </span>
-<span class="sd">    </span>
-<span class="sd">            shuffle_val (bool, optional): take random training examples to      </span>
-<span class="sd">                create validation data.</span>
+<span class="sd">       random_subvolumes_in_DA : bool, optional</span>
+<span class="sd">           To advice the method that not preparation of the data must be done, </span>
+<span class="sd">           as random subvolumes will be created on DA, and the whole volume will </span>
+<span class="sd">           be used for that.</span>
 
-<span class="sd">            val_split (float, optional): % of the train data used as    </span>
-<span class="sd">                validation (value between ``0`` and ``1``).</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------                                                         </span>
+<span class="sd">       X_train : 5D Numpy array                                                 </span>
+<span class="sd">           Train images. E.g. ``(image_number, x, y, z, channels)``.               </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Y_train : 5D Numpy array                                                 </span>
+<span class="sd">           Train images&#39; mask. E.g. ``(image_number, x, y, z, channels)``.         </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       X_val : 5D Numpy array, optional                                         </span>
+<span class="sd">           Validation images (``create_val==True``). E.g. ``(image_number,      </span>
+<span class="sd">           x, y, z, channels)``.                                                   </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Y_val : 5D Numpy array, optional                                         </span>
+<span class="sd">           Validation images&#39; mask (``create_val==True``). E.g. ``(image_number,</span>
+<span class="sd">           x, y, z, channels)``.                                  </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       X_test : 5D Numpy array                                                  </span>
+<span class="sd">           Test images. E.g. ``(image_number, x, y, z, channels)``.                </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Y_test : 5D Numpy array                                                  </span>
+<span class="sd">           Test images&#39; mask. E.g. ``(image_number, x, y, z, channels)``.  </span>
 
-<span class="sd">            seedValue (int, optional): seed value.</span>
+<span class="sd">       orig_test_shape : tuple of ints</span>
+<span class="sd">           Test data original shape.</span>
 
-<span class="sd">            train_subvol_shape (tuple, optional): shape of the train subvolumes </span>
-<span class="sd">                to create. </span>
-
-<span class="sd">            test_subvol_shape (tuple, optional): shape of the test subvolumes </span>
-<span class="sd">                to create. </span>
-<span class="sd">    </span>
-<span class="sd">            random_subvolumes_in_DA (bool, optional): flag to advice the method </span>
-<span class="sd">                that not preparation of the data must be done, as random </span>
-<span class="sd">                subvolumes will be created on DA, and the whole volume will be </span>
-<span class="sd">                used for that.</span>
-
-<span class="sd">       Returns:                                                         </span>
-<span class="sd">           Multiple elements</span>
-
-<span class="sd">               - **X_train** (*4D Numpy array*): train images.</span>
-<span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
-
-<span class="sd">               - **Y_train** (*4D Numpy array*): train images&#39; mask.</span>
-<span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
-
-<span class="sd">               - **X_val** (*4D Numpy array, optional*): validation images</span>
-<span class="sd">                 (``create_val==True``). E.g. ``(image_number, x, y, channels)``.</span>
-
-<span class="sd">               - **Y_val** (*4D Numpy array, optional*): validation images&#39; mask</span>
-<span class="sd">                 (``create_val==True``). E.g. ``(image_number, x, y, channels)``.</span>
-
-<span class="sd">               - **X_test** (*4D Numpy array*): test images.</span>
-<span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
-
-<span class="sd">               - **Y_test** (*4D Numpy array*): test images&#39; mask.</span>
-<span class="sd">                 E.g. ``(image_number, x, y, channels)``.</span>
-
-<span class="sd">               - **orig_test_shape** (*tuple of ints*): test data original shape.</span>
-
-<span class="sd">               - **norm_value** (*int*): normalization value calculated.</span>
+<span class="sd">       norm_value : int</span>
+<span class="sd">           Normalization value calculated.</span>
 <span class="sd">    &quot;&quot;&quot;</span>      
    
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### LOAD ###&quot;</span><span class="p">)</span>
@@ -586,19 +612,20 @@
 <div class="viewcode-block" id="load_data_from_dir"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.load_data_from_dir">[docs]</a><span class="k">def</span> <span class="nf">load_data_from_dir</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Load data from a directory.</span>
 
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    data_dir : str </span>
-<span class="sd">        path to read the data from.</span>
-
-<span class="sd">    shape : 3D int tuple</span>
-<span class="sd">        shape of the data.</span>
-<span class="sd">    </span>
-<span class="sd">    Returns</span>
-<span class="sd">    -------        </span>
-<span class="sd">    data : 4D Numpy array</span>
-<span class="sd">        data loaded. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       data_dir : str </span>
+<span class="sd">           path to read the data from.</span>
+<span class="sd">   </span>
+<span class="sd">       shape : 3D int tuple</span>
+<span class="sd">           shape of the data.</span>
+<span class="sd">       </span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------        </span>
+<span class="sd">       data : 4D Numpy array</span>
+<span class="sd">           data loaded. E.g. ``(image_number, x, y, channels)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Loading data from </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))</span>
     <span class="n">ids</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>
     <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">),</span> <span class="p">)</span> <span class="o">+</span> <span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
@@ -619,30 +646,36 @@
               <span class="n">d_percentage</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>                          
     <span class="sd">&quot;&quot;&quot;Crop data into smaller pieces.</span>
 <span class="sd">                                                                        </span>
-<span class="sd">       Args:                                                            </span>
-<span class="sd">            data (4D Numpy array): data to crop. </span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------                                                            </span>
+<span class="sd">       data : 4D Numpy array</span>
+<span class="sd">           Data to crop.  E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            crop_shape (3D int tuple): output image shape.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       crop_shape : 3D int tuple</span>
+<span class="sd">           Output image shape. E.g. ``(x, y, channels)``.</span>
 
-<span class="sd">            data_mask (4D Numpy array, optional): data masks to crop.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       data_mask : 4D Numpy array, optional</span>
+<span class="sd">           Data masks to crop. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            force_shape (2D int tuple, optional): force horizontal and vertical </span>
-<span class="sd">            crops to the given numbers.</span>
+<span class="sd">       force_shape : 2D int tuple, optional</span>
+<span class="sd">           Force horizontal and vertical crops to the given numbers.</span>
 
-<span class="sd">            d_percentage (int, optional): number between 0 and 100. The images </span>
-<span class="sd">            that have less foreground pixels than the given number will be </span>
-<span class="sd">            discarded. Only available if data_mask is provided.</span>
+<span class="sd">       d_percentage : int, optional</span>
+<span class="sd">           Number between ``0`` and ``100``. The images that have less foreground </span>
+<span class="sd">           pixels than the given number will be discarded. Only available if </span>
+<span class="sd">           ``data_mask`` is provided.</span>
 <span class="sd">                                                                        </span>
-<span class="sd">       Returns:                                                         </span>
-<span class="sd">            cropped_data (4D Numpy array): cropped data images.         </span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------                                                         </span>
+<span class="sd">       cropped_data : 4D Numpy array</span>
+<span class="sd">           Cropped data images.         </span>
 
-<span class="sd">            cropped_data_mask (4D Numpy array): cropped data masks.     </span>
+<span class="sd">       cropped_data_mask : 4D Numpy array</span>
+<span class="sd">           Cropped data masks.     </span>
 
-<span class="sd">            force_shape (2D int tuple): number of horizontal and vertical crops </span>
-<span class="sd">            made. Useful for future crop calls. </span>
+<span class="sd">       force_shape : 2D int tuple</span>
+<span class="sd">           Number of horizontal and vertical crops made. Useful for future crop </span>
+<span class="sd">           calls. </span>
 <span class="sd">    &quot;&quot;&quot;</span>                                                                 
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### CROP ###&quot;</span><span class="p">)</span>                                                                    
@@ -753,23 +786,27 @@
 <div class="viewcode-block" id="crop_data_with_overlap"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.crop_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">crop_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">data_mask</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivision</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Crop data into smaller pieces with the minimun overlap.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            data (4D Numpy array): data to crop.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       data : 4D Numpy array</span>
+<span class="sd">           Data to crop. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            data_mask (4D Numpy array): data mask to crop.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       data_mask : 4D Numpy array</span>
+<span class="sd">           Data mask to crop. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            window_size (int): crop size.</span>
+<span class="sd">       window_size : int</span>
+<span class="sd">           Crop size.</span>
 
-<span class="sd">            subdivision (int): number of crops to create.</span>
+<span class="sd">       subdivision : int</span>
+<span class="sd">           Number of crops to create.</span>
 
-<span class="sd">       Returns:</span>
-<span class="sd">            cropped_data (4D Numpy array): cropped image data.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       cropped_data : 4D Numpy array</span>
+<span class="sd">           Cropped image data. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            cropped_data_mask (4D Numpy array): cropped image data masks.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       cropped_data_mask : 4D Numpy array)</span>
+<span class="sd">           Cropped image data masks. E.g. ``(image_number, x, y, channels)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### OV-CROP ###&quot;</span><span class="p">)</span>
@@ -859,24 +896,28 @@
     <span class="sd">&quot;&quot;&quot;Crop 3D data into smaller volumes with the minimun overlap in z.</span>
 <span class="sd">       Reverse function of merge_3D_data_with_overlap().</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            data (4D Numpy array): data to crop.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       data : 4D Numpy array</span>
+<span class="sd">           Data to crop. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            vol_shape (4D int tuple): shape of the desired volumes to be created.</span>
+<span class="sd">       vol_shape : 4D int tuple</span>
+<span class="sd">           Shape of the desired volumes to be created.</span>
 <span class="sd">        </span>
-<span class="sd">            data_mask (4D Numpy array, optional): data mask to crop.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       data_mask : 4D Numpy array, optional</span>
+<span class="sd">            Data mask to crop. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            overlap_z (float, optional): amount of overlap on z dimension. The </span>
-<span class="sd">            value must be on range [0, 1), that is, 0% or 99% of overlap. </span>
+<span class="sd">       overlap_z : float, optional</span>
+<span class="sd">            Amount of overlap on z dimension. The value must be on range </span>
+<span class="sd">            ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. </span>
 
-<span class="sd">       Returns:</span>
-<span class="sd">            cropped_data (5D Numpy array): cropped image data.</span>
-<span class="sd">            E.g. (vol_number, x, y, z, channels).</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       cropped_data : 5D Numpy array</span>
+<span class="sd">           Cropped image data. E.g. ``(vol_number, x, y, z, channels)``.</span>
 
-<span class="sd">            cropped_data_mask (5D Numpy array, optional): cropped image data </span>
-<span class="sd">            masks. E.g. (vol_number, x, y, z, channels).</span>
+<span class="sd">       cropped_data_mask : 5D Numpy array, optional</span>
+<span class="sd">           Cropped image data masks. E.g. ``(vol_number, x, y, z, channels)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### 3D-OV-CROP ###&quot;</span><span class="p">)</span>
@@ -995,26 +1036,33 @@
     <span class="sd">&quot;&quot;&quot;Merge data with an amount of overlap. Used to undo the crop made by the </span>
 <span class="sd">       function crop_data_with_overlap.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            data (4D Numpy array): data to merge.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       data : 4D Numpy array</span>
+<span class="sd">           Data to merge. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            original_shape (4D int tuple): original dimensions to reconstruct. </span>
+<span class="sd">       original_shape : 4D int tuple</span>
+<span class="sd">           Original dimensions to reconstruct. </span>
 
-<span class="sd">            window_size (int): crop size.</span>
+<span class="sd">       window_size : int    </span>
+<span class="sd">           Crop size.</span>
 
-<span class="sd">            subdivision (int): number of crops to merge.</span>
+<span class="sd">       subdivision : int</span>
+<span class="sd">           Number of crops to merge.</span>
 
-<span class="sd">            out_dir (str, optional): directory where the images will be save.</span>
+<span class="sd">       out_dir : str, optional</span>
+<span class="sd">           Directory where the images will be save.</span>
 
-<span class="sd">            ov_map (bool, optional): whether to create overlap map.</span>
+<span class="sd">       ov_map : bool, optional</span>
+<span class="sd">           Whether to create overlap map.</span>
 
-<span class="sd">            ov_data_img (int, optional): number of the image on the data to </span>
-<span class="sd">            create the overlappng map.</span>
+<span class="sd">       ov_data_img : int, optional</span>
+<span class="sd">           Number of the image on the data to create the overlappng map.</span>
 
-<span class="sd">       Returns:</span>
-<span class="sd">            merged_data (4D Numpy array): merged image data.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       merged_data : 4D Numpy array</span>
+<span class="sd">           Merged image data. E.g. ``(image_number, x, y, channels)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### MERGE-OV-CROP ###&quot;</span><span class="p">)</span>
@@ -1163,23 +1211,27 @@
     <span class="sd">&quot;&quot;&quot;Combine images from input data into a bigger one given shape. It is the </span>
 <span class="sd">       opposite function of crop_data().</span>
 
-<span class="sd">       Args:                                                                    </span>
-<span class="sd">            data (4D Numpy array): data to crop.                                </span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------                                                                    </span>
+<span class="sd">       data : 4D Numpy array</span>
+<span class="sd">           Data to crop. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            num (int, optional): number of examples to convert.</span>
+<span class="sd">       num : int, optional</span>
+<span class="sd">           Number of examples to convert.</span>
 
-<span class="sd">            out_shape (2D int tuple, optional): number of horizontal and </span>
-<span class="sd">            vertical images to combine in a single one.</span>
+<span class="sd">       out_shape : 2D int tuple, optional</span>
+<span class="sd">           Number of horizontal and vertical images to combine in a single one.</span>
 
-<span class="sd">            grid (bool, optional): make the grid in the output image.</span>
+<span class="sd">       grid : bool, optional</span>
+<span class="sd">           Make the grid in the output image.</span>
 
-<span class="sd">       Returns:                                                                 </span>
-<span class="sd">            mixed_data (4D Numpy array): mixed data images.                 </span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------                                                                 </span>
+<span class="sd">       mixed_data : 4D Numpy array</span>
+<span class="sd">           Mixed data images. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            mixed_data_mask (4D Numpy array): mixed data masks.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       mixed_data_mask : 4D Numpy array</span>
+<span class="sd">           Mixed data masks. E.g. ``(image_number, x, y, channels)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### MERGE-CROP ###&quot;</span><span class="p">)</span>
@@ -1220,27 +1272,30 @@
 <div class="viewcode-block" id="merge_3D_data_with_overlap"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.merge_3D_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">merge_3D_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">orig_vol_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
                                <span class="n">overlap_z</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Merge 3D smaller volumes in a 3D full volume with a defined overlap.</span>
-<span class="sd">       Reverse operation of crop_3D_data_with_overlap().</span>
+<span class="sd">       Reverse operation of ``crop_3D_data_with_overlap()``.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            data (5D Numpy array): data to crop.</span>
-<span class="sd">            E.g. (volume_number, x, y, z, channels).</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       data : 5D Numpy array</span>
+<span class="sd">           Data to crop. E.g. ``(volume_number, x, y, z, channels)``.</span>
 
-<span class="sd">            orig_vol_shape (4D int tuple): shape of the desired volumes to be </span>
-<span class="sd">            created.</span>
+<span class="sd">       orig_vol_shape : 4D int tuple</span>
+<span class="sd">           shape of the desired volumes to be created.</span>
 
-<span class="sd">            data_mask (4D Numpy array, optional): data mask to crop.</span>
-<span class="sd">            E.g. (volume_number, x, y, z, channels).</span>
+<span class="sd">       data_mask : 4D Numpy array, optional</span>
+<span class="sd">           Data mask to crop. E.g. ``(volume_number, x, y, z, channels)``.</span>
 
-<span class="sd">            overlap_z (float, optional): amount of overlap on z dimension. The</span>
-<span class="sd">            value must be on range [0, 1), that is, 0% or 99% of overlap.</span>
+<span class="sd">       overlap_z : float, optional</span>
+<span class="sd">           Amount of overlap on z dimension. The value must be on range </span>
+<span class="sd">           ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.</span>
 
-<span class="sd">       Returns:</span>
-<span class="sd">            merged_data (4D Numpy array): cropped image data.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       merged_data : 4D Numpy array</span>
+<span class="sd">           Cropped image data. E.g. ``(image_number, x, y, channels)``.</span>
 
-<span class="sd">            merged_data_mask (5D Numpy array, optional): cropped image data </span>
-<span class="sd">            masks. E.g. (image_number, x, y, channels).</span>
+<span class="sd">       merged_data_mask : 5D Numpy array, optional</span>
+<span class="sd">           Cropped image data masks. E.g. ``(image_number, x, y, channels)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span> 
  
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### MERGE-3D-OV-CROP ###&quot;</span><span class="p">)</span>
@@ -1336,23 +1391,28 @@
                 <span class="n">out_dir</span><span class="o">=</span><span class="s2">&quot;check_crops&quot;</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;_none_&quot;</span><span class="p">,</span> <span class="n">grid</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Check cropped images by the function crop_data(). </span>
 <span class="sd">        </span>
-<span class="sd">       Args:</span>
-<span class="sd">            data (4D Numpy array): data to crop.</span>
-<span class="sd">            E.g. (image_number, x, y, channels).</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       data : 4D Numpy array</span>
+<span class="sd">           Data to crop. E.g. ``(image_number, x, y, channels)``.</span>
 <span class="sd">    </span>
-<span class="sd">            out_dim (int 2D tuple): width and height of the image to be </span>
-<span class="sd">            constructed.</span>
+<span class="sd">       out_dim : int 2D tuple</span>
+<span class="sd">           Width and height of the image to be constructed.</span>
 
-<span class="sd">            num_examples (int, optional): number of examples to create.</span>
+<span class="sd">       num_examples : int, optional</span>
+<span class="sd">           Number of examples to create.</span>
 
-<span class="sd">            include_crops (bool, optional): to save cropped images or only the </span>
-<span class="sd">            image to contruct.  </span>
+<span class="sd">       include_crops : bool, optional</span>
+<span class="sd">           To save cropped images or only the image to contruct.  </span>
 
-<span class="sd">            out_dir (string, optional): directory where the images will be save.</span>
+<span class="sd">       out_dir : str, optional</span>
+<span class="sd">           Directory where the images will be save.</span>
 
-<span class="sd">            suffix (string, optional): suffix to add in image names. </span>
+<span class="sd">       suffix : str, optional</span>
+<span class="sd">           Suffix to add in image names. </span>
 
-<span class="sd">            grid (bool, optional): make the grid in the output image.</span>
+<span class="sd">       grid : bool, optional</span>
+<span class="sd">           Make the grid in the output image.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
   
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### CHECK-CROPS ###&quot;</span><span class="p">)</span>
@@ -1407,8 +1467,10 @@
 <span class="sd">       the given path. If the function gives no error one should assume that the</span>
 <span class="sd">       masks are correct.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            path (str): path to the data mask.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       path : str</span>
+<span class="sd">           Path to the data mask.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Checking wheter the images in </span><span class="si">{}</span><span class="s2"> are binary . . .&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
 
@@ -1431,35 +1493,45 @@
                            <span class="n">use_rest</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ov</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>                          
     <span class="sd">&quot;&quot;&quot;Prepare given data into 3D subvolumes to train a 3D network.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            X (Numpy 4D array): data. E.g. (image_number, x, y, channels).      </span>
-<span class="sd">                                                                                </span>
-<span class="sd">            Y (Numpy 4D array): mask data.  E.g. (image_number, x, y, channels).</span>
-<span class="sd">                                                                                </span>
-<span class="sd">            shape (3D int tuple, optional): dimension of the desired images.           </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       X : Numpy 4D array</span>
+<span class="sd">           Data. E.g. ``(image_number, x, y, channels)``.      </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       Y : Numpy 4D array</span>
+<span class="sd">           Mask data. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">                                                                           </span>
+<span class="sd">       shape : 3D int tuple, optional</span>
+<span class="sd">           Dimension of the desired images.           </span>
 
-<span class="sd">            overlap (bool, optional): flag to create subvolumes with overlap</span>
-<span class="sd">            forcing to use all the data. If False as much as possible subvolumes </span>
-<span class="sd">            of the desired shape will be created with the available data, and </span>
-<span class="sd">            the rest of images will be dropped out (depens on &#39;use_rest&#39; value).</span>
-<span class="sd">            Activate it when dealing with test data, as all the images must be </span>
-<span class="sd">            present.</span>
-<span class="sd">        </span>
-<span class="sd">            use_rest (bool, optional): flag to try to use the rest of the images</span>
-<span class="sd">            to create more training data using mirroring. </span>
-<span class="sd">            </span>
-<span class="sd">            ov (float, optional): amount of overlap on z dimension. The value </span>
-<span class="sd">            must be on range [0, 1), that is, 0% or 99% of overlap.</span>
+<span class="sd">       overlap : bool, optional</span>
+<span class="sd">           To create subvolumes with overlap forcing to use all the data. If </span>
+<span class="sd">           ``False`` as much as possible subvolumes of the desired shape will</span>
+<span class="sd">           be created with the available data, and the rest of images will be</span>
+<span class="sd">           dropped out (depens on &#39;use_rest&#39; value). Activate it when dealing</span>
+<span class="sd">           with test data, as all the images must be present.</span>
+<span class="sd">   </span>
+<span class="sd">       use_rest : bool, optional</span>
+<span class="sd">           To try to use the rest of the images to create more training data </span>
+<span class="sd">           using mirroring. </span>
+<span class="sd">       </span>
+<span class="sd">       ov : float, optional</span>
+<span class="sd">           Amount of overlap on z dimension. The value must be on range </span>
+<span class="sd">           ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.</span>
 
-<span class="sd">       Returns:</span>
-<span class="sd">            X_prep (Numpy 5D array): X data separated in different subvolumes </span>
-<span class="sd">            with the desired shape. E.g. (subvolume_number, ) + shape</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       X_prep : Numpy 5D array</span>
+<span class="sd">           X data separated in different subvolumes with the desired shape. E.g.</span>
+<span class="sd">           ``(subvolume_number, ) + shape``.</span>
 <span class="sd">            </span>
-<span class="sd">            Y_prep (Numpy 5D array): Y data separated in different subvolumes     </span>
-<span class="sd">            with the desired shape. E.g. (subvolume_number, ) + shape</span>
+<span class="sd">       Y_prep : Numpy 5D array</span>
+<span class="sd">           Y data separated in different subvolumes with the desired shape. E.g. </span>
+<span class="sd">           ``(subvolume_number, ) + shape``.</span>
 <span class="sd">            </span>
-<span class="sd">            mirrored_subvols (int): number of subvolumes created with the rest</span>
-<span class="sd">            of the images. A valid value is returned when &#39;use_rest&#39; is True.</span>
+<span class="sd">       mirrored_subvols : int</span>
+<span class="sd">           Number of subvolumes created with the rest of the images. A valid</span>
+<span class="sd">           value is returned when ``use_rest`` is ``True``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
                                                                             
     <span class="k">if</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>                                                      
@@ -1574,14 +1646,19 @@
 
 <div class="viewcode-block" id="img_to_onehot_encoding"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.img_to_onehot_encoding">[docs]</a><span class="k">def</span> <span class="nf">img_to_onehot_encoding</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Converts image given into one-hot encode format.</span>
-<span class="sd">       Args:</span>
-<span class="sd">           img (Numpy 4D array): data. E.g. (x, y, z, channels).</span>
+
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       img : Numpy 4D array</span>
+<span class="sd">           Image. E.g. ``(x, y, z, channels)``.</span>
 <span class="sd">            </span>
-<span class="sd">           num_classes (int, optional): number of classes to distinguish.</span>
+<span class="sd">       num_classes : int, optional</span>
+<span class="sd">           Number of classes to distinguish.</span>
 <span class="sd">       </span>
-<span class="sd">       Return: </span>
-<span class="sd">           one_hot_labels (Numpy 4D array): data one-hot encoded. </span>
-<span class="sd">           E.g. (x, y, z, num_classes)</span>
+<span class="sd">       Returns</span>
+<span class="sd">       ------- </span>
+<span class="sd">       one_hot_labels : Numpy 4D array</span>
+<span class="sd">           Data one-hot encoded. E.g. ``(x, y, z, num_classes)``.</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>
 
@@ -1602,19 +1679,55 @@
 
 
 <div class="viewcode-block" id="random_crop"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.random_crop">[docs]</a><span class="k">def</span> <span class="nf">random_crop</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">random_crop_size</span><span class="p">,</span> <span class="n">val</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>                       
-                <span class="n">draw_prob_map_points</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">img_prob</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">weights_on_data</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                <span class="n">weight_map</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>                                               
+                <span class="n">draw_prob_map_points</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">img_prob</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">weight_map</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>                                               
     <span class="sd">&quot;&quot;&quot;Random crop.                                                             </span>
-<span class="sd">                                                                                </span>
-<span class="sd">       Based on:                                                                </span>
-<span class="sd">           https://jkjung-avt.github.io/keras-image-cropping/                   </span>
+<span class="sd">        </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       image : Numpy 3D array                                                     </span>
+<span class="sd">           Image. E.g. ``(x, y, channels)``.</span>
+
+<span class="sd">       mask : Numpy 3D array                                                     </span>
+<span class="sd">           Image mask. E.g. ``(x, y, channels)``.                                    </span>
+<span class="sd">                </span>
+<span class="sd">       random_crop_size : 2 int tuple</span>
+<span class="sd">           Size of the crop. E.g. ``(height, width)``.</span>
+<span class="sd">    </span>
+<span class="sd">       val : bool, optional</span>
+<span class="sd">           If the image provided is going to be used in the validation data. </span>
+<span class="sd">           This forces to crop from the origin, e. g. ``(0, 0)`` point.</span>
+<span class="sd">    </span>
+<span class="sd">       draw_prob_map_points : bool</span>
+<span class="sd">           To return the pixel choosen to be the center of the crop. </span>
+
+<span class="sd">       img_prob : Numpy 3D array, optional</span>
+<span class="sd">           Probability of each pixel to be choosen as the center of the crop. </span>
+<span class="sd">           E. .g. ``(x, y, channels)``.</span>
+
+<span class="sd">       weight_map : bool, optional</span>
+<span class="sd">           Weight map of the given image. E.g. ``(x, y, channels)``.</span>
+
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       img : 2D Numpy array</span>
+<span class="sd">           Crop of the given image. E. g. ``(height, width)``.</span>
+
+<span class="sd">       weight_map : 2D Numpy array, optional</span>
+<span class="sd">           Crop of the given image&#39;s weigth map. E. g. ``(height, width)``.</span>
+<span class="sd">       </span>
+<span class="sd">       ox : int, optional</span>
+<span class="sd">           X coordinate in the complete image of the choosed central pixel to </span>
+<span class="sd">           make the crop.</span>
+<span class="sd">       oy : int, optional</span>
+<span class="sd">           Y coordinate in the complete image of the choosed central pixel to    </span>
+<span class="sd">           make the crop.</span>
+<span class="sd">       x : int, optional</span>
+<span class="sd">           X coordinate in the complete image where the crop starts. </span>
+<span class="sd">       y : int, optional</span>
+<span class="sd">           Y coordinate in the complete image where the crop starts.</span>
 <span class="sd">    &quot;&quot;&quot;</span>                                                                         
                                                                                 
-    <span class="k">if</span> <span class="n">weights_on_data</span> <span class="o">==</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">weight_map</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>                          
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;When &#39;weights_on_data&#39; is selected weight_map must be &quot;</span>
-                         <span class="s2">&quot; provided&quot;</span><span class="p">)</span>                                           
-                                                                                
-    <span class="k">if</span> <span class="n">weights_on_data</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>                                                 
+    <span class="k">if</span> <span class="n">weight_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">img</span><span class="p">,</span> <span class="n">we</span> <span class="o">=</span> <span class="n">image</span>                                                         
     <span class="k">else</span><span class="p">:</span>                                                                       
         <span class="n">img</span> <span class="o">=</span> <span class="n">image</span>                                                             
@@ -1663,7 +1776,7 @@
     <span class="k">if</span> <span class="n">draw_prob_map_points</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>                                            
         <span class="k">return</span> <span class="n">img</span><span class="p">[</span><span class="n">y</span><span class="p">:(</span><span class="n">y</span><span class="o">+</span><span class="n">dy</span><span class="p">),</span> <span class="n">x</span><span class="p">:(</span><span class="n">x</span><span class="o">+</span><span class="n">dx</span><span class="p">),</span> <span class="p">:],</span> <span class="n">mask</span><span class="p">[</span><span class="n">y</span><span class="p">:(</span><span class="n">y</span><span class="o">+</span><span class="n">dy</span><span class="p">),</span> <span class="n">x</span><span class="p">:(</span><span class="n">x</span><span class="o">+</span><span class="n">dx</span><span class="p">),</span> <span class="p">:],</span> <span class="n">ox</span><span class="p">,</span> <span class="n">oy</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span>
     <span class="k">else</span><span class="p">:</span>                                                                       
-        <span class="k">if</span> <span class="n">weights_on_data</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>                                             
+        <span class="k">if</span> <span class="n">weight_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">img</span><span class="p">[</span><span class="n">y</span><span class="p">:(</span><span class="n">y</span><span class="o">+</span><span class="n">dy</span><span class="p">),</span> <span class="n">x</span><span class="p">:(</span><span class="n">x</span><span class="o">+</span><span class="n">dx</span><span class="p">),</span> <span class="p">:],</span> <span class="n">mask</span><span class="p">[</span><span class="n">y</span><span class="p">:(</span><span class="n">y</span><span class="o">+</span><span class="n">dy</span><span class="p">),</span> <span class="n">x</span><span class="p">:(</span><span class="n">x</span><span class="o">+</span><span class="n">dx</span><span class="p">),</span> <span class="p">:],</span>\
                    <span class="n">weight_map</span><span class="p">[</span><span class="n">y</span><span class="p">:(</span><span class="n">y</span><span class="o">+</span><span class="n">dy</span><span class="p">),</span> <span class="n">x</span><span class="p">:(</span><span class="n">x</span><span class="o">+</span><span class="n">dx</span><span class="p">),</span> <span class="p">:]</span>                            
         <span class="k">else</span><span class="p">:</span>                                                                   

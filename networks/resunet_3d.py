@@ -14,34 +14,47 @@ def ResUNet_3D(image_shape, activation='elu', k_init='he_normal',
 
     """Create 3D Residual_U-Net.
 
-       Args:
-            image_shape (array of 3 int): dimensions of the input image.
+       Parameters
+       ----------
+       image_shape : array of 3 int
+           Dimensions of the input image.
 
-            activation (str, optional): Keras available activation type.
+       activation : str, optional
+           Keras available activation type.
 
-            k_init (str, optional): Keras available kernel initializer type.
+       k_init : str, optional
+           Keras available kernel initializer type.
 
-            drop_values (array of floats, optional): dropout value to be fixed.
+       drop_values : array of floats, optional
+           Dropout value to be fixed.
 
-            batch_norm (bool, optional): use batch normalization.
+       batch_norm : bool, optional
+           Use batch normalization.
 
-            feature_maps (array of ints, optional): feature maps to use on each 
-                level. Must have the same length as the ``depth+1``.
-            
-            depth (int, optional): depth of the network.                        
-                                                                                
-            loss_type (str, optional): loss type to use, three type available:  
-                ``bce`` (Binary Cross Entropy), ``w_bce`` (Weighted BCE, based on
-                weigth maps) and ``w_bce_dice`` (Weighted loss: ``weight1*BCE + 
-                weight2*Dice``). 
-                                                                                
-            optimizer (str, optional): optimizer used to minimize the loss      
-                function. Posible options: ``sgd`` or ``adam``.                         
-                                                                                
-            lr (float, optional): learning rate value.
+       feature_maps : array of ints, optional
+           Feature maps to use on each level. Must have the same length as the 
+           ``depth+1``.
+       
+       depth : int, optional
+           Depth of the network.                        
+                                                                           
+       loss_type : str, optional
+           Loss type to use, three type available: ``bce`` (Binary Cross Entropy),
+           ``w_bce`` (Weighted BCE, based on weigth maps) and ``w_bce_dice``
+           (Weighted loss: ``weight1*BCE + weight2*Dice``). 
+                                                                           
+       optimizer : str, optional
+           Optimizer used to minimize the loss function. Posible options: ``sgd``
+           or ``adam``.                         
+                                                                           
+       lr : float, optional
+           Learning rate value.
 
-       Returns:
-            model (Keras model): model containing the U-Net.
+       Returns  
+       -------
+       Model : Keras model
+            Model containing the U-Net.
+
 
        Calling this function with its default parameters returns the following
        network:
@@ -108,31 +121,41 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values,
 
     """Produces a level of the network. It calls itself recursively.
                                                                                 
-       Args:                                                                    
-            x (Keras layer): input layer of the block.                          
-                                                                                
-            depth (int): depth of the network. This value determines 
-            how many times the function will be called recursively.
+       Parameters
+       ----------
+       x : Keras layer
+           Input layer of the block.                          
+                                                                           
+       depth : int
+           Depth of the network. This value determines how many times the 
+           function will be called recursively.
 
-            f_maps (array of ints): feature maps to use.                        
+       f_maps : array of ints
+           Feature maps to use.                        
+                                                                           
+       filter_size : 3 int tuple
+           Height, width and depth of the convolution window.                                                             
+                                                                           
+       activation : str, optional
+           Keras available activation type.        
+                                                                           
+       k_init : str, optional
+           Keras available kernel initializer type.    
+                                                                           
+       drop_values : array of floats, optional
+           Dropout value to be fixed.
+                                                                           
+       batch_norm : bool, optional
+           Use batch normalization.                       
+                                                                           
+       first_block : float, optional
+           To advice the function that it is the first residual block of the
+           network, which avoids Full Pre-Activation layers.                                              
                                                                                 
-            filter_size (3 int tuple): height, width and depth of the convolution
-            window.                                                             
-                                                                                
-            activation (str, optional): Keras available activation type.        
-                                                                                
-            k_init (str, optional): Keras available kernel initializer type.    
-                                                                                
-            drop_values (array of floats, optional): dropout value to be fixed.
-                                                                                
-            batch_norm (bool, optional): flag to use batch normalization.                       
-                                                                                
-            first_block (float, optional): to advice the function that ir it    
-            the first residual block of the network, which avoids Full          
-            Pre-Activation layers.                                              
-                                                                                
-       Returns:                                                                 
-            x (Keras layer): last layer of the levels.
+       Returns
+       -------
+       x : Keras layer
+           last layer of the levels.
     """  
                                                                                 
     if depth > 0:                                                               
@@ -166,28 +189,37 @@ def residual_block(x, f_maps, filter_size, activation='elu', k_init='he_normal',
 
     """Residual block.
                                                                                 
-       Args:                                                                    
-            x (Keras layer): input layer of the block.
-                                                                                
-            f_maps (array of ints): feature maps to use.
-            
-            filter_size (3 int tuple): height, width and depth of the convolution
-            window. 
+       Parameters
+       ----------
+       x : Keras layer
+           iInput layer of the block.
+                                                                           
+       f_maps : array of ints
+           Feature maps to use.
+       
+       filter_size : 3 int tuple
+           Height, width and depth of the convolution window. 
 
-            activation (str, optional): Keras available activation type.        
+       activation : str, optional
+           Keras available activation type.        
+                                                                           
+       k_init : str, optional
+           Keras available kernel initializer type.    
+                                                                           
+       drop_value : float, optional
+           Dropout value to be fixed.
+                                                                           
+       bn : bool, optional
+           Use batch normalization.               
+                                                                           
+       first_block : float, optional
+           To advice the function that it is the first residual block of the 
+           network, which avoids Full Pre-Activation layers.
                                                                                 
-            k_init (str, optional): Keras available kernel initializer type.    
-                                                                                
-            drop_value (float, optional): dropout value to be fixed.
-                                                                                
-            bn (bool, optional): use batch normalization.               
-                                                                                
-            first_block (float, optional): to advice the function that ir it
-            the first residual block of the network, which avoids Full 
-            Pre-Activation layers.
-                                                                                
-       Returns:                                                                 
-            x (Keras layer): last layer of the block.
+       Returns
+       -------
+       x : Keras layer
+           Last layer of the block.
     """ 
                                                                                 
     # Create shorcut                                                            

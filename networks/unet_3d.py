@@ -15,38 +15,50 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
              
     """Create 3D U-Net.
 
-       Args:
-            image_shape (3D tuple): dimensions of the input image.
+       Parameters
+       ----------
+       image_shape :3D tuple
+           Dimensions of the input image.
 
-            activation (str, optional): Keras available activation type.
+       activation : str, optional
+           Keras available activation type.
 
-            feature_maps (array of ints, optional): feature maps to use on each 
-                level. Must have the same length as the ``depth+1``.
-        
-            depth (int, optional): depth of the network.
+       feature_maps : array of ints, optional
+           Feature maps to use on each level. Must have the same length as the 
+           ``depth+1``.
+   
+       depth : int, optional
+           Depth of the network.
 
-            drop_values (float, optional): dropout value to be fixed. 
+       drop_values : float, optional
+           Dropout value to be fixed. 
 
-            spatial_dropout (bool, optional): use spatial dropout instead of the
-                `normal` dropout.
+       spatial_dropout : bool, optional
+           Use spatial dropout instead of the `normal` dropout.
 
-            batch_norm (bool, optional): flag to make batch normalization.
+       batch_norm : bool, optional
+           Make batch normalization.
     
-            k_init (string, optional): kernel initialization for convolutional 
-                layers.
+       k_init : string, optional
+           Kernel initialization for convolutional layers.
 
-            loss_type (str, optional): loss type to use, three type available: 
-                ``bce`` (Binary Cross Entropy) , ``w_bce`` (Weighted BCE, based on
-                weigth maps) and ``w_bce_dice`` (Weighted loss: ``weight1*BCE + 
-                weight2*Dice``). 
+       loss_type : str, optional
+           Loss type to use, three type available: ``bce`` (Binary Cross Entropy) 
+           , ``w_bce`` (Weighted BCE, based on weigth maps) and ``w_bce_dice`` 
+           (Weighted loss: ``weight1*BCE + weight2*Dice``). 
 
-            optimizer (str, optional): optimizer used to minimize the loss
-                function. Posible options: ``sgd`` or ``adam``.
+       optimizer : str, optional
+           Optimizer used to minimize the loss function. Posible options: ``sgd``
+           or ``adam``.
 
-            lr (float, optional): learning rate value.
+       lr : float, optional
+           Learning rate value.
 
-       Returns:
-            model (Keras model): model containing the U-Net.
+       Returns
+       -------
+       model : Keras model
+           Model containing the U-Net.
+
     
        Calling this function with its default parameters returns the following
        network:

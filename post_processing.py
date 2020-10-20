@@ -15,23 +15,31 @@ def spuriuous_detection_filter(Y, low_score_th=0.6, th=0.45):
 
        Based on post-processing made in `Oztel et al <https://ieeexplore.ieee.org/abstract/document/8217827?casa_token=ga4A1VzvnykAAAAA:U7iBJ2H0qD4MU4Z1JzdzobNx_vCxwM89fzy39IwAPT8TsRuESFu_rFzKKHspp6-EKTGRoOHh2g>`_.
        
-       Args:
-            Y (4D Numpy array): data to apply the filter. 
-                E.g. ``(img_number, x, y, channels)``. 
+       Parameters
+       ----------
+       Y : 4D Numpy array
+           Data to apply the filter. E.g. ``(img_number, x, y, channels)``. 
     
-            low_score_th (float, optional): the minimun class score that the 
-                artifact must have to not be discarded. Must be a value between 
-                ``0`` and ``1``. 
+       low_score_th : float, optional
+           Minimun class score that the artifact must have to not be discarded. 
+           Must be a value between ``0`` and ``1``. 
             
-            th (float, optional): threshold applied to binarize the given images.
-                Must be a vaue between ``0`` and ``1``.
+       th : float, optional
+           Threshold applied to binarize the given images. Must be a vaue 
+           between ``0`` and ``1``.
 
-       Return:
-           4D Numpy array: filtered data. E.g. ``(img_number, x, y, channels)``. 
+       Returns
+       -------
+       Array : 4D Numpy array
+           Filtered data. E.g. ``(img_number, x, y, channels)``. 
 
-       Raises:
-           ValueError: if ``low_score_th`` not in ``[0, 1]``
-           ValueError: if ``th`` not in ``[0, 1]``
+       Raises
+       ------
+       ValueError
+           If ``low_score_th`` not in ``[0, 1]``
+
+       ValueError
+           If ``th`` not in ``[0, 1]``
     """
         
     if low_score_th < 0 or low_score_th > 1:
@@ -62,22 +70,26 @@ def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
 
        Based on https://docs.opencv.org/master/d3/db4/tutorial_py_watershed.html.
 
-       Args:
-            X (4D Numpy array): original data to guide the watershed.
-                E.g. ``(img_number, x, y, channels)``.
+       Parameters
+       ----------
+       X : 4D Numpy array
+           Original data to guide the watershed. E.g. ``(img_number, x, y, channels)``.
 
-            Y_pred (4D Numpy array): predicted data to refine the boundaries.
-                E.g. ``(img_number, x, y, channels)``.
+       Y_pred : 4D Numpy array
+           Predicted data to refine the boundaries. E.g. ``(img_number, x, y, channels)``.
 
-            erode (bool, optional): flag to extract the sure foreground eroding 
-                the artifacts instead of doing with distanceTransform.  
+       erode : bool, optional
+           To extract the sure foreground eroding the artifacts instead of doing 
+           with distanceTransform.  
 
-            save_marks_dir (str, optional): directory to save the markers used 
-                to make the watershed. Useful for debugging. 
+       save_marks_dir : str, optional
+           Directory to save the markers used to make the watershed. Useful for 
+           debugging. 
 
-       Returns:
-           4D Numpy array: refined boundaries of the predictions. 
-           E.g. ``(img_number, x, y, channels)``.
+       Returns
+       -------
+       Array : 4D Numpy array
+           Refined boundaries of the predictions. E.g. ``(img_number, x, y, channels)``.
         
        Examples
        --------
@@ -162,19 +174,22 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
 
        Based on https://scikit-image.org/docs/dev/auto_examples/segmentation/plot_watershed.html. 
 
-       Args:
-            X (4D Numpy array): original data to guide the watershed.
-                E.g. ``(img_number, x, y, channels)``.
+       Parameters
+       ----------
+       X : 4D Numpy array
+           Original data to guide the watershed. E.g. ``(img_number, x, y, channels)``.
 
-            Y_pred (4D Numpy array): predicted data to refine the boundaries.
-                E.g. ``(img_number, x, y, channels)``.
+       Y_pred : 4D Numpy array
+           Predicted data to refine the boundaries. E.g. ``(img_number, x, y, channels)``.
 
-            save_marks_dir (str, optional): directory to save the markers used 
-                to make the watershed. Useful for debugging. 
+       save_marks_dir : str, optional
+           Directory to save the markers used to make the watershed. Useful for 
+           debugging. 
 
-       Returns:
-           4D Numpy array: refined boundaries of the predictions. 
-           E.g. ``(img_number, x, y, channels)``.
+       Returns
+       -------
+       Array : 4D Numpy array
+           Refined boundaries of the predictions. E.g. ``(img_number, x, y, channels)``.
     """
 
     if save_marks_dir is not None:
@@ -214,15 +229,18 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
 def calculate_z_filtering(data, mf_size=5):
     """Applies a median filtering in the z dimension of the provided data.
 
-       Args:
-            data (4D Numpy array): data to apply the filter to.
-                E.g. ``(image_number, x, y, channels)``.
+       Parameters
+       ----------
+       data : 4D Numpy array
+           Data to apply the filter to. E.g. ``(image_number, x, y, channels)``.
 
-            mf_size (int, optional): size of the median filter. Must be an odd
-                number.
+       mf_size : int, optional
+           Size of the median filter. Must be an odd number.
 
-       Returns:
-            4D Numpy array: z filtered data. E.g. ``(image_number, x, y, channels)``.
+       Returns
+       -------
+       Array : 4D Numpy array
+           Z filtered data. E.g. ``(image_number, x, y, channels)``.
     """
 
     out_data = np.copy(data)

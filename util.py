@@ -1,5 +1,6 @@
 import os
 import math
+#import mkl
 import numpy as np
 import time
 import random
@@ -18,8 +19,10 @@ from metrics import jaccard_index, jaccard_index_numpy, voc_calculation, \
 def limit_threads(threads_number='1'):
     """Limits the number of threads for a python process.
        
-       Args: 
-            threads_number (int, optional): number of threads.
+       Parameters
+       ---------- 
+       threads_number : int, optional
+           Number of threads.
     """
 
     print("Python process limited to {} thread".format(threads_number))
@@ -30,16 +33,20 @@ def limit_threads(threads_number='1'):
     os.environ["NUMEXPR_NUM_THREADS"]='1';
     os.environ["VECLIB_MAXIMUM_THREADS"]='1';
     os.environ["OMP_NUM_THREADS"] = '1';
+    #mkl.set_num_threads(1)
 
 
 def set_seed(seedValue=42, determinism=False):
     """Sets the seed on multiple python modules to obtain results as 
        reproducible as possible.
 
-       Args:
-           seedValue (int, optional): seed value.
+       Parameters
+       ----------
+       seedValue : int, optional
+           Seed value.
         
-           determinism (bool, optional): to force determism. 
+       determinism : bool, optional
+           To force determism. 
     """
 
     random.seed = seedValue
@@ -67,16 +74,21 @@ class TimeHistory(tf.keras.callbacks.Callback):
 def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
     """Create loss and main metric plots with the given results.
 
-       Args:
-            results (Keras History object): record of training loss values and 
-                metrics values at successive epochs. History object is returned
-                by Keras `fit() <https://keras.io/api/models/model_training_apis/#fit-method>`_ method.
+       Parameters
+       ----------
+       results : Keras History object
+           Record of training loss values and metrics values at successive 
+           epochs. History object is returned by Keras `fit() 
+           <https://keras.io/api/models/model_training_apis/#fit-method>`_ method.
 
-            job_id (str): jod identifier.
+       job_id : str
+           Jod identifier.
 
-            chartOutDir (str): path where the charts will be stored into.
+       chartOutDir : str    
+           Path where the charts will be stored into.
             
-            metric (str, optional): metric used.
+       metric : str, optional
+           Metric used.
 
        Examples
        --------
@@ -121,15 +133,17 @@ def store_history(results, score, time_callback, log_dir, job_file,
     """Stores the results obtained as csv to manipulate them later 
        and labeled in another file as historic results.
 
-       Args:
-            results (history object): record of training loss values and metrics 
-                values at successive epochs.
+       Parameters
+       ----------
+       results : Keras History object
+           Record of training loss values and metrics values at successive 
+           epochs.
 
-            score (Dictionary): contains all metrics values extracted from 
-                training and inference. 
+       score : Dictionary
+           Contains all metrics values extracted from training and inference. 
 
-            time_callback (util.TimeHistory): time structure with the time of 
-                each epoch.
+       time_callback : ``util.TimeHistory``
+           Time structure with the time of each epoch.
     """
 
     # Create folders and construct file names
@@ -284,40 +298,49 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path,
     """Create a plot with the different metric values binarizing the prediction
        with different thresholds, from 0.1 to 0.9.
                                                                                 
-       Args:                                                                    
-           preds_test (4D Numpy array): predictions made by the model. 
-               E.g. ``(image_number, x, y, channels)``.
+       Parameters
+       ----------                                                                    
+       preds_test : 4D Numpy array
+           Predictions made by the model. E.g. ``(image_number, x, y, channels)``.
 
-           Y_test (4D Numpy array): ground truth of the data.
-               E.g. ``(image_number, x, y, channels)``.
+       Y_test : 4D Numpy array
+           Ground truth of the data. E.g. ``(image_number, x, y, channels)``.
 
-           det_eval_ge_path (str): path where the ground truth is stored for 
-               the DET calculation.
+       det_eval_ge_path : str
+           Path where the ground truth is stored for the DET calculation.
 
-           det_eval_path (str): path where the evaluation of the metric will be done.
+       det_eval_path : str
+           Path where the evaluation of the metric will be done.
 
-           det_bin (str): path to the DET binary.
+       det_bin : str 
+           Path to the DET binary.
 
-           n_dig (int): The number of digits used for encoding temporal indices
-               (e.g. ``3``). Used by the DET calculation binary.
+       n_dig : int
+           The number of digits used for encoding temporal indices (e.g. ``3``).
+           Used by the DET calculation binary.
 
-           job_id (str): id of the job.
+       job_id : str
+           Id of the job.
 
-           job_file (str): id and run number of the job.
+       job_file : str
+           Id and run number of the job.
 
-           char_dir (str): path to store the charts generated.
+       char_dir : str
+           Path to store the charts generated.
 
-           r_val (float, optional): threshold values to return. 
+       r_val : float, optional
+           Threshold values to return. 
 
-       Returns:
-           Multiple elements
-            
-               - **t_jac** (*float*): value of the Jaccard index when the 
-                 threshold is ``r_val``.
+       Returns
+       -------
+       t_jac : float
+           Value of the Jaccard index when the threshold is ``r_val``.
 
-               - **t_voc** (*float*): value of VOC when the threshold is ``r_val``.
+       t_voc : float
+           Value of VOC when the threshold is ``r_val``.
 
-               - **t_det** (*float*): value of DET when the threshold is ``r_val``.
+       t_det : float
+           Value of DET when the threshold is ``r_val``.
 
        Examples
        -------- 
@@ -482,20 +505,24 @@ def img_to_array(img, data_format='channels_last', dtype='float32'):
 def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
     """Save images in the given directory. 
 
-       Args:                                                                    
-            X (4D numpy array, optional): data to save as images. The first 
-                dimension must be the number of images.
-                E.g. ``(image_number, x, y, channels)``.
+       Parameters
+       ----------                                                                    
+       X : 4D numpy array, optional
+           Data to save as images. The first dimension must be the number of 
+           images. E.g. ``(image_number, x, y, channels)``.
     
-            data_dir (str, optional): path to store X images.
+       data_dir : str, optional
+           Path to store X images.
 
-            Y (4D numpy array, optional): masks to save as images. The first 
-                dimension must be the number of images.
-                E.g. ``(image_number, x, y, channels)``.
+       Y : 4D numpy array, optional
+           Masks to save as images. The first dimension must be the number of 
+           images. E.g. ``(image_number, x, y, channels)``.
 
-            mask_dir (str, optional): path to store Y images. 
+       mask_dir : str, optional
+           Path to store Y images. 
 
-            prefix (str, optional): path to store generated charts.
+       prefix : str, optional
+           Path to store generated charts.
     """   
 
     if prefix is "":
@@ -557,36 +584,36 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
        
 
 def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
-    """
-    Generates a weight map in order to make the U-Net learn better the          
-    borders of cells and distinguish individual cells that are tightly packed.  
-    These weight maps follow the methodology of the original U-Net paper.
+    """Generates a weight map in order to make the U-Net learn better the          
+       borders of cells and distinguish individual cells that are tightly packed.  
+       These weight maps follow the methodology of the original U-Net paper.
 
-    Based on `unet/py_files/helpers.py <https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py>`_.
-
-    Args:
-
-        label (3D numpy array): corresponds to a label image. 
-            E.g. ``(x, y, channels)``.
-
-        binary (bool, optional): corresponds to whether or not the labels are   
-            binary.                                                             
-                                                                                
-        w0 (float, optional): controls for the importance of separating tightly 
-            associated entities.                                                
-                                                                                
-        sigma (int, optional): represents the standard deviation of the Gaussian
-            used for the weight map.
-
-    Example
-    -------
-
-    Notice that weight has been defined where the objects are almost touching 
-    each other.
-
-    .. image:: img/weight_map.png
-        :width: 650
-        :align: center
+       Based on `unet/py_files/helpers.py <https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py>`_.
+   
+       Parameters
+       ----------
+   
+       label : 3D numpy array
+          Corresponds to a label image. E.g. ``(x, y, channels)``.
+   
+       binary : bool, optional
+          Corresponds to whether or not the labels are binary.                                                             
+                                                                                   
+       w0 : float, optional
+          Controls for the importance of separating tightly associated entities.                                                
+                                                                                   
+       sigma : int, optional
+          Represents the standard deviation of the Gaussian used for the weight map.
+   
+       Example
+       -------
+   
+       Notice that weight has been defined where the objects are almost touching 
+       each other.
+   
+       .. image:: img/weight_map.png
+           :width: 650
+           :align: center
     """
     
     # Initialization.
@@ -664,24 +691,27 @@ def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
 
 def do_save_wm(labels, path, binary = True, w0 = 10, sigma = 5):
     """Retrieves the label images, applies the weight-map algorithm and save the
-    weight maps in a folder. Uses internally :meth:`util.make_weight_map`.
-
-    Based on `deepimagejunet/py_files/helpers.py <https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py>`_.
-
-    Args:
-        labels (4D numpy array): corresponds to given label images.
-            E.g. ``(image_number, x, y, channels)``.
-    
-        path (str): refers to the path where the weight maps should be saved.
-    
-        binary (bool, optional): corresponds to whether or not the labels are
-            binary. 
-    
-        w0 (float, optional): controls for the importance of separating tightly 
-            associated entities. 
-        
-        sigma (int, optional): represents the standard deviation of the Gaussian
-            used for the weight map.
+       weight maps in a folder. Uses internally :meth:`util.make_weight_map`.
+   
+       Based on `deepimagejunet/py_files/helpers.py <https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py>`_.
+   
+       Parameters
+       ----------
+       labels : 4D numpy array
+           Corresponds to given label images. E.g. ``(image_number, x, y, channels)``.
+       
+       path : str
+           Refers to the path where the weight maps should be saved.
+       
+       binary : bool, optional
+           Corresponds to whether or not the labels are binary. 
+       
+       w0 : float, optional
+           Controls for the importance of separating tightly associated entities. 
+           
+       sigma : int, optional
+           Represents the standard deviation of the Gaussian used for the weight 
+           map.
     """
     
     # Copy labels.
@@ -713,15 +743,21 @@ def do_save_wm(labels, path, binary = True, w0 = 10, sigma = 5):
 
 
 def foreground_percentage(mask, class_tag):
-    """ Percentage of pixels that corresponds to the class in the given image.
+    """Percentage of pixels that corresponds to the class in the given image.
 
-        Args:
-             mask (2D Numpy array): image mask to analize.
+       Parameters
+       ----------
+       mask : 2D Numpy array
+           Image mask to analize.
 
-             class_tag (int): class to find in the image.
+       class_tag : int
+           Class to find in the image.
 
-        Returns:
-            float: percentage of pixels that corresponds to the class. Value between 0 and 1.
+       Returns
+       -------
+       x : float
+           Percentage of pixels that corresponds to the class. Value between ``0`` 
+           and ``1``.
     """
 
     c = 0
@@ -738,19 +774,25 @@ def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, th=0.8):
        labeled as the class (in percentage) than the given threshold will be 
        stored. 
     
-       Args:
-            data (4D numpy array): data to save as images. The first dimension
-                must be the number of images. ``E.g. (image_number, x, y, channels)``.
+       Parameters
+       ----------
+       data : 4D numpy array
+           Data to save as images. The first dimension must be the number of 
+           images. ``E.g. (image_number, x, y, channels)``.
 
-            data_mask (4D numpy array): data mask to save as images.  The first 
-                dimension must be the number of images. ``E.g. (image_number, x, y, channels)``.
+       data_mask : 4D numpy array
+           Data mask to save as images.  The first dimension must be the number 
+           of images. ``E.g. (image_number, x, y, channels)``.
 
-            out_dir (str): path to save the images.
+       out_dir : str
+           Path to save the images.
 
-            num_classes (int, optional): number of classes. 
+       num_classes : int, optional
+           Number of classes. 
 
-            th (float, optional): percentage of the pixels that must be labeled
-                as a class to save it inside that class folder. 
+       th : float, optional
+           Percentage of the pixels that must be labeled as a class to save it
+           inside that class folder. 
     """
         
     # Create the directories
@@ -778,28 +820,36 @@ def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, th=0.8):
 
 def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="",
                               img_per_row=8):
-
     """Create an image of the filters learned by a convolutional layer. One can 
-       identify the layer with 'l_num' or 'name' args. If both are passed 'name'
-       will be prioritized. 
+       identify the layer with ``l_num`` or ``name`` args. If both are passed 
+       ``name`` will be prioritized. 
     
-       Inspired by https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks/
+       Inspired by https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks
 
-       Args:
-            model (Keras Model): model where the layers are stored.
+       Parameters
+       ----------
+       model : Keras Model
+           Model where the layers are stored.
 
-            out_dir (str): path where the image will be stored.
+       out_dir : str
+           Path where the image will be stored.
         
-            l_num (int, optional): number of the layer to extract filters from. 
+       l_num : int, optional
+           Number of the layer to extract filters from. 
             
-            name (str, optional): name of the layer to extract filters from.
+       name : str, optional
+           Name of the layer to extract filters from.
 
-            prefix (str, optional): prefix to add to the output image name. 
+       prefix : str, optional
+           Prefix to add to the output image name. 
         
-            img_per_row (int, optional): filters per row on the image.
+       img_per_row : int, optional
+           Filters per row on the image.
 
-       Raises:
-           ValueError: if ``l_num`` and ``name`` not provided.     
+       Raises   
+       ------
+       ValueError
+           if ``l_num`` and ``name`` not provided.     
 
        Examples
        --------
@@ -857,22 +907,35 @@ def calculate_2D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
                                  save_file=None):
     """Calculate the probability map of the given 2D data.
 
-       Args:
-            Y (4D Numpy array): data to calculate the probability map from.
-                E. g. ``(image_number, x, y, channel)``
-            w_foreground (float, optional): weight of the foreground. This value
-                plus w_background must be equal 1.
-            w_background (float, optional): weight of the background. This value
-                plus w_foreground must be equal 1.
-            save_file (str, optional): path to the file where the probability
-                map will be stored.
+       Parameters
+       ----------
+       Y : 4D Numpy array
+           Data to calculate the probability map from. E. g. ``(image_number, x, 
+           y, channel)``
 
-       Return:
-           4D Numpy array: probability map of the given data.
+       w_foreground : float, optional
+           Weight of the foreground. This value plus ``w_background`` must be 
+           equal ``1``.
 
-       Raises:
-           ValueError: if ``Y`` does not have 4 dimensions.
-           ValueError: if ``w_foreground + w_background > 1``.
+       w_background : float, optional
+           Weight of the background. This value plus ``w_foreground`` must be 
+           equal ``1``.
+
+       save_file : str, optional
+           Path to the file where the probability map will be stored.
+
+       Raises
+       ------
+       ValueError
+           if ``Y`` does not have 4 dimensions.                     
+
+       ValueError
+           if ``w_foreground + w_background > 1``.
+
+       Returns
+       -------
+       Array : 4D Numpy array
+           Probability map of the given data.
     """
 
     if Y.ndim != 4:
@@ -911,22 +974,34 @@ def calculate_3D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
                                  save_file=None):
     """Calculate the probability map of the given 3D data.
        
-       Args: 
-            Y (5D Numpy array): data to calculate the probability map from.
-                E. g. ``(num_subvolumes, x, y, z, channel)``
-            w_foreground (float, optional): weight of the foreground. This value
-                plus w_background must be equal 1.
-            w_background (float, optional): weight of the background. This value
-                plus w_foreground must be equal 1.
-            save_file (str, optional): path to the file where the probability
-                map will be stored.
+       Parameters
+       ---------- 
+       Y : 5D Numpy array
+           Data to calculate the probability map from. E. g. ``(num_subvolumes,
+           x, y, z, channel)``
 
-       Return:
-           5D Numpy array: probability map of the given data.
+       w_foreground : float, optional
+           Weight of the foreground. This value plus ``w_background`` must be 
+           equal ``1``.
 
-       Raises:
-           ValueError: if ``Y`` does not have 5 dimensions.
-           ValueError: if ``w_foreground + w_background > 1``.
+       w_background : float, optional
+           Weight of the background. This value plus ``w_foreground`` must be 
+           equal ``1``.
+
+       save_file : str, optional
+           Path to the file where the probability map will be stored.
+
+       Returns
+       -------
+       Array : 5D Numpy array
+           Probability map of the given data.
+
+       Raises
+       ------
+       ValueError
+           if ``Y`` does not have 5 dimensions.
+       ValueError
+           if ``w_foreground + w_background > 1``.
     """
 
     if Y.ndim != 5:
@@ -963,26 +1038,30 @@ def grayscale_2D_image_to_3D(X, Y, th=127):
     """Creates 3D surface from each image in X based on the grayscale of each
        image.
     
-       Args:
-           X (4D numpy array): data that contains the images to create the
-               surfaces from. E.g. ``(image_number, x, y, channels)``.
+       Parameters
+       ----------
+       X : 4D numpy array
+           Data that contains the images to create the surfaces from. E.g. 
+           ``(image_number, x, y, channels)``.
 
-           Y (4D numpy array): data mask of the same shape of X that will be 
-               converted into 3D volume, stacking multiple times each image. 
-               Useful if you need the two data arrays to be of the same shape. 
-               E.g. ``(image_number, x, y, channels)``.
+       Y : 4D numpy array
+           Data mask of the same shape of X that will be converted into 3D volume,
+           stacking multiple times each image. Useful if you need the two data
+           arrays to be of the same shape. E.g. ``(image_number, x, y, channels)``.
 
-           th (int, optional): values to ommit when creating the surfaces. 
-               Useful to reduce the amount of data in z to be created and 
-               reduce computational time.
+       th : int, optional
+           Values to ommit when creating the surfaces. Useful to reduce the
+           amount of data in z to be created and reduce computational time.
 
-       Returns:
-            Multiple elements
+       Returns
+       -------
+       Array : 5D numpy array
+           3D surface of each image provided. E.g. ``(image_number, z, x, y, 
+           channels)``.
 
-           - **5D numpy array**: 3D surface of each image provided.
-             E.g. ``(image_number, z, x, y, channels)``.
-           - **5D numpy array**: 3D stack of each mask provided.                  
-             E.g. ``(image_number, z, x, y, channels)``.
+       Array : 5D numpy array
+           3D stack of each mask provided. E.g. ``(image_number, z, x, y, 
+           channels)``.
     """
 
     print("Creating 3D surface for each image . . .")

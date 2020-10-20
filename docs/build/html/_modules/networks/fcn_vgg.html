@@ -164,18 +164,26 @@
 <div class="viewcode-block" id="FCN32_VGG16"><a class="viewcode-back" href="../../networks_fcn.html#networks.fcn_vgg.FCN32_VGG16">[docs]</a><span class="k">def</span> <span class="nf">FCN32_VGG16</span><span class="p">(</span><span class="n">image_shape</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;adam&quot;</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Create FCN32 network based on a VGG16.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            image_shape (2D tuple): dimensions of the input image.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       image_shape : 2D tuple</span>
+<span class="sd">           Dimensions of the input image.</span>
 
-<span class="sd">            activation (str, optional): Keras available activation type.</span>
+<span class="sd">       activation : str, optional</span>
+<span class="sd">           Keras available activation type.</span>
 
-<span class="sd">            lr (float, optional): learning rate value.</span>
+<span class="sd">       lr : float, optional</span>
+<span class="sd">           Learning rate value.</span>
 
-<span class="sd">            optimizer (str, optional): optimizer used to minimize the loss</span>
-<span class="sd">                function. Posible options: ``sgd`` or ``adam``.</span>
+<span class="sd">       optimizer : str, optional</span>
+<span class="sd">           Optimizer used to minimize the loss function. Posible options: ``sgd`` </span>
+<span class="sd">           or ``adam``.</span>
 
-<span class="sd">       Returns:</span>
-<span class="sd">            Keras model: model containing the FCN32.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       model : Keras model</span>
+<span class="sd">           Model containing the FCN32.</span>
+
 
 <span class="sd">       Calling this function with its default parameters returns the following</span>
 <span class="sd">       network:</span>
@@ -265,18 +273,26 @@
 <div class="viewcode-block" id="FCN8_VGG16"><a class="viewcode-back" href="../../networks_fcn.html#networks.fcn_vgg.FCN8_VGG16">[docs]</a><span class="k">def</span> <span class="nf">FCN8_VGG16</span><span class="p">(</span><span class="n">image_shape</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;adam&quot;</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Create FCN8 network based on a VGG16.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            image_shape (2D tuple): dimensions of the input image.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       image_shape : 2D tuple</span>
+<span class="sd">           Dimensions of the input image.</span>
 
-<span class="sd">            activation (str, optional): Keras available activation type.</span>
+<span class="sd">       activation : str, optional</span>
+<span class="sd">           Keras available activation type.</span>
 
-<span class="sd">            lr (float, optional): learning rate value.</span>
+<span class="sd">       lr : float, optional</span>
+<span class="sd">           Learning rate value.</span>
 
-<span class="sd">            optimizer (str, optional): optimizer used to minimize the loss</span>
-<span class="sd">                function. Posible options: ``sgd`` or ``adam``.</span>
+<span class="sd">       optimizer : str, optional</span>
+<span class="sd">           Optimizer used to minimize the loss function. Posible options: ``sgd`` </span>
+<span class="sd">           or ``adam``.</span>
 
-<span class="sd">       Returns:</span>
-<span class="sd">            Keras model: model containing the FCN8.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       model : Keras model</span>
+<span class="sd">           Model containing the FCN8.</span>
+
 
 <span class="sd">       Calling this function with its default parameters returns the following</span>
 <span class="sd">       network:</span>

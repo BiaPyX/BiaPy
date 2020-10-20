@@ -11,46 +11,55 @@ from metrics import binary_crossentropy_weighted, jaccard_index, \
 def U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 512], 
              depth=4, drop_values=[0.1,0.1,0.2,0.2,0.3], spatial_dropout=False, 
              batch_norm=False, k_init='he_normal', loss_type="bce", 
-             optimizer="sgd", lr=0.001, fine_tunning=False):
+             optimizer="sgd", lr=0.001):
     """Create 2D U-Net.                                                         
                                                                                 
-       Args:                                                                    
-            image_shape (2D tuple): dimensions of the input image.              
+       Parameters
+       ----------
+       image_shape : 2D tuple
+           Dimensions of the input image.              
                                                                                 
-            activation (str, optional): Keras available activation type.        
-                                                                                
-            feature_maps (array of ints, optional): feature maps to use on each 
-                level. Must have the same length as the ``depth+1``.            
-                                                                                
-            depth (int, optional): depth of the network.                        
-                                                                                
-            drop_values (float, optional): dropout value to be fixed. If no     
-                value is provided the default behaviour will be to select a     
-                piramidal value starting from ``0.1`` and reaching ``0.3`` value.
-                                                                                
-            spatial_dropout (bool, optional): use spatial dropout instead of the
-                `normal` dropout.                                               
-                                                                                
-            batch_norm (bool, optional): flag to make batch normalization.      
-                                                                                
-            k_init (string, optional): kernel initialization for convolutional  
-                layers.                                                         
-                                                                                
-            loss_type (str, optional): loss type to use, three type available:  
-                ``bce`` (Binary Cross Entropy) , ``w_bce`` (Weighted BCE, based 
-                on weigth maps) and ``w_bce_dice`` (Weighted loss: ``weight1*BCE 
-                + weight2*Dice``).                                              
-                                                                                
-            optimizer (str, optional): optimizer used to minimize the loss      
-                function. Posible options: ``sgd`` or ``adam``.                 
-                                                                                
-            lr (float, optional): learning rate value.                          
-                                                                                
-            fine_tunning (bool, optional): flag to freeze the encoder part for  
-                fine tuning.                                                    
-                                                                                
-       Returns:                                                                 
-            Keras model: model containing the U-Net.              
+       activation : str, optional
+           Keras available activation type.        
+                                                                           
+       feature_maps : array of ints, optional
+           Feature maps to use on each level. Must have the same length as the 
+           ``depth+1``.            
+                                                                           
+       depth : int, optional
+           Depth of the network.                        
+                                                                           
+       drop_values : float, optional
+           Dropout value to be fixed. If no value is provided the default
+           behaviour will be to select a piramidal value starting from ``0.1`` 
+           and reaching ``0.3`` value.
+                                                                           
+       spatial_dropout : bool, optional
+           Use spatial dropout instead of the `normal` dropout.                                               
+                                                                           
+       batch_norm : bool, optional
+           Make batch normalization.      
+                                                                           
+       k_init : string, optional
+           Kernel initialization for convolutional layers.                                                         
+                                                                           
+       loss_type : str, optional
+           Loss type to use, three type available: ``bce`` (Binary Cross Entropy)
+           , ``w_bce`` (Weighted BCE, based on weigth maps) and ``w_bce_dice``
+           (Weighted loss: ``weight1*BCE + weight2*Dice``).                                              
+                                                                           
+       optimizer : str, optional
+           Optimizer used to minimize the loss function. Posible options: 
+           ``sgd`` or ``adam``.                 
+                                                                           
+       lr : float, optional
+           Learning rate value.                          
+                                                                           
+       Returns
+       -------                                                                 
+       model : Keras model
+           Model containing the U-Net.              
+
 
        Calling this function with its default parameters returns the following  
        network:                                                                 
@@ -150,14 +159,6 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 512]
             amsgrad=False)
     else:
         raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
-
-    # Fine tunning: freeze the enconder part
-    if fine_tunning == True:
-        print("Freezing the contracting path of the U-Net for fine tunning . . .")
-        for layer in model.layers[:20]:
-            layer.trainable = False
-        for layer in model.layers:
-            print("{}: {}".format(layer, layer.trainable))
 
     # Compile the model
     if loss_type == "bce":

@@ -180,29 +180,30 @@ transition down are applied, followed by an upsampling path where
 transition up and dense blocks are applied.  Skip connections are used
 between the downsampling path and the upsampling path Each layer is a
 composite function of BN - ReLU - Conv and the last layer is a softmax layer.</p>
-<dl>
-<dt>Args:</dt><dd><p>image_shape (array of 3 int): dimensions of the input image.</p>
-<dl class="simple">
-<dt>n_filters_first_conv (int, optional): number of filters for the</dt><dd><p>first convolution applied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">int</span></code>) – Dimensions of the input image.</p></li>
+<li><p><strong>n_filters_first_conv</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of filters for the first convolution applied.</p></li>
+<li><p><strong>n_pool</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of pooling layers = number of transition down = number of
+transition up.</p></li>
+<li><p><strong>growth_rate</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of new feature maps created by each layer in a dense block.</p></li>
+<li><p><strong>n_layers_per_block</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Number of layers per block. Can be an int or a list of size
+<code class="docutils literal notranslate"><span class="pre">(2*n_pool)+1</span></code>.</p></li>
+<li><p><strong>dropout_p</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Dropout rate applied after each convolution (<code class="docutils literal notranslate"><span class="pre">0.0</span></code> for not using).</p></li>
+<li><p><strong>loss_type</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Loss type to use, three type available: <code class="docutils literal notranslate"><span class="pre">bce</span></code> (Binary Cross Entropy),
+<code class="docutils literal notranslate"><span class="pre">w_bce</span></code> (Weighted BCE, based on weigth maps) and <code class="docutils literal notranslate"><span class="pre">w_bce_dice</span></code>
+(Weighted loss: <code class="docutils literal notranslate"><span class="pre">weight1*BCE</span> <span class="pre">+</span> <span class="pre">weight2*Dice</span></code>).</p></li>
+<li><p><strong>optimizer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Optimizer used to minimize the loss function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code>
+or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p></li>
+<li><p><strong>lr</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Learning rate value.</p></li>
+</ul>
 </dd>
-<dt>n_pool (int, optional): number of pooling layers = number of</dt><dd><p>transition down = number of transition up.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – Model containing the FC_DenseNet103.</p>
 </dd>
-<dt>growth_rate (int, optional): number of new feature maps created by</dt><dd><p>each layer in a dense block.</p>
-</dd>
-<dt>n_layers_per_block (array of ints, optional): number of layers per</dt><dd><p>block. Can be an int or a list of size <code class="docutils literal notranslate"><span class="pre">(2*n_pool)+1</span></code>.</p>
-</dd>
-<dt>dropout_p (float, optional): dropout rate applied after each</dt><dd><p>convolution (<code class="docutils literal notranslate"><span class="pre">0.0</span></code> for not using).</p>
-</dd>
-<dt>loss_type (str, optional): loss type to use, three type available:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">bce</span></code> (Binary Cross Entropy), <code class="docutils literal notranslate"><span class="pre">w_bce</span></code> (Weighted BCE, based on
-weigth maps) and <code class="docutils literal notranslate"><span class="pre">w_bce_dice</span></code> (Weighted loss: <code class="docutils literal notranslate"><span class="pre">weight1*BCE</span> <span class="pre">+</span>
-<span class="pre">weight2*Dice</span></code>).</p>
-</dd>
-<dt>optimizer (str, optional): optimizer used to minimize the loss</dt><dd><p>function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p>
-</dd>
-</dl>
-<p>lr (float, optional): learning rate value.</p>
-</dd>
-<dt>Returns:</dt><dd><p>model (Keras model): model containing the FC_DenseNet103.</p>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code></p>
 </dd>
 </dl>
 </dd></dl>

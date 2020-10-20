@@ -172,16 +172,21 @@
 <dt id="networks.fcn_vgg.FCN32_VGG16">
 <code class="sig-prename descclassname">networks.fcn_vgg.</code><code class="sig-name descname">FCN32_VGG16</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'relu'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'adam'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/fcn_vgg.html#FCN32_VGG16"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.fcn_vgg.FCN32_VGG16" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create FCN32 network based on a VGG16.</p>
-<dl>
-<dt>Args:</dt><dd><p>image_shape (2D tuple): dimensions of the input image.</p>
-<p>activation (str, optional): Keras available activation type.</p>
-<p>lr (float, optional): learning rate value.</p>
-<dl class="simple">
-<dt>optimizer (str, optional): optimizer used to minimize the loss</dt><dd><p>function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">tuple</span></code>) – Dimensions of the input image.</p></li>
+<li><p><strong>activation</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Keras available activation type.</p></li>
+<li><p><strong>lr</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Learning rate value.</p></li>
+<li><p><strong>optimizer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Optimizer used to minimize the loss function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code>
+or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p></li>
+</ul>
 </dd>
-</dl>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – Model containing the FCN32.</p>
 </dd>
-<dt>Returns:</dt><dd><p>Keras model: model containing the FCN32.</p>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code></p>
 </dd>
 </dl>
 <p>Calling this function with its default parameters returns the following
@@ -194,16 +199,21 @@ network:</p>
 <dt id="networks.fcn_vgg.FCN8_VGG16">
 <code class="sig-prename descclassname">networks.fcn_vgg.</code><code class="sig-name descname">FCN8_VGG16</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'relu'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'adam'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/fcn_vgg.html#FCN8_VGG16"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.fcn_vgg.FCN8_VGG16" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create FCN8 network based on a VGG16.</p>
-<dl>
-<dt>Args:</dt><dd><p>image_shape (2D tuple): dimensions of the input image.</p>
-<p>activation (str, optional): Keras available activation type.</p>
-<p>lr (float, optional): learning rate value.</p>
-<dl class="simple">
-<dt>optimizer (str, optional): optimizer used to minimize the loss</dt><dd><p>function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">tuple</span></code>) – Dimensions of the input image.</p></li>
+<li><p><strong>activation</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Keras available activation type.</p></li>
+<li><p><strong>lr</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Learning rate value.</p></li>
+<li><p><strong>optimizer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Optimizer used to minimize the loss function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code>
+or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p></li>
+</ul>
 </dd>
-</dl>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – Model containing the FCN8.</p>
 </dd>
-<dt>Returns:</dt><dd><p>Keras model: model containing the FCN8.</p>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code></p>
 </dd>
 </dl>
 <p>Calling this function with its default parameters returns the following

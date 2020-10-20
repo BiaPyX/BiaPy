@@ -161,8 +161,9 @@
 <dt id="util.limit_threads">
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">limit_threads</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">threads_number</span><span class="o">=</span><span class="default_value">'1'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#limit_threads"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.limit_threads" title="Permalink to this definition">¶</a></dt>
 <dd><p>Limits the number of threads for a python process.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>threads_number (int, optional): number of threads.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>threads_number</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of threads.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -172,9 +173,12 @@
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">set_seed</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seedValue</span><span class="o">=</span><span class="default_value">42</span></em>, <em class="sig-param"><span class="n">determinism</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#set_seed"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.set_seed" title="Permalink to this definition">¶</a></dt>
 <dd><p>Sets the seed on multiple python modules to obtain results as
 reproducible as possible.</p>
-<dl>
-<dt>Args:</dt><dd><p>seedValue (int, optional): seed value.</p>
-<p>determinism (bool, optional): to force determism.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seedValue</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Seed value.</p></li>
+<li><p><strong>determinism</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To force determism.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -308,15 +312,15 @@ are prefixed with <cite>val_</cite>.</p>
 <dt id="util.create_plots">
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">create_plots</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">results</span></em>, <em class="sig-param"><span class="n">job_id</span></em>, <em class="sig-param"><span class="n">chartOutDir</span></em>, <em class="sig-param"><span class="n">metric</span><span class="o">=</span><span class="default_value">'jaccard_index'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#create_plots"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.create_plots" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create loss and main metric plots with the given results.</p>
-<dl>
-<dt>Args:</dt><dd><dl class="simple">
-<dt>results (Keras History object): record of training loss values and</dt><dd><p>metrics values at successive epochs. History object is returned
-by Keras <a class="reference external" href="https://keras.io/api/models/model_training_apis/#fit-method">fit()</a> method.</p>
-</dd>
-</dl>
-<p>job_id (str): jod identifier.</p>
-<p>chartOutDir (str): path where the charts will be stored into.</p>
-<p>metric (str, optional): metric used.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">History</span> <span class="pre">object</span></code>) – Record of training loss values and metrics values at successive
+epochs. History object is returned by Keras <a class="reference external" href="https://keras.io/api/models/model_training_apis/#fit-method">fit()</a> method.</p></li>
+<li><p><strong>job_id</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Jod identifier.</p></li>
+<li><p><strong>chartOutDir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path where the charts will be stored into.</p></li>
+<li><p><strong>metric</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Metric used.</p></li>
+</ul>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
@@ -346,15 +350,14 @@ by Keras <a class="reference external" href="https://keras.io/api/models/model_t
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">store_history</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">results</span></em>, <em class="sig-param"><span class="n">score</span></em>, <em class="sig-param"><span class="n">time_callback</span></em>, <em class="sig-param"><span class="n">log_dir</span></em>, <em class="sig-param"><span class="n">job_file</span></em>, <em class="sig-param"><span class="n">metric</span><span class="o">=</span><span class="default_value">'jaccard_index'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#store_history"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.store_history" title="Permalink to this definition">¶</a></dt>
 <dd><p>Stores the results obtained as csv to manipulate them later
 and labeled in another file as historic results.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><dl class="simple">
-<dt>results (history object): record of training loss values and metrics</dt><dd><p>values at successive epochs.</p>
-</dd>
-<dt>score (Dictionary): contains all metrics values extracted from</dt><dd><p>training and inference.</p>
-</dd>
-<dt>time_callback (util.TimeHistory): time structure with the time of</dt><dd><p>each epoch.</p>
-</dd>
-</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">History</span> <span class="pre">object</span></code>) – Record of training loss values and metrics values at successive
+epochs.</p></li>
+<li><p><strong>score</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Dictionary</span></code>) – Contains all metrics values extracted from training and inference.</p></li>
+<li><p><strong>time_callback</strong> (<code class="docutils literal notranslate"><span class="pre">util.TimeHistory</span></code>) – Time structure with the time of each epoch.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -364,35 +367,29 @@ and labeled in another file as historic results.</p>
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">threshold_plots</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">preds_test</span></em>, <em class="sig-param"><span class="n">Y_test</span></em>, <em class="sig-param"><span class="n">det_eval_ge_path</span></em>, <em class="sig-param"><span class="n">det_eval_path</span></em>, <em class="sig-param"><span class="n">det_bin</span></em>, <em class="sig-param"><span class="n">n_dig</span></em>, <em class="sig-param"><span class="n">job_id</span></em>, <em class="sig-param"><span class="n">job_file</span></em>, <em class="sig-param"><span class="n">char_dir</span></em>, <em class="sig-param"><span class="n">r_val</span><span class="o">=</span><span class="default_value">0.5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#threshold_plots"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.threshold_plots" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a plot with the different metric values binarizing the prediction
 with different thresholds, from 0.1 to 0.9.</p>
-<dl>
-<dt>Args:</dt><dd><dl class="simple">
-<dt>preds_test (4D Numpy array): predictions made by the model.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-<dt>Y_test (4D Numpy array): ground truth of the data.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-<dt>det_eval_ge_path (str): path where the ground truth is stored for</dt><dd><p>the DET calculation.</p>
-</dd>
-</dl>
-<p>det_eval_path (str): path where the evaluation of the metric will be done.</p>
-<p>det_bin (str): path to the DET binary.</p>
-<dl class="simple">
-<dt>n_dig (int): The number of digits used for encoding temporal indices</dt><dd><p>(e.g. <code class="docutils literal notranslate"><span class="pre">3</span></code>). Used by the DET calculation binary.</p>
-</dd>
-</dl>
-<p>job_id (str): id of the job.</p>
-<p>job_file (str): id and run number of the job.</p>
-<p>char_dir (str): path to store the charts generated.</p>
-<p>r_val (float, optional): threshold values to return.</p>
-</dd>
-<dt>Returns:</dt><dd><p>Multiple elements</p>
-<blockquote>
-<div><ul class="simple">
-<li><p><strong>t_jac</strong> (<em>float</em>): value of the Jaccard index when the
-threshold is <code class="docutils literal notranslate"><span class="pre">r_val</span></code>.</p></li>
-<li><p><strong>t_voc</strong> (<em>float</em>): value of VOC when the threshold is <code class="docutils literal notranslate"><span class="pre">r_val</span></code>.</p></li>
-<li><p><strong>t_det</strong> (<em>float</em>): value of DET when the threshold is <code class="docutils literal notranslate"><span class="pre">r_val</span></code>.</p></li>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>preds_test</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Predictions made by the model. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_test</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Ground truth of the data. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>det_eval_ge_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path where the ground truth is stored for the DET calculation.</p></li>
+<li><p><strong>det_eval_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path where the evaluation of the metric will be done.</p></li>
+<li><p><strong>det_bin</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the DET binary.</p></li>
+<li><p><strong>n_dig</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – The number of digits used for encoding temporal indices (e.g. <code class="docutils literal notranslate"><span class="pre">3</span></code>).
+Used by the DET calculation binary.</p></li>
+<li><p><strong>job_id</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Id of the job.</p></li>
+<li><p><strong>job_file</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Id and run number of the job.</p></li>
+<li><p><strong>char_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to store the charts generated.</p></li>
+<li><p><strong>r_val</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Threshold values to return.</p></li>
 </ul>
-</div></blockquote>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>t_jac</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>) – Value of the Jaccard index when the threshold is <code class="docutils literal notranslate"><span class="pre">r_val</span></code>.</p></li>
+<li><p><strong>t_voc</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>) – Value of VOC when the threshold is <code class="docutils literal notranslate"><span class="pre">r_val</span></code>.</p></li>
+<li><p><strong>t_det</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>) – Value of DET when the threshold is <code class="docutils literal notranslate"><span class="pre">r_val</span></code>.</p></li>
+</ul>
+</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
@@ -431,20 +428,17 @@ of <code class="docutils literal notranslate"><span class="pre">0.4</span></code
 <dt id="util.save_img">
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">save_img</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">data_dir</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">Y</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">mask_dir</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#save_img"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.save_img" title="Permalink to this definition">¶</a></dt>
 <dd><p>Save images in the given directory.</p>
-<dl>
-<dt>Args:</dt><dd><dl class="simple">
-<dt>X (4D numpy array, optional): data to save as images. The first</dt><dd><p>dimension must be the number of images.
-E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-</dl>
-<p>data_dir (str, optional): path to store X images.</p>
-<dl class="simple">
-<dt>Y (4D numpy array, optional): masks to save as images. The first</dt><dd><p>dimension must be the number of images.
-E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-</dl>
-<p>mask_dir (str, optional): path to store Y images.</p>
-<p>prefix (str, optional): path to store generated charts.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Data to save as images. The first dimension must be the number of
+images. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>data_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to store X images.</p></li>
+<li><p><strong>Y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Masks to save as images. The first dimension must be the number of
+images. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>mask_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to store Y images.</p></li>
+<li><p><strong>prefix</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to store generated charts.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -456,19 +450,16 @@ E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,
 borders of cells and distinguish individual cells that are tightly packed.
 These weight maps follow the methodology of the original U-Net paper.</p>
 <p>Based on <a class="reference external" href="https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py">unet/py_files/helpers.py</a>.</p>
-<p>Args:</p>
-<blockquote>
-<div><dl class="simple">
-<dt>label (3D numpy array): corresponds to a label image.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-<dt>binary (bool, optional): corresponds to whether or not the labels are</dt><dd><p>binary.</p>
-</dd>
-<dt>w0 (float, optional): controls for the importance of separating tightly</dt><dd><p>associated entities.</p>
-</dd>
-<dt>sigma (int, optional): represents the standard deviation of the Gaussian</dt><dd><p>used for the weight map.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – Corresponds to a label image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>binary</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Corresponds to whether or not the labels are binary.</p></li>
+<li><p><strong>w0</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Controls for the importance of separating tightly associated entities.</p></li>
+<li><p><strong>sigma</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Represents the standard deviation of the Gaussian used for the weight map.</p></li>
+</ul>
 </dd>
 </dl>
-</div></blockquote>
 <p class="rubric">Example</p>
 <p>Notice that weight has been defined where the objects are almost touching
 each other.</p>
@@ -481,20 +472,16 @@ each other.</p>
 <dd><p>Retrieves the label images, applies the weight-map algorithm and save the
 weight maps in a folder. Uses internally <a class="reference internal" href="#util.make_weight_map" title="util.make_weight_map"><code class="xref py py-meth docutils literal notranslate"><span class="pre">util.make_weight_map()</span></code></a>.</p>
 <p>Based on <a class="reference external" href="https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py">deepimagejunet/py_files/helpers.py</a>.</p>
-<dl>
-<dt>Args:</dt><dd><dl class="simple">
-<dt>labels (4D numpy array): corresponds to given label images.</dt><dd><p>E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-</dl>
-<p>path (str): refers to the path where the weight maps should be saved.</p>
-<dl class="simple">
-<dt>binary (bool, optional): corresponds to whether or not the labels are</dt><dd><p>binary.</p>
-</dd>
-<dt>w0 (float, optional): controls for the importance of separating tightly</dt><dd><p>associated entities.</p>
-</dd>
-<dt>sigma (int, optional): represents the standard deviation of the Gaussian</dt><dd><p>used for the weight map.</p>
-</dd>
-</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>labels</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – Corresponds to given label images. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Refers to the path where the weight maps should be saved.</p></li>
+<li><p><strong>binary</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Corresponds to whether or not the labels are binary.</p></li>
+<li><p><strong>w0</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Controls for the importance of separating tightly associated entities.</p></li>
+<li><p><strong>sigma</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Represents the standard deviation of the Gaussian used for the weight
+map.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -503,11 +490,19 @@ weight maps in a folder. Uses internally <a class="reference internal" href="#ut
 <dt id="util.foreground_percentage">
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">foreground_percentage</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">mask</span></em>, <em class="sig-param"><span class="n">class_tag</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#foreground_percentage"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.foreground_percentage" title="Permalink to this definition">¶</a></dt>
 <dd><p>Percentage of pixels that corresponds to the class in the given image.</p>
-<dl>
-<dt>Args:</dt><dd><p>mask (2D Numpy array): image mask to analize.</p>
-<p>class_tag (int): class to find in the image.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Image mask to analize.</p></li>
+<li><p><strong>class_tag</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Class to find in the image.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>float: percentage of pixels that corresponds to the class. Value between 0 and 1.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>x</strong> – Percentage of pixels that corresponds to the class. Value between <code class="docutils literal notranslate"><span class="pre">0</span></code>
+and <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -518,19 +513,18 @@ weight maps in a folder. Uses internally <a class="reference internal" href="#ut
 <dd><p>Create a folder for each class where the images that have more pixels
 labeled as the class (in percentage) than the given threshold will be
 stored.</p>
-<dl>
-<dt>Args:</dt><dd><dl class="simple">
-<dt>data (4D numpy array): data to save as images. The first dimension</dt><dd><p>must be the number of images. <code class="docutils literal notranslate"><span class="pre">E.g.</span> <span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-<dt>data_mask (4D numpy array): data mask to save as images.  The first</dt><dd><p>dimension must be the number of images. <code class="docutils literal notranslate"><span class="pre">E.g.</span> <span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-</dl>
-<p>out_dir (str): path to save the images.</p>
-<p>num_classes (int, optional): number of classes.</p>
-<dl class="simple">
-<dt>th (float, optional): percentage of the pixels that must be labeled</dt><dd><p>as a class to save it inside that class folder.</p>
-</dd>
-</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – Data to save as images. The first dimension must be the number of
+images. <code class="docutils literal notranslate"><span class="pre">E.g.</span> <span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>data_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – Data mask to save as images.  The first dimension must be the number
+of images. <code class="docutils literal notranslate"><span class="pre">E.g.</span> <span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>out_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to save the images.</p></li>
+<li><p><strong>num_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes.</p></li>
+<li><p><strong>th</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Percentage of the pixels that must be labeled as a class to save it
+inside that class folder.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -539,18 +533,22 @@ stored.</p>
 <dt id="util.save_filters_of_convlayer">
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">save_filters_of_convlayer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">model</span></em>, <em class="sig-param"><span class="n">out_dir</span></em>, <em class="sig-param"><span class="n">l_num</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">name</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">prefix</span><span class="o">=</span><span class="default_value">''</span></em>, <em class="sig-param"><span class="n">img_per_row</span><span class="o">=</span><span class="default_value">8</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#save_filters_of_convlayer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.save_filters_of_convlayer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create an image of the filters learned by a convolutional layer. One can
-identify the layer with ‘l_num’ or ‘name’ args. If both are passed ‘name’
-will be prioritized.</p>
-<p>Inspired by <a class="reference external" href="https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks/">https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks/</a></p>
-<dl>
-<dt>Args:</dt><dd><p>model (Keras Model): model where the layers are stored.</p>
-<p>out_dir (str): path where the image will be stored.</p>
-<p>l_num (int, optional): number of the layer to extract filters from.</p>
-<p>name (str, optional): name of the layer to extract filters from.</p>
-<p>prefix (str, optional): prefix to add to the output image name.</p>
-<p>img_per_row (int, optional): filters per row on the image.</p>
+identify the layer with <code class="docutils literal notranslate"><span class="pre">l_num</span></code> or <code class="docutils literal notranslate"><span class="pre">name</span></code> args. If both are passed
+<code class="docutils literal notranslate"><span class="pre">name</span></code> will be prioritized.</p>
+<p>Inspired by <a class="reference external" href="https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks">https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks</a></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">Model</span></code>) – Model where the layers are stored.</p></li>
+<li><p><strong>out_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path where the image will be stored.</p></li>
+<li><p><strong>l_num</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of the layer to extract filters from.</p></li>
+<li><p><strong>name</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Name of the layer to extract filters from.</p></li>
+<li><p><strong>prefix</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Prefix to add to the output image name.</p></li>
+<li><p><strong>img_per_row</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Filters per row on the image.</p></li>
+</ul>
 </dd>
-<dt>Raises:</dt><dd><p>ValueError: if <code class="docutils literal notranslate"><span class="pre">l_num</span></code> and <code class="docutils literal notranslate"><span class="pre">name</span></code> not provided.</p>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">l_num</span></code> and <code class="docutils literal notranslate"><span class="pre">name</span></code> not provided.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
@@ -567,27 +565,29 @@ the function as follows</p>
 <dt id="util.calculate_2D_volume_prob_map">
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">calculate_2D_volume_prob_map</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">w_foreground</span><span class="o">=</span><span class="default_value">0.94</span></em>, <em class="sig-param"><span class="n">w_background</span><span class="o">=</span><span class="default_value">0.06</span></em>, <em class="sig-param"><span class="n">save_file</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#calculate_2D_volume_prob_map"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.calculate_2D_volume_prob_map" title="Permalink to this definition">¶</a></dt>
 <dd><p>Calculate the probability map of the given 2D data.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><dl class="simple">
-<dt>Y (4D Numpy array): data to calculate the probability map from.</dt><dd><ol class="upperalpha simple" start="5">
-<li><ol class="loweralpha simple" start="7">
-<li><p><code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channel)</span></code></p></li>
-</ol>
-</li>
-</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to calculate the probability map from. E. g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span>
+<span class="pre">y,</span> <span class="pre">channel)</span></code></p></li>
+<li><p><strong>w_foreground</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Weight of the foreground. This value plus <code class="docutils literal notranslate"><span class="pre">w_background</span></code> must be
+equal <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
+<li><p><strong>w_background</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Weight of the background. This value plus <code class="docutils literal notranslate"><span class="pre">w_foreground</span></code> must be
+equal <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
+<li><p><strong>save_file</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to the file where the probability map will be stored.</p></li>
+</ul>
 </dd>
-<dt>w_foreground (float, optional): weight of the foreground. This value</dt><dd><p>plus w_background must be equal 1.</p>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">Y</span></code> does not have 4 dimensions.</p></li>
+<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">w_foreground</span> <span class="pre">+</span> <span class="pre">w_background</span> <span class="pre">&gt;</span> <span class="pre">1</span></code>.</p></li>
+</ul>
 </dd>
-<dt>w_background (float, optional): weight of the background. This value</dt><dd><p>plus w_foreground must be equal 1.</p>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><strong>Array</strong> – Probability map of the given data.</p>
 </dd>
-<dt>save_file (str, optional): path to the file where the probability</dt><dd><p>map will be stored.</p>
-</dd>
-</dl>
-</dd>
-<dt>Return:</dt><dd><p>4D Numpy array: probability map of the given data.</p>
-</dd>
-<dt>Raises:</dt><dd><p>ValueError: if <code class="docutils literal notranslate"><span class="pre">Y</span></code> does not have 4 dimensions.
-ValueError: if <code class="docutils literal notranslate"><span class="pre">w_foreground</span> <span class="pre">+</span> <span class="pre">w_background</span> <span class="pre">&gt;</span> <span class="pre">1</span></code>.</p>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -596,27 +596,29 @@ ValueError: if <code class="docutils literal notranslate"><span class="pre">w_fo
 <dt id="util.calculate_3D_volume_prob_map">
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">calculate_3D_volume_prob_map</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">w_foreground</span><span class="o">=</span><span class="default_value">0.94</span></em>, <em class="sig-param"><span class="n">w_background</span><span class="o">=</span><span class="default_value">0.06</span></em>, <em class="sig-param"><span class="n">save_file</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#calculate_3D_volume_prob_map"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.calculate_3D_volume_prob_map" title="Permalink to this definition">¶</a></dt>
 <dd><p>Calculate the probability map of the given 3D data.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><dl class="simple">
-<dt>Y (5D Numpy array): data to calculate the probability map from.</dt><dd><ol class="upperalpha simple" start="5">
-<li><ol class="loweralpha simple" start="7">
-<li><p><code class="docutils literal notranslate"><span class="pre">(num_subvolumes,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channel)</span></code></p></li>
-</ol>
-</li>
-</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to calculate the probability map from. E. g. <code class="docutils literal notranslate"><span class="pre">(num_subvolumes,</span>
+<span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channel)</span></code></p></li>
+<li><p><strong>w_foreground</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Weight of the foreground. This value plus <code class="docutils literal notranslate"><span class="pre">w_background</span></code> must be
+equal <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
+<li><p><strong>w_background</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Weight of the background. This value plus <code class="docutils literal notranslate"><span class="pre">w_foreground</span></code> must be
+equal <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
+<li><p><strong>save_file</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to the file where the probability map will be stored.</p></li>
+</ul>
 </dd>
-<dt>w_foreground (float, optional): weight of the foreground. This value</dt><dd><p>plus w_background must be equal 1.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>Array</strong> – Probability map of the given data.</p>
 </dd>
-<dt>w_background (float, optional): weight of the background. This value</dt><dd><p>plus w_foreground must be equal 1.</p>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
 </dd>
-<dt>save_file (str, optional): path to the file where the probability</dt><dd><p>map will be stored.</p>
-</dd>
-</dl>
-</dd>
-<dt>Return:</dt><dd><p>5D Numpy array: probability map of the given data.</p>
-</dd>
-<dt>Raises:</dt><dd><p>ValueError: if <code class="docutils literal notranslate"><span class="pre">Y</span></code> does not have 5 dimensions.
-ValueError: if <code class="docutils literal notranslate"><span class="pre">w_foreground</span> <span class="pre">+</span> <span class="pre">w_background</span> <span class="pre">&gt;</span> <span class="pre">1</span></code>.</p>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">Y</span></code> does not have 5 dimensions.</p></li>
+<li><p><strong>ValueError</strong> – if <code class="docutils literal notranslate"><span class="pre">w_foreground</span> <span class="pre">+</span> <span class="pre">w_background</span> <span class="pre">&gt;</span> <span class="pre">1</span></code>.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -626,28 +628,26 @@ ValueError: if <code class="docutils literal notranslate"><span class="pre">w_fo
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">grayscale_2D_image_to_3D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span></em>, <em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">th</span><span class="o">=</span><span class="default_value">127</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#grayscale_2D_image_to_3D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.grayscale_2D_image_to_3D" title="Permalink to this definition">¶</a></dt>
 <dd><p>Creates 3D surface from each image in X based on the grayscale of each
 image.</p>
-<dl>
-<dt>Args:</dt><dd><dl class="simple">
-<dt>X (4D numpy array): data that contains the images to create the</dt><dd><p>surfaces from. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-<dt>Y (4D numpy array): data mask of the same shape of X that will be</dt><dd><p>converted into 3D volume, stacking multiple times each image.
-Useful if you need the two data arrays to be of the same shape.
-E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-<dt>th (int, optional): values to ommit when creating the surfaces.</dt><dd><p>Useful to reduce the amount of data in z to be created and
-reduce computational time.</p>
-</dd>
-</dl>
-</dd>
-<dt>Returns:</dt><dd><blockquote>
-<div><p>Multiple elements</p>
-</div></blockquote>
-<ul class="simple">
-<li><p><strong>5D numpy array</strong>: 3D surface of each image provided.
-E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>5D numpy array</strong>: 3D stack of each mask provided.
-E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – Data that contains the images to create the surfaces from. E.g.
+<code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – Data mask of the same shape of X that will be converted into 3D volume,
+stacking multiple times each image. Useful if you need the two data
+arrays to be of the same shape. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>th</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Values to ommit when creating the surfaces. Useful to reduce the
+amount of data in z to be created and reduce computational time.</p></li>
 </ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>Array</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – 3D surface of each image provided. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span>
+<span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Array</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – 3D stack of each mask provided. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span>
+<span class="pre">channels)</span></code>.</p></li>
+</ul>
+</p>
 </dd>
 </dl>
 </dd></dl>

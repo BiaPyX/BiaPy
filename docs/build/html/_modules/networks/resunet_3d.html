@@ -170,34 +170,47 @@
 
     <span class="sd">&quot;&quot;&quot;Create 3D Residual_U-Net.</span>
 
-<span class="sd">       Args:</span>
-<span class="sd">            image_shape (array of 3 int): dimensions of the input image.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       image_shape : array of 3 int</span>
+<span class="sd">           Dimensions of the input image.</span>
 
-<span class="sd">            activation (str, optional): Keras available activation type.</span>
+<span class="sd">       activation : str, optional</span>
+<span class="sd">           Keras available activation type.</span>
 
-<span class="sd">            k_init (str, optional): Keras available kernel initializer type.</span>
+<span class="sd">       k_init : str, optional</span>
+<span class="sd">           Keras available kernel initializer type.</span>
 
-<span class="sd">            drop_values (array of floats, optional): dropout value to be fixed.</span>
+<span class="sd">       drop_values : array of floats, optional</span>
+<span class="sd">           Dropout value to be fixed.</span>
 
-<span class="sd">            batch_norm (bool, optional): use batch normalization.</span>
+<span class="sd">       batch_norm : bool, optional</span>
+<span class="sd">           Use batch normalization.</span>
 
-<span class="sd">            feature_maps (array of ints, optional): feature maps to use on each </span>
-<span class="sd">                level. Must have the same length as the ``depth+1``.</span>
-<span class="sd">            </span>
-<span class="sd">            depth (int, optional): depth of the network.                        </span>
-<span class="sd">                                                                                </span>
-<span class="sd">            loss_type (str, optional): loss type to use, three type available:  </span>
-<span class="sd">                ``bce`` (Binary Cross Entropy), ``w_bce`` (Weighted BCE, based on</span>
-<span class="sd">                weigth maps) and ``w_bce_dice`` (Weighted loss: ``weight1*BCE + </span>
-<span class="sd">                weight2*Dice``). </span>
-<span class="sd">                                                                                </span>
-<span class="sd">            optimizer (str, optional): optimizer used to minimize the loss      </span>
-<span class="sd">                function. Posible options: ``sgd`` or ``adam``.                         </span>
-<span class="sd">                                                                                </span>
-<span class="sd">            lr (float, optional): learning rate value.</span>
+<span class="sd">       feature_maps : array of ints, optional</span>
+<span class="sd">           Feature maps to use on each level. Must have the same length as the </span>
+<span class="sd">           ``depth+1``.</span>
+<span class="sd">       </span>
+<span class="sd">       depth : int, optional</span>
+<span class="sd">           Depth of the network.                        </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       loss_type : str, optional</span>
+<span class="sd">           Loss type to use, three type available: ``bce`` (Binary Cross Entropy),</span>
+<span class="sd">           ``w_bce`` (Weighted BCE, based on weigth maps) and ``w_bce_dice``</span>
+<span class="sd">           (Weighted loss: ``weight1*BCE + weight2*Dice``). </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       optimizer : str, optional</span>
+<span class="sd">           Optimizer used to minimize the loss function. Posible options: ``sgd``</span>
+<span class="sd">           or ``adam``.                         </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       lr : float, optional</span>
+<span class="sd">           Learning rate value.</span>
 
-<span class="sd">       Returns:</span>
-<span class="sd">            model (Keras model): model containing the U-Net.</span>
+<span class="sd">       Returns  </span>
+<span class="sd">       -------</span>
+<span class="sd">       Model : Keras model</span>
+<span class="sd">            Model containing the U-Net.</span>
+
 
 <span class="sd">       Calling this function with its default parameters returns the following</span>
 <span class="sd">       network:</span>
@@ -264,31 +277,41 @@
 
     <span class="sd">&quot;&quot;&quot;Produces a level of the network. It calls itself recursively.</span>
 <span class="sd">                                                                                </span>
-<span class="sd">       Args:                                                                    </span>
-<span class="sd">            x (Keras layer): input layer of the block.                          </span>
-<span class="sd">                                                                                </span>
-<span class="sd">            depth (int): depth of the network. This value determines </span>
-<span class="sd">            how many times the function will be called recursively.</span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       x : Keras layer</span>
+<span class="sd">           Input layer of the block.                          </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       depth : int</span>
+<span class="sd">           Depth of the network. This value determines how many times the </span>
+<span class="sd">           function will be called recursively.</span>
 
-<span class="sd">            f_maps (array of ints): feature maps to use.                        </span>
+<span class="sd">       f_maps : array of ints</span>
+<span class="sd">           Feature maps to use.                        </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       filter_size : 3 int tuple</span>
+<span class="sd">           Height, width and depth of the convolution window.                                                             </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       activation : str, optional</span>
+<span class="sd">           Keras available activation type.        </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       k_init : str, optional</span>
+<span class="sd">           Keras available kernel initializer type.    </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       drop_values : array of floats, optional</span>
+<span class="sd">           Dropout value to be fixed.</span>
+<span class="sd">                                                                           </span>
+<span class="sd">       batch_norm : bool, optional</span>
+<span class="sd">           Use batch normalization.                       </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       first_block : float, optional</span>
+<span class="sd">           To advice the function that it is the first residual block of the</span>
+<span class="sd">           network, which avoids Full Pre-Activation layers.                                              </span>
 <span class="sd">                                                                                </span>
-<span class="sd">            filter_size (3 int tuple): height, width and depth of the convolution</span>
-<span class="sd">            window.                                                             </span>
-<span class="sd">                                                                                </span>
-<span class="sd">            activation (str, optional): Keras available activation type.        </span>
-<span class="sd">                                                                                </span>
-<span class="sd">            k_init (str, optional): Keras available kernel initializer type.    </span>
-<span class="sd">                                                                                </span>
-<span class="sd">            drop_values (array of floats, optional): dropout value to be fixed.</span>
-<span class="sd">                                                                                </span>
-<span class="sd">            batch_norm (bool, optional): flag to use batch normalization.                       </span>
-<span class="sd">                                                                                </span>
-<span class="sd">            first_block (float, optional): to advice the function that ir it    </span>
-<span class="sd">            the first residual block of the network, which avoids Full          </span>
-<span class="sd">            Pre-Activation layers.                                              </span>
-<span class="sd">                                                                                </span>
-<span class="sd">       Returns:                                                                 </span>
-<span class="sd">            x (Keras layer): last layer of the levels.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       x : Keras layer</span>
+<span class="sd">           last layer of the levels.</span>
 <span class="sd">    &quot;&quot;&quot;</span>  
                                                                                 
     <span class="k">if</span> <span class="n">depth</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>                                                               
@@ -322,28 +345,37 @@
 
     <span class="sd">&quot;&quot;&quot;Residual block.</span>
 <span class="sd">                                                                                </span>
-<span class="sd">       Args:                                                                    </span>
-<span class="sd">            x (Keras layer): input layer of the block.</span>
-<span class="sd">                                                                                </span>
-<span class="sd">            f_maps (array of ints): feature maps to use.</span>
-<span class="sd">            </span>
-<span class="sd">            filter_size (3 int tuple): height, width and depth of the convolution</span>
-<span class="sd">            window. </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       x : Keras layer</span>
+<span class="sd">           iInput layer of the block.</span>
+<span class="sd">                                                                           </span>
+<span class="sd">       f_maps : array of ints</span>
+<span class="sd">           Feature maps to use.</span>
+<span class="sd">       </span>
+<span class="sd">       filter_size : 3 int tuple</span>
+<span class="sd">           Height, width and depth of the convolution window. </span>
 
-<span class="sd">            activation (str, optional): Keras available activation type.        </span>
+<span class="sd">       activation : str, optional</span>
+<span class="sd">           Keras available activation type.        </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       k_init : str, optional</span>
+<span class="sd">           Keras available kernel initializer type.    </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       drop_value : float, optional</span>
+<span class="sd">           Dropout value to be fixed.</span>
+<span class="sd">                                                                           </span>
+<span class="sd">       bn : bool, optional</span>
+<span class="sd">           Use batch normalization.               </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       first_block : float, optional</span>
+<span class="sd">           To advice the function that it is the first residual block of the </span>
+<span class="sd">           network, which avoids Full Pre-Activation layers.</span>
 <span class="sd">                                                                                </span>
-<span class="sd">            k_init (str, optional): Keras available kernel initializer type.    </span>
-<span class="sd">                                                                                </span>
-<span class="sd">            drop_value (float, optional): dropout value to be fixed.</span>
-<span class="sd">                                                                                </span>
-<span class="sd">            bn (bool, optional): use batch normalization.               </span>
-<span class="sd">                                                                                </span>
-<span class="sd">            first_block (float, optional): to advice the function that ir it</span>
-<span class="sd">            the first residual block of the network, which avoids Full </span>
-<span class="sd">            Pre-Activation layers.</span>
-<span class="sd">                                                                                </span>
-<span class="sd">       Returns:                                                                 </span>
-<span class="sd">            x (Keras layer): last layer of the block.</span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       x : Keras layer</span>
+<span class="sd">           Last layer of the block.</span>
 <span class="sd">    &quot;&quot;&quot;</span> 
                                                                                 
     <span class="c1"># Create shorcut                                                            </span>

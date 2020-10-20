@@ -172,33 +172,31 @@
 <dt id="networks.unet_3d.U_Net_3D">
 <code class="sig-prename descclassname">networks.unet_3d.</code><code class="sig-name descname">U_Net_3D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">feature_maps</span><span class="o">=</span><span class="default_value">[32, 64, 128, 256]</span></em>, <em class="sig-param"><span class="n">depth</span><span class="o">=</span><span class="default_value">3</span></em>, <em class="sig-param"><span class="n">drop_values</span><span class="o">=</span><span class="default_value">[0.1, 0.1, 0.1, 0.1]</span></em>, <em class="sig-param"><span class="n">spatial_dropout</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">batch_norm</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">loss_type</span><span class="o">=</span><span class="default_value">'bce'</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'sgd'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.001</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/unet_3d.html#U_Net_3D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.unet_3d.U_Net_3D" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create 3D U-Net.</p>
-<dl>
-<dt>Args:</dt><dd><p>image_shape (3D tuple): dimensions of the input image.</p>
-<p>activation (str, optional): Keras available activation type.</p>
-<dl class="simple">
-<dt>feature_maps (array of ints, optional): feature maps to use on each</dt><dd><p>level. Must have the same length as the <code class="docutils literal notranslate"><span class="pre">depth+1</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">tuple</span></code>) – Dimensions of the input image.</p></li>
+<li><p><strong>activation</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Keras available activation type.</p></li>
+<li><p><strong>feature_maps</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Feature maps to use on each level. Must have the same length as the
+<code class="docutils literal notranslate"><span class="pre">depth+1</span></code>.</p></li>
+<li><p><strong>depth</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Depth of the network.</p></li>
+<li><p><strong>drop_values</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Dropout value to be fixed.</p></li>
+<li><p><strong>spatial_dropout</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Use spatial dropout instead of the <cite>normal</cite> dropout.</p></li>
+<li><p><strong>batch_norm</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Make batch normalization.</p></li>
+<li><p><strong>k_init</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">string</span></code>, <em>optional</em>) – Kernel initialization for convolutional layers.</p></li>
+<li><p><strong>loss_type</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Loss type to use, three type available: <code class="docutils literal notranslate"><span class="pre">bce</span></code> (Binary Cross Entropy)
+, <code class="docutils literal notranslate"><span class="pre">w_bce</span></code> (Weighted BCE, based on weigth maps) and <code class="docutils literal notranslate"><span class="pre">w_bce_dice</span></code>
+(Weighted loss: <code class="docutils literal notranslate"><span class="pre">weight1*BCE</span> <span class="pre">+</span> <span class="pre">weight2*Dice</span></code>).</p></li>
+<li><p><strong>optimizer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Optimizer used to minimize the loss function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code>
+or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p></li>
+<li><p><strong>lr</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Learning rate value.</p></li>
+</ul>
 </dd>
-</dl>
-<p>depth (int, optional): depth of the network.</p>
-<p>drop_values (float, optional): dropout value to be fixed.</p>
-<dl class="simple">
-<dt>spatial_dropout (bool, optional): use spatial dropout instead of the</dt><dd><p><cite>normal</cite> dropout.</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – Model containing the U-Net.</p>
 </dd>
-</dl>
-<p>batch_norm (bool, optional): flag to make batch normalization.</p>
-<dl class="simple">
-<dt>k_init (string, optional): kernel initialization for convolutional</dt><dd><p>layers.</p>
-</dd>
-<dt>loss_type (str, optional): loss type to use, three type available:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">bce</span></code> (Binary Cross Entropy) , <code class="docutils literal notranslate"><span class="pre">w_bce</span></code> (Weighted BCE, based on
-weigth maps) and <code class="docutils literal notranslate"><span class="pre">w_bce_dice</span></code> (Weighted loss: <code class="docutils literal notranslate"><span class="pre">weight1*BCE</span> <span class="pre">+</span>
-<span class="pre">weight2*Dice</span></code>).</p>
-</dd>
-<dt>optimizer (str, optional): optimizer used to minimize the loss</dt><dd><p>function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p>
-</dd>
-</dl>
-<p>lr (float, optional): learning rate value.</p>
-</dd>
-<dt>Returns:</dt><dd><p>model (Keras model): model containing the U-Net.</p>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code></p>
 </dd>
 </dl>
 <p>Calling this function with its default parameters returns the following
