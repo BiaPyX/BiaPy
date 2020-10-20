@@ -1,6 +1,5 @@
 import os
 import math
-#import mkl
 import numpy as np
 import time
 import random
@@ -31,7 +30,6 @@ def limit_threads(threads_number='1'):
     os.environ["NUMEXPR_NUM_THREADS"]='1';
     os.environ["VECLIB_MAXIMUM_THREADS"]='1';
     os.environ["OMP_NUM_THREADS"] = '1';
-    #mkl.set_num_threads(1)
 
 
 def set_seed(seedValue=42, determinism=False):
