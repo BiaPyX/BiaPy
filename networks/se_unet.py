@@ -13,7 +13,7 @@ from metrics import binary_crossentropy_weighted, jaccard_index, \
 def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 512], 
              depth=4, drop_values=[0.1,0.1,0.2,0.2,0.3], spatial_dropout=False, 
              batch_norm=False, k_init='he_normal', loss_type="bce", 
-             optimizer="sgd", lr=0.001, fine_tunning=False):
+             optimizer="sgd", lr=0.001):
     """Create 2D U-Net.                                                         
                                                                                 
        Args:                                                                    
@@ -47,9 +47,6 @@ def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 5
                 function. Posible options: ``sgd`` or ``adam``.                 
                                                                                 
             lr (float, optional): learning rate value.                          
-                                                                                
-            fine_tunning (bool, optional): flag to freeze the encoder part for  
-                fine tuning.                                                    
                                                                                 
        Returns:                                                                 
             Keras model: model containing the U-Net.              
@@ -154,14 +151,6 @@ def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 5
             amsgrad=False)
     else:
         raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
-
-    # Fine tunning: freeze the enconder part
-    if fine_tunning == True:
-        print("Freezing the contracting path of the U-Net for fine tunning . . .")
-        for layer in model.layers[:20]:
-            layer.trainable = False
-        for layer in model.layers:
-            print("{}: {}".format(layer, layer.trainable))
 
     # Compile the model
     if loss_type == "bce":

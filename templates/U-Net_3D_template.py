@@ -180,10 +180,6 @@ extra_train_data = 0
 load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
-# Flag to activate the fine tunning
-fine_tunning = False
-# ID of the previous weigths to load the weigths from to make the fine tunning 
-fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
 # Wheter to find the best learning rate plot. If this options is selected the 
@@ -434,13 +430,6 @@ model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
-    if fine_tunning == True:                                                    
-        h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
-                             + '_' + str(args.run_id) + '.h5')     
-        print("Fine-tunning: loading model weights from h5_file: {}"
-              .format(h5_file))   
-        model.load_weights(h5_file)                                             
-
     if use_LRFinder:
         print("Training just for 10 epochs . . .")
         results = model.fit(x=train_generator, validation_data=val_generator,

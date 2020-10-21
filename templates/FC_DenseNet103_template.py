@@ -119,39 +119,12 @@ img_train_shape = (1024, 768, 1)
 img_test_shape = (1024, 768, 1)
 
 
-### Extra datasets variables
-# Paths, shapes and discard values for the extra dataset used together with the
-# main train dataset, provided by train_path and train_mask_path variables, to 
-# train the network with. If the shape of the datasets differ the best option
-# To normalize them is to make crops ("make_crops" variable)
-extra_datasets_data_list = []
-extra_datasets_mask_list = []
-extra_datasets_data_dim_list = []
-extra_datasets_discard = []
-### Example of use:
-# Path to the data:
-# extra_datasets_data_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'x'))
-# Path to the mask: 
-# extra_datasets_mask_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'y'))
-# Shape of the images:
-# extra_datasets_data_dim_list.append((877, 967, 1))
-# Discard value to apply in the dataset (see "Discard variables" for more details):
-# extra_datasets_discard.append(0.05)                                             
-#
-# Number of crop to take form each dataset to train the network. If 0, the      
-# variable will be ignored                                                      
-num_crops_per_dataset = 0
-
-
 ### Crop variables
 # Shape of the crops
 crop_shape = (256, 256, 1)
 # To make crops on the train data
 make_crops = True
-# To check the crops. Useful to ensure that the crops have been made 
-# correctly. Note: if "discard_cropped_images" is True only the run that 
-# prepare the discarded data will check the crops, as the future runs only load 
-# the crops stored by this first run
+# To check the crops. Useful to ensure that the crops have been made correctly
 check_crop = True 
 # Instead of make the crops before the network training, this flag activates
 # the option to extract a random crop of each train image during data 
@@ -162,33 +135,6 @@ test_ov_crops = 16 # Only active with random_crops_in_DA
 probability_map = False # Only active with random_crops_in_DA                       
 w_foreground = 0.94 # Only active with probability_map
 w_background = 0.06 # Only active with probability_map
-
-
-### Discard variables
-# To activate the discards in the main train data. Only active when 
-# "make_crops" variable is True
-discard_cropped_images = False
-# Percentage of pixels labeled with the foreground class necessary to not 
-# discard the image 
-d_percentage_value = 0.05
-# Path where the train discarded data will be stored to be loaded by future runs 
-# instead of make again the process
-train_crop_discard_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'train', 'x')
-# Path where the train discarded masks will be stored                           
-train_crop_discard_mask_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'train', 'y')
-# The discards are NOT done in the test data, but this will store the test data,
-# which will be cropped, into the pointed path to be loaded by future runs      
-# Together with the train discarded data and masks                              
-test_crop_discard_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'test', 'x')
-test_crop_discard_mask_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'test', 'y')
 
 
 ### Normalization
@@ -263,10 +209,6 @@ extra_train_data = 0
 load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
-# To activate the fine tunning
-fine_tunning = False
-# ID of the previous weigths to load the weigths from to make the fine tunning 
-fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
 # Wheter to find the best learning rate plot. If this options is selected the
@@ -424,61 +366,6 @@ print("###################\n"
 
 check_binary_masks(train_mask_path)
 check_binary_masks(test_mask_path)
-if extra_datasets_mask_list: 
-    for i in range(len(extra_datasets_mask_list)):
-        check_binary_masks(extra_datasets_mask_list[i])
-
-
-print("##########################################\n"
-      "#  PREPARE DATASET IF DISCARD IS ACTIVE  #\n"
-      "##########################################\n")
-
-# The first time the dataset will be prepared for future runs if it is not 
-# created yet
-if discard_cropped_images and make_crops \
-   and not os.path.exists(train_crop_discard_path):
-    # Load data
-    X_train, Y_train, \
-    X_test, Y_test, \
-    orig_test_shape, norm_value, \
-    crops_made = load_and_prepare_2D_data(
-        train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
-        img_test_shape, create_val=False, job_id=args.job_id, crop_shape=crop_shape, 
-        check_crop=check_crop, check_crop_path=check_crop_path, 
-        d_percentage=d_percentage_value)
-
-    # Create folders and save the images for future runs 
-    print("Saving cropped images for future runs . . .")
-    save_img(X=X_train, data_dir=train_crop_discard_path, Y=Y_train,            
-             mask_dir=train_crop_discard_mask_path)                             
-    save_img(X=X_test, data_dir=test_crop_discard_path, Y=Y_test,               
-             mask_dir=test_crop_discard_mask_path)
-
-    del X_train, Y_train, X_test, Y_test
-   
-    # Update shapes 
-    img_train_shape = crop_shape
-    img_test_shape = crop_shape
-    discard_made_run = True
-else:
-    discard_made_run = False
-
-# Disable the crops if the run is not the one that have prepared the discarded 
-# data as it will work with cropped images instead of the original ones, 
-# rewriting the needed images 
-if discard_cropped_images and discard_made_run == False:
-    check_crop = False
-
-# For the rest of runs that are not the first that prepares the dataset when 
-# discard is active some variables must be set as if it would made the crops
-if make_crops and discard_cropped_images:
-    train_path = train_crop_discard_path
-    train_mask_path = train_crop_discard_mask_path
-    test_path = test_crop_discard_path
-    test_mask_path = test_crop_discard_mask_path
-    img_train_shape = crop_shape
-    img_test_shape = crop_shape
-    crops_made = True
 
 
 print("###############\n"
@@ -490,10 +377,7 @@ Y_val, X_test, Y_test,\
 orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
     img_test_shape, val_split=perc_used_as_val, shuffle_val=random_val_data,
-    e_d_data=extra_datasets_data_list, e_d_mask=extra_datasets_mask_list, 
-    e_d_data_dim=extra_datasets_data_dim_list, e_d_dis=extra_datasets_discard, 
-    num_crops_per_dataset=num_crops_per_dataset, make_crops=make_crops, 
-    crop_shape=crop_shape, check_crop=check_crop, 
+    make_crops=make_crops, crop_shape=crop_shape, check_crop=check_crop, 
     check_crop_path=check_crop_path)
 
 # Normalize the data
@@ -640,13 +524,6 @@ model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
-    if fine_tunning:                                                    
-        h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
-                             + '_' + args.run_id + '.h5')     
-        print("Fine-tunning: loading model weights from h5_file: {}"
-              .format(h5_file))
-        model.load_weights(h5_file)                                             
-   
     if use_LRFinder:
         print("Training just for 10 epochs . . .")
         results = model.fit(x=train_generator, validation_data=val_generator,

@@ -119,30 +119,6 @@ img_train_shape = (1024, 768, 1)
 img_test_shape = (1024, 768, 1)
 
 
-### Extra datasets variables
-# Paths, shapes and discard values for the extra dataset used together with the
-# main train dataset, provided by train_path and train_mask_path variables, to 
-# train the network with. If the shape of the datasets differ the best option
-# To normalize them is to make crops ("make_crops" variable)
-extra_datasets_data_list = []
-extra_datasets_mask_list = []
-extra_datasets_data_dim_list = []
-extra_datasets_discard = []
-### Example of use:
-# Path to the data:
-# extra_datasets_data_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'x'))
-# Path to the mask: 
-# extra_datasets_mask_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'y'))
-# Shape of the images:
-# extra_datasets_data_dim_list.append((877, 967, 1))
-# Discard value to apply in the dataset (see "Discard variables" for more details):
-# extra_datasets_discard.append(0.05)                                             
-#
-# Number of crop to take form each dataset to train the network. If 0, the      
-# variable will be ignored                                                      
-num_crops_per_dataset = 0
-
-
 ### Crop variables
 # Shape of the crops
 crop_shape = (256, 256, 1)
@@ -263,10 +239,6 @@ extra_train_data = 0
 load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
-# To activate the fine tunning
-fine_tunning = False
-# ID of the previous weigths to load the weigths from to make the fine tunning 
-fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
 # Wheter to find the best learning rate plot. If this options is selected the
@@ -428,9 +400,6 @@ print("###################\n"
 
 check_binary_masks(train_mask_path)
 check_binary_masks(test_mask_path)
-if extra_datasets_mask_list: 
-    for i in range(len(extra_datasets_mask_list)):
-        check_binary_masks(extra_datasets_mask_list[i])
 
 
 print("##########################################\n"
@@ -494,10 +463,7 @@ Y_val, X_test, Y_test,\
 orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
     img_test_shape, val_split=perc_used_as_val, shuffle_val=random_val_data,
-    e_d_data=extra_datasets_data_list, e_d_mask=extra_datasets_mask_list, 
-    e_d_data_dim=extra_datasets_data_dim_list, e_d_dis=extra_datasets_discard, 
-    num_crops_per_dataset=num_crops_per_dataset, make_crops=make_crops, 
-    crop_shape=crop_shape, check_crop=check_crop, 
+    make_crops=make_crops, crop_shape=crop_shape, check_crop=check_crop, 
     check_crop_path=check_crop_path)
 
 # Normalize the data
@@ -635,7 +601,7 @@ model = SE_U_Net_2D([img_height, img_width, img_channels], activation=activation
                     drop_values=dropout_values, spatial_dropout=spatial_dropout,
                     batch_norm=batch_normalization, k_init=kernel_init,
                     loss_type=loss_type, optimizer=optimizer, 
-                    lr=learning_rate_value, fine_tunning=fine_tunning)
+                    lr=learning_rate_value)
 
 # Check the network created
 model.summary(line_length=150)
@@ -644,13 +610,6 @@ model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
-    if fine_tunning:                                                    
-        h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
-                             + '_' + args.run_id + '.h5')     
-        print("Fine-tunning: loading model weights from h5_file: {}"
-              .format(h5_file))
-        model.load_weights(h5_file)                                             
-   
     if use_LRFinder:
         print("Training just for 10 epochs . . .")
         results = model.fit(x=train_generator, validation_data=val_generator,
