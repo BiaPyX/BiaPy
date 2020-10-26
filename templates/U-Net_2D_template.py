@@ -124,7 +124,7 @@ img_test_shape = (1024, 768, 1)
 crop_shape = (256, 256, 1)
 # To make crops on the train data
 make_crops = True
-# To check the crops. Useful to ensure that the crops have been made correctly 
+# To check the crops. Useful to ensure that the crops have been made correctly
 check_crop = True 
 # Instead of make the crops before the network training, this flag activates
 # the option to extract a random crop of each train image during data 
@@ -227,11 +227,11 @@ batch_size_value = 6
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "sgd"
 # Learning rate used by the optimization method
-learning_rate_value = 0.001
+learning_rate_value = 0.002
 # Number of epochs to train the network
 epochs_value = 360
 # Number of epochs to stop the training process after no improvement
-patience = 50 
+patience = 200
 # If weights on data are going to be applied. To true when loss_type is 'w_bce' 
 weights_on_data = True if loss_type == "w_bce" else False
 
@@ -239,7 +239,7 @@ weights_on_data = True if loss_type == "w_bce" else False
 ### Network architecture specific parameters
 # Number of feature maps on each level of the network. It's dimension must be 
 # equal depth+1.
-feature_maps = [32, 64, 128, 256, 512]
+feature_maps = [16, 32, 64, 128, 256]
 # Depth of the network
 depth = 4
 # To activate the Spatial Dropout instead of use the "normal" dropout layer
