@@ -88,6 +88,7 @@
 <li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
@@ -296,9 +297,18 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="adabound.html#adabound.AdaBound.get_config">get_config() (adabound.AdaBound method)</a>
 </li>
+      <li><a href="adabound.html#adabound.AdaBound.get_updates">get_updates() (adabound.AdaBound method)</a>
+</li>
+      <li>
+    Grad_CAM.grad_cam
+
+      <ul>
+        <li><a href="grad_cam.html#module-Grad_CAM.grad_cam">module</a>
+</li>
+      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="adabound.html#adabound.AdaBound.get_updates">get_updates() (adabound.AdaBound method)</a>
+      <li><a href="grad_cam.html#Grad_CAM.grad_cam.grad_cam_sample">grad_cam_sample() (in module Grad_CAM.grad_cam)</a>
 </li>
       <li><a href="util.html#util.grayscale_2D_image_to_3D">grayscale_2D_image_to_3D() (in module util)</a>
 </li>
@@ -385,6 +395,8 @@
 </li>
         <li><a href="data_manipulation.html#module-data_manipulation">data_manipulation</a>
 </li>
+        <li><a href="grad_cam.html#module-Grad_CAM.grad_cam">Grad_CAM.grad_cam</a>
+</li>
         <li><a href="metrics.html#module-metrics">metrics</a>
 </li>
         <li><a href="networks_fc_densetnet103.html#module-networks.fc_densenet103">networks.fc_densenet103</a>
@@ -469,6 +481,8 @@
         <li><a href="networks_unet_3d.html#module-networks.unet_3d">module</a>
 </li>
       </ul></li>
+      <li><a href="grad_cam.html#Grad_CAM.grad_cam.normalize">normalize() (in module Grad_CAM.grad_cam)</a>
+</li>
   </ul></td>
 </tr></table>
 
@@ -550,12 +564,16 @@
 <h2 id="T">T</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="util.html#util.threshold_plots">threshold_plots() (in module util)</a>
+      <li><a href="grad_cam.html#Grad_CAM.grad_cam.target_category_loss">target_category_loss() (in module Grad_CAM.grad_cam)</a>
 </li>
-      <li><a href="util.html#util.TimeHistory">TimeHistory (class in util)</a>
+      <li><a href="grad_cam.html#Grad_CAM.grad_cam.target_category_loss_output_shape">target_category_loss_output_shape() (in module Grad_CAM.grad_cam)</a>
+</li>
+      <li><a href="util.html#util.threshold_plots">threshold_plots() (in module util)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="util.html#util.TimeHistory">TimeHistory (class in util)</a>
+</li>
       <li><a href="networks_multiresunet.html#networks.MultiResUNet.trans_conv2d_bn">trans_conv2d_bn() (in module networks.MultiResUNet)</a>
 </li>
       <li><a href="networks_fc_densetnet103.html#networks.fc_densenet103.TransitionDown">TransitionDown() (in module networks.fc_densenet103)</a>

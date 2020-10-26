@@ -20,6 +20,7 @@ Some of state-of-the-art approaches have been reproduced and implemented to comp
    data_manipulation 
    metrics
    util
+   grad_cam
    adabound
    callbacks
 
