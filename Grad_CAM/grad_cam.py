@@ -28,10 +28,10 @@ def grad_cam_sample(input_model, image, predicted_class, layer_name, out_dir,
            Model.
       
        image : 2D Numpy array
-           Image to visualize the heatmap from. E. g. ``(x, y)``
+           Image to visualize the heatmap from. E. g. ``(x, y)``.
     
        predicted_class : int
-           Number of the class predicted
+           Number of the class predicted.
 
        layer_name : str 
            Keras layer name to extract the features from.
@@ -65,7 +65,7 @@ def grad_cam_sample(input_model, image, predicted_class, layer_name, out_dir,
   
            # Notice that, if you select the activation maps of the last layer of
            # the network, for example, 'conv2d_18' in 2D U-Net implementation of
-           # this project, the output should be the same as the predcition on
+           # this project, the output should be the same as the prediction on
            # the complete image
            grad_cam_sample(unet_model, img, 1, 'conv2d_18', 'out_dir', 2)
 

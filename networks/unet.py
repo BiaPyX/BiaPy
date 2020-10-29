@@ -5,14 +5,14 @@ from tensorflow.keras.layers import Dropout, SpatialDropout2D, Conv2D,\
                                     ZeroPadding2D
 from tensorflow.keras import Model, Input
 from metrics import binary_crossentropy_weighted, jaccard_index, \
-                    weighted_bce_dice_loss
+                    jaccard_index_softmax, weighted_bce_dice_loss
 
 
-def U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 512], 
+def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256], 
              depth=4, drop_values=[0.1,0.1,0.2,0.2,0.3], spatial_dropout=False, 
              batch_norm=False, k_init='he_normal', loss_type="bce", 
-             optimizer="sgd", lr=0.001):
-    """Create 2D U-Net.                                                         
+             optimizer="sgd", lr=0.002, n_classes=1):
+    """Create 2D U-Net.
                                                                                 
        Parameters
        ----------
@@ -54,6 +54,9 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 512]
                                                                            
        lr : float, optional
            Learning rate value.                          
+        
+       n_classes: int, optional
+           Number of classes.
                                                                            
        Returns
        -------                                                                 
@@ -141,7 +144,7 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 512]
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
 
-    outputs = Conv2D(1, (1, 1), activation='sigmoid') (x)
+    outputs = Conv2D(n_classes, (1, 1), activation='sigmoid') (x)
     
     # Loss type
     if loss_type == "w_bce":
@@ -162,8 +165,12 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 512]
 
     # Compile the model
     if loss_type == "bce":
-        model.compile(optimizer=opt, loss='binary_crossentropy',
-                      metrics=[jaccard_index])
+        if n_classes > 1:
+            model.compile(optimizer=opt, loss='categorical_crossentropy',
+                          metrics=[jaccard_index_softmax])
+        else:
+            model.compile(optimizer=opt, loss='binary_crossentropy',
+                          metrics=[jaccard_index])
     elif loss_type == "w_bce":
         model.compile(optimizer=opt, loss=binary_crossentropy_weighted(weights),
                       metrics=[jaccard_index])
