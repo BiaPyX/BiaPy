@@ -7,49 +7,66 @@ from tensorflow.keras.layers import Dropout, SpatialDropout2D, Conv2D,\
                                     Reshape, Dense, multiply, add, Permute
 from tensorflow.keras import Model, Input
 from metrics import binary_crossentropy_weighted, jaccard_index, \
-                    weighted_bce_dice_loss
+                    jaccard_index_softmax, weighted_bce_dice_loss
 
 
-def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 512], 
+def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256], 
              depth=4, drop_values=[0.1,0.1,0.2,0.2,0.3], spatial_dropout=False, 
              batch_norm=False, k_init='he_normal', loss_type="bce", 
-             optimizer="sgd", lr=0.001):
-    """Create 2D U-Net.                                                         
+             optimizer="sgd", lr=0.002, n_classes=1):
+    """Create 2D U-Net with squeeze-excite blocks.
+        
+       Reference `Squeeze and Excitation Networks <https://arxiv.org/abs/1709.01507>`_
                                                                                 
-       Args:                                                                    
-            image_shape (2D tuple): dimensions of the input image.              
+       Parameters
+       ----------
+       image_shape : 2D tuple
+           Dimensions of the input image.              
                                                                                 
-            activation (str, optional): Keras available activation type.        
-                                                                                
-            feature_maps (array of ints, optional): feature maps to use on each 
-                level. Must have the same length as the ``depth+1``.            
-                                                                                
-            depth (int, optional): depth of the network.                        
-                                                                                
-            drop_values (float, optional): dropout value to be fixed. If no     
-                value is provided the default behaviour will be to select a     
-                piramidal value starting from ``0.1`` and reaching ``0.3`` value.
-                                                                                
-            spatial_dropout (bool, optional): use spatial dropout instead of the
-                `normal` dropout.                                               
-                                                                                
-            batch_norm (bool, optional): flag to make batch normalization.      
-                                                                                
-            k_init (string, optional): kernel initialization for convolutional  
-                layers.                                                         
-                                                                                
-            loss_type (str, optional): loss type to use, three type available:  
-                ``bce`` (Binary Cross Entropy) , ``w_bce`` (Weighted BCE, based 
-                on weigth maps) and ``w_bce_dice`` (Weighted loss: ``weight1*BCE 
-                + weight2*Dice``).                                              
-                                                                                
-            optimizer (str, optional): optimizer used to minimize the loss      
-                function. Posible options: ``sgd`` or ``adam``.                 
-                                                                                
-            lr (float, optional): learning rate value.                          
-                                                                                
-       Returns:                                                                 
-            Keras model: model containing the U-Net.              
+       activation : str, optional
+           Keras available activation type.        
+                                                                           
+       feature_maps : array of ints, optional
+           Feature maps to use on each level. Must have the same length as the 
+           ``depth+1``.            
+                                                                           
+       depth : int, optional
+           Depth of the network.                        
+                                                                           
+       drop_values : float, optional
+           Dropout value to be fixed. If no value is provided the default
+           behaviour will be to select a piramidal value starting from ``0.1`` 
+           and reaching ``0.3`` value.
+                                                                           
+       spatial_dropout : bool, optional
+           Use spatial dropout instead of the `normal` dropout.                                               
+                                                                           
+       batch_norm : bool, optional
+           Make batch normalization.      
+                                                                           
+       k_init : string, optional
+           Kernel initialization for convolutional layers.                                                         
+                                                                           
+       loss_type : str, optional
+           Loss type to use, three type available: ``bce`` (Binary Cross Entropy)
+           , ``w_bce`` (Weighted BCE, based on weigth maps) and ``w_bce_dice``
+           (Weighted loss: ``weight1*BCE + weight2*Dice``).                                              
+                                                                           
+       optimizer : str, optional
+           Optimizer used to minimize the loss function. Posible options: 
+           ``sgd`` or ``adam``.                 
+                                                                           
+       lr : float, optional
+           Learning rate value.                          
+        
+       n_classes: int, optional
+           Number of classes.
+                                                                           
+       Returns
+       -------                                                                 
+       model : Keras model
+           Model containing the U-Net.              
+
 
        Calling this function with its default parameters returns the following  
        network:                                                                 
@@ -133,7 +150,7 @@ def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 5
         x = Activation(activation) (x)
         x = squeeze_excite_block(x)
 
-    outputs = Conv2D(1, (1, 1), activation='sigmoid') (x)
+    outputs = Conv2D(n_classes, (1, 1), activation='sigmoid') (x)
     
     # Loss type
     if loss_type == "w_bce":
@@ -154,8 +171,12 @@ def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 5
 
     # Compile the model
     if loss_type == "bce":
-        model.compile(optimizer=opt, loss='binary_crossentropy',
-                      metrics=[jaccard_index])
+        if n_classes > 1:                                                     
+            model.compile(optimizer=opt, loss='categorical_crossentropy',     
+                          metrics=[jaccard_index_softmax])                    
+        else:                                                                 
+            model.compile(optimizer=opt, loss='binary_crossentropy',          
+                          metrics=[jaccard_index])
     elif loss_type == "w_bce":
         model.compile(optimizer=opt, loss=binary_crossentropy_weighted(weights),
                       metrics=[jaccard_index])
@@ -170,18 +191,18 @@ def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256, 5
 
 
 def squeeze_excite_block(input, ratio=16):
-    ''' Create a channel-wise squeeze-excite block
-        Code fully extracted from `keras-squeeze-excite-network <https://github.com/titu1994/keras-squeeze-excite-network>_`.
+    """Create a channel-wise squeeze-excite block
+       Code fully extracted from `keras-squeeze-excite-network <https://github.com/titu1994/keras-squeeze-excite-network>_`.
 
-    Args:
-        input: input tensor
-        filters: number of output filters
+       Args:
+            input: input tensor
+            filters: number of output filters
 
-    Returns: a keras tensor
+       Returns: a keras tensor
 
-    References
-    -   [Squeeze and Excitation Networks](https://arxiv.org/abs/1709.01507)
-    '''
+       References
+           [Squeeze and Excitation Networks](https://arxiv.org/abs/1709.01507)
+    """
     init = input
     channel_axis = 1 if K.image_data_format() == "channels_first" else -1
     filters = init.shape[channel_axis]
