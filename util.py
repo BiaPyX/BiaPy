@@ -1017,7 +1017,7 @@ def calculate_3D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
     for i in range(prob_map.shape[0]):
         for j in tqdm(range(prob_map[i].shape[2])):
             # Remove artifacts connected to image border
-            prob_map[i, j] = clear_border(prob_map[i,:,:,j])
+            prob_map[i,:,:,j] = clear_border(prob_map[i,:,:,j])
 
         foreground_pixels = (prob_map[i] == 255).sum()
         background_pixels = (prob_map[i] == 0).sum()
