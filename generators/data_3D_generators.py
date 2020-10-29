@@ -337,7 +337,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         # Generate the examples 
         print("0) Creating samples of data augmentation . . .")
         for i in tqdm(range(num_examples)):
-            if random_images:
+            if random_images or self.random_subvolumes_in_DA:
                 pos = random.randint(0,self.X.shape[0]-1) 
             else:
                 pos = i
@@ -375,18 +375,19 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 # Save the original images with a red point and a blue square 
                 # that represents the point selected with the probability map 
                 # and the random volume extracted from the original data
-                if self.random_subvolumes_in_DA and self.prob_map is not None:
+                if self.random_subvolumes_in_DA and self.prob_map is not None and i == 0:
                     rc_out_dir = os.path.join(out_dir, 'rd_crop' + str(pos))
                     os.makedirs(rc_out_dir, exist_ok=True)
 
                     print("The selected point on the random crop was [{},{},{}]"
                           .format(ox,oy,oz))
 
+                    d = len(str(self.X[pos].shape[2]))
                     for i in range(self.X[pos].shape[2]):
-                        im = Image.fromarray((self.X[pos,i,...,0]*255).astype(np.uint8)) 
+                        im = Image.fromarray((self.X[pos,:,:,i,0]).astype(np.uint8)) 
                         im = im.convert('RGB')                                                  
                         px = im.load()                                                          
-                        mask = Image.fromarray((self.Y[pos,i,...,0]*255).astype(np.uint8))
+                        mask = Image.fromarray((self.Y[pos,:,:,i,0]).astype(np.uint8))
                         mask = mask.convert('RGB')
                         py = mask.load()
                        
@@ -414,9 +415,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                                 py[row, s_x+self.shape[1]-1] = (0, 0, 255)
                          
                         im.save(os.path.join(
-                                    rc_out_dir, 'rc_x_' + str(i) + '.png'))
+                                    rc_out_dir,'rc_x_'+str(i).zfill(d)+'.png'))
                         mask.save(os.path.join(
-                                      rc_out_dir, 'rc_y_' + str(i) + '.png'))          
+                                      rc_out_dir,'rc_y_'+str(i).zfill(d)+'.png'))          
         return sample_x, sample_y
 
 

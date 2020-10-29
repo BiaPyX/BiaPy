@@ -403,12 +403,13 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
 
     orig_test_shape = tuple(Y_test.shape[i] for i in [0, 1, 2, 3])
 
-    # Force 3D data preparation if create_val is selected 
     mirrored_subvols = 0
-    if random_subvolumes_in_DA == False:
+    
+    if not random_subvolumes_in_DA:
         print("Preparing train data subvolumes . . .")
         X_train, Y_train, mirrored_subvols = prepare_3D_volume_data(
             X_train, Y_train, train_subvol_shape)
+        
     print("Preparing test data subvolumes . . .")
     X_test, Y_test, _ = prepare_3D_volume_data(
         X_test, Y_test, test_subvol_shape, overlap=True, ov=ov_test)
@@ -431,6 +432,14 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
             Y_train, Y_val = train_test_split(
                 X_train, Y_train, test_size=val_split, shuffle=shuffle_val, 
                 random_state=seedValue)
+
+    # Convert the original volumes as they were a unique subvolume
+    if random_subvolumes_in_DA:                                                 
+        X_train = np.expand_dims(np.transpose(X_train, (1,2,0,3)), axis=0)      
+        Y_train = np.expand_dims(np.transpose(Y_train, (1,2,0,3)), axis=0)    
+        if create_val:
+            X_val = np.expand_dims(np.transpose(X_val, (1,2,0,3)), axis=0)
+            Y_val = np.expand_dims(np.transpose(Y_val, (1,2,0,3)), axis=0)
 
     if create_val:
         print("*** Loaded train data shape is: {}".format(X_train.shape))
