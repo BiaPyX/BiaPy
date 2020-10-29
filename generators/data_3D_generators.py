@@ -24,7 +24,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                  seed=42, shuffle_each_epoch=False, batch_size=32, da=True, 
                  shift_range=0, hist_eq=False, flip=False, rotation=False, 
                  elastic=False, g_blur=False, gamma_contrast=False, 
-                 softmax_out=False, val=False, prob_map=None, extra_data_factor=1):
+                 n_classes=1, val=False, prob_map=None, extra_data_factor=1):
         """ImageDataGenerator constructor. Based on transformations from 
            https://github.com/aleju/imgaug.
                                                                                 
@@ -66,9 +66,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             gamma_contrast (bool, optional): flag to insert gamma constrast 
             changes on images. 
 
-            softmax_out (bool, optional): flag to advice that the output of the
-            network has in the last layer a softmax activation or one channel
-            per class. If so one-hot encoded will be done on the ground truth.
+            n_classes (int, optional): number of classes. If ``> 1`` one-hot    
+            encoding will be done on the ground truth.
 
             val (bool, optional): advice the generator that the volumes will be
             used to validate the model to not make random crops (as the val. 
@@ -98,7 +97,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.divide = True if np.max(X) > 1 else False
         self.X = (X).astype(np.uint8)
         self.Y = (Y).astype(np.uint8)
-        self.softmax_out = softmax_out
+        self.n_classes = n_classes
         self.random_subvolumes_in_DA = random_subvolumes_in_DA
         self.seed = seed
         self.shuffle_each_epoch = shuffle_each_epoch
@@ -184,8 +183,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             batch_x = batch_x/255
             batch_y = batch_y/255
 
-        if self.softmax_out:
-            batch_y_ = np.zeros((len(indexes), ) + self.shape[:3] + (2,))
+        if self.n_classes > 1:
+            batch_y_ = np.zeros((len(indexes), ) + self.shape[:3] + (self.n_classes,))
             for i in range(len(indexes)):
                 batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[i]))
 

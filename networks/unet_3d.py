@@ -5,13 +5,13 @@ from tensorflow.keras.layers import Dropout, SpatialDropout3D, Conv3D,\
                                     ZeroPadding3D
 from tensorflow.keras import Model, Input
 from metrics import binary_crossentropy_weighted, jaccard_index, \
-                    weighted_bce_dice_loss
+                    jaccard_index_softmax, weighted_bce_dice_loss
 
 
 def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], 
              depth=3, drop_values=[0.1,0.1,0.1,0.1], spatial_dropout=False, 
              batch_norm=False, k_init='he_normal', loss_type="bce",
-             optimizer="sgd", lr=0.001):
+             optimizer="sgd", lr=0.001, n_classes=1):
              
     """Create 3D U-Net.
 
@@ -54,6 +54,9 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
        lr : float, optional
            Learning rate value.
 
+       n_classes: int, optional                                                 
+           Number of classes.    
+
        Returns
        -------
        model : Keras model
@@ -70,8 +73,10 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
        Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
     """
 
-    if len(feature_maps) != depth+1:
-        raise ValueError("feature_maps dimension must be equal depth+1")
+    if len(feature_maps) != depth+1:                                            
+        raise ValueError("feature_maps dimension must be equal depth+1")        
+    if len(drop_values) != depth+1:                                             
+        raise ValueError("'drop_values' dimension must be equal depth+1")       
 
     #dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
     #inputs = Input(dinamic_dim)
@@ -136,7 +141,7 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
 
-    outputs = Conv3D(1, (1, 1, 1), activation='sigmoid') (x)
+    outputs = Conv3D(n_classes, (1, 1, 1), activation='sigmoid') (x)
     
     # Loss type 
     if loss_type == "w_bce":
@@ -157,8 +162,12 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
         
     # Compile the model
     if loss_type == "bce":
-        model.compile(optimizer=opt, loss='binary_crossentropy', 
-                      metrics=[jaccard_index])
+        if n_classes > 1:                                                       
+            model.compile(optimizer=opt, loss='categorical_crossentropy',       
+                          metrics=[jaccard_index_softmax])                      
+        else:                                                                   
+            model.compile(optimizer=opt, loss='binary_crossentropy',            
+                          metrics=[jaccard_index])        
     elif loss_type == "w_bce":
         model.compile(optimizer=opt, loss=binary_crossentropy_weighted(weights), 
                       metrics=[jaccard_index])
