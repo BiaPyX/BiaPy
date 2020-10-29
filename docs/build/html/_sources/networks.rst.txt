@@ -12,3 +12,4 @@ Networks
    networks_fcn
    networks_fc_densetnet103
    networks_multiresunet
+   networks_se_unet

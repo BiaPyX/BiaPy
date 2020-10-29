@@ -171,8 +171,8 @@ Localization</a>.</p>
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>input_model</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code>) – Model.</p></li>
-<li><p><strong>image</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Image to visualize the heatmap from. E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code></p></li>
-<li><p><strong>predicted_class</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Number of the class predicted</p></li>
+<li><p><strong>image</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Image to visualize the heatmap from. E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>predicted_class</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Number of the class predicted.</p></li>
 <li><p><strong>layer_name</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Keras layer name to extract the features from.</p></li>
 <li><p><strong>out_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code>) – Path to save the image on.</p></li>
 <li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Total number of classes.</p></li>
@@ -209,7 +209,7 @@ Localization</a>.</p>
 </table>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Notice that, if you select the activation maps of the last layer of</span>
 <span class="c1"># the network, for example, &#39;conv2d_18&#39; in 2D U-Net implementation of</span>
-<span class="c1"># this project, the output should be the same as the predcition on</span>
+<span class="c1"># this project, the output should be the same as the prediction on</span>
 <span class="c1"># the complete image</span>
 <span class="n">grad_cam_sample</span><span class="p">(</span><span class="n">unet_model</span><span class="p">,</span> <span class="n">img</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;conv2d_18&#39;</span><span class="p">,</span> <span class="s1">&#39;out_dir&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
 </pre></div>

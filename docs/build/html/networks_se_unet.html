@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>2D U-Net &mdash; EM Image Segmentation  documentation</title>
+  <title>SE+2D U-Net &mdash; EM Image Segmentation  documentation</title>
   
 
   
@@ -36,8 +36,8 @@
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="3D U-Net" href="networks_unet_3d.html" />
-    <link rel="prev" title="Networks" href="networks.html" /> 
+    <link rel="next" title="Post processing" href="post_processing.html" />
+    <link rel="prev" title="MultiResUNet" href="networks_multiresunet.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -86,14 +86,14 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="networks.html">Networks</a><ul class="current">
-<li class="toctree-l2 current"><a class="current reference internal" href="#">2D U-Net</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
-<li class="toctree-l2"><a class="reference internal" href="networks_se_unet.html">SE+2D U-Net</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">SE+2D U-Net</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
@@ -151,7 +151,7 @@
         
           <li><a href="networks.html">Networks</a> &raquo;</li>
         
-      <li>2D U-Net</li>
+      <li>SE+2D U-Net</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -168,12 +168,13 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="module-networks.unet">
-<span id="d-u-net"></span><h1>2D U-Net<a class="headerlink" href="#module-networks.unet" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-networks.se_unet">
+<span id="se-2d-u-net"></span><h1>SE+2D U-Net<a class="headerlink" href="#module-networks.se_unet" title="Permalink to this headline">¶</a></h1>
 <dl class="py function">
-<dt id="networks.unet.U_Net_2D">
-<code class="sig-prename descclassname">networks.unet.</code><code class="sig-name descname">U_Net_2D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">feature_maps</span><span class="o">=</span><span class="default_value">[16, 32, 64, 128, 256]</span></em>, <em class="sig-param"><span class="n">depth</span><span class="o">=</span><span class="default_value">4</span></em>, <em class="sig-param"><span class="n">drop_values</span><span class="o">=</span><span class="default_value">[0.1, 0.1, 0.2, 0.2, 0.3]</span></em>, <em class="sig-param"><span class="n">spatial_dropout</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">batch_norm</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">loss_type</span><span class="o">=</span><span class="default_value">'bce'</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'sgd'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.002</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/unet.html#U_Net_2D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.unet.U_Net_2D" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create 2D U-Net.</p>
+<dt id="networks.se_unet.SE_U_Net_2D">
+<code class="sig-prename descclassname">networks.se_unet.</code><code class="sig-name descname">SE_U_Net_2D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">feature_maps</span><span class="o">=</span><span class="default_value">[16, 32, 64, 128, 256]</span></em>, <em class="sig-param"><span class="n">depth</span><span class="o">=</span><span class="default_value">4</span></em>, <em class="sig-param"><span class="n">drop_values</span><span class="o">=</span><span class="default_value">[0.1, 0.1, 0.2, 0.2, 0.3]</span></em>, <em class="sig-param"><span class="n">spatial_dropout</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">batch_norm</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">loss_type</span><span class="o">=</span><span class="default_value">'bce'</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'sgd'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.002</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/se_unet.html#SE_U_Net_2D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.se_unet.SE_U_Net_2D" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create 2D U-Net with squeeze-excite blocks.</p>
+<p>Reference <a class="reference external" href="https://arxiv.org/abs/1709.01507">Squeeze and Excitation Networks</a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -210,6 +211,27 @@ network:</p>
 <p>Image created with <a class="reference external" href="https://github.com/HarisIqbal88/PlotNeuralNet">PlotNeuralNet</a>.</p>
 </dd></dl>
 
+<dl class="py function">
+<dt id="networks.se_unet.squeeze_excite_block">
+<code class="sig-prename descclassname">networks.se_unet.</code><code class="sig-name descname">squeeze_excite_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input</span></em>, <em class="sig-param"><span class="n">ratio</span><span class="o">=</span><span class="default_value">16</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/se_unet.html#squeeze_excite_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.se_unet.squeeze_excite_block" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a channel-wise squeeze-excite block.</p>
+<p>Code fully extracted from <a class="reference external" href="https://github.com/titu1994/keras-squeeze-excite-network">keras-squeeze-excite-network</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">layer</span></code>) – Input Keras layer</p></li>
+<li><p><strong>ratio</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Reduction fatio. See the paper for more info.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>x</strong> – The last layer after applayng the SE block</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">tensor</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
 </div>
 
 
@@ -220,10 +242,10 @@ network:</p>
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="networks_unet_3d.html" class="btn btn-neutral float-right" title="3D U-Net" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="post_processing.html" class="btn btn-neutral float-right" title="Post processing" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="networks.html" class="btn btn-neutral float-left" title="Networks" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="networks_multiresunet.html" class="btn btn-neutral float-left" title="MultiResUNet" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

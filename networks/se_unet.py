@@ -16,7 +16,7 @@ def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 25
              optimizer="sgd", lr=0.002, n_classes=1):
     """Create 2D U-Net with squeeze-excite blocks.
         
-       Reference `Squeeze and Excitation Networks <https://arxiv.org/abs/1709.01507>`_
+       Reference `Squeeze and Excitation Networks <https://arxiv.org/abs/1709.01507>`_.
                                                                                 
        Parameters
        ----------
@@ -191,17 +191,22 @@ def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 25
 
 
 def squeeze_excite_block(input, ratio=16):
-    """Create a channel-wise squeeze-excite block
-       Code fully extracted from `keras-squeeze-excite-network <https://github.com/titu1994/keras-squeeze-excite-network>_`.
+    """Create a channel-wise squeeze-excite block.
 
-       Args:
-            input: input tensor
-            filters: number of output filters
+       Code fully extracted from `keras-squeeze-excite-network <https://github.com/titu1994/keras-squeeze-excite-network>`_.
 
-       Returns: a keras tensor
+       Parameters
+       ----------
+       input : Keras layer
+           Input Keras layer
+        
+       ratio : int 
+           Reduction fatio. See the paper for more info. 
 
-       References
-           [Squeeze and Excitation Networks](https://arxiv.org/abs/1709.01507)
+       Returns
+       ------- 
+       x : Keras tensor
+           The last layer after applayng the SE block
     """
     init = input
     channel_axis = 1 if K.image_data_format() == "channels_first" else -1
@@ -217,47 +222,5 @@ def squeeze_excite_block(input, ratio=16):
         se = Permute((3, 1, 2))(se)
 
     x = multiply([init, se])
-    return x
-
-
-def spatial_squeeze_excite_block(input):
-    ''' Create a spatial squeeze-excite block
-        Code fully extracted from `keras-squeeze-excite-network <https://github.com/titu1994/keras-squeeze-excite-network>_`.
-
-    Args:
-        input: input tensor
-
-    Returns: a keras tensor
-
-    References
-    -   [Concurrent Spatial and Channel Squeeze & Excitation in Fully Convolutional Networks](https://arxiv.org/abs/1803.02579)
-    '''
-
-    se = Conv2D(1, (1, 1), activation='sigmoid', use_bias=False,
-                kernel_initializer='he_normal')(input)
-
-    x = multiply([input, se])
-    return x
-
-
-def channel_spatial_squeeze_excite(input, ratio=16):
-    ''' Create a spatial squeeze-excite block.
-        Code fully extracted from `keras-squeeze-excite-network <https://github.com/titu1994/keras-squeeze-excite-network>_`.
-
-    Args:
-        input: input tensor
-        filters: number of output filters
-
-    Returns: a keras tensor
-
-    References
-    -   [Squeeze and Excitation Networks](https://arxiv.org/abs/1709.01507)
-    -   [Concurrent Spatial and Channel Squeeze & Excitation in Fully Convolutional Networks](https://arxiv.org/abs/1803.02579)
-    '''
-
-    cse = squeeze_excite_block(input, ratio)
-    sse = spatial_squeeze_excite_block(input)
-
-    x = add([cse, sse])
     return x
 
