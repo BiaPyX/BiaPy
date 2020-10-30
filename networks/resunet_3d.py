@@ -4,19 +4,19 @@ from tensorflow.keras.layers import Dropout, Lambda, SpatialDropout3D, Conv3D, \
                                     Conv3DTranspose, MaxPooling3D, Concatenate,\
                                     Add, BatchNormalization, ELU, ZeroPadding3D
 from metrics import binary_crossentropy_weighted, jaccard_index, \
-                    weighted_bce_dice_loss
+                    jaccard_index_softmax, weighted_bce_dice_loss
 
 
 def ResUNet_3D(image_shape, activation='elu', k_init='he_normal', 
                drop_values=[0.1,0.1,0.1,0.1,0.1], batch_norm=False, 
                feature_maps=[16,32,64,128,256], depth=4, loss_type="bce", 
-               optimizer="sgd", lr=0.001):
+               optimizer="sgd", lr=0.001, n_classes=1):
 
     """Create 3D Residual_U-Net.
 
        Parameters
        ----------
-       image_shape : array of 3 int
+       image_shape : 3D tuple
            Dimensions of the input image.
 
        activation : str, optional
@@ -49,6 +49,9 @@ def ResUNet_3D(image_shape, activation='elu', k_init='he_normal',
                                                                            
        lr : float, optional
            Learning rate value.
+
+       n_classes: int, optional                                                 
+           Number of classes.    
 
        Returns  
        -------
@@ -84,7 +87,7 @@ def ResUNet_3D(image_shape, activation='elu', k_init='he_normal',
     x = level_block(inputs, depth, fm, 3, activation, k_init, drop_values, 
                     batch_norm, True)
 
-    outputs = Conv3D(1, (1, 1, 1), activation='sigmoid') (x)
+    outputs = Conv3D(n_classes, (1, 1, 1), activation='sigmoid') (x)
 
     model = Model(inputs=[inputs], outputs=[outputs])
 
@@ -101,8 +104,12 @@ def ResUNet_3D(image_shape, activation='elu', k_init='he_normal',
 
     # Compile the model
     if loss_type == "bce":
-        model.compile(optimizer=opt, loss='binary_crossentropy',
-                      metrics=[jaccard_index])
+        if n_classes > 1:                                                       
+            model.compile(optimizer=opt, loss='categorical_crossentropy',       
+                          metrics=[jaccard_index_softmax])                      
+        else:                                                                   
+            model.compile(optimizer=opt, loss='binary_crossentropy',            
+                          metrics=[jaccard_index])    
     elif loss_type == "w_bce":
         model.compile(optimizer=opt, loss=binary_crossentropy_weighted(weights),
                       metrics=[jaccard_index])

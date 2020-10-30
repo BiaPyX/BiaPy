@@ -17,7 +17,7 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
 
        Parameters
        ----------
-       image_shape :3D tuple
+       image_shape : 3D tuple
            Dimensions of the input image.
 
        activation : str, optional
