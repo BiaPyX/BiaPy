@@ -29,9 +29,9 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         """ImageDataGenerator constructor.
                                                                                 
        Args:                                                                    
-            X (4D Numpy array): data. E.g. (image_number, x, y, channels).
+            X (4D Numpy array): data. E.g. (num_of_images, x, y, channels).
 
-            Y (4D Numpy array): mask data. E.g. (image_number, x, y, channels).
+            Y (4D Numpy array): mask data. E.g. (num_of_images, x, y, channels).
 
             batch_size (int, optional): size of the batches.
 

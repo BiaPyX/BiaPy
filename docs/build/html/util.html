@@ -82,15 +82,28 @@
               
             
             
-              <p class="caption"><span class="caption-text">Contents:</span></p>
-<ul class="current">
+              <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Networks</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_2d.html">SE+2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Auxiliary code</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
@@ -371,8 +384,8 @@ with different thresholds, from 0.1 to 0.9.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>preds_test</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Predictions made by the model. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>Y_test</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Ground truth of the data. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>preds_test</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Predictions made by the model. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_test</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Ground truth of the data. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>det_eval_ge_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path where the ground truth is stored for the DET calculation.</p></li>
 <li><p><strong>det_eval_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path where the evaluation of the metric will be done.</p></li>
 <li><p><strong>det_bin</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the DET binary.</p></li>
@@ -433,10 +446,10 @@ of <code class="docutils literal notranslate"><span class="pre">0.4</span></code
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>X</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Data to save as images. The first dimension must be the number of
-images. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+images. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>data_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to store X images.</p></li>
 <li><p><strong>Y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Masks to save as images. The first dimension must be the number of
-images. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+images. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>mask_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to store Y images.</p></li>
 <li><p><strong>prefix</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to store generated charts.</p></li>
 </ul>
@@ -476,7 +489,7 @@ weight maps in a folder. Uses internally <a class="reference internal" href="#ut
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>labels</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – Corresponds to given label images. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>labels</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – Corresponds to given label images. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Refers to the path where the weight maps should be saved.</p></li>
 <li><p><strong>binary</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Corresponds to whether or not the labels are binary.</p></li>
 <li><p><strong>w0</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Controls for the importance of separating tightly associated entities.</p></li>
@@ -518,9 +531,9 @@ stored.</p>
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – Data to save as images. The first dimension must be the number of
-images. <code class="docutils literal notranslate"><span class="pre">E.g.</span> <span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+images. <code class="docutils literal notranslate"><span class="pre">E.g.</span> <span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>data_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – Data mask to save as images.  The first dimension must be the number
-of images. <code class="docutils literal notranslate"><span class="pre">E.g.</span> <span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+of images. <code class="docutils literal notranslate"><span class="pre">E.g.</span> <span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>out_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to save the images.</p></li>
 <li><p><strong>num_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes.</p></li>
 <li><p><strong>th</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Percentage of the pixels that must be labeled as a class to save it
@@ -569,7 +582,7 @@ the function as follows</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>Y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to calculate the probability map from. E. g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span>
+<li><p><strong>Y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to calculate the probability map from. E. g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span>
 <span class="pre">y,</span> <span class="pre">channel)</span></code></p></li>
 <li><p><strong>w_foreground</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Weight of the foreground. This value plus <code class="docutils literal notranslate"><span class="pre">w_background</span></code> must be
 equal <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
@@ -633,19 +646,19 @@ image.</p>
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>X</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – Data that contains the images to create the surfaces from. E.g.
-<code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>Y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – Data mask of the same shape of X that will be converted into 3D volume,
 stacking multiple times each image. Useful if you need the two data
-arrays to be of the same shape. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+arrays to be of the same shape. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>th</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Values to ommit when creating the surfaces. Useful to reduce the
 amount of data in z to be created and reduce computational time.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p><ul class="simple">
-<li><p><strong>Array</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – 3D surface of each image provided. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span>
+<li><p><strong>Array</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – 3D surface of each image provided. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span>
 <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>Array</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – 3D stack of each mask provided. E.g. <code class="docutils literal notranslate"><span class="pre">(image_number,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span>
+<li><p><strong>Array</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>) – 3D stack of each mask provided. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">z,</span> <span class="pre">x,</span> <span class="pre">y,</span>
 <span class="pre">channels)</span></code>.</p></li>
 </ul>
 </p>

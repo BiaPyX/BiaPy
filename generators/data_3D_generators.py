@@ -29,9 +29,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            https://github.com/aleju/imgaug.
                                                                                 
        Args:                                                                    
-            X (Numpy 5D array): data. E.g. (image_number, x, y, z, channels).
+            X (Numpy 5D array): data. E.g. (num_of_images, x, y, z, channels).
 
-            Y (Numpy 5D array): mask data. E.g. (image_number, x, y, z, channels).
+            Y (Numpy 5D array): mask data. E.g. (num_of_images, x, y, z, channels).
 
             random_subvolumes_in_DA (bool, optional): flag to extract random 
             subvolumes from the given data. If not, the data must be 5D and is 

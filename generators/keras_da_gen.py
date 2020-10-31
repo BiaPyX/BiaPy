@@ -24,16 +24,16 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
        Args:                                                                    
             X_train (4D Numpy array, optional): train data. If this arg is provided 
             data_paths arg value will be avoided.
-            E.g. (image_number, x, y, channels).
+            E.g. (num_of_images, x, y, channels).
 
             Y_train (4D Numpy array, optional): train mask data.                             
-            E.g. (image_number, x, y, channels).
+            E.g. (num_of_images, x, y, channels).
 
             X_val (4D Numpy array, optional): validation data.
-            E.g. (image_number, x, y, channels).
+            E.g. (num_of_images, x, y, channels).
 
             Y_val (4D Numpy array, optional): validation mask data.
-            E.g. (image_number, x, y, channels).
+            E.g. (num_of_images, x, y, channels).
 
             ld_img_from_disk (bool, optional): to make the generator with
             images loaded form disk instead of use X_train, Y_train, X_val 
@@ -413,10 +413,10 @@ def keras_gen_samples(num_samples, X_data=None, Y_data=None,
             num_samples (int): number of sampels to create.
 
             X_data (4D Numpy array, optional): data used to generate samples.
-            E.g. (image_number, x, y, channels).
+            E.g. (num_of_images, x, y, channels).
 
             Y_data (4D Numpy array, optional): mask used to generate samples. 
-            E.g. (image_number, x, y, channels).
+            E.g. (num_of_images, x, y, channels).
 
             ld_img_from_disk (bool, optional): to advise the function to 
             load images from disk instead of use X_data or Y_data.
@@ -594,13 +594,13 @@ def prepare_weight_maps(train_w_path, val_w_path, test_w_path, c_w_path=None,
             Ignored if 'ld_img_from_disk' is False.
 
             Y_train (4D Numpy array, optional): train mask data used to generate 
-            weight maps. E.g. (image_number, x, y, channels).
+            weight maps. E.g. (num_of_images, x, y, channels).
 
             Y_val (Numpy array, optional): validation mask data used to generate
-            weight maps. E.g. (image_number, x, y, channels).
+            weight maps. E.g. (num_of_images, x, y, channels).
 
             Y_test (Numpy array, optional): test mask data used to generate
-            weight maps. E.g. (image_number, x, y, channels).
+            weight maps. E.g. (num_of_images, x, y, channels).
 
             ld_img_from_disk (bool, optional): to advise the function to
             load images from disk instead of use Y_train_data or Y_val.

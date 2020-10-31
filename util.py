@@ -301,10 +301,10 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path,
        Parameters
        ----------                                                                    
        preds_test : 4D Numpy array
-           Predictions made by the model. E.g. ``(image_number, x, y, channels)``.
+           Predictions made by the model. E.g. ``(num_of_images, x, y, channels)``.
 
        Y_test : 4D Numpy array
-           Ground truth of the data. E.g. ``(image_number, x, y, channels)``.
+           Ground truth of the data. E.g. ``(num_of_images, x, y, channels)``.
 
        det_eval_ge_path : str
            Path where the ground truth is stored for the DET calculation.
@@ -509,14 +509,14 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
        ----------                                                                    
        X : 4D numpy array, optional
            Data to save as images. The first dimension must be the number of 
-           images. E.g. ``(image_number, x, y, channels)``.
+           images. E.g. ``(num_of_images, x, y, channels)``.
     
        data_dir : str, optional
            Path to store X images.
 
        Y : 4D numpy array, optional
            Masks to save as images. The first dimension must be the number of 
-           images. E.g. ``(image_number, x, y, channels)``.
+           images. E.g. ``(num_of_images, x, y, channels)``.
 
        mask_dir : str, optional
            Path to store Y images. 
@@ -698,7 +698,7 @@ def do_save_wm(labels, path, binary = True, w0 = 10, sigma = 5):
        Parameters
        ----------
        labels : 4D numpy array
-           Corresponds to given label images. E.g. ``(image_number, x, y, channels)``.
+           Corresponds to given label images. E.g. ``(num_of_images, x, y, channels)``.
        
        path : str
            Refers to the path where the weight maps should be saved.
@@ -778,11 +778,11 @@ def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, th=0.8):
        ----------
        data : 4D numpy array
            Data to save as images. The first dimension must be the number of 
-           images. ``E.g. (image_number, x, y, channels)``.
+           images. ``E.g. (num_of_images, x, y, channels)``.
 
        data_mask : 4D numpy array
            Data mask to save as images.  The first dimension must be the number 
-           of images. ``E.g. (image_number, x, y, channels)``.
+           of images. ``E.g. (num_of_images, x, y, channels)``.
 
        out_dir : str
            Path to save the images.
@@ -910,7 +910,7 @@ def calculate_2D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
        Parameters
        ----------
        Y : 4D Numpy array
-           Data to calculate the probability map from. E. g. ``(image_number, x, 
+           Data to calculate the probability map from. E. g. ``(num_of_images, x, 
            y, channel)``
 
        w_foreground : float, optional
@@ -1042,12 +1042,12 @@ def grayscale_2D_image_to_3D(X, Y, th=127):
        ----------
        X : 4D numpy array
            Data that contains the images to create the surfaces from. E.g. 
-           ``(image_number, x, y, channels)``.
+           ``(num_of_images, x, y, channels)``.
 
        Y : 4D numpy array
            Data mask of the same shape of X that will be converted into 3D volume,
            stacking multiple times each image. Useful if you need the two data
-           arrays to be of the same shape. E.g. ``(image_number, x, y, channels)``.
+           arrays to be of the same shape. E.g. ``(num_of_images, x, y, channels)``.
 
        th : int, optional
            Values to ommit when creating the surfaces. Useful to reduce the
@@ -1056,11 +1056,11 @@ def grayscale_2D_image_to_3D(X, Y, th=127):
        Returns
        -------
        Array : 5D numpy array
-           3D surface of each image provided. E.g. ``(image_number, z, x, y, 
+           3D surface of each image provided. E.g. ``(num_of_images, z, x, y, 
            channels)``.
 
        Array : 5D numpy array
-           3D stack of each mask provided. E.g. ``(image_number, z, x, y, 
+           3D stack of each mask provided. E.g. ``(num_of_images, z, x, y, 
            channels)``.
     """
 

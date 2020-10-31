@@ -80,15 +80,28 @@
               
             
             
-              <p class="caption"><span class="caption-text">Contents:</span></p>
-<ul>
+              <ul>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../post_processing.html">Post processing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../grad_cam.html">Grad-CAM</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Networks</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../networks_unet.html">2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_resunet.html">2D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_se_unet_2d.html">SE+2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_unet_3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_resunet_3d.html">3D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_fcn.html">FCN</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_multiresunet.html">MultiResUNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Auxiliary code</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="../adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../callbacks.html">Callbacks</a></li>
 </ul>
@@ -458,10 +471,10 @@
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------                                                                    </span>
 <span class="sd">       preds_test : 4D Numpy array</span>
-<span class="sd">           Predictions made by the model. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Predictions made by the model. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       Y_test : 4D Numpy array</span>
-<span class="sd">           Ground truth of the data. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Ground truth of the data. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       det_eval_ge_path : str</span>
 <span class="sd">           Path where the ground truth is stored for the DET calculation.</span>
@@ -666,14 +679,14 @@
 <span class="sd">       ----------                                                                    </span>
 <span class="sd">       X : 4D numpy array, optional</span>
 <span class="sd">           Data to save as images. The first dimension must be the number of </span>
-<span class="sd">           images. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           images. E.g. ``(num_of_images, x, y, channels)``.</span>
 <span class="sd">    </span>
 <span class="sd">       data_dir : str, optional</span>
 <span class="sd">           Path to store X images.</span>
 
 <span class="sd">       Y : 4D numpy array, optional</span>
 <span class="sd">           Masks to save as images. The first dimension must be the number of </span>
-<span class="sd">           images. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           images. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       mask_dir : str, optional</span>
 <span class="sd">           Path to store Y images. </span>
@@ -855,7 +868,7 @@
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------</span>
 <span class="sd">       labels : 4D numpy array</span>
-<span class="sd">           Corresponds to given label images. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Corresponds to given label images. E.g. ``(num_of_images, x, y, channels)``.</span>
 <span class="sd">       </span>
 <span class="sd">       path : str</span>
 <span class="sd">           Refers to the path where the weight maps should be saved.</span>
@@ -935,11 +948,11 @@
 <span class="sd">       ----------</span>
 <span class="sd">       data : 4D numpy array</span>
 <span class="sd">           Data to save as images. The first dimension must be the number of </span>
-<span class="sd">           images. ``E.g. (image_number, x, y, channels)``.</span>
+<span class="sd">           images. ``E.g. (num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       data_mask : 4D numpy array</span>
 <span class="sd">           Data mask to save as images.  The first dimension must be the number </span>
-<span class="sd">           of images. ``E.g. (image_number, x, y, channels)``.</span>
+<span class="sd">           of images. ``E.g. (num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       out_dir : str</span>
 <span class="sd">           Path to save the images.</span>
@@ -1067,7 +1080,7 @@
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------</span>
 <span class="sd">       Y : 4D Numpy array</span>
-<span class="sd">           Data to calculate the probability map from. E. g. ``(image_number, x, </span>
+<span class="sd">           Data to calculate the probability map from. E. g. ``(num_of_images, x, </span>
 <span class="sd">           y, channel)``</span>
 
 <span class="sd">       w_foreground : float, optional</span>
@@ -1174,7 +1187,7 @@
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">prob_map</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])):</span>
             <span class="c1"># Remove artifacts connected to image border</span>
-            <span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">clear_border</span><span class="p">(</span><span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="n">j</span><span class="p">])</span>
+            <span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">clear_border</span><span class="p">(</span><span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="n">j</span><span class="p">])</span>
 
         <span class="n">foreground_pixels</span> <span class="o">=</span> <span class="p">(</span><span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mi">255</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
         <span class="n">background_pixels</span> <span class="o">=</span> <span class="p">(</span><span class="n">prob_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
@@ -1199,12 +1212,12 @@
 <span class="sd">       ----------</span>
 <span class="sd">       X : 4D numpy array</span>
 <span class="sd">           Data that contains the images to create the surfaces from. E.g. </span>
-<span class="sd">           ``(image_number, x, y, channels)``.</span>
+<span class="sd">           ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       Y : 4D numpy array</span>
 <span class="sd">           Data mask of the same shape of X that will be converted into 3D volume,</span>
 <span class="sd">           stacking multiple times each image. Useful if you need the two data</span>
-<span class="sd">           arrays to be of the same shape. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           arrays to be of the same shape. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       th : int, optional</span>
 <span class="sd">           Values to ommit when creating the surfaces. Useful to reduce the</span>
@@ -1213,11 +1226,11 @@
 <span class="sd">       Returns</span>
 <span class="sd">       -------</span>
 <span class="sd">       Array : 5D numpy array</span>
-<span class="sd">           3D surface of each image provided. E.g. ``(image_number, z, x, y, </span>
+<span class="sd">           3D surface of each image provided. E.g. ``(num_of_images, z, x, y, </span>
 <span class="sd">           channels)``.</span>
 
 <span class="sd">       Array : 5D numpy array</span>
-<span class="sd">           3D stack of each mask provided. E.g. ``(image_number, z, x, y, </span>
+<span class="sd">           3D stack of each mask provided. E.g. ``(num_of_images, z, x, y, </span>
 <span class="sd">           channels)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 

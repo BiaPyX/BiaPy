@@ -80,15 +80,28 @@
               
             
             
-              <p class="caption"><span class="caption-text">Contents:</span></p>
-<ul>
+              <ul>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../post_processing.html">Post processing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../grad_cam.html">Grad-CAM</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Networks</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../networks_unet.html">2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_resunet.html">2D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_se_unet_2d.html">SE+2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_unet_3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_resunet_3d.html">3D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_fcn.html">FCN</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_multiresunet.html">MultiResUNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Auxiliary code</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="../adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../callbacks.html">Callbacks</a></li>
 </ul>
@@ -190,11 +203,11 @@
 <span class="sd">       test_mask_path : str</span>
 <span class="sd">           Path to the test data masks.          </span>
 
-<span class="sd">       image_train_shape : Array of 3 int</span>
-<span class="sd">           Dimensions of the images.     </span>
+<span class="sd">       image_train_shape : 3D tuple</span>
+<span class="sd">           Dimensions of the images to load. E.g. ``(x, y, channels)``.</span>
 
-<span class="sd">       image_test_shape : Array of 3 int</span>
-<span class="sd">           Dimensions of the images.     </span>
+<span class="sd">       image_test_shape : 3D tuple</span>
+<span class="sd">           Dimensions of the images to load. E.g. ``(x, y, channels)``.</span>
 
 <span class="sd">       create_val : bool, optional</span>
 <span class="sd">           If true validation data is created (from the train data).                                                    </span>
@@ -235,7 +248,7 @@
 <span class="sd">           To make crops on data.</span>
 
 <span class="sd">       crop_shape : 3D int tuple, optional</span>
-<span class="sd">           Shape of the crops.</span>
+<span class="sd">           Shape of the crops. E.g. ``(x, y, channels)``.</span>
 
 <span class="sd">       check_crop : bool, optional</span>
 <span class="sd">           To save the crops made to ensure they are generating as one wish.</span>
@@ -250,27 +263,27 @@
 <span class="sd">       Returns</span>
 <span class="sd">       -------                                                         </span>
 <span class="sd">       X_train : 4D Numpy array</span>
-<span class="sd">           Train images. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Train images. E.g. ``(num_of_images, y, x, channels)``.</span>
 <span class="sd">        </span>
 <span class="sd">       Y_train : 4D Numpy array</span>
-<span class="sd">           Train images&#39; mask. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Train images&#39; mask. E.g. ``(num_of_images, y, x, channels)``.</span>
 
 <span class="sd">       X_val : 4D Numpy array, optional</span>
-<span class="sd">           Validation images (``create_val==True``). E.g. ``(image_number, </span>
-<span class="sd">           x, y, channels)``.</span>
+<span class="sd">           Validation images (``create_val==True``). E.g. ``(num_of_images, </span>
+<span class="sd">           y, x, channels)``.</span>
 
 <span class="sd">       Y_val : 4D Numpy array, optional</span>
 <span class="sd">           Validation images&#39; mask (``create_val==True``). E.g. </span>
-<span class="sd">           ``(image_number, x, y, channels)``.</span>
+<span class="sd">           ``(num_of_images, y, x, channels)``.</span>
 
 <span class="sd">       X_test : 4D Numpy array</span>
-<span class="sd">           Test images. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Test images. E.g. ``(num_of_images, y, x, channels)``.</span>
 
 <span class="sd">       Y_test : 4D Numpy array</span>
-<span class="sd">           Test images&#39; mask. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Test images&#39; mask. E.g. ``(num_of_images, y, x, channels)``.</span>
 
-<span class="sd">       orig_test_shape : tuple of ints</span>
-<span class="sd">           Test data original shape.</span>
+<span class="sd">       orig_test_shape : 4D int tuple</span>
+<span class="sd">           Test data original shape. E.g. ``(num_of_images, x, y, channels)``</span>
 
 <span class="sd">       norm_value : int</span>
 <span class="sd">           mean of the train data in case we need to make a normalization.</span>
@@ -282,17 +295,34 @@
 <span class="sd">       --------</span>
 <span class="sd">       ::</span>
 <span class="sd">        </span>
-<span class="sd">           # EXAMPLE 1 </span>
-<span class="sd">           # Case where we need to load the data, creating a validation split, and dividing them </span>
-<span class="sd">           # into patches</span>
+<span class="sd">           # EXAMPLE 1</span>
+<span class="sd">           # Case where we need to load the data (creating a validation split)</span>
 <span class="sd">           train_path = &quot;data/train/x&quot;</span>
 <span class="sd">           train_mask_path = &quot;data/train/y&quot;</span>
 <span class="sd">           test_path = &quot;data/test/y&quot;</span>
 <span class="sd">           test_mask_path = &quot;data/test/y&quot;</span>
 
+<span class="sd">           # Original image shape is (1024, 768, 165), so each image shape should be this:</span>
 <span class="sd">           img_train_shape = (1024, 768, 1)</span>
 <span class="sd">           img_test_shape = (1024, 768, 1)</span>
 
+<span class="sd">           X_train, Y_train, X_val,</span>
+<span class="sd">           Y_val, X_test, Y_test,</span>
+<span class="sd">           orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(</span>
+<span class="sd">               train_path, train_mask_path, test_path, test_mask_path, img_train_shape,</span>
+<span class="sd">               img_test_shape, val_split=0.1, shuffle_val=True, make_crops=False)</span>
+<span class="sd">               </span>
+
+<span class="sd">           # The function will print the shapes of the generated arrays. In this example:</span>
+<span class="sd">           #     *** Loaded train data shape is: (148, 768, 1024, 1)</span>
+<span class="sd">           #     *** Loaded validation data shape is: (17, 768, 1024, 1)</span>
+<span class="sd">           #     *** Loaded test data shape is: (165, 768, 1024, 1)</span>
+<span class="sd">           #</span>
+<span class="sd">           # Notice height and width swap because of Numpy ndarray terminology </span>
+<span class="sd">            </span>
+
+<span class="sd">           # EXAMPLE 2 </span>
+<span class="sd">           # Same as the first example but creating patches of (256x256)</span>
 <span class="sd">           X_train, Y_train, X_val,</span>
 <span class="sd">           Y_val, X_test, Y_test,</span>
 <span class="sd">           orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(</span>
@@ -305,8 +335,8 @@
 <span class="sd">           #    *** Loaded validation data shape is: (204, 256, 256, 1)</span>
 <span class="sd">           #    *** Loaded test data shape is: (1980, 256, 256, 1)</span>
 
-<span class="sd">            </span>
-<span class="sd">           # EXAMPLE 2</span>
+
+<span class="sd">           # EXAMPLE 3</span>
 <span class="sd">           # Same as the first example but definig extra datasets to be loaded and stacked together </span>
 <span class="sd">           # with the main dataset. Extra variables to be defined: </span>
 <span class="sd">           extra_datasets_data_list.append(&#39;/data2/train/x&#39;)</span>
@@ -314,7 +344,6 @@
 <span class="sd">           extra_datasets_data_dim_list.append((877, 967, 1))</span>
 <span class="sd">           extra_datasets_discard.append(0) # To not discard any image </span>
 
-<span class="sd">           # The call should be this:</span>
 <span class="sd">           X_train, Y_train, X_val,                                             </span>
 <span class="sd">           Y_val, X_test, Y_test,                                               </span>
 <span class="sd">           orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(  </span>
@@ -365,7 +394,7 @@
         
         <span class="k">if</span> <span class="n">create_val</span><span class="p">:</span>
             <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;4.3) Cropping validation data . . .&quot;</span><span class="p">)</span>
-            <span class="n">X_val</span><span class="p">,</span> <span class="n">Y_val</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">crop_data</span><span class="p">(</span>
+            <span class="n">X_val</span><span class="p">,</span> <span class="n">Y_data_shapeval</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">crop_data</span><span class="p">(</span>
                 <span class="n">X_val</span><span class="p">,</span> <span class="n">crop_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_val</span><span class="p">,</span> <span class="n">d_percentage</span><span class="o">=</span><span class="n">d_percentage</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">check_crop</span><span class="p">:</span>
@@ -464,13 +493,18 @@
 
 <div class="viewcode-block" id="load_and_prepare_3D_data"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.load_and_prepare_3D_data">[docs]</a><span class="k">def</span> <span class="nf">load_and_prepare_3D_data</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">test_path</span><span class="p">,</span> 
                              <span class="n">test_mask_path</span><span class="p">,</span> <span class="n">image_train_shape</span><span class="p">,</span> <span class="n">image_test_shape</span><span class="p">,</span> 
+                             <span class="n">test_subvol_shape</span><span class="p">,</span> <span class="n">train_subvol_shape</span><span class="p">,</span> 
                              <span class="n">create_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> 
-                             <span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">train_subvol_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
-                             <span class="n">test_subvol_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
-                             <span class="n">random_subvolumes_in_DA</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ov_test</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>         
-    <span class="sd">&quot;&quot;&quot;Load train, validation and test images from the given paths to create 2D</span>
-<span class="sd">       data. If the images to be loaded are smaller than the given dimension it</span>
-<span class="sd">       will be sticked in the (0, 0).</span>
+                             <span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">random_subvolumes_in_DA</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+                             <span class="n">ov_test</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>         
+    <span class="sd">&quot;&quot;&quot;Load train, validation and test images from the given paths to create a </span>
+<span class="sd">       3D data representation. All the test data will be used to create a 3D</span>
+<span class="sd">       volume of ``test_subvol_shape`` shape (taking into account ``ov_test``).  </span>
+
+<span class="sd">       For train data, some images in Z dimension may not be included if</span>
+<span class="sd">       ``train_subvol_shape`` in Z is not divisible by the original shape. The</span>
+<span class="sd">       remaining images after the division will be used only if they are more</span>
+<span class="sd">       or equal than the half of the Z wanted dimension (see an example below).</span>
 <span class="sd">                                                                        </span>
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------                                                            </span>
@@ -486,12 +520,18 @@
 <span class="sd">       test_mask_path : str                                                     </span>
 <span class="sd">           Path to the test data masks.                                         </span>
 <span class="sd">                                                                                </span>
-<span class="sd">       image_train_shape : Array of 3 int                                       </span>
-<span class="sd">           Dimensions of the images.                                            </span>
+<span class="sd">       image_train_shape : 3D tuple</span>
+<span class="sd">           Dimensions of the images to load. E.g. ``(x, y, channels)``.</span>
 <span class="sd">                                                                                </span>
-<span class="sd">       image_test_shape : Array of 3 int                                        </span>
-<span class="sd">           Dimensions of the images.                                            </span>
-<span class="sd">                                                                                </span>
+<span class="sd">       image_test_shape : 3D tuple</span>
+<span class="sd">           Dimensions of the images to load. E.g. ``(x, y, channels)``.</span>
+
+<span class="sd">       train_subvol_shape : 4D tuple</span>
+<span class="sd">            Shape of the train subvolumes to create. E.g. ``(x, y, z, channels)``.</span>
+
+<span class="sd">       test_subvol_shape : 4D tuple</span>
+<span class="sd">            Shape of the test subvolumes to create. E.g. ``(x, y, z, channels)``.</span>
+
 <span class="sd">       create_val : bool, optional                                              </span>
 <span class="sd">           If true validation data is created (from the train data).                                                    </span>
 
@@ -504,49 +544,116 @@
 <span class="sd">       seedValue : int, optional                                                </span>
 <span class="sd">            Seed value.                                                     </span>
 
-<span class="sd">       train_subvol_shape : tuple, optional</span>
-<span class="sd">            Shape of the train subvolumes to create. </span>
-
-<span class="sd">       test_subvol_shape : tuple, optional</span>
-<span class="sd">            Shape of the test subvolumes to create. </span>
-
 <span class="sd">       random_subvolumes_in_DA : bool, optional</span>
 <span class="sd">           To advice the method that not preparation of the data must be done, </span>
 <span class="sd">           as random subvolumes will be created on DA, and the whole volume will </span>
 <span class="sd">           be used for that.</span>
+<span class="sd">       </span>
+<span class="sd">       ov_test : float, optional</span>
+<span class="sd">          Amount of overlap on z dimension for the test data. The value must be </span>
+<span class="sd">          on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. </span>
 
 <span class="sd">       Returns</span>
 <span class="sd">       -------                                                         </span>
 <span class="sd">       X_train : 5D Numpy array                                                 </span>
-<span class="sd">           Train images. E.g. ``(image_number, x, y, z, channels)``.               </span>
+<span class="sd">           Train images. E.g. ``(num_of_images, y, x, z, channels)``.               </span>
 <span class="sd">                                                                                </span>
 <span class="sd">       Y_train : 5D Numpy array                                                 </span>
-<span class="sd">           Train images&#39; mask. E.g. ``(image_number, x, y, z, channels)``.         </span>
+<span class="sd">           Train images&#39; mask. E.g. ``(num_of_images, y, x, z, channels)``.         </span>
 <span class="sd">                                                                                </span>
 <span class="sd">       X_val : 5D Numpy array, optional                                         </span>
-<span class="sd">           Validation images (``create_val==True``). E.g. ``(image_number,      </span>
-<span class="sd">           x, y, z, channels)``.                                                   </span>
+<span class="sd">           Validation images (``create_val==True``). E.g. ``(num_of_images,      </span>
+<span class="sd">           y, x, z, channels)``.                                                   </span>
 <span class="sd">                                                                                </span>
 <span class="sd">       Y_val : 5D Numpy array, optional                                         </span>
-<span class="sd">           Validation images&#39; mask (``create_val==True``). E.g. ``(image_number,</span>
-<span class="sd">           x, y, z, channels)``.                                  </span>
+<span class="sd">           Validation images&#39; mask (``create_val==True``). E.g. ``(num_of_images,</span>
+<span class="sd">           y, x, z, channels)``.                                  </span>
 <span class="sd">                                                                                </span>
 <span class="sd">       X_test : 5D Numpy array                                                  </span>
-<span class="sd">           Test images. E.g. ``(image_number, x, y, z, channels)``.                </span>
-<span class="sd">                                                                                </span>
-<span class="sd">       Y_test : 5D Numpy array                                                  </span>
-<span class="sd">           Test images&#39; mask. E.g. ``(image_number, x, y, z, channels)``.  </span>
+<span class="sd">           Test images. E.g. ``(num_of_images, y, x, z, channels)``.                </span>
 
-<span class="sd">       orig_test_shape : tuple of ints</span>
-<span class="sd">           Test data original shape.</span>
+<span class="sd">       Y_test : 5D Numpy array      </span>
+<span class="sd">           Test images&#39; mask. E.g. ``(num_of_images, y, x, z, channels)``.  </span>
+
+<span class="sd">       orig_test_shape : 4D int tuple</span>
+<span class="sd">           Test data original shape. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       norm_value : int</span>
 <span class="sd">           Normalization value calculated.</span>
+
+<span class="sd">       Examples</span>
+<span class="sd">       --------</span>
+<span class="sd">       ::</span>
+
+<span class="sd">           # EXAMPLE 1</span>
+<span class="sd">           # Case where we need to load the data and creating a validation split</span>
+<span class="sd">           train_path = &quot;data/train/x&quot;</span>
+<span class="sd">           train_mask_path = &quot;data/train/y&quot;</span>
+<span class="sd">           test_path = &quot;data/test/y&quot;</span>
+<span class="sd">           test_mask_path = &quot;data/test/y&quot;</span>
+
+<span class="sd">           # Original image shape is (1024, 768, 165), so each image shape should be this:</span>
+<span class="sd">           img_train_shape = (1024, 768, 1)</span>
+<span class="sd">           img_test_shape = (1024, 768, 1)</span>
+
+<span class="sd">           # 3D subvolume shape needed</span>
+<span class="sd">           train_3d_shape = (80, 80, 80, 1)</span>
+<span class="sd">           test_3d_shape = (80, 80, 80, 1)</span>
+
+<span class="sd">           X_train, Y_train, X_val,</span>
+<span class="sd">           Y_val, X_test, Y_test,</span>
+<span class="sd">           orig_test_shape, norm_value = load_and_prepare_3D_data(</span>
+<span class="sd">               train_path, train_mask_path, test_path, test_mask_path, img_train_shape,</span>
+<span class="sd">               img_test_shape, val_split=0.1, create_val=True, shuffle_val=True,</span>
+<span class="sd">               ov_test=0, train_subvol_shape=train_3d_shape,</span>
+<span class="sd">               test_subvol_shape=test_3d_shape)</span>
+
+<span class="sd">           # The function will print the shapes of the generated arrays. In this example:</span>
+<span class="sd">           #     *** Loaded train data shape is: (194, 80, 80, 80, 1)</span>
+<span class="sd">           #     *** Loaded validation data shape is: (22, 80, 80, 80, 1)</span>
+<span class="sd">           #     *** Loaded test data shape is: (390, 80, 80, 80, 1)</span>
+<span class="sd">           #</span>
+<span class="sd">           # For the test data, 390 subvolumes have been created. As you may noticed, </span>
+<span class="sd">           # a minimum overlap is set (selecting ov_test=0). So as z dimension has 165</span>
+<span class="sd">           # images, the subvolumes should be extracted from these slices: [0:79],</span>
+<span class="sd">           # [43:123] and [86:166]. Notice the 43 images of overlap between the subvolumes.</span>
+<span class="sd">           # The rest of the images that overflows original 165 images will be completed</span>
+<span class="sd">           # using mirroring to preserve tissue proporties. Here only one image has been</span>
+<span class="sd">           # mirrored, the last 166 image number</span>
+<span class="sd">    </span>
+<span class="sd">       The function that makes the 3D crop is :func:`~crop_3D_data_with_overlap`.</span>
+
+<span class="sd">       A visual explanation of the process could be this:</span>
+
+<span class="sd">       .. image:: img/crop_3D.png</span>
+<span class="sd">           :width: 80%</span>
+<span class="sd">           :align: center</span>
+
+<span class="sd">       ::</span>
+
+<span class="sd">           # EXAMPLE 2</span>
+<span class="sd">           # As the example 1 but when random_subvolumes_in_DA is True and no validation data</span>
+<span class="sd">           # needs to be created. The test data should be of the same shape as the example 1.</span>
+<span class="sd">           # However, the returned train data will be the same but adding an extra dimension </span>
+<span class="sd">           # on the first axis. This is made to consider the entire data as a unique subvolume.</span>
+<span class="sd">           # More information about this in 3D generator. </span>
+<span class="sd">           # </span>
+<span class="sd">           X_train, Y_train, X_val,</span>
+<span class="sd">           Y_val, X_test, Y_test,</span>
+<span class="sd">           orig_test_shape, norm_value = load_and_prepare_3D_data(</span>
+<span class="sd">               train_path, train_mask_path, test_path, test_mask_path, img_train_shape,</span>
+<span class="sd">               img_test_shape, create_val=False, random_subvolumes_in_DA=True, </span>
+<span class="sd">               ov_test=0, train_subvol_shape=train_3d_shape, test_subvol_shape=test_3d_shape)</span>
+
+<span class="sd">           # The function will print the shapes of the generated arrays. In this example:</span>
+<span class="sd">           #     *** Loaded train data shape is: (1, 768, 1024, 165, 1)</span>
+<span class="sd">           #     *** Loaded test data shape is: (390, 80, 80, 80, 1)</span>
+<span class="sd">           # Notice height and width swap because of Numpy ndarray terminology</span>
 <span class="sd">    &quot;&quot;&quot;</span>      
    
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### LOAD ###&quot;</span><span class="p">)</span>
                                                                         
-    <span class="n">tr_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">image_train_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">image_train_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">image_train_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="n">tr_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">image_train_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">imagTrue_train_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">image_train_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;0) Loading train images . . .&quot;</span><span class="p">)</span>
     <span class="n">X_train</span> <span class="o">=</span> <span class="n">load_data_from_dir</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="n">tr_shape</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;1) Loading train masks . . .&quot;</span><span class="p">)</span>
@@ -560,12 +667,13 @@
 
     <span class="n">orig_test_shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">Y_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
 
-    <span class="c1"># Force 3D data preparation if create_val is selected </span>
     <span class="n">mirrored_subvols</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="k">if</span> <span class="n">random_subvolumes_in_DA</span> <span class="o">==</span> <span class="kc">False</span><span class="p">:</span>
+    
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">random_subvolumes_in_DA</span><span class="p">:</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Preparing train data subvolumes . . .&quot;</span><span class="p">)</span>
         <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">mirrored_subvols</span> <span class="o">=</span> <span class="n">prepare_3D_volume_data</span><span class="p">(</span>
             <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">train_subvol_shape</span><span class="p">)</span>
+        
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Preparing test data subvolumes . . .&quot;</span><span class="p">)</span>
     <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">prepare_3D_volume_data</span><span class="p">(</span>
         <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span> <span class="n">test_subvol_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ov</span><span class="o">=</span><span class="n">ov_test</span><span class="p">)</span>
@@ -588,6 +696,14 @@
             <span class="n">Y_train</span><span class="p">,</span> <span class="n">Y_val</span> <span class="o">=</span> <span class="n">train_test_split</span><span class="p">(</span>
                 <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">test_size</span><span class="o">=</span><span class="n">val_split</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_val</span><span class="p">,</span> 
                 <span class="n">random_state</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+
+    <span class="c1"># Convert the original volumes as they were a unique subvolume</span>
+    <span class="k">if</span> <span class="n">random_subvolumes_in_DA</span><span class="p">:</span>                                                 
+        <span class="n">X_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">)),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>      
+        <span class="n">Y_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">Y_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">)),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>    
+        <span class="k">if</span> <span class="n">create_val</span><span class="p">:</span>
+            <span class="n">X_val</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">X_val</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">)),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">Y_val</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">Y_val</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">)),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">create_val</span><span class="p">:</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;*** Loaded train data shape is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">X_train</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
@@ -616,15 +732,30 @@
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------</span>
 <span class="sd">       data_dir : str </span>
-<span class="sd">           path to read the data from.</span>
+<span class="sd">           Path to read the data from.</span>
 <span class="sd">   </span>
 <span class="sd">       shape : 3D int tuple</span>
-<span class="sd">           shape of the data.</span>
+<span class="sd">           Shape of the data. E.g. ``(x, y, channels)``.</span>
 <span class="sd">       </span>
 <span class="sd">       Returns</span>
 <span class="sd">       -------        </span>
 <span class="sd">       data : 4D Numpy array</span>
-<span class="sd">           data loaded. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Data loaded. E.g. ``(num_of_images, y, x, channels)``.</span>
+
+<span class="sd">       Examples</span>
+<span class="sd">       --------</span>
+<span class="sd">       ::</span>
+
+<span class="sd">           # EXAMPLE 1</span>
+<span class="sd">           # Case where we need to load 165 images of shape (1024, 768)</span>
+<span class="sd">           data_path = &quot;data/train/x&quot;</span>
+<span class="sd">           data_shape = (1024, 768, 1)</span>
+<span class="sd">           </span>
+<span class="sd">           load_data_from_dir(data_path, data_shape) </span>
+
+<span class="sd">           # The function will print the shape of the created array. In this example:</span>
+<span class="sd">           #     *** Loaded data shape is (165, 768, 1024, 1)</span>
+<span class="sd">           # Notice height and width swap because of Numpy ndarray terminology</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Loading data from </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))</span>
@@ -645,21 +776,27 @@
 
 <div class="viewcode-block" id="crop_data"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.crop_data">[docs]</a><span class="k">def</span> <span class="nf">crop_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">crop_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">force_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> 
               <span class="n">d_percentage</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>                          
-    <span class="sd">&quot;&quot;&quot;Crop data into smaller pieces.</span>
-<span class="sd">                                                                        </span>
+    <span class="sd">&quot;&quot;&quot;Crop data into smaller pieces of ``crop_shape``. If there is no exact </span>
+<span class="sd">       division between the data shape and ``crop_shape`` in a specific dimension</span>
+<span class="sd">       zeros will be added.</span>
+<span class="sd">        </span>
+<span class="sd">       The opposite function is :func:`~merge_data_without_overlap`.</span>
+
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------                                                            </span>
 <span class="sd">       data : 4D Numpy array</span>
-<span class="sd">           Data to crop.  E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Data to crop. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       crop_shape : 3D int tuple</span>
 <span class="sd">           Output image shape. E.g. ``(x, y, channels)``.</span>
 
 <span class="sd">       data_mask : 4D Numpy array, optional</span>
-<span class="sd">           Data masks to crop. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Data masks to crop. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       force_shape : 2D int tuple, optional</span>
-<span class="sd">           Force horizontal and vertical crops to the given numbers.</span>
+<span class="sd">           Force number of horizontal and vertical crops to the given numbers. </span>
+<span class="sd">           E. g. ``(4, 5)`` should create ``20`` crops: ``4`` rows and ``5`` crop </span>
+<span class="sd">           per each row.</span>
 
 <span class="sd">       d_percentage : int, optional</span>
 <span class="sd">           Number between ``0`` and ``100``. The images that have less foreground </span>
@@ -668,15 +805,46 @@
 <span class="sd">                                                                        </span>
 <span class="sd">       Returns</span>
 <span class="sd">       -------                                                         </span>
-<span class="sd">       cropped_data : 4D Numpy array</span>
-<span class="sd">           Cropped data images.         </span>
+<span class="sd">       cropped_data : 4D Numpy array. </span>
+<span class="sd">           Cropped data images. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       cropped_data_mask : 4D Numpy array</span>
-<span class="sd">           Cropped data masks.     </span>
+<span class="sd">           Cropped data masks. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       force_shape : 2D int tuple</span>
 <span class="sd">           Number of horizontal and vertical crops made. Useful for future crop </span>
 <span class="sd">           calls. </span>
+<span class="sd">        </span>
+<span class="sd">       Examples</span>
+<span class="sd">       --------</span>
+<span class="sd">       ::</span>
+
+<span class="sd">           # EXAMPLE 1</span>
+<span class="sd">           # Divide in (256, 256, 1) crops a given data </span>
+<span class="sd">           X_train = np.ones((165, 768, 1024, 1)) </span>
+<span class="sd">           Y_train = np.ones((165, 768, 1024, 1)) </span>
+<span class="sd">           </span>
+<span class="sd">           X_train, Y_train, _ = crop_data(</span>
+<span class="sd">               X_train, (256, 256, 1), data_mask=Y_train)</span>
+<span class="sd">        </span>
+<span class="sd">           # The function will print the shape of the created array. In this example:</span>
+<span class="sd">           #     **** New data shape is: (1980, 256, 256, 1)</span>
+
+<span class="sd">           # EXAMPLE 2</span>
+<span class="sd">           # Divide in (256, 256, 1) crops a given data that has no exact division</span>
+<span class="sd">           # with that shape</span>
+<span class="sd">           X_train = np.ones((165, 700, 900))</span>
+<span class="sd">           Y_train = np.ones((165, 700, 900))</span>
+
+<span class="sd">           X_train, Y_train, _ = crop_data(</span>
+<span class="sd">               X_train, (256, 256, 1), data_mask=Y_train)</span>
+
+<span class="sd">           # The function will print the shape of the created array. In this example:</span>
+<span class="sd">           #     **** New data shape is: (1980, 256, 256, 1)</span>
+<span class="sd">           # Here some of the crops, concretelly the last in height and width, will</span>
+<span class="sd">           # have a black part (which are zeros)</span>
+<span class="sd">    </span>
+<span class="sd">       See :func:`~check_crops` function for a visual example</span>
 <span class="sd">    &quot;&quot;&quot;</span>                                                                 
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### CROP ###&quot;</span><span class="p">)</span>                                                                    
@@ -784,45 +952,82 @@
         <span class="k">return</span> <span class="n">cropped_data</span><span class="p">,</span> <span class="n">force_shape</span></div>
 
 
-<div class="viewcode-block" id="crop_data_with_overlap"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.crop_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">crop_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">data_mask</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivision</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Crop data into smaller pieces with the minimun overlap.</span>
+<div class="viewcode-block" id="crop_data_with_overlap"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.crop_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">crop_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">data_mask</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">n_crops</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Crop data into small square pieces with overlap. The difference with</span>
+<span class="sd">       :func:`~crop_data` is that this function allows you to create patches with </span>
+<span class="sd">       overlap. </span>
+
+<span class="sd">       This function can help in cases where the train and test data shapes are </span>
+<span class="sd">       different. On that case, to evaluate the network on test data you can make </span>
+<span class="sd">       crops with this function instead of use :func:`~crop_data` to do not add </span>
+<span class="sd">       zeros and use only image data information. You can calculate the number</span>
+<span class="sd">       of crops you want, and the function will calculate the minimum overlap</span>
+<span class="sd">       along x and y axis that satisfies that number. </span>
+
+<span class="sd">       The opposite function is :func:`~merge_data_with_overlap`.</span>
 
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------</span>
 <span class="sd">       data : 4D Numpy array</span>
-<span class="sd">           Data to crop. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Data to crop. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       data_mask : 4D Numpy array</span>
-<span class="sd">           Data mask to crop. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Data mask to crop. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       window_size : int</span>
 <span class="sd">           Crop size.</span>
 
-<span class="sd">       subdivision : int</span>
-<span class="sd">           Number of crops to create.</span>
+<span class="sd">       n_crops : int</span>
+<span class="sd">           Number of crops to create. Must an even number.</span>
 
 <span class="sd">       Returns</span>
 <span class="sd">       -------</span>
 <span class="sd">       cropped_data : 4D Numpy array</span>
-<span class="sd">           Cropped image data. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Cropped image data. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       cropped_data_mask : 4D Numpy array)</span>
-<span class="sd">           Cropped image data masks. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Cropped image data masks. E.g. ``(num_of_images, x, y, channels)``.</span>
+
+<span class="sd">       Examples</span>
+<span class="sd">       --------</span>
+<span class="sd">       ::</span>
+
+<span class="sd">           # EXAMPLE 1</span>
+<span class="sd">           # Divide in 16 crops of (256, 256) a given data</span>
+<span class="sd">           X_train = np.ones((165, 768, 1024, 1))</span>
+<span class="sd">           Y_train = np.ones((165, 768, 1024, 1))</span>
+
+<span class="sd">           X_test, Y_test = crop_data_with_overlap(X_test, Y_test, 256, 16)</span>
+
+<span class="sd">           # The function will print the shape of the created array. In this example:</span>
+<span class="sd">           #     **** New data shape is: (2640, 256, 256, 1)</span>
+<span class="sd">           # Notice that, as we need 16 crops and only with 12 can be cover all </span>
+<span class="sd">           # the image, some of the crops have being overlapped, leading to more</span>
+<span class="sd">           # crops than using &#39;crop_data&#39; function (where 1980 are created)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### OV-CROP ###&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cropping </span><span class="si">{}</span><span class="s2"> images into (</span><span class="si">{}</span><span class="s2">, </span><span class="si">{}</span><span class="s2">) with overlapping. . .&quot;</span>\
           <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">window_size</span><span class="p">))</span>
 
-    <span class="k">if</span> <span class="n">subdivision</span> <span class="o">!=</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">subdivision</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;subdivision&#39; must be 1 or an even number&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">n_crops</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;n_crops&#39; must be an even number&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">window_size</span> <span class="o">&gt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;window_size&#39; greater than </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
     <span class="k">if</span> <span class="n">window_size</span> <span class="o">&gt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;window_size&#39; greater than </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
 
+    <span class="k">if</span> <span class="n">window_size</span><span class="o">*</span><span class="n">rows</span> <span class="o">&lt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;Total height of all the crops per row must be greater or equal &quot;</span>
+            <span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> and it is only </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">window_size</span><span class="o">*</span><span class="n">rows</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">window_size</span><span class="o">*</span><span class="n">columns</span> <span class="o">&lt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;Total width of all the crops per row must be greater or equal &quot;</span>
+            <span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> and it is only </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">window_size</span><span class="o">*</span><span class="n">columns</span><span class="p">))</span>
+
     <span class="c1"># Crop data</span>
-    <span class="n">total_cropped</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">subdivision</span>
+    <span class="n">total_cropped</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">n_crops</span>
     <span class="n">cropped_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">total_cropped</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span>
                              <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
     <span class="n">cropped_data_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">total_cropped</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span>
@@ -832,24 +1037,14 @@
     <span class="n">min_d</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">maxsize</span>
     <span class="n">rows</span> <span class="o">=</span> <span class="mi">1</span>
     <span class="n">columns</span> <span class="o">=</span> <span class="mi">1</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">subdivision</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">subdivision</span> <span class="o">%</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">((</span><span class="n">subdivision</span><span class="o">/</span><span class="n">i</span><span class="p">)</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">min_d</span><span class="p">:</span>
-            <span class="n">min_d</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">((</span><span class="n">subdivision</span><span class="o">/</span><span class="n">i</span><span class="p">)</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">n_crops</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">n_crops</span> <span class="o">%</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">((</span><span class="n">n_crops</span><span class="o">/</span><span class="n">i</span><span class="p">)</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">min_d</span><span class="p">:</span>
+            <span class="n">min_d</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">((</span><span class="n">n_crops</span><span class="o">/</span><span class="n">i</span><span class="p">)</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span>
             <span class="n">rows</span> <span class="o">=</span> <span class="n">i</span>
-            <span class="n">columns</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">subdivision</span><span class="o">/</span><span class="n">i</span><span class="p">)</span>
+            <span class="n">columns</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">n_crops</span><span class="o">/</span><span class="n">i</span><span class="p">)</span>
         
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;The minimum overlap has been found with rows=</span><span class="si">{}</span><span class="s2"> and columns=</span><span class="si">{}</span><span class="s2">&quot;</span>\
           <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">columns</span><span class="p">))</span>
-
-    <span class="k">if</span> <span class="n">subdivision</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">window_size</span><span class="o">*</span><span class="n">rows</span> <span class="o">&lt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="s2">&quot;Total height of all the crops per row must be greater or equal &quot;</span>
-                <span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> and it is only </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">window_size</span><span class="o">*</span><span class="n">rows</span><span class="p">))</span>
-        <span class="k">if</span> <span class="n">window_size</span><span class="o">*</span><span class="n">columns</span> <span class="o">&lt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="s2">&quot;Total width of all the crops per row must be greater or equal &quot;</span>
-                <span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> and it is only </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">window_size</span><span class="o">*</span><span class="n">columns</span><span class="p">))</span>
 
     <span class="c1"># Calculate the amount of overlap, the division remainder to obtain an </span>
     <span class="c1"># offset to adjust the last crop and the step size. All of this values per</span>
@@ -874,7 +1069,7 @@
 
     <span class="c1"># Create the crops</span>
     <span class="n">cont</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;0) Cropping data with the minimun overlap . . .&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;0) Cropping data with the minimum overlap . . .&quot;</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">img_num</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))):</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">y_ov</span><span class="p">,</span> <span class="n">step_y</span><span class="p">):</span>
             <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="n">x_ov</span><span class="p">,</span> <span class="n">step_x</span><span class="p">):</span>
@@ -894,19 +1089,20 @@
 
 
 <div class="viewcode-block" id="crop_3D_data_with_overlap"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.crop_3D_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">crop_3D_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">vol_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">overlap_z</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Crop 3D data into smaller volumes with the minimun overlap in z.</span>
-<span class="sd">       Reverse function of merge_3D_data_with_overlap().</span>
+    <span class="sd">&quot;&quot;&quot;Crop 3D data into smaller volumes with the minimum overlap in z.</span>
+
+<span class="sd">       The opposite function is :func:`~merge_3D_data_with_overlap`.</span>
 
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------</span>
 <span class="sd">       data : 4D Numpy array</span>
-<span class="sd">           Data to crop. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Data to crop. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       vol_shape : 4D int tuple</span>
-<span class="sd">           Shape of the desired volumes to be created.</span>
+<span class="sd">           Shape of the volumes to created. E.g. ``(x, y, z, channels)``.</span>
 <span class="sd">        </span>
 <span class="sd">       data_mask : 4D Numpy array, optional</span>
-<span class="sd">            Data mask to crop. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">            Data mask to crop. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       overlap_z : float, optional</span>
 <span class="sd">            Amount of overlap on z dimension. The value must be on range </span>
@@ -919,6 +1115,19 @@
 
 <span class="sd">       cropped_data_mask : 5D Numpy array, optional</span>
 <span class="sd">           Cropped image data masks. E.g. ``(vol_number, x, y, z, channels)``.</span>
+<span class="sd">        </span>
+<span class="sd">       Examples</span>
+<span class="sd">       --------</span>
+<span class="sd">            </span>
+<span class="sd">       Following the example introduced in ``load_and_prepare_3D_data``, the cropping</span>
+<span class="sd">       of a volume with shape ``(165, 1024, 765)``, notice that the z dimension is in</span>
+<span class="sd">       the first position, with a subvolume shape of ``(80, 80, 80, 1)`` and minimum</span>
+<span class="sd">       overlap will return ``390`` subvolumes, that is, ``(390, 80, 80, 80, 1)`` </span>
+<span class="sd">       array. </span>
+
+<span class="sd">       .. image:: img/crop_3D.png</span>
+<span class="sd">           :width: 80%</span>
+<span class="sd">           :align: center</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### 3D-OV-CROP ###&quot;</span><span class="p">)</span>
@@ -1032,38 +1241,73 @@
         <span class="k">return</span> <span class="n">cropped_data</span></div>
 
 
-<div class="viewcode-block" id="merge_data_with_overlap"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.merge_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">merge_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivision</span><span class="p">,</span> 
+<div class="viewcode-block" id="merge_data_with_overlap"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.merge_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">merge_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">n_crops</span><span class="p">,</span> 
                             <span class="n">out_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ov_map</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ov_data_img</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Merge data with an amount of overlap. Used to undo the crop made by the </span>
-<span class="sd">       function crop_data_with_overlap.</span>
+    <span class="sd">&quot;&quot;&quot;Merge data with an amount of overlap.</span>
+<span class="sd">    </span>
+<span class="sd">       The opposite function is :func:`~crop_data_with_overlap`.</span>
 
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------</span>
 <span class="sd">       data : 4D Numpy array</span>
-<span class="sd">           Data to merge. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Data to merge. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       original_shape : 4D int tuple</span>
-<span class="sd">           Original dimensions to reconstruct. </span>
+<span class="sd">           Shape of the original data. E.g. ``(num_of_images, x, y, channels)``</span>
 
 <span class="sd">       window_size : int    </span>
 <span class="sd">           Crop size.</span>
 
-<span class="sd">       subdivision : int</span>
+<span class="sd">       n_crops : int</span>
 <span class="sd">           Number of crops to merge.</span>
 
 <span class="sd">       out_dir : str, optional</span>
-<span class="sd">           Directory where the images will be save.</span>
+<span class="sd">           If provided an image that represents the overlap made will be saved. </span>
+<span class="sd">           The image will be colored as follows: green region when ``==2`` crops </span>
+<span class="sd">           overlap, yellow when ``2 &lt; x &lt; 8`` and red when ``=&lt;8`` or more </span>
+<span class="sd">           overlaps are merged.</span>
 
 <span class="sd">       ov_map : bool, optional</span>
 <span class="sd">           Whether to create overlap map.</span>
 
 <span class="sd">       ov_data_img : int, optional</span>
-<span class="sd">           Number of the image on the data to create the overlappng map.</span>
+<span class="sd">           Number of the image on the data to create the overlap map.</span>
 
 <span class="sd">       Returns</span>
 <span class="sd">       -------</span>
 <span class="sd">       merged_data : 4D Numpy array</span>
-<span class="sd">           Merged image data. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Merged image data. E.g. ``(num_of_images, x, y, channels)``.</span>
+
+<span class="sd">       Examples</span>
+<span class="sd">       --------</span>
+<span class="sd">       ::</span>
+
+<span class="sd">           # EXAMPLE 1</span>
+<span class="sd">           # First divide the data in crops of (512, 512) and merge after that</span>
+<span class="sd">           X_train = np.ones((165, 768, 1024, 1))</span>
+<span class="sd">           Y_train = np.ones((165, 768, 1024, 1))</span>
+
+<span class="sd">           X_test, Y_test = crop_data_with_overlap(X_test, Y_test, 512, 4)</span>
+
+<span class="sd">           X_test = merge_data_with_overlap(X_test, (165, 768, 1024, 1), 512, 4,</span>
+<span class="sd">                                            out_dir=&#39;out_dir&#39;)</span>
+
+<span class="sd">       As example of different overlap maps are presented below. Example 1 above</span>
+<span class="sd">       should store an image similar to the one on the top-right, as n_crops=4.</span>
+
+<span class="sd">       +-------------------------------------+-------------------------------------------+</span>
+<span class="sd">       | .. figure:: img/FIBSEM_test_0.png   | .. figure:: img/merged_ov_map_4.png       |</span>
+<span class="sd">       |   :width: 80%                       |   :width: 70%                             |</span>
+<span class="sd">       |   :align: center                    |   :align: center                          |</span>
+<span class="sd">       |                                     |                                           |</span>
+<span class="sd">       |   Original image                    |   Overlap map when n_crops=4              |</span>
+<span class="sd">       +-------------------------------------+-------------------------------------------+</span>
+<span class="sd">       | .. figure:: img/merged_ov_map_8.png | .. figure:: img/merged_ov_map_12.png      |</span>
+<span class="sd">       |   :width: 80%                       |   :width: 70%                             |</span>
+<span class="sd">       |   :align: center                    |   :align: center                          |</span>
+<span class="sd">       |                                     |                                           |</span>
+<span class="sd">       |   Overlap map when n_crops=8        |   Overlap map when n_crops=12             |</span>
+<span class="sd">       +-------------------------------------+-------------------------------------------+</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### MERGE-OV-CROP ###&quot;</span><span class="p">)</span>
@@ -1071,7 +1315,7 @@
           <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">original_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">original_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
 
     <span class="c1"># Merged data</span>
-    <span class="n">total_images</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">/</span><span class="n">subdivision</span><span class="p">)</span>
+    <span class="n">total_images</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">/</span><span class="n">n_crops</span><span class="p">)</span>
     <span class="n">merged_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">total_images</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">original_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
                              <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
 
@@ -1088,11 +1332,11 @@
     <span class="n">min_d</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">maxsize</span>
     <span class="n">rows</span> <span class="o">=</span> <span class="mi">1</span>
     <span class="n">columns</span> <span class="o">=</span> <span class="mi">1</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">subdivision</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">subdivision</span> <span class="o">%</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">((</span><span class="n">subdivision</span><span class="o">/</span><span class="n">i</span><span class="p">)</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">min_d</span><span class="p">:</span>
-            <span class="n">min_d</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">((</span><span class="n">subdivision</span><span class="o">/</span><span class="n">i</span><span class="p">)</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">n_crops</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">n_crops</span> <span class="o">%</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">((</span><span class="n">n_crops</span><span class="o">/</span><span class="n">i</span><span class="p">)</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">min_d</span><span class="p">:</span>
+            <span class="n">min_d</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">((</span><span class="n">n_crops</span><span class="o">/</span><span class="n">i</span><span class="p">)</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span>
             <span class="n">rows</span> <span class="o">=</span> <span class="n">i</span>
-            <span class="n">columns</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">subdivision</span><span class="o">/</span><span class="n">i</span><span class="p">)</span>
+            <span class="n">columns</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">n_crops</span><span class="o">/</span><span class="n">i</span><span class="p">)</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;The minimum overlap has been found with (</span><span class="si">{}</span><span class="s2">, </span><span class="si">{}</span><span class="s2">)&quot;</span>
           <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">columns</span><span class="p">))</span>
@@ -1158,11 +1402,13 @@
     <span class="c1"># green when 2 crops overlap, yellow when (2 &lt; x &lt; 8) and red when more than </span>
     <span class="c1"># 7 overlaps are merged </span>
     <span class="k">if</span> <span class="n">out_dir</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">ov_map</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
         <span class="n">ov_map_matrix</span><span class="p">[</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">ov_map_matrix</span> <span class="o">&gt;=</span> <span class="mi">8</span><span class="p">)</span> <span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
         <span class="n">ov_map_matrix</span><span class="p">[</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">ov_map_matrix</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">)</span> <span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">2</span>
         <span class="n">ov_map_matrix</span><span class="p">[</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">ov_map_matrix</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">)</span> <span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">3</span>
 
-        <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">merged_data</span><span class="p">[</span><span class="n">ov_data_img</span><span class="p">,:,:,</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="mi">255</span><span class="p">)</span>
+        <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">merged_data</span><span class="p">[</span><span class="n">ov_data_img</span><span class="p">,:,:,</span><span class="mi">0</span><span class="p">])</span>
         <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;RGB&#39;</span><span class="p">)</span>
         <span class="n">px</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
         <span class="n">width</span><span class="p">,</span> <span class="n">height</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">size</span>
@@ -1215,7 +1461,7 @@
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------                                                                    </span>
 <span class="sd">       data : 4D Numpy array</span>
-<span class="sd">           Data to crop. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Data to crop. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       num : int, optional</span>
 <span class="sd">           Number of examples to convert.</span>
@@ -1229,10 +1475,10 @@
 <span class="sd">       Returns</span>
 <span class="sd">       -------                                                                 </span>
 <span class="sd">       mixed_data : 4D Numpy array</span>
-<span class="sd">           Mixed data images. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Mixed data images. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       mixed_data_mask : 4D Numpy array</span>
-<span class="sd">           Mixed data masks. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Mixed data masks. E.g. ``(num_of_images, x, y, channels)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### MERGE-CROP ###&quot;</span><span class="p">)</span>
@@ -1281,7 +1527,7 @@
 <span class="sd">           Data to crop. E.g. ``(volume_number, x, y, z, channels)``.</span>
 
 <span class="sd">       orig_vol_shape : 4D int tuple</span>
-<span class="sd">           shape of the desired volumes to be created.</span>
+<span class="sd">           Shape of the volumes to created.</span>
 
 <span class="sd">       data_mask : 4D Numpy array, optional</span>
 <span class="sd">           Data mask to crop. E.g. ``(volume_number, x, y, z, channels)``.</span>
@@ -1293,10 +1539,10 @@
 <span class="sd">       Returns</span>
 <span class="sd">       -------</span>
 <span class="sd">       merged_data : 4D Numpy array</span>
-<span class="sd">           Cropped image data. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Cropped image data. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       merged_data_mask : 5D Numpy array, optional</span>
-<span class="sd">           Cropped image data masks. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Cropped image data masks. E.g. ``(num_of_images, x, y, channels)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span> 
  
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### MERGE-3D-OV-CROP ###&quot;</span><span class="p">)</span>
@@ -1390,15 +1636,15 @@
 
 <div class="viewcode-block" id="check_crops"><a class="viewcode-back" href="../data_manipulation.html#data_manipulation.check_crops">[docs]</a><span class="k">def</span> <span class="nf">check_crops</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">out_dim</span><span class="p">,</span> <span class="n">num_examples</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">include_crops</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                 <span class="n">out_dir</span><span class="o">=</span><span class="s2">&quot;check_crops&quot;</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;_none_&quot;</span><span class="p">,</span> <span class="n">grid</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Check cropped images by the function crop_data(). </span>
+    <span class="sd">&quot;&quot;&quot;Check cropped images by the function :func:`~crop_data`.</span>
 <span class="sd">        </span>
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------</span>
 <span class="sd">       data : 4D Numpy array</span>
-<span class="sd">           Data to crop. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Data to crop. E.g. ``(num_of_images, x, y, channels)``.</span>
 <span class="sd">    </span>
 <span class="sd">       out_dim : int 2D tuple</span>
-<span class="sd">           Width and height of the image to be constructed.</span>
+<span class="sd">           Width and height of the image to be constructed. E. g. ``(y, x)``.</span>
 
 <span class="sd">       num_examples : int, optional</span>
 <span class="sd">           Number of examples to create.</span>
@@ -1414,6 +1660,35 @@
 
 <span class="sd">       grid : bool, optional</span>
 <span class="sd">           Make the grid in the output image.</span>
+
+<span class="sd">       Examples</span>
+<span class="sd">       --------</span>
+<span class="sd">       ::</span>
+
+<span class="sd">           # EXAMPLE 1</span>
+<span class="sd">           # Check crops made in the first example of &#39;crop_data&#39; function</span>
+<span class="sd">           X_train = np.ones((165, 768, 1024))</span>
+<span class="sd">           Y_train = np.ones((165, 768, 1024))</span>
+
+<span class="sd">           X_train, Y_train, _ = crop_data(</span>
+<span class="sd">               X_train, (256, 256, 1), data_mask=Y_train)</span>
+
+<span class="sd">           # Notice that the original shape in &#39;out_dim&#39; is provided, that is, (1024, 768)</span>
+<span class="sd">           # instead of (768, 1024)</span>
+<span class="sd">           check_crops(X_train, (1024, 768), num_examples=1, out_dir=&#39;out&#39;, grid=True)</span>
+
+<span class="sd">           # 3 images samples will be stored in &#39;out&#39; directory </span>
+
+<span class="sd">       The example above will store 12 individual crops (4x3, height x width), and </span>
+<span class="sd">       two images of the original shape: data image and its mask. For instance:</span>
+
+<span class="sd">       +-----------------------------------------------+----------------------------------------------+</span>
+<span class="sd">       | .. figure:: img/check_crop_data.png           | .. figure:: img/check_crop_mask.png          |</span>
+<span class="sd">       |   :width: 80%                                 |   :width: 80%                                |</span>
+<span class="sd">       |   :align: center                              |   :align: center                             |</span>
+<span class="sd">       |                                               |                                              |</span>
+<span class="sd">       | Original image (the grid should be each crop) | Original mask (the grid should be each crop) |</span>
+<span class="sd">       +-----------------------------------------------+----------------------------------------------+</span>
 <span class="sd">    &quot;&quot;&quot;</span>
   
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### CHECK-CROPS ###&quot;</span><span class="p">)</span>
@@ -1497,17 +1772,17 @@
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------</span>
 <span class="sd">       X : Numpy 4D array</span>
-<span class="sd">           Data. E.g. ``(image_number, x, y, channels)``.      </span>
+<span class="sd">           Data. E.g. ``(num_of_images, x, y, channels)``.      </span>
 <span class="sd">                                                                           </span>
 <span class="sd">       Y : Numpy 4D array</span>
-<span class="sd">           Mask data. E.g. ``(image_number, x, y, channels)``.</span>
+<span class="sd">           Mask data. E.g. ``(num_of_images, x, y, channels)``.</span>
 <span class="sd">                                                                           </span>
 <span class="sd">       shape : 3D int tuple, optional</span>
-<span class="sd">           Dimension of the desired images.           </span>
+<span class="sd">           Shape of the subvolumes to create.</span>
 
 <span class="sd">       overlap : bool, optional</span>
 <span class="sd">           To create subvolumes with overlap forcing to use all the data. If </span>
-<span class="sd">           ``False`` as much as possible subvolumes of the desired shape will</span>
+<span class="sd">           ``False`` as much as possible subvolumes of the provided shape will</span>
 <span class="sd">           be created with the available data, and the rest of images will be</span>
 <span class="sd">           dropped out (depens on &#39;use_rest&#39; value). Activate it when dealing</span>
 <span class="sd">           with test data, as all the images must be present.</span>
@@ -1523,11 +1798,11 @@
 <span class="sd">       Returns</span>
 <span class="sd">       -------</span>
 <span class="sd">       X_prep : Numpy 5D array</span>
-<span class="sd">           X data separated in different subvolumes with the desired shape. E.g.</span>
+<span class="sd">           X data separated in different subvolumes with the provided shape. E.g.</span>
 <span class="sd">           ``(subvolume_number, ) + shape``.</span>
 <span class="sd">            </span>
 <span class="sd">       Y_prep : Numpy 5D array</span>
-<span class="sd">           Y data separated in different subvolumes with the desired shape. E.g. </span>
+<span class="sd">           Y data separated in different subvolumes with the provided shape. E.g. </span>
 <span class="sd">           ``(subvolume_number, ) + shape``.</span>
 <span class="sd">            </span>
 <span class="sd">       mirrored_subvols : int</span>
@@ -1569,7 +1844,7 @@
     <span class="n">X_prep</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_sub_volum</span><span class="p">,</span> <span class="p">)</span> <span class="o">+</span> <span class="n">shape</span><span class="p">)</span>
     <span class="n">Y_prep</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_sub_volum</span><span class="p">,</span> <span class="p">)</span> <span class="o">+</span> <span class="n">shape</span><span class="p">)</span>
                                                                                 
-    <span class="c1"># Reshape the data to generate desired 3D subvolumes                        </span>
+    <span class="c1"># Reshape the data to generate needed 3D subvolumes                        </span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generating 3D subvolumes . . .&quot;</span><span class="p">)</span>                                     
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Converting </span><span class="si">{}</span><span class="s2"> data to </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">X_prep</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>             
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Filling [0:</span><span class="si">{}</span><span class="s2">] subvolumes with [0:</span><span class="si">{}</span><span class="s2">] images . . .&quot;</span>                  

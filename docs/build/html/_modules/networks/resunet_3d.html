@@ -80,15 +80,28 @@
               
             
             
-              <p class="caption"><span class="caption-text">Contents:</span></p>
-<ul>
+              <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../post_processing.html">Post processing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../grad_cam.html">Grad-CAM</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Networks</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_unet.html">2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_resunet.html">2D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_se_unet_2d.html">SE+2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_unet_3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_resunet_3d.html">3D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_fcn.html">FCN</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_multiresunet.html">MultiResUNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Auxiliary code</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="../../adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../callbacks.html">Callbacks</a></li>
 </ul>
@@ -161,19 +174,19 @@
                                     <span class="n">Conv3DTranspose</span><span class="p">,</span> <span class="n">MaxPooling3D</span><span class="p">,</span> <span class="n">Concatenate</span><span class="p">,</span>\
                                     <span class="n">Add</span><span class="p">,</span> <span class="n">BatchNormalization</span><span class="p">,</span> <span class="n">ELU</span><span class="p">,</span> <span class="n">ZeroPadding3D</span>
 <span class="kn">from</span> <span class="nn">metrics</span> <span class="kn">import</span> <span class="n">binary_crossentropy_weighted</span><span class="p">,</span> <span class="n">jaccard_index</span><span class="p">,</span> \
-                    <span class="n">weighted_bce_dice_loss</span>
+                    <span class="n">jaccard_index_softmax</span><span class="p">,</span> <span class="n">weighted_bce_dice_loss</span>
 
 
 <div class="viewcode-block" id="ResUNet_3D"><a class="viewcode-back" href="../../networks_resunet_3d.html#networks.resunet_3d.ResUNet_3D">[docs]</a><span class="k">def</span> <span class="nf">ResUNet_3D</span><span class="p">(</span><span class="n">image_shape</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;elu&#39;</span><span class="p">,</span> <span class="n">k_init</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> 
                <span class="n">drop_values</span><span class="o">=</span><span class="p">[</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">],</span> <span class="n">batch_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
                <span class="n">feature_maps</span><span class="o">=</span><span class="p">[</span><span class="mi">16</span><span class="p">,</span><span class="mi">32</span><span class="p">,</span><span class="mi">64</span><span class="p">,</span><span class="mi">128</span><span class="p">,</span><span class="mi">256</span><span class="p">],</span> <span class="n">depth</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">loss_type</span><span class="o">=</span><span class="s2">&quot;bce&quot;</span><span class="p">,</span> 
-               <span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;sgd&quot;</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.001</span><span class="p">):</span>
+               <span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;sgd&quot;</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">n_classes</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
 
     <span class="sd">&quot;&quot;&quot;Create 3D Residual_U-Net.</span>
 
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------</span>
-<span class="sd">       image_shape : array of 3 int</span>
+<span class="sd">       image_shape : 3D tuple</span>
 <span class="sd">           Dimensions of the input image.</span>
 
 <span class="sd">       activation : str, optional</span>
@@ -206,6 +219,9 @@
 <span class="sd">                                                                           </span>
 <span class="sd">       lr : float, optional</span>
 <span class="sd">           Learning rate value.</span>
+
+<span class="sd">       n_classes: int, optional                                                 </span>
+<span class="sd">           Number of classes.    </span>
 
 <span class="sd">       Returns  </span>
 <span class="sd">       -------</span>
@@ -241,7 +257,7 @@
     <span class="n">x</span> <span class="o">=</span> <span class="n">level_block</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">depth</span><span class="p">,</span> <span class="n">fm</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span><span class="p">,</span> <span class="n">k_init</span><span class="p">,</span> <span class="n">drop_values</span><span class="p">,</span> 
                     <span class="n">batch_norm</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
 
-    <span class="n">outputs</span> <span class="o">=</span> <span class="n">Conv3D</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;sigmoid&#39;</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">outputs</span> <span class="o">=</span> <span class="n">Conv3D</span><span class="p">(</span><span class="n">n_classes</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;sigmoid&#39;</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
 
     <span class="n">model</span> <span class="o">=</span> <span class="n">Model</span><span class="p">(</span><span class="n">inputs</span><span class="o">=</span><span class="p">[</span><span class="n">inputs</span><span class="p">],</span> <span class="n">outputs</span><span class="o">=</span><span class="p">[</span><span class="n">outputs</span><span class="p">])</span>
 
@@ -258,8 +274,12 @@
 
     <span class="c1"># Compile the model</span>
     <span class="k">if</span> <span class="n">loss_type</span> <span class="o">==</span> <span class="s2">&quot;bce&quot;</span><span class="p">:</span>
-        <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;binary_crossentropy&#39;</span><span class="p">,</span>
-                      <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">n_classes</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>                                                       
+            <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;categorical_crossentropy&#39;</span><span class="p">,</span>       
+                          <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index_softmax</span><span class="p">])</span>                      
+        <span class="k">else</span><span class="p">:</span>                                                                   
+            <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;binary_crossentropy&#39;</span><span class="p">,</span>            
+                          <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>    
     <span class="k">elif</span> <span class="n">loss_type</span> <span class="o">==</span> <span class="s2">&quot;w_bce&quot;</span><span class="p">:</span>
         <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="n">binary_crossentropy_weighted</span><span class="p">(</span><span class="n">weights</span><span class="p">),</span>
                       <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>

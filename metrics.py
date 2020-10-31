@@ -15,11 +15,11 @@ def jaccard_index_numpy(y_true, y_pred):
        Parameters
        ----------
        y_true : N dim Numpy array
-           Ground truth masks. E.g. ``(image_number, x, y, channels)`` for 2D 
+           Ground truth masks. E.g. ``(num_of_images, x, y, channels)`` for 2D 
            images or ``(volume_number, z, x, y, channels)`` for 3D volumes.
 
        y_pred : N dim Numpy array
-           Predicted masks. E.g. ``(image_number, x, y, channels)`` for 2D 
+           Predicted masks. E.g. ``(num_of_images, x, y, channels)`` for 2D 
            images or ``(volume_number, z, x, y, channels)`` for 3D volumes.
 
        Returns
@@ -237,10 +237,10 @@ def voc_calculation(y_true, y_pred, foreground):
        Parameters
        ----------
        y_true : 4D Numpy array
-           Ground truth masks. E.g. ``(image_number, x, y, channels)``.
+           Ground truth masks. E.g. ``(num_of_images, x, y, channels)``.
 
        y_pred : 4D Numpy array
-           Predicted masks. E.g. ``(image_number, x, y, channels)``.
+           Predicted masks. E.g. ``(num_of_images, x, y, channels)``.
 
        foreground : float
            Foreground Jaccard index score.
@@ -291,10 +291,10 @@ def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig, job_
        Parameters
        ----------
        Y_test : 4D Numpy array
-           Ground truth mask. E.g. ``(image_number, x, y, channels)``.
+           Ground truth mask. E.g. ``(num_of_images, x, y, channels)``.
 
        preds_test : 4D Numpy array
-           Predicted mask. E.g. ``(image_number, x, y, channels)``.
+           Predicted mask. E.g. ``(num_of_images, x, y, channels)``.
 
        ge_path : str
            Path where the ground truth is stored. If the folder does not exist 

@@ -232,7 +232,7 @@ def calculate_z_filtering(data, mf_size=5):
        Parameters
        ----------
        data : 4D Numpy array
-           Data to apply the filter to. E.g. ``(image_number, x, y, channels)``.
+           Data to apply the filter to. E.g. ``(num_of_images, x, y, channels)``.
 
        mf_size : int, optional
            Size of the median filter. Must be an odd number.
@@ -240,7 +240,7 @@ def calculate_z_filtering(data, mf_size=5):
        Returns
        -------
        Array : 4D Numpy array
-           Z filtered data. E.g. ``(image_number, x, y, channels)``.
+           Z filtered data. E.g. ``(num_of_images, x, y, channels)``.
     """
 
     out_data = np.copy(data)
