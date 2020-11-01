@@ -787,12 +787,13 @@ def crop_data_with_overlap(data, data_mask, window_size, n_crops):
        :func:`~crop_data` is that this function allows you to create patches with 
        overlap. 
 
-       This function can help in cases where the train and test data shapes are 
-       different. On that case, to evaluate the network on test data you can make 
-       crops with this function instead of use :func:`~crop_data` to do not add 
-       zeros and use only image data information. You can calculate the number
-       of crops you want, and the function will calculate the minimum overlap
-       along x and y axis that satisfies that number. 
+       As the inference should be make with the same crop shape as the one used 
+       to train the network, sometimes that shape has no exact division with the 
+       test data shape. On that case, instead of use :func:`~crop_data` that 
+       would add zeros in the last crop of each row and column, you can use this
+       function and create the crops using only image data information. You can 
+       calculate the number of crops you want, and the function will calculate 
+       the minimum overlap along x and y axis that satisfies that number. 
 
        The opposite function is :func:`~merge_data_with_overlap`.
 
