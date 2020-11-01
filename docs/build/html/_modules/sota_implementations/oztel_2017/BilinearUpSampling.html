@@ -1,0 +1,316 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>sota_implementations.oztel_2017.BilinearUpSampling &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run.html">How to run</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../data_manipulation.html">Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../grad_cam.html">Grad-CAM</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Networks</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_unet.html">2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_resunet.html">2D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_se_unet_2d.html">SE+2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_unet_3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_resunet_3d.html">3D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_fcn.html">FCN</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_multiresunet.html">MultiResUNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Reproduced methods</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../oztel.html">Oztel et al.</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Auxiliary code</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../callbacks.html">Callbacks</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>sota_implementations.oztel_2017.BilinearUpSampling</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for sota_implementations.oztel_2017.BilinearUpSampling</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">tensorflow.keras.backend</span> <span class="k">as</span> <span class="nn">K</span>
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras.layers</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<div class="viewcode-block" id="resize_images_bilinear"><a class="viewcode-back" href="../../../oztel_bilinear.html#sota_implementations.oztel_2017.BilinearUpSampling.resize_images_bilinear">[docs]</a><span class="k">def</span> <span class="nf">resize_images_bilinear</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">height_factor</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">width_factor</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">target_height</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_width</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data_format</span><span class="o">=</span><span class="s1">&#39;default&#39;</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Resizes the images contained in a 4D tensor of shape</span>
+<span class="sd">    - [batch, channels, height, width] (for &#39;channels_first&#39; data_format)</span>
+<span class="sd">    - [batch, height, width, channels] (for &#39;channels_last&#39; data_format)</span>
+<span class="sd">    by a factor of (height_factor, width_factor). Both factors should be</span>
+<span class="sd">    positive integers.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">data_format</span> <span class="o">==</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span>
+        <span class="n">data_format</span> <span class="o">=</span> <span class="n">K</span><span class="o">.</span><span class="n">image_data_format</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">data_format</span> <span class="o">==</span> <span class="s1">&#39;channels_first&#39;</span><span class="p">:</span>
+        <span class="n">original_shape</span> <span class="o">=</span> <span class="n">K</span><span class="o">.</span><span class="n">int_shape</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">target_height</span> <span class="ow">and</span> <span class="n">target_width</span><span class="p">:</span>
+            <span class="n">new_shape</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">constant</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">((</span><span class="n">target_height</span><span class="p">,</span> <span class="n">target_width</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;int32&#39;</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">new_shape</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">X</span><span class="p">)[</span><span class="mi">2</span><span class="p">:]</span>
+            <span class="n">new_shape</span> <span class="o">*=</span> <span class="n">tf</span><span class="o">.</span><span class="n">constant</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">height_factor</span><span class="p">,</span> <span class="n">width_factor</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;int32&#39;</span><span class="p">))</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">permute_dimensions</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">new_shape</span><span class="p">)</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">permute_dimensions</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">target_height</span> <span class="ow">and</span> <span class="n">target_width</span><span class="p">:</span>
+            <span class="n">X</span><span class="o">.</span><span class="n">set_shape</span><span class="p">((</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">target_height</span><span class="p">,</span> <span class="n">target_width</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">X</span><span class="o">.</span><span class="n">set_shape</span><span class="p">((</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">*</span> <span class="n">height_factor</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">*</span> <span class="n">width_factor</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">X</span>
+    <span class="k">elif</span> <span class="n">data_format</span> <span class="o">==</span> <span class="s1">&#39;channels_last&#39;</span><span class="p">:</span>
+        <span class="n">original_shape</span> <span class="o">=</span> <span class="n">K</span><span class="o">.</span><span class="n">int_shape</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">target_height</span> <span class="ow">and</span> <span class="n">target_width</span><span class="p">:</span>
+            <span class="n">new_shape</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">constant</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">((</span><span class="n">target_height</span><span class="p">,</span> <span class="n">target_width</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;int32&#39;</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">new_shape</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">X</span><span class="p">)[</span><span class="mi">1</span><span class="p">:</span><span class="mi">3</span><span class="p">]</span>
+            <span class="n">new_shape</span> <span class="o">*=</span> <span class="n">tf</span><span class="o">.</span><span class="n">constant</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">height_factor</span><span class="p">,</span> <span class="n">width_factor</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;int32&#39;</span><span class="p">))</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">new_shape</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">target_height</span> <span class="ow">and</span> <span class="n">target_width</span><span class="p">:</span>
+            <span class="n">X</span><span class="o">.</span><span class="n">set_shape</span><span class="p">((</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_height</span><span class="p">,</span> <span class="n">target_width</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">X</span><span class="o">.</span><span class="n">set_shape</span><span class="p">((</span><span class="kc">None</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">height_factor</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">*</span> <span class="n">width_factor</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">X</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;Invalid data_format: &#39;</span> <span class="o">+</span> <span class="n">data_format</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="BilinearUpSampling2D"><a class="viewcode-back" href="../../../oztel_bilinear.html#sota_implementations.oztel_2017.BilinearUpSampling.BilinearUpSampling2D">[docs]</a><span class="k">class</span> <span class="nc">BilinearUpSampling2D</span><span class="p">(</span><span class="n">Layer</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">target_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data_format</span><span class="o">=</span><span class="s1">&#39;default&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">data_format</span> <span class="o">==</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span>
+            <span class="n">data_format</span> <span class="o">=</span> <span class="n">K</span><span class="o">.</span><span class="n">image_data_format</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">target_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">target_size</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">assert</span> <span class="n">data_format</span> <span class="ow">in</span> <span class="p">{</span><span class="s1">&#39;channels_last&#39;</span><span class="p">,</span> <span class="s1">&#39;channels_first&#39;</span><span class="p">},</span> <span class="s1">&#39;data_format must be in {tf, th}&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data_format</span> <span class="o">=</span> <span class="n">data_format</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">input_spec</span> <span class="o">=</span> <span class="p">[</span><span class="n">InputSpec</span><span class="p">(</span><span class="n">ndim</span><span class="o">=</span><span class="mi">4</span><span class="p">)]</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">BilinearUpSampling2D</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BilinearUpSampling2D.compute_output_shape"><a class="viewcode-back" href="../../../oztel_bilinear.html#sota_implementations.oztel_2017.BilinearUpSampling.BilinearUpSampling2D.compute_output_shape">[docs]</a>    <span class="k">def</span> <span class="nf">compute_output_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_shape</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_format</span> <span class="o">==</span> <span class="s1">&#39;channels_first&#39;</span><span class="p">:</span>
+            <span class="n">width</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">input_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">if</span> <span class="n">input_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="n">height</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">input_shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="k">if</span> <span class="n">input_shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">width</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">height</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">input_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                    <span class="n">input_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                    <span class="n">width</span><span class="p">,</span>
+                    <span class="n">height</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_format</span> <span class="o">==</span> <span class="s1">&#39;channels_last&#39;</span><span class="p">:</span>
+            <span class="n">width</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">input_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">input_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="n">height</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">input_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">if</span> <span class="n">input_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">width</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">height</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">input_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                    <span class="n">width</span><span class="p">,</span>
+                    <span class="n">height</span><span class="p">,</span>
+                    <span class="n">input_shape</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;Invalid data_format: &#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_format</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="BilinearUpSampling2D.call"><a class="viewcode-back" href="../../../oztel_bilinear.html#sota_implementations.oztel_2017.BilinearUpSampling.BilinearUpSampling2D.call">[docs]</a>    <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">resize_images_bilinear</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">target_height</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">target_size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">target_width</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">target_size</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">data_format</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data_format</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">resize_images_bilinear</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">height_factor</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">width_factor</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">data_format</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data_format</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="BilinearUpSampling2D.get_config"><a class="viewcode-back" href="../../../oztel_bilinear.html#sota_implementations.oztel_2017.BilinearUpSampling.BilinearUpSampling2D.get_config">[docs]</a>    <span class="k">def</span> <span class="nf">get_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;size&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="s1">&#39;target_size&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span><span class="p">}</span>
+        <span class="n">base_config</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">BilinearUpSampling2D</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_config</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">base_config</span><span class="o">.</span><span class="n">items</span><span class="p">())</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">items</span><span class="p">()))</span></div></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

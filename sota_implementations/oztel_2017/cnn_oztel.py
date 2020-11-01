@@ -8,18 +8,25 @@ from metrics import jaccard_index, jaccard_index_softmax
 def cnn_oztel(image_shape, activation='relu', lr=0.1, optimizer="sgd"):
     """Create the CNN proposed by Oztel et. al.
 
-       Args:
-            image_shape (3D tuple): dimensions of the input image.
+       Parameters
+       ----------
+       image_shape : 3D tuple
+           Dimensions of the input image.
 
-            activation (str, optional): Keras available activation type.
+       activation : str, optional
+           Keras available activation type.
 
-            lr (float, optional): learning rate value.
+       lr : float, optional
+           Learning rate value.
 
-            optimizer (str, optional): optimizer used to minimize the loss
-            function. Posible options: 'sgd' or 'adam'.
+       optimizer : str, optional
+           Optimizer used to minimize the loss function. Posible options: ``sgd``
+           or ``adam``.
         
-       Returns:
-            model (Keras model): model containing the CNN created.
+       Returns
+       -------
+       model : Keras model
+           Model containing the CNN created.
     """
 
     inputs = Input(image_shape)
@@ -63,18 +70,25 @@ def cnn_oztel_test(model, image_shape, activation='relu', lr=0.1,
     """Create the CNN proposed by Oztel et. al for testing, where the full image
        will be fed to the network.
 
-       Args:
-            image_shape (3D tuple): dimensions of the input image.
+       Parameters
+       ----------
+       image_shape : 3D tuple
+           Dimensions of the input image.
 
-            activation (str, optional): Keras available activation type.
+       activation : str, optional
+           Keras available activation type.
 
-            lr (float, optional): learning rate value.
+       lr : float, optional
+           Learning rate value.
 
-            optimizer (str, optional): optimizer used to minimize the loss
-            function. Posible options: 'sgd' or 'adam'.
+       optimizer : str, optional
+           Optimizer used to minimize the loss function. Posible options: ``sgd``
+           or ``adam``.
 
-       Returns:
-            model (Keras model): model containing the CNN created.
+       Returns
+       -------
+       model : Keras model
+           Model containing the CNN created.
     """
 
     dinamic_dim = (None,)*(len(image_shape)-1) + (1,)

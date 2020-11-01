@@ -100,6 +100,10 @@
 <li class="toctree-l1"><a class="reference internal" href="../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../networks_multiresunet.html">MultiResUNet</a></li>
 </ul>
+<p class="caption"><span class="caption-text">Reproduced methods</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../oztel.html">Oztel et al.</a></li>
+</ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../adabound.html">Adabound</a></li>
@@ -394,7 +398,7 @@
         
         <span class="k">if</span> <span class="n">create_val</span><span class="p">:</span>
             <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;4.3) Cropping validation data . . .&quot;</span><span class="p">)</span>
-            <span class="n">X_val</span><span class="p">,</span> <span class="n">Y_data_shapeval</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">crop_data</span><span class="p">(</span>
+            <span class="n">X_val</span><span class="p">,</span> <span class="n">Y_val</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">crop_data</span><span class="p">(</span>
                 <span class="n">X_val</span><span class="p">,</span> <span class="n">crop_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_val</span><span class="p">,</span> <span class="n">d_percentage</span><span class="o">=</span><span class="n">d_percentage</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">check_crop</span><span class="p">:</span>
@@ -653,7 +657,7 @@
    
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### LOAD ###&quot;</span><span class="p">)</span>
                                                                         
-    <span class="n">tr_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">image_train_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">imagTrue_train_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">image_train_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="n">tr_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">image_train_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">image_train_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">image_train_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;0) Loading train images . . .&quot;</span><span class="p">)</span>
     <span class="n">X_train</span> <span class="o">=</span> <span class="n">load_data_from_dir</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="n">tr_shape</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;1) Loading train masks . . .&quot;</span><span class="p">)</span>
@@ -957,12 +961,13 @@
 <span class="sd">       :func:`~crop_data` is that this function allows you to create patches with </span>
 <span class="sd">       overlap. </span>
 
-<span class="sd">       This function can help in cases where the train and test data shapes are </span>
-<span class="sd">       different. On that case, to evaluate the network on test data you can make </span>
-<span class="sd">       crops with this function instead of use :func:`~crop_data` to do not add </span>
-<span class="sd">       zeros and use only image data information. You can calculate the number</span>
-<span class="sd">       of crops you want, and the function will calculate the minimum overlap</span>
-<span class="sd">       along x and y axis that satisfies that number. </span>
+<span class="sd">       As the inference should be make with the same crop shape as the one used </span>
+<span class="sd">       to train the network, sometimes that shape has no exact division with the </span>
+<span class="sd">       test data shape. On that case, instead of use :func:`~crop_data` that </span>
+<span class="sd">       would add zeros in the last crop of each row and column, you can use this</span>
+<span class="sd">       function and create the crops using only image data information. You can </span>
+<span class="sd">       calculate the number of crops you want, and the function will calculate </span>
+<span class="sd">       the minimum overlap along x and y axis that satisfies that number. </span>
 
 <span class="sd">       The opposite function is :func:`~merge_data_with_overlap`.</span>
 
@@ -1017,15 +1022,6 @@
     <span class="k">if</span> <span class="n">window_size</span> <span class="o">&gt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;window_size&#39; greater than </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
 
-    <span class="k">if</span> <span class="n">window_size</span><span class="o">*</span><span class="n">rows</span> <span class="o">&lt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="s2">&quot;Total height of all the crops per row must be greater or equal &quot;</span>
-            <span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> and it is only </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">window_size</span><span class="o">*</span><span class="n">rows</span><span class="p">))</span>
-    <span class="k">if</span> <span class="n">window_size</span><span class="o">*</span><span class="n">columns</span> <span class="o">&lt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="s2">&quot;Total width of all the crops per row must be greater or equal &quot;</span>
-            <span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> and it is only </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">window_size</span><span class="o">*</span><span class="n">columns</span><span class="p">))</span>
-
     <span class="c1"># Crop data</span>
     <span class="n">total_cropped</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">n_crops</span>
     <span class="n">cropped_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">total_cropped</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span>
@@ -1045,6 +1041,15 @@
         
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;The minimum overlap has been found with rows=</span><span class="si">{}</span><span class="s2"> and columns=</span><span class="si">{}</span><span class="s2">&quot;</span>\
           <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">columns</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">window_size</span><span class="o">*</span><span class="n">rows</span> <span class="o">&lt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;Total height of all the crops per row must be greater or equal &quot;</span>
+            <span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> and it is only </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">window_size</span><span class="o">*</span><span class="n">rows</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">window_size</span><span class="o">*</span><span class="n">columns</span> <span class="o">&lt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;Total width of all the crops per row must be greater or equal &quot;</span>
+            <span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> and it is only </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">window_size</span><span class="o">*</span><span class="n">columns</span><span class="p">))</span>
 
     <span class="c1"># Calculate the amount of overlap, the division remainder to obtain an </span>
     <span class="c1"># offset to adjust the last crop and the step size. All of this values per</span>
