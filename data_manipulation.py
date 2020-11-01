@@ -224,7 +224,7 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
         
         if create_val:
             print("4.3) Cropping validation data . . .")
-            X_val, Y_data_shapeval, _ = crop_data(
+            X_val, Y_val, _ = crop_data(
                 X_val, crop_shape, data_mask=Y_val, d_percentage=d_percentage)
 
         if check_crop:
@@ -483,7 +483,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
    
     print("### LOAD ###")
                                                                         
-    tr_shape = (image_train_shape[1], imagTrue_train_shape[0], image_train_shape[2])
+    tr_shape = (image_train_shape[1], image_train_shape[0], image_train_shape[2])
     print("0) Loading train images . . .")
     X_train = load_data_from_dir(train_path, tr_shape)
     print("1) Loading train masks . . .")
