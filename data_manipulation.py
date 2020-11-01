@@ -847,15 +847,6 @@ def crop_data_with_overlap(data, data_mask, window_size, n_crops):
     if window_size > data.shape[2]:
         raise ValueError("'window_size' greater than {}".format(data.shape[2]))
 
-    if window_size*rows < data.shape[1]:
-        raise ValueError(
-            "Total height of all the crops per row must be greater or equal "
-            "{} and it is only {}".format(data.shape[1], window_size*rows))
-    if window_size*columns < data.shape[2]:
-        raise ValueError(
-            "Total width of all the crops per row must be greater or equal "
-            "{} and it is only {}".format(data.shape[2], window_size*columns))
-
     # Crop data
     total_cropped = data.shape[0]*n_crops
     cropped_data = np.zeros((total_cropped, window_size, window_size,
@@ -875,6 +866,15 @@ def crop_data_with_overlap(data, data_mask, window_size, n_crops):
         
     print("The minimum overlap has been found with rows={} and columns={}"\
           .format(rows, columns))
+
+    if window_size*rows < data.shape[1]:
+        raise ValueError(
+            "Total height of all the crops per row must be greater or equal "
+            "{} and it is only {}".format(data.shape[1], window_size*rows))
+    if window_size*columns < data.shape[2]:
+        raise ValueError(
+            "Total width of all the crops per row must be greater or equal "
+            "{} and it is only {}".format(data.shape[2], window_size*columns))
 
     # Calculate the amount of overlap, the division remainder to obtain an 
     # offset to adjust the last crop and the step size. All of this values per
