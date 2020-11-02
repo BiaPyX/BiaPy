@@ -168,8 +168,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         for i, j in zip(range(len(indexes)), indexes):
             if self.random_subvolumes_in_DA:
                 batch_x[i], batch_y[i] = random_3D_crop(
-                    self.X[j], self.Y[j], self.shape, self.val, 
-                    vol_prob=(self.prob_map[j] if self.prob_map is not None else None))
+                    self.X[0], self.Y[0], self.shape, self.val, 
+                    vol_prob=(self.prob_map[0] if self.prob_map is not None else None))
             else:
                 batch_x[i] = np.copy(self.X[j])
                 batch_y[i] = np.copy(self.Y[j])
