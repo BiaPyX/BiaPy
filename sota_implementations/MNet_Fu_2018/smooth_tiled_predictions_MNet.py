@@ -148,7 +148,7 @@ def _rotate_mirror_undo(im_mirrs):
     return np.mean(origs, axis=0)
 
 
-def _windowed_subdivs(padded_img, window_size, subdivisions, nb_classes, pred_func, softmax=False):
+def _windowed_subdivs(padded_img, window_size, subdivisions, n_classes, pred_func):
     """
     Create tiled overlapping patches.
 
@@ -191,22 +191,15 @@ def _windowed_subdivs(padded_img, window_size, subdivisions, nb_classes, pred_fu
     subdivs = np.array([patch * WINDOW_SPLINE_2D for patch in subdivs])
     gc.collect()
 
-    # Decode predicted images into the original one
-    if softmax == True:
-        decoded_subdivs = np.zeros(subdivs.shape[:3] + (1,))
-        for i in range(subdivs.shape[0]):
-            decoded_subdivs[i] = np.expand_dims(subdivs[i,...,1], -1)
-        subdivs = decoded_subdivs
-
     subdivs = subdivs[-1]
  
     # Such 5D array:
-    subdivs = subdivs.reshape(a, b, c, d, nb_classes)
+    subdivs = subdivs.reshape(a, b, c, d, n_classes)
     gc.collect()
 
     return subdivs
 
-def _windowed_subdivs_weighted(padded_img, padded_mask, weight_map, batch_size_value, window_size, subdivisions, nb_classes, pred_func):
+def _windowed_subdivs_weighted(padded_img, padded_mask, weight_map, batch_size_value, window_size, subdivisions, n_classes, pred_func):
     """
     Create tiled overlapping patches with weights.
 
@@ -269,7 +262,7 @@ def _windowed_subdivs_weighted(padded_img, padded_mask, weight_map, batch_size_v
     subdivs = np.array([patch * WINDOW_SPLINE_2D for patch in r])
 
     # Such 5D array:
-    subdivs = subdivs.reshape(a, b, c, d, nb_classes)
+    subdivs = subdivs.reshape(a, b, c, d, n_classes)
 
     return subdivs
 
@@ -298,7 +291,7 @@ def _recreate_from_subdivs(subdivs, window_size, subdivisions, padded_out_shape)
         a += 1
     return y / (subdivisions ** 2)
 
-def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, nb_classes, pred_func, softmax=False):
+def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, n_classes, pred_func):
     """
     Apply the `pred_func` function to square patches of the image, and overlap
     the predictions to merge them smoothly.
@@ -330,10 +323,10 @@ def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, nb_c
     res = []
     for pad in tqdm(pads):
         # For every rotation:
-        sd = _windowed_subdivs(pad, window_size, subdivisions, nb_classes, pred_func, softmax=softmax)
+        sd = _windowed_subdivs(pad, window_size, subdivisions, n_classes, pred_func)
         one_padded_result = _recreate_from_subdivs(
             sd, window_size, subdivisions,
-            padded_out_shape=list(pad.shape[:-1])+[nb_classes])
+            padded_out_shape=list(pad.shape[:-1])+[n_classes])
 
         res.append(one_padded_result)
 
@@ -350,15 +343,15 @@ def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, nb_c
         plt.show()
     return prd
 
-def predict_img_with_overlap(input_img, window_size, subdivisions, nb_classes, pred_func, softmax=False):
+def predict_img_with_overlap(input_img, window_size, subdivisions, n_classes, pred_func):
     """Based on predict_img_with_smooth_windowing but works just with the 
        original image instead of creating 8 new ones.
     """
     pad = _pad_img(input_img, window_size, subdivisions)
 
-    sd = _windowed_subdivs(pad, window_size, subdivisions, nb_classes, pred_func, softmax=softmax)
+    sd = _windowed_subdivs(pad, window_size, subdivisions, n_classes, pred_func)
     one_padded_result = _recreate_from_subdivs(sd, window_size, subdivisions,
-                                               padded_out_shape=list(pad.shape[:-1])+[nb_classes])
+                                               padded_out_shape=list(pad.shape[:-1])+[n_classes])
 
     prd = _unpad_img(one_padded_result, window_size, subdivisions)
 
@@ -370,7 +363,7 @@ def predict_img_with_overlap(input_img, window_size, subdivisions, nb_classes, p
         plt.show()
     return prd
 
-def predict_img_with_overlap_weighted(input_img, input_mask, weight_map, batch_size_value, window_size, subdivisions, nb_classes, pred_func):
+def predict_img_with_overlap_weighted(input_img, input_mask, weight_map, batch_size_value, window_size, subdivisions, n_classes, pred_func):
     """Based on predict_img_with_smooth_windowing but works just with the
        original image (adding a weight map) instead of creating 8 new ones.
     """
@@ -378,9 +371,9 @@ def predict_img_with_overlap_weighted(input_img, input_mask, weight_map, batch_s
     pad_mask = _pad_img(input_mask, window_size, subdivisions)
     pad_w = _pad_img(weight_map, window_size, subdivisions)
 
-    sd = _windowed_subdivs_weighted(pad, pad_mask, pad_w, batch_size_value, window_size, subdivisions, nb_classes, pred_func)
+    sd = _windowed_subdivs_weighted(pad, pad_mask, pad_w, batch_size_value, window_size, subdivisions, n_classes, pred_func)
     one_padded_result = _recreate_from_subdivs(sd, window_size, subdivisions,
-                                               padded_out_shape=list(pad.shape[:-1])+[nb_classes])
+                                               padded_out_shape=list(pad.shape[:-1])+[n_classes])
 
     prd = _unpad_img(one_padded_result, window_size, subdivisions)
 
@@ -392,13 +385,13 @@ def predict_img_with_overlap_weighted(input_img, input_mask, weight_map, batch_s
         plt.show()
     return prd
 
-def cheap_tiling_prediction(img, window_size, nb_classes, pred_func):
+def cheap_tiling_prediction(img, window_size, n_classes, pred_func):
     """
     Does predictions on an image without tiling.
     """
     original_shape = img.shape
     full_border = img.shape[0] + (window_size - (img.shape[0] % window_size))
-    prd = np.zeros((full_border, full_border, nb_classes))
+    prd = np.zeros((full_border, full_border, n_classes))
     tmp = np.zeros((full_border, full_border, original_shape[-1]))
     tmp[:original_shape[0], :original_shape[1], :] = img
     img = tmp
@@ -456,7 +449,8 @@ def round_predictions(prd, nb_channels_out, thresholds):
 
 
 def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, 
-                             softmax_output=True):
+                             n_classes=2):
+                             
     """ Outputs the mean prediction of a given image generating its 8 possible 
         rotations/flips and blending them.
     """
@@ -486,12 +480,10 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1,
     decoded_aug_img = np.zeros(aug_img.shape)
     
     for i in range(aug_img.shape[0]):
-        if softmax_output == True:
+        if n_classes > 1:
             decoded_aug_img[i] = np.array(np.expand_dims(pred_func(np.expand_dims(aug_img[i], 0))[...,1], -1))[-1]
         else:
-            a = np.array(pred_func(np.expand_dims(aug_img[i], 0)))[-1]
-            print("decoded_aug_img: {}".format(a.shape))
-            decoded_aug_img[i] = a
+            decoded_aug_img[i] = np.array(pred_func(np.expand_dims(aug_img[i], 0)))[-1]
 
     # Undo the combinations of the img
     out_img = []
@@ -527,7 +519,7 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1,
 
 
 def smooth_3d_predictions(vol, pred_func, batch_size_value=1, 
-                          softmax=True):
+                          n_classes=2):
     """ Outputs the mean prediction of a given subvolume generating its 16 
         possible rotations/flips and blending them.
     """
@@ -568,7 +560,7 @@ def smooth_3d_predictions(vol, pred_func, batch_size_value=1,
     decoded_aug_vols = np.zeros(aug_vols.shape)
 
     for i in range(aug_vols.shape[0]):
-        if softmax == True:
+        if n_classes > 1:
             decoded_aug_vols[i] = np.expand_dims(pred_func(np.expand_dims(aug_vols[i], 0))[...,1], -1)
         else:
             decoded_aug_vols[i] = pred_func(np.expand_dims(aug_vols[i], 0))

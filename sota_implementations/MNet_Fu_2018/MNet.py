@@ -9,7 +9,7 @@ from tensorflow.keras.models import Model
    Made some minor changes to adapt the network to our specific case. 
 """
 
-# This script works if v2 is disabled, but fails if v2 is enabled.
+# This code works if v2 is disabled, but fails if v2 is enabled.
 tf.compat.v1.enable_v2_behavior
 
 def MNet(input_shape):

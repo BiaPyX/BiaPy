@@ -19,12 +19,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly
     """
 
-    def __init__(self, X, Y, batch_size=32, shape=(256,256,1), nclasses=2, 
-                 shuffle=False, da=True, hist_eq=False, rotation90=False,
-                 rotation_range=0.0, vflip=False, hflip=False, elastic=False,
-                 g_blur=False, median_blur=False, gamma_contrast=False,
+    def __init__(self, X, Y, batch_size=32, shape=(256,256,1), shuffle=False,
+                 da=True, hist_eq=False, rotation90=False, rotation_range=0.0,
+                 vflip=False, hflip=False, elastic=False, g_blur=False,
+                 median_blur=False, gamma_contrast=False,
                  random_crops_in_DA=False, prob_map=False, train_prob=None, 
-                 val=False, softmax_out=False, extra_data_factor=1):
+                 val=False, n_classes=1, extra_data_factor=1):
 
         """ImageDataGenerator constructor.
                                                                                 
@@ -37,9 +37,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
             shape (3D int tuple, optional): shape of the desired images.
 
-            nclasses (int, optional): number of classes. Used when 'softmax_out' 
-            is selected to create one-hot class enconde.
-                
             shuffle (bool, optional): to decide if the indexes will be shuffled
             after every epoch. 
 
@@ -77,9 +74,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             to validate the model to not make random crops (as the val. data must
             be the same on each epoch). Valid when random_crops_in_DA is set.
 
-            softmax_out (bool, optional): to advice that the output of the
-            network has in the last layer a softmax activation or one channel 
-            per class. If so one-hot encoded will be done on the ground truth.
+            n_classes (int, optional): number of classes. If ``> 1`` one-hot
+            encoding will be done on the ground truth.
 
             extra_data_factor (int, optional): factor to multiply the batches 
             yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated
@@ -101,12 +97,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         self.X = np.asarray(X, dtype=np.uint8)
         self.Y = np.asarray(Y, dtype=np.uint8)
         self.shuffle = shuffle
-        self.nclasses = nclasses
+        self.n_classes = n_classes
         self.da = da
         self.random_crops_in_DA = random_crops_in_DA
         self.train_prob = train_prob
         self.val = val
-        self.softmax_out = softmax_out 
         self.o_indexes = np.arange(len(self.X))
         if extra_data_factor > 1:
             self.extra_data_factor = extra_data_factor
@@ -204,13 +199,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             batch_x *= 1./255
             batch_y *= 1./255
 
-        if self.softmax_out:
-            batch_y_ = np.zeros((len(indexes),) + self.shape[:2] + (self.nclasses,))
+        if self.n_classes > 1:
+            batch_y_ = np.zeros((len(indexes),) + self.shape[:2] + (self.n_classes,))
             for i in range(len(indexes)):
                 batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[i]))
 
             batch_y = batch_y_
-
         return ([batch_x], [batch_y,batch_y,batch_y,batch_y,batch_y])
 
 
