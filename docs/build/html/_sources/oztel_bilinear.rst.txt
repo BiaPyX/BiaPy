@@ -1,8 +1,0 @@
-BilinearUpSampling
-==================
-
-.. automodule:: sota_implementations.oztel_2017.BilinearUpSampling
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
