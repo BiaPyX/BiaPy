@@ -1083,3 +1083,30 @@ def grayscale_2D_image_to_3D(X, Y, th=127):
     print("*** New surface 3D data shape is now: {}".format(X_3D.shape))
 
     return X_3D, Y_3D
+
+
+def check_binary_masks(path):                                                   
+    """Check wheter the data masks is binary checking a few random images of the
+       given path. If the function gives no error one should assume that the    
+       masks are correct.                                                       
+                                                                                
+       Parameters                                                               
+       ----------                                                               
+       path : str                                                               
+           Path to the data mask.                                               
+    """                                                                         
+    print("Checking wheter the images in {} are binary . . .".format(path))     
+                                                                                
+    ids = sorted(next(os.walk(path))[2])                                        
+                                                                                
+    # Check only 4 random images or less if there are not as many               
+    num_sample = [4, len(ids)]                                                  
+    numbers = random.sample(range(0, len(ids)), min(num_sample))                
+    for i in numbers:                                                           
+        img = imread(os.path.join(path, ids[i]))                                
+        values, _ = np.unique(img, return_counts=True)                          
+        if len(values) > 2 :                                                    
+            raise ValueError(                                                   
+                "Error: given masks are not binary. Please correct the images " 
+                "before training. (image: {})\nValues: {}"\                     
+                .format(os.path.join(path, ids[i]), values))    

@@ -1627,33 +1627,6 @@ def check_crops(data, out_dim, num_examples=2, include_crops=True,
     print("### END CHECK-CROP ###")
 
 
-def check_binary_masks(path):
-    """Check wheter the data masks is binary checking the a few random images of
-       the given path. If the function gives no error one should assume that the
-       masks are correct.
-
-       Parameters
-       ----------
-       path : str
-           Path to the data mask.
-    """
-    print("Checking wheter the images in {} are binary . . .".format(path))
-
-    ids = sorted(next(os.walk(path))[2])
-
-    # Check only 4 random images or less if there are not as many
-    num_sample = [4, len(ids)]
-    numbers = random.sample(range(0, len(ids)), min(num_sample))
-    for i in numbers:
-        img = imread(os.path.join(path, ids[i]))
-        values, _ = np.unique(img, return_counts=True)
-        if len(values) > 2 :
-            raise ValueError(
-                "Error: given masks are not binary. Please correct the images "
-                "before training. (image: {})\nValues: {}"\
-                .format(os.path.join(path, ids[i]), values))
-
-
 def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False):
     """Crop 3D data into smaller volumes without overlap. If there is no exact
        division between the data shape and ``vol_shape`` in a specific dimension
