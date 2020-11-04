@@ -179,6 +179,7 @@
 <span class="kn">import</span> <span class="nn">time</span>
 <span class="kn">import</span> <span class="nn">random</span>
 <span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">skimage.io</span> <span class="kn">import</span> <span class="n">imread</span>                                                   
 <span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">ImageEnhance</span><span class="p">,</span> <span class="n">Image</span>
 <span class="kn">from</span> <span class="nn">tqdm</span> <span class="kn">import</span> <span class="n">tqdm</span>
 <span class="kn">import</span> <span class="nn">copy</span>
@@ -1257,6 +1258,33 @@
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;*** New surface 3D data shape is now: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">X_3D</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
 
     <span class="k">return</span> <span class="n">X_3D</span><span class="p">,</span> <span class="n">Y_3D</span></div>
+
+
+<div class="viewcode-block" id="check_binary_masks"><a class="viewcode-back" href="../util.html#util.check_binary_masks">[docs]</a><span class="k">def</span> <span class="nf">check_binary_masks</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>                                                   
+    <span class="sd">&quot;&quot;&quot;Check wheter the data masks is binary checking a few random images of the</span>
+<span class="sd">       given path. If the function gives no error one should assume that the    </span>
+<span class="sd">       masks are correct.                                                       </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Parameters                                                               </span>
+<span class="sd">       ----------                                                               </span>
+<span class="sd">       path : str                                                               </span>
+<span class="sd">           Path to the data mask.                                               </span>
+<span class="sd">    &quot;&quot;&quot;</span>                                                                         
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Checking wheter the images in </span><span class="si">{}</span><span class="s2"> are binary . . .&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>     
+                                                                                
+    <span class="n">ids</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">path</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>                                        
+                                                                                
+    <span class="c1"># Check only 4 random images or less if there are not as many               </span>
+    <span class="n">num_sample</span> <span class="o">=</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">)]</span>                                                  
+    <span class="n">numbers</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">)),</span> <span class="nb">min</span><span class="p">(</span><span class="n">num_sample</span><span class="p">))</span>                
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">numbers</span><span class="p">:</span>                                                           
+        <span class="n">img</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">ids</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>                                
+        <span class="n">values</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">return_counts</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>                          
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="p">:</span>                                                    
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>                                                   
+                <span class="s2">&quot;Error: given masks are not binary. Please correct the images &quot;</span> 
+                <span class="s2">&quot;before training. (image: </span><span class="si">{}</span><span class="s2">)</span><span class="se">\n</span><span class="s2">Values: </span><span class="si">{}</span><span class="s2">&quot;</span>             
+                <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">ids</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span> <span class="n">values</span><span class="p">))</span>    </div>
 </pre></div>
 
            </div>

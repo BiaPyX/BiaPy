@@ -329,7 +329,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
                              overlap_train=False, use_rest_train=True, ov=(0,0,0)):         
     """Load train, validation and test images from the given paths to create a 
        3D data representation. All the test data will be used to create a 3D
-       volume of ``test_subvol_shape`` shape (taking into account ``ov``).
+       volume of ``test_subvol_shape`` shape (considering ``ov``).
 
        Parameters
        ----------                                                            
@@ -1648,9 +1648,9 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False):
            division between the data shape and ``vol_shape`` in a specific
            dimension, the remainder data is not enough to create another 
            subvolume. If True, that data will be used completing the rest of the 
-           subvolume with zeros. If False, that remainder will be dropped (notice 
-           that this option will make the data impossible to reconstruct 100% 
-           later on).
+           subvolume with zeros. If ``False``, that remainder will be dropped 
+           (notice that this option will make the data impossible to reconstruct 
+           100% later on). See example 2 for more info. 
 
        Returns
        -------
@@ -1661,6 +1661,57 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False):
        cropped_data_mask : Numpy 5D array
            data_mask data separated in different subvolumes with the provided shape. E.g. 
            ``(subvolume_number, ) + shape``.
+
+       Examples                                                                 
+       --------                                                                 
+       ::                                                                       
+                                                                                
+           # EXAMPLE 1                                                          
+           # Crop into subvolumes a volume with shape (165, 1024, 765)
+                                                                                
+           X_train = np.ones((165, 768, 1024, 1))                               
+           Y_train = np.ones((165, 768, 1024, 1))                               
+                                                                                
+           X_train, Y_train = crop_3D(X_train, (80, 80, 80, 1), data_mask=Y_train)
+                                                                                
+           # The function will print the shape of the generated arrays. In this example:
+           #     **** New data shape is: (216, 80, 80, 80, 1)
+                                                                                
+
+           # EXAMPLE 2
+           # As the first example but using all the data 
+                                                                                
+           X_train, Y_train = crop_3D(X_train, (80, 80, 80, 1), data_mask=Y_train, use_rest=True)
+                                                                                
+           # The function will print the shape of the generated arrays. In this example:
+           #     **** New data shape is: (390, 80, 80, 80, 1)
+
+       A visual explanation of example 2:
+                                                                                
+       .. image:: img/crop_3D.png                                               
+           :width: 80%                                                          
+           :align: center                                                       
+
+
+       As you may noticed, as ``use_rest=True`` the last subvolume is filled with
+       zeros (black) instead of been discarded. Thus, more subvolumes have been 
+       created. 
+
+       Adding zeros to all the axis when they do not have an exact division could not
+       be the best approach in all cases. In example 2, the amount of pixels along x
+       and y axis are not to much, however, for the z axis, that amount is high
+       considering that we only have about 165 slices. To notify the user, the method
+       also prints the number of zeros added per each axis as follows:
+
+       ::
+
+          X_train, Y_train = crop_3D(X_train, (80, 80, 80, 1), data_mask=Y_train, use_rest=True)
+          #       [...]
+          #     Zeros added per dimension: (32,16,75)
+          #       [...]
+          #     **** New data shape is: (390, 80, 80, 80, 1)
+
+       
     """
         
     print("### 3D-CROP ###")
@@ -1822,11 +1873,14 @@ def random_crop(image, mask, random_crop_size, val=False,
        ox : int, optional
            X coordinate in the complete image of the choosed central pixel to 
            make the crop.
+
        oy : int, optional
            Y coordinate in the complete image of the choosed central pixel to    
            make the crop.
+
        x : int, optional
            X coordinate in the complete image where the crop starts. 
+
        y : int, optional
            Y coordinate in the complete image where the crop starts.
     """                                                                         
