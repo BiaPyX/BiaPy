@@ -326,7 +326,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
                              test_subvol_shape, train_subvol_shape, 
                              create_val=True, shuffle_val=True, val_split=0.1, 
                              seedValue=42, random_subvolumes_in_DA=False, 
-                             overlap_train=False, ov=(0,0,0)):         
+                             overlap_train=False, use_rest_train=True, ov=(0,0,0)):         
     """Load train, validation and test images from the given paths to create a 
        3D data representation. All the test data will be used to create a 3D
        volume of ``test_subvol_shape`` shape (taking into account ``ov``).
@@ -377,10 +377,15 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
        overlap_train : bool, optional
            To make training subvolumes as overlapping patches using ``ov``.
 
+       use_rest_train : bool, optional
+           Wheter to use the train data remainder when the subvolume shape 
+           selected has no exact division with it. More info at :func:`~crop_data`
+           function.
+
        ov : Tuple of 3 floats, optional                                         
-            Amount of minimum overlap on x, y and z dimensions. The values must 
-            be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.      
-            E. g. ``(x, y, z)``.   
+           Amount of minimum overlap on x, y and z dimensions. The values must 
+           be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.      
+           E. g. ``(x, y, z)``.   
 
        Returns
        -------                                                         
@@ -500,35 +505,26 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
 
     orig_test_shape = tuple(Y_test.shape[i] for i in [0, 1, 2, 3])
 
-    mirrored_subvols = 0
-    
     if not random_subvolumes_in_DA:
-        print("Preparing train data subvolumes . . .")
-        X_train, Y_train, mirrored_subvols = prepare_3D_volume_data(
-            X_train, Y_train, train_subvol_shape, overlap=overlap_train, ov=ov)
+        print("Cropping train data subvolumes . . .")
+        if overlap_train:
+            X_test, Y_test = crop_3D_data_with_overlap(
+                X_test, test_subvol_shape, data_mask=Y_test, overlap=ov) 
+        else:
+            X_train, Y_train = crop_3D_data(
+                X_train, train_subvol_shape, use_rest=use_rest_train,
+                data_mask=Y_train)
 
-    print("Preparing test data subvolumes . . .")
-    X_test, Y_test, _ = prepare_3D_volume_data(
-        X_test, Y_test, test_subvol_shape, overlap=True, ov=ov)
+    print("Cropping test data subvolumes . . .")
+    X_test, Y_test = crop_3D_data_with_overlap(
+        X_test, test_subvol_shape, data_mask=Y_test, overlap=ov)
 
     # Create validation data splitting the train
     if create_val:
-        # Calculate the percentage of images to extract the validation data from 
-        # avoiding those subvolumes that have been created using the rest of the
-        # images and mirroring in the prepare_3D_volume_data function
-        if mirrored_subvols != 0:
-            val_split = (val_split*mirrored_subvols)/X_train.shape[0]
-            X_train2, X_val, \
-            Y_train2, Y_val = train_test_split(
-                X_train[:mirrored_subvols], Y_train[:mirrored_subvols],
-                test_size=val_split, shuffle=shuffle_val, random_state=seedValue)
-            X_train = np.concatenate((X_train2, X_train[mirrored_subvols:]), axis=0)
-            Y_train = np.concatenate((Y_train2, Y_train[mirrored_subvols:]), axis=0)
-        else:       
-            X_train, X_val, \
-            Y_train, Y_val = train_test_split(
-                X_train, Y_train, test_size=val_split, shuffle=shuffle_val, 
-                random_state=seedValue)
+        X_train, X_val, \
+        Y_train, Y_val = train_test_split(
+            X_train, Y_train, test_size=val_split, shuffle=shuffle_val, 
+            random_state=seedValue)
 
     # Convert the original volumes as they were a unique subvolume
     if random_subvolumes_in_DA:                                                 
@@ -675,7 +671,7 @@ def crop_data(data, crop_shape, data_mask=None, force_shape=(0, 0),
            # Here some of the crops, concretelly the last in height and width, will
            # have a black part (which are zeros)
     
-       See :func:`~check_crops` function for a visual example
+       See :func:`~check_crops` function for a visual example.
     """                                                                 
 
     print("### CROP ###")                                                                    
@@ -684,8 +680,8 @@ def crop_data(data, crop_shape, data_mask=None, force_shape=(0, 0),
   
     # Calculate the number of images to be generated                    
     if force_shape == (0, 0):
-        h_num = int(data.shape[1] / crop_shape[0]) + (data.shape[1] % crop_shape[0] > 0)
-        v_num = int(data.shape[2] / crop_shape[1]) + (data.shape[2] % crop_shape[1] > 0)
+        h_num = math.ceil(data.shape[1] / crop_shape[0])
+        v_num = math.ceil(data.shape[2] / crop_shape[1])
         force_shape = (h_num, v_num)
     else:
         h_num = force_shape[0]
@@ -969,9 +965,11 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0)):
 
        A visual explanation of the process:                                     
                                                                                 
-       .. image:: img/crop_3D.png                                               
+       .. image:: img/crop_3D_ov.png                                               
            :width: 80%                                                          
            :align: center
+    
+       Note: this image do not respect the proportions.
 
        ::  
 
@@ -989,7 +987,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0)):
     """
 
     print("### 3D-OV-CROP ###")
-    print("Cropping {} images into {} with overlapping. . ."
+    print("Cropping {} images into {} with overlapping . . ."
           .format(data.shape, vol_shape))
     print("Minimum overlap selected: {}".format(overlap))
 
@@ -1049,7 +1047,8 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0)):
     print("Real overlapping: {}".format((real_ov_x,real_ov_y,real_ov_z)))
 
     print("{},{},{} patches per x,y,z axis"
-          .format((vols_per_z-1),(vols_per_x-1),(vols_per_y-1)))
+          .format((vols_per_x-1),(vols_per_y-1),(vols_per_z-1)))
+
     total_vol = (vols_per_z-1)*(vols_per_x-1)*(vols_per_y-1)
     cropped_data = np.zeros((total_vol,) + vol_shape)
     if data_mask is not None:
@@ -1073,7 +1072,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0)):
     cropped_data = cropped_data.transpose(0,2,3,1,4)
 
     print("**** New data shape is: {}".format(cropped_data.shape))
-    print("### END OV-CROP ###")
+    print("### END 3D-OV-CROP ###")
 
     if data_mask is not None:
         cropped_data_mask = cropped_data_mask.transpose(0,2,3,1,4)
@@ -1655,157 +1654,125 @@ def check_binary_masks(path):
                 .format(os.path.join(path, ids[i]), values))
 
 
-def prepare_3D_volume_data(X, Y, shape=(256, 256, 82), overlap=False, 
-                           use_rest=True, ov=(0,0,0)):                          
-    """Prepare given data into 3D subvolumes to train a 3D network.
+def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False):
+    """Crop 3D data into smaller volumes without overlap. If there is no exact
+       division between the data shape and ``vol_shape`` in a specific dimension
+       it will be discarded or zeros will be added if ``use_rest`` is True.
 
        Parameters
        ----------
-       X : Numpy 4D array
+       data : Numpy 4D array
            Data. E.g. ``(num_of_images, x, y, channels)``.      
                                                                            
-       Y : Numpy 4D array
+       vol_shape : 4D int tuple
+           Shape of the volumes to created. E.g. ``(x, y, z, channels)``.
+
+       data_mask : Numpy 4D array, optional
            Mask data. E.g. ``(num_of_images, x, y, channels)``.
-                                                                           
-       shape : 3D int tuple, optional
-           Shape of the subvolumes to create.
-
-       overlap : bool, optional
-           To create subvolumes with overlap forcing to use all the data. If 
-           ``False`` as much as possible subvolumes of the provided shape will
-           be created with the available data, and the rest of images will be
-           dropped out (depens on 'use_rest' value). Activate it when dealing
-           with test data, as all the images must be present.
-    
+        
        use_rest : bool, optional
-           To try to use the rest of the images to create more training data 
-           using mirroring. 
-
-       ov : Tuple of 3 floats, optional                                    
-            Amount of minimum overlap on x, y and z dimensions. The values must 
-            be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.      
-            E. g. ``(x, y, z)``.   
+           Controls how the rest data will be processed. When there is no exact
+           division between the data shape and ``vol_shape`` in a specific
+           dimension, the remainder data is not enough to create another 
+           subvolume. If True, that data will be used completing the rest of the 
+           subvolume with zeros. If False, that remainder will be dropped (notice 
+           that this option will make the data impossible to reconstruct 100% 
+           later on).
 
        Returns
        -------
-       X_prep : Numpy 5D array
-           X data separated in different subvolumes with the provided shape. E.g.
+       cropped_data : Numpy 5D array
+           data data separated in different subvolumes with the provided shape. E.g.
            ``(subvolume_number, ) + shape``.
             
-       Y_prep : Numpy 5D array
-           Y data separated in different subvolumes with the provided shape. E.g. 
+       cropped_data_mask : Numpy 5D array
+           data_mask data separated in different subvolumes with the provided shape. E.g. 
            ``(subvolume_number, ) + shape``.
-            
-       mirrored_subvols : int
-           Number of subvolumes created with the rest of the images. A valid
-           value is returned when ``use_rest`` is ``True``.
     """
-                                                                            
-    if X.shape != Y.shape:                                                      
-        raise ValueError("The shape of X and Y must be the same")               
-    if X.ndim != 4 or Y.ndim != 4:                                              
-        raise ValueError("X or Y must be a 4D Numpy array")                     
-    if len(shape) != 4:
-        raise ValueError("'shape' must be 4D")
+        
+    print("### 3D-CROP ###")
+    print("Cropping {} images into {} . . ."
+          .format(data.shape, vol_shape))
+                                                                    
+    if len(vol_shape) != 4:
+        raise ValueError("'vol_shape' must be 4D int tuple")
+    if data.ndim != 4:
+        raise ValueError("data must be a 4D Numpy array")
+    if data_mask is not None:
+        if data_mask.ndim != 4:                                              
+            raise ValueError("data_mask must be a 4D Numpy array") 
+    if vol_shape[0] > data.shape[0]:
+        raise ValueError("'vol_shape[0]' {} greater than {}"
+                         .format(vol_shape[0], data.shape[0]))
+    if vol_shape[1] > data.shape[1]:
+        raise ValueError("'vol_shape[1]' {} greater than {}"
+                         .format(vol_shape[1], data.shape[1]))
+    if vol_shape[2] > data.shape[2]:
+        raise ValueError("'vol_shape[2]' {} greater than {}"
+                         .format(vol_shape[2], data.shape[2]))
+
+    # Calculate crops per axis                                      
+    vols_per_x = math.ceil(data.shape[1]/vol_shape[0])
+    vols_per_y = math.ceil(data.shape[2]/vol_shape[1])
+    vols_per_z = math.ceil(data.shape[0]/vol_shape[2])
     
-    # Calculate the rest                                                        
-    rest = X.shape[0] % shape[2]                                                
+    _d_x = 1 if data.shape[1]%vol_shape[0] and not use_rest else 0
+    _d_y = 1 if data.shape[2]%vol_shape[1] and not use_rest else 0
+    _d_z = 1 if data.shape[0]%vol_shape[2] and not use_rest else 0
+    
+    num_sub_volum = (vols_per_x-_d_x)*(vols_per_y-_d_y)*(vols_per_z-_d_z)
 
-    mirrored_subvols = 0
-    if overlap:
-        print("Overlap cropping selected")
-        X, Y = crop_3D_data_with_overlap(X, shape, data_mask=Y, overlap=ov)
-        return X, Y, mirrored_subvols
+    # Calculate the excess
+    last_x = vols_per_x*vol_shape[0]-data.shape[1]
+    last_y = vols_per_y*vol_shape[1]-data.shape[2]
+    last_z = vols_per_z*vol_shape[2]-data.shape[0]
+    print("Zeros added per dimension: ({},{},{})"
+          .format(last_x,last_y,last_z))
+                                                                                
+    cropped_data = np.zeros((num_sub_volum, ) + vol_shape)
+    if data_mask is not None:
+        cropped_data_mask = np.zeros((num_sub_volum, ) + vol_shape)
+                                                                                
+    print("{},{},{} patches per x,y,z axis"
+          .format((vols_per_x),(vols_per_y),(vols_per_z)))
 
-    if rest != 0 and use_rest == False:                                                               
-        print("As the number of images required to form a stack 3D is not "
-              "multiple of images provided and no overlap+use_rest is selected,"
-              " the last {} image(s) will be unused".format(rest))
-                                                                                
-    # Calculate crops are per axis                                      
-    h_num = int(X.shape[1]/shape[0])
-    v_num = int(X.shape[2]/shape[1])
-    crops_per_image = h_num*v_num                                               
-                                                                                
-    num_sub_volum = int(math.floor(X.shape[0]/shape[2])*crops_per_image)             
-                                                                                
-    X_prep = np.zeros((num_sub_volum, ) + shape)
-    Y_prep = np.zeros((num_sub_volum, ) + shape)
-                                                                                
     # Reshape the data to generate needed 3D subvolumes                        
-    print("Generating 3D subvolumes . . .")                                     
-    print("Converting {} data to {}".format(X.shape, X_prep.shape))             
-    print("Filling [0:{}] subvolumes with [0:{}] images . . ."                  
-          .format(crops_per_image-1, shape[2]-1))                               
-    subvolume = 0                                                               
-    vol_slice = 0                                                               
-    total_subvol_filled = 0                                                     
-    for k in range(X.shape[0]-rest):                                                 
-        for i in range(h_num):                                                  
-            for j in range(v_num):                                              
-                im = X[k,(i*shape[0]):((i+1)*shape[1]),(j*shape[0]):((j+1)*shape[1])]
-                mask = Y[k,(i*shape[0]):((i+1)*shape[1]),(j*shape[0]):((j+1)*shape[1])]
-                  
-                X_prep[subvolume, ..., vol_slice, :] = im                               
-                Y_prep[subvolume, ..., vol_slice, :] = mask                             
-                                                                                
-                subvolume += 1                                                  
-                if subvolume == (total_subvol_filled+crops_per_image):
-                    subvolume = total_subvol_filled
-                    vol_slice += 1                                              
-                                                                                
-                    # Reached this point we will have filled part of            
-                    # the subvolumes                                            
-                    if vol_slice == shape[2] and (k+1) != (X.shape[0]-rest):                                   
-                        total_subvol_filled += crops_per_image                  
-                        subvolume = total_subvol_filled
-                        vol_slice = 0                                           
-                                                                                
-                        print("Filling [{}:{}] subvolumes with [{}:{}] "        
-                              "images . . .".format(total_subvol_filled,        
-                              total_subvol_filled+crops_per_image-1, k+1,       
-                              k+shape[2]-1))
-    print("Data prepared shape: {}".format(X_prep.shape))
+    c = 0
+    for z in range(vols_per_z):
+        for x in range(vols_per_x):                                                  
+            for y in range(vols_per_y):
+                d_x = 0 if (((x+1)*vol_shape[0])) < data.shape[1] else last_x
+                d_y = 0 if (((y+1)*vol_shape[1])) < data.shape[2] else last_y
+                d_z = 0 if (((z+1)*vol_shape[2])) < data.shape[0] else last_z
 
-    if rest != 0 and use_rest:
-        if rest*2 < shape[2]:
-            print("As mirroring will be used at least the rest of the images need"
-                  " to be half of the size in z provided. Rest={} ; z-images={}"
-                  .format(rest, shape[2]))
-        else:
-            mirrored_subvols = crops_per_image
-            print("Last {} images will be used to create {} more subvolumes "
-                  "doing mirroring".format(rest, mirrored_subvols))
+                if d_x != 0 and not use_rest: break
+                if d_y != 0 and not use_rest: break
+                if d_z != 0 and not use_rest: break
 
-            X_prep2 = np.zeros((crops_per_image, ) + shape)
-            Y_prep2 = np.zeros((crops_per_image, ) + shape)
-            
-            img_to_mirror = shape[2]-rest
-            subvolume = 0
-            vol_slice = 0
-            s = 0
-            for k in range(X.shape[0]-rest, X.shape[0]+img_to_mirror):
-                if k >= X.shape[0]:
-                    s += 1
-                for i in range(h_num):
-                    for j in range(v_num):
-                        im = X[k-s,(i*shape[0]):((i+1)*shape[1]),(j*shape[0]):((j+1)*shape[1])]
-                        mask = Y[k-s,(i*shape[0]):((i+1)*shape[1]),(j*shape[0]):((j+1)*shape[1])]
+                cropped_data[c,0:vol_shape[2]-d_z,
+                               0:vol_shape[0]-d_x,
+                               0:vol_shape[1]-d_y] = \
+                    data[(z*vol_shape[2]):((z+1)*vol_shape[2])-d_z,
+                         (x*vol_shape[0]):((x+1)*vol_shape[0])-d_x,
+                         (y*vol_shape[1]):((y+1)*vol_shape[1])-d_y]
+                if data_mask is not None:
+                    cropped_data_mask[c,0:vol_shape[2]-d_z,                              
+                                        0:vol_shape[0]-d_x,                              
+                                        0:vol_shape[1]-d_y] = \
+                        data_mask[(z*vol_shape[2]):((z+1)*vol_shape[2])-d_z,                 
+                                  (x*vol_shape[0]):((x+1)*vol_shape[0])-d_x,                 
+                                  (y*vol_shape[1]):((y+1)*vol_shape[1])-d_y]
+                c += 1                                                                
 
-                        X_prep2[subvolume,:,:,vol_slice] = im
-                        Y_prep2[subvolume,:,:,vol_slice] = mask
-                        
-                        subvolume += 1
-                        if subvolume == crops_per_image:
-                            subvolume = 0
-                            vol_slice += 1
+    cropped_data = cropped_data.transpose(0,2,3,1,4)
+    print("**** New data shape is: {}".format(cropped_data.shape))
+    print("### END 3D-CROP ###")
 
-            X_prep = np.concatenate((X_prep, X_prep2), axis=0)
-            Y_prep = np.concatenate((Y_prep, Y_prep2), axis=0)
-            print("Rest used. New data prepared shape is now: {}"
-                  .format(X_prep.shape))
-
-    return X_prep, Y_prep, mirrored_subvols
+    if data_mask is not None:
+        cropped_data_mask = cropped_data_mask.transpose(0,2,3,1,4)
+        return cropped_data, cropped_data_mask
+    else:
+        return cropped_data
 
 
 def img_to_onehot_encoding(img, num_classes=2):
