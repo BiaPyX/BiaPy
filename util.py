@@ -5,6 +5,7 @@ import numpy as np
 import time
 import random
 import matplotlib.pyplot as plt
+from skimage.io import imread                                                   
 from PIL import ImageEnhance, Image
 from tqdm import tqdm
 import copy
@@ -1108,5 +1109,5 @@ def check_binary_masks(path):
         if len(values) > 2 :                                                    
             raise ValueError(                                                   
                 "Error: given masks are not binary. Please correct the images " 
-                "before training. (image: {})\nValues: {}"\                     
+                "before training. (image: {})\nValues: {}"             
                 .format(os.path.join(path, ids[i]), values))    
