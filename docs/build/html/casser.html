@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Welcome to EM Image Segmentation’s documentation! &mdash; EM Image Segmentation  documentation</title>
+  <title>Casser et al. &mdash; EM Image Segmentation  documentation</title>
   
 
   
@@ -36,7 +36,8 @@
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="How to run" href="how_to_run.html" /> 
+    <link rel="next" title="Oztel et al." href="oztel.html" />
+    <link rel="prev" title="MultiResUNet" href="networks_multiresunet.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -50,7 +51,7 @@
           
 
           
-            <a href="#" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
           
 
           
@@ -102,8 +103,8 @@
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Casser et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
@@ -125,7 +126,7 @@
       <nav class="wy-nav-top" aria-label="top navigation">
         
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="#">EM Image Segmentation</a>
+          <a href="index.html">EM Image Segmentation</a>
         
       </nav>
 
@@ -154,9 +155,9 @@
 
   <ul class="wy-breadcrumbs">
     
-      <li><a href="#" class="icon icon-home"></a> &raquo;</li>
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
         
-      <li>Welcome to EM Image Segmentation’s documentation!</li>
+      <li>Casser et al.</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -173,54 +174,22 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="welcome-to-em-image-segmentation-s-documentation">
-<h1>Welcome to EM Image Segmentation’s documentation!<a class="headerlink" href="#welcome-to-em-image-segmentation-s-documentation" title="Permalink to this headline">¶</a></h1>
-<p>This documentation tries to explain better the code of the project <a class="reference external" href="https://github.com/danifranco/DeepLearning_EM">EM Image Segmentation</a>, which is used to make semantic segmentation using U-Net based architecture for EM images. The code is based on Keras and TensorFlow as backend.</p>
-<p>Some of state-of-the-art approaches have been reproduced and implemented to compare our method in a more robust way, with the goal of supplement the lack of information in some of those works.</p>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="how_to_run.html#step-0-prepare-environment">Step 0: Prepare environment</a></li>
-<li class="toctree-l2"><a class="reference internal" href="how_to_run.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
-<li class="toctree-l2"><a class="reference internal" href="how_to_run.html#step-2-data-structure">Step 2: Data structure</a></li>
-<li class="toctree-l2"><a class="reference internal" href="how_to_run.html#step-3-run-the-code">Step 3: Run the code</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
-</ul>
+  <div class="section" id="casser-et-al">
+<h1>Casser et al.<a class="headerlink" href="#casser-et-al" title="Permalink to this headline">¶</a></h1>
+<p>As part of our paper we try to reproduce other state-of-the-art approaches for EM semantic segmentation
+that do not provide code. In this case the following paper has been reproduced:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>Vincent Casser, Kai Kang, Hanspeter Pfister, and Daniel Haehn, <span class="s2">&quot;Fast mitochondria segmentation</span>
+<span class="s2">for connectomics&quot;</span>, arXiv preprint arXiv:1812.06024 <span class="o">(</span><span class="m">2018</span><span class="o">)</span>
+</pre></div>
 </div>
-<div class="toctree-wrapper compound">
-<p class="caption"><span class="caption-text">Networks</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
+<p><a class="reference external" href="https://arxiv.org/abs/1812.06024">[Paper]</a> <a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018">[Our code]</a></p>
+<p>We have prepared two templates:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018/casser_template_V1.py">casser_template_V0.py</a> : exact parameters and training workflow as described in the paper.</p></li>
+<li><p><a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018/casser_template_V1.py">casser_template_V1.py</a> : changes made respect to V0 with which we have achieved better results.</p></li>
 </ul>
-</div>
-<div class="toctree-wrapper compound">
-<p class="caption"><span class="caption-text">Reproduced methods</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<p class="caption"><span class="caption-text">Auxiliary code</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
-<li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
-</ul>
-</div>
+</div></blockquote>
 </div>
 
 
@@ -231,8 +200,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="how_to_run.html" class="btn btn-neutral float-right" title="How to run" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="oztel.html" class="btn btn-neutral float-right" title="Oztel et al." accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
+      
+        <a href="networks_multiresunet.html" class="btn btn-neutral float-left" title="MultiResUNet" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

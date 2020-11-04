@@ -104,6 +104,7 @@
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
@@ -177,7 +178,7 @@
 <span id="d-residual-u-net"></span><h1>2D Residual U-Net<a class="headerlink" href="#module-networks.resunet" title="Permalink to this headline">¶</a></h1>
 <dl class="py function">
 <dt id="networks.resunet.ResUNet_2D">
-<code class="sig-prename descclassname">networks.resunet.</code><code class="sig-name descname">ResUNet_2D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">drop_values</span><span class="o">=</span><span class="default_value">[0.1, 0.1, 0.1, 0.1, 0.1]</span></em>, <em class="sig-param"><span class="n">batch_norm</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">feature_maps</span><span class="o">=</span><span class="default_value">[16, 32, 64, 128, 256]</span></em>, <em class="sig-param"><span class="n">depth</span><span class="o">=</span><span class="default_value">4</span></em>, <em class="sig-param"><span class="n">loss_type</span><span class="o">=</span><span class="default_value">'bce'</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'sgd'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.001</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/resunet.html#ResUNet_2D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.resunet.ResUNet_2D" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">networks.resunet.</code><code class="sig-name descname">ResUNet_2D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">drop_values</span><span class="o">=</span><span class="default_value">[0.1, 0.1, 0.1, 0.1, 0.1]</span></em>, <em class="sig-param"><span class="n">batch_norm</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">feature_maps</span><span class="o">=</span><span class="default_value">[16, 32, 64, 128, 256]</span></em>, <em class="sig-param"><span class="n">depth</span><span class="o">=</span><span class="default_value">4</span></em>, <em class="sig-param"><span class="n">loss_type</span><span class="o">=</span><span class="default_value">'bce'</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'sgd'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.001</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/resunet.html#ResUNet_2D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.resunet.ResUNet_2D" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create 2D Residual_U-Net.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -196,6 +197,7 @@
 <li><p><strong>optimizer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Optimizer used to minimize the loss function. Posible options:
 <code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p></li>
 <li><p><strong>lr</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Learning rate value.</p></li>
+<li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>

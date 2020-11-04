@@ -102,6 +102,7 @@
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../casser.html">Casser et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
@@ -184,7 +185,7 @@
 <div class="viewcode-block" id="ResUNet_2D"><a class="viewcode-back" href="../../networks_resunet.html#networks.resunet.ResUNet_2D">[docs]</a><span class="k">def</span> <span class="nf">ResUNet_2D</span><span class="p">(</span><span class="n">image_shape</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;elu&#39;</span><span class="p">,</span> <span class="n">k_init</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span>
                <span class="n">drop_values</span><span class="o">=</span><span class="p">[</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.1</span><span class="p">],</span> <span class="n">batch_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
                <span class="n">feature_maps</span><span class="o">=</span><span class="p">[</span><span class="mi">16</span><span class="p">,</span><span class="mi">32</span><span class="p">,</span><span class="mi">64</span><span class="p">,</span><span class="mi">128</span><span class="p">,</span><span class="mi">256</span><span class="p">],</span> <span class="n">depth</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">loss_type</span><span class="o">=</span><span class="s2">&quot;bce&quot;</span><span class="p">,</span> 
-               <span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;sgd&quot;</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.001</span><span class="p">):</span>
+               <span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;sgd&quot;</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">n_classes</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
 
     <span class="sd">&quot;&quot;&quot;Create 2D Residual_U-Net.</span>
 
@@ -224,6 +225,9 @@
 <span class="sd">       lr : float, optional</span>
 <span class="sd">           Learning rate value.</span>
 
+<span class="sd">       n_classes: int, optional                                                 </span>
+<span class="sd">           Number of classes.  </span>
+
 <span class="sd">       Returns</span>
 <span class="sd">       -------</span>
 <span class="sd">       model : Keras model</span>
@@ -259,7 +263,7 @@
     <span class="n">x</span> <span class="o">=</span> <span class="n">level_block</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">depth</span><span class="p">,</span> <span class="n">fm</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span><span class="p">,</span> <span class="n">k_init</span><span class="p">,</span> <span class="n">drop_values</span><span class="p">,</span> 
                     <span class="n">batch_norm</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
 
-    <span class="n">outputs</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;sigmoid&#39;</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">outputs</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">n_classes</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;sigmoid&#39;</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
 
     <span class="n">model</span> <span class="o">=</span> <span class="n">Model</span><span class="p">(</span><span class="n">inputs</span><span class="o">=</span><span class="p">[</span><span class="n">inputs</span><span class="p">],</span> <span class="n">outputs</span><span class="o">=</span><span class="p">[</span><span class="n">outputs</span><span class="p">])</span>
 
