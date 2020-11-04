@@ -37,7 +37,7 @@ os.chdir(args.base_work_dir)
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
                  TimeHistory, threshold_plots, save_img, \
-                 calculate_2D_volume_prob_map
+                 calculate_2D_volume_prob_map, check_binary_masks
 limit_threads()
 
 # Try to generate the results as reproducible as possible
@@ -60,7 +60,7 @@ import tensorflow as tf
 from data_manipulation import load_and_prepare_2D_data, crop_data,\
                               merge_data_without_overlap,\
                               crop_data_with_overlap, merge_data_with_overlap, \
-                              check_binary_masks, img_to_onehot_encoding
+                              img_to_onehot_encoding
 from generators.custom_da_gen import ImageDataGenerator
 from generators.keras_da_gen import keras_da_generator, keras_gen_samples
 from networks.unet import U_Net_2D
@@ -110,7 +110,7 @@ perc_used_as_val = 0.1
 random_val_data = False
 
 
-### Dataset shape
+### Data shape
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. Be sure to take care of this if you are not going to
 # use "crop_data()" with the arg force_shape, as this function resolves the 
@@ -119,39 +119,12 @@ img_train_shape = (1024, 768, 1)
 img_test_shape = (1024, 768, 1)
 
 
-### Extra datasets variables
-# Paths, shapes and discard values for the extra dataset used together with the
-# main train dataset, provided by train_path and train_mask_path variables, to 
-# train the network with. If the shape of the datasets differ the best option
-# To normalize them is to make crops ("make_crops" variable)
-extra_datasets_data_list = []
-extra_datasets_mask_list = []
-extra_datasets_data_dim_list = []
-extra_datasets_discard = []
-### Example of use:
-# Path to the data:
-# extra_datasets_data_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'x'))
-# Path to the mask: 
-# extra_datasets_mask_list.append(os.path.join('kasthuri_pp', 'reshaped_fibsem', 'train', 'y'))
-# Shape of the images:
-# extra_datasets_data_dim_list.append((877, 967, 1))
-# Discard value to apply in the dataset (see "Discard variables" for more details):
-# extra_datasets_discard.append(0.05)                                             
-#
-# Number of crop to take form each dataset to train the network. If 0, the      
-# variable will be ignored                                                      
-num_crops_per_dataset = 0
-
-
 ### Crop variables
 # Shape of the crops
 crop_shape = (512, 512, 1)
 # To make crops on the train data
 make_crops = False
-# To check the crops. Useful to ensure that the crops have been made 
-# correctly. Note: if "discard_cropped_images" is True only the run that 
-# prepare the discarded data will check the crops, as the future runs only load 
-# the crops stored by this first run
+# To check the crops. Useful to ensure that the crops have been made correctly
 check_crop = True 
 # Instead of make the crops before the network training, this flag activates
 # the option to extract a random crop of each train image during data 
@@ -162,33 +135,6 @@ test_ov_crops = 1 # Only active with random_crops_in_DA
 probability_map = False # Only active with random_crops_in_DA                       
 w_foreground = 0.94 # Only active with probability_map
 w_background = 0.06 # Only active with probability_map
-
-
-### Discard variables
-# To activate the discards in the main train data. Only active when 
-# "make_crops" variable is True
-discard_cropped_images = False
-# Percentage of pixels labeled with the foreground class necessary to not 
-# discard the image 
-d_percentage_value = 0.05
-# Path where the train discarded data will be stored to be loaded by future runs 
-# instead of make again the process
-train_crop_discard_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'train', 'x')
-# Path where the train discarded masks will be stored                           
-train_crop_discard_mask_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'train', 'y')
-# The discards are NOT done in the test data, but this will store the test data,
-# which will be cropped, into the pointed path to be loaded by future runs      
-# Together with the train discarded data and masks                              
-test_crop_discard_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'test', 'x')
-test_crop_discard_mask_path = \
-    os.path.join(args.result_dir, 'data_d', job_identifier 
-                 + str(d_percentage_value), 'test', 'y')
 
 
 ### Normalization
@@ -263,10 +209,6 @@ extra_train_data = 0
 load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
-# To activate the fine tunning
-fine_tunning = False
-# ID of the previous weigths to load the weigths from to make the fine tunning 
-fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
 # Wheter to find the best learning rate plot. If this options is selected the
@@ -289,7 +231,7 @@ learning_rate_value = 0.0005
 # Number of epochs to train the network
 epochs_value = 360
 # Number of epochs to stop the training process after no improvement
-patience = 360
+patience = 200
 # If weights on data are going to be applied. To true when loss_type is 'w_bce' 
 weights_on_data = True if loss_type == "w_bce" else False
 
@@ -311,9 +253,13 @@ batch_normalization = False
 kernel_init = 'he_normal'
 # Activation function to use                                                    
 activation = "elu" 
-# Active flag if softmax or one channel per class is used as the last layer of
-# the network. Custom DA needed.
-softmax_out = False
+# Number of classes. To generate data with more than 1 channel custom DA need to
+# be selected. It can be 1 or 2.                                                                   
+n_classes = 1
+# Adjust the metric used accordingly to the number of clases. This code is planned 
+# to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
+# will only calculate the IoU for the foreground class (channel 1)
+metric = "jaccard_index_softmax" if n_classes > 1 else "jaccard_index"
 
 
 ### DET metric variables
@@ -428,61 +374,6 @@ print("###################\n"
 
 check_binary_masks(train_mask_path)
 check_binary_masks(test_mask_path)
-if extra_datasets_mask_list: 
-    for i in range(len(extra_datasets_mask_list)):
-        check_binary_masks(extra_datasets_mask_list[i])
-
-
-print("##########################################\n"
-      "#  PREPARE DATASET IF DISCARD IS ACTIVE  #\n"
-      "##########################################\n")
-
-# The first time the dataset will be prepared for future runs if it is not 
-# created yet
-if discard_cropped_images and make_crops \
-   and not os.path.exists(train_crop_discard_path):
-    # Load data
-    X_train, Y_train, \
-    X_test, Y_test, \
-    orig_test_shape, norm_value, \
-    crops_made = load_and_prepare_2D_data(
-        train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
-        img_test_shape, create_val=False, job_id=args.job_id, crop_shape=crop_shape, 
-        check_crop=check_crop, check_crop_path=check_crop_path, 
-        d_percentage=d_percentage_value)
-
-    # Create folders and save the images for future runs 
-    print("Saving cropped images for future runs . . .")
-    save_img(X=X_train, data_dir=train_crop_discard_path, Y=Y_train,            
-             mask_dir=train_crop_discard_mask_path)                             
-    save_img(X=X_test, data_dir=test_crop_discard_path, Y=Y_test,               
-             mask_dir=test_crop_discard_mask_path)
-
-    del X_train, Y_train, X_test, Y_test
-   
-    # Update shapes 
-    img_train_shape = crop_shape
-    img_test_shape = crop_shape
-    discard_made_run = True
-else:
-    discard_made_run = False
-
-# Disable the crops if the run is not the one that have prepared the discarded 
-# data as it will work with cropped images instead of the original ones, 
-# rewriting the needed images 
-if discard_cropped_images and discard_made_run == False:
-    check_crop = False
-
-# For the rest of runs that are not the first that prepares the dataset when 
-# discard is active some variables must be set as if it would made the crops
-if make_crops and discard_cropped_images:
-    train_path = train_crop_discard_path
-    train_mask_path = train_crop_discard_mask_path
-    test_path = test_crop_discard_path
-    test_mask_path = test_crop_discard_mask_path
-    img_train_shape = crop_shape
-    img_test_shape = crop_shape
-    crops_made = True
 
 
 print("###############\n"
@@ -494,10 +385,7 @@ Y_val, X_test, Y_test,\
 orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
     img_test_shape, val_split=perc_used_as_val, shuffle_val=random_val_data,
-    e_d_data=extra_datasets_data_list, e_d_mask=extra_datasets_mask_list, 
-    e_d_data_dim=extra_datasets_data_dim_list, e_d_dis=extra_datasets_discard, 
-    num_crops_per_dataset=num_crops_per_dataset, make_crops=make_crops, 
-    crop_shape=crop_shape, check_crop=check_crop, 
+    make_crops=make_crops, crop_shape=crop_shape, check_crop=check_crop, 
     check_crop_path=check_crop_path)
 
 # Normalize the data
@@ -526,13 +414,14 @@ print("###########################\n"
       "#  EXTRA DATA GENERATION  #\n"
       "###########################\n")
 
-# Calculate the steps_per_epoch value to train in case
+# Calculate the steps_per_epoch value to train in case we need to increase the 
+# train data samples by multiplying the number of images with 'duplicate_train'
 if duplicate_train != 0:
     steps_per_epoch_value = int((duplicate_train*X_train.shape[0])/batch_size_value)
     print("Data doubled by {} ; Steps per epoch = {}".format(duplicate_train,
           steps_per_epoch_value))
 else:
-    steps_per_epoch_value = X_train.shape[0]
+    steps_per_epoch_value = int(X_train.shape[0]/batch_size_value)
 
 # Add extra train data generated with DA
 if extra_train_data != 0:
@@ -609,13 +498,13 @@ else:
         vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,
         median_blur=median_blur, gamma_contrast=gamma_contrast,
         random_crops_in_DA=random_crops_in_DA, prob_map=probability_map, 
-        train_prob=train_prob, softmax_out=softmax_out,
+        train_prob=train_prob, n_classes=n_classes,
         extra_data_factor=duplicate_train)
     data_gen_val_args = dict(
         X=X_val, Y=Y_val, batch_size=batch_size_value, 
         shape=(img_height,img_width,img_channels), 
         shuffle=shuffle_val_data_each_epoch, da=False, 
-        random_crops_in_DA=random_crops_in_DA, val=True, softmax_out=softmax_out)
+        random_crops_in_DA=random_crops_in_DA, val=True, n_classes=n_classes)
     train_generator = ImageDataGenerator(**data_gen_args)                       
     val_generator = ImageDataGenerator(**data_gen_val_args)                     
                                                                                 
@@ -635,22 +524,15 @@ model = U_Net_2D([img_height, img_width, img_channels], activation=activation,
                  drop_values=dropout_values, spatial_dropout=spatial_dropout,
                  batch_norm=batch_normalization, k_init=kernel_init,
                  loss_type=loss_type, optimizer=optimizer, 
-                 lr=learning_rate_value, fine_tunning=fine_tunning)
+                 lr=learning_rate_value, n_classes=n_classes)
 
 # Check the network created
 model.summary(line_length=150)
 os.makedirs(char_dir, exist_ok=True)
 model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
-#plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
+plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
-    if fine_tunning:                                                    
-        h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
-                             + '_' + args.run_id + '.h5')     
-        print("Fine-tunning: loading model weights from h5_file: {}"
-              .format(h5_file))
-        model.load_weights(h5_file)                                             
-   
     if use_LRFinder:
         print("Training just for 10 epochs . . .")
         results = model.fit(x=train_generator, validation_data=val_generator,
@@ -679,8 +561,8 @@ print("################################\n"
 # Prepare test data for its use
 Y_test /= 255 if np.max(Y_test) > 2 else Y_test
 X_test /= 255 if np.max(X_test) > 2 else X_test
-if softmax_out:
-    Y_test_one_hot = np.zeros(Y_test.shape[:3] + (2,))
+if n_classes > 1:
+    Y_test_one_hot = np.zeros(Y_test.shape[:3] + (n_classes,))
     for i in range(Y_test.shape[0]):
         Y_test_one_hot[i] = np.asarray(img_to_onehot_encoding(Y_test[i]))
     Y_test = Y_test_one_hot
@@ -703,9 +585,10 @@ jac_per_crop = score_per_crop[1]
 print("Making the predictions on test data . . .")
 preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
-if softmax_out:
-    preds_test = np.expand_dims(preds_test[...,1], -1)
-    Y_test = np.expand_dims(Y_test[...,1], -1)
+# Take only the foreground class                                                
+if n_classes > 1:                                                               
+    preds_test = np.expand_dims(preds_test[...,1], -1)                          
+    Y_test = np.expand_dims(Y_test[...,1], -1) 
 
 
 print("########################################\n"
@@ -713,7 +596,7 @@ print("########################################\n"
       "########################################\n")
 
 # Merge crops
-if make_crops or (random_crops_in_DA and test_ov_crops == 1):
+if make_crops:
     h_num = math.ceil(orig_test_shape[1]/preds_test.shape[1])
     v_num = math.ceil(orig_test_shape[2]/preds_test.shape[2])
 
@@ -729,7 +612,7 @@ if make_crops or (random_crops_in_DA and test_ov_crops == 1):
     Y_test = merge_data_without_overlap(
         Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
         out_shape=[h_num, v_num], grid=False)
-elif random_crops_in_DA and test_ov_crops > 1:
+elif random_crops_in_DA:
     print("Reconstruct X_test . . .")
     X_test = merge_data_with_overlap(
         X_test, orig_test_shape, crop_shape[0], test_ov_crops)
@@ -758,10 +641,12 @@ print("~~~~ Smooth (per image) ~~~~")
 Y_test_smooth = np.zeros(X_test.shape, dtype=np.float32)
 for i in tqdm(range(X_test.shape[0])):
     predictions_smooth = predict_img_with_smooth_windowing(
-        X_test[i], window_size=crop_shape[0], subdivisions=2, nb_classes=1,
-        pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        softmax=softmax_out)
-    Y_test_smooth[i] = predictions_smooth
+        X_test[i], window_size=crop_shape[0], subdivisions=2, n_classes=n_classes,
+        pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
+    if n_classes > 1:
+        Y_test_smooth[i] = np.expand_dims(predictions_smooth[...,1], axis=-1)
+    else:
+        Y_test_smooth[i] = predictions_smooth
 
 print("Saving smooth predicted images . . .")
 save_img(Y=Y_test_smooth, mask_dir=smo_no_bin_dir_per_image,
@@ -822,11 +707,13 @@ Y_test_50ov = np.zeros(X_test.shape, dtype=np.float32)
 for i in tqdm(range(X_test.shape[0])):
     predictions_smooth = predict_img_with_overlap(
         X_test[i], window_size=crop_shape[0], subdivisions=2,
-        nb_classes=1, pred_func=(
-            lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        softmax=softmax_out)
-    Y_test_50ov[i] = predictions_smooth
-
+        n_classes=n_classes, pred_func=(
+            lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
+    if n_classes > 1:
+        Y_test_50ov[i] = np.expand_dims(predictions_smooth[...,1], axis=-1)
+    else:
+        Y_test_50ov[i] = predictions_smooth
+    
 print("Saving 50% overlap predicted images . . .")
 save_img(Y=(Y_test_50ov > 0.5).astype(np.float32),
          mask_dir=result_bin_dir_50ov, prefix="test_out_bin_50ov")
@@ -865,7 +752,7 @@ print("########################\n"
 print("Making the predictions on test data . . .")
 preds_test_full = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
-if softmax_out:
+if n_classes > 1:
     preds_test_full = np.expand_dims(preds_test_full[...,1], -1)
 
 print("Saving predicted images . . .")
@@ -888,8 +775,11 @@ Y_test_smooth = np.zeros(X_test.shape, dtype=(np.float32))
 for i in tqdm(range(X_test.shape[0])):
     predictions_smooth = ensemble8_2d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        softmax_output=softmax_out)
-    Y_test_smooth[i] = predictions_smooth
+        n_classes=n_classes)
+    if n_classes > 1:
+        Y_test_smooth[i] = np.expand_dims(predictions_smooth[...,1], axis=-1)
+    else:
+        Y_test_smooth[i] = predictions_smooth
 
 print("Saving smooth predicted images . . .")
 save_img(Y=Y_test_smooth, mask_dir=smo_no_bin_dir_full,
@@ -987,10 +877,10 @@ if load_previous_weights == False:
     print("Epoch number: {}".format(len(results.history['val_loss'])))
     print("Train time (s): {}".format(np.sum(time_callback.times)))
     print("Train loss: {}".format(np.min(results.history['loss'])))
-    print("Train IoU: {}".format(np.max(results.history['jaccard_index'])))
+    print("Train IoU: {}".format(np.max(results.history[metric])))
     print("Validation loss: {}".format(np.min(results.history['val_loss'])))
     print("Validation IoU: {}"
-          .format(np.max(results.history['val_jaccard_index'])))
+          .format(np.max(results.history['val_'+metric])))
 
 print("Test loss: {}".format(loss_per_crop))
 print("Test IoU (per crop): {}".format(jac_per_crop))
@@ -1041,8 +931,9 @@ if not load_previous_weights:
         or "_per_image" in name or "_full" in name):
             scores[name] = eval(name)
 
-    store_history(results, scores, time_callback, args.result_dir, job_identifier)
-    create_plots(results, job_identifier, char_dir)
+    store_history(results, scores, time_callback, args.result_dir, job_identifier, 
+                  metric=metric)
+    create_plots(results, job_identifier, char_dir, metric=metric)
 
 print("FINISHED JOB {} !!".format(job_identifier))
 
