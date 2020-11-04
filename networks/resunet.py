@@ -10,7 +10,7 @@ from metrics import binary_crossentropy_weighted, jaccard_index, \
 def ResUNet_2D(image_shape, activation='elu', k_init='he_normal',
                drop_values=[0.1,0.1,0.1,0.1,0.1], batch_norm=False, 
                feature_maps=[16,32,64,128,256], depth=4, loss_type="bce", 
-               optimizer="sgd", lr=0.001):
+               optimizer="sgd", lr=0.001, n_classes=1):
 
     """Create 2D Residual_U-Net.
 
@@ -50,6 +50,9 @@ def ResUNet_2D(image_shape, activation='elu', k_init='he_normal',
        lr : float, optional
            Learning rate value.
 
+       n_classes: int, optional                                                 
+           Number of classes.  
+
        Returns
        -------
        model : Keras model
@@ -85,7 +88,7 @@ def ResUNet_2D(image_shape, activation='elu', k_init='he_normal',
     x = level_block(inputs, depth, fm, 3, activation, k_init, drop_values, 
                     batch_norm, True)
 
-    outputs = Conv2D(1, (1, 1), activation='sigmoid') (x)
+    outputs = Conv2D(n_classes, (1, 1), activation='sigmoid') (x)
 
     model = Model(inputs=[inputs], outputs=[outputs])
 
