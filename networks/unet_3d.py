@@ -95,6 +95,7 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
                    kernel_initializer=k_init, padding='same') (x)
         x = BatchNormalization() (x) if batch_norm else x 
         x = Activation(activation) (x)
+
         if spatial_dropout and drop_values[i] > 0:
             x = SpatialDropout3D(drop_values[i]) (x)
         elif drop_values[i] > 0 and not spatial_dropout:
@@ -114,6 +115,7 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
                kernel_initializer=k_init, padding='same')(x)
     x = BatchNormalization() (x) if batch_norm else x
     x = Activation(activation) (x)
+
     if spatial_dropout and drop_values[depth] > 0:
         x = SpatialDropout3D(drop_values[depth]) (x)
     elif drop_values[depth] > 0 and not spatial_dropout:
@@ -128,14 +130,18 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
     for i in range(depth-1, -1, -1):
         x = Conv3DTranspose(feature_maps[i], (2, 2, 2), 
                             strides=(2, 2, 2), padding='same') (x)
+        x = concatenate([x, l[i]])
+
         x = Conv3D(feature_maps[i], (3, 3, 3), activation=None,
                    kernel_initializer=k_init, padding='same') (x)
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
+
         if spatial_dropout and drop_values[i] > 0:
             x = SpatialDropout3D(drop_values[i]) (x)
         elif drop_values[i] > 0 and not spatial_dropout:
             x = Dropout(drop_values[i]) (x)
+
         x = Conv3D(feature_maps[i], (3, 3, 3), activation=None,
                    kernel_initializer=k_init, padding='same') (x)
         x = BatchNormalization() (x) if batch_norm else x
