@@ -31,6 +31,7 @@ Some of state-of-the-art approaches have been reproduced and implemented to comp
    networks_unet_3d
    networks_resunet_3d
    networks_se_unet_3d
+   networks_vanilla_unet_3d
    networks_fcn
    networks_fc_densetnet103
    networks_multiresunet

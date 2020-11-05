@@ -14,6 +14,8 @@ def Vanilla_U_Net_3D(image_shape, activation='relu',
                      lr=0.001, n_classes=1):
     """Create Vanilla 3D U-Net.
 
+       Based on `U-Net 3D <https://arxiv.org/abs/1606.06650>`_.
+
        Parameters
        ----------
        image_shape : 3D tuple
@@ -56,7 +58,7 @@ def Vanilla_U_Net_3D(image_shape, activation='relu',
        Calling this function with its default parameters returns the following
        network:
 
-       .. image:: img/unet_3d.png
+       .. image:: img/vanilla_unet_3d.png
            :width: 100%
            :align: center
 
