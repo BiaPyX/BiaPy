@@ -1031,7 +1031,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0)):
     excess_z = int((vols_per_z*vol_shape[0]*overlap_z)-data.shape[0])           
     step_z = int(vol_shape[0]*overlap_z)-int(excess_z/(vols_per_z-1))           
     last_z = excess_z%(vols_per_z-1)
-
+    
     vols_per_x += 1 if overlap_x == 1 else 0
     vols_per_y += 1 if overlap_y == 1 else 0
     vols_per_z += 1 if overlap_z == 1 else 0
@@ -1041,10 +1041,12 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0)):
     last_z += int(excess_z/(vols_per_z-1)) if overlap_z != 1 else 0
 
     # Real overlap calculation for printing 
-    real_ov_x = (vol_shape[0]-step_x)/vol_shape[0]
-    real_ov_y = (vol_shape[1]-step_y)/vol_shape[1]
-    real_ov_z = (vol_shape[2]-step_z)/vol_shape[2]
-    print("Real overlapping: {}".format((real_ov_x,real_ov_y,real_ov_z)))
+    real_ov_x = (vol_shape[1]-step_x)/vol_shape[1]
+    real_ov_y = (vol_shape[2]-step_y)/vol_shape[2]
+    real_ov_z = (vol_shape[0]-step_z)/vol_shape[0]
+    print("Real overlapping (%): {}".format((real_ov_x,real_ov_y,real_ov_z)))
+    print("Real overlapping (pixels): {}".format((vol_shape[1]*real_ov_x,
+          vol_shape[2]*real_ov_y,vol_shape[0]*real_ov_z)))
 
     print("{},{},{} patches per x,y,z axis"
           .format((vols_per_x-1),(vols_per_y-1),(vols_per_z-1)))
@@ -1063,10 +1065,14 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0)):
                 d_z = 0 if (z*step_z+vol_shape[0]) < data.shape[0] else last_z
 
                 cropped_data[c] = \
-                    data[z*step_z-d_z:(z*step_z)+vol_shape[0]-d_z, x*step_x-d_x:x*step_x+vol_shape[1]-d_x, y*step_y-d_y:y*step_y+vol_shape[2]-d_y]
+                    data[z*step_z-d_z:(z*step_z)+vol_shape[0]-d_z,
+                         x*step_x-d_x:x*step_x+vol_shape[1]-d_x,
+                         y*step_y-d_y:y*step_y+vol_shape[2]-d_y]
                 if data_mask is not None:
                     cropped_data_mask[c] = \
-                        data_mask[z*step_z-d_z:(z*step_z)+vol_shape[0]-d_z, x*step_x-d_x:x*step_x+vol_shape[1]-d_x, y*step_y-d_y:y*step_y+vol_shape[2]-d_y]
+                        data_mask[z*step_z-d_z:(z*step_z)+vol_shape[0]-d_z,
+                                  x*step_x-d_x:x*step_x+vol_shape[1]-d_x,   
+                                  y*step_y-d_y:y*step_y+vol_shape[2]-d_y]
                 c += 1
 
     cropped_data = cropped_data.transpose(0,2,3,1,4)
@@ -1674,7 +1680,11 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False):
                                                                                 
            X_train, Y_train = crop_3D(X_train, (80, 80, 80, 1), data_mask=Y_train)
                                                                                 
-           # The function will print the shape of the generated arrays. In this example:
+           # The function will print the shape of the generated arrays and the data
+           # discarded on each axis ``(x,y,z)``, as use_rest is False 
+           #       [...]
+           #    Pixels dropped per dimension: (48,64,5)
+           #       [...]
            #     **** New data shape is: (216, 80, 80, 80, 1)
                                                                                 
 
@@ -1701,7 +1711,7 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False):
        be the best approach in all cases. In example 2, the amount of pixels along x
        and y axis are not to much, however, for the z axis, that amount is high
        considering that we only have about 165 slices. To notify the user, the method
-       also prints the number of zeros added per each axis as follows:
+       also prints the number of zeros added per each axis ``(x,y,z)`` as follows:
 
        ::
 
@@ -1710,14 +1720,12 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False):
           #     Zeros added per dimension: (32,16,75)
           #       [...]
           #     **** New data shape is: (390, 80, 80, 80, 1)
-
-       
     """
         
     print("### 3D-CROP ###")
     print("Cropping {} images into {} . . ."
           .format(data.shape, vol_shape))
-                                                                    
+
     if len(vol_shape) != 4:
         raise ValueError("'vol_shape' must be 4D int tuple")
     if data.ndim != 4:
@@ -1725,15 +1733,15 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False):
     if data_mask is not None:
         if data_mask.ndim != 4:                                              
             raise ValueError("data_mask must be a 4D Numpy array") 
-    if vol_shape[0] > data.shape[0]:
+    if vol_shape[0] > data.shape[1]:
         raise ValueError("'vol_shape[0]' {} greater than {}"
-                         .format(vol_shape[0], data.shape[0]))
-    if vol_shape[1] > data.shape[1]:
+                         .format(vol_shape[0], data.shape[1]))
+    if vol_shape[1] > data.shape[2]:
         raise ValueError("'vol_shape[1]' {} greater than {}"
-                         .format(vol_shape[1], data.shape[1]))
-    if vol_shape[2] > data.shape[2]:
+                         .format(vol_shape[1], data.shape[2]))
+    if vol_shape[2] > data.shape[0]:
         raise ValueError("'vol_shape[2]' {} greater than {}"
-                         .format(vol_shape[2], data.shape[2]))
+                         .format(vol_shape[2], data.shape[0]))
 
     # Calculate crops per axis                                      
     vols_per_x = math.ceil(data.shape[1]/vol_shape[0])
@@ -1750,8 +1758,15 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False):
     last_x = vols_per_x*vol_shape[0]-data.shape[1]
     last_y = vols_per_y*vol_shape[1]-data.shape[2]
     last_z = vols_per_z*vol_shape[2]-data.shape[0]
-    print("Zeros added per dimension: ({},{},{})"
-          .format(last_x,last_y,last_z))
+    if use_rest:
+        print("Zeros added per dimension: ({},{},{})"
+              .format(last_x,last_y,last_z))
+    else:
+        drop_x = 0 if last_x == 0 else vol_shape[0]-last_x
+        drop_y = 0 if last_y == 0 else vol_shape[1]-last_y
+        drop_z = 0 if last_z == 0 else vol_shape[2]-last_z
+        print("Pixels dropped per dimension: ({},{},{})"
+              .format(drop_x,drop_y,drop_z))
                                                                                 
     cropped_data = np.zeros((num_sub_volum, ) + vol_shape)
     if data_mask is not None:
@@ -1773,27 +1788,25 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False):
                 if d_y != 0 and not use_rest: break
                 if d_z != 0 and not use_rest: break
 
-                cropped_data[c,0:vol_shape[2]-d_z,
-                               0:vol_shape[0]-d_x,
-                               0:vol_shape[1]-d_y] = \
+                cropped_data[c,0:vol_shape[0]-d_x,
+                               0:vol_shape[1]-d_y,
+                               0:vol_shape[2]-d_z] = \
                     data[(z*vol_shape[2]):((z+1)*vol_shape[2])-d_z,
                          (x*vol_shape[0]):((x+1)*vol_shape[0])-d_x,
-                         (y*vol_shape[1]):((y+1)*vol_shape[1])-d_y]
+                         (y*vol_shape[1]):((y+1)*vol_shape[1])-d_y].transpose(1,2,0,3)
                 if data_mask is not None:
-                    cropped_data_mask[c,0:vol_shape[2]-d_z,                              
-                                        0:vol_shape[0]-d_x,                              
-                                        0:vol_shape[1]-d_y] = \
+                    cropped_data_mask[c,0:vol_shape[0]-d_x,                              
+                                        0:vol_shape[1]-d_y,
+                                        0:vol_shape[2]-d_z] = \
                         data_mask[(z*vol_shape[2]):((z+1)*vol_shape[2])-d_z,                 
                                   (x*vol_shape[0]):((x+1)*vol_shape[0])-d_x,                 
-                                  (y*vol_shape[1]):((y+1)*vol_shape[1])-d_y]
+                                  (y*vol_shape[1]):((y+1)*vol_shape[1])-d_y].transpose(1,2,0,3)
                 c += 1                                                                
 
-    cropped_data = cropped_data.transpose(0,2,3,1,4)
     print("**** New data shape is: {}".format(cropped_data.shape))
     print("### END 3D-CROP ###")
 
     if data_mask is not None:
-        cropped_data_mask = cropped_data_mask.transpose(0,2,3,1,4)
         return cropped_data, cropped_data_mask
     else:
         return cropped_data
