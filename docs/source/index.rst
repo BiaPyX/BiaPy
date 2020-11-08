@@ -35,6 +35,7 @@ Some of state-of-the-art approaches have been reproduced and implemented to comp
    networks_fcn
    networks_fc_densetnet103
    networks_multiresunet
+   networks_mnet
 
 
 .. toctree::

@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Search &mdash; EM Image Segmentation  documentation</title>
+  <title>MNet &mdash; EM Image Segmentation  documentation</title>
   
 
   
@@ -20,7 +20,6 @@
   
 
   
-    
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -35,9 +34,10 @@
     <script type="text/javascript" src="_static/js/theme.js"></script>
 
     
-    <script type="text/javascript" src="_static/searchtools.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
-    <link rel="search" title="Search" href="#" /> 
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Casser et al." href="casser.html" />
+    <link rel="prev" title="MultiResUNet" href="networks_multiresunet.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -64,7 +64,7 @@
 
           
 <div role="search">
-  <form id="rtd-search-form" class="wy-form" action="#" method="get">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
@@ -91,7 +91,7 @@
 <li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_se_unet_2d.html">SE+2D U-Net</a></li>
@@ -102,7 +102,7 @@
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">MNet</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
@@ -159,7 +159,7 @@
     
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
         
-      <li>Search</li>
+      <li>MNet</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -176,23 +176,45 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <noscript>
-  <div id="fallback" class="admonition warning">
-    <p class="last">
-      Please activate JavaScript to enable the search functionality.
-    </p>
-  </div>
-  </noscript>
+  <div class="section" id="module-sota_implementations.MNet_Fu_2018.MNet">
+<span id="mnet"></span><h1>MNet<a class="headerlink" href="#module-sota_implementations.MNet_Fu_2018.MNet" title="Permalink to this headline">¶</a></h1>
+<dl class="py function">
+<dt id="sota_implementations.MNet_Fu_2018.MNet.MNet">
+<code class="sig-prename descclassname">sota_implementations.MNet_Fu_2018.MNet.</code><code class="sig-name descname">MNet</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_shape</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/sota_implementations/MNet_Fu_2018/MNet.html#MNet"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sota_implementations.MNet_Fu_2018.MNet.MNet" title="Permalink to this definition">¶</a></dt>
+<dd><p>Code copied from <a class="reference external" href="https://github.com/HzFu/MNet_DeepCDR/blob/master/mnet_deep_cdr/Model_MNet.py">Model_MNet</a>.
+Made some minor changes to adapt the network to our specific case.</p>
+<p>Based on <a class="reference external" href="https://arxiv.org/abs/1801.00926">Joint Optic Disc and Cup Segmentation Based on Multi-label Deep Network and Polar Transformation</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>input_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Shape of input images.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – MNet network model.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code></p>
+</dd>
+</dl>
+<p>A visual representation of the network extracted from the original paper:</p>
+<a class="reference internal image-reference" href="_images/MNet.jpg"><img alt="_images/MNet.jpg" class="align-center" src="_images/MNet.jpg" style="width: 100%;" /></a>
+</dd></dl>
 
-  
-  <div id="search-results">
-  
-  </div>
+</div>
+
 
            </div>
            
           </div>
           <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="casser.html" class="btn btn-neutral float-right" title="Casser et al." accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="networks_multiresunet.html" class="btn btn-neutral float-left" title="MultiResUNet" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
   
 
   <hr/>
@@ -232,14 +254,7 @@
   
   
     
-  
-  <script type="text/javascript">
-    jQuery(function() { Search.loadIndex("searchindex.js"); });
-  </script>
-  
-  <script type="text/javascript" id="searchindexloader"></script>
    
-
 
 </body>
 </html>

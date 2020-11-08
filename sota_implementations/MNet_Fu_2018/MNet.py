@@ -5,14 +5,35 @@ from tensorflow.keras.layers import Input, concatenate, Conv2D, MaxPooling2D, \
 from tensorflow.keras.models import Model
 
 
-"""Code copied from `Model_MNet <https://github.com/HzFu/MNet_DeepCDR/blob/master/mnet_deep_cdr/Model_MNet.py>`_. 
-   Made some minor changes to adapt the network to our specific case. 
-"""
-
 # This code works if v2 is disabled, but fails if v2 is enabled.
 tf.compat.v1.enable_v2_behavior
 
 def MNet(input_shape):
+    """Code copied from `Model_MNet <https://github.com/HzFu/MNet_DeepCDR/blob/master/mnet_deep_cdr/Model_MNet.py>`_.
+       Made some minor changes to adapt the network to our specific case.
+ 
+       Based on `Joint Optic Disc and Cup Segmentation Based on Multi-label Deep Network and Polar Transformation <https://arxiv.org/abs/1801.00926>`_.
+
+       Parameters
+       ----------
+
+       input_shape : 3 int tuple
+           Shape of input images.
+
+       Returns
+       -------
+
+       model : Keras model
+           MNet network model.
+
+
+       A visual representation of the network extracted from the original paper:
+
+       .. image:: img/MNet.jpg
+           :width: 100%
+           :align: center
+    """
+
     img_input = Input(input_shape)
 
     scale_img_2 = AveragePooling2D(pool_size=(2, 2))(img_input)

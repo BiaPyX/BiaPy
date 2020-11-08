@@ -98,12 +98,15 @@
 <li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
@@ -880,7 +883,11 @@ subvolume with zeros. If <code class="docutils literal notranslate"><span class=
 
 <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">crop_3D</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_train</span><span class="p">)</span>
 
-<span class="c1"># The function will print the shape of the generated arrays. In this example:</span>
+<span class="c1"># The function will print the shape of the generated arrays and the data</span>
+<span class="c1"># discarded on each axis ``(x,y,z)``, as use_rest is False</span>
+<span class="c1">#       [...]</span>
+<span class="c1">#    Pixels dropped per dimension: (48,64,5)</span>
+<span class="c1">#       [...]</span>
 <span class="c1">#     **** New data shape is: (216, 80, 80, 80, 1)</span>
 
 <span class="c1"># EXAMPLE 2</span>
@@ -901,7 +908,7 @@ created.</p>
 be the best approach in all cases. In example 2, the amount of pixels along x
 and y axis are not to much, however, for the z axis, that amount is high
 considering that we only have about 165 slices. To notify the user, the method
-also prints the number of zeros added per each axis as follows:</p>
+also prints the number of zeros added per each axis <code class="docutils literal notranslate"><span class="pre">(x,y,z)</span></code> as follows:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">crop_3D</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">use_rest</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="c1">#       [...]</span>
 <span class="c1">#     Zeros added per dimension: (32,16,75)</span>
