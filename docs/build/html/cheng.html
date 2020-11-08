@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Search &mdash; EM Image Segmentation  documentation</title>
+  <title>Cheng et al. &mdash; EM Image Segmentation  documentation</title>
   
 
   
@@ -20,7 +20,6 @@
   
 
   
-    
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -35,9 +34,10 @@
     <script type="text/javascript" src="_static/js/theme.js"></script>
 
     
-    <script type="text/javascript" src="_static/searchtools.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
-    <link rel="search" title="Search" href="#" /> 
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Oztel et al." href="oztel.html" />
+    <link rel="prev" title="Casser et al." href="casser.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -64,7 +64,7 @@
 
           
 <div role="search">
-  <form id="rtd-search-form" class="wy-form" action="#" method="get">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
@@ -105,9 +105,9 @@
 <li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Cheng et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
@@ -160,7 +160,7 @@
     
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
         
-      <li>Search</li>
+      <li>Cheng et al.</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -177,23 +177,40 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <noscript>
-  <div id="fallback" class="admonition warning">
-    <p class="last">
-      Please activate JavaScript to enable the search functionality.
-    </p>
-  </div>
-  </noscript>
+  <div class="section" id="cheng-et-al">
+<h1>Cheng et al.<a class="headerlink" href="#cheng-et-al" title="Permalink to this headline">¶</a></h1>
+<p>As part of our paper we try to reproduce other state-of-the-art approaches for EM semantic segmentation
+that do not provide code. In this case the following paper has been reproduced:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>H. Cheng and A. Varshney, <span class="s2">&quot;Volume segmentation using convolutional neural networks with limited</span>
+<span class="s2">training data&quot;</span>, <span class="m">2017</span> IEEE International Conference on Image Processing <span class="o">(</span>ICIP<span class="o">)</span>, Beijing, <span class="m">2017</span>,
+pp. <span class="m">590</span>-594.
+</pre></div>
+</div>
+<p><a class="reference external" href="https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=8296349&amp;casa_token=5b69S99XYcYAAAAA:1-kW8nB6nLKm8Fc0adC-i2OFA9CIrW-DD2dcjcIJGcDfzKYfxMv4j2-5COjyyQJ6vIjE818clA&amp;tag=1">[Paper]</a> <a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/cheng_2017">[Our code]</a></p>
+<p>We have prepared three templates:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/cheng_2017/cheng_2D_template_V0.py">cheng_2D_template_V0.py</a> : exact parameters and training workflow as described in the paper.</p></li>
+<li><p><a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/cheng_2017/cheng_2D_template_V1.py">cheng_2D_template_V1.py</a> : changes made respect to V0 with which we have achieved better results.</p></li>
+<li><p><a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/cheng_2017/cheng_3D_template_V0.py">cheng_3D_template_V0.py</a> : exact parameters and training workflow as described in the paper.</p></li>
+</ul>
+</div></blockquote>
+</div>
 
-  
-  <div id="search-results">
-  
-  </div>
 
            </div>
            
           </div>
           <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="oztel.html" class="btn btn-neutral float-right" title="Oztel et al." accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="casser.html" class="btn btn-neutral float-left" title="Casser et al." accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
   
 
   <hr/>
@@ -233,14 +250,7 @@
   
   
     
-  
-  <script type="text/javascript">
-    jQuery(function() { Search.loadIndex("searchindex.js"); });
-  </script>
-  
-  <script type="text/javascript" id="searchindexloader"></script>
    
-
 
 </body>
 </html>
