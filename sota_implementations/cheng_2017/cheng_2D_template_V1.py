@@ -189,7 +189,7 @@ gamma_contrast = False
 # Rotation of 90, 180 or 270
 rotation90 = False
 # Range of rotation. Set to 0 to disable it
-rotation_range = 0
+rotation_range = 180
 # To make vertical flips 
 vflips = True
 # To make horizontal flips
@@ -199,7 +199,7 @@ hflips = True
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when "random_crops_in_DA"
 # is made, as more original train data can be cover
-duplicate_train = 0
+duplicate_train = 12
 # Extra number of images to add to the train data. Applied after duplicate_train 
 extra_train_data = 0
 
@@ -207,7 +207,7 @@ extra_train_data = 0
 ### Load previously generated model weigths
 # To activate the load of a previous training weigths instead of train 
 # the network again
-load_previous_weights = False
+load_previous_weights = True
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
 # Prefix of the files where the weights are stored/loaded from
@@ -226,13 +226,13 @@ loss_type = "bce"
 # Batch size value
 batch_size_value = 24
 # Optimizer to use. Possible values: "sgd" or "adam"
-optimizer = "sgd"
+optimizer = "adam"
 # Learning rate used by the optimization method
-learning_rate_value = 0.05
+learning_rate_value = 0.0001
 # Number of epochs to train the network
-epochs_value = 4000
+epochs_value = 400
 # Number of epochs to stop the training process after no improvement
-patience = 200
+patience = 100
 # If weights on data are going to be applied. To true when loss_type is 'w_bce' 
 weights_on_data = True if loss_type == "w_bce" else False
 
@@ -241,7 +241,7 @@ weights_on_data = True if loss_type == "w_bce" else False
 # Number of channels in the first initial layer of the network
 num_init_channels = 16
 # Dropout value
-dropout_value = 0.1
+dropout_value = 0
 # Number of classes. To generate data with more than 1 channel custom DA need to
 # be selected. It can be 1 or 2.                                                                   
 n_classes = 2
@@ -355,13 +355,6 @@ checkpointer = ModelCheckpoint(
 if use_LRFinder:
     lr_finder = LRFinder(min_lr=10e-9, max_lr=10e-3, lrfinder_dir=lrfinder_dir)
     os.makedirs(lrfinder_dir, exist_ok=True)
-# Define lr decay as in the paper
-def scheduler(epoch, lr):
-    if epoch == 2000 or epoch == 3000:
-        return lr*0.1
-    else:
-        return lr
-lr_callback = tf.keras.callbacks.LearningRateScheduler(scheduler, verbose=1)
 
 
 print("###################\n"
@@ -539,7 +532,7 @@ if load_previous_weights == False:
         results = model.fit(train_generator, validation_data=val_generator,
             validation_steps=math.ceil(X_val.shape[0]/batch_size_value),
             steps_per_epoch=steps_per_epoch_value, epochs=epochs_value,
-            callbacks=[earlystopper, checkpointer, time_callback, lr_callback])
+            callbacks=[earlystopper, checkpointer, time_callback])
 else:
     h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
                          + '_' + str(args.run_id) + '.h5')
