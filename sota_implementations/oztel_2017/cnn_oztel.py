@@ -27,6 +27,13 @@ def cnn_oztel(image_shape, activation='relu', lr=0.1, optimizer="sgd"):
        -------
        model : Keras model
            Model containing the CNN created.
+
+
+       Here is a picture of the network extracted from the original paper:
+                                                                                
+       .. image:: img/oztel_network.png
+           :width: 100%                                                         
+           :align: center
     """
 
     inputs = Input(image_shape)
@@ -68,7 +75,10 @@ def cnn_oztel(image_shape, activation='relu', lr=0.1, optimizer="sgd"):
 def cnn_oztel_test(model, image_shape, activation='relu', lr=0.1, 
                    optimizer="sgd"):
     """Create the CNN proposed by Oztel et. al for testing, where the full image
-       will be fed to the network.
+       is fed to the network. It is the same as :meth:`cnn_oztel` but changing
+       the last layers to match a semantic segmentation problem and not
+       classification. An 8x upsampling is made, as described by the authors,to
+       match the original image shape.  
 
        Parameters
        ----------

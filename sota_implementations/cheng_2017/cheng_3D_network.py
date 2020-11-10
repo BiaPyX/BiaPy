@@ -10,37 +10,52 @@ from tensorflow.keras.layers import PReLU
 from tensorflow.keras.regularizers import l2
 from metrics import jaccard_index_softmax
 from loss import jaccard_loss_cheng2017
-from StochasticDownsamplig3D import StochasticDownsampling3D
+from StochasticDownsampling3D import StochasticDownsampling3D
 
 
 def asymmetric_3D_network(image_shape, numInitChannels=16, fixed_dropout=0.0, 
                           optimizer="sgd", lr=0.001, t_downsmp_layer=4):
-    """Create the assymetric network proposed in:
-        https://www.cs.umd.edu/~varshney/papers/Cheng_VolumeSegmentationUsingConvolutionalNeuralNetworksWithLimitedTrainingData_ICIP2017.pdf
-
-       Args:
-            image_shape (array of 4 int): dimensions of the input image.
-
-            numInitChannels (int, optional): number of convolution channels to
-            start with. In each downsampling/upsampling the number of filters
-            are multiplied/divided by 2.
-
-            fixed_dropout (float, optional): dropout value to be fixed. If no
-            value is provided the default behaviour will be to select a
-            piramidal value stating from 0.1 and reaching 0.3 value.
-
-            optimizer (str, optional): optimizer used to minimize the loss
-            function. Posible options: 'sgd' or 'adam'.
-
-            lr (float, optional): learning rate value.
-        
-            t_downsmp_layer (int, optional): degree of randomness in the sampling 
-            pattern. Find more information about that on the paper. 
-
-       Returns:
-            model (Keras model): model containing the U-Net created.
-    """
-
+    """Create the assymetric network proposed in Cheng et al.                   
+                                                                                
+       Parameters                                                               
+       ----------                                                               
+       image_shape : array of 3 int                                             
+           Dimensions of the input image.                                       
+                                                                                
+       numInitChannels : int, optional                                          
+           Number of convolution channels to start with. In each                
+           downsampling/upsampling the number of filters are multiplied/divided 
+           by ``2``.                                                            
+                                                                                
+       fixed_dropout : float, optional                                          
+           Dropout value to be fixed. If no value is provided the default       
+           behaviour will be to select a piramidal value stating from 0.1 and   
+           reaching 0.3 value.                                                  
+                                                                                
+       optimizer : str, optional                                                
+           Optimizer used to minimize the loss function. Posible options: ``sgd``
+           or ``adam``.                                                         
+                                                                                
+       lr : float, optional                                                     
+           Learning rate value.                                                 
+                                                                                
+       t_downsmp_layer : int, optional                                          
+           Degree of randomness in the sampling pattern which corresponds to the
+           ``t`` value defined in the paper for the proposed stochastic         
+           downsampling layer.                                                  
+                                                                                
+       Returns                                                                  
+       -------                                                                  
+       model : Keras model                                                      
+          Asymmetric network proposed in Cheng et al. model.                    
+                                                                                
+                                                                                
+       Here is a picture of the network extracted from the original paper:      
+                                                                                
+       .. image:: img/cheng_network.png                                         
+           :width: 90%                                                          
+           :align: center                                                       
+    """ 
     inputs = Input(image_shape)
         
     # Input block
@@ -130,67 +145,108 @@ def pad_depth(x, desired_channels):
 
 def encode_block(inp_layer, channels, t_downsmp_layer=4, downsample=False, 
                  fixed_dropout=0.1):
-        
-        if downsample == True:
-            shortcut_padded = StochasticDownsampling3D() (inp_layer, t_downsmp_layer)
-            shortcut_padded = Conv3D(channels, (1, 1, 1), activation=None, 
-                                     kernel_regularizer=l2(0.01)) (shortcut_padded)
-        else:
-            shortcut_padded = Lambda(
-                pad_depth, arguments={'desired_channels':channels})(inp_layer)
+    """Encode block defined in Cheng et al.                                     
+                                                                                
+       Parameters                                                               
+       ----------                                                               
+       inp_layer : Keras layer                                                  
+           Input layer.                                                         
+                                                                                
+       channels : int, optional                                                 
+           Feature maps to define in Conv layers.                               
+                                                                                
+       t_downsmp_layer : int, optional                                          
+           ``t`` value defined in the paper for the proposed stochastic         
+           downsampling layer.                                                  
+                                                                                
+       downsample : bool, optional                                              
+           To make a downsampling. Blue blocks in the encoding part.            
+                                                                                
+       fixed_dropout : float, optional                                          
+           Dropout value.                                                       
+                                                                                
+       Returns                                                                  
+       -------                                                                  
+       out : Keras layer                                                        
+           Last layer of the block.                                             
+    """ 
+    if downsample == True:
+        shortcut_padded = StochasticDownsampling3D() (inp_layer, t_downsmp_layer)
+        shortcut_padded = Conv3D(channels, (1, 1, 1), activation=None, 
+                                 kernel_regularizer=l2(0.01)) (shortcut_padded)
+    else:
+        shortcut_padded = Lambda(
+            pad_depth, arguments={'desired_channels':channels})(inp_layer)
    
-        x = BatchNormalization()(inp_layer)
-        x = PReLU(shared_axes=[1, 2, 3]) (x)
-        if downsample == True:
-            r = 1 if channels%3 > 0 else 0
-            c1 = Conv3D(int(channels/3)+r, (1, 1, 3), activation=None, 
-                        strides=(2, 2, 2), kernel_initializer='he_normal', 
-                        padding='same', kernel_regularizer=l2(0.01)) (x)
-            r = 1 if channels%3 > 1 else 0
-            c2 = Conv3D(int(channels/3)+r, (1, 3, 1), activation=None, 
-                        strides=(2, 2, 2), kernel_initializer='he_normal', 
-                        padding='same', kernel_regularizer=l2(0.01)) (x)
-            c3 = Conv3D(int(channels/3), (3, 1, 1), activation=None, 
-                        strides=(2, 2, 2), kernel_initializer='he_normal', 
-                        padding='same', kernel_regularizer=l2(0.01)) (x)
-            x = concatenate([c1,c2,c3])
-        else:
-            r = 1 if channels%3 > 0 else 0
-            c1 = Conv3D(int(channels/3)+r, (1, 1, 3), activation=None,
-                        kernel_initializer='he_normal', padding='same', 
-                        kernel_regularizer=l2(0.01)) (x)
-            r = 1 if channels%3 > 1 else 0
-            c2 = Conv3D(int(channels/3)+r, (1, 3, 1), activation=None,
-                        kernel_initializer='he_normal', padding='same', 
-                        kernel_regularizer=l2(0.01)) (x)
-            c3 = Conv3D(int(channels/3), (3, 1, 1), activation=None,
-                        kernel_initializer='he_normal', padding='same', 
-                        kernel_regularizer=l2(0.01)) (x)
-            x = concatenate([c1,c2,c3])
-        
-        x = Dropout(fixed_dropout)(x)
-        x = BatchNormalization()(x)
-        x = PReLU(shared_axes=[1, 2, 3]) (x)
-
+    x = BatchNormalization()(inp_layer)
+    x = PReLU(shared_axes=[1, 2, 3]) (x)
+    if downsample == True:
+        r = 1 if channels%3 > 0 else 0
+        c1 = Conv3D(int(channels/3)+r, (1, 1, 3), activation=None, 
+                    strides=(2, 2, 2), kernel_initializer='he_normal', 
+                    padding='same', kernel_regularizer=l2(0.01)) (x)
+        r = 1 if channels%3 > 1 else 0
+        c2 = Conv3D(int(channels/3)+r, (1, 3, 1), activation=None, 
+                    strides=(2, 2, 2), kernel_initializer='he_normal', 
+                    padding='same', kernel_regularizer=l2(0.01)) (x)
+        c3 = Conv3D(int(channels/3), (3, 1, 1), activation=None, 
+                    strides=(2, 2, 2), kernel_initializer='he_normal', 
+                    padding='same', kernel_regularizer=l2(0.01)) (x)
+        x = concatenate([c1,c2,c3])
+    else:
         r = 1 if channels%3 > 0 else 0
         c1 = Conv3D(int(channels/3)+r, (1, 1, 3), activation=None,
-                    kernel_initializer='he_normal', padding='same',
+                    kernel_initializer='he_normal', padding='same', 
                     kernel_regularizer=l2(0.01)) (x)
         r = 1 if channels%3 > 1 else 0
         c2 = Conv3D(int(channels/3)+r, (1, 3, 1), activation=None,
-                    kernel_initializer='he_normal', padding='same',
+                    kernel_initializer='he_normal', padding='same', 
                     kernel_regularizer=l2(0.01)) (x)
         c3 = Conv3D(int(channels/3), (3, 1, 1), activation=None,
-                    kernel_initializer='he_normal', padding='same',
+                    kernel_initializer='he_normal', padding='same', 
                     kernel_regularizer=l2(0.01)) (x)
         x = concatenate([c1,c2,c3])
+    
+    x = Dropout(fixed_dropout)(x)
+    x = BatchNormalization()(x)
+    x = PReLU(shared_axes=[1, 2, 3]) (x)
 
-        x = Add()([shortcut_padded, x])
-        return x
+    r = 1 if channels%3 > 0 else 0
+    c1 = Conv3D(int(channels/3)+r, (1, 1, 3), activation=None,
+                kernel_initializer='he_normal', padding='same',
+                kernel_regularizer=l2(0.01)) (x)
+    r = 1 if channels%3 > 1 else 0
+    c2 = Conv3D(int(channels/3)+r, (1, 3, 1), activation=None,
+                kernel_initializer='he_normal', padding='same',
+                kernel_regularizer=l2(0.01)) (x)
+    c3 = Conv3D(int(channels/3), (3, 1, 1), activation=None,
+                kernel_initializer='he_normal', padding='same',
+                kernel_regularizer=l2(0.01)) (x)
+    x = concatenate([c1,c2,c3])
+
+    x = Add()([shortcut_padded, x])
+    return x
 
 
 def decode_block(inp_layer, channels, upsample=False):
-       
+    """Encode block defined in Cheng et al.                                     
+                                                                                
+       Parameters                                                               
+       ----------                                                               
+       inp_layer : Keras layer                                                  
+           Input layer.                                                         
+                                                                                
+       channels : int, optional                                                 
+           Feature maps to define in Conv layers.                               
+                                                                                
+       upsample : bool, optional                                                
+           To make an upsampling. Blue blocks in the decoding part.             
+                                                                                
+       Returns                                                                  
+       -------                                                                  
+       out : Keras layer                                                        
+           Last layer of the block.                                             
+    """   
     if upsample == True:    
         x = Conv3DTranspose(channels, (3, 3, 3), activation=None, 
                             strides=(2, 2, 2), padding='same',

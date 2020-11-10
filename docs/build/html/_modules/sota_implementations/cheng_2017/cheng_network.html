@@ -1,0 +1,490 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>sota_implementations.cheng_2017.cheng_network &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run.html">How to run</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../data_manipulation.html">Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../grad_cam.html">Grad-CAM</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Networks</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_unet.html">2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_resunet.html">2D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_se_unet_2d.html">SE+2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_unet_3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_resunet_3d.html">3D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_fcn.html">FCN</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_mnet.html">MNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Reproduced methods</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../casser.html">Casser et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../cheng.html">Cheng et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../oztel.html">Oztel et al.</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Auxiliary code</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../callbacks.html">Callbacks</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>sota_implementations.cheng_2017.cheng_network</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for sota_implementations.cheng_2017.cheng_network</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras</span> <span class="kn">import</span> <span class="n">backend</span> <span class="k">as</span> <span class="n">K</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras.models</span> <span class="kn">import</span> <span class="n">Model</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras.layers</span> <span class="kn">import</span> <span class="n">Input</span><span class="p">,</span> <span class="n">BatchNormalization</span><span class="p">,</span> <span class="n">Dropout</span><span class="p">,</span> <span class="n">Lambda</span><span class="p">,</span>\
+                                    <span class="n">SpatialDropout2D</span><span class="p">,</span> <span class="n">Conv2D</span><span class="p">,</span> <span class="n">Conv2DTranspose</span><span class="p">,</span> \
+                                    <span class="n">MaxPooling2D</span><span class="p">,</span> <span class="n">concatenate</span><span class="p">,</span> <span class="n">Add</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras.layers</span> <span class="kn">import</span> <span class="n">PReLU</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras.regularizers</span> <span class="kn">import</span> <span class="n">l2</span>
+<span class="kn">from</span> <span class="nn">metrics</span> <span class="kn">import</span> <span class="n">jaccard_index_softmax</span>
+<span class="kn">from</span> <span class="nn">loss</span> <span class="kn">import</span> <span class="n">jaccard_loss_cheng2017</span>
+<span class="kn">from</span> <span class="nn">StochasticDownsampling2D</span> <span class="kn">import</span> <span class="n">StochasticDownsampling2D</span>
+
+
+<div class="viewcode-block" id="asymmetric_network"><a class="viewcode-back" href="../../../cheng_network.html#sota_implementations.cheng_2017.cheng_network.asymmetric_network">[docs]</a><span class="k">def</span> <span class="nf">asymmetric_network</span><span class="p">(</span><span class="n">image_shape</span><span class="p">,</span> <span class="n">numInitChannels</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">fixed_dropout</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> 
+                       <span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;sgd&quot;</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">t_downsmp_layer</span><span class="o">=</span><span class="mi">4</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create the assymetric network proposed in Cheng et al.</span>
+
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       image_shape : array of 3 int</span>
+<span class="sd">           Dimensions of the input image.</span>
+
+<span class="sd">       numInitChannels : int, optional</span>
+<span class="sd">           Number of convolution channels to start with. In each</span>
+<span class="sd">           downsampling/upsampling the number of filters are multiplied/divided </span>
+<span class="sd">           by ``2``.</span>
+
+<span class="sd">       fixed_dropout : float, optional</span>
+<span class="sd">           Dropout value to be fixed. If no value is provided the default</span>
+<span class="sd">           behaviour will be to select a piramidal value stating from 0.1 and</span>
+<span class="sd">           reaching 0.3 value.</span>
+
+<span class="sd">       optimizer : str, optional</span>
+<span class="sd">           Optimizer used to minimize the loss function. Posible options: ``sgd``</span>
+<span class="sd">           or ``adam``.</span>
+
+<span class="sd">       lr : float, optional</span>
+<span class="sd">           Learning rate value.</span>
+<span class="sd">        </span>
+<span class="sd">       t_downsmp_layer : int, optional</span>
+<span class="sd">           Degree of randomness in the sampling pattern which corresponds to the</span>
+<span class="sd">           ``t`` value defined in the paper for the proposed stochastic </span>
+<span class="sd">           downsampling layer. </span>
+
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       model : Keras model</span>
+<span class="sd">          Asymmetric network proposed in Cheng et al. model.</span>
+
+
+<span class="sd">       Here is a picture of the network extracted from the original paper:</span>
+<span class="sd">                                                                                </span>
+<span class="sd">       .. image:: img/cheng_network.png                                         </span>
+<span class="sd">           :width: 90%                                                         </span>
+<span class="sd">           :align: center</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">dinamic_dim</span> <span class="o">=</span> <span class="p">(</span><span class="kc">None</span><span class="p">,)</span><span class="o">*</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">image_shape</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+    <span class="n">inputs</span> <span class="o">=</span> <span class="n">Input</span><span class="p">(</span><span class="n">dinamic_dim</span><span class="p">)</span>
+        
+    <span class="c1"># Input block</span>
+    <span class="n">channels</span> <span class="o">=</span> <span class="n">numInitChannels</span>
+    <span class="n">c1</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">channels</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">strides</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+                <span class="n">kernel_initializer</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span>
+                <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))</span> <span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+    <span class="n">m1</span> <span class="o">=</span> <span class="n">MaxPooling2D</span><span class="p">(</span><span class="n">pool_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))(</span><span class="n">inputs</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">concatenate</span><span class="p">([</span><span class="n">c1</span><span class="p">,</span><span class="n">m1</span><span class="p">])</span>
+       
+    <span class="c1"># First encode block sequence</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">):</span>
+        <span class="n">channels</span> <span class="o">+=</span> <span class="mi">8</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">encode_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">channels</span><span class="p">,</span> <span class="n">t_downsmp_layer</span><span class="o">=</span><span class="n">t_downsmp_layer</span><span class="p">,</span> 
+                         <span class="n">fixed_dropout</span><span class="o">=</span><span class="n">fixed_dropout</span><span class="p">)</span>
+
+    <span class="c1"># 1st downsample block</span>
+    <span class="n">channels</span> <span class="o">+=</span> <span class="mi">8</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">encode_block</span><span class="p">(</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">channels</span><span class="p">,</span> <span class="n">downsample</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">t_downsmp_layer</span><span class="o">=</span><span class="n">t_downsmp_layer</span><span class="p">,</span> 
+        <span class="n">fixed_dropout</span><span class="o">=</span><span class="n">fixed_dropout</span><span class="p">)</span>
+
+    <span class="c1"># Second encode block sequence</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+        <span class="n">channels</span> <span class="o">+=</span> <span class="mi">8</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">encode_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">channels</span><span class="p">,</span> <span class="n">t_downsmp_layer</span><span class="o">=</span><span class="n">t_downsmp_layer</span><span class="p">,</span>
+                         <span class="n">fixed_dropout</span><span class="o">=</span><span class="n">fixed_dropout</span><span class="p">)</span>
+
+    <span class="c1"># 2nd downsample block</span>
+    <span class="n">channels</span> <span class="o">+=</span> <span class="mi">8</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">encode_block</span><span class="p">(</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">channels</span><span class="p">,</span> <span class="n">downsample</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">t_downsmp_layer</span><span class="o">=</span><span class="n">t_downsmp_layer</span><span class="p">,</span>
+        <span class="n">fixed_dropout</span><span class="o">=</span><span class="n">fixed_dropout</span><span class="p">)</span>
+    
+    <span class="c1"># Third encode block sequence</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">6</span><span class="p">):</span>
+        <span class="n">channels</span> <span class="o">+=</span> <span class="mi">8</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">encode_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">channels</span><span class="p">,</span> <span class="n">t_downsmp_layer</span><span class="o">=</span><span class="n">t_downsmp_layer</span><span class="p">,</span>
+                         <span class="n">fixed_dropout</span><span class="o">=</span><span class="n">fixed_dropout</span><span class="p">)</span>
+
+    <span class="c1"># 1st upsample block </span>
+    <span class="n">channels</span> <span class="o">=</span> <span class="mi">64</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">decode_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">channels</span><span class="p">,</span> <span class="n">upsample</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> 
+
+    <span class="c1"># First decode block sequence</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">decode_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">channels</span><span class="p">)</span>
+
+    <span class="c1"># 2nd upsample block</span>
+    <span class="n">channels</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">channels</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">decode_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">channels</span><span class="p">,</span> <span class="n">upsample</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Second decode block sequence </span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">):</span>                                                          
+        <span class="n">x</span> <span class="o">=</span> <span class="n">decode_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">channels</span><span class="p">)</span>
+
+    <span class="c1"># Last transpose conv </span>
+    <span class="n">outputs</span> <span class="o">=</span> <span class="n">Conv2DTranspose</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="s2">&quot;softmax&quot;</span><span class="p">,</span> <span class="n">strides</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+                              <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Model</span><span class="p">(</span><span class="n">inputs</span><span class="o">=</span><span class="p">[</span><span class="n">inputs</span><span class="p">],</span> <span class="n">outputs</span><span class="o">=</span><span class="p">[</span><span class="n">outputs</span><span class="p">])</span>
+    
+    <span class="k">if</span> <span class="n">optimizer</span> <span class="o">==</span> <span class="s2">&quot;sgd&quot;</span><span class="p">:</span>
+        <span class="n">opt</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">lr</span><span class="o">=</span><span class="n">lr</span><span class="p">,</span> <span class="n">momentum</span><span class="o">=</span><span class="mf">0.90</span><span class="p">,</span> <span class="n">decay</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> 
+                                      <span class="n">nesterov</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">optimizer</span> <span class="o">==</span> <span class="s2">&quot;adam&quot;</span><span class="p">:</span>
+        <span class="n">opt</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">lr</span><span class="o">=</span><span class="n">lr</span><span class="p">,</span> <span class="n">beta_1</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">beta_2</span><span class="o">=</span><span class="mf">0.999</span><span class="p">,</span> 
+                                       <span class="n">epsilon</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">decay</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">amsgrad</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Error: optimizer value must be &#39;sgd&#39; or &#39;adam&#39;&quot;</span><span class="p">)</span>
+
+    <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="n">jaccard_loss_cheng2017</span><span class="p">,</span>
+                  <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index_softmax</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">model</span></div>
+
+
+<div class="viewcode-block" id="pad_depth"><a class="viewcode-back" href="../../../cheng_network.html#sota_implementations.cheng_2017.cheng_network.pad_depth">[docs]</a><span class="k">def</span> <span class="nf">pad_depth</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">desired_channels</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Zero padding to use in case the feature map changes in shortcut </span>
+<span class="sd">        connections.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">K</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">new_channels</span> <span class="o">=</span> <span class="n">desired_channels</span> <span class="o">-</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="o">.</span><span class="n">as_list</span><span class="p">()[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">y</span><span class="p">[:,:,:,:</span><span class="n">new_channels</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">concatenate</span><span class="p">([</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="encode_block"><a class="viewcode-back" href="../../../cheng_network.html#sota_implementations.cheng_2017.cheng_network.encode_block">[docs]</a><span class="k">def</span> <span class="nf">encode_block</span><span class="p">(</span><span class="n">inp_layer</span><span class="p">,</span> <span class="n">channels</span><span class="p">,</span> <span class="n">t_downsmp_layer</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">downsample</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+                 <span class="n">fixed_dropout</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Encode block defined in Cheng et al.     </span>
+<span class="sd">        </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------   </span>
+<span class="sd">       inp_layer : Keras layer</span>
+<span class="sd">           Input layer.</span>
+<span class="sd">       </span>
+<span class="sd">       channels : int, optional</span>
+<span class="sd">           Feature maps to define in Conv layers.</span>
+<span class="sd">        </span>
+<span class="sd">       t_downsmp_layer : int, optional</span>
+<span class="sd">           ``t`` value defined in the paper for the proposed stochastic </span>
+<span class="sd">           downsampling layer. </span>
+<span class="sd">    </span>
+<span class="sd">       downsample : bool, optional</span>
+<span class="sd">           To make a downsampling. Blue blocks in the encoding part. </span>
+
+<span class="sd">       fixed_dropout : float, optional</span>
+<span class="sd">           Dropout value.</span>
+
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       out : Keras layer</span>
+<span class="sd">           Last layer of the block.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">downsample</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">inp_layer</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">tf</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;MaxPooling2D&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;MaxPooling2D&quot;</span><span class="p">)</span>
+            <span class="n">shortcut_padded</span> <span class="o">=</span> <span class="n">MaxPooling2D</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span> <span class="p">(</span><span class="n">inp_layer</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">tf</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;StochasticDownsampling2D&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;StochasticDownsampling2D&quot;</span><span class="p">)</span>
+            <span class="n">shortcut_padded</span> <span class="o">=</span> <span class="n">StochasticDownsampling2D</span><span class="p">()</span> <span class="p">(</span><span class="n">inp_layer</span><span class="p">,</span> <span class="n">t_downsmp_layer</span><span class="p">)</span>
+
+        <span class="n">shortcut_padded</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">channels</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+                                 <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))</span> <span class="p">(</span><span class="n">shortcut_padded</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">shortcut_padded</span> <span class="o">=</span> <span class="n">Lambda</span><span class="p">(</span>
+            <span class="n">pad_depth</span><span class="p">,</span> <span class="n">arguments</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;desired_channels&#39;</span><span class="p">:</span><span class="n">channels</span><span class="p">})(</span><span class="n">inp_layer</span><span class="p">)</span>
+   
+    <span class="n">x</span> <span class="o">=</span> <span class="n">BatchNormalization</span><span class="p">()(</span><span class="n">inp_layer</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">PReLU</span><span class="p">(</span><span class="n">shared_axes</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">downsample</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">c1</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">channels</span><span class="o">/</span><span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">strides</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+                   <span class="n">kernel_initializer</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span>
+                   <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">c2</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">channels</span><span class="o">/</span><span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">strides</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+                   <span class="n">kernel_initializer</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span>
+                   <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">concatenate</span><span class="p">([</span><span class="n">c1</span><span class="p">,</span><span class="n">c2</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">c1</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">channels</span><span class="o">/</span><span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                   <span class="n">kernel_initializer</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span>
+                   <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">c2</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">channels</span><span class="o">/</span><span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                   <span class="n">kernel_initializer</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span>
+                   <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">concatenate</span><span class="p">([</span><span class="n">c1</span><span class="p">,</span><span class="n">c2</span><span class="p">])</span>
+    
+    <span class="n">x</span> <span class="o">=</span> <span class="n">Dropout</span><span class="p">(</span><span class="n">fixed_dropout</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">BatchNormalization</span><span class="p">()(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">PReLU</span><span class="p">(</span><span class="n">shared_axes</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+    <span class="n">c1</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">channels</span><span class="o">/</span><span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+               <span class="n">kernel_initializer</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span>
+               <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">c2</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">channels</span><span class="o">/</span><span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+               <span class="n">kernel_initializer</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span>
+               <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">concatenate</span><span class="p">([</span><span class="n">c1</span><span class="p">,</span><span class="n">c2</span><span class="p">])</span>
+
+    <span class="n">x</span> <span class="o">=</span> <span class="n">Add</span><span class="p">()([</span><span class="n">shortcut_padded</span><span class="p">,</span> <span class="n">x</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">x</span></div>
+
+
+<div class="viewcode-block" id="decode_block"><a class="viewcode-back" href="../../../cheng_network.html#sota_implementations.cheng_2017.cheng_network.decode_block">[docs]</a><span class="k">def</span> <span class="nf">decode_block</span><span class="p">(</span><span class="n">inp_layer</span><span class="p">,</span> <span class="n">channels</span><span class="p">,</span> <span class="n">upsample</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Encode block defined in Cheng et al.                                     </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Parameters                                                               </span>
+<span class="sd">       ----------                                                               </span>
+<span class="sd">       inp_layer : Keras layer                                                  </span>
+<span class="sd">           Input layer.                                                         </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       channels : int, optional                                                 </span>
+<span class="sd">           Feature maps to define in Conv layers.                               </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       upsample : bool, optional                                              </span>
+<span class="sd">           To make an upsampling. Blue blocks in the decoding part.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Returns                                                                  </span>
+<span class="sd">       -------                                                                  </span>
+<span class="sd">       out : Keras layer                                                        </span>
+<span class="sd">           Last layer of the block.                                             </span>
+<span class="sd">    &quot;&quot;&quot;</span> 
+    <span class="k">if</span> <span class="n">upsample</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>    
+        <span class="n">x</span> <span class="o">=</span> <span class="n">Conv2DTranspose</span><span class="p">(</span><span class="n">channels</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+                            <span class="n">strides</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span>
+                            <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))</span> <span class="p">(</span><span class="n">inp_layer</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">shortcut</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">channels</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span>
+                          <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))(</span><span class="n">inp_layer</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">channels</span><span class="o">/</span><span class="mi">4</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                   <span class="n">kernel_initializer</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span>
+                   <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))(</span><span class="n">inp_layer</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">channels</span><span class="o">/</span><span class="mi">4</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>                           
+                   <span class="n">kernel_initializer</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span>
+                   <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">channels</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>                           
+                   <span class="n">kernel_initializer</span><span class="o">=</span><span class="s1">&#39;he_normal&#39;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="s1">&#39;same&#39;</span><span class="p">,</span>
+                   <span class="n">kernel_regularizer</span><span class="o">=</span><span class="n">l2</span><span class="p">(</span><span class="mf">0.01</span><span class="p">))(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">Add</span><span class="p">()([</span><span class="n">shortcut</span><span class="p">,</span> <span class="n">x</span><span class="p">])</span>           
+    <span class="k">return</span> <span class="n">x</span> </div>
+
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

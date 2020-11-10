@@ -2,15 +2,20 @@ import tensorflow as tf
 import numpy as np
 
 def jaccard_loss_cheng2017(y_true, y_pred):
-    """Define Jaccard index.
+    """Jaccard loss proposed by Cheng et al.
 
-       Args:
-            y_true (tensor): ground truth masks.
+       Parameters
+       ----------
+       y_true : Tensor
+           Ground truth masks.
 
-            y_pred (tensor): predicted masks.
+       y_pred : tensor
+           Predicted masks.
 
-       Return:
-            Jaccard loss score.
+       Returns
+       -------
+       loss : tensor
+           Jaccard loss score.
     """
     C = 1
     numerator = tf.reduce_sum(y_true[...,1] * y_pred[...,1])

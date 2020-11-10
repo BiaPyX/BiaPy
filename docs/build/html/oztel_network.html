@@ -96,12 +96,17 @@
 <li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
@@ -194,13 +199,18 @@ or <code class="docutils literal notranslate"><span class="pre">adam</span></cod
 <dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code></p>
 </dd>
 </dl>
+<p>Here is a picture of the network extracted from the original paper:</p>
+<a class="reference internal image-reference" href="_images/oztel_network.png"><img alt="_images/oztel_network.png" class="align-center" src="_images/oztel_network.png" style="width: 100%;" /></a>
 </dd></dl>
 
 <dl class="py function">
 <dt id="sota_implementations.oztel_2017.cnn_oztel.cnn_oztel_test">
 <code class="sig-prename descclassname">sota_implementations.oztel_2017.cnn_oztel.</code><code class="sig-name descname">cnn_oztel_test</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">model</span></em>, <em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'relu'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'sgd'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/sota_implementations/oztel_2017/cnn_oztel.html#cnn_oztel_test"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sota_implementations.oztel_2017.cnn_oztel.cnn_oztel_test" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create the CNN proposed by Oztel et. al for testing, where the full image
-will be fed to the network.</p>
+is fed to the network. It is the same as <a class="reference internal" href="#sota_implementations.oztel_2017.cnn_oztel.cnn_oztel" title="sota_implementations.oztel_2017.cnn_oztel.cnn_oztel"><code class="xref py py-meth docutils literal notranslate"><span class="pre">cnn_oztel()</span></code></a> but changing
+the last layers to match a semantic segmentation problem and not
+classification. An 8x upsampling is made, as described by the authors,to
+match the original image shape.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">

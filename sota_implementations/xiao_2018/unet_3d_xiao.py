@@ -31,7 +31,7 @@ def U_Net_3D_Xiao(image_shape, lr=0.0001, n_classes=2):
            Xiao 3D U-Net type proposed network model.
 
 
-       A visual representation of the network extracted from the original paper:
+       Here is a picture of the network extracted from the original paper:
 
        .. image:: img/xiao_network.jpg                                               
            :width: 100%                                                         

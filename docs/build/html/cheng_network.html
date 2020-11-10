@@ -1,0 +1,315 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Cheng 2D network &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Networks</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_2d.html">SE+2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Reproduced methods</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Auxiliary code</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Cheng 2D network</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-sota_implementations.cheng_2017.cheng_network">
+<span id="cheng-2d-network"></span><h1>Cheng 2D network<a class="headerlink" href="#module-sota_implementations.cheng_2017.cheng_network" title="Permalink to this headline">¶</a></h1>
+<dl class="py function">
+<dt id="sota_implementations.cheng_2017.cheng_network.asymmetric_network">
+<code class="sig-prename descclassname">sota_implementations.cheng_2017.cheng_network.</code><code class="sig-name descname">asymmetric_network</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">numInitChannels</span><span class="o">=</span><span class="default_value">16</span></em>, <em class="sig-param"><span class="n">fixed_dropout</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'sgd'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.001</span></em>, <em class="sig-param"><span class="n">t_downsmp_layer</span><span class="o">=</span><span class="default_value">4</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/sota_implementations/cheng_2017/cheng_network.html#asymmetric_network"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sota_implementations.cheng_2017.cheng_network.asymmetric_network" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create the assymetric network proposed in Cheng et al.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">int</span></code>) – Dimensions of the input image.</p></li>
+<li><p><strong>numInitChannels</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of convolution channels to start with. In each
+downsampling/upsampling the number of filters are multiplied/divided
+by <code class="docutils literal notranslate"><span class="pre">2</span></code>.</p></li>
+<li><p><strong>fixed_dropout</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Dropout value to be fixed. If no value is provided the default
+behaviour will be to select a piramidal value stating from 0.1 and
+reaching 0.3 value.</p></li>
+<li><p><strong>optimizer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Optimizer used to minimize the loss function. Posible options: <code class="docutils literal notranslate"><span class="pre">sgd</span></code>
+or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p></li>
+<li><p><strong>lr</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Learning rate value.</p></li>
+<li><p><strong>t_downsmp_layer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Degree of randomness in the sampling pattern which corresponds to the
+<code class="docutils literal notranslate"><span class="pre">t</span></code> value defined in the paper for the proposed stochastic
+downsampling layer.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – Asymmetric network proposed in Cheng et al. model.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code></p>
+</dd>
+</dl>
+<p>Here is a picture of the network extracted from the original paper:</p>
+<a class="reference internal image-reference" href="_images/cheng_network.png"><img alt="_images/cheng_network.png" class="align-center" src="_images/cheng_network.png" style="width: 90%;" /></a>
+</dd></dl>
+
+<dl class="py function">
+<dt id="sota_implementations.cheng_2017.cheng_network.pad_depth">
+<code class="sig-prename descclassname">sota_implementations.cheng_2017.cheng_network.</code><code class="sig-name descname">pad_depth</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">desired_channels</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/sota_implementations/cheng_2017/cheng_network.html#pad_depth"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sota_implementations.cheng_2017.cheng_network.pad_depth" title="Permalink to this definition">¶</a></dt>
+<dd><p>Zero padding to use in case the feature map changes in shortcut
+connections.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="sota_implementations.cheng_2017.cheng_network.encode_block">
+<code class="sig-prename descclassname">sota_implementations.cheng_2017.cheng_network.</code><code class="sig-name descname">encode_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">inp_layer</span></em>, <em class="sig-param"><span class="n">channels</span></em>, <em class="sig-param"><span class="n">t_downsmp_layer</span><span class="o">=</span><span class="default_value">4</span></em>, <em class="sig-param"><span class="n">downsample</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">fixed_dropout</span><span class="o">=</span><span class="default_value">0.1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/sota_implementations/cheng_2017/cheng_network.html#encode_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sota_implementations.cheng_2017.cheng_network.encode_block" title="Permalink to this definition">¶</a></dt>
+<dd><p>Encode block defined in Cheng et al.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inp_layer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">layer</span></code>) – Input layer.</p></li>
+<li><p><strong>channels</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Feature maps to define in Conv layers.</p></li>
+<li><p><strong>t_downsmp_layer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – <code class="docutils literal notranslate"><span class="pre">t</span></code> value defined in the paper for the proposed stochastic
+downsampling layer.</p></li>
+<li><p><strong>downsample</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To make a downsampling. Blue blocks in the encoding part.</p></li>
+<li><p><strong>fixed_dropout</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Dropout value.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>out</strong> – Last layer of the block.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">layer</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="sota_implementations.cheng_2017.cheng_network.decode_block">
+<code class="sig-prename descclassname">sota_implementations.cheng_2017.cheng_network.</code><code class="sig-name descname">decode_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">inp_layer</span></em>, <em class="sig-param"><span class="n">channels</span></em>, <em class="sig-param"><span class="n">upsample</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/sota_implementations/cheng_2017/cheng_network.html#decode_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sota_implementations.cheng_2017.cheng_network.decode_block" title="Permalink to this definition">¶</a></dt>
+<dd><p>Encode block defined in Cheng et al.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inp_layer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">layer</span></code>) – Input layer.</p></li>
+<li><p><strong>channels</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Feature maps to define in Conv layers.</p></li>
+<li><p><strong>upsample</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To make an upsampling. Blue blocks in the decoding part.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>out</strong> – Last layer of the block.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">layer</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

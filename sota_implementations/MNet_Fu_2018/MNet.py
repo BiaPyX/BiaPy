@@ -12,7 +12,8 @@ def MNet(input_shape):
     """Code copied from `Model_MNet <https://github.com/HzFu/MNet_DeepCDR/blob/master/mnet_deep_cdr/Model_MNet.py>`_.
        Made some minor changes to adapt the network to our specific case.
  
-       Based on `Joint Optic Disc and Cup Segmentation Based on Multi-label Deep Network and Polar Transformation <https://arxiv.org/abs/1801.00926>`_.
+       Based on `Joint Optic Disc and Cup Segmentation Based on Multi-label Deep
+       Network and Polar Transformation <https://arxiv.org/abs/1801.00926>`_.
 
        Parameters
        ----------
@@ -27,7 +28,7 @@ def MNet(input_shape):
            MNet network model.
 
 
-       A visual representation of the network extracted from the original paper:
+       Here is a picture of the network extracted from the original paper:
 
        .. image:: img/MNet.jpg
            :width: 100%

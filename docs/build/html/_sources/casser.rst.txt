@@ -16,3 +16,8 @@ We have prepared two templates:
     - `casser_template_V0.py <https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018/casser_template_V0.py>`_ : exact parameters and training workflow as described in the paper.
     - `casser_template_V1.py <https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018/casser_template_V1.py>`_ : changes made respect to V0 with which we have achieved better results.
 
+The architecture of the network can be reproduced used our `U-Net 2D <https://github.com/danifranco/EM_Image_Segmentation/blob/master/networks/unet.py>`_ code. Here is a picture of the network extracted from the original paper:
+                                                                                
+.. image:: img/casser_network.png
+    :width: 100%                                                         
+    :align: center 

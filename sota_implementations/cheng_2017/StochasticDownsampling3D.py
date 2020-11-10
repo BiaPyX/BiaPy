@@ -3,13 +3,7 @@ import numpy as np
 
 
 class StochasticDownsampling3D(tf.keras.layers.Layer):
-    """Stochastic downsampling layer based on the following work:
-
-        https://www.cs.umd.edu/~varshney/papers/Cheng_VolumeSegmentationUsingConvolutionalNeuralNetworksWithLimitedTrainingData_ICIP2017.pdf
-        
-        Specifically, this layer is explained in 2.3 of their paper. An example
-        can be shown in Fig. 2.
-    """
+    """3D version of the stochastic downsampling layer presented in Cheng et al. """              
     def __init__(self):
         super(StochasticDownsampling3D, self).__init__()
 
