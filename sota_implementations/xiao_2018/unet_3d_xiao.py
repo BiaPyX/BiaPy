@@ -6,22 +6,36 @@ from tensorflow.keras.layers import ELU, UpSampling3D, Add, Dense, Activation, \
                                     MaxPooling3D, concatenate, BatchNormalization
 from tensorflow.keras.regularizers import l2
 from metrics import binary_crossentropy_weighted, jaccard_index, jaccard_index_softmax
-#from .loss import custom_loss
 
 
 def U_Net_3D_Xiao(image_shape, lr=0.0001, n_classes=2):
     """Create 3D U-Net.
 
-       Args:
-           image_shape (array of 3 int): dimensions of the input image.
-               activation (str, optional): Keras available activation type.
+       Parameters
+       ----------
+       image_shape : array of 3 int
+           Dimensions of the input image.
+        
+       activation : str, optional
+           Keras available activation type.
 
-           lr (float, optional): learning rate value.
+       lr : float, optional
+           Learning rate value.
 
-           n_classes (int, optional): number of classes.
+       n_classes : int, optional
+           Number of classes.
     
-       Returns:
-           model (Keras model): model containing the U-Net created.
+       Returns  
+       -------
+       model : Keras model
+           Xiao 3D U-Net type proposed network model.
+
+
+       A visual representation of the network extracted from the original paper:
+
+       .. image:: img/xiao_network.jpg                                               
+           :width: 100%                                                         
+           :align: center  
     """
 
     dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
@@ -103,8 +117,21 @@ def U_Net_3D_Xiao(image_shape, lr=0.0001, n_classes=2):
     return model
 
 def residual_block(inp_layer, channels):
-    """ Residual block definition. """
+    """Residual block definition.   
 
+       Parameters
+       ----------
+       inp_layer : Keras layer
+           Input layer. 
+
+       channels : int
+           Number of feature maps to use in Conv layers.
+
+       Returns
+       -------
+       out : Keras layer
+           Last layer of the block. 
+    """
     a = Conv3D(channels, (1, 1, 1), activation=None,
            kernel_initializer='he_normal', padding='same')(inp_layer)
     a = BatchNormalization()(a)

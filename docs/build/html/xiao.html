@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Casser et al. &mdash; EM Image Segmentation  documentation</title>
+  <title>Xiao et al. &mdash; EM Image Segmentation  documentation</title>
   
 
   
@@ -36,8 +36,8 @@
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Xiao et al." href="xiao.html" />
-    <link rel="prev" title="MNet" href="networks_mnet.html" /> 
+    <link rel="next" title="Cheng et al." href="cheng.html" />
+    <link rel="prev" title="Casser et al." href="casser.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -106,8 +106,8 @@
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Casser et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Xiao et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
 </ul>
@@ -161,7 +161,7 @@
     
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
         
-      <li>Casser et al.</li>
+      <li>Xiao et al.</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -178,22 +178,29 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="casser-et-al">
-<h1>Casser et al.<a class="headerlink" href="#casser-et-al" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="xiao-et-al">
+<h1>Xiao et al.<a class="headerlink" href="#xiao-et-al" title="Permalink to this headline">¶</a></h1>
 <p>As part of our paper we try to reproduce other state-of-the-art approaches for EM semantic segmentation
 that do not provide code. In this case the following paper has been reproduced:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>Vincent Casser, Kai Kang, Hanspeter Pfister, and Daniel Haehn, <span class="s2">&quot;Fast mitochondria</span>
-<span class="s2">segmentation for connectomics&quot;</span>, arXiv preprint arXiv:1812.06024 <span class="o">(</span><span class="m">2018</span><span class="o">)</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>Chi Xiao, Xi Chen, Weifu Li, Linlin Li, Lu Wang, Qiwei Xie, and Hua Han, <span class="s2">&quot;Automatic</span>
+<span class="s2">mitochondria segmentation for em data using a 3d supervised convolutional network&quot;</span>,
+Frontiers in Neuroanatomy <span class="m">12</span> <span class="o">(</span><span class="m">2018</span><span class="o">)</span>, <span class="m">92</span>.
 </pre></div>
 </div>
-<p><a class="reference external" href="https://arxiv.org/abs/1812.06024">[Paper]</a> <a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018">[Our code]</a></p>
+<p><a class="reference external" href="https://www.frontiersin.org/articles/10.3389/fnana.2018.00092/full">[Paper]</a> <a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/xiao_2018">[Our code]</a></p>
 <p>We have prepared two templates:</p>
 <blockquote>
 <div><ul class="simple">
-<li><p><a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018/casser_template_V0.py">casser_template_V0.py</a> : exact parameters and training workflow as described in the paper.</p></li>
-<li><p><a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018/casser_template_V1.py">casser_template_V1.py</a> : changes made respect to V0 with which we have achieved better results.</p></li>
+<li><p><a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/xiao_2018/xiao_template_V0.py">xiao_template_V0.py</a> : exact parameters and training workflow as described in the paper.</p></li>
+<li><p><a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/xiao_2018/xiao_template_V1.py">xiao_template_V1.py</a> : changes made respect to V0 with which we have achieved better results.</p></li>
 </ul>
 </div></blockquote>
+<dl class="simple">
+<dt>The implementation is based in one file:</dt><dd><ul class="simple">
+<li><p><a class="reference external" href="xiao_network.html">3D network</a> : proposed 3D network based on 3D U-Net.</p></li>
+</ul>
+</dd>
+</dl>
 </div>
 
 
@@ -204,10 +211,10 @@ that do not provide code. In this case the following paper has been reproduced:<
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="xiao.html" class="btn btn-neutral float-right" title="Xiao et al." accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="cheng.html" class="btn btn-neutral float-right" title="Cheng et al." accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="networks_mnet.html" class="btn btn-neutral float-left" title="MNet" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="casser.html" class="btn btn-neutral float-left" title="Casser et al." accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

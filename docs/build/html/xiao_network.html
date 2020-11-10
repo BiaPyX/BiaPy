@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Casser et al. &mdash; EM Image Segmentation  documentation</title>
+  <title>Xiao 3D network &mdash; EM Image Segmentation  documentation</title>
   
 
   
@@ -35,9 +35,7 @@
 
     
     <link rel="index" title="Index" href="genindex.html" />
-    <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Xiao et al." href="xiao.html" />
-    <link rel="prev" title="MNet" href="networks_mnet.html" /> 
+    <link rel="search" title="Search" href="search.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -105,8 +103,8 @@
 <li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
-<ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Casser et al.</a></li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
@@ -161,7 +159,7 @@
     
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
         
-      <li>Casser et al.</li>
+      <li>Xiao 3D network</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -178,22 +176,52 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="casser-et-al">
-<h1>Casser et al.<a class="headerlink" href="#casser-et-al" title="Permalink to this headline">¶</a></h1>
-<p>As part of our paper we try to reproduce other state-of-the-art approaches for EM semantic segmentation
-that do not provide code. In this case the following paper has been reproduced:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>Vincent Casser, Kai Kang, Hanspeter Pfister, and Daniel Haehn, <span class="s2">&quot;Fast mitochondria</span>
-<span class="s2">segmentation for connectomics&quot;</span>, arXiv preprint arXiv:1812.06024 <span class="o">(</span><span class="m">2018</span><span class="o">)</span>
-</pre></div>
-</div>
-<p><a class="reference external" href="https://arxiv.org/abs/1812.06024">[Paper]</a> <a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018">[Our code]</a></p>
-<p>We have prepared two templates:</p>
-<blockquote>
-<div><ul class="simple">
-<li><p><a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018/casser_template_V0.py">casser_template_V0.py</a> : exact parameters and training workflow as described in the paper.</p></li>
-<li><p><a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018/casser_template_V1.py">casser_template_V1.py</a> : changes made respect to V0 with which we have achieved better results.</p></li>
+  <div class="section" id="module-sota_implementations.xiao_2018.unet_3d_xiao">
+<span id="xiao-3d-network"></span><h1>Xiao 3D network<a class="headerlink" href="#module-sota_implementations.xiao_2018.unet_3d_xiao" title="Permalink to this headline">¶</a></h1>
+<dl class="py function">
+<dt id="sota_implementations.xiao_2018.unet_3d_xiao.U_Net_3D_Xiao">
+<code class="sig-prename descclassname">sota_implementations.xiao_2018.unet_3d_xiao.</code><code class="sig-name descname">U_Net_3D_Xiao</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.0001</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">2</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/sota_implementations/xiao_2018/unet_3d_xiao.html#U_Net_3D_Xiao"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sota_implementations.xiao_2018.unet_3d_xiao.U_Net_3D_Xiao" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create 3D U-Net.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">int</span></code>) – Dimensions of the input image.</p></li>
+<li><p><strong>activation</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Keras available activation type.</p></li>
+<li><p><strong>lr</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Learning rate value.</p></li>
+<li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes.</p></li>
 </ul>
-</div></blockquote>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – Xiao 3D U-Net type proposed network model.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code></p>
+</dd>
+</dl>
+<p>A visual representation of the network extracted from the original paper:</p>
+<a class="reference internal image-reference" href="_images/xiao_network.jpg"><img alt="_images/xiao_network.jpg" class="align-center" src="_images/xiao_network.jpg" style="width: 100%;" /></a>
+</dd></dl>
+
+<dl class="py function">
+<dt id="sota_implementations.xiao_2018.unet_3d_xiao.residual_block">
+<code class="sig-prename descclassname">sota_implementations.xiao_2018.unet_3d_xiao.</code><code class="sig-name descname">residual_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">inp_layer</span></em>, <em class="sig-param"><span class="n">channels</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/sota_implementations/xiao_2018/unet_3d_xiao.html#residual_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sota_implementations.xiao_2018.unet_3d_xiao.residual_block" title="Permalink to this definition">¶</a></dt>
+<dd><p>Residual block definition.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inp_layer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">layer</span></code>) – Input layer.</p></li>
+<li><p><strong>channels</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Number of feature maps to use in Conv layers.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>out</strong> – Last layer of the block.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">layer</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
 </div>
 
 
@@ -201,15 +229,6 @@ that do not provide code. In this case the following paper has been reproduced:<
            
           </div>
           <footer>
-  
-    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-      
-        <a href="xiao.html" class="btn btn-neutral float-right" title="Xiao et al." accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
-      
-      
-        <a href="networks_mnet.html" class="btn btn-neutral float-left" title="MNet" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
-      
-    </div>
   
 
   <hr/>

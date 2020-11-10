@@ -6,8 +6,8 @@ that do not provide code. In this case the following paper has been reproduced:
 
 .. code-block:: bash
 
-    Vincent Casser, Kai Kang, Hanspeter Pfister, and Daniel Haehn, "Fast mitochondria segmentation 
-    for connectomics", arXiv preprint arXiv:1812.06024 (2018)
+    Vincent Casser, Kai Kang, Hanspeter Pfister, and Daniel Haehn, "Fast mitochondria 
+    segmentation for connectomics", arXiv preprint arXiv:1812.06024 (2018)
 
 `[Paper] <https://arxiv.org/abs/1812.06024>`_ `[Our code] <https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018>`_ 
 

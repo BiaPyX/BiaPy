@@ -31,7 +31,7 @@ args = parser.parse_args()
 import os
 import sys
 sys.path.insert(0, args.base_work_dir)
-sys.path.insert(0, os.path.join(args.base_work_dir, 'xiao_2018'))
+sys.path.insert(0, os.path.join("sota_implementations", "cheng_2017"))          
 
 # Working dir
 os.chdir(args.base_work_dir)
@@ -39,7 +39,7 @@ os.chdir(args.base_work_dir)
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
                  TimeHistory, threshold_plots, save_img, \
-                 calculate_3D_volume_prob_map
+                 calculate_3D_volume_prob_map, check_binary_masks
 limit_threads()
 
 # Try to generate the results as reproducible as possible
@@ -53,17 +53,17 @@ job_identifier = args.job_id + '_' + str(args.run_id)
 #        IMPORTS         #
 ##########################
 
+import datetime
 import random
 import numpy as np
 import math
 import time
 import tensorflow as tf
-from data_manipulation import load_and_prepare_3D_data, check_binary_masks, \
-                              crop_3D_data_with_overlap, \
-                              merge_3D_data_with_overlap
+from data_manipulation import load_and_prepare_3D_data, merge_3D_data_with_overlap, \
+                              crop_3D_data_with_overlap
 from generators.data_3D_generators import VoxelDataGenerator
-from unet_3d_xiao import U_Net_3D_Xiao
-from metrics import jaccard_index, jaccard_index_numpy, voc_calculation
+from cheng_3D_network import asymmetric_3D_network
+from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.models import load_model
 from tqdm import tqdm
@@ -73,11 +73,15 @@ from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
 from tensorflow.keras.utils import plot_model
 from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
                             boundary_refinement_watershed2
+from LRFinder.keras_callback import LRFinder
+
 
 ############
 #  CHECKS  #
 ############
 
+now = datetime.datetime.now()
+print("Date : {}".format(now.strftime("%Y-%m-%d %H:%M:%S")))
 print("Arguments: {}".format(args))
 print("Python       : {}".format(sys.version.split('\n')[0]))
 print("Numpy        : {}".format(np.__version__))
@@ -98,30 +102,30 @@ train_mask_path = os.path.join(args.data_dir, 'train', 'y')
 test_path = os.path.join(args.data_dir, 'test', 'x')
 test_mask_path = os.path.join(args.data_dir, 'test', 'y')
 # Percentage of the training data used as validation                            
-perc_used_as_val = 0.1
+perc_used_as_val = 0
 # Create the validation data with random images of the training data. If False
 # the validation data will be the last portion of training images.
-random_val_data = True
+random_val_data = False
 
 
-### Dataset shape
-# Note: train and test dimensions must be the same when training the network and
-# making the predictions. Be sure to take care of this if you are not going to
-# use "crop_data()" with the arg force_shape, as this function resolves the 
-# problem creating always crops of the same dimension
+### Data shape
 img_train_shape = (1024, 768, 1)
 img_test_shape = (1024, 768, 1)
 
 
 ### 3D volume variables
 # Train shape of the 3D subvolumes
-train_3d_desired_shape = (20, 256, 256, 1)
+train_3d_desired_shape = (128, 128, 96, 1)
 # Train shape of the 3D subvolumes
-test_3d_desired_shape = (20, 448, 576, 1)
-# Percentage of overlap made to create subvolumes of the defined shape based on
-# test data. Fix in 0.0 to calculate the minimun overlap needed to satisfy the
-# shape.
-ov_test = 0.5
+test_3d_desired_shape = (128, 128, 96, 1)
+# Make overlap on train data
+ov_train = False
+# Wheter to use the rest of the train data when there is no exact division between
+# it and the subvolume shape needed (train_3d_desired_shape). Only has sense when
+# ov_train is False
+use_rest_train = True
+# Percentage of overlap in (x, y, z). Set to 0 to calculate the minimun overlap
+overlap = (0,0,0)
 
 
 ### Normalization
@@ -132,29 +136,33 @@ normalize_data = False
 norm_value_forced = -1                                                          
 
 
-### Data augmentation (DA) variables
+### Data augmentation (DA) variables. Based on https://github.com/aleju/imgaug
 # Flag to activate DA
 da = True
 # Create samples of the DA made. Useful to check the output images made.
-aug_examples = True
+aug_examples = False
 # Flag to shuffle the training data on every epoch 
 shuffle_train_data_each_epoch = True
 # Flag to shuffle the validation data on every epoch
 shuffle_val_data_each_epoch = False
-# Shift range to appply to the subvolumes 
-shift_range = 0.0
-# Range of rotation to the subvolumes
-rotation_range = 0
-# Square rotations (90º, -90º and 180º) intead of using a range
-square_rotations = True
-# Flag to make flips on the subvolumes 
-flips = True
+# Histogram equalization
+hist_eq = False
+# Rotation of 90º to the subvolumes
+rotation = True
+# Flag to make flips on the subvolumes (horizontal and vertical)
+flips = False
+# Elastic transformations
+elastic = False
+# Gaussian blur
+g_blur = False
+# Gamma contrast 
+gamma_contrast = False
 # Flag to extract random subvolumnes during the DA
-random_subvolumes_in_DA = False
+random_subvolumes_in_DA = True
 # Calculate probability map to make random subvolumes to be extracted with high
 # probability of having a mitochondria on the middle of it. Useful to avoid
 # extracting a subvolume which less mitochondria information.
-probability_map = False # Only active with random_subvolumes_in_DA
+probability_map = True # Only active with random_subvolumes_in_DA
 w_foreground = 0.94 # Only active with probability_map
 w_background = 0.06 # Only active with probability_map
 
@@ -162,7 +170,7 @@ w_background = 0.06 # Only active with probability_map
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when 
 # "random_subvolumes_in_DA" is made, as more original train data can be cover
-duplicate_train = 75
+duplicate_train = 0
 # Extra number of images to add to the train data. Applied after duplicate_train
 extra_train_data = 0
 
@@ -173,36 +181,38 @@ extra_train_data = 0
 load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
-# Flag to activate the fine tunning
-fine_tunning = False
-# ID of the previous weigths to load the weigths from to make the fine tunning 
-fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
+# Wheter to find the best learning rate plot. If this options is selected the 
+# training will stop when 5 epochs are done
+use_LRFinder = False
 
 
 ### Experiment main parameters
 # Batch size value
-batch_size_value = 2
+batch_size_value = 1
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "adam"
 # Learning rate used by the optimization method
 learning_rate_value = 0.0001
 # Number of epochs to train the network
-epochs_value = 30
+epochs_value = 545
 # Number of epochs to stop the training process after no improvement
-patience = 10 
+patience = 200
 
 
 ### Network architecture specific parameters
 # Number of channels in the first initial layer of the network
-num_init_channels = 32
-# Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
-spatial_dropout = False
+num_init_channels = 16
 # Fixed value to make the dropout. Ignored if the value is zero
-fixed_dropout_value = 0.0 
-# Active flag if softmax is used as the last layer of the network
-softmax_out = True
+fixed_dropout_value = 0.1
+# Number of classes. To generate data with more than 1 channel custom DA need to
+# be selected. It can be 1 or 2.                                                                   
+n_classes = 2
+# Adjust the metric used accordingly to the number of clases. This code is planned 
+# to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
+# will only calculate the IoU for the foreground class (channel 1)              
+metric = "jaccard_index_softmax" if n_classes > 1 else "jaccard_index" 
 
 
 ### Paths of the results                                             
@@ -271,6 +281,8 @@ h5_dir = os.path.join(args.result_dir, 'h5_files')
 # Name of the folder to store the probability map to avoid recalculating it on
 # every run
 prob_map_dir = os.path.join(args.result_dir, 'prob_map')
+# Folder where LRFinder callback will store its plot
+lrfinder_dir = os.path.join(result_dir, 'LRFinder')
 
 
 ### Callbacks
@@ -281,10 +293,20 @@ earlystopper = EarlyStopping(
     patience=patience, verbose=1, restore_best_weights=True)
 # Save the best model into a h5 file in case one need again the weights learned
 os.makedirs(h5_dir, exist_ok=True)
-checkpointer = ModelCheckpoint(
-    os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
-    verbose=1, save_best_only=True)
-
+# Check the best learning rate using the code from:
+#  https://github.com/WittmannF/LRFinder
+if use_LRFinder:
+    lr_finder = LRFinder(min_lr=10e-9, max_lr=10e-3, lrfinder_dir=lrfinder_dir)
+    os.makedirs(lrfinder_dir, exist_ok=True)
+# Define lr decay as in the paper                                               
+def scheduler(epoch, lr):                                                       
+    # 50% and 75% of the training
+    if epoch == 272 or epoch == 408:                                                
+        return lr*0.1                                                           
+    else:                                                                       
+        return lr                                                               
+lr_callback = tf.keras.callbacks.LearningRateScheduler(scheduler, verbose=1)    
+                                                                                
 
 print("###################\n"
       "#  SANITY CHECKS  #\n"
@@ -298,14 +320,15 @@ print("###############\n"
       "#  LOAD DATA  #\n"
       "###############\n")
 
-X_train, Y_train, X_val,\
-Y_val, X_test, Y_test,\
+X_train, Y_train,\
+X_test, Y_test,\
 orig_test_shape, norm_value = load_and_prepare_3D_data(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
-    img_test_shape, val_split=perc_used_as_val, create_val=True,
+    img_test_shape, val_split=perc_used_as_val, create_val=False,
     shuffle_val=random_val_data, random_subvolumes_in_DA=random_subvolumes_in_DA,
-    train_subvol_shape=train_3d_desired_shape,
-    test_subvol_shape=test_3d_desired_shape, ov_test=ov_test)
+    test_subvol_shape=test_3d_desired_shape,
+    train_subvol_shape=train_3d_desired_shape, use_rest_train=use_rest_train,
+    overlap_train=ov_train, ov=overlap)
 
 # Normalize the data
 if normalize_data == True:
@@ -315,27 +338,28 @@ if normalize_data == True:
     else:
         print("Normalization value calculated: {}".format(norm_value))
     X_train -= int(norm_value)
-    X_val -= int(norm_value)
     X_test -= int(norm_value)
-    
+
 
 print("###########################\n"
       "#  EXTRA DATA GENERATION  #\n"
       "###########################\n")
 
-# Duplicate train data N times
+# Calculate the steps_per_epoch value to train in case
 if duplicate_train != 0:
-    X_train = np.vstack([X_train]*duplicate_train)
-    Y_train = np.vstack([Y_train]*duplicate_train)
-    print("Train data replicated {} times. Its new shape is: {}"
-          .format(duplicate_train, X_train.shape))
+    steps_per_epoch_value = int((duplicate_train*X_train.shape[0])/batch_size_value)
+    print("Data doubled by {} ; Steps per epoch = {}".format(duplicate_train,
+          steps_per_epoch_value))
+else:
+    steps_per_epoch_value = int(X_train.shape[0]/batch_size_value)
 
 # Add extra train data generated with DA
 if extra_train_data != 0:
     extra_generator = VoxelDataGenerator(
         X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,
-        shuffle_each_epoch=True, batch_size=batch_size_value,
-        da=True, flip=True, shift_range=0.0, rotation_range=0)
+        shuffle_each_epoch=True, batch_size=batch_size_value, da=da, 
+        hist_eq=hist_eq, flip=flips, rotation=rotation, elastic=elastic, 
+        g_blur=g_blur, gamma_contrast=gamma_contrast)
 
     extra_x, extra_y = extra_generator.get_transformed_samples(extra_train_data)
 
@@ -359,33 +383,27 @@ if probability_map == True:
         train_prob = calculate_3D_volume_prob_map(
             Y_train, w_foreground, w_background, save_file=prob_map_file)
 
-print("Preparing validation data generator . . .")
-val_generator = VoxelDataGenerator(
-    X_val, Y_val, random_subvolumes_in_DA=random_subvolumes_in_DA,
-    subvol_shape=train_3d_desired_shape,
-    shuffle_each_epoch=shuffle_val_data_each_epoch, batch_size=batch_size_value,
-    da=False, softmax_out=softmax_out, val=True)
-del X_val, Y_val
-
 print("Preparing train data generator . . .")
 train_generator = VoxelDataGenerator(
     X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,
+    subvol_shape=train_3d_desired_shape,
     shuffle_each_epoch=shuffle_train_data_each_epoch, 
-    batch_size=batch_size_value, da=da, flip=flips, shift_range=shift_range, 
-    rotation_range=rotation_range, square_rotations=square_rotations,
-    softmax_out=softmax_out, prob_map=train_prob)
+    batch_size=batch_size_value, da=da, hist_eq=hist_eq, flip=flips, 
+    rotation=rotation, elastic=elastic, g_blur=g_blur, 
+    gamma_contrast=gamma_contrast, n_classes=n_classes, prob_map=train_prob,
+    extra_data_factor=duplicate_train)
 del X_train, Y_train
 
 # Create the test data generator without DA
 print("Preparing test data generator . . .")
 test_generator = VoxelDataGenerator(
     X_test, Y_test, random_subvolumes_in_DA=False, shuffle_each_epoch=False,
-    batch_size=batch_size_value, da=False, softmax_out=softmax_out)
+    batch_size=batch_size_value, da=False, n_classes=n_classes)
 
 # Generate examples of data augmentation
 if aug_examples == True:
     train_generator.get_transformed_samples(
-        10, random_images=True, save_to_dir=True, out_dir=da_samples_dir)
+        5, random_images=False, save_to_dir=True, out_dir=da_samples_dir)
 
 
 print("#################################\n"
@@ -393,28 +411,32 @@ print("#################################\n"
       "#################################\n")
 
 print("Creating the network . . .")
-model = U_Net_3D_Xiao(train_3d_desired_shape, lr=learning_rate_value)
+model = asymmetric_3D_network(
+    train_3d_desired_shape, numInitChannels=num_init_channels,
+    fixed_dropout=fixed_dropout_value, optimizer=optimizer,
+    lr=learning_rate_value)
 
 # Check the network created
 model.summary(line_length=150)
 os.makedirs(char_dir, exist_ok=True)
 model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
+h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights
+                             + '_' + str(args.run_id) + '.h5')
 
 if load_previous_weights == False:
-    if fine_tunning == True:                                                    
-        h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
-                             + '_' + str(args.run_id) + '.h5')     
-        print("Fine-tunning: loading model weights from h5_file: {}"
-              .format(h5_file))   
-        model.load_weights(h5_file)                                             
-
-    results = model.fit(x=train_generator, validation_data=val_generator,
-        validation_steps=len(val_generator), steps_per_epoch=len(train_generator),
-        epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
+    if use_LRFinder:
+        print("Training just for 10 epochs . . .")
+        results = model.fit(x=train_generator, steps_per_epoch=len(train_generator), 
+                            epochs=5, callbacks=[lr_finder])
+        print("Finish LRFinder. Check the plot in {}".format(lrfinder_dir))
+        sys.exit(0)
+    else:
+        results = model.fit(x=train_generator,
+            steps_per_epoch=steps_per_epoch_value, epochs=epochs_value,
+            callbacks=[earlystopper, time_callback, lr_callback])
+        model.save(h5_file)
 else:
-    h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
-                                 + '_' + str(args.run_id) + '.h5')
     print("Loading model weights from h5_file: {}".format(h5_file))
     model.load_weights(h5_file)
 
@@ -441,17 +463,18 @@ jac_per_crop = score_per_crop[1]
 print("Making the predictions on test data . . .")
 preds_test = model.predict(test_generator, verbose=1)
 
-if softmax_out:
+# Take only the foreground class                                                
+if n_classes > 1:
     preds_test = np.expand_dims(preds_test[...,1], -1)
 
 
-print("####################################################\n"
-      "#  Metrics (per image, merging subvolumes - 50ov)  #\n"
-      "####################################################\n")
+print("#############################################\n"
+      "#  Metrics (per image, merging subvolumes)  #\n"
+      "#############################################\n")
 
 # Merge the volumes and convert them into 2D data                               
 preds_test, Y_test = merge_3D_data_with_overlap(                                 
-    preds_test, orig_test_shape, data_mask=Y_test, overlap_z=ov_test) 
+    preds_test, orig_test_shape, data_mask=Y_test, overlap=overlap) 
 
 print("Saving predicted images . . .")                                          
 save_img(Y=(preds_test > 0.5).astype(np.uint8), 
@@ -471,13 +494,12 @@ Y_test_smooth = np.zeros(X_test.shape, dtype=np.float32)
 for i in tqdm(range(X_test.shape[0])):                                          
     predictions_smooth = smooth_3d_predictions(X_test[i],                       
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        softmax=softmax_out)   
-                                                                                
-    Y_test_smooth[i] = predictions_smooth                                       
+        n_classes=n_classes)   
+    Y_test_smooth[i] = predictions_smooth
                                                                                 
 # Merge the volumes and convert them into 2D data                               
 Y_test_smooth = merge_3D_data_with_overlap(                                     
-    Y_test_smooth, orig_test_shape, overlap_z=ov_test)                          
+    Y_test_smooth, orig_test_shape, overlap=overlap)                          
                                                                                 
 print("Saving smooth predicted images . . .")                                   
 save_img(Y=Y_test_smooth, mask_dir=smo_no_bin_dir_per_image,
@@ -528,13 +550,55 @@ print("############################################################\n"
       "#  Metrics (per image, merging crops with 50% of overlap)  #\n"
       "############################################################\n")
 
-jac_50ov = -1
-voc_50ov = -1
-det_50ov = -1
+if overlap != (0.5,0.5,0.5):
+   # Merge X_test to crop it again with 50% overlap
+   X_test = merge_3D_data_with_overlap(X_test, orig_test_shape, overlap=overlap)
+   X_test = crop_3D_data_with_overlap(
+       X_test, test_3d_desired_shape, overlap=(0.5,0.5,0.5))
 
-zfil_score_50ov = -1
-zfil_voc_50ov = -1
-zfil_det_50ov = -1
+   print("~~~~ 16-Ensemble ~~~~")
+   Y_test_50ov = np.zeros(X_test.shape, dtype=np.float32)
+   for i in tqdm(range(X_test.shape[0])):
+       predictions_smooth = smooth_3d_predictions(X_test[i],
+           pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
+           n_classes=n_classes)
+       Y_test_50ov[i] = predictions_smooth
+
+   Y_test_50ov = merge_3D_data_with_overlap(
+       Y_test_50ov, orig_test_shape, overlap=(0.5,0.5,0.5))
+
+   print("Saving 50% overlap predicted images . . .")
+   save_img(Y=(Y_test_50ov > 0.5).astype(np.float32),
+            mask_dir=result_bin_dir_50ov, prefix="test_out_bin_50ov")
+   save_img(Y=Y_test_50ov, mask_dir=result_no_bin_dir_50ov,
+            prefix="test_out_no_bin_50ov")
+
+   print("Calculate metrics (50% overlap) . . .")
+   jac_50ov = jaccard_index_numpy(Y_test, (Y_test_50ov > 0.5).astype(np.float32))
+   voc_50ov = voc_calculation(
+       Y_test, (Y_test_50ov > 0.5).astype(np.float32), jac_50ov)
+   det_50ov = -1
+
+   print("~~~~ Z-Filtering (50% overlap) ~~~~")
+   zfil_preds_test = calculate_z_filtering(Y_test_50ov)
+
+   print("Saving Z-filtered images . . .")
+   save_img(Y=zfil_preds_test, mask_dir=zfil_dir_50ov, prefix="test_out_zfil")
+
+   print("Calculate metrics (Z-filtering + 50% overlap) . . .")
+   zfil_score_50ov = jaccard_index_numpy(
+       Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
+   zfil_voc_50ov = voc_calculation(
+       Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_score_50ov)
+   zfil_det_50ov = -1
+   del Y_test_50ov, zfil_preds_test
+else:
+   jac_50ov = smo_score_per_image
+   voc_50ov = smo_voc_per_image
+   det_50ov = -1
+   zfil_score_50ov = zfil_score_per_image
+   zfil_voc_50ov = zfil_voc_per_image
+   zfil_det_50ov = zfil_det_per_image
 
 
 print("########################\n"
@@ -609,12 +673,8 @@ print("####################################\n"
 
 if load_previous_weights == False:
     print("Epoch average time: {}".format(np.mean(time_callback.times)))
-    print("Epoch number: {}".format(len(results.history['val_loss'])))
     print("Train time (s): {}".format(np.sum(time_callback.times)))
-    print("Train loss: {}".format(np.min(results.history['loss'])))
-    print("Train IoU: {}".format(np.max(results.history['jaccard_index_softmax'])))
-    print("Validation loss: {}".format(np.min(results.history['val_loss'])))
-    print("Validation IoU: {}".format(np.max(results.history['val_jaccard_index_softmax'])))
+    print("Train IoU: {}".format(np.max(results.history[metric])))
 
 print("Test loss: {}".format(loss_per_crop))
 print("Test IoU (per crop): {}".format(jac_per_crop))
@@ -666,7 +726,7 @@ if not load_previous_weights:
             scores[name] = eval(name)
 
     store_history(results, scores, time_callback, args.result_dir, job_identifier, 
-                  metric="jaccard_index_softmax")
-    create_plots(results, job_identifier, char_dir, metric="jaccard_index_softmax")
+                  metric=metric)
+    create_plots(results, job_identifier, char_dir, metric=metric)
 
 print("FINISHED JOB {} !!".format(job_identifier))

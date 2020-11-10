@@ -6,9 +6,9 @@ that do not provide code. In this case the following paper has been reproduced:
 
 .. code-block:: bash
 
-    H. Cheng and A. Varshney, "Volume segmentation using convolutional neural networks with limited 
-    training data", 2017 IEEE International Conference on Image Processing (ICIP), Beijing, 2017, 
-    pp. 590-594.
+    H. Cheng and A. Varshney, "Volume segmentation using convolutional neural networks with 
+    limited training data", 2017 IEEE International Conference on Image Processing (ICIP), 
+    Beijing, 2017, pp. 590-594.
 
 `[Paper] <https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=8296349&casa_token=5b69S99XYcYAAAAA:1-kW8nB6nLKm8Fc0adC-i2OFA9CIrW-DD2dcjcIJGcDfzKYfxMv4j2-5COjyyQJ6vIjE818clA&tag=1>`_ `[Our code] <https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/cheng_2017>`_ 
 
