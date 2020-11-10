@@ -15,7 +15,6 @@ from tqdm import tqdm
 import gc
 from tensorflow.keras.preprocessing.image import ImageDataGenerator as kerasDA
 import math
-
 from scipy.ndimage import rotate
 
 if __name__ == '__main__':
@@ -530,58 +529,71 @@ def smooth_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2):
     else:
         volume = np.pad(vol, [(0,0), (pad_to_square,0), (0,0), (0,0)], 'reflect')
     
+    # Remove the last channel to make the transformations correctly             
+    volume = volume[...,0]
+
     # Make 16 different combinations of the volume 
     aug_vols.append(volume) 
-    aug_vols.append(rotate(volume, mode='reflect', axes=(1, 2), angle=90, reshape=False))
-    aug_vols.append(rotate(volume, mode='reflect', axes=(1, 2), angle=180, reshape=False))
-    aug_vols.append(rotate(volume, mode='reflect', axes=(1, 2), angle=270, reshape=False))
+    aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=90, reshape=False))
+    aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=180, reshape=False))
+    aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=270, reshape=False))
     volume_aux = np.flip(volume, 0)
     aug_vols.append(volume_aux)
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=90, reshape=False))
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=180, reshape=False))
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=270, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
     volume_aux = np.flip(volume, 1)
     aug_vols.append(volume_aux)
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=90, reshape=False))
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=180, reshape=False))
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=270, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
     volume_aux = np.flip(volume, 2)
     aug_vols.append(volume_aux)
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=90, reshape=False))
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=180, reshape=False))
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(1, 2), angle=270, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
     del volume_aux
-
     aug_vols = np.array(aug_vols)
-    decoded_aug_vols = np.zeros(aug_vols.shape)
+    
+    # Add the last channel again
+    aug_vols = np.expand_dims(aug_vols, -1)
+    volume = np.expand_dims(volume, -1)
 
+    decoded_aug_vols = np.zeros(aug_vols.shape)
     for i in range(aug_vols.shape[0]):
         if n_classes > 1:
-            decoded_aug_vols[i] = np.expand_dims(pred_func(np.expand_dims(aug_vols[i], 0))[...,1], -1)[-1,0]
+            decoded_aug_vols[i] = np.expand_dims(np.array(pred_func(np.expand_dims(aug_vols[i], 0)))[...,1], -1)[-1]
         else:
-            decoded_aug_vols[i] = pred_func(np.expand_dims(aug_vols[i], 0))[-1,0]
+            decoded_aug_vols[i] = np.array(pred_func(np.expand_dims(aug_vols[i], 0)))[-1]
+
+    # Remove the last channel to make the transformations correctly
+    decoded_aug_vols = decoded_aug_vols[...,0]
 
     # Undo the combinations of the volume
     out_vols = []
     out_vols.append(np.array(decoded_aug_vols[0]))
-    out_vols.append(rotate(np.array(decoded_aug_vols[1]), mode='reflect', axes=(1, 2), angle=-90, reshape=False))
-    out_vols.append(rotate(np.array(decoded_aug_vols[2]), mode='reflect', axes=(1, 2), angle=-180, reshape=False))
-    out_vols.append(rotate(np.array(decoded_aug_vols[3]), mode='reflect', axes=(1, 2), angle=-270, reshape=False))
+    out_vols.append(rotate(np.array(decoded_aug_vols[1]), mode='reflect', axes=(0, 1), angle=-90, reshape=False))
+    out_vols.append(rotate(np.array(decoded_aug_vols[2]), mode='reflect', axes=(0, 1), angle=-180, reshape=False))
+    out_vols.append(rotate(np.array(decoded_aug_vols[3]), mode='reflect', axes=(0, 1), angle=-270, reshape=False))
     out_vols.append(np.flip(np.array(decoded_aug_vols[4]), 0))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[5]), mode='reflect', axes=(1, 2), angle=-90, reshape=False), 0))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[6]), mode='reflect', axes=(1, 2), angle=-180, reshape=False), 0))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[7]), mode='reflect', axes=(1, 2), angle=-270, reshape=False), 0))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[5]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 0))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[6]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 0))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[7]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 0))
     out_vols.append(np.flip(np.array(decoded_aug_vols[8]), 1))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[9]), mode='reflect', axes=(1, 2), angle=-90, reshape=False), 1))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[10]), mode='reflect', axes=(1, 2), angle=-180, reshape=False), 1))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[11]), mode='reflect', axes=(1, 2), angle=-270, reshape=False), 1))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[9]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 1))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[10]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 1))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[11]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 1))
     out_vols.append(np.flip(np.array(decoded_aug_vols[12]), 2))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[13]), mode='reflect', axes=(1, 2), angle=-90, reshape=False), 2))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[14]), mode='reflect', axes=(1, 2), angle=-180, reshape=False), 2))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[15]), mode='reflect', axes=(1, 2), angle=-270, reshape=False), 2))
-  
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[13]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 2))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[14]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 2))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[15]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 2))
+    out_vols = np.array(out_vols)
+
+    # Add the last channel again
+    decoded_aug_vols = np.expand_dims(decoded_aug_vols, -1)
+    out_vols = np.expand_dims(out_vols, -1)
+    
     # Create the output data
-    out_vols = np.array(out_vols) 
     if pad_to_square != 0:
         if pad_to_square < 0:
             out = np.zeros((out_vols.shape[0], volume.shape[0]+pad_to_square, 
@@ -601,3 +613,4 @@ def smooth_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2):
             out[i] = out_vols[i,:,abs(pad_to_square):,:,:]
 
     return np.mean(out, axis=0)
+
