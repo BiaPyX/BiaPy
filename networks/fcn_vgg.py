@@ -5,7 +5,8 @@ from tensorflow.keras.layers import Conv2D, Conv2DTranspose, MaxPooling2D, Add,\
 from metrics import jaccard_index_softmax, jaccard_index
 
 
-def FCN32_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
+def FCN32_VGG16(image_shape, activation='relu', n_classes=2, lr=0.1,
+                optimizer="adam"):
     """Create FCN32 network based on a VGG16.
 
        Parameters
@@ -15,6 +16,9 @@ def FCN32_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
 
        activation : str, optional
            Keras available activation type.
+
+       n_classes: int, optional
+           Number of classes.
 
        lr : float, optional
            Learning rate value.
@@ -42,7 +46,6 @@ def FCN32_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
     
     dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
     inputs = Input(dinamic_dim, name="input")
-    #inputs = Input((image_shape[0], image_shape[1], image_shape[2]))
 
     # Block 1
     x = Conv2D(64, (3, 3), activation='relu', padding='same', 
@@ -90,8 +93,8 @@ def FCN32_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
     x = Dropout(0.5)(x)
     x = Conv2D(4096, (1, 1), activation='relu', padding='same', name='fc2')(x)
     x = Dropout(0.5)(x)
-    x = Conv2D(2, (1, 1), kernel_initializer='he_normal', activation='sigmoid',
-               padding='valid', strides=(1, 1))(x)
+    x = Conv2D(n_classes, (1, 1), kernel_initializer='he_normal', 
+               activation='sigmoid', padding='valid', strides=(1, 1))(x)
 
     outputs = tf.keras.layers.UpSampling2D(size=(32, 32), interpolation='bilinear')(x)
 
@@ -108,13 +111,18 @@ def FCN32_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
         raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
 
     # Compile the model
-    model_fcn.compile(optimizer=opt, loss='binary_crossentropy',
+    if n_classes > 1:
+        model.compile(optimizer=opt, loss='categorical_crossentropy',
+                      metrics=[jaccard_index_softmax])
+    else:
+        model.compile(optimizer=opt, loss='binary_crossentropy',
                       metrics=[jaccard_index])
 
     return model_fcn
 
 
-def FCN8_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
+def FCN8_VGG16(image_shape, activation='relu', n_classes=2, lr=0.1,
+               optimizer="adam"):
     """Create FCN8 network based on a VGG16.
 
        Parameters
@@ -124,6 +132,9 @@ def FCN8_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
 
        activation : str, optional
            Keras available activation type.
+
+       n_classes: int, optional
+           Number of classes.
 
        lr : float, optional
            Learning rate value.
@@ -147,11 +158,9 @@ def FCN8_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
 
        Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
     """
-
     
     dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
     inputs = Input(dinamic_dim, name="input")
-    #inputs = Input((image_shape[0], image_shape[1], image_shape[2]))
 
     # Block 1
     x = Conv2D(64, (3, 3), activation='relu', padding='same',
@@ -199,19 +208,19 @@ def FCN8_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
     x = Dropout(0.5)(x)
     x = Conv2D(4096, (1, 1), activation='relu', padding='same', name='fc2')(x)
     x = Dropout(0.5)(x)
-    x = Conv2D(2, (1, 1), kernel_initializer='he_normal')(x)
+    x = Conv2D(n_classes, (1, 1), kernel_initializer='he_normal')(x)
 
-    u1 = Conv2DTranspose(2, kernel_size=(4, 4), strides=(2, 2), use_bias=False) (x)
+    u1 = Conv2DTranspose(n_classes, kernel_size=(4, 4), strides=(2, 2), use_bias=False) (x)
     u1 = Cropping2D(cropping=((0, 2), (0, 2))) (u1)
-    u_p4 = Conv2D(2, (1, 1), kernel_initializer='he_normal')(p4)
+    u_p4 = Conv2D(n_classes, (1, 1), kernel_initializer='he_normal')(p4)
     o1 = Add() ([u1, u_p4])
 
-    u2 = Conv2DTranspose(2, kernel_size=(4, 4), strides=(2, 2), use_bias=False) (o1)
+    u2 = Conv2DTranspose(n_classes, kernel_size=(4, 4), strides=(2, 2), use_bias=False) (o1)
     u2 = Cropping2D(cropping=((0, 2), (0, 2))) (u2)
-    u_p3 = Conv2D(2, (1, 1), kernel_initializer='he_normal')(p3)
+    u_p3 = Conv2D(n_classes, (1, 1), kernel_initializer='he_normal')(p3)
     o2 = Add() ([u2, u_p3])
 
-    outputs = Conv2DTranspose(2, kernel_size=(16, 16), strides=(8, 8),
+    outputs = Conv2DTranspose(n_classes, kernel_size=(16, 16), strides=(8, 8),
                               use_bias=False, padding='same', activation="sigmoid") (o2)
 
     model_fcn = Model(inputs=[inputs], outputs=[outputs])
@@ -227,7 +236,11 @@ def FCN8_VGG16(image_shape, activation='relu', lr=0.1, optimizer="adam"):
         raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
 
     # Compile the model
-    model_fcn.compile(optimizer=opt, loss='binary_crossentropy',
+    if n_classes > 1:
+        model.compile(optimizer=opt, loss='categorical_crossentropy',
+                      metrics=[jaccard_index_softmax])
+    else:
+        model.compile(optimizer=opt, loss='binary_crossentropy',
                       metrics=[jaccard_index])
 
     return model_fcn
