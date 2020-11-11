@@ -112,11 +112,11 @@ def FCN32_VGG16(image_shape, activation='relu', n_classes=2, lr=0.1,
 
     # Compile the model
     if n_classes > 1:
-        model.compile(optimizer=opt, loss='categorical_crossentropy',
-                      metrics=[jaccard_index_softmax])
-    else:
-        model.compile(optimizer=opt, loss='binary_crossentropy',
-                      metrics=[jaccard_index])
+        model_fcn.compile(optimizer=opt, loss='categorical_crossentropy',
+                          metrics=[jaccard_index_softmax])
+    else:   
+        model_fcn.compile(optimizer=opt, loss='binary_crossentropy',
+                          metrics=[jaccard_index])
 
     return model_fcn
 
@@ -237,10 +237,10 @@ def FCN8_VGG16(image_shape, activation='relu', n_classes=2, lr=0.1,
 
     # Compile the model
     if n_classes > 1:
-        model.compile(optimizer=opt, loss='categorical_crossentropy',
-                      metrics=[jaccard_index_softmax])
+        model_fcn.compile(optimizer=opt, loss='categorical_crossentropy',
+                          metrics=[jaccard_index_softmax])
     else:
-        model.compile(optimizer=opt, loss='binary_crossentropy',
-                      metrics=[jaccard_index])
+        model_fcn.compile(optimizer=opt, loss='binary_crossentropy',
+                          metrics=[jaccard_index])
 
     return model_fcn
