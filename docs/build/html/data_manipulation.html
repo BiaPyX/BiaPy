@@ -37,7 +37,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Metrics" href="metrics.html" />
-    <link rel="prev" title="Post processing" href="post_processing.html" /> 
+    <link rel="prev" title="How to run" href="how_to_run.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -84,11 +84,20 @@
             
               <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
+</ul>
+<p class="caption"><span class="caption-text">2D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator_keras.html">2D generator (Keras)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator.html">2D generator</a></li>
+</ul>
+<p class="caption"><span class="caption-text">3D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="3d_generator.html">3D generator</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
@@ -107,6 +116,8 @@
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
@@ -952,7 +963,7 @@ also prints the number of zeros added per each axis <code class="docutils litera
 This forces to crop from the origin, e. g. <code class="docutils literal notranslate"><span class="pre">(0,</span> <span class="pre">0)</span></code> point.</p></li>
 <li><p><strong>draw_prob_map_points</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – To return the pixel choosen to be the center of the crop.</p></li>
 <li><p><strong>img_prob</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">3D</span> <span class="pre">array</span></code>, <em>optional</em>) – Probability of each pixel to be choosen as the center of the crop.
-E. .g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>weight_map</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Weight map of the given image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 </ul>
 </dd>
@@ -985,7 +996,7 @@ make the crop.</p></li>
         <a href="metrics.html" class="btn btn-neutral float-right" title="Metrics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="post_processing.html" class="btn btn-neutral float-left" title="Post processing" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="how_to_run.html" class="btn btn-neutral float-left" title="How to run" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

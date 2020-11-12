@@ -14,11 +14,26 @@ Some of state-of-the-art approaches have been reproduced and implemented to comp
    :maxdepth: 2
 
    how_to_run  
-   post_processing
    data_manipulation 
    metrics
    util
+   post_processing
    grad_cam
+
+
+.. toctree::                                                                    
+   :maxdepth: 2                                                                 
+   :caption: 2D Data
+
+   2d_generator_keras
+   2d_generator
+
+
+.. toctree::                                                                    
+   :maxdepth: 2                                                                 
+   :caption: 3D Data
+
+   3d_generator
 
 
 .. toctree::

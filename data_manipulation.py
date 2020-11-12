@@ -1870,7 +1870,7 @@ def random_crop(image, mask, random_crop_size, val=False,
 
        img_prob : Numpy 3D array, optional
            Probability of each pixel to be choosen as the center of the crop. 
-           E. .g. ``(x, y, channels)``.
+           E.g. ``(x, y, channels)``.
 
        weight_map : bool, optional
            Weight map of the given image. E.g. ``(x, y, channels)``.

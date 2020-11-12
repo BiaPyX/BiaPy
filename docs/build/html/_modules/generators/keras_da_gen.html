@@ -1,0 +1,1193 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>generators.keras_da_gen &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run.html">How to run</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../data_manipulation.html">Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../grad_cam.html">Grad-CAM</a></li>
+</ul>
+<p class="caption"><span class="caption-text">2D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../2d_generator_keras.html">2D generator (Keras)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../2d_generator.html">2D generator (Custom)</a></li>
+</ul>
+<p class="caption"><span class="caption-text">3D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../3d_generator.html">3D generator</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Networks</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_unet.html">2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_resunet.html">2D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_se_unet_2d.html">SE+2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_unet_3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_resunet_3d.html">3D Residual U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_fcn.html">FCN</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_mnet.html">MNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Reproduced methods</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../casser.html">Casser et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../cheng.html">Cheng et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../oztel.html">Oztel et al.</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Auxiliary code</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../callbacks.html">Callbacks</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+        
+      <li>generators.keras_da_gen</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for generators.keras_da_gen</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">from</span> <span class="nn">tqdm</span> <span class="kn">import</span> <span class="n">tqdm</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras.preprocessing.image</span> <span class="kn">import</span> <span class="n">ImageDataGenerator</span> <span class="k">as</span> <span class="n">kerasDA</span>
+<span class="kn">from</span> <span class="nn">util</span> <span class="kn">import</span> <span class="n">do_save_wm</span><span class="p">,</span> <span class="n">make_weight_map</span>
+<span class="kn">from</span> <span class="nn">data_manipulation</span> <span class="kn">import</span> <span class="n">random_crop</span>
+
+<div class="viewcode-block" id="keras_da_generator"><a class="viewcode-back" href="../../2d_generator_keras.html#generators.keras_da_gen.keras_da_generator">[docs]</a><span class="k">def</span> <span class="nf">keras_da_generator</span><span class="p">(</span><span class="n">X_train</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Y_train</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">X_val</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Y_val</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+                       <span class="n">ld_img_from_disk</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">data_paths</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+                       <span class="n">c_target_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">batch_size_value</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> 
+                       <span class="n">save_examples</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">out_dir</span><span class="o">=</span><span class="s1">&#39;aug&#39;</span><span class="p">,</span> <span class="n">hflip</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                       <span class="n">vflip</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">rotation_range</span><span class="o">=</span><span class="mi">180</span><span class="p">,</span> 
+                       <span class="n">fill_mode</span><span class="o">=</span><span class="s1">&#39;reflect&#39;</span><span class="p">,</span> <span class="n">preproc_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+                       <span class="n">featurewise_center</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">brightness_range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+                       <span class="n">channel_shift_range</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">shuffle_train</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                       <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">featurewise_std_normalization</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+                       <span class="n">zoom</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">w_shift_r</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">h_shift_r</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">shear_range</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                       <span class="n">random_crops_in_DA</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">crop_length</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                       <span class="n">weights_on_data</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">weights_path</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>             
+                                                                                
+    <span class="sd">&quot;&quot;&quot;Makes data augmentation of the given input data based on Keras </span>
+<span class="sd">       ``ImageDataGenerator`` class.                         </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------                                                                    </span>
+<span class="sd">       X_train : 4D Numpy array, optional</span>
+<span class="sd">           Train data. If provided ``data_paths`` arg value will be avoided.</span>
+<span class="sd">           E.g. ``(num_of_images, x, y, channels)``.</span>
+
+<span class="sd">       Y_train : 4D Numpy array, optional</span>
+<span class="sd">           Train mask data. E.g. ``(num_of_images, x, y, channels)``.</span>
+
+<span class="sd">       X_val : 4D Numpy array, optional</span>
+<span class="sd">           Validation data. E.g. ``(num_of_images, x, y, channels)``.</span>
+
+<span class="sd">       Y_val : 4D Numpy array, optional</span>
+<span class="sd">           Validation mask data. E.g. ``(num_of_images, x, y, channels)``.</span>
+
+<span class="sd">       ld_img_from_disk : bool, optional</span>
+<span class="sd">           To make the generator with images loaded form disk instead of use</span>
+<span class="sd">           ``X_train``, ``Y_train``, ``X_val`` and ``Y_val``.</span>
+
+<span class="sd">       data_paths : list of str, optional</span>
+<span class="sd">           List of paths where the data is stored. Use this instead of ``X_train``</span>
+<span class="sd">           and ``Y_train`` args to do not charge the data in memory and make a</span>
+<span class="sd">           generator over the paths instead. The path order is this: 1) train</span>
+<span class="sd">           images path 2) train masks path 3) validation images path 4) validation</span>
+<span class="sd">           masks path 5) test images path 6) test masks path 7) complete images</span>
+<span class="sd">           path (this last useful to make the smoothing post processing, as it</span>
+<span class="sd">           requires the reconstructed data) 8) complete mask path. To provide the</span>
+<span class="sd">           validation data val must be set to ``True``. If no validation data</span>
+<span class="sd">           provided the order of the paths is the same avoiding validation ones.</span>
+
+<span class="sd">       target_size : 2D int tuple, optional</span>
+<span class="sd">           Size where the images will be resized if data_paths is defined. </span>
+
+<span class="sd">       c_target_size : 2D int tuple, optional</span>
+<span class="sd">           Size where complete images will be resized if data_paths is defined. </span>
+
+<span class="sd">       batch_size_value : int, optional</span>
+<span class="sd">           Batch size value.</span>
+
+<span class="sd">       val : bool, optional</span>
+<span class="sd">           If ``True`` validation data generator will be returned.</span>
+
+<span class="sd">       save_examples : bool, optional</span>
+<span class="sd">           If ``True`` 5 examples of DA are stored.</span>
+
+<span class="sd">       out_dir : string, optional</span>
+<span class="sd">           Save directory suffix.                  </span>
+
+<span class="sd">       hflip : bool, optional</span>
+<span class="sd">           If ``True`` horizontal flips are made.          </span>
+
+<span class="sd">       vflip : bool, optional</span>
+<span class="sd">           If ``True`` vertical flip are made.             </span>
+
+<span class="sd">       seedValue : int, optional</span>
+<span class="sd">           Seed value.                              </span>
+
+<span class="sd">       rotation_range : int, optional</span>
+<span class="sd">           Range of rotation degrees.</span>
+
+<span class="sd">       fill_mode : str, optional</span>
+<span class="sd">           ``ImageDataGenerator`` of Keras fill mode values.</span>
+
+<span class="sd">       preproc_function : function, optional</span>
+<span class="sd">           Preprocessing function to apply.</span>
+
+<span class="sd">       featurewise_center : bool, optional</span>
+<span class="sd">           Set input mean to 0 over the dataset, feature-wise.</span>
+
+<span class="sd">       brightness_range : 2D float tuple, optional</span>
+<span class="sd">           Range for picking a brightness shift value from.</span>
+
+<span class="sd">       channel_shift_range : float, optional</span>
+<span class="sd">           Range for random channel shifts.</span>
+
+<span class="sd">       shuffle_train : bool, optional</span>
+<span class="sd">           Randomize the training data on each epoch.</span>
+
+<span class="sd">       shuffle_val : bool, optional</span>
+<span class="sd">           Randomize the validation data on each epoch.</span>
+
+<span class="sd">       featurewise_std_normalization : bool, optional</span>
+<span class="sd">           Divide inputs by std of the dataset, feature-wise.                                       </span>
+
+<span class="sd">       zoom : float, optional</span>
+<span class="sd">           Range for random zoom.</span>
+
+<span class="sd">       w_shift_r : float, optional</span>
+<span class="sd">           Width shift range.</span>
+
+<span class="sd">       h_shift_r : float, optional</span>
+<span class="sd">           Height shift range.</span>
+
+<span class="sd">       shear_range : float, optional</span>
+<span class="sd">           Range to apply shearing transformations. </span>
+
+<span class="sd">       random_crops_in_DA : bool, optional</span>
+<span class="sd">           Decide to make random crops in DA (after transformations).                                           </span>
+
+<span class="sd">       crop_length : int, optional</span>
+<span class="sd">           Length of the random crop before DA. </span>
+
+<span class="sd">       weights_on_data : bool, optional</span>
+<span class="sd">           To make a weights generator for the weighted loss. </span>
+
+<span class="sd">       Returns</span>
+<span class="sd">       -------                                                                 </span>
+<span class="sd">       train_generator : Iterator</span>
+<span class="sd">           Train data iterator.                                                           </span>
+
+<span class="sd">       val_generator : Iterator, optional</span>
+<span class="sd">           Validation data iterator.</span>
+
+<span class="sd">       X_test_aug : Iterator, optional</span>
+<span class="sd">           Test data iterator.</span>
+
+<span class="sd">       Y_test_aug : Iterator, optional</span>
+<span class="sd">           Test masks iterator.</span>
+
+<span class="sd">       W_test_aug : Iterator, optional</span>
+<span class="sd">           Test weight maps iterator.</span>
+
+<span class="sd">       X_complete_aug : Iterator, optional</span>
+<span class="sd">           Original data iterator useful to make the smoothing post processing,</span>
+<span class="sd">           as it requires the reconstructed data.</span>
+<span class="sd">       </span>
+<span class="sd">       Y_complete_aug : Iterator, optional</span>
+<span class="sd">           Original mask iterator.</span>
+
+<span class="sd">       W_complete_aug : Iterator, optional</span>
+<span class="sd">           Original weight maps iterator.</span>
+
+<span class="sd">       n_train_samples : int, optional</span>
+<span class="sd">           Number of training samples.  </span>
+
+<span class="sd">       n_val_samples : int, optional</span>
+<span class="sd">           Number of validation samples.</span>
+
+<span class="sd">       n_test_samples : int, optional</span>
+<span class="sd">           Number of test samples.</span>
+
+<span class="sd">       </span>
+<span class="sd">       Examples</span>
+<span class="sd">       --------</span>
+<span class="sd">       ::</span>
+<span class="sd">        </span>
+<span class="sd">           # EXAMPLE 1</span>
+<span class="sd">           # Create a train and val data generators making random rotations between</span>
+<span class="sd">           # 0 and 180 degrees and vertical/horizontal flips. </span>
+
+<span class="sd">           X_train = np.zeros((1776, 256, 256, 1))</span>
+<span class="sd">           Y_train = np.zeros((1776, 256, 256, 1))</span>
+<span class="sd">           X_val = np.zeros((204, 256, 256, 1))</span>
+<span class="sd">           Y_val = np.zeros((204, 256, 256, 1))</span>
+
+<span class="sd">           train_generator, val_generator = keras_da_generator(</span>
+<span class="sd">               X_train=X_train, Y_train=Y_train, X_val=X_val, Y_val=Y_val, </span>
+<span class="sd">               batch_size_value=6, save_examples=True, out_dir=&#39;da_out&#39;,</span>
+<span class="sd">               shuffle_train=True, shuffle_val=False, rotation_range=180,</span>
+<span class="sd">               vflip=True, hflip=True)</span>
+
+
+<span class="sd">           # EXAMPLE 2</span>
+<span class="sd">           # Generate random crops on DA-time. To allow that notice that the</span>
+<span class="sd">           # data in this case is bigger in width and height than example 1, to</span>
+<span class="sd">           # allow a (256, 256) random crop extraction</span>
+<span class="sd">           X_train = np.zeros((148, 768, 1024, 1))</span>
+<span class="sd">           Y_train = np.zeros((148, 768, 1024, 1))</span>
+<span class="sd">           X_val = np.zeros((17, 768, 1024, 1))</span>
+<span class="sd">           Y_val = np.zeros((17, 768, 1024, 1))</span>
+<span class="sd"> </span>
+<span class="sd">           train_generator, </span>
+<span class="sd">           val_generator = keras_da_generator(</span>
+<span class="sd">               X_train=X_train, Y_train=Y_train, X_val=X_val, Y_val=Y_val, </span>
+<span class="sd">               batch_size_value=6, save_examples=True, out_dir=&#39;da_out&#39;,</span>
+<span class="sd">               shuffle_train=True, shuffle_val=False, rotation_range=180,</span>
+<span class="sd">               random_crops_in_DA=True, crop_length=256, vflip=True, hflip=True)</span>
+<span class="sd">    &quot;&quot;&quot;</span>                                                                         
+
+    <span class="k">if</span> <span class="n">X_train</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ld_img_from_disk</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;One between X_train or ld_img_from_disk must be selected&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="ow">and</span> <span class="p">(</span><span class="n">target_size</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">c_target_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;target_size and c_target_size must be specified when &quot;</span>
+                         <span class="s2">&quot;ld_img_from_disk is selected&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_paths</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">8</span><span class="p">:</span> 
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;data_paths must contain the following paths: 1) train path ; 2) &quot;</span>
+            <span class="s2">&quot;train masks path ; 3) validation path ; 4) validation masks path ; &quot;</span>
+            <span class="s2">&quot;5) test path ; 6) test masks path ; 7) complete images path 8) &quot;</span>
+            <span class="s2">&quot;complete image mask path&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">weights_on_data</span> <span class="ow">and</span> <span class="n">weights_path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+       <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+           <span class="s2">&quot;&#39;weights_path&#39; must be provided when weights is selected&quot;</span><span class="p">)</span>
+
+    <span class="n">data_gen_args1</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="n">horizontal_flip</span><span class="o">=</span><span class="n">hflip</span><span class="p">,</span> <span class="n">vertical_flip</span><span class="o">=</span><span class="n">vflip</span><span class="p">,</span> <span class="n">fill_mode</span><span class="o">=</span><span class="n">fill_mode</span><span class="p">,</span> 
+        <span class="n">rotation_range</span><span class="o">=</span><span class="n">rotation_range</span><span class="p">,</span> <span class="n">featurewise_center</span><span class="o">=</span><span class="n">featurewise_center</span><span class="p">,</span>            
+        <span class="n">featurewise_std_normalization</span><span class="o">=</span><span class="n">featurewise_std_normalization</span><span class="p">,</span> 
+        <span class="n">zoom_range</span><span class="o">=</span><span class="n">zoom</span><span class="p">,</span> <span class="n">width_shift_range</span><span class="o">=</span><span class="n">w_shift_r</span><span class="p">,</span>
+        <span class="n">height_shift_range</span><span class="o">=</span><span class="n">h_shift_r</span><span class="p">,</span> <span class="n">shear_range</span><span class="o">=</span><span class="n">shear_range</span><span class="p">,</span>
+        <span class="n">channel_shift_range</span><span class="o">=</span><span class="n">channel_shift_range</span><span class="p">,</span>
+        <span class="n">brightness_range</span><span class="o">=</span><span class="n">brightness_range</span><span class="p">,</span> <span class="n">rescale</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="mi">255</span><span class="p">)</span>
+    <span class="n">data_gen_args2</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="n">horizontal_flip</span><span class="o">=</span><span class="n">hflip</span><span class="p">,</span> <span class="n">vertical_flip</span><span class="o">=</span><span class="n">vflip</span><span class="p">,</span> <span class="n">fill_mode</span><span class="o">=</span><span class="n">fill_mode</span><span class="p">,</span> 
+        <span class="n">rotation_range</span><span class="o">=</span><span class="n">rotation_range</span><span class="p">,</span> <span class="n">zoom_range</span><span class="o">=</span><span class="n">zoom</span><span class="p">,</span> 
+        <span class="n">width_shift_range</span><span class="o">=</span><span class="n">w_shift_r</span><span class="p">,</span> <span class="n">height_shift_range</span><span class="o">=</span><span class="n">h_shift_r</span><span class="p">,</span> 
+        <span class="n">shear_range</span><span class="o">=</span><span class="n">shear_range</span><span class="p">,</span> <span class="n">rescale</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="mi">255</span><span class="p">)</span>                              
+
+    <span class="c1"># Obtaining the path where the data is stored                                                                                 </span>
+    <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">train_path</span> <span class="o">=</span> <span class="n">data_paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">train_mask_path</span> <span class="o">=</span> <span class="n">data_paths</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">val_path</span> <span class="o">=</span> <span class="n">data_paths</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="n">val_mask_path</span> <span class="o">=</span> <span class="n">data_paths</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
+        <span class="n">test_path</span> <span class="o">=</span> <span class="n">data_paths</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span>
+        <span class="n">test_mask_path</span> <span class="o">=</span> <span class="n">data_paths</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span>
+        <span class="n">complete_path</span> <span class="o">=</span> <span class="n">data_paths</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span>
+        <span class="n">complete_mask_path</span> <span class="o">=</span> <span class="n">data_paths</span><span class="p">[</span><span class="mi">7</span><span class="p">]</span>
+                            
+    <span class="c1"># Generators</span>
+    <span class="n">X_datagen_train</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">(</span><span class="o">**</span><span class="n">data_gen_args1</span><span class="p">)</span>
+    <span class="n">Y_datagen_train</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">(</span><span class="o">**</span><span class="n">data_gen_args2</span><span class="p">)</span>                                 
+    <span class="n">X_datagen_test</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">(</span><span class="n">rescale</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="mi">255</span><span class="p">)</span>
+    <span class="n">Y_datagen_test</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">(</span><span class="n">rescale</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="mi">255</span><span class="p">)</span>                                 
+    <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">complete_datagen</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">(</span><span class="n">rescale</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="mi">255</span><span class="p">)</span>
+        <span class="n">complete_mask_datagen</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">(</span><span class="n">rescale</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="mi">255</span><span class="p">)</span>                                 
+    <span class="k">if</span> <span class="n">val</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">X_datagen_val</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">(</span><span class="n">rescale</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="mi">255</span><span class="p">)</span>
+        <span class="n">Y_datagen_val</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">(</span><span class="n">rescale</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="mi">255</span><span class="p">)</span>                                                   
+    <span class="k">if</span> <span class="n">weights_on_data</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">w_datagen</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">(</span><span class="o">**</span><span class="n">data_gen_args2</span><span class="p">)</span>
+
+    <span class="c1"># Save a few examples </span>
+    <span class="k">if</span> <span class="n">save_examples</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Saving some samples of the train generator . . .&quot;</span><span class="p">)</span>        
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">random_crops_in_DA</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;WARNING: aug samples generated will not have the shape &quot;</span>
+                  <span class="s2">&quot;specified by crop_length, as it is not implemented&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ld_img_from_disk</span><span class="p">:</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">X_datagen_train</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span>
+                <span class="n">X_train</span><span class="p">,</span> <span class="n">save_to_dir</span><span class="o">=</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>
+                <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">,</span> <span class="n">save_prefix</span><span class="o">=</span><span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="n">save_format</span><span class="o">=</span><span class="s1">&#39;png&#39;</span><span class="p">):</span>
+                <span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+                    <span class="k">break</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">Y_datagen_train</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span>
+                <span class="n">Y_train</span><span class="p">,</span> <span class="n">save_to_dir</span><span class="o">=</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>
+                <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">,</span> <span class="n">save_prefix</span><span class="o">=</span><span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="n">save_format</span><span class="o">=</span><span class="s1">&#39;png&#39;</span><span class="p">):</span>
+                <span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+                    <span class="k">break</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">X_datagen_train</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+                <span class="n">train_path</span><span class="p">,</span> <span class="n">save_to_dir</span><span class="o">=</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span>
+                <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">,</span>
+                <span class="n">save_prefix</span><span class="o">=</span><span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="n">save_format</span><span class="o">=</span><span class="s1">&#39;png&#39;</span><span class="p">):</span>
+                <span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+                    <span class="k">break</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">Y_datagen_train</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+                <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">save_to_dir</span><span class="o">=</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span>
+                <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">,</span>
+                <span class="n">save_prefix</span><span class="o">=</span><span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="n">save_format</span><span class="o">=</span><span class="s1">&#39;png&#39;</span><span class="p">):</span>
+                <span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+                    <span class="k">break</span>
+  
+    <span class="c1"># Create the generators with the provided data</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ld_img_from_disk</span><span class="p">:</span>
+        <span class="n">X_train_aug</span> <span class="o">=</span> <span class="n">X_datagen_train</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>       
+                                           <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_train</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+        <span class="n">Y_train_aug</span> <span class="o">=</span> <span class="n">Y_datagen_train</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>       
+                                           <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_train</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+
+    <span class="c1"># Create the generator loading images directly from disk</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Train data loaded from directory: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">train_path</span><span class="p">))</span>
+        <span class="n">X_train_aug</span> <span class="o">=</span> <span class="n">X_datagen_train</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+            <span class="n">train_path</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span> <span class="n">class_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+            <span class="n">color_mode</span><span class="o">=</span><span class="s2">&quot;grayscale&quot;</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>
+            <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_train</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+        <span class="n">Y_train_aug</span> <span class="o">=</span> <span class="n">Y_datagen_train</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+            <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span> <span class="n">class_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">color_mode</span><span class="o">=</span><span class="s2">&quot;grayscale&quot;</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>
+            <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_train</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+        <span class="n">n_train_samples</span> <span class="o">=</span> <span class="n">X_train_aug</span><span class="o">.</span><span class="n">n</span> 
+        
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Test data loaded from directory: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">test_path</span><span class="p">))</span>
+        <span class="n">X_test_aug</span> <span class="o">=</span> <span class="n">X_datagen_test</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+            <span class="n">test_path</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span> <span class="n">class_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+            <span class="n">color_mode</span><span class="o">=</span><span class="s2">&quot;grayscale&quot;</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+            <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+        <span class="n">Y_test_aug</span> <span class="o">=</span> <span class="n">Y_datagen_test</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+            <span class="n">test_mask_path</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span> <span class="n">class_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">color_mode</span><span class="o">=</span><span class="s2">&quot;grayscale&quot;</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+            <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+
+        <span class="n">n_test_samples</span> <span class="o">=</span> <span class="n">X_test_aug</span><span class="o">.</span><span class="n">n</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Complete data loaded from directory: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">complete_path</span><span class="p">))</span>
+        <span class="n">X_complete_aug</span> <span class="o">=</span> <span class="n">complete_datagen</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+            <span class="n">complete_path</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="n">c_target_size</span><span class="p">,</span> <span class="n">class_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">color_mode</span><span class="o">=</span><span class="s2">&quot;grayscale&quot;</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">Y_complete_aug</span> <span class="o">=</span> <span class="n">complete_datagen</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+            <span class="n">complete_mask_path</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="n">c_target_size</span><span class="p">,</span> <span class="n">class_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">color_mode</span><span class="o">=</span><span class="s2">&quot;grayscale&quot;</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># Create the validation generator</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ld_img_from_disk</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">val</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">X_val_aug</span> <span class="o">=</span> <span class="n">X_datagen_val</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">X_val</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>
+                                           <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_val</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+            <span class="n">Y_val_aug</span> <span class="o">=</span> <span class="n">Y_datagen_val</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">Y_val</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>
+                                           <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_val</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Validation data loaded from directory: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">val_path</span><span class="p">))</span>
+        <span class="n">X_val_aug</span> <span class="o">=</span> <span class="n">X_datagen_val</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+            <span class="n">val_path</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>
+            <span class="n">class_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">color_mode</span><span class="o">=</span><span class="s2">&quot;grayscale&quot;</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_val</span><span class="p">,</span> 
+            <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+        <span class="n">Y_val_aug</span> <span class="o">=</span> <span class="n">Y_datagen_val</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+            <span class="n">val_mask_path</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>
+            <span class="n">class_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">color_mode</span><span class="o">=</span><span class="s2">&quot;grayscale&quot;</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_val</span><span class="p">,</span> 
+            <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+        <span class="n">n_val_samples</span> <span class="o">=</span> <span class="n">X_val_aug</span><span class="o">.</span><span class="n">n</span>
+
+    <span class="c1"># Create the weight map generator</span>
+    <span class="k">if</span> <span class="n">weights_on_data</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">train_w_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">weights_path</span><span class="p">,</span> <span class="s1">&#39;train&#39;</span><span class="p">)</span>
+        <span class="n">val_w_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">weights_path</span><span class="p">,</span> <span class="s1">&#39;val&#39;</span><span class="p">)</span>
+        <span class="n">test_w_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">weights_path</span><span class="p">,</span> <span class="s1">&#39;test&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">complete_w_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">weights_path</span><span class="p">,</span> <span class="s1">&#39;complete&#39;</span><span class="p">)</span>            
+        
+        <span class="c1"># Create generator from disk</span>
+        <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+   
+            <span class="c1"># Create train maks generator without augmentation</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Create train mask generator in case we need it to create the&quot;</span>
+                  <span class="s2">&quot; map weigths&quot;</span> <span class="p">)</span>
+            <span class="n">Y_train_no_aug</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">()</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+                <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span> <span class="n">class_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                <span class="n">color_mode</span><span class="o">=</span><span class="s2">&quot;grayscale&quot;</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span> 
+                <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+            <span class="n">prepare_weight_maps</span><span class="p">(</span>
+                <span class="n">train_w_path</span><span class="p">,</span> <span class="n">val_w_path</span><span class="p">,</span> <span class="n">test_w_path</span><span class="p">,</span> <span class="n">c_w_path</span><span class="o">=</span><span class="n">complete_w_path</span><span class="p">,</span> 
+                <span class="n">ld_img_from_disk</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">Y_train_aug</span><span class="o">=</span><span class="n">Y_train_no_aug</span><span class="p">,</span> 
+                <span class="n">Y_val_aug</span><span class="o">=</span><span class="n">Y_val_aug</span><span class="p">,</span> <span class="n">Y_test_aug</span><span class="o">=</span><span class="n">Y_test_aug</span><span class="p">,</span> 
+                <span class="n">Y_cmp_aug</span><span class="o">=</span><span class="n">Y_complete_aug</span><span class="p">,</span> <span class="n">batch_size_value</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">)</span>
+
+        <span class="c1"># Create generator from data</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">prepare_weight_maps</span><span class="p">(</span>
+                <span class="n">train_w_path</span><span class="p">,</span> <span class="n">val_w_path</span><span class="p">,</span> <span class="n">test_w_path</span><span class="p">,</span> <span class="n">Y_train</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> 
+                <span class="n">Y_val</span><span class="o">=</span><span class="n">Y_val</span><span class="p">,</span> <span class="n">Y_test</span><span class="o">=</span><span class="n">Y_test</span><span class="p">,</span> <span class="n">batch_size_value</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">)</span>
+
+        <span class="c1"># Retrieve weight-maps</span>
+        <span class="n">t_filelist</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">train_w_path</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>
+        <span class="n">v_filelist</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">val_w_path</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>
+        <span class="n">te_filelist</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">test_w_path</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">c_filelist</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">complete_w_path</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>
+        
+        <span class="c1"># Loads all weight-map images in a list</span>
+        <span class="n">t_weights</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">train_w_path</span><span class="p">,</span> <span class="n">fname</span><span class="p">))</span> <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">t_filelist</span><span class="p">]</span>
+        <span class="n">t_weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">t_weights</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="n">t_weights</span> <span class="o">=</span> <span class="n">t_weights</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">t_weights</span><span class="p">),</span><span class="n">target_size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                                       <span class="n">target_size</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">v_weights</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">val_w_path</span><span class="p">,</span> <span class="n">fname</span><span class="p">))</span> <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">v_filelist</span><span class="p">]</span>
+        <span class="n">v_weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">v_weights</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="n">v_weights</span> <span class="o">=</span> <span class="n">v_weights</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">v_weights</span><span class="p">),</span><span class="n">target_size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                                       <span class="n">target_size</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">te_weights</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">test_w_path</span><span class="p">,</span> <span class="n">fname</span><span class="p">))</span> <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">te_filelist</span><span class="p">]</span>
+        <span class="n">te_weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">te_weights</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>                       
+        <span class="n">te_weights</span> <span class="o">=</span> <span class="n">te_weights</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">te_weights</span><span class="p">),</span><span class="n">target_size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>           
+                                       <span class="n">target_size</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="mi">1</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">c_weights</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">complete_w_path</span><span class="p">,</span> <span class="n">fname</span><span class="p">))</span> <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">c_filelist</span><span class="p">]</span>
+            <span class="n">c_weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">c_weights</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>                     
+            <span class="n">c_weights</span> <span class="o">=</span> <span class="n">c_weights</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">c_weights</span><span class="p">),</span><span class="n">c_target_size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>        
+                                          <span class="n">c_target_size</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="mi">1</span><span class="p">))</span>
+
+        <span class="c1"># Create the weight generator </span>
+        <span class="n">W_train_aug</span> <span class="o">=</span> <span class="n">w_datagen</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">t_weights</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>
+                                     <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_train</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+        <span class="n">W_val_aug</span> <span class="o">=</span> <span class="n">w_datagen</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">v_weights</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>
+                                   <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_val</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
+        <span class="n">W_test_aug</span> <span class="o">=</span> <span class="n">w_datagen</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">te_weights</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>
+                                    <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">W_cmp_aug</span> <span class="o">=</span> <span class="n">w_datagen</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">c_weights</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>    
+                                       <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">W_train_aug</span> <span class="o">=</span> <span class="n">W_val_aug</span> <span class="o">=</span> <span class="n">W_test_aug</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">W_cmp_aug</span> <span class="o">=</span> <span class="kc">None</span>
+        
+
+    <span class="c1"># Combine generators into one which yields image, masks and weights (if used)</span>
+    <span class="n">train_generator</span> <span class="o">=</span> <span class="n">combine_generators</span><span class="p">(</span><span class="n">X_train_aug</span><span class="p">,</span> <span class="n">Y_train_aug</span><span class="p">,</span> <span class="n">W_train_aug</span><span class="p">)</span>                 
+    <span class="k">if</span> <span class="n">val</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">val_generator</span> <span class="o">=</span> <span class="n">combine_generators</span><span class="p">(</span><span class="n">X_val_aug</span><span class="p">,</span> <span class="n">Y_val_aug</span><span class="p">,</span> <span class="n">W_val_aug</span><span class="p">)</span>
+    
+    <span class="c1"># Make random crops over the generators                                                               </span>
+    <span class="k">if</span> <span class="n">random_crops_in_DA</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>                                                
+        <span class="n">train_generator</span> <span class="o">=</span> <span class="n">crop_generator</span><span class="p">(</span><span class="n">train_generator</span><span class="p">,</span> <span class="n">crop_length</span><span class="p">,</span> 
+                                         <span class="n">weights_on_data</span><span class="o">=</span><span class="n">weights_on_data</span><span class="p">)</span>
+                          
+        <span class="k">if</span> <span class="n">val</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">val_generator</span> <span class="o">=</span> <span class="n">crop_generator</span><span class="p">(</span><span class="n">val_generator</span><span class="p">,</span> <span class="n">crop_length</span><span class="p">,</span> <span class="n">val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                                           <span class="n">weights_on_data</span><span class="o">=</span><span class="n">weights_on_data</span><span class="p">)</span>
+ 
+    <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">train_generator</span><span class="p">,</span> <span class="n">val_generator</span><span class="p">,</span> <span class="n">X_test_aug</span><span class="p">,</span> <span class="n">Y_test_aug</span><span class="p">,</span> \
+               <span class="n">W_test_aug</span><span class="p">,</span> <span class="n">X_complete_aug</span><span class="p">,</span> <span class="n">Y_complete_aug</span><span class="p">,</span> <span class="n">W_cmp_aug</span><span class="p">,</span> \
+               <span class="n">n_train_samples</span><span class="p">,</span> <span class="n">n_val_samples</span><span class="p">,</span> <span class="n">n_test_samples</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">val</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">train_generator</span><span class="p">,</span> <span class="n">val_generator</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">train_generator</span></div>
+
+
+<div class="viewcode-block" id="keras_gen_samples"><a class="viewcode-back" href="../../2d_generator_keras.html#generators.keras_da_gen.keras_gen_samples">[docs]</a><span class="k">def</span> <span class="nf">keras_gen_samples</span><span class="p">(</span><span class="n">num_samples</span><span class="p">,</span> <span class="n">X_data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Y_data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+                      <span class="n">ld_img_from_disk</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">data_paths</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+                      <span class="n">batch_size_value</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">shuffle_data</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">hflip</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> 
+                      <span class="n">vflip</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">rotation_range</span><span class="o">=</span><span class="mi">180</span><span class="p">,</span> 
+                      <span class="n">fill_mode</span><span class="o">=</span><span class="s1">&#39;reflect&#39;</span><span class="p">,</span> <span class="n">preproc_function</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                      <span class="n">featurewise_center</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">brightness_range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                      <span class="n">channel_shift_range</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">featurewise_std_normalization</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                      <span class="n">zoom</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">w_shift_r</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">h_shift_r</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">shear_range</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Generates samples based on keras da generator.</span>
+<span class="sd">    </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       num_samples : int</span>
+<span class="sd">           Number of samples to create.</span>
+
+<span class="sd">       X_data : 4D Numpy array, optional</span>
+<span class="sd">           Data used to generate samples. E.g. ``(num_of_images, x, y, channels)``.</span>
+
+<span class="sd">       Y_data : 4D Numpy array, optional</span>
+<span class="sd">           Mask used to generate samples. E.g. ``(num_of_images, x, y, channels)``.</span>
+
+<span class="sd">       ld_img_from_disk : bool, optional</span>
+<span class="sd">           To advise the function to load images from disk instead of use </span>
+<span class="sd">           ``X_data`` and ``Y_data``.</span>
+
+<span class="sd">       data_paths : list of str</span>
+<span class="sd">           Path were the data and mask are stored to generate the new samples.</span>
+
+<span class="sd">       target_size : 2D int tuple, optional</span>
+<span class="sd">           Shape of the images to load from disk.</span>
+
+<span class="sd">       batch_size_value : int, optional</span>
+<span class="sd">           Batch size value.</span>
+
+<span class="sd">       shuffle_data : bool, optional</span>
+<span class="sd">           Shuffle the data while generating new samples. </span>
+
+<span class="sd">       hflip : bool, optional</span>
+<span class="sd">           If ``True`` horizontal flips are made.</span>
+
+<span class="sd">       vflip : bool, optional</span>
+<span class="sd">           If ``True`` vertical flip are made.</span>
+
+<span class="sd">       seedValue : int, optional</span>
+<span class="sd">           Seed value.</span>
+
+<span class="sd">       rotation_range : int, optional</span>
+<span class="sd">           Range of rotation degrees.</span>
+
+<span class="sd">       fill_mode : str, optional</span>
+<span class="sd">           ``ImageDataGenerator`` of Keras fill mode values.</span>
+
+<span class="sd">       preproc_function : function, optional                                    </span>
+<span class="sd">           Preprocessing function to apply.                                     </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       featurewise_center : bool, optional                                      </span>
+<span class="sd">           Set input mean to 0 over the dataset, feature-wise.                  </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       brightness_range : 2D float tuple, optional                              </span>
+<span class="sd">           Range for picking a brightness shift value from.                     </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       channel_shift_range : float, optional                                    </span>
+<span class="sd">           Range for random channel shifts.                                     </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       featurewise_std_normalization : bool, optional                           </span>
+<span class="sd">           Divide inputs by std of the dataset, feature-wise.                                       </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       zoom : float, optional                                                   </span>
+<span class="sd">           Range for random zoom.                                               </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       w_shift_r : float, optional                                              </span>
+<span class="sd">           Width shift range.                                                   </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       h_shift_r : float, optional                                              </span>
+<span class="sd">           Height shift range.                                                  </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       shear_range : float, optional                                            </span>
+<span class="sd">           Range to apply shearing transformations.     </span>
+
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       x_samples : 4D Numpy array</span>
+<span class="sd">           Data new samples. E.g. ``(num_samples, x, y, channels)``.</span>
+
+<span class="sd">       y_samples : 4D numpy array</span>
+<span class="sd">           Mask new samples. E.g. ``(num_samples, x, y, channels)``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">num_samples</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">if</span> <span class="n">X_data</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ld_img_from_disk</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;One between X_data or ld_img_from_disk must be selected&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="o">==</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">target_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;target_size must be specified when ld_img_from_disk &quot;</span>
+                         <span class="s2">&quot;is selected&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="o">==</span> <span class="kc">True</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_paths</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;data_paths must contain the following paths: 1) data &quot;</span>
+                         <span class="s2">&quot;path ; 2) data masks path&quot;</span><span class="p">)</span>
+
+    <span class="n">data_gen_args1</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="n">horizontal_flip</span><span class="o">=</span><span class="n">hflip</span><span class="p">,</span> <span class="n">vertical_flip</span><span class="o">=</span><span class="n">vflip</span><span class="p">,</span> <span class="n">fill_mode</span><span class="o">=</span><span class="n">fill_mode</span><span class="p">,</span> 
+        <span class="n">rotation_range</span><span class="o">=</span><span class="n">rotation_range</span><span class="p">,</span> <span class="n">preprocessing_function</span><span class="o">=</span><span class="n">preproc_function</span><span class="p">,</span>
+        <span class="n">featurewise_center</span><span class="o">=</span><span class="n">featurewise_center</span><span class="p">,</span> 
+        <span class="n">featurewise_std_normalization</span><span class="o">=</span><span class="n">featurewise_std_normalization</span><span class="p">,</span>
+        <span class="n">zoom_range</span><span class="o">=</span><span class="n">zoom</span><span class="p">,</span> <span class="n">width_shift_range</span><span class="o">=</span><span class="n">w_shift_r</span><span class="p">,</span> 
+        <span class="n">height_shift_range</span><span class="o">=</span><span class="n">h_shift_r</span><span class="p">,</span> <span class="n">shear_range</span><span class="o">=</span><span class="n">shear_range</span><span class="p">,</span> 
+        <span class="n">channel_shift_range</span><span class="o">=</span><span class="n">channel_shift_range</span><span class="p">,</span> 
+        <span class="n">brightness_range</span><span class="o">=</span><span class="n">brightness_range</span><span class="p">,</span> <span class="n">rescale</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="mi">255</span><span class="p">)</span>
+    <span class="n">data_gen_args2</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="n">horizontal_flip</span><span class="o">=</span><span class="n">hflip</span><span class="p">,</span> <span class="n">vertical_flip</span><span class="o">=</span><span class="n">vflip</span><span class="p">,</span> <span class="n">fill_mode</span><span class="o">=</span><span class="n">fill_mode</span><span class="p">,</span> 
+        <span class="n">rotation_range</span><span class="o">=</span><span class="n">rotation_range</span><span class="p">,</span> <span class="n">preprocessing_function</span><span class="o">=</span><span class="n">preproc_function</span><span class="p">,</span>
+        <span class="n">zoom_range</span><span class="o">=</span><span class="n">zoom</span><span class="p">,</span> <span class="n">width_shift_range</span><span class="o">=</span><span class="n">w_shift_r</span><span class="p">,</span> 
+        <span class="n">height_shift_range</span><span class="o">=</span><span class="n">h_shift_r</span><span class="p">,</span> <span class="n">shear_range</span><span class="o">=</span><span class="n">shear_range</span><span class="p">,</span> <span class="n">rescale</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="mi">255</span><span class="p">)</span>
+
+    <span class="n">X_datagen</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">(</span><span class="o">**</span><span class="n">data_gen_args1</span><span class="p">)</span>
+    <span class="n">Y_datagen</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">(</span><span class="o">**</span><span class="n">data_gen_args2</span><span class="p">)</span>
+
+    <span class="c1"># Use X_data and Y_data to generate the samples </span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ld_img_from_disk</span><span class="p">:</span>
+        <span class="n">x_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_samples</span><span class="p">,)</span> <span class="o">+</span> <span class="n">X_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="n">y_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_samples</span><span class="p">,)</span> <span class="o">+</span> <span class="n">Y_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+        <span class="n">n_batches</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_samples</span> <span class="o">/</span> <span class="n">batch_size_value</span><span class="p">)</span> \
+                    <span class="o">+</span> <span class="p">(</span><span class="n">num_samples</span> <span class="o">%</span> <span class="n">batch_size_value</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generating new data samples . . .&quot;</span><span class="p">)</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>                                                                   
+        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>                                                                   
+        <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">X_datagen</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">X_data</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>        
+                                    <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_data</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">):</span>      
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">batch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>                                  
+                <span class="n">x_samples</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="n">batch</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>                                         
+                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>                                                          
+            <span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>                                                           
+            <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">n_batches</span><span class="p">:</span>                                                  
+                <span class="k">break</span>                                                           
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>                                                                   
+        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>                                                                   
+        <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">Y_datagen</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">Y_data</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>        
+                                    <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_data</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">):</span>      
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">batch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>                                  
+                <span class="n">y_samples</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="n">batch</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>                                         
+                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>                                                          
+            <span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>                                                           
+            <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">n_batches</span><span class="p">:</span>                                                  
+                <span class="k">break</span>
+
+    <span class="c1"># Use data_paths to load images from disk to make more samples</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">x_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_samples</span><span class="p">,</span> <span class="n">X_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">X_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+                            <span class="n">X_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="n">y_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_samples</span><span class="p">,</span> <span class="n">Y_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">Y_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+                            <span class="n">Y_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+        <span class="n">n_batches</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_samples</span> <span class="o">/</span> <span class="n">batch_size_value</span><span class="p">)</span> \
+                    <span class="o">+</span> <span class="p">(</span><span class="n">num_samples</span> <span class="o">%</span> <span class="n">batch_size_value</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generating new data samples . . .&quot;</span><span class="p">)</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">X_datagen</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+            <span class="n">data_paths</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>    
+            <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_data</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">batch_size_value</span><span class="p">):</span>
+                <span class="n">x_samples</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="n">batch</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">n_batches</span><span class="p">:</span>
+                <span class="k">break</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">Y_datagen</span><span class="o">.</span><span class="n">flow_from_directory</span><span class="p">(</span>
+            <span class="n">data_paths</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span>
+            <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_data</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seedValue</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">batch_size_value</span><span class="p">):</span>
+                <span class="n">y_samples</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="n">batch</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">n_batches</span><span class="p">:</span>
+                <span class="k">break</span>
+
+    <span class="k">return</span> <span class="n">x_samples</span><span class="p">,</span> <span class="n">y_samples</span></div>
+
+
+<div class="viewcode-block" id="prepare_weight_maps"><a class="viewcode-back" href="../../2d_generator_keras.html#generators.keras_da_gen.prepare_weight_maps">[docs]</a><span class="k">def</span> <span class="nf">prepare_weight_maps</span><span class="p">(</span><span class="n">train_w_path</span><span class="p">,</span> <span class="n">val_w_path</span><span class="p">,</span> <span class="n">test_w_path</span><span class="p">,</span> <span class="n">c_w_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                        <span class="n">Y_train</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Y_val</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Y_test</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+                        <span class="n">ld_img_from_disk</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">Y_train_aug</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Y_val_aug</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
+                        <span class="n">Y_test_aug</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Y_cmp_aug</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">batch_size_value</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Prepare weight maps saving them into a given path. When the paths exist</span>
+<span class="sd">       it suposses that weight maps are already generated. Uses </span>
+<span class="sd">       :meth:`util.make_weight_map` and :meth:`util.do_save_wm`.</span>
+
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       train_w_path : str</span>
+<span class="sd">           Path where train images should be stored.</span>
+
+<span class="sd">       val_w_path : str</span>
+<span class="sd">           Path where validation images should be stored.</span>
+
+<span class="sd">       test_w_path : str</span>
+<span class="sd">           Path where test images should be stored.</span>
+
+<span class="sd">       c_w_path : str</span>
+<span class="sd">           Path where complete images should be stored. Ignored if </span>
+<span class="sd">           ``ld_img_from_disk`` is ``False``.</span>
+
+<span class="sd">       Y_train : 4D Numpy array, optional</span>
+<span class="sd">           Train mask data used to generate weight maps. </span>
+<span class="sd">           E.g.``(num_of_images, x, y, channels)``.</span>
+
+<span class="sd">       Y_val : Numpy array, optional</span>
+<span class="sd">           Validation mask data used to generate weight maps. </span>
+<span class="sd">           E.g. ``(num_of_images, x, y, channels)``.</span>
+
+<span class="sd">       Y_test : Numpy array, optional</span>
+<span class="sd">           Test mask data used to generate weight maps.</span>
+<span class="sd">           E.g. ``(num_of_images, x, y, channels)``.</span>
+
+<span class="sd">       ld_img_from_disk : bool, optional</span>
+<span class="sd">           To advise the function to load images from disk instead of use </span>
+<span class="sd">           ``Y_train_aug``, ``Y_val_aug`` and ``Y_test_aug``.</span>
+
+<span class="sd">       Y_train_aug : Keras ImageDataGenerator, optional</span>
+<span class="sd">           Train mask generator used to produce weight maps.</span>
+
+<span class="sd">       Y_val_aug : Keras ImageDataGenerator, optional</span>
+<span class="sd">           Validation mask generator used to produce weight maps.</span>
+
+<span class="sd">       Y_test_aug : Keras ImageDataGenerator, optional</span>
+<span class="sd">           Test mask generator used to produce weight maps.</span>
+
+<span class="sd">       Y_cmp_aug : Keras ImageDataGenerator, optional</span>
+<span class="sd">           Complete image mask generator used to produce weight maps.</span>
+
+<span class="sd">       batch_size_value : int, optional</span>
+<span class="sd">           Batch size value. </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">Y_train</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ld_img_from_disk</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Y_train or ld_img_from_disk must be selected.&quot;</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">ld_img_from_disk</span> <span class="o">==</span> <span class="kc">True</span> <span class="ow">and</span> <span class="p">(</span><span class="n">Y_train_aug</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">Y_val_aug</span> <span class="ow">is</span> <span class="kc">None</span>\
+        <span class="ow">or</span> <span class="n">Y_test_aug</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;When ld_img_from_disk is selected Y_train_aug, &quot;</span>
+                         <span class="s2">&quot;Y_val_aug and Y_test_aug must be provided&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">c_w_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">Y_cmp_aug</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;Y_cmp_aug&#39; must be provided when c_w_path is provided&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">ld_img_from_disk</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">train_w_path</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Constructing train weight maps with Y_train . . .&quot;</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">train_w_path</span><span class="p">)</span>
+            <span class="n">do_save_wm</span><span class="p">(</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">train_w_path</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">val_w_path</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Constructing validation weight maps with Y_val . . .&quot;</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">val_w_path</span><span class="p">)</span>
+            <span class="n">do_save_wm</span><span class="p">(</span><span class="n">Y_val</span><span class="p">,</span> <span class="n">val_w_path</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">test_w_path</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Constructing test weight maps with Y_test . . .&quot;</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">test_w_path</span><span class="p">)</span>
+            <span class="n">do_save_wm</span><span class="p">(</span><span class="n">Y_test</span><span class="p">,</span> <span class="n">test_w_path</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">train_w_path</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Constructing train weight maps from disk . . .&quot;</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">train_w_path</span><span class="p">)</span>
+
+            <span class="n">iterations</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">Y_train_aug</span><span class="o">.</span><span class="n">n</span><span class="o">/</span><span class="n">batch_size_value</span><span class="p">)</span>
+            
+            <span class="c1"># Count number of digits in n. This is important for the number</span>
+            <span class="c1"># of leading zeros in the name of the maps</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Y_train_aug</span><span class="o">.</span><span class="n">n</span><span class="p">))</span>
+
+            <span class="n">cont</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">iterations</span><span class="p">)):</span>
+                <span class="n">batch</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">Y_train_aug</span><span class="p">)</span>
+
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">batch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+                    <span class="k">if</span> <span class="n">cont</span> <span class="o">&gt;=</span> <span class="n">Y_train_aug</span><span class="o">.</span><span class="n">n</span><span class="p">:</span>
+                       <span class="k">break</span>
+
+                    <span class="n">img_map</span> <span class="o">=</span> <span class="n">make_weight_map</span><span class="p">(</span><span class="n">batch</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+
+                    <span class="c1"># Resize correctly the maps so that it can be used in the model</span>
+                    <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span> <span class="o">=</span> <span class="n">img_map</span><span class="o">.</span><span class="n">shape</span>
+                    <span class="n">img_map</span> <span class="o">=</span> <span class="n">img_map</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+
+                    <span class="c1"># Saving files as .npy files</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                                <span class="n">train_w_path</span><span class="p">,</span> <span class="s2">&quot;w_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">cont</span><span class="p">)</span><span class="o">.</span><span class="n">zfill</span><span class="p">(</span><span class="n">d</span><span class="p">)),</span> <span class="n">img_map</span><span class="p">)</span>
+
+                    <span class="n">cont</span> <span class="o">+=</span> <span class="mi">1</span>
+
+            <span class="n">Y_train_aug</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Train weight maps are already prepared!&quot;</span><span class="p">)</span>
+            
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">val_w_path</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Constructing validation weight maps from disk . . .&quot;</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">val_w_path</span><span class="p">)</span>
+
+            <span class="n">iterations</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">Y_val_aug</span><span class="o">.</span><span class="n">n</span><span class="o">/</span><span class="n">batch_size_value</span><span class="p">)</span>
+
+            <span class="c1"># Count number of digits in n. This is important for the number</span>
+            <span class="c1"># of leading zeros in the name of the maps</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Y_val_aug</span><span class="o">.</span><span class="n">n</span><span class="p">))</span>
+
+            <span class="n">cont</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">iterations</span><span class="p">)):</span>
+                <span class="n">batch</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">Y_val_aug</span><span class="p">)</span>
+
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">batch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+                    <span class="k">if</span> <span class="n">cont</span> <span class="o">&gt;=</span> <span class="n">Y_val_aug</span><span class="o">.</span><span class="n">n</span><span class="p">:</span>
+                        <span class="k">break</span>
+
+                    <span class="n">img_map</span> <span class="o">=</span> <span class="n">make_weight_map</span><span class="p">(</span><span class="n">batch</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+
+                    <span class="c1"># Resize correctly the maps so that it can be used in the model</span>
+                    <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span> <span class="o">=</span> <span class="n">img_map</span><span class="o">.</span><span class="n">shape</span>
+                    <span class="n">img_map</span> <span class="o">=</span> <span class="n">img_map</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+
+                    <span class="c1"># Saving files as .npy files</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                                <span class="n">val_w_path</span><span class="p">,</span> <span class="s2">&quot;w_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">cont</span><span class="p">)</span><span class="o">.</span><span class="n">zfill</span><span class="p">(</span><span class="n">d</span><span class="p">)),</span> <span class="n">img_map</span><span class="p">)</span>
+
+                    <span class="n">cont</span> <span class="o">+=</span> <span class="mi">1</span>
+
+            <span class="n">Y_val_aug</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>                                                                   
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Validation weight maps are already prepared!&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">test_w_path</span><span class="p">):</span>                                      
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Constructing test weight maps from disk . . .&quot;</span><span class="p">)</span>        
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">test_w_path</span><span class="p">)</span>                                             
+                                                                                
+            <span class="n">iterations</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">Y_test_aug</span><span class="o">.</span><span class="n">n</span><span class="o">/</span><span class="n">batch_size_value</span><span class="p">)</span>                
+                                                                                
+            <span class="c1"># Count number of digits in n. This is important for the number     </span>
+            <span class="c1"># of leading zeros in the name of the maps                          </span>
+            <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Y_test_aug</span><span class="o">.</span><span class="n">n</span><span class="p">))</span>                                           
+                                                                                
+            <span class="n">cont</span> <span class="o">=</span> <span class="mi">0</span>                                                            
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">iterations</span><span class="p">)):</span>                                 
+                <span class="n">batch</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">Y_test_aug</span><span class="p">)</span>                                         
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">batch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>                              
+                    <span class="k">if</span> <span class="n">cont</span> <span class="o">&gt;=</span> <span class="n">Y_test_aug</span><span class="o">.</span><span class="n">n</span><span class="p">:</span>                                     
+                        <span class="k">break</span>                                                   
+                                                                                
+                    <span class="n">img_map</span> <span class="o">=</span> <span class="n">make_weight_map</span><span class="p">(</span><span class="n">batch</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>                  
+                                                                                
+                    <span class="c1"># Resize correctly the maps so that it can be used in the model</span>
+                    <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span> <span class="o">=</span> <span class="n">img_map</span><span class="o">.</span><span class="n">shape</span>                                  
+                    <span class="n">img_map</span> <span class="o">=</span> <span class="n">img_map</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>                  
+                                                                                
+                    <span class="c1"># Saving files as .npy files                                </span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                                <span class="n">test_w_path</span><span class="p">,</span> <span class="s2">&quot;w_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">cont</span><span class="p">)</span><span class="o">.</span><span class="n">zfill</span><span class="p">(</span><span class="n">d</span><span class="p">)),</span> <span class="n">img_map</span><span class="p">)</span>                     
+                                                                                
+                    <span class="n">cont</span> <span class="o">+=</span> <span class="mi">1</span>                                                   
+                                                                                
+            <span class="n">Y_test_aug</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>                                                                   
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Test weight maps are already prepared!&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">c_w_path</span><span class="p">):</span>                                     
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Constructing complete image weight maps from disk . . .&quot;</span><span class="p">)</span>              
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">c_w_path</span><span class="p">)</span>                                            
+                                                                                
+            <span class="n">iterations</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">Y_cmp_aug</span><span class="o">.</span><span class="n">n</span><span class="o">/</span><span class="n">batch_size_value</span><span class="p">)</span>               
+                                                                                
+            <span class="c1"># Count number of digits in n. This is important for the number     </span>
+            <span class="c1"># of leading zeros in the name of the maps                          </span>
+            <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Y_cmp_aug</span><span class="o">.</span><span class="n">n</span><span class="p">))</span>                                          
+                                                                                
+            <span class="n">cont</span> <span class="o">=</span> <span class="mi">0</span>                                                            
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">iterations</span><span class="p">)):</span>                                 
+                <span class="n">batch</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">Y_cmp_aug</span><span class="p">)</span>                                        
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">batch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>                              
+                    <span class="k">if</span> <span class="n">cont</span> <span class="o">&gt;=</span> <span class="n">Y_cmp_aug</span><span class="o">.</span><span class="n">n</span><span class="p">:</span>                                    
+                        <span class="k">break</span>                                                   
+                    
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Making the map&quot;</span><span class="p">)</span>                                                            
+                    <span class="n">img_map</span> <span class="o">=</span> <span class="n">make_weight_map</span><span class="p">(</span><span class="n">batch</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>                  
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Map created&quot;</span><span class="p">)</span>
+                                                                                
+                    <span class="c1"># Resize correctly the maps so that it can be used in the model</span>
+                    <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span> <span class="o">=</span> <span class="n">img_map</span><span class="o">.</span><span class="n">shape</span>                                  
+                    <span class="n">img_map</span> <span class="o">=</span> <span class="n">img_map</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>                  
+                                                                                
+                    <span class="c1"># Saving files as .npy files                                </span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                                <span class="n">c_w_path</span><span class="p">,</span> <span class="s2">&quot;w_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">cont</span><span class="p">)</span><span class="o">.</span><span class="n">zfill</span><span class="p">(</span><span class="n">d</span><span class="p">)),</span> <span class="n">img_map</span><span class="p">)</span>
+                                                                                
+                    <span class="n">cont</span> <span class="o">+=</span> <span class="mi">1</span>                                                   
+                                                                                
+            <span class="n">Y_cmp_aug</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>                                                                   
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Complete image weight maps are already prepared!&quot;</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Weight maps are prepared!&quot;</span><span class="p">)</span></div>
+    
+
+<div class="viewcode-block" id="combine_generators"><a class="viewcode-back" href="../../2d_generator_keras.html#generators.keras_da_gen.combine_generators">[docs]</a><span class="k">def</span> <span class="nf">combine_generators</span><span class="p">(</span><span class="n">X_aug</span><span class="p">,</span> <span class="n">Y_aug</span><span class="p">,</span> <span class="n">W_aug</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Combine generators into one.</span>
+<span class="sd">    </span>
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       X_aug : Keras ImageDataGenerator</span>
+<span class="sd">           Image generator.</span>
+
+<span class="sd">       Y_aug : Keras ImageDataGenerator</span>
+<span class="sd">           Mask generator.</span>
+
+<span class="sd">       W_aug : Keras ImageDataGenerator, optional</span>
+<span class="sd">           Weight map generator.</span>
+<span class="sd">    </span>
+<span class="sd">       Yields</span>
+<span class="sd">       ------</span>
+<span class="sd">       out : 2 element list </span>
+<span class="sd">           One batch of the generator.                                          </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">W_aug</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">generator</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">X_aug</span><span class="p">,</span> <span class="n">Y_aug</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span> <span class="ow">in</span> <span class="n">generator</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">generator</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">X_aug</span><span class="p">,</span> <span class="n">Y_aug</span><span class="p">,</span> <span class="n">W_aug</span><span class="p">)</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">weight</span><span class="p">)</span> <span class="ow">in</span> <span class="n">generator</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="p">([</span><span class="n">img</span><span class="p">,</span> <span class="n">weight</span><span class="p">],</span> <span class="n">label</span><span class="p">)</span> </div>
+        
+        
+<div class="viewcode-block" id="crop_generator"><a class="viewcode-back" href="../../2d_generator_keras.html#generators.keras_da_gen.crop_generator">[docs]</a><span class="k">def</span> <span class="nf">crop_generator</span><span class="p">(</span><span class="n">generator</span><span class="p">,</span> <span class="n">crop_length</span><span class="p">,</span> <span class="n">val</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">weights_on_data</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Generate random crops of the images extracted from a generator. Uses</span>
+<span class="sd">       :meth:`util.random_crop` to make the crop. </span>
+
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       generator : Keras ImageDataGenerator</span>
+<span class="sd">           Generator to extract images from. </span>
+<span class="sd">        </span>
+<span class="sd">       crop_length : int</span>
+<span class="sd">           Size of the crop. Its shape will be square: </span>
+<span class="sd">           ``(crop_length, crop_length)``.</span>
+<span class="sd">      </span>
+<span class="sd">       val: bool, optional</span>
+<span class="sd">           To advise the function that the given data is for validation, which </span>
+<span class="sd">           ensures that the crop choosen will be always the same: starting from</span>
+<span class="sd">           (0,0) coords. </span>
+
+<span class="sd">       weights_on_data : bool, optional</span>
+<span class="sd">           To advise the method that weights on data should be unpacked from the</span>
+<span class="sd">           batches extracted from the generator.</span>
+<span class="sd">     </span>
+<span class="sd">       Yields</span>
+<span class="sd">       ------</span>
+<span class="sd">       out : 2 element list</span>
+<span class="sd">           One batch of the generator. </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">batch_x</span><span class="p">,</span> <span class="n">batch_y</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">generator</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">weights_on_data</span><span class="p">:</span>
+            <span class="n">x</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">batch_x</span> 
+            <span class="n">y</span> <span class="o">=</span> <span class="n">batch_y</span>
+            <span class="n">batch_crops_w</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">crop_length</span><span class="p">,</span> <span class="n">crop_length</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">batch_x</span>
+            <span class="n">y</span> <span class="o">=</span> <span class="n">batch_y</span>
+
+        <span class="n">batch_crops_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">crop_length</span><span class="p">,</span> <span class="n">crop_length</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="n">batch_crops_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">crop_length</span><span class="p">,</span> <span class="n">crop_length</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+            <span class="k">if</span> <span class="n">weights_on_data</span><span class="p">:</span>
+                <span class="n">batch_crops_x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>\
+                <span class="n">batch_crops_y</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>\
+                <span class="n">batch_crops_w</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">random_crop</span><span class="p">(</span>
+                    <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">(</span><span class="n">crop_length</span><span class="p">,</span> <span class="n">crop_length</span><span class="p">),</span> <span class="n">val</span><span class="o">=</span><span class="n">val</span><span class="p">,</span> 
+                    <span class="n">weight_map</span><span class="o">=</span><span class="n">w</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+                <span class="k">yield</span> <span class="p">([</span><span class="n">batch_crops_x</span><span class="p">,</span> <span class="n">batch_crops_w</span><span class="p">],</span> <span class="n">batch_crops_y</span><span class="p">)</span>
+            
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">batch_crops_x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>\
+                <span class="n">batch_crops_y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">random_crop</span><span class="p">(</span>
+                    <span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">(</span><span class="n">crop_length</span><span class="p">,</span> <span class="n">crop_length</span><span class="p">),</span> <span class="n">val</span><span class="o">=</span><span class="n">val</span><span class="p">)</span>
+
+                <span class="k">yield</span> <span class="p">(</span><span class="n">batch_crops_x</span><span class="p">,</span> <span class="n">batch_crops_y</span><span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

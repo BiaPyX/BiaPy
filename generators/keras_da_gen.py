@@ -9,134 +9,196 @@ from data_manipulation import random_crop
 def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None, 
                        ld_img_from_disk=False, data_paths=None, target_size=None, 
                        c_target_size=None, batch_size_value=1, val=True, 
-                       save_examples=True, out_dir='aug', 
-                       hflip=False, vflip=False, seedValue=42, rotation_range=180, 
+                       save_examples=True, out_dir='aug', hflip=False,
+                       vflip=False, seedValue=42, rotation_range=180, 
                        fill_mode='reflect', preproc_function=False, 
                        featurewise_center=False, brightness_range=None, 
                        channel_shift_range=0.0, shuffle_train=True,
                        shuffle_val=False, featurewise_std_normalization=False, 
-                       zoom=False, w_shift_r=0.0, h_shift_r=0.0, shear_range=0,
-                       random_crops_in_DA=False, crop_length=0, 
+                       zoom=0.0, w_shift_r=0.0, h_shift_r=0.0, shear_range=0,
+                       random_crops_in_DA=False, crop_length=0,
                        weights_on_data=False, weights_path=None):             
                                                                                 
-    """Makes data augmentation of the given input data.                         
+    """Makes data augmentation of the given input data based on Keras 
+       ``ImageDataGenerator`` class.                         
                                                                                 
-       Args:                                                                    
-            X_train (4D Numpy array, optional): train data. If this arg is provided 
-            data_paths arg value will be avoided.
-            E.g. (num_of_images, x, y, channels).
+       Parameters
+       ----------                                                                    
+       X_train : 4D Numpy array, optional
+           Train data. If provided ``data_paths`` arg value will be avoided.
+           E.g. ``(num_of_images, x, y, channels)``.
 
-            Y_train (4D Numpy array, optional): train mask data.                             
-            E.g. (num_of_images, x, y, channels).
+       Y_train : 4D Numpy array, optional
+           Train mask data. E.g. ``(num_of_images, x, y, channels)``.
 
-            X_val (4D Numpy array, optional): validation data.
-            E.g. (num_of_images, x, y, channels).
+       X_val : 4D Numpy array, optional
+           Validation data. E.g. ``(num_of_images, x, y, channels)``.
 
-            Y_val (4D Numpy array, optional): validation mask data.
-            E.g. (num_of_images, x, y, channels).
+       Y_val : 4D Numpy array, optional
+           Validation mask data. E.g. ``(num_of_images, x, y, channels)``.
 
-            ld_img_from_disk (bool, optional): to make the generator with
-            images loaded form disk instead of use X_train, Y_train, X_val 
-            and Y_val.
+       ld_img_from_disk : bool, optional
+           To make the generator with images loaded form disk instead of use
+           ``X_train``, ``Y_train``, ``X_val`` and ``Y_val``.
 
-            data_paths (list of str, optional): list of paths where the data is 
-            stored. Use this instead of X_train and Y_train args to do not 
-            charge the data in memory and make a generator over the paths 
-            instead. The path order is this: 1) train images path 2) train masks
-            path 3) validation images path 4) validation masks path 5) test 
-            images path 6) test masks path 7) complete images path (this last 
-            useful to make the smoothing post processing, as it requires the 
-            reconstructed data) 8) complete mask path. To provide the validation 
-            data val must be set to True. If no validation data provided the 
-            order of the paths is the same avoiding validation ones.
+       data_paths : list of str, optional
+           List of paths where the data is stored. Use this instead of ``X_train``
+           and ``Y_train`` args to do not charge the data in memory and make a
+           generator over the paths instead. The path order is this: 1) train
+           images path 2) train masks path 3) validation images path 4) validation
+           masks path 5) test images path 6) test masks path 7) complete images
+           path (this last useful to make the smoothing post processing, as it
+           requires the reconstructed data) 8) complete mask path. To provide the
+           validation data val must be set to ``True``. If no validation data
+           provided the order of the paths is the same avoiding validation ones.
 
-            target_size (2D int tuple, optional): size where the images will be 
-            resized if data_paths is defined. 
+       target_size : 2D int tuple, optional
+           Size where the images will be resized if data_paths is defined. 
 
-            c_target_size (2D int tuple, optional): size where complete images 
-            will be resized if data_paths is defined. 
+       c_target_size : 2D int tuple, optional
+           Size where complete images will be resized if data_paths is defined. 
 
-            batch_size_value (int, optional): batch size.
+       batch_size_value : int, optional
+           Batch size value.
 
-            val (bool, optional): If True validation data generator will be 
-            returned.
+       val : bool, optional
+           If ``True`` validation data generator will be returned.
 
-            save_examples (bool, optional): if true 5 examples of DA are stored.
+       save_examples : bool, optional
+           If ``True`` 5 examples of DA are stored.
 
-            out_dir (string, optional): save directory suffix.                  
+       out_dir : string, optional
+           Save directory suffix.                  
 
-            hflip (bool, optional): if true horizontal flips are made.          
+       hflip : bool, optional
+           If ``True`` horizontal flips are made.          
 
-            vflip (bool, optional): if true vertical flip are made.             
+       vflip : bool, optional
+           If ``True`` vertical flip are made.             
 
-            seedValue (int, optional): seed value.                              
+       seedValue : int, optional
+           Seed value.                              
 
-            rotation_range (int, optional): range of rotation degrees.
+       rotation_range : int, optional
+           Range of rotation degrees.
 
-            fill_mode (str, optional): ImageDataGenerator of Keras fill mode    
-            values.
+       fill_mode : str, optional
+           ``ImageDataGenerator`` of Keras fill mode values.
 
-            preproc_function (bool, optional): if true preprocess function to   
-            make random 180 degrees rotations are performed.                    
+       preproc_function : function, optional
+           Preprocessing function to apply.
 
-            featurewise_center (bool, optional): set input mean to 0 over the   
-            dataset, feature-wise.
+       featurewise_center : bool, optional
+           Set input mean to 0 over the dataset, feature-wise.
 
-            brightness_range (2D float tuple, optional): range for picking a 
-            brightness shift value from.
+       brightness_range : 2D float tuple, optional
+           Range for picking a brightness shift value from.
 
-            channel_shift_range (float, optional): range for random channel 
-            shifts.
+       channel_shift_range : float, optional
+           Range for random channel shifts.
 
-            shuffle_train (bool, optional): randomize the training data on each 
-            epoch.
+       shuffle_train : bool, optional
+           Randomize the training data on each epoch.
 
-            shuffle_val(bool, optional): randomize the validation data on each 
-            epoch.
+       shuffle_val : bool, optional
+           Randomize the validation data on each epoch.
 
-            featurewise_std_normalization (bool, optional): divide inputs by std 
-            of the dataset, feature-wise.                                       
+       featurewise_std_normalization : bool, optional
+           Divide inputs by std of the dataset, feature-wise.                                       
 
-            zoom (bool, optional): make random zoom in the images.              
+       zoom : float, optional
+           Range for random zoom.
 
-            w_shift_r (float, optional): width shift range.
+       w_shift_r : float, optional
+           Width shift range.
 
-            h_shift_r (float, optional): height shift range.
+       h_shift_r : float, optional
+           Height shift range.
 
-            shear_range (float, optional): range to apply shearing 
-            transformations. 
+       shear_range : float, optional
+           Range to apply shearing transformations. 
 
-            random_crops_in_DA (bool, optional): decide to make random crops 
-            in DA (after transformations).                                           
+       random_crops_in_DA : bool, optional
+           Decide to make random crops in DA (after transformations).                                           
 
-            crop_length (int, optional): length of the random crop before DA. 
-            weights_on_data (bool, optional): to make a weights generator 
-            for the weighted loss. 
+       crop_length : int, optional
+           Length of the random crop before DA. 
 
-       Returns:                                                                 
-            train_generator (Iterator): train data iterator.                                                           
+       weights_on_data : bool, optional
+           To make a weights generator for the weighted loss. 
 
-            val_generator (Iterator, optional): validation data iterator.
+       Returns
+       -------                                                                 
+       train_generator : Iterator
+           Train data iterator.                                                           
 
-            X_test_aug (Iterator, optional): test data iterator.
+       val_generator : Iterator, optional
+           Validation data iterator.
 
-            Y_test_aug (Iterator, optional): test masks iterator.
+       X_test_aug : Iterator, optional
+           Test data iterator.
 
-            W_test_aug (Iterator, optional): test weight maps iterator.
+       Y_test_aug : Iterator, optional
+           Test masks iterator.
 
-            X_complete_aug (Iterator, optional): original data iterator useful 
-            to make the smoothing post processing, as it requires the 
-            reconstructed data.
-            
-            Y_complete_aug (Iterator, optional): original mask iterator.
+       W_test_aug : Iterator, optional
+           Test weight maps iterator.
 
-            W_complete_aug (Iterator, optional): original weight maps iterator.
+       X_complete_aug : Iterator, optional
+           Original data iterator useful to make the smoothing post processing,
+           as it requires the reconstructed data.
+       
+       Y_complete_aug : Iterator, optional
+           Original mask iterator.
 
-            n_train_samples (int, optional): number of training samples.  
+       W_complete_aug : Iterator, optional
+           Original weight maps iterator.
 
-            n_val_samples (int, optional): number of validation samples.
+       n_train_samples : int, optional
+           Number of training samples.  
 
-            n_test_samples (int, optional): number of test samples.
+       n_val_samples : int, optional
+           Number of validation samples.
+
+       n_test_samples : int, optional
+           Number of test samples.
+
+       
+       Examples
+       --------
+       ::
+        
+           # EXAMPLE 1
+           # Create a train and val data generators making random rotations between
+           # 0 and 180 degrees and vertical/horizontal flips. 
+
+           X_train = np.zeros((1776, 256, 256, 1))
+           Y_train = np.zeros((1776, 256, 256, 1))
+           X_val = np.zeros((204, 256, 256, 1))
+           Y_val = np.zeros((204, 256, 256, 1))
+
+           train_generator, val_generator = keras_da_generator(
+               X_train=X_train, Y_train=Y_train, X_val=X_val, Y_val=Y_val, 
+               batch_size_value=6, save_examples=True, out_dir='da_out',
+               shuffle_train=True, shuffle_val=False, rotation_range=180,
+               vflip=True, hflip=True)
+
+
+           # EXAMPLE 2
+           # Generate random crops on DA-time. To allow that notice that the
+           # data in this case is bigger in width and height than example 1, to
+           # allow a (256, 256) random crop extraction
+           X_train = np.zeros((148, 768, 1024, 1))
+           Y_train = np.zeros((148, 768, 1024, 1))
+           X_val = np.zeros((17, 768, 1024, 1))
+           Y_val = np.zeros((17, 768, 1024, 1))
+ 
+           train_generator, 
+           val_generator = keras_da_generator(
+               X_train=X_train, Y_train=Y_train, X_val=X_val, Y_val=Y_val, 
+               batch_size_value=6, save_examples=True, out_dir='da_out',
+               shuffle_train=True, shuffle_val=False, rotation_range=180,
+               random_crops_in_DA=True, crop_length=256, vflip=True, hflip=True)
     """                                                                         
 
     if X_train is None and not ld_img_from_disk:
@@ -157,19 +219,17 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
        raise ValueError(
            "'weights_path' must be provided when weights is selected")
 
-    zoom_val = 0.25 if zoom else 0                                      
-                                                                                
     data_gen_args1 = dict(
         horizontal_flip=hflip, vertical_flip=vflip, fill_mode=fill_mode, 
         rotation_range=rotation_range, featurewise_center=featurewise_center,            
         featurewise_std_normalization=featurewise_std_normalization, 
-        zoom_range=zoom_val, width_shift_range=w_shift_r,
+        zoom_range=zoom, width_shift_range=w_shift_r,
         height_shift_range=h_shift_r, shear_range=shear_range,
         channel_shift_range=channel_shift_range,
         brightness_range=brightness_range, rescale=1./255)
     data_gen_args2 = dict(
         horizontal_flip=hflip, vertical_flip=vflip, fill_mode=fill_mode, 
-        rotation_range=rotation_range, zoom_range=zoom_val, 
+        rotation_range=rotation_range, zoom_range=zoom, 
         width_shift_range=w_shift_r, height_shift_range=h_shift_r, 
         shear_range=shear_range, rescale=1./255)                              
 
@@ -382,6 +442,7 @@ def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None,
     if random_crops_in_DA == True:                                                
         train_generator = crop_generator(train_generator, crop_length, 
                                          weights_on_data=weights_on_data)
+                          
         if val == True:
             val_generator = crop_generator(val_generator, crop_length, val=True,
                                            weights_on_data=weights_on_data)
@@ -403,76 +464,86 @@ def keras_gen_samples(num_samples, X_data=None, Y_data=None,
                       vflip=True, seedValue=42, rotation_range=180, 
                       fill_mode='reflect', preproc_function=None,
                       featurewise_center=False, brightness_range=None,
-                      channel_shift_range=0.0,
-                      featurewise_std_normalization=False,
-                      zoom=False, w_shift_r=0.0, h_shift_r=0.0, shear_range=0):
-
+                      channel_shift_range=0.0, featurewise_std_normalization=False,
+                      zoom=0.0, w_shift_r=0.0, h_shift_r=0.0, shear_range=0):
     """Generates samples based on keras da generator.
     
-       Args:
-            num_samples (int): number of sampels to create.
+       Parameters
+       ----------
+       num_samples : int
+           Number of samples to create.
 
-            X_data (4D Numpy array, optional): data used to generate samples.
-            E.g. (num_of_images, x, y, channels).
+       X_data : 4D Numpy array, optional
+           Data used to generate samples. E.g. ``(num_of_images, x, y, channels)``.
 
-            Y_data (4D Numpy array, optional): mask used to generate samples. 
-            E.g. (num_of_images, x, y, channels).
+       Y_data : 4D Numpy array, optional
+           Mask used to generate samples. E.g. ``(num_of_images, x, y, channels)``.
 
-            ld_img_from_disk (bool, optional): to advise the function to 
-            load images from disk instead of use X_data or Y_data.
+       ld_img_from_disk : bool, optional
+           To advise the function to load images from disk instead of use 
+           ``X_data`` and ``Y_data``.
 
-            data_paths (list of str): path were the data and mask are stored to 
-            generate the new samples.
+       data_paths : list of str
+           Path were the data and mask are stored to generate the new samples.
 
-            target_size (2D int tuple, optional): shape of the images to load 
-            from disk.
+       target_size : 2D int tuple, optional
+           Shape of the images to load from disk.
 
-            batch_size_value (int, optional): batch size value.
+       batch_size_value : int, optional
+           Batch size value.
 
-            shuffle_data (bool, optional): shuffle the data while generating new
-            samples. 
+       shuffle_data : bool, optional
+           Shuffle the data while generating new samples. 
 
-            hflip (bool, optional): if true horizontal flips are made.
+       hflip : bool, optional
+           If ``True`` horizontal flips are made.
 
-            vflip (bool, optional): if true vertical flip are made.
+       vflip : bool, optional
+           If ``True`` vertical flip are made.
 
-            seedValue (int, optional): seed value.
+       seedValue : int, optional
+           Seed value.
 
-            rotation_range (int, optional): range of rotation degrees.
+       rotation_range : int, optional
+           Range of rotation degrees.
 
-            fill_mode (str, optional): ImageDataGenerator of Keras fill mode
-            values.
+       fill_mode : str, optional
+           ``ImageDataGenerator`` of Keras fill mode values.
 
-            preproc_function (bool, optional): if true preprocess function to
-            make random 180 degrees rotations are performed.
+       preproc_function : function, optional                                    
+           Preprocessing function to apply.                                     
+                                                                                
+       featurewise_center : bool, optional                                      
+           Set input mean to 0 over the dataset, feature-wise.                  
+                                                                                
+       brightness_range : 2D float tuple, optional                              
+           Range for picking a brightness shift value from.                     
+                                                                                
+       channel_shift_range : float, optional                                    
+           Range for random channel shifts.                                     
+                                                                                
+       featurewise_std_normalization : bool, optional                           
+           Divide inputs by std of the dataset, feature-wise.                                       
+                                                                                
+       zoom : float, optional                                                   
+           Range for random zoom.                                               
+                                                                                
+       w_shift_r : float, optional                                              
+           Width shift range.                                                   
+                                                                                
+       h_shift_r : float, optional                                              
+           Height shift range.                                                  
+                                                                                
+       shear_range : float, optional                                            
+           Range to apply shearing transformations.     
 
-            featurewise_center (bool, optional): set input mean to 0 over the
-            dataset, feature-wise.
+       Returns
+       -------
+       x_samples : 4D Numpy array
+           Data new samples. E.g. ``(num_samples, x, y, channels)``.
 
-            brightness_range (2D float tuple, optional): range for picking a 
-            brightness shift value from.
-
-            channel_shift_range (float, optional): range for random channel
-            shifts.
-
-            featurewise_std_normalization (bool, optional): divide inputs by std
-            of the dataset, feature-wise.
-
-            zoom (bool, optional): make random zoom in the images.
-
-            w_shift_r (float, optional): width shift range.
-
-            h_shift_r (float, optional): height shift range.
-
-            shear_range (float, optional): range to apply shearing
-            transformations.
-        
-       Return:
-            x_samples (4D Numpy array): data new samples.
-            E.g. (num_samples, x, y, channels).
-
-            y_samples (4D numpy array): mask new samples.
-            E.g. (num_samples, x, y, channels).
+       y_samples : 4D numpy array
+           Mask new samples. E.g. ``(num_samples, x, y, channels)``.
     """
 
     if num_samples == 0:
@@ -489,21 +560,19 @@ def keras_gen_samples(num_samples, X_data=None, Y_data=None,
         raise ValueError("data_paths must contain the following paths: 1) data "
                          "path ; 2) data masks path")
 
-    zoom_val = 0.25 if zoom == True else 0
-
     data_gen_args1 = dict(
         horizontal_flip=hflip, vertical_flip=vflip, fill_mode=fill_mode, 
         rotation_range=rotation_range, preprocessing_function=preproc_function,
         featurewise_center=featurewise_center, 
         featurewise_std_normalization=featurewise_std_normalization,
-        zoom_range=zoom_val, width_shift_range=w_shift_r, 
+        zoom_range=zoom, width_shift_range=w_shift_r, 
         height_shift_range=h_shift_r, shear_range=shear_range, 
         channel_shift_range=channel_shift_range, 
         brightness_range=brightness_range, rescale=1./255)
     data_gen_args2 = dict(
         horizontal_flip=hflip, vertical_flip=vflip, fill_mode=fill_mode, 
         rotation_range=rotation_range, preprocessing_function=preproc_function,
-        zoom_range=zoom_val, width_shift_range=w_shift_r, 
+        zoom_range=zoom, width_shift_range=w_shift_r, 
         height_shift_range=h_shift_r, shear_range=shear_range, rescale=1./255)
 
     X_datagen = kerasDA(**data_gen_args1)
@@ -580,44 +649,55 @@ def prepare_weight_maps(train_w_path, val_w_path, test_w_path, c_w_path=None,
                         Y_train=None, Y_val=None, Y_test=None, 
                         ld_img_from_disk=False, Y_train_aug=None, Y_val_aug=None, 
                         Y_test_aug=None, Y_cmp_aug=None, batch_size_value=1):
-    """Prepare weight maps saving them into a given path. If the paths are created
-       it suposses that weight maps are already generated. 
+    """Prepare weight maps saving them into a given path. When the paths exist
+       it suposses that weight maps are already generated. Uses 
+       :meth:`util.make_weight_map` and :meth:`util.do_save_wm`.
 
-       Args:
-            train_w_path (str): path where train images should be stored.
+       Parameters
+       ----------
+       train_w_path : str
+           Path where train images should be stored.
 
-            val_w_path (str): path where validation images should be stored.
+       val_w_path : str
+           Path where validation images should be stored.
 
-            test_w_path (str): path where test images should be stored.
+       test_w_path : str
+           Path where test images should be stored.
 
-            c_w_path (str): path where complete images should be stored. 
-            Ignored if 'ld_img_from_disk' is False.
+       c_w_path : str
+           Path where complete images should be stored. Ignored if 
+           ``ld_img_from_disk`` is ``False``.
 
-            Y_train (4D Numpy array, optional): train mask data used to generate 
-            weight maps. E.g. (num_of_images, x, y, channels).
+       Y_train : 4D Numpy array, optional
+           Train mask data used to generate weight maps. 
+           E.g.``(num_of_images, x, y, channels)``.
 
-            Y_val (Numpy array, optional): validation mask data used to generate
-            weight maps. E.g. (num_of_images, x, y, channels).
+       Y_val : Numpy array, optional
+           Validation mask data used to generate weight maps. 
+           E.g. ``(num_of_images, x, y, channels)``.
 
-            Y_test (Numpy array, optional): test mask data used to generate
-            weight maps. E.g. (num_of_images, x, y, channels).
+       Y_test : Numpy array, optional
+           Test mask data used to generate weight maps.
+           E.g. ``(num_of_images, x, y, channels)``.
 
-            ld_img_from_disk (bool, optional): to advise the function to
-            load images from disk instead of use Y_train_data or Y_val.
+       ld_img_from_disk : bool, optional
+           To advise the function to load images from disk instead of use 
+           ``Y_train_aug``, ``Y_val_aug`` and ``Y_test_aug``.
 
-            Y_train_aug (Keras ImageDataGenerator, optional): train mask 
-            generator used to produce weight maps.
+       Y_train_aug : Keras ImageDataGenerator, optional
+           Train mask generator used to produce weight maps.
 
-            Y_val_aug (Keras ImageDataGenerator, optional): validation mask
-            generator used to produce weight maps.
+       Y_val_aug : Keras ImageDataGenerator, optional
+           Validation mask generator used to produce weight maps.
 
-            Y_test_aug (Keras ImageDataGenerator, optional): test mask generator 
-            used to produce weight maps.
+       Y_test_aug : Keras ImageDataGenerator, optional
+           Test mask generator used to produce weight maps.
 
-            Y_cmp_aug (Keras ImageDataGenerator, optional): complete image mask 
-            generator used to produce weight maps.
+       Y_cmp_aug : Keras ImageDataGenerator, optional
+           Complete image mask generator used to produce weight maps.
 
-            batch_size_value (int, optional): batch size value. 
+       batch_size_value : int, optional
+           Batch size value. 
     """
 
     if Y_train is None and not ld_img_from_disk:
@@ -788,15 +868,21 @@ def prepare_weight_maps(train_w_path, val_w_path, test_w_path, c_w_path=None,
 def combine_generators(X_aug, Y_aug, W_aug=None):
     """Combine generators into one.
     
-       Args:
-            X_aug (Keras ImageDataGenerator): image generator.
+       Parameters
+       ----------
+       X_aug : Keras ImageDataGenerator
+           Image generator.
 
-            Y_aug (Keras ImageDataGenerator): mask generator.
+       Y_aug : Keras ImageDataGenerator
+           Mask generator.
 
-            W_aug (Keras ImageDataGenerator, optional): weight map generator.
+       W_aug : Keras ImageDataGenerator, optional
+           Weight map generator.
     
-       Return:
-            The combination of given generators.
+       Yields
+       ------
+       out : 2 element list 
+           One batch of the generator.                                          
     """
 
     if W_aug is None:
@@ -810,17 +896,37 @@ def combine_generators(X_aug, Y_aug, W_aug=None):
             yield ([img, weight], label) 
         
         
-def crop_generator(batches, crop_length, val=False, prob_map=False, 
-                   weights_on_data=False):
-    """Generate random crops of the given images.
+def crop_generator(generator, crop_length, val=False, weights_on_data=False):
+    """Generate random crops of the images extracted from a generator. Uses
+       :meth:`util.random_crop` to make the crop. 
+
+       Parameters
+       ----------
+       generator : Keras ImageDataGenerator
+           Generator to extract images from. 
         
-       Based on:                                                                
-           https://jkjung-avt.github.io/keras-image-cropping/  
+       crop_length : int
+           Size of the crop. Its shape will be square: 
+           ``(crop_length, crop_length)``.
+      
+       val: bool, optional
+           To advise the function that the given data is for validation, which 
+           ensures that the crop choosen will be always the same: starting from
+           (0,0) coords. 
+
+       weights_on_data : bool, optional
+           To advise the method that weights on data should be unpacked from the
+           batches extracted from the generator.
+     
+       Yields
+       ------
+       out : 2 element list
+           One batch of the generator. 
     """
 
     while True:
-        batch_x, batch_y = next(batches)
-        if weights_on_data == True:
+        batch_x, batch_y = next(generator)
+        if weights_on_data:
             x, w = batch_x 
             y = batch_y
             batch_crops_w = np.zeros((x.shape[0], crop_length, crop_length, 1))
@@ -832,7 +938,7 @@ def crop_generator(batches, crop_length, val=False, prob_map=False,
         batch_crops_y = np.zeros((x.shape[0], crop_length, crop_length, 1))
 
         for i in range(x.shape[0]):
-            if weights_on_data == True:
+            if weights_on_data:
                 batch_crops_x[i],\
                 batch_crops_y[i],\
                 batch_crops_w[i] = random_crop(
@@ -845,9 +951,6 @@ def crop_generator(batches, crop_length, val=False, prob_map=False,
                 batch_crops_x[i],\
                 batch_crops_y[i] = random_crop(
                     batch_x[i], batch_y[i], (crop_length, crop_length), val=val)
-                    
 
                 yield (batch_crops_x, batch_crops_y)
-        
-
 
