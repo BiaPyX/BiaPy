@@ -508,8 +508,8 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
     if not random_subvolumes_in_DA:
         print("Cropping train data subvolumes . . .")
         if overlap_train:
-            X_test, Y_test = crop_3D_data_with_overlap(
-                X_test, test_subvol_shape, data_mask=Y_test, overlap=ov) 
+            X_train, Y_train = crop_3D_data_with_overlap(
+                X_train, train_subvol_shape, data_mask=Y_train, overlap=ov) 
         else:
             X_train, Y_train = crop_3D_data(
                 X_train, train_subvol_shape, use_rest=use_rest_train,
