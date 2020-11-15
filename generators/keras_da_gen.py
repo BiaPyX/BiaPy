@@ -4,7 +4,7 @@ import math
 from tqdm import tqdm
 from tensorflow.keras.preprocessing.image import ImageDataGenerator as kerasDA
 from util import do_save_wm, make_weight_map
-from data_manipulation import random_crop
+from data_2D_manipulation import random_crop
 
 def keras_da_generator(X_train=None, Y_train=None, X_val=None, Y_val=None, 
                        ld_img_from_disk=False, data_paths=None, target_size=None, 

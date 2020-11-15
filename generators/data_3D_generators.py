@@ -4,10 +4,9 @@ import random
 import os
 from tqdm import tqdm
 from skimage.io import imread
-from util import save_img
+from util import save_img, img_to_onehot_encoding 
 from scipy.ndimage import rotate
 from scipy.ndimage.interpolation import shift
-from data_manipulation import img_to_onehot_encoding
 from PIL import Image
 import imageio
 from imgaug import augmenters as iaa

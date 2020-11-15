@@ -5,7 +5,8 @@ import os
 from tqdm import tqdm
 from PIL import Image
 from PIL import ImageEnhance
-from data_manipulation import img_to_onehot_encoding, random_crop
+from data_2D_manipulation import random_crop
+from util import img_to_onehot_encoding
 import imgaug as ia                                                             
 from imgaug import augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
