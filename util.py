@@ -170,14 +170,14 @@ def store_history(results, score, time_callback, log_dir, job_file,
     s += str(score['jac_per_image']) + ','
     s += str(score['jac_50ov']) + ','
     s += str(score['jac_full']) + ','
-    s += str(score['smo_score_per_image']) + ','
-    s += str(score['zfil_score_per_image']) + ','
-    s += str(score['smo_zfil_score_per_image']) + ','
-    s += str(score['smo_score_full']) + ','
-    s += str(score['zfil_score_full']) + ','
-    s += str(score['spu_score_full']) + ','
-    s += str(score['wa_score_full']) + ','
-    s += str(score['spu_wa_zfil_score_full']) + ','
+    s += str(score['smo_jac_per_image']) + ','
+    s += str(score['zfil_jac_per_image']) + ','
+    s += str(score['smo_zfil_jac_per_image']) + ','
+    s += str(score['smo_jac_full']) + ','
+    s += str(score['zfil_jac_full']) + ','
+    s += str(score['spu_jac_full']) + ','
+    s += str(score['wa_jac_full']) + ','
+    s += str(score['spu_wa_zfil_jac_full']) + ','
     s += str(score['voc_per_image']) + ','
     s += str(score['voc_50ov']) + ','
     s += str(score['voc_full']) + ','
@@ -233,21 +233,21 @@ def store_history(results, score, time_callback, log_dir, job_file,
     s += '### TEST JACCARD INDEX (full) ### \n'
     s += str(score['jac_full']) + '\n'
     s += '### TEST JACCARD INDEX SMOOTH (per image) ### \n'
-    s += str(score['smo_score_per_image']) + '\n'
+    s += str(score['smo_jac_per_image']) + '\n'
     s += '### TEST JACCARD INDEX Z-FILTERING (per image) ### \n'
-    s += str(score['zfil_score_per_image']) + '\n'
+    s += str(score['zfil_jac_per_image']) + '\n'
     s += '### TEST JACCARD INDEX SMOOTH+Z-FILTERING (per image) ### \n'
-    s += str(score['smo_zfil_score_per_image']) + '\n'
+    s += str(score['smo_zfil_jac_per_image']) + '\n'
     s += '### TEST JACCARD INDEX 8-ENSEMBLE (full) ### \n'
-    s += str(score['smo_score_full']) + '\n'
+    s += str(score['smo_jac_full']) + '\n'
     s += '### TEST JACCARD INDEX Z-FILTERING (full) ### \n'
-    s += str(score['zfil_score_full']) + '\n'
+    s += str(score['zfil_jac_full']) + '\n'
     s += '### TEST JACCARD INDEX SPURIOUS (full) ### \n'
-    s += str(score['spu_score_full']) + '\n'
+    s += str(score['spu_jac_full']) + '\n'
     s += '### TEST JACCARD INDEX WATERSHED (full) ### \n'
-    s += str(score['wa_score_full']) + '\n'
+    s += str(score['wa_jac_full']) + '\n'
     s += '### TEST JACCARD INDEX SPURIOUS+WATERSHED+Z-FILTERING (full) ### \n'
-    s += str(score['spu_wa_zfil_score_full']) + '\n'
+    s += str(score['spu_wa_zfil_jac_full']) + '\n'
     s += '### VOC (per image) ### \n'
     s += str(score['voc_per_image']) + '\n'
     s += '### VOC (per image with 50% ov) ### \n'
@@ -1111,3 +1111,147 @@ def check_binary_masks(path):
                 "Error: given masks are not binary. Please correct the images " 
                 "before training. (image: {})\nValues: {}"             
                 .format(os.path.join(path, ids[i]), values))    
+
+
+def img_to_onehot_encoding(img, num_classes=2):
+    """Converts image given into one-hot encode format.
+
+       Parameters
+       ----------
+       img : Numpy 3D/4D array
+           Image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+
+       num_classes : int, optional
+           Number of classes to distinguish.
+
+       Returns
+       -------
+       one_hot_labels : Numpy 4D array
+           Data one-hot encoded. E.g. ``(x, y, z, num_classes)``.
+
+    """
+
+    if img.ndim == 4:
+        shape = img.shape[:3]+(num_classes,)
+    else:
+        shape = img.shape[:2]+(num_classes,)
+
+    encoded_image = np.zeros(shape, dtype=np.int8)
+
+    for i in range(num_classes):
+        if img.ndim == 4:
+            encoded_image[:,:,:,i] = np.all(img.reshape((-1,1)) == i, axis=1).reshape(shape[:3])
+        else:
+            encoded_image[:,:,i] = np.all(img.reshape((-1,1)) == i, axis=1).reshape(shape[:2])
+
+    return encoded_image
+
+
+def load_data_from_dir(data_dir, shape):
+    """Load data from a directory.
+
+       Parameters
+       ----------
+       data_dir : str 
+           Path to read the data from.
+   
+       shape : 3D int tuple
+           Shape of the data. E.g. ``(x, y, channels)``.
+       
+       Returns
+       -------        
+       data : 4D Numpy array
+           Data loaded. E.g. ``(num_of_images, y, x, channels)``.
+
+       Examples
+       --------
+       ::
+           # EXAMPLE 1
+           # Case where we need to load 165 images of shape (1024, 768)
+           data_path = "data/train/x"
+           data_shape = (1024, 768, 1)
+           
+           load_data_from_dir(data_path, data_shape) 
+           # The function will print the shape of the created array. In this example:
+           #     *** Loaded data shape is (165, 768, 1024, 1)
+           # Notice height and width swap because of Numpy ndarray terminology
+    """
+
+    print("Loading data from {}".format(data_dir))
+    ids = sorted(next(os.walk(data_dir))[2])
+    data = np.zeros((len(ids), ) + shape, dtype=np.float32)
+
+    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+        img = imread(os.path.join(data_dir, id_))
+
+        if len(img.shape) == 2:
+            img = np.expand_dims(img, axis=-1)
+
+        data[n] = img
+
+    print("*** Loaded data shape is {}".format(data.shape))
+    return data
+
+
+def load_ct_data_from_dir(data_dir, shape=None):
+    """Load CT data from a directory.
+
+       Parameters
+       ----------
+       data_dir : str
+           Path to read the data from.
+
+       shape : optional, 3D int tuple
+           Shape of the data. E.g. ``(x, y, channels)``.
+
+       Returns
+       -------
+       data : 4D Numpy array
+           Data loaded. E.g. ``(num_of_images, y, x, channels)``.
+
+       Examples
+       --------
+       ::
+
+           # EXAMPLE 1
+           # Case where we need to load 165 images of shape (1024, 768)
+           data_path = "data/train/x"
+           data_shape = (1024, 768, 1)
+
+           load_data_from_dir(data_path, data_shape)
+
+           # The function will print the shape of the created array. In this example:
+           #     *** Loaded data shape is (165, 768, 1024, 1)
+           # Notice height and width swap because of Numpy ndarray terminology
+    """
+    import nibabel as nib
+
+    print("Loading data from {}".format(data_dir))
+    ids = sorted(next(os.walk(data_dir))[2])
+
+    if shape is None:
+        # Determine max in each dimension first
+        max_x = 0
+        max_y = 0
+        max_z = 0
+        for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+            img = nib.load(os.path.join(data_dir, id_))
+            img = np.array(img.dataobj)
+
+            max_x = img.shape[0] if max_x < img.shape[0] else max_x
+            max_y = img.shape[1] if max_y < img.shape[1] else max_y
+            max_z = img.shape[2] if max_z < img.shape[2] else max_z
+        _shape = (max_x, max_y, max_z)
+    else:
+        _shape = shape
+
+    # Create the array
+    data = np.zeros((len(ids), ) + _shape, dtype=np.float32)
+    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+        img = nib.load(os.path.join(data_dir, id_))
+        img = np.array(img.dataobj)
+        data[n,0:img.shape[0],0:img.shape[1],0:img.shape[2]] = img
+
+    print("*** Loaded data shape is {}".format(data.shape))
+    return data
+
