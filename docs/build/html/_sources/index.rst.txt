@@ -14,7 +14,6 @@ Some of state-of-the-art approaches have been reproduced and implemented to comp
    :maxdepth: 2
 
    how_to_run  
-   data_manipulation 
    metrics
    util
    post_processing
@@ -25,6 +24,7 @@ Some of state-of-the-art approaches have been reproduced and implemented to comp
    :maxdepth: 2                                                                 
    :caption: 2D Data
 
+   data_2d_manipulation
    2d_generator_keras
    2d_generator
 
@@ -33,6 +33,7 @@ Some of state-of-the-art approaches have been reproduced and implemented to comp
    :maxdepth: 2                                                                 
    :caption: 3D Data
 
+   data_3d_manipulation
    3d_generator
 
 

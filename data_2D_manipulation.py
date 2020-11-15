@@ -736,6 +736,7 @@ def check_crops(data, original_shape, ov, num_examples=1, include_crops=True,
        Examples
        --------
        ::
+
            # EXAMPLE 1
            # Check crops made in the first example of 'crop_data' function
            original_shape = (165, 768, 1024)
@@ -947,6 +948,7 @@ def crop_data(data, crop_shape, data_mask=None, force_shape=(0, 0),
        Examples
        --------
        ::
+
            # EXAMPLE 1
            # Divide in (256, 256, 1) crops a given data 
            X_train = np.ones((165, 768, 1024, 1)) 
@@ -1109,6 +1111,7 @@ def merge_data(data, num, out_shape=(1, 1), grid=False):
        Examples
        --------
        ::
+
            # EXAMPLE 1
            # As the first example introduced in crop_data function, the merge after 
            # the crop should be done as follows:

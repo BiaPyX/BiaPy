@@ -82,7 +82,6 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../post_processing.html">Post processing</a></li>
@@ -90,11 +89,13 @@
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../data_2d_manipulation.html">Data manipulation 2D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../2d_generator_keras.html">2D generator (Keras)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../2d_generator.html">2D generator (Custom)</a></li>
 </ul>
 <p class="caption"><span class="caption-text">3D Data</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../data_3d_manipulation.html">Data manipulation 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../3d_generator.html">3D generator</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
@@ -300,11 +301,11 @@
 
     <span class="c1"># Compile the model</span>
     <span class="k">if</span> <span class="n">n_classes</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;categorical_crossentropy&#39;</span><span class="p">,</span>
-                      <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index_softmax</span><span class="p">])</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;binary_crossentropy&#39;</span><span class="p">,</span>
-                      <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>
+        <span class="n">model_fcn</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;categorical_crossentropy&#39;</span><span class="p">,</span>
+                          <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index_softmax</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>   
+        <span class="n">model_fcn</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;binary_crossentropy&#39;</span><span class="p">,</span>
+                          <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>
 
     <span class="k">return</span> <span class="n">model_fcn</span></div>
 
@@ -425,11 +426,11 @@
 
     <span class="c1"># Compile the model</span>
     <span class="k">if</span> <span class="n">n_classes</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;categorical_crossentropy&#39;</span><span class="p">,</span>
-                      <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index_softmax</span><span class="p">])</span>
+        <span class="n">model_fcn</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;categorical_crossentropy&#39;</span><span class="p">,</span>
+                          <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index_softmax</span><span class="p">])</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;binary_crossentropy&#39;</span><span class="p">,</span>
-                      <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>
+        <span class="n">model_fcn</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;binary_crossentropy&#39;</span><span class="p">,</span>
+                          <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>
 
     <span class="k">return</span> <span class="n">model_fcn</span></div>
 </pre></div>

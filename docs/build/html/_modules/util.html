@@ -82,7 +82,6 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../post_processing.html">Post processing</a></li>
@@ -90,11 +89,13 @@
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../data_2d_manipulation.html">Data manipulation 2D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../2d_generator_keras.html">2D generator (Keras)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../2d_generator.html">2D generator (Custom)</a></li>
 </ul>
 <p class="caption"><span class="caption-text">3D Data</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../data_3d_manipulation.html">Data manipulation 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../3d_generator.html">3D generator</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
@@ -358,14 +359,14 @@
     <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;jac_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;jac_50ov&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_score_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_score_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_zfil_score_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;wa_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_wa_zfil_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_jac_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_jac_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_zfil_jac_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;wa_jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_wa_zfil_jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;voc_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;voc_50ov&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;voc_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;,&#39;</span>
@@ -421,21 +422,21 @@
     <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX SMOOTH (per image) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_score_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_jac_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX Z-FILTERING (per image) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_score_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_jac_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX SMOOTH+Z-FILTERING (per image) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_zfil_score_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_zfil_jac_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX 8-ENSEMBLE (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;smo_jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX Z-FILTERING (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;zfil_jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX SPURIOUS (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX WATERSHED (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;wa_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;wa_jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### TEST JACCARD INDEX SPURIOUS+WATERSHED+Z-FILTERING (full) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_wa_zfil_score_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;spu_wa_zfil_jac_full&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC (per image) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">score</span><span class="p">[</span><span class="s1">&#39;voc_per_image&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="n">s</span> <span class="o">+=</span> <span class="s1">&#39;### VOC (per image with 50</span><span class="si">% o</span><span class="s1">v) ### </span><span class="se">\n</span><span class="s1">&#39;</span>
@@ -1299,6 +1300,150 @@
                 <span class="s2">&quot;Error: given masks are not binary. Please correct the images &quot;</span> 
                 <span class="s2">&quot;before training. (image: </span><span class="si">{}</span><span class="s2">)</span><span class="se">\n</span><span class="s2">Values: </span><span class="si">{}</span><span class="s2">&quot;</span>             
                 <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">ids</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span> <span class="n">values</span><span class="p">))</span>    </div>
+
+
+<div class="viewcode-block" id="img_to_onehot_encoding"><a class="viewcode-back" href="../util.html#util.img_to_onehot_encoding">[docs]</a><span class="k">def</span> <span class="nf">img_to_onehot_encoding</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts image given into one-hot encode format.</span>
+
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       img : Numpy 3D/4D array</span>
+<span class="sd">           Image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.</span>
+
+<span class="sd">       num_classes : int, optional</span>
+<span class="sd">           Number of classes to distinguish.</span>
+
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       one_hot_labels : Numpy 4D array</span>
+<span class="sd">           Data one-hot encoded. E.g. ``(x, y, z, num_classes)``.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">img</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+        <span class="n">shape</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">num_classes</span><span class="p">,)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">shape</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">num_classes</span><span class="p">,)</span>
+
+    <span class="n">encoded_image</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int8</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_classes</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">img</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="n">encoded_image</span><span class="p">[:,:,:,</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span> <span class="o">==</span> <span class="n">i</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">[:</span><span class="mi">3</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">encoded_image</span><span class="p">[:,:,</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span> <span class="o">==</span> <span class="n">i</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">encoded_image</span></div>
+
+
+<div class="viewcode-block" id="load_data_from_dir"><a class="viewcode-back" href="../util.html#util.load_data_from_dir">[docs]</a><span class="k">def</span> <span class="nf">load_data_from_dir</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Load data from a directory.</span>
+
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       data_dir : str </span>
+<span class="sd">           Path to read the data from.</span>
+<span class="sd">   </span>
+<span class="sd">       shape : 3D int tuple</span>
+<span class="sd">           Shape of the data. E.g. ``(x, y, channels)``.</span>
+<span class="sd">       </span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------        </span>
+<span class="sd">       data : 4D Numpy array</span>
+<span class="sd">           Data loaded. E.g. ``(num_of_images, y, x, channels)``.</span>
+
+<span class="sd">       Examples</span>
+<span class="sd">       --------</span>
+<span class="sd">       ::</span>
+<span class="sd">           # EXAMPLE 1</span>
+<span class="sd">           # Case where we need to load 165 images of shape (1024, 768)</span>
+<span class="sd">           data_path = &quot;data/train/x&quot;</span>
+<span class="sd">           data_shape = (1024, 768, 1)</span>
+<span class="sd">           </span>
+<span class="sd">           load_data_from_dir(data_path, data_shape) </span>
+<span class="sd">           # The function will print the shape of the created array. In this example:</span>
+<span class="sd">           #     *** Loaded data shape is (165, 768, 1024, 1)</span>
+<span class="sd">           # Notice height and width swap because of Numpy ndarray terminology</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Loading data from </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))</span>
+    <span class="n">ids</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">),</span> <span class="p">)</span> <span class="o">+</span> <span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">id_</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">ids</span><span class="p">),</span> <span class="n">total</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">)):</span>
+        <span class="n">img</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">id_</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">data</span><span class="p">[</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">img</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;*** Loaded data shape is </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">data</span></div>
+
+
+<div class="viewcode-block" id="load_ct_data_from_dir"><a class="viewcode-back" href="../util.html#util.load_ct_data_from_dir">[docs]</a><span class="k">def</span> <span class="nf">load_ct_data_from_dir</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Load CT data from a directory.</span>
+
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       data_dir : str</span>
+<span class="sd">           Path to read the data from.</span>
+
+<span class="sd">       shape : optional, 3D int tuple</span>
+<span class="sd">           Shape of the data. E.g. ``(x, y, channels)``.</span>
+
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       data : 4D Numpy array</span>
+<span class="sd">           Data loaded. E.g. ``(num_of_images, y, x, channels)``.</span>
+
+<span class="sd">       Examples</span>
+<span class="sd">       --------</span>
+<span class="sd">       ::</span>
+
+<span class="sd">           # EXAMPLE 1</span>
+<span class="sd">           # Case where we need to load 165 images of shape (1024, 768)</span>
+<span class="sd">           data_path = &quot;data/train/x&quot;</span>
+<span class="sd">           data_shape = (1024, 768, 1)</span>
+
+<span class="sd">           load_data_from_dir(data_path, data_shape)</span>
+
+<span class="sd">           # The function will print the shape of the created array. In this example:</span>
+<span class="sd">           #     *** Loaded data shape is (165, 768, 1024, 1)</span>
+<span class="sd">           # Notice height and width swap because of Numpy ndarray terminology</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">nibabel</span> <span class="k">as</span> <span class="nn">nib</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Loading data from </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))</span>
+    <span class="n">ids</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>
+
+    <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Determine max in each dimension first</span>
+        <span class="n">max_x</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">max_y</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">max_z</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">id_</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">ids</span><span class="p">),</span> <span class="n">total</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">)):</span>
+            <span class="n">img</span> <span class="o">=</span> <span class="n">nib</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">id_</span><span class="p">))</span>
+            <span class="n">img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">dataobj</span><span class="p">)</span>
+
+            <span class="n">max_x</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">max_x</span> <span class="o">&lt;</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">else</span> <span class="n">max_x</span>
+            <span class="n">max_y</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">max_y</span> <span class="o">&lt;</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">else</span> <span class="n">max_y</span>
+            <span class="n">max_z</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">if</span> <span class="n">max_z</span> <span class="o">&lt;</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">else</span> <span class="n">max_z</span>
+        <span class="n">_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">max_x</span><span class="p">,</span> <span class="n">max_y</span><span class="p">,</span> <span class="n">max_z</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">_shape</span> <span class="o">=</span> <span class="n">shape</span>
+
+    <span class="c1"># Create the array</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">),</span> <span class="p">)</span> <span class="o">+</span> <span class="n">_shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">id_</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">ids</span><span class="p">),</span> <span class="n">total</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">)):</span>
+        <span class="n">img</span> <span class="o">=</span> <span class="n">nib</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">id_</span><span class="p">))</span>
+        <span class="n">img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">dataobj</span><span class="p">)</span>
+        <span class="n">data</span><span class="p">[</span><span class="n">n</span><span class="p">,</span><span class="mi">0</span><span class="p">:</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">0</span><span class="p">:</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="mi">0</span><span class="p">:</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]]</span> <span class="o">=</span> <span class="n">img</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;*** Loaded data shape is </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">data</span></div>
+
 </pre></div>
 
            </div>

@@ -82,7 +82,6 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
@@ -90,11 +89,13 @@
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">Data manipulation 2D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="2d_generator_keras.html">2D generator (Keras)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="2d_generator.html">2D generator (Custom)</a></li>
 </ul>
 <p class="caption"><span class="caption-text">3D Data</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">Data manipulation 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="3d_generator.html">3D generator</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
@@ -279,7 +280,7 @@
       </ul></li>
       <li><a href="util.html#util.check_binary_masks">check_binary_masks() (in module util)</a>
 </li>
-      <li><a href="data_manipulation.html#data_manipulation.check_crops">check_crops() (in module data_manipulation)</a>
+      <li><a href="data_2d_manipulation.html#data_2D_manipulation.check_crops">check_crops() (in module data_2D_manipulation)</a>
 </li>
       <li><a href="oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.cnn_oztel">cnn_oztel() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
 </li>
@@ -299,13 +300,13 @@
 </li>
       <li><a href="util.html#util.create_plots">create_plots() (in module util)</a>
 </li>
-      <li><a href="data_manipulation.html#data_manipulation.crop_3D_data">crop_3D_data() (in module data_manipulation)</a>
+      <li><a href="data_3d_manipulation.html#data_3D_manipulation.crop_3D_data">crop_3D_data() (in module data_3D_manipulation)</a>
 </li>
-      <li><a href="data_manipulation.html#data_manipulation.crop_3D_data_with_overlap">crop_3D_data_with_overlap() (in module data_manipulation)</a>
+      <li><a href="data_3d_manipulation.html#data_3D_manipulation.crop_3D_data_with_overlap">crop_3D_data_with_overlap() (in module data_3D_manipulation)</a>
 </li>
-      <li><a href="data_manipulation.html#data_manipulation.crop_data">crop_data() (in module data_manipulation)</a>
+      <li><a href="data_2d_manipulation.html#data_2D_manipulation.crop_data">crop_data() (in module data_2D_manipulation)</a>
 </li>
-      <li><a href="data_manipulation.html#data_manipulation.crop_data_with_overlap">crop_data_with_overlap() (in module data_manipulation)</a>
+      <li><a href="data_2d_manipulation.html#data_2D_manipulation.crop_data_with_overlap">crop_data_with_overlap() (in module data_2D_manipulation)</a>
 </li>
       <li><a href="2d_generator_keras.html#generators.keras_da_gen.crop_generator">crop_generator() (in module generators.keras_da_gen)</a>
 </li>
@@ -316,10 +317,17 @@
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li>
-    data_manipulation
+    data_2D_manipulation
 
       <ul>
-        <li><a href="data_manipulation.html#module-data_manipulation">module</a>
+        <li><a href="data_2d_manipulation.html#module-data_2D_manipulation">module</a>
+</li>
+      </ul></li>
+      <li>
+    data_3D_manipulation
+
+      <ul>
+        <li><a href="data_3d_manipulation.html#module-data_3D_manipulation">module</a>
 </li>
       </ul></li>
       <li><a href="cheng_3d_network.html#sota_implementations.cheng_2017.cheng_3D_network.decode_block">decode_block() (in module sota_implementations.cheng_2017.cheng_3D_network)</a>
@@ -436,7 +444,7 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="util.html#util.img_to_array">img_to_array() (in module util)</a>
 </li>
-      <li><a href="data_manipulation.html#data_manipulation.img_to_onehot_encoding">img_to_onehot_encoding() (in module data_manipulation)</a>
+      <li><a href="util.html#util.img_to_onehot_encoding">img_to_onehot_encoding() (in module util)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -484,11 +492,13 @@
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="data_manipulation.html#data_manipulation.load_and_prepare_2D_data">load_and_prepare_2D_data() (in module data_manipulation)</a>
+      <li><a href="data_2d_manipulation.html#data_2D_manipulation.load_and_prepare_2D_data">load_and_prepare_2D_data() (in module data_2D_manipulation)</a>
 </li>
-      <li><a href="data_manipulation.html#data_manipulation.load_and_prepare_3D_data">load_and_prepare_3D_data() (in module data_manipulation)</a>
+      <li><a href="data_3d_manipulation.html#data_3D_manipulation.load_and_prepare_3D_data">load_and_prepare_3D_data() (in module data_3D_manipulation)</a>
 </li>
-      <li><a href="data_manipulation.html#data_manipulation.load_data_from_dir">load_data_from_dir() (in module data_manipulation)</a>
+      <li><a href="util.html#util.load_ct_data_from_dir">load_ct_data_from_dir() (in module util)</a>
+</li>
+      <li><a href="util.html#util.load_data_from_dir">load_data_from_dir() (in module util)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -498,11 +508,11 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="util.html#util.make_weight_map">make_weight_map() (in module util)</a>
 </li>
-      <li><a href="data_manipulation.html#data_manipulation.merge_3D_data_with_overlap">merge_3D_data_with_overlap() (in module data_manipulation)</a>
+      <li><a href="data_3d_manipulation.html#data_3D_manipulation.merge_3D_data_with_overlap">merge_3D_data_with_overlap() (in module data_3D_manipulation)</a>
 </li>
-      <li><a href="data_manipulation.html#data_manipulation.merge_data_with_overlap">merge_data_with_overlap() (in module data_manipulation)</a>
+      <li><a href="data_2d_manipulation.html#data_2D_manipulation.merge_data">merge_data() (in module data_2D_manipulation)</a>
 </li>
-      <li><a href="data_manipulation.html#data_manipulation.merge_data_without_overlap">merge_data_without_overlap() (in module data_manipulation)</a>
+      <li><a href="data_2d_manipulation.html#data_2D_manipulation.merge_data_with_overlap">merge_data_with_overlap() (in module data_2D_manipulation)</a>
 </li>
       <li>
     metrics
@@ -523,7 +533,9 @@
 </li>
         <li><a href="callbacks.html#module-callbacks">callbacks</a>
 </li>
-        <li><a href="data_manipulation.html#module-data_manipulation">data_manipulation</a>
+        <li><a href="data_2d_manipulation.html#module-data_2D_manipulation">data_2D_manipulation</a>
+</li>
+        <li><a href="data_3d_manipulation.html#module-data_3D_manipulation">data_3D_manipulation</a>
 </li>
         <li><a href="2d_generator.html#module-generators.custom_da_gen">generators.custom_da_gen</a>
 </li>
@@ -715,7 +727,7 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="3d_generator.html#generators.data_3D_generators.random_3D_crop">random_3D_crop() (in module generators.data_3D_generators)</a>
 </li>
-      <li><a href="data_manipulation.html#data_manipulation.random_crop">random_crop() (in module data_manipulation)</a>
+      <li><a href="data_2d_manipulation.html#data_2D_manipulation.random_crop">random_crop() (in module data_2D_manipulation)</a>
 </li>
       <li><a href="networks_resunet.html#networks.resunet.residual_block">residual_block() (in module networks.resunet)</a>
 

@@ -82,7 +82,6 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../post_processing.html">Post processing</a></li>
@@ -90,11 +89,13 @@
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../data_2d_manipulation.html">Data manipulation 2D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../2d_generator_keras.html">2D generator (Keras)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../2d_generator.html">2D generator (Custom)</a></li>
 </ul>
 <p class="caption"><span class="caption-text">3D Data</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../data_3d_manipulation.html">Data manipulation 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../3d_generator.html">3D generator</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
@@ -192,10 +193,9 @@
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">from</span> <span class="nn">tqdm</span> <span class="kn">import</span> <span class="n">tqdm</span>
 <span class="kn">from</span> <span class="nn">skimage.io</span> <span class="kn">import</span> <span class="n">imread</span>
-<span class="kn">from</span> <span class="nn">util</span> <span class="kn">import</span> <span class="n">save_img</span>
+<span class="kn">from</span> <span class="nn">util</span> <span class="kn">import</span> <span class="n">save_img</span><span class="p">,</span> <span class="n">img_to_onehot_encoding</span> 
 <span class="kn">from</span> <span class="nn">scipy.ndimage</span> <span class="kn">import</span> <span class="n">rotate</span>
 <span class="kn">from</span> <span class="nn">scipy.ndimage.interpolation</span> <span class="kn">import</span> <span class="n">shift</span>
-<span class="kn">from</span> <span class="nn">data_manipulation</span> <span class="kn">import</span> <span class="n">img_to_onehot_encoding</span>
 <span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span>
 <span class="kn">import</span> <span class="nn">imageio</span>
 <span class="kn">from</span> <span class="nn">imgaug</span> <span class="kn">import</span> <span class="n">augmenters</span> <span class="k">as</span> <span class="n">iaa</span>

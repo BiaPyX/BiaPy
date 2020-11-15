@@ -36,7 +36,7 @@
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Grad-CAM" href="grad_cam.html" />
+    <link rel="next" title="Post processing" href="post_processing.html" />
     <link rel="prev" title="Metrics" href="metrics.html" /> 
 </head>
 
@@ -84,11 +84,21 @@
             
               <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
+</ul>
+<p class="caption"><span class="caption-text">2D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">Data manipulation 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator_keras.html">2D generator (Keras)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator.html">2D generator (Custom)</a></li>
+</ul>
+<p class="caption"><span class="caption-text">3D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">Data manipulation 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="3d_generator.html">3D generator</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
@@ -98,12 +108,17 @@
 <li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
@@ -348,14 +363,14 @@ epochs. History object is returned by Keras <a class="reference external" href="
 <col style="width: 50%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><div class="figure align-center" id="id2">
+<tr class="row-odd"><td><div class="figure align-center" id="id4">
 <a class="reference internal image-reference" href="_images/chart_loss.png"><img alt="_images/chart_loss.png" src="_images/chart_loss.png" style="width: 80%;" /></a>
-<p class="caption"><span class="caption-text">Loss values on each epoch</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+<p class="caption"><span class="caption-text">Loss values on each epoch</span><a class="headerlink" href="#id4" title="Permalink to this image">¶</a></p>
 </div>
 </td>
-<td><div class="figure align-center" id="id3">
+<td><div class="figure align-center" id="id5">
 <a class="reference internal image-reference" href="_images/chart_jaccard_index.png"><img alt="_images/chart_jaccard_index.png" src="_images/chart_jaccard_index.png" style="width: 80%;" /></a>
-<p class="caption"><span class="caption-text">Jaccard index values on each epoch</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
+<p class="caption"><span class="caption-text">Jaccard index values on each epoch</span><a class="headerlink" href="#id5" title="Permalink to this image">¶</a></p>
 </div>
 </td>
 </tr>
@@ -683,6 +698,91 @@ masks are correct.</p>
 </dl>
 </dd></dl>
 
+<dl class="py function">
+<dt id="util.img_to_onehot_encoding">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">img_to_onehot_encoding</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">img</span></em>, <em class="sig-param"><span class="n">num_classes</span><span class="o">=</span><span class="default_value">2</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#img_to_onehot_encoding"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.img_to_onehot_encoding" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts image given into one-hot encode format.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>img</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">3D/4D</span> <span class="pre">array</span></code>) – Image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> or <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>num_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes to distinguish.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>one_hot_labels</strong> – Data one-hot encoded. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">num_classes)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">4D</span> <span class="pre">array</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.load_data_from_dir">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_data_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_data_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_data_from_dir" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load data from a directory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to read the data from.</p></li>
+<li><p><strong>shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Shape of the data. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>data</strong> – Data loaded. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<dl>
+<dt>::</dt><dd><p># EXAMPLE 1
+# Case where we need to load 165 images of shape (1024, 768)
+data_path = “data/train/x”
+data_shape = (1024, 768, 1)</p>
+<p>load_data_from_dir(data_path, data_shape)
+# The function will print the shape of the created array. In this example:
+#     <a href="#id2"><span class="problematic" id="id3">**</span></a>* Loaded data shape is (165, 768, 1024, 1)
+# Notice height and width swap because of Numpy ndarray terminology</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.load_ct_data_from_dir">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_ct_data_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_ct_data_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_ct_data_from_dir" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load CT data from a directory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to read the data from.</p></li>
+<li><p><strong>shape</strong> (<em>optional</em>, <code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Shape of the data. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>data</strong> – Data loaded. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
+<span class="c1"># Case where we need to load 165 images of shape (1024, 768)</span>
+<span class="n">data_path</span> <span class="o">=</span> <span class="s2">&quot;data/train/x&quot;</span>
+<span class="n">data_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="n">load_data_from_dir</span><span class="p">(</span><span class="n">data_path</span><span class="p">,</span> <span class="n">data_shape</span><span class="p">)</span>
+
+<span class="c1"># The function will print the shape of the created array. In this example:</span>
+<span class="c1">#     *** Loaded data shape is (165, 768, 1024, 1)</span>
+<span class="c1"># Notice height and width swap because of Numpy ndarray terminology</span>
+</pre></div>
+</div>
+</dd></dl>
+
 </div>
 
 
@@ -693,7 +793,7 @@ masks are correct.</p>
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="grad_cam.html" class="btn btn-neutral float-right" title="Grad-CAM" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="post_processing.html" class="btn btn-neutral float-right" title="Post processing" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="metrics.html" class="btn btn-neutral float-left" title="Metrics" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
