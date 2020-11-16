@@ -1,8 +1,11 @@
 import tensorflow as tf
+from tensorflow.keras import backend as K
 from tensorflow.keras.layers import Dropout, SpatialDropout3D, Conv3D,\
                                     Conv3DTranspose, MaxPooling3D, concatenate,\
                                     ELU, BatchNormalization, Activation, \
-                                    ZeroPadding3D
+                                    ZeroPadding3D, GlobalAveragePooling3D,\
+                                    Reshape, Dense, multiply, Permute
+
 from tensorflow.keras import Model, Input
 from metrics import binary_crossentropy_weighted, jaccard_index, \
                     jaccard_index_softmax, weighted_bce_dice_loss
@@ -117,7 +120,6 @@ def SE_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
                kernel_initializer=k_init, padding='same')(x)
     x = BatchNormalization() (x) if batch_norm else x
     x = Activation(activation) (x)
-    x = squeeze_excite_block(x)
     if spatial_dropout and drop_values[depth] > 0:
         x = SpatialDropout3D(drop_values[depth]) (x)
     elif drop_values[depth] > 0 and not spatial_dropout:
@@ -127,12 +129,12 @@ def SE_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256],
                kernel_initializer=k_init, padding='same') (x)
     x = BatchNormalization() (x) if batch_norm else x
     x = Activation(activation) (x)
-    x = squeeze_excite_block(x)
 
     # DECODER
     for i in range(depth-1, -1, -1):
         x = Conv3DTranspose(feature_maps[i], (2, 2, 2), 
                             strides=(2, 2, 2), padding='same') (x)
+        x = concatenate([x, l[i]])
         x = Conv3D(feature_maps[i], (3, 3, 3), activation=None,
                    kernel_initializer=k_init, padding='same') (x)
         x = BatchNormalization() (x) if batch_norm else x
@@ -210,7 +212,7 @@ def squeeze_excite_block(input, ratio=16):
     filters = init.shape[channel_axis]
     se_shape = (1, 1, filters)
 
-    se = GlobalAveragePooling2D()(init)
+    se = GlobalAveragePooling3D()(init)
     se = Reshape(se_shape)(se)
     se = Dense(filters // ratio, activation='relu', kernel_initializer='he_normal', use_bias=False)(se)
     se = Dense(filters, activation='sigmoid', kernel_initializer='he_normal', use_bias=False)(se)

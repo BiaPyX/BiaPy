@@ -4,7 +4,7 @@ from tensorflow.keras.layers import Dropout, SpatialDropout2D, Conv2D,\
                                     Conv2DTranspose, MaxPooling2D, concatenate,\
                                     ELU, BatchNormalization, Activation, \
                                     ZeroPadding2D, GlobalAveragePooling2D, \
-                                    Reshape, Dense, multiply, add, Permute
+                                    Reshape, Dense, multiply, Permute
 from tensorflow.keras import Model, Input
 from metrics import binary_crossentropy_weighted, jaccard_index, \
                     jaccard_index_softmax, weighted_bce_dice_loss
@@ -121,7 +121,6 @@ def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 25
                kernel_initializer=k_init, padding='same')(x)
     x = BatchNormalization() (x) if batch_norm else x
     x = Activation(activation) (x)
-    x = squeeze_excite_block(x)
     if drop_values is not None:
             if spatial_dropout:
                 x = SpatialDropout2D(drop_values[depth]) (x)
@@ -131,7 +130,6 @@ def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 25
                kernel_initializer=k_init, padding='same') (x)
     x = BatchNormalization() (x) if batch_norm else x
     x = Activation(activation) (x)
-    x = squeeze_excite_block(x)
 
     # DECODER
     for i in range(depth-1, -1, -1):
