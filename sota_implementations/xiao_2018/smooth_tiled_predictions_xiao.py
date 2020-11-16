@@ -514,7 +514,7 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1,
     return np.mean(out, axis=0)
 
 
-def smooth_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2):
+def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2):
     """ Outputs the mean prediction of a given subvolume generating its 16 
         possible rotations/flips and blending them.
     """
