@@ -7,6 +7,7 @@ from scipy import ndimage as ndi
 from skimage.morphology import disk
 from skimage.segmentation import watershed
 from skimage.filters import rank
+from scipy.ndimage import rotate
 
 
 def spuriuous_detection_filter(Y, low_score_th=0.6, th=0.45):
@@ -257,3 +258,244 @@ def calculate_z_filtering(data, mf_size=5):
 
     return np.expand_dims(out_data, axis=-1)
 
+def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=2):
+    """Outputs the mean prediction of a given image generating its 8 possible 
+       rotations and flips.
+
+       Parameters
+       ----------
+       o_img : 3D Numpy array
+           Input image. E.g. ``(x, y, channels)``.
+
+       pred_func : function
+           Function to make predictions. 
+
+       batch_size_value : int, optional
+           Batch size value.
+        
+       n_classes : int, optional
+           Number of classes.
+
+       Returns
+       -------
+       out : 3D Numpy array
+           Output image ensembled. E.g. ``(x, y, channels)``.
+
+       Examples
+       --------
+       ::
+
+           # EXAMPLE 1   
+           # Apply ensemble to each image of X_test
+           X_test = np.ones((165, 768, 1024, 1))
+           out_X_test = np.zeros(X_test.shape, dtype=(np.float32))
+
+           for i in tqdm(range(X_test.shape[0])):                                          
+               pred_ensembled = ensemble8_2d_predictions(X_test[i],                        
+                   pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),   
+                   n_classes=n_classes)                                                    
+               out_X_test[i] = pred_ensembled   
+                                                                                
+           # Notice that here pred_func is created based on model.predict function
+           # of Keras 
+    """
+
+    aug_img = []
+        
+    # Convert into square image to make the rotations properly
+    pad_to_square = o_img.shape[0] - o_img.shape[1]
+   
+    if pad_to_square < 0:
+        img = np.pad(o_img, [(abs(pad_to_square), 0), (0, 0), (0, 0)], 'reflect') 
+    else:
+        img = np.pad(o_img, [(0, 0), (pad_to_square, 0), (0, 0)], 'reflect')
+    
+    # Make 8 different combinations of the img 
+    aug_img.append(img) 
+    aug_img.append(np.rot90(img, axes=(0, 1), k=1))
+    aug_img.append(np.rot90(img, axes=(0, 1), k=2))
+    aug_img.append(np.rot90(img, axes=(0, 1), k=3))
+    aug_img.append(img[:, ::-1])
+    img_aux = img[:, ::-1]
+    aug_img.append(np.rot90(img_aux, axes=(0, 1), k=1))
+    aug_img.append(np.rot90(img_aux, axes=(0, 1), k=2))
+    aug_img.append(np.rot90(img_aux, axes=(0, 1), k=3))
+
+    aug_img = np.array(aug_img)
+    decoded_aug_img = np.zeros(aug_img.shape)
+    
+    for i in range(aug_img.shape[0]):
+        if n_classes > 1:
+            decoded_aug_img[i] = np.expand_dims(pred_func(np.expand_dims(aug_img[i], 0))[...,1], -1)
+        else:
+            decoded_aug_img[i] = pred_func(np.expand_dims(aug_img[i], 0))
+
+    # Undo the combinations of the img
+    out_img = []
+    out_img.append(decoded_aug_img[0])
+    out_img.append(np.rot90(decoded_aug_img[1], axes=(0, 1), k=3))
+    out_img.append(np.rot90(decoded_aug_img[2], axes=(0, 1), k=2))
+    out_img.append(np.rot90(decoded_aug_img[3], axes=(0, 1), k=1))
+    out_img.append(decoded_aug_img[4][:, ::-1])
+    out_img.append(np.rot90(decoded_aug_img[5], axes=(0, 1), k=3)[:, ::-1])
+    out_img.append(np.rot90(decoded_aug_img[6], axes=(0, 1), k=2)[:, ::-1])
+    out_img.append(np.rot90(decoded_aug_img[7], axes=(0, 1), k=1)[:, ::-1])
+
+    # Create the output data
+    out_img = np.array(out_img) 
+    if pad_to_square != 0:
+        if pad_to_square < 0:
+            out = np.zeros((out_img.shape[0], img.shape[0]+pad_to_square, 
+                            img.shape[1], img.shape[2]))
+        else:
+            out = np.zeros((out_img.shape[0], img.shape[0], 
+                            img.shape[1]-pad_to_square, img.shape[2]))
+    else:
+        out = np.zeros(out_img.shape)
+
+    # Undo the padding
+    for i in range(out_img.shape[0]):
+        if pad_to_square < 0:
+            out[i] = out_img[i,abs(pad_to_square):,:]
+        else:
+            out[i] = out_img[i,:,abs(pad_to_square):]
+
+    return np.mean(out, axis=0)
+
+
+def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2):
+    """Outputs the mean prediction of a given image generating its 16 possible   
+       rotations and flips.                                                     
+                                                                                
+       Parameters                                                               
+       ----------                                                               
+       o_img : 4D Numpy array                                                   
+           Input image. E.g. ``(x, y, z, channels)``.                              
+                                                                                
+       pred_func : function                                                     
+           Function to make predictions.                                        
+                                                                                
+       batch_size_value : int, optional                                         
+           Batch size value.                                                    
+                                                                                
+       n_classes : int, optional                                                
+           Number of classes.                                                   
+                                                                                
+       Returns                                                                  
+       -------                                                                  
+       out : 4D Numpy array                                                     
+           Output image ensembled. E.g. ``(x, y, z, channels)``.                   
+                                                                                
+       Examples                                                                 
+       --------                                                                 
+       ::                                                                       
+                                                                                
+           # EXAMPLE 1                                                          
+           # Apply ensemble to each image of X_test
+           X_test = np.ones((10, 165, 768, 1024, 1))                               
+           out_X_test = np.zeros(X_test.shape, dtype=(np.float32))            
+                                                                                
+           for i in tqdm(range(X_test.shape[0])):                                          
+               pred_ensembled = ensemble8_2d_predictions(X_test[i],                        
+                   pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),   
+                   n_classes=n_classes)                                                    
+               out_X_test[i] = pred_ensembled          
+                        
+           # Notice that here pred_func is created based on model.predict function
+           # of Keras
+    """  
+
+    aug_vols = []
+        
+    # Convert into square image to make the rotations properly
+    pad_to_square = vol.shape[0] - vol.shape[1]
+   
+    if pad_to_square < 0:
+        volume = np.pad(vol, [(abs(pad_to_square),0), (0,0), (0,0), (0,0)], 'reflect') 
+    else:
+        volume = np.pad(vol, [(0,0), (pad_to_square,0), (0,0), (0,0)], 'reflect')
+    
+    # Remove the last channel to make the transformations correctly             
+    volume = volume[...,0]
+
+    # Make 16 different combinations of the volume 
+    aug_vols.append(volume) 
+    aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=90, reshape=False))
+    aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=180, reshape=False))
+    aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=270, reshape=False))
+    volume_aux = np.flip(volume, 0)
+    aug_vols.append(volume_aux)
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
+    volume_aux = np.flip(volume, 1)
+    aug_vols.append(volume_aux)
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
+    volume_aux = np.flip(volume, 2)
+    aug_vols.append(volume_aux)
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
+    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
+    del volume_aux
+    aug_vols = np.array(aug_vols)
+    
+    # Add the last channel again
+    aug_vols = np.expand_dims(aug_vols, -1)
+    volume = np.expand_dims(volume, -1)
+
+    decoded_aug_vols = np.zeros(aug_vols.shape)
+    for i in range(aug_vols.shape[0]):
+        if n_classes > 1:
+            decoded_aug_vols[i] = np.expand_dims(pred_func(np.expand_dims(aug_vols[i], 0))[...,1], -1)
+        else:
+            decoded_aug_vols[i] = pred_func(np.expand_dims(aug_vols[i], 0))
+
+    # Remove the last channel to make the transformations correctly
+    decoded_aug_vols = decoded_aug_vols[...,0]
+
+    # Undo the combinations of the volume
+    out_vols = []
+    out_vols.append(np.array(decoded_aug_vols[0]))
+    out_vols.append(rotate(np.array(decoded_aug_vols[1]), mode='reflect', axes=(0, 1), angle=-90, reshape=False))
+    out_vols.append(rotate(np.array(decoded_aug_vols[2]), mode='reflect', axes=(0, 1), angle=-180, reshape=False))
+    out_vols.append(rotate(np.array(decoded_aug_vols[3]), mode='reflect', axes=(0, 1), angle=-270, reshape=False))
+    out_vols.append(np.flip(np.array(decoded_aug_vols[4]), 0))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[5]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 0))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[6]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 0))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[7]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 0))
+    out_vols.append(np.flip(np.array(decoded_aug_vols[8]), 1))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[9]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 1))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[10]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 1))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[11]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 1))
+    out_vols.append(np.flip(np.array(decoded_aug_vols[12]), 2))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[13]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 2))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[14]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 2))
+    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[15]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 2))
+    out_vols = np.array(out_vols)
+
+    # Add the last channel again
+    decoded_aug_vols = np.expand_dims(decoded_aug_vols, -1)
+    out_vols = np.expand_dims(out_vols, -1)
+    
+    # Create the output data
+    if pad_to_square != 0:
+        if pad_to_square < 0:
+            out = np.zeros((out_vols.shape[0], volume.shape[0]+pad_to_square, 
+                            volume.shape[1], volume.shape[2], volume.shape[3]))
+        else:
+            out = np.zeros((out_vols.shape[0], volume.shape[0], 
+                            volume.shape[1]-pad_to_square, volume.shape[2], 
+                            volume.shape[3]))
+    else:
+        out = np.zeros(out_vols.shape)
+
+    # Undo the padding
+    for i in range(out_vols.shape[0]):
+        if pad_to_square < 0:
+            out[i] = out_vols[i,abs(pad_to_square):,:,:,:]
+        else:
+            out[i] = out_vols[i,:,abs(pad_to_square):,:,:]
+
+    return np.mean(out, axis=0)
