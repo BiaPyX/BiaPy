@@ -435,7 +435,7 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0)):
     total_vol = data.shape[0]*(crops_per_x)*(crops_per_y)
     cropped_data = np.zeros((total_vol,) + crop_shape)
     if data_mask is not None:
-        cropped_data_mask = np.zeros((total_vol,) + crop_shape)
+        cropped_data_mask = np.zeros((total_vol,)+crop_shape[:2]+(data_mask.shape[-1],))
 
     c = 0
     for z in range(data.shape[0]):
