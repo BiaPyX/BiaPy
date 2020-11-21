@@ -5,17 +5,13 @@ from tensorflow.keras.layers import Conv2D, Conv2DTranspose, MaxPooling2D, Add,\
 from metrics import jaccard_index_softmax, jaccard_index
 
 
-def FCN32_VGG16(image_shape, activation='relu', n_classes=2, lr=0.1,
-                optimizer="adam"):
+def FCN32_VGG16(image_shape, n_classes=2, lr=0.1, optimizer="adam"):
     """Create FCN32 network based on a VGG16.
 
        Parameters
        ----------
        image_shape : 2D tuple
            Dimensions of the input image.
-
-       activation : str, optional
-           Keras available activation type.
 
        n_classes: int, optional
            Number of classes.
@@ -97,7 +93,7 @@ def FCN32_VGG16(image_shape, activation='relu', n_classes=2, lr=0.1,
                activation='sigmoid', padding='valid', strides=(1, 1))(x)
 
     outputs = tf.keras.layers.UpSampling2D(size=(32, 32), interpolation='bilinear')(x)
-
+    
     model_fcn = Model(inputs=[inputs], outputs=[outputs])
 
     # Select the optimizer
@@ -111,27 +107,19 @@ def FCN32_VGG16(image_shape, activation='relu', n_classes=2, lr=0.1,
         raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
 
     # Compile the model
-    if n_classes > 1:
-        model_fcn.compile(optimizer=opt, loss='categorical_crossentropy',
-                          metrics=[jaccard_index_softmax])
-    else:   
-        model_fcn.compile(optimizer=opt, loss='binary_crossentropy',
-                          metrics=[jaccard_index])
+    model_fcn.compile(optimizer=opt, loss='binary_crossentropy',
+                      metrics=[jaccard_index])
 
     return model_fcn
 
 
-def FCN8_VGG16(image_shape, activation='relu', n_classes=2, lr=0.1,
-               optimizer="adam"):
+def FCN8_VGG16(image_shape, n_classes=2, lr=0.1, optimizer="adam"):
     """Create FCN8 network based on a VGG16.
 
        Parameters
        ----------
        image_shape : 2D tuple
            Dimensions of the input image.
-
-       activation : str, optional
-           Keras available activation type.
 
        n_classes: int, optional
            Number of classes.
