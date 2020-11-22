@@ -68,7 +68,7 @@ def FC_DenseNet103(image_shape, n_filters_first_conv=48, n_pool=4,
     else:
         raise ValueError
 
-    dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
+    dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)
     inputs = Input(dinamic_dim)
     #inputs = Input(image_shape)
 

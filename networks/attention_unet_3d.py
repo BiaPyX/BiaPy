@@ -79,7 +79,7 @@ def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128,
     if len(drop_values) != depth+1:                                             
         raise ValueError("'drop_values' dimension must be equal depth+1")       
 
-    #dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
+    #dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)
     #inputs = Input(dinamic_dim)
     x = Input(image_shape)
     inputs = x

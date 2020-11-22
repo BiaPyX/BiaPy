@@ -68,7 +68,7 @@ def Vanilla_U_Net_3D(image_shape, activation='relu',
     if len(feature_maps) != depth+2:                                            
         raise ValueError("feature_maps dimension must be equal depth+2")        
 
-    #dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
+    #dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)
     #inputs = Input(dinamic_dim)
     x = Input(image_shape)
     inputs = x

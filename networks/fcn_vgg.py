@@ -40,7 +40,7 @@ def FCN32_VGG16(image_shape, n_classes=2, lr=0.1, optimizer="adam"):
     """
 
     
-    dinamic_dim = (None,)*(len(image_shape)-1) + (1,)
+    dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)
     inputs = Input(dinamic_dim, name="input")
 
     # Block 1

@@ -79,7 +79,7 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
     if len(drop_values) != depth+1:
         raise ValueError("'drop_values' dimension must be equal depth+1")
 
-    dinamic_dim = (None,)*(len(image_shape)-1) + (1,)                           
+    dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)                           
     x = Input(dinamic_dim)                                                      
     #x = Input(image_shape)                                                     
     inputs = x
