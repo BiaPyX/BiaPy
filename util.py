@@ -503,7 +503,8 @@ def img_to_array(img, data_format='channels_last', dtype='float32'):
     return x
 
 
-def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
+def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True, 
+             prefix="", extension=".png", filenames=None):
     """Save images in the given directory. 
 
        Parameters
@@ -519,11 +520,22 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
            Masks to save as images. The first dimension must be the number of 
            images. E.g. ``(num_of_images, x, y, channels)``.
 
+       scale_mask : bool, optional
+           To allow mask be multiplied by 255.
+
        mask_dir : str, optional
            Path to store Y images. 
 
        prefix : str, optional
            Path to store generated charts.
+
+       filenames : list, optional
+           Filenames that should be used when saving each image. If any provided
+           each image should be named as: ``prefix + "_x_" + image_number + 
+           extension`` when ``X.ndim < 4`` and ``prefix + "_x_" + image_number +
+           "_" + slice_numger + extension`` otherwise. E.g. ``prefix_x_000.png`` 
+           when ``X.ndim < 4`` or ``prefix_x_000_000.png`` when ``X.ndim >= 4``. 
+           The same applies to ``Y``.
     """   
 
     if prefix is "":
@@ -547,16 +559,32 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
             d = len(str(X.shape[0]*X.shape[3]))
             for i in tqdm(range(X.shape[0])):
                 for j in range(X.shape[3]):
-                    im = Image.fromarray(X[i,:,:,j,0]*v)
-                    im = im.convert('L')
-                    im.save(os.path.join(data_dir, p_x + str(i).zfill(d) + "_" \
-                                         + str(j).zfill(d) + ".png"))
+                    if X.shape[-1] == 1:
+                        im = Image.fromarray(X[i,:,:,j,0]*v)
+                        im = im.convert('L')
+                    else:
+                        im = Image.fromarray(X[i,:,:,j]*v, 'RGB')
+                    
+                    if filenames is None:
+                        f = os.path.join(data_dir, p_x + str(i).zfill(d) + "_" \
+                                         + str(j).zfill(d) + extension)
+                    else:
+                        f = os.path.join(data_dir, filenames[(i*j)+j] + extension)
+                    im.save(f)
         else:
             d = len(str(X.shape[0]))
             for i in tqdm(range(X.shape[0])):
-                im = Image.fromarray(X[i,:,:,0]*v)         
-                im = im.convert('L')                                                
-                im.save(os.path.join(data_dir, p_x + str(i).zfill(d) + ".png")) 
+                if X.shape[-1] == 1:
+                    im = Image.fromarray(X[i,:,:,0]*v)
+                    im = im.convert('L')                                                
+                else:
+                    im = Image.fromarray(X[i]*v, 'RGB')
+
+                if filenames is None:
+                    f = os.path.join(data_dir, p_x + str(i).zfill(d) + extension)
+                else:
+                    f = os.path.join(data_dir, filenames[i] + extension)
+                im.save(f)
 
     if Y is not None:
         if mask_dir is not None:                                                    
@@ -567,21 +595,32 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, prefix=""):
         
         print("Saving images in {}".format(mask_dir))
 
-        v = 1 if np.max(Y) > 2 else 255
+        v = 1 if np.max(Y) > 2 or not scale_mask else 255
         if Y.ndim > 4:
             d = len(str(Y.shape[0]*Y.shape[3]))
             for i in tqdm(range(Y.shape[0])):
                 for j in range(Y.shape[3]):
                     im = Image.fromarray(Y[i,:,:,j,0]*v)
                     im = im.convert('L')
-                    im.save(os.path.join(mask_dir, p_y + str(i).zfill(d) + "_" \
-                                         + str(j).zfill(d) + ".png"))
+                    if filenames is None:
+                        f = os.path.join(mask_dir, p_y + str(i).zfill(d) + "_" \
+                                         + str(j).zfill(d) + extension)
+                    else:
+                        f = os.path.join(data_dir, filenames[(i*j)+j] + extension)
+
+                    im.save(f)
         else:
             d = len(str(Y.shape[0]))
             for i in tqdm(range(0, Y.shape[0])):
                 im = Image.fromarray(Y[i,:,:,0]*v)         
                 im = im.convert('L')                                                
-                im.save(os.path.join(mask_dir, p_y + str(i).zfill(d) + ".png")) 
+
+                if filenames is None:
+                    f = os.path.join(mask_dir, p_y + str(i).zfill(d) + extension)
+                else:
+                    f = os.path.join(mask_dir, filenames[i] + extension)
+
+                im.save(f)
        
 
 def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
@@ -1086,15 +1125,18 @@ def grayscale_2D_image_to_3D(X, Y, th=127):
     return X_3D, Y_3D
 
 
-def check_binary_masks(path):                                                   
-    """Check wheter the data masks is binary checking a few random images of the
-       given path. If the function gives no error one should assume that the    
-       masks are correct.                                                       
+def check_masks(path, n_classes=2):                                                   
+    """Check wheter the data masks have the correct labels inspection a few 
+       random images of the given path. If the function gives no error one 
+       should assume that the masks are correct.                                                       
                                                                                 
        Parameters                                                               
        ----------                                                               
        path : str                                                               
            Path to the data mask.                                               
+
+       n_classes : int, optional
+           Maximum classes that the masks must contain. 
     """                                                                         
     print("Checking wheter the images in {} are binary . . .".format(path))     
                                                                                 
@@ -1106,7 +1148,7 @@ def check_binary_masks(path):
     for i in numbers:                                                           
         img = imread(os.path.join(path, ids[i]))                                
         values, _ = np.unique(img, return_counts=True)                          
-        if len(values) > 2 :                                                    
+        if len(values) > n_classes :                                                    
             raise ValueError(                                                   
                 "Error: given masks are not binary. Please correct the images " 
                 "before training. (image: {})\nValues: {}"             
@@ -1115,6 +1157,8 @@ def check_binary_masks(path):
 
 def img_to_onehot_encoding(img, num_classes=2):
     """Converts image given into one-hot encode format.
+
+       The opposite function is :func:`~onehot_encoding_to_img`.
 
        Parameters
        ----------
@@ -1126,9 +1170,9 @@ def img_to_onehot_encoding(img, num_classes=2):
 
        Returns
        -------
-       one_hot_labels : Numpy 4D array
-           Data one-hot encoded. E.g. ``(x, y, z, num_classes)``.
-
+       one_hot_labels : Numpy 3D/4D array
+           Data one-hot encoded. E.g. ``(x, y, num_classes)`` or 
+           ``(x, y, z, num_classes)``.
     """
 
     if img.ndim == 4:
@@ -1145,6 +1189,35 @@ def img_to_onehot_encoding(img, num_classes=2):
             encoded_image[:,:,i] = np.all(img.reshape((-1,1)) == i, axis=1).reshape(shape[:2])
 
     return encoded_image
+
+
+def onehot_encoding_to_img(encoded_image):
+    """Converts one-hot encode image into an image with jus tone channel and all
+       the classes represented by an integer. 
+
+       The opposite function is :func:`~img_to_onehot_encoding`.
+
+       Parameters
+       ----------
+       encoded_image : Numpy 3D/4D array
+           Image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+
+       Returns
+       -------
+       img : Numpy 3D/4D array
+           Data one-hot encoded. E.g. ``(x, y, z, num_classes)``.
+    """
+
+    if encoded_image.ndim == 4:
+        shape = encoded_image.shape[:3]+(1,)
+    else:
+        shape = encoded_image.shape[:2]+(1,)
+
+    img = np.zeros(shape, dtype=np.int8)
+    for i in range(img.shape[-1]):
+        img[encoded_image[...,i] == 1] = i 
+
+    return img
 
 
 def load_data_from_dir(data_dir, shape):
@@ -1179,7 +1252,7 @@ def load_data_from_dir(data_dir, shape):
 
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
-    data = np.zeros((len(ids), ) + shape, dtype=np.float32)
+    data = np.zeros((len(ids), ) + shape, dtype=np.uint8)
 
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         img = imread(os.path.join(data_dir, id_))
