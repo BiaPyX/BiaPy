@@ -62,7 +62,7 @@ from data_3D_manipulation import load_and_prepare_3D_data,\
                                  merge_3D_data_with_overlap, \
                                  crop_3D_data_with_overlap
 from generators.data_3D_generators import VoxelDataGenerator
-from networks.unet_3d import U_Net_3D
+from networks.vanilla_unet_3d import Vanilla_U_Net_3D
 from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.models import load_model
@@ -178,7 +178,7 @@ extra_train_data = 0
 ### Load previously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
-load_previous_weights = False
+load_previous_weights = True
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
 # Prefix of the files where the weights are stored/loaded from
@@ -203,7 +203,7 @@ patience = 200
 
 ### Network architecture specific parameters
 # Number of feature maps on each level of the network
-feature_maps = [28, 36, 48, 64]
+feature_maps = [32, 64, 128, 256, 512]
 # Depth of the network
 depth = 3
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
@@ -216,7 +216,7 @@ batch_normalization = False
 # Kernel type to use on convolution layers
 kernel_init = 'he_normal'
 # Activation function to use
-activation = "elu"
+activation = "relu"
 # Number of classes. To generate data with more than 1 channel custom DA need to
 # be selected. It can be 1 or 2.                                                                   
 n_classes = 1
@@ -405,11 +405,10 @@ print("#################################\n"
       "#################################\n")
 
 print("Creating the network . . .")
-model = U_Net_3D(train_3d_desired_shape, activation=activation, depth=depth,
-                 feature_maps=feature_maps, drop_values=dropout_values,
-                 spatial_dropout=spatial_dropout, batch_norm=batch_normalization,
-                 k_init=kernel_init, optimizer=optimizer, lr=learning_rate_value,
-                 n_classes=n_classes)
+model = Vanilla_U_Net_3D(
+    train_3d_desired_shape, activation=activation, depth=depth,
+    feature_maps=feature_maps, k_init=kernel_init, optimizer=optimizer, 
+    lr=learning_rate_value, n_classes=n_classes)
 
 # Check the network created
 model.summary(line_length=150)
@@ -570,7 +569,7 @@ Y_test_50ov_ensemble = np.zeros(X_test.shape, dtype=np.float32)
 for i in tqdm(range(X_test.shape[0])):                                          
     predictions_ensembled = ensemble16_3d_predictions(X_test[i],                       
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),   
-        n_classes=n_classes, last_class=last_class)                                                    
+        n_classes=n_classes, last_class)                                                    
     Y_test_50ov_ensemble[i] = predictions_ensembled
 
 Y_test_50ov_ensemble = merge_3D_data_with_overlap(

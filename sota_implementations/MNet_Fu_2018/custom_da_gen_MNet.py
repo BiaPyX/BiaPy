@@ -5,18 +5,144 @@ import os
 from tqdm import tqdm
 from PIL import Image
 from PIL import ImageEnhance
-from data_manipulation import img_to_onehot_encoding, random_crop
+from data_2D_manipulation import random_crop
+from util import img_to_onehot_encoding
 import imgaug as ia                                                             
 from imgaug import augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 
 
 class ImageDataGenerator(tf.keras.utils.Sequence):
-    """Custom ImageDataGenerator.
+    """Custom ImageDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
+       transformations. 
 
-       Based on:
-           https://github.com/czbiohub/microDL 
-           https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly
+       Based on https://github.com/czbiohub/microDL and 
+       https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly
+
+       Parameters
+       ----------
+       X : 4D Numpy array
+           Data. E.g. ``(num_of_images, x, y, channels)``.
+
+       Y : 4D Numpy array
+           Mask data. E.g. ``(num_of_images, x, y, channels)``.
+
+       batch_size : int, optional
+           Size of the batches.
+
+       shape : 3D int tuple, optional
+           Shape of the desired images.
+
+       shuffle : bool, optional
+           To decide if the indexes will be shuffled after every epoch.
+
+       da : bool, optional
+           To activate the data augmentation.
+
+       hist_eq : bool, optional
+           To make histogram equalization on images.
+
+       rotation90 : bool, optional
+           To make rotations of ``90º``, ``180º`` or ``270º``.
+
+       rotation_range : float, optional
+           Range of rotation degrees.
+
+       vflips : bool, optional
+           To make vertical flips.
+
+       hflips : bool, optional
+           To make horizontal flips.
+
+       elastic : bool, optional
+           To make elastic deformations.
+
+       g_blur : bool, optional
+           To insert gaussian blur on the images.
+
+       median_blur : bool, optional
+           To insert median blur.
+
+       gamma_contrast : bool, optional
+           To insert gamma constrast changes on images.
+
+       random_crops_in_DA : bool, optional
+           Decide to make random crops in DA (before transformations).
+
+       prob_map : bool, optional
+           Take the crop center based on a given probability ditribution.
+
+       train_prob : 4D Numpy array, optional
+           Probabilities of each pixels to use with ``prob_map=True``.
+           E.g. ``(num_of_images, x, y, channels)``.
+
+       val : bool, optional
+           Advise the generator that the images will be to validate the
+           model to not make random crops (as the val. data must be the same
+           on each epoch). Valid when ``random_crops_in_DA`` is set.
+
+       n_classes : int, optional
+           Number of classes. If ``> 1`` one-hot encoding will be done on
+           the ground truth.
+
+       extra_data_factor : int, optional
+           Factor to multiply the batches yielded in a epoch. It acts as if
+           ``X`` and ``Y``` where concatenated ``extra_data_factor`` times.
+
+
+       Examples
+       --------
+       ::
+        
+           # EXAMPLE 1
+           # Define train and val generators to make random rotations between 0 and
+           # 180 degrees. Notice that DA is disabled in val data 
+
+           X_train = np.ones((1776, 256, 256, 1))
+           Y_train = np.ones((1776, 256, 256, 1))
+           X_val = np.ones((204, 256, 256, 1))
+           Y_val = np.ones((204, 256, 256, 1))
+
+           data_gen_args = dict(
+               X=X_train, Y=Y_train, batch_size=6, shape=(256, 256, 1), shuffle=True,
+               rotation_range=True, vflip=True, hflip=True)
+
+           data_gen_val_args = dict(
+               X=X_val, Y=Y_val, batch_size=6, shape=(256, 256, 1), shuffle=True,
+               da=False, val=True)
+
+           train_generator = ImageDataGenerator(**data_gen_args)                       
+           val_generator = ImageDataGenerator(**data_gen_val_args)  
+
+
+           # EXAMPLE 2
+           # Generate random crops on DA-time. To allow that notice that the
+           # data in this case is bigger in width and height than example 1, to
+           # allow a (256, 256) random crop extraction
+
+           X_train = np.zeros((148, 768, 1024, 1))
+           Y_train = np.zeros((148, 768, 1024, 1))
+           X_val = np.zeros((17, 768, 1024, 1))
+           Y_val = np.zeros((17, 768, 1024, 1))
+
+           # Create a prbobability map for each image. Here we define foreground 
+           # probability much higher than the background simulating a class inbalance 
+           # With this, the probability of take the center pixel of the random crop 
+           # that corresponds to the foreground class will be so high
+           train_prob = calculate_2D_volume_prob_map(
+                Y_train, 0.94, 0.06, save_file=''prob_map.npy')
+          
+           data_gen_args = dict(
+               X=X_train, Y=Y_train, batch_size=6, shape=(256, 256, 1), shuffle=True,
+               rotation_range=True, vflip=True, hflip=True, random_crops_in_DA=True,
+               prob_map=True, train_prob=train_prob)
+
+           data_gen_val_args = dict(
+               X=X_val, Y=Y_val, batch_size=6, shape=(256, 256, 1), shuffle=True,
+               da=False, val=True)
+
+           train_generator = ImageDataGenerator(**data_gen_args)
+           val_generator = ImageDataGenerator(**data_gen_val_args)
     """
 
     def __init__(self, X, Y, batch_size=32, shape=(256,256,1), shuffle=False,
@@ -25,62 +151,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                  median_blur=False, gamma_contrast=False,
                  random_crops_in_DA=False, prob_map=False, train_prob=None, 
                  val=False, n_classes=1, extra_data_factor=1):
-
-        """ImageDataGenerator constructor.
-                                                                                
-       Args:                                                                    
-            X (4D Numpy array): data. E.g. (num_of_images, x, y, channels).
-
-            Y (4D Numpy array): mask data. E.g. (num_of_images, x, y, channels).
-
-            batch_size (int, optional): size of the batches.
-
-            shape (3D int tuple, optional): shape of the desired images.
-
-            shuffle (bool, optional): to decide if the indexes will be shuffled
-            after every epoch. 
-
-            da (bool, optional): to activate the data augmentation. 
-
-            hist_eq (bool, optional): to make histogram equalization on images.
-            
-            rotation90 (bool, optional): to make rotations of 90º, 180º or 270º.
-
-            rotation_range (float, optional): range of rotation degrees.
-
-            vflips (bool, optional): to make vertical flips. 
-
-            hflips (bool, optional): to make horizontal flips.
-            
-            elastic (bool, optional): to make elastic deformations.
-
-            g_blur (bool, optional): to insert gaussian blur on the images.
-
-            median_blur (bool, optional): to insert median blur.
-
-            gamma_contrast (bool, optional): to insert gamma constrast 
-            changes on images. 
-
-            random_crops_in_DA (bool, optional): decide to make random crops in 
-            DA (before transformations).
-
-            prob_map (bool, optional): take the crop center based on a given    
-            probability ditribution.
-
-            train_prob (numpy array, optional): probabilities of each pixels to
-            use with prob_map actived. 
-
-            val (bool, optional): advice the generator that the images will be
-            to validate the model to not make random crops (as the val. data must
-            be the same on each epoch). Valid when random_crops_in_DA is set.
-
-            n_classes (int, optional): number of classes. If ``> 1`` one-hot
-            encoding will be done on the ground truth.
-
-            extra_data_factor (int, optional): factor to multiply the batches 
-            yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated
-            ``extra_data_factor`` times.
-        """
 
         if rotation_range != 0 and rotation90:
             raise ValueError("'rotation_range' and 'rotation90' can not be set "
@@ -154,15 +224,21 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
     def __getitem__(self, index):
         """Generation of one batch data. 
-           Args:
-                index (int): batch index counter.
-            
-           Returns:
-               batch_x (4D Numpy array): corresponding X elements of the batch.
-               E.g. (batch_size, x, y, channels).
 
-               batch_y (4D Numpy array): corresponding Y elements of the batch.
-               E.g. (batch_size, x, y, channels).
+           Parameters
+           ----------
+           index : int
+               Batch index counter.
+            
+           Returns
+           -------
+           batch_x : 4D Numpy array
+               Corresponding X elements of the batch. 
+               E.g. ``(batch_size, x, y, channels)``.
+
+           batch_y : 4D Numpy array
+               Corresponding Y elements of the batch.
+               E.g. ``(batch_size, x, y, channels)``.
         """
 
         # Generate indexes of the batch
@@ -205,6 +281,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[i]))
 
             batch_y = batch_y_
+
         return ([batch_x], [batch_y,batch_y,batch_y,batch_y,batch_y])
 
 
@@ -219,12 +296,16 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
     def __draw_grid(self, im, grid_width=50, v=1):
         """Draw grid of the specified size on an image. 
            
-           Args:                                                                
-                im (2D Numpy array): image to be modified. E. g. (x, y)
+           Parameters
+           ----------                                                                
+           im : 2D Numpy array
+               Image to be modified. E. g. ``(x, y)``
                 
-                grid_width (int, optional): grid's width. 
+           grid_width : int, optional
+               Grid's width. 
 
-                v (int, optional): value to create the grid with.
+           v : int, optional
+               Value to create the grid with.
         """
 
         for i in range(0, im.shape[0], grid_width):
@@ -235,47 +316,131 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
     def get_transformed_samples(self, num_examples, save_to_dir=False, 
                                 out_dir='aug', save_prefix=None, train=True, 
-                                original_elastic=True, random_images=True, 
-                                force_full_images=False):
+                                random_images=True, force_full_images=False):
         """Apply selected transformations to a defined number of images from
            the dataset. 
             
-           Args:
-                num_examples (int): number of examples to generate.
+           Parameters
+           ----------
+           num_examples : int
+               Number of examples to generate.
 
-                save_to_dir (bool, optional): save the images generated. The 
-                purpose of this variable is to check the images generated by 
-                data augmentation.
+           save_to_dir : bool, optional
+               Save the images generated. The purpose of this variable is to
+               check the images generated by data augmentation.
 
-                out_dir (str, optional): name of the folder where the
-                examples will be stored. If any provided the examples will be
-                generated under a folder 'aug'.
+           out_dir : str, optional
+               Name of the folder where the examples will be stored. If any
+               provided the examples will be generated under a folder ``aug``.
 
-                save_prefix (str, optional): prefix to add to the generated 
-                examples' name. 
+           save_prefix : str, optional
+               Prefix to add to the generated examples' name. 
 
-                train (bool, optional): to avoid drawing a grid on the 
-                generated images. This should be set when the samples will be
-                used for training.
+           train : bool, optional
+               To avoid drawing a grid on the generated images. This should be
+               set when the samples will be used for training.
 
-                original_elastic (bool, optional): to save also the original
-                images when an elastic transformation is performed.
+           random_images : bool, optional
+               Randomly select images from the dataset. If ``False`` the examples
+               will be generated from the start of the dataset. 
 
-                random_images (bool, optional): randomly select images from the
-                dataset. If False the examples will be generated from the start
-                of the dataset. 
-
-                force_full_images (bool, optional): force the usage of the entire
-                images. Useful to generate extra images and overide
-                'self.random_crops_in_DA' functionality.
+           force_full_images : bool, optional
+               Force the usage of the entire images. Useful to generate extra
+               images and override ``random_crops_in_DA`` functionality.
 
 
-            Returns:
-                batch_x (4D Numpy array): batch of data.
-                E.g. (num_examples, x, y, channels).
+           Returns
+           -------
+           batch_x : 4D Numpy array
+               Batch of data. E.g. ``(num_examples, x, y, channels)``.
 
-                batch_y (4D Numpy array): batch of data mask.
-                E.g. (num_examples, x, y, channels).
+           batch_y : 4D Numpy array
+               Batch of data mask. E.g. ``(num_examples, x, y, channels)``.
+
+          
+           Examples
+           --------
+           ::
+
+               # EXAMPLE 1
+               # Generate 10 samples following with the example 1 of the class definition
+               X_train = np.ones((1776, 256, 256, 1))                               
+               Y_train = np.ones((1776, 256, 256, 1))                               
+                                                                                
+               data_gen_args = dict(                                                
+                   X=X_train, Y=Y_train, batch_size=6, shape=(256, 256, 1),
+                   shuffle=True, rotation_range=True, vflip=True, hflip=True)                     
+                                                                                
+               train_generator = ImageDataGenerator(**data_gen_args)                       
+
+               train_generator.get_transformed_samples(                                
+                   10, save_to_dir=True, train=False, out_dir='da_dir') 
+
+               # EXAMPLE 2
+               # If random crop in DA-time is choosen, as the example 2 of the class definition, 
+               # the call should be the same but two more images will be stored: img and mask
+               # representing the random crop extracted. There a red point is painted representing 
+               # the pixel choosen to be the center of the random crop and a blue square which
+               # delimits crop boundaries
+
+               train_prob = calculate_2D_volume_prob_map(                           
+                   Y_train, 0.94, 0.06, save_file=''prob_map.npy')                 
+                                                                                
+               data_gen_args = dict(                                                
+                   X=X_train, Y=Y_train, batch_size=6, shape=(256, 256, 1), shuffle=True,
+                   rotation_range=True, vflip=True, hflip=True, random_crops_in_DA=True,
+                   prob_map=True, train_prob=train_prob)                            
+               train_generator = ImageDataGenerator(**data_gen_args)
+            
+                train_generator.get_transformed_samples(                                
+                   10, save_to_dir=True, train=False, out_dir='da_dir')
+            
+
+           Example 2 will store two additional images as the following:
+
+           +--------------------------------------+-------------------------------------------+
+           | .. figure:: img/rd_crop_2d.png       | .. figure:: img/rd_crop_mask_2d.png       |
+           |   :width: 80%                        |   :width: 70%                             |
+           |   :align: center                     |   :align: center                          |
+           |                                      |                                           |
+           |   Original crop                      |   Original crop mask                      |
+           +--------------------------------------+-------------------------------------------+
+
+           Together with these images another pair of images will be stored: the crop made and a 
+           transformed version of it, which is really the generator output. 
+    
+           For instance, setting ``elastic=True`` the above extracted crop should be transformed as follows:
+        
+           +--------------------------------------+-------------------------------------------+
+           | .. figure:: img/original_crop_2d.png | .. figure:: img/original_crop_mask_2d.png |
+           |   :width: 80%                        |   :width: 70%                             |
+           |   :align: center                     |   :align: center                          |
+           |                                      |                                           |
+           |   Original crop                      |   Original crop mask                      |
+           +--------------------------------------+-------------------------------------------+
+           | .. figure:: img/elastic_crop_2d.png  | .. figure:: img/elastic_crop_mask_2d.png  |
+           |   :width: 80%                        |   :width: 70%                             |
+           |   :align: center                     |   :align: center                          |
+           |                                      |                                           |
+           |   Elastic transformation of the crop |   Elastic transformation of them crop mask|
+           +--------------------------------------+-------------------------------------------+
+
+           The grid is only painted if ``train=False`` which should be used just to display transformations made.
+           Selecting random rotations between 0 and 180 degrees should generate the following:
+            
+           +---------------------------------------------+--------------------------------------------------+
+           | .. figure:: img/original_rd_rot_crop_2d.png | .. figure:: img/original_rd_rot_crop_mask_2d.png |
+           |   :width: 80%                               |   :width: 70%                                    |
+           |   :align: center                            |   :align: center                                 |
+           |                                             |                                                  |
+           |   Original crop                             |   Original crop mask                             |
+           +---------------------------------------------+--------------------------------------------------+
+           | .. figure:: img/rd_rot_crop_2d.png          | .. figure:: img/rd_rot_crop_mask_2d.png          |
+           |   :width: 80%                               |   :width: 70%                                    |
+           |   :align: center                            |   :align: center                                 |
+           |                                             |                                                  |
+           |   Random rotation [0, 180] of the crop      |   Random rotation [0, 180] of the crop mask      |
+           +---------------------------------------------+--------------------------------------------------+
         """
 
         print("### TR-SAMPLES ###")
@@ -314,6 +479,9 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             if not train:
                 self.__draw_grid(batch_x[i,...,0])
                 self.__draw_grid(batch_y[i,...,0], v=255)
+            if save_to_dir:
+                o_x = np.copy(batch_x[i,...,0])                                 
+                o_y = np.copy(batch_y[i,...,0])
 
             # Apply transformations
             if self.da:                                                         
@@ -327,10 +495,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
             if save_to_dir:
                 # Save original images
-                im = Image.fromarray(self.X[pos,:,:,0])                          
+                self.__draw_grid(o_x)                                           
+                self.__draw_grid(o_y, v=255)  
+                im = Image.fromarray(o_x)
                 im = im.convert('L')                                            
                 im.save(os.path.join(out_dir,str(pos)+'_orig_x'+self.t_made+".png"))
-                mask = Image.fromarray(self.Y[pos,:,:,0])                        
+                mask = Image.fromarray(o_y)
                 mask = mask.convert('L')                                        
                 mask.save(os.path.join(out_dir,str(pos)+'_orig_y'+self.t_made+".png"))
 

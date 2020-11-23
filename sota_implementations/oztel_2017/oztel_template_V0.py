@@ -30,6 +30,7 @@ args = parser.parse_args()
 import os
 import sys
 sys.path.insert(0, args.base_work_dir)
+sys.path.insert(0, os.path.join("sota_implementations", "oztel_2017"))           
 
 # Working dir
 os.chdir(args.base_work_dir)
@@ -38,7 +39,8 @@ os.chdir(args.base_work_dir)
 from util import limit_threads, set_seed, create_plots, store_history,\
                  TimeHistory, threshold_plots, save_img, \
                  calculate_2D_volume_prob_map, divide_images_on_classes, \
-                 save_filters_of_convlayer
+                 save_filters_of_convlayer, check_masks, \
+                 load_data_from_dir, img_to_onehot_encoding
 limit_threads()
 
 # Try to generate the results as reproducible as possible
@@ -59,14 +61,11 @@ import numpy as np
 import math
 import time
 import tensorflow as tf
-from data_manipulation import load_and_prepare_2D_data, crop_data,\
-                              merge_data_without_overlap,\
-                              crop_data_with_overlap, merge_data_with_overlap, \
-                              check_binary_masks, img_to_onehot_encoding,\
-                              load_data_from_dir
+from data_2D_manipulation import load_and_prepare_2D_data, crop_data_with_overlap,\
+                                 merge_data_with_overlap
 from generators.custom_da_gen import ImageDataGenerator
 from generators.keras_da_gen import keras_da_generator, keras_gen_samples
-from sota_implementations.oztel_2017.cnn_oztel import cnn_oztel, cnn_oztel_test
+from cnn_oztel import cnn_oztel, cnn_oztel_test
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation,\
                     DET_calculation
 from tensorflow.keras.callbacks import EarlyStopping
@@ -74,12 +73,12 @@ from tensorflow.keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
-                                     predict_img_with_overlap,\
-                                     ensemble8_2d_predictions
+                                     predict_img_with_overlap
 from tensorflow.keras.utils import plot_model
 from callbacks import ModelCheckpoint
 from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
-                            boundary_refinement_watershed2
+                            boundary_refinement_watershed2, \
+                            ensemble8_2d_predictions
 import shutil                                                                   
 from tensorflow.keras.preprocessing.image import ImageDataGenerator as kerasDA  
 from sklearn.metrics import classification_report, confusion_matrix
@@ -117,11 +116,11 @@ perc_used_as_val = 0.2
 random_val_data = True
 
 
-### Dataset shape
+### Data shape
 # Note: train and test dimensions must be the same when training the network and
 # making the predictions. Be sure to take care of this if you are not going to
-# use "crop_data()" with the arg force_shape, as this function resolves the 
-# problem creating always crops of the same dimension
+# use "crop_data_with_overlap()" with the arg force_shape, as this function 
+# resolves the problem creating always crops of the same dimension
 img_train_shape = (1024, 768, 1)
 img_test_shape = (1024, 768, 1)
 
@@ -133,15 +132,24 @@ crop_shape = (32, 32, 1)
 make_crops = True
 # To check the crops. Useful to ensure that the crops have been made correctly
 check_crop = True 
+# Percentage of overlap in (x, y) when cropping in test. Set to 0 to calculate  
+# the minimun overlap                                                           
+overlap = (0,0)                                                                 
+# Use 'overlap' also in training data. If False overlap in train will be        
+# minimum: (0,0)                                                                
+ov_train = False                  
 # Instead of make the crops before the network training, this flag activates
 # the option to extract a random crop of each train image during data 
 # augmentation (with a crop shape defined by "crop_shape" variable). This flag
 # is not compatible with "make_crops" variable
-random_crops_in_DA = False 
-test_ov_crops = 16 # Only active with random_crops_in_DA
-probability_map = False # Only active with random_crops_in_DA                       
-w_foreground = 0.94 # Only active with probability_map
-w_background = 0.06 # Only active with probability_map
+random_crops_in_DA = False
+# To extract the ramdom crop based on a probability map given. Only active with 
+# random_crops_in_DA and custom_da                                              
+probability_map = False                                                         
+# Foreground weight to create the probability map                               
+w_foreground = 0.94                                                             
+# Background weight to create the probability map                               
+w_background = 0.06   
 
 
 ### Normalization
@@ -167,8 +175,8 @@ shuffle_train_data_each_epoch = custom_da
 shuffle_val_data_each_epoch = False
 
 ### Options available for Keras Data Augmentation
-# Make a bit of zoom in the images
-k_zoom = False 
+# Range for random zoom
+k_zoom = 0.0
 # widtk_h_shift_range (more details in Keras ImageDataGenerator class)
 k_w_shift_r = 0.0
 # height_shift_range (more details in Keras ImageDataGenerator class)
@@ -247,6 +255,10 @@ n_classes = 2
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)
 metric = "jaccard_index_softmax" if n_classes > 1 else "jaccard_index"
+# To take only the last class of the predictions, which corresponds to the
+# foreground in a binary problem. If n_classes > 2 this should be disabled to
+# ensure all classes are preserved
+last_class = True if n_classes <= 2 else False
 
 
 ### DET metric variables
@@ -271,51 +283,33 @@ n_dig = "3"
 ### Paths of the results                                             
 result_dir = os.path.join(args.result_dir, 'results', job_identifier)
 
-# Directory where binarized predicted images will be stored
-result_bin_dir_per_image = os.path.join(result_dir, 'per_image_binarized')
-# Directory where predicted images will be stored
+# per-image directories                                                         
+result_bin_dir_per_image = os.path.join(result_dir, 'per_image_binarized')      
 result_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_no_binarized')
-# Folder where the smoothed images will be stored
-smo_bin_dir_per_image = os.path.join(result_dir, 'per_image_smooth')
-# Folder where the smoothed images (no binarized) will be stored
-smo_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_smooth_no_bin')
-# Folder where the images with the z-filter applied will be stored
-zfil_dir_per_image = os.path.join(result_dir, 'per_image_zfil')
-# Folder where the images with smoothing and z-filter applied will be stored
-smo_zfil_dir_per_image = os.path.join(result_dir, 'per_image_smo_zfil')
-
-# Directory where binarized predicted images with 50% of overlap will be stored
-result_bin_dir_50ov = os.path.join(result_dir, '50ov_binarized')
-# Directory where predicted images with 50% of overlap will be stored
-result_no_bin_dir_50ov = os.path.join(result_dir, '50ov_no_binarized')
-# Folder where the images with the z-filter applied will be stored
-zfil_dir_50ov = os.path.join(result_dir, '50ov_zfil')
-
-# Directory where binarired predicted images obtained from feeding the full
-# image will be stored
-result_bin_dir_full = os.path.join(result_dir, 'full_binarized')
-# Directory where predicted images obtained from feeding the full image will
-# be stored
-result_no_bin_dir_full = os.path.join(result_dir, 'full_no_binarized')
-# Folder where the smoothed images will be stored
-smo_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')
-# Folder where the smoothed images (no binarized) will be stored
-smo_no_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')
-# Folder where the images with the z-filter applied will be stored
-zfil_dir_full = os.path.join(result_dir, 'full_zfil')
-# Folder where the images passed through the spurious detection filtering will
-# be saved in
-spu_dir_full = os.path.join(result_dir, 'full_spu')
-# Folder where watershed debugging images will be placed in
-wa_debug_dir_full = os.path.join(result_dir, 'full_watershed_debug')
-# Folder where watershed output images will be placed in
-wa_dir_full = os.path.join(result_dir, 'full_watershed')
-# Folder where spurious detection + watershed + z-filter images' watershed
-# markers will be placed in
+smo_bin_dir_per_image = os.path.join(result_dir, 'per_image_smooth')            
+smo_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_smooth_no_bin')  
+zfil_dir_per_image = os.path.join(result_dir, 'per_image_zfil')                 
+smo_zfil_dir_per_image = os.path.join(result_dir, 'per_image_smo_zfil')         
+                                                                                
+# 50% overlap directories                                                       
+result_bin_dir_50ov = os.path.join(result_dir, '50ov_binarized')                
+result_no_bin_dir_50ov = os.path.join(result_dir, '50ov_no_binarized')          
+ens_bin_dir_50ov = os.path.join(result_dir, '50ov_8ensemble_binarized')         
+ens_no_bin_dir_50ov = os.path.join(result_dir, '50ov_8ensemble_no_binarized')   
+ens_zfil_dir_50ov = os.path.join(result_dir, '50ov_8ensemble_zfil')             
+                                                                                
+# Full image directories                                                        
+result_bin_dir_full = os.path.join(result_dir, 'full_binarized')                
+result_no_bin_dir_full = os.path.join(result_dir, 'full_no_binarized')          
+smo_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')                   
+smo_no_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')                
+zfil_dir_full = os.path.join(result_dir, 'full_zfil')                           
+spu_dir_full = os.path.join(result_dir, 'full_spu')                             
+wa_debug_dir_full = os.path.join(result_dir, 'full_watershed_debug')            
+wa_dir_full = os.path.join(result_dir, 'full_watershed')                        
 spu_wa_zfil_wa_debug_dir = os.path.join(result_dir, 'full_wa_spu_zfil_wa_debug')
-# Folder where spurious detection + watershed + z-filter images will be placed in
-spu_wa_zfil_dir_full = os.path.join(result_dir, 'full_wa_spu_zfil')
-
+spu_wa_zfil_dir_full = os.path.join(result_dir, 'full_wa_spu_zfil')             
+ 
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
 # folder pointed by "args.base_work_dir" variable 
@@ -333,8 +327,6 @@ h5_dir = os.path.join(args.result_dir, 'h5_files')
 # Name of the folder to store the probability map to avoid recalculating it on
 # every run
 prob_map_dir = os.path.join(args.result_dir, 'prob_map')
-# Folder where LRFinder callback will store its plot
-lrfinder_dir = os.path.join(result_dir, 'LRFinder')
 
 
 ### Callbacks
@@ -348,19 +340,14 @@ os.makedirs(h5_dir, exist_ok=True)
 checkpointer = ModelCheckpoint(
     os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
     verbose=1, save_best_only=True)
-# Check the best learning rate using the code from:
-#  https://github.com/WittmannF/LRFinder
-if use_LRFinder:
-    lr_finder = LRFinder(min_lr=10e-9, max_lr=10e-3, lrfinder_dir=lrfinder_dir)
-    os.makedirs(lrfinder_dir, exist_ok=True)
 
 
 print("###################\n"
       "#  SANITY CHECKS  #\n"
       "###################\n")
 
-check_binary_masks(train_mask_path)
-check_binary_masks(test_mask_path)
+check_masks(train_mask_path)
+check_masks(test_mask_path)
 
 
 print("##################################\n"                                    
@@ -402,7 +389,8 @@ if not os.path.exists(p_train):
         img_train_shape[2]))                                                    
     print("*** Loaded train data shape is: {}".format(X_train.shape))           
                                                                                 
-    X_train, Y_train, _ = crop_data(X_train, crop_shape, data_mask=Y_train)     
+    X_train, Y_train = crop_data_with_overlap(
+        X_train, crop_shape, data_mask=Y_train, overlap=(0,0)) 
     divide_images_on_classes(X_train, Y_train/255, p_train, th=0.8)             
                                                                                 
     # Path were divide_images_on_classes stored the data                        
@@ -533,13 +521,12 @@ if not os.path.exists(p_train):
                                                                                 
     del mito_data, mito_mask_data                                               
                                                                                 
-orig_test_shape = img_test_shape                                                
-                                                                                
 # Finally load test data                                                        
 X_test = load_data_from_dir(                                                    
     test_path, (img_test_shape[1], img_test_shape[0], img_test_shape[2]))       
 Y_test = load_data_from_dir(                                                    
     test_mask_path, (img_test_shape[1], img_test_shape[0], img_test_shape[2]))  
+orig_test_shape = X_test.shape                                                  
 print("*** Loaded test data shape is: {}".format(X_test.shape))                 
 
 
@@ -583,36 +570,27 @@ os.makedirs(char_dir, exist_ok=True)
 model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
+h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights
+                     + '_' + str(args.run_id) + '.h5')
+
 if load_previous_weights == False:
-    if use_LRFinder:
-        print("Training just for 10 epochs . . .")
-        results = model.fit(x=train_generator, validation_data=val_generator,
-            validation_steps=math.ceil(X_val.shape[0]/batch_size_value),
-            steps_per_epoch=math.ceil(X_train.shape[0]/batch_size_value),
-            epochs=5, callbacks=[lr_finder])
+    results = model.fit(train_generator, validation_data=val_generator,
+        validation_steps=math.ceil(val_generator.n/batch_size_value),
+        steps_per_epoch=math.ceil(train_generator.n/batch_size_value),
+        epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
 
-        print("Finish LRFinder. Check the plot in {}".format(lrfinder_dir))
-        sys.exit(0)
-    else:
-        results = model.fit(train_generator, validation_data=val_generator,
-            validation_steps=math.ceil(val_generator.n/batch_size_value),
-            steps_per_epoch=math.ceil(train_generator.n/batch_size_value),
-            epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
+    print("Epoch average time: {}".format(np.mean(time_callback.times)))        
+    print("Epoch number: {}".format(len(results.history['val_loss'])))          
+    print("Train time (s): {}".format(np.sum(time_callback.times)))             
+    print("Train loss: {}".format(np.min(results.history['loss'])))             
+    print("Train accuracy: {}"                                                  
+          .format(np.max(results.history['accuracy'])))                         
+    print("Validation loss: {}".format(np.min(results.history['val_loss'])))    
+    print("Validation accuracy: {}"                                             
+          .format(np.max(results.history['val_accuracy'])))
 
-        print("Epoch average time: {}".format(np.mean(time_callback.times)))        
-        print("Epoch number: {}".format(len(results.history['val_loss'])))          
-        print("Train time (s): {}".format(np.sum(time_callback.times)))             
-        print("Train loss: {}".format(np.min(results.history['loss'])))             
-        print("Train accuracy: {}"                                                  
-              .format(np.max(results.history['accuracy'])))                         
-        print("Validation loss: {}".format(np.min(results.history['val_loss'])))    
-        print("Validation accuracy: {}"                                             
-              .format(np.max(results.history['val_accuracy'])))
-else:
-    h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights 
-                         + '_' + str(args.run_id) + '.h5')
-    print("Loading model weights from h5_file: {}".format(h5_file))
-    model.load_weights(h5_file)
+print("Loading model weights from h5_file: {}".format(h5_file))
+model.load_weights(h5_file)
 
 # Print confusion matrix and some metrics                                       
 target_names = ['Background', 'Mitochondria']                                   
@@ -636,8 +614,6 @@ model_test_ft.summary(line_length=150)
 save_filters_of_convlayer(model, char_dir, name="conv1", prefix="model")        
 save_filters_of_convlayer(model_test_ft, char_dir, name="conv1", prefix="model_test_ft")
                                                                                 
-h5_file=os.path.join(h5_dir, weight_files_prefix + job_identifier + '_ft.h5')   
-                                                                                
 # Prepare the train/val generator with softmax output                           
 X_train = load_data_from_dir(p_train_ss_x, crop_shape)                          
 Y_train = load_data_from_dir(p_train_ss_y, crop_shape)                          
@@ -657,17 +633,17 @@ data_gen_val_args = dict(
 train_generator = ImageDataGenerator(**data_gen_args)                           
 val_generator = ImageDataGenerator(**data_gen_val_args)                         
                                                                                 
+h5_file=os.path.join(h5_dir, weight_files_prefix + job_identifier + '_ft.h5')
 if not load_previous_weights_ft:                                           
     checkpointer = ModelCheckpoint(                                             
-            os.path.join(h5_dir, weight_files_prefix + job_identifier + '_ft.h5'),
-            verbose=1, save_best_only=True)                                     
+            h5_file, verbose=1, save_best_only=True)                                     
     results = model_test_ft.fit(                                                
         train_generator, validation_data=val_generator,                         
         validation_steps=len(val_generator), steps_per_epoch=len(train_generator),
         epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
-else:                                                                           
-    print("Loading model_test_ft weights from h5_file: {}".format(h5_file))     
-    model_test_ft.load_weights(h5_file)   
+
+print("Loading model_test_ft weights from h5_file: {}".format(h5_file))     
+model_test_ft.load_weights(h5_file)   
 
 
 print("################################\n"
@@ -688,15 +664,15 @@ print("##########################\n"
       "#  INFERENCE (per crop)  #\n"
       "##########################\n")
 
-if random_crops_in_DA:
-    X_test, Y_test = crop_data_with_overlap(
-        X_test, Y_test, crop_shape[0], test_ov_crops)
+print("Cropping test data to have the same shape as the used during training")
+X_test, Y_test = crop_data_with_overlap(
+    X_test, crop_shape, data_mask=Y_test, overlap=overlap)
 
 print("Evaluating test data . . .")
-score_per_crop = model_test_ft.evaluate(
+jac_per_crop = model_test_ft.evaluate(
     X_test, Y_test, batch_size=batch_size_value, verbose=1)
-loss_per_crop = score_per_crop[0]
-jac_per_crop = score_per_crop[1]
+loss_per_crop = jac_per_crop[0]
+jac_per_crop = jac_per_crop[1]
 
 print("Making the predictions on test data . . .")
 preds_test = model_test_ft.predict(X_test, batch_size=batch_size_value, verbose=1)
@@ -711,33 +687,13 @@ print("########################################\n"
       "#  Metrics (per image, merging crops)  #\n"
       "########################################\n")
 
-# Merge crops
-if make_crops:
-    h_num = math.ceil(orig_test_shape[1]/preds_test.shape[1])
-    v_num = math.ceil(orig_test_shape[2]/preds_test.shape[2])
-
-    print("Reconstruct preds_test . . .")
-    preds_test = merge_data_without_overlap(
-        preds_test, math.ceil(preds_test.shape[0]/(h_num*v_num)),
-        out_shape=[h_num, v_num], grid=False)
-    print("Reconstruct X_test . . .")
-    X_test = merge_data_without_overlap(
-        X_test, math.ceil(X_test.shape[0]/(h_num*v_num)),
-        out_shape=[h_num, v_num], grid=False)
-    print("Reconstruct Y_test . . .")
-    Y_test = merge_data_without_overlap(
-        Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
-        out_shape=[h_num, v_num], grid=False)
-elif random_crops_in_DA:
-    print("Reconstruct X_test . . .")
-    X_test = merge_data_with_overlap(
-        X_test, orig_test_shape, crop_shape[0], test_ov_crops)
-    print("Reconstruct Y_test . . .")
-    Y_test = merge_data_with_overlap(
-        Y_test, orig_test_shape, crop_shape[0], test_ov_crops)
-    print("Reconstruct preds_test . . .")
-    preds_test = merge_data_with_overlap(
-        preds_test, orig_test_shape, crop_shape[0], test_ov_crops)
+# Merge crops                                                                   
+print("Reconstruct X_test/Y_test . . .")                                        
+X_test, Y_test = merge_data_with_overlap(                                       
+    X_test, orig_test_shape, Y_test, overlap=overlap)                           
+   
+print("Reconstruct preds_test . . .")
+preds_test = merge_data_with_overlap(preds_test, orig_test_shape, overlap=overlap)
 
 print("Saving predicted images . . .")
 save_img(Y=(preds_test > 0.5).astype(np.uint8),
@@ -771,10 +727,10 @@ save_img(Y=(Y_test_smooth > 0.5).astype(np.uint8), mask_dir=smo_bin_dir_per_imag
          prefix="test_out_smo")
 
 print("Calculate metrics (smooth + per crop) . . .")
-smo_score_per_image = jaccard_index_numpy(
+smo_jac_per_image = jaccard_index_numpy(
     Y_test, (Y_test_smooth > 0.5).astype(np.uint8))
 smo_voc_per_image = voc_calculation(
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smo_score_per_image)
+    Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smo_jac_per_image)
 smo_det_per_image = DET_calculation(
     Y_test, (Y_test_smooth > 0.5).astype(np.uint8), det_eval_ge_path,
     det_eval_post_path, det_bin, n_dig, args.job_id)
@@ -786,10 +742,10 @@ print("Saving Z-filtered images . . .")
 save_img(Y=zfil_preds_test, mask_dir=zfil_dir_per_image, prefix="test_out_zfil")
 
 print("Calculate metrics (Z-filtering + per crop) . . .")
-zfil_score_per_image = jaccard_index_numpy(
+zfil_jac_per_image = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
 zfil_voc_per_image = voc_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_score_per_image)
+    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_jac_per_image)
 zfil_det_per_image = DET_calculation(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
     det_eval_post_path, det_bin, n_dig, args.job_id)
@@ -803,11 +759,11 @@ save_img(Y=smo_zfil_preds_test, mask_dir=smo_zfil_dir_per_image,
          prefix="test_out_smoo_zfil")
 
 print("Calculate metrics (Smooth + Z-filtering per crop) . . .")
-smo_zfil_score_per_image = jaccard_index_numpy(
+smo_zfil_jac_per_image = jaccard_index_numpy(
     Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8))
 smo_zfil_voc_per_image = voc_calculation(
     Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8),
-    smo_zfil_score_per_image)
+    smo_zfil_jac_per_image)
 smo_zfil_det_per_image = DET_calculation(
     Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8),
     det_eval_ge_path, det_eval_post_path, det_bin, n_dig, args.job_id)
@@ -819,46 +775,75 @@ print("############################################################\n"
       "#  Metrics (per image, merging crops with 50% of overlap)  #\n"
       "############################################################\n")
 
-Y_test_50ov = np.zeros(X_test.shape, dtype=np.float32)
-for i in tqdm(range(X_test.shape[0])):
-    predictions_smooth = predict_img_with_overlap(
-        X_test[i], window_size=crop_shape[0], subdivisions=2,
-        n_classes=n_classes, pred_func=(
-            lambda img_batch_subdiv: model_test_ft.predict(img_batch_subdiv)))
-    if n_classes > 1:
-        Y_test_50ov[i] = np.expand_dims(predictions_smooth[...,1], axis=-1)
-    else:
-        Y_test_50ov[i] = predictions_smooth
-
-print("Saving 50% overlap predicted images . . .")
-save_img(Y=(Y_test_50ov > 0.5).astype(np.float32),
-         mask_dir=result_bin_dir_50ov, prefix="test_out_bin_50ov")
-save_img(Y=Y_test_50ov, mask_dir=result_no_bin_dir_50ov,
-         prefix="test_out_no_bin_50ov")
-
-print("Calculate metrics (50% overlap) . . .")
-jac_50ov = jaccard_index_numpy(Y_test, (Y_test_50ov > 0.5).astype(np.float32))
-voc_50ov = voc_calculation(
-    Y_test, (Y_test_50ov > 0.5).astype(np.float32), jac_50ov)
-det_50ov = DET_calculation(
-    Y_test, (Y_test_50ov > 0.5).astype(np.float32), det_eval_ge_path,
-    det_eval_path, det_bin, n_dig, args.job_id)
-
-print("~~~~ Z-Filtering (50% overlap) ~~~~")
-zfil_preds_test = calculate_z_filtering(Y_test_50ov)
-
-print("Saving Z-filtered images . . .")
-save_img(Y=zfil_preds_test, mask_dir=zfil_dir_50ov, prefix="test_out_zfil")
-
-print("Calculate metrics (Z-filtering + 50% overlap) . . .")
-zfil_score_50ov = jaccard_index_numpy(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
-zfil_voc_50ov = voc_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_score_50ov)
-zfil_det_50ov = DET_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_post_path, det_bin, n_dig, args.job_id)
-del Y_test_50ov, zfil_preds_test
+print("Making the predictions on test data (50% overlap) . . .")                
+X_test = crop_data_with_overlap(X_test, crop_shape, overlap=(0.5, 0.5))         
+                                                                                
+Y_test_50ov = model_test_ft.predict(X_test, batch_size=batch_size_value, verbose=1)     
+# Take only the foreground class                                                
+if n_classes > 1:                                                               
+    Y_test_50ov = np.expand_dims(Y_test_50ov[...,1], -1)                        
+                                                                                
+Y_test_50ov = merge_data_with_overlap(                                          
+    Y_test_50ov, orig_test_shape, overlap=(0.5, 0.5))                           
+                                                                                
+print("Saving 50% overlap predicted images . . .")                              
+save_img(Y=(Y_test_50ov > 0.5).astype(np.uint8),                                
+         mask_dir=result_bin_dir_50ov, prefix="test_out_bin_50ov")              
+save_img(Y=Y_test_50ov, mask_dir=result_no_bin_dir_50ov,                        
+         prefix="test_out_no_bin_50ov")                                         
+                                                                                
+print("Calculate metrics (50% overlap) . . .")                                  
+jac_50ov = jaccard_index_numpy(Y_test, (Y_test_50ov > 0.5).astype(np.float32))  
+voc_50ov = voc_calculation(                                                     
+    Y_test, (Y_test_50ov > 0.5).astype(np.float32), jac_50ov)                   
+det_50ov = DET_calculation(                                                     
+    Y_test, (Y_test_50ov > 0.5).astype(np.float32), det_eval_ge_path,           
+    det_eval_path, det_bin, n_dig, args.job_id)                                 
+del Y_test_50ov                                                                 
+                                                                                
+print("~~~~ 8-Ensemble (50% overlap) ~~~~")                                     
+Y_test_50ov_ensemble = np.zeros(X_test.shape, dtype=(np.float32))               
+for i in tqdm(range(X_test.shape[0])):                                          
+    pred_ensembled = ensemble8_2d_predictions(X_test[i],                        
+        pred_func=(lambda img_batch_subdiv: model_test_ft.predict(img_batch_subdiv)),   
+        n_classes=n_classes, last_class=last_class)                                                    
+    Y_test_50ov_ensemble[i] = pred_ensembled                                    
+Y_test_50ov_ensemble = merge_data_with_overlap(                                 
+    Y_test_50ov_ensemble, orig_test_shape, overlap=(0.5, 0.5))                  
+                                                                                
+print("Saving 50% overlap + 8-Ensemble predicted images . . .")                 
+save_img(Y=(Y_test_50ov_ensemble > 0.5).astype(np.uint8),                       
+         mask_dir=ens_bin_dir_50ov, prefix="test_out_bin_ens8_50ov")            
+save_img(Y=Y_test_50ov_ensemble, mask_dir=ens_no_bin_dir_50ov,                  
+         prefix="test_out_no_bin_ens8_50ov")                                    
+                                                                                
+print("Calculate metrics (50% overlap + 8-Ensemble) . . .")                     
+ens_jac_50ov = jaccard_index_numpy(                                             
+    Y_test, (Y_test_50ov_ensemble > 0.5).astype(np.float32))                    
+ens_voc_50ov = voc_calculation(                                                 
+    Y_test, (Y_test_50ov_ensemble > 0.5).astype(np.float32), jac_50ov)          
+ens_det_50ov = DET_calculation(                                                 
+    Y_test, (Y_test_50ov_ensemble > 0.5).astype(np.float32), det_eval_ge_path,  
+    det_eval_path, det_bin, n_dig, args.job_id)                                 
+                                                                                
+print("~~~~ 8-Ensemble + Z-Filtering (50% overlap) ~~~~")                       
+zfil_preds_test = calculate_z_filtering(Y_test_50ov_ensemble)                   
+                                                                                
+print("Saving Z-filtered images . . .")                                         
+save_img(Y=zfil_preds_test, mask_dir=ens_zfil_dir_50ov, prefix="test_out_zfil") 
+                                                                                
+print("Calculate metrics (50% overlap + 8-Ensemble + Z-filtering) . . .")       
+ens_zfil_jac_50ov = jaccard_index_numpy(                                        
+    Y_test, (zfil_preds_test > 0.5).astype(np.uint8))                           
+ens_zfil_voc_50ov = voc_calculation(                                            
+    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), ens_zfil_jac_50ov)        
+ens_zfil_det_50ov = DET_calculation(                                            
+    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,         
+    det_eval_post_path, det_bin, n_dig, args.job_id)                            
+del Y_test_50ov_ensemble, zfil_preds_test                                       
+                                                                                
+# Merge X_test                                                                  
+X_test = merge_data_with_overlap(X_test, orig_test_shape, overlap=(0.5,0.5))    
 
 
 print("########################\n"
@@ -886,32 +871,29 @@ det_full = DET_calculation(
     det_eval_path, det_bin, n_dig, args.job_id)
 
 print("~~~~ 8-Ensemble (full image) ~~~~")
-Y_test_smooth = np.zeros(X_test.shape, dtype=(np.float32))
+Y_test_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
 
 for i in tqdm(range(X_test.shape[0])):
-    predictions_smooth = ensemble8_2d_predictions(X_test[i],
+    pred_ensembled = ensemble8_2d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model_test_ft.predict(img_batch_subdiv)),
-        n_classes=n_classes)
-    if n_classes > 1:
-        Y_test_smooth[i] = np.expand_dims(predictions_smooth[...,1], axis=-1)
-    else:
-        Y_test_smooth[i] = predictions_smooth
+        n_classes=n_classes, last_class=last_class)
+    Y_test_ensemble[i] = pred_ensembled
 
 print("Saving smooth predicted images . . .")
-save_img(Y=Y_test_smooth, mask_dir=smo_no_bin_dir_full,
+save_img(Y=Y_test_ensemble, mask_dir=smo_no_bin_dir_full,
          prefix="test_out_ens_no_bin")
-save_img(Y=(Y_test_smooth > 0.5).astype(np.uint8), mask_dir=smo_bin_dir_full,
+save_img(Y=(Y_test_ensemble > 0.5).astype(np.uint8), mask_dir=smo_bin_dir_full,
          prefix="test_out_ens")
 
 print("Calculate metrics (8-Ensemble + full image) . . .")
-smo_score_full = jaccard_index_numpy(
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8))
+smo_jac_full = jaccard_index_numpy(
+    Y_test, (Y_test_ensemble > 0.5).astype(np.uint8))
 smo_voc_full = voc_calculation(
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smo_score_full)
+    Y_test, (Y_test_ensemble > 0.5).astype(np.uint8), smo_jac_full)
 smo_det_full = DET_calculation(
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8), det_eval_ge_path,
+    Y_test, (Y_test_ensemble > 0.5).astype(np.uint8), det_eval_ge_path,
     det_eval_path, det_bin, n_dig, args.job_id)
-del Y_test_smooth
+del Y_test_ensemble
 
 print("~~~~ Z-Filtering (full image) ~~~~")
 zfil_preds_test = calculate_z_filtering(preds_test_full)
@@ -920,10 +902,10 @@ print("Saving Z-filtered images . . .")
 save_img(Y=zfil_preds_test, mask_dir=zfil_dir_full, prefix="test_out_zfil")
 
 print("Calculate metrics (Z-filtering + full image) . . .")
-zfil_score_full = jaccard_index_numpy(
+zfil_jac_full = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
 zfil_voc_full = voc_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_score_full)
+    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_jac_full)
 zfil_det_full = DET_calculation(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
     det_eval_post_path, det_bin, n_dig, args.job_id)
@@ -937,8 +919,8 @@ print("Saving spurious detection filtering resulting images . . .")
 save_img(Y=spu_preds_test, mask_dir=spu_dir_full, prefix="test_out_spu")
 
 print("Calculate metrics (Spurious + full image) . . .")
-spu_score_full = jaccard_index_numpy(Y_test, spu_preds_test)
-spu_voc_full = voc_calculation(Y_test, spu_preds_test, spu_score_full)
+spu_jac_full = jaccard_index_numpy(Y_test, spu_preds_test)
+spu_voc_full = voc_calculation(Y_test, spu_preds_test, spu_jac_full)
 spu_det_full = DET_calculation(Y_test, spu_preds_test, det_eval_ge_path,
                                det_eval_post_path, det_bin, n_dig, args.job_id)
 
@@ -953,8 +935,8 @@ save_img(Y=(wa_preds_test).astype(np.uint8), mask_dir=wa_dir_full,
          prefix="test_out_wa")
 
 print("Calculate metrics (Watershed + full image) . . .")
-wa_score_full = jaccard_index_numpy(Y_test, wa_preds_test)
-wa_voc_full = voc_calculation(Y_test, wa_preds_test, wa_score_full)
+wa_jac_full = jaccard_index_numpy(Y_test, wa_preds_test)
+wa_voc_full = voc_calculation(Y_test, wa_preds_test, wa_jac_full)
 wa_det_full = DET_calculation(Y_test, wa_preds_test, det_eval_ge_path,
                               det_eval_post_path, det_bin, n_dig, args.job_id)
 del preds_test_full, wa_preds_test
@@ -973,11 +955,11 @@ save_img(Y=spu_wa_zfil_preds_test, mask_dir=spu_wa_zfil_dir_full,
          prefix="test_out_spu_wa_zfil")
 
 print("Calculate metrics (Z-filtering + full image) . . .")
-spu_wa_zfil_score_full = jaccard_index_numpy(
+spu_wa_zfil_jac_full = jaccard_index_numpy(
     Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8))
 spu_wa_zfil_voc_full = voc_calculation(
     Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8),
-    spu_wa_zfil_score_full)
+    spu_wa_zfil_jac_full)
 spu_wa_zfil_det_full = DET_calculation(
     Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
     det_eval_post_path, det_bin, n_dig, args.job_id)
@@ -988,7 +970,7 @@ print("####################################\n"
       "#  PRINT AND SAVE SCORES OBTAINED  #\n"
       "####################################\n")
 
-if not load_previous_weights:
+if load_previous_weights == False:
     print("Epoch average time: {}".format(np.mean(time_callback.times)))
     print("Epoch number: {}".format(len(results.history['val_loss'])))
     print("Train time (s): {}".format(np.sum(time_callback.times)))
@@ -1004,39 +986,42 @@ print("Test IoU (per crop): {}".format(jac_per_crop))
 print("Test IoU (merge into complete image): {}".format(jac_per_image))
 print("Test VOC (merge into complete image): {}".format(voc_per_image))
 print("Test DET (merge into complete image): {}".format(det_per_image))
-print("Post-process: Smooth - Test IoU (merge into complete image): {}".format(smo_score_per_image))
+print("Post-process: Smooth - Test IoU (merge into complete image): {}".format(smo_jac_per_image))
 print("Post-process: Smooth - Test VOC (merge into complete image): {}".format(smo_voc_per_image))
 print("Post-process: Smooth - Test DET (merge into complete image): {}".format(smo_det_per_image))
-print("Post-process: Z-Filtering - Test IoU (merge into complete image): {}".format(zfil_score_per_image))
+print("Post-process: Z-Filtering - Test IoU (merge into complete image): {}".format(zfil_jac_per_image))
 print("Post-process: Z-Filtering - Test VOC (merge into complete image): {}".format(zfil_voc_per_image))
 print("Post-process: Z-Filtering - Test DET (merge into complete image): {}".format(zfil_det_per_image))
-print("Post-process: Smooth + Z-Filtering - Test IoU (merge into complete image): {}".format(smo_zfil_score_per_image))
+print("Post-process: Smooth + Z-Filtering - Test IoU (merge into complete image): {}".format(smo_zfil_jac_per_image))
 print("Post-process: Smooth + Z-Filtering - Test VOC (merge into complete image): {}".format(smo_zfil_voc_per_image))
 print("Post-process: Smooth + Z-Filtering - Test DET (merge into complete image): {}".format(smo_zfil_det_per_image))
 
 print("Test IoU (merge with 50% overlap): {}".format(jac_50ov))
 print("Test VOC (merge with 50% overlap): {}".format(voc_50ov))
 print("Test DET (merge with with 50% overlap): {}".format(det_50ov))
-print("Post-process: Z-Filtering - Test IoU (merge with 50% overlap): {}".format(zfil_score_50ov))
-print("Post-process: Z-Filtering - Test VOC (merge with 50% overlap): {}".format(zfil_voc_50ov))
-print("Post-process: Z-Filtering - Test DET (merge with 50% overlap): {}".format(zfil_det_50ov))
+print("Post-process: Ensemble - Test IoU (merge with 50% overlap): {}".format(ens_jac_50ov))
+print("Post-process: Ensemble - Test VOC (merge with 50% overlap): {}".format(ens_voc_50ov))
+print("Post-process: Ensemble - Test DET (merge with 50% overlap): {}".format(ens_det_50ov))
+print("Post-process: Ensemble + Z-Filtering - Test IoU (merge with 50% overlap): {}".format(ens_zfil_jac_50ov))
+print("Post-process: Ensemble + Z-Filtering - Test VOC (merge with 50% overlap): {}".format(ens_zfil_voc_50ov))
+print("Post-process: Ensemble + Z-Filtering - Test DET (merge with 50% overlap): {}".format(ens_zfil_det_50ov))
 
 print("Test IoU (full): {}".format(jac_full))
 print("Test VOC (full): {}".format(voc_full))
 print("Test DET (full): {}".format(det_full))
-print("Post-process: Ensemble - Test IoU (full): {}".format(smo_score_full))
+print("Post-process: Ensemble - Test IoU (full): {}".format(smo_jac_full))
 print("Post-process: Ensemble - Test VOC (full): {}".format(smo_voc_full))
 print("Post-process: Ensemble - Test DET (full): {}".format(smo_det_full))
-print("Post-process: Z-Filtering - Test IoU (full): {}".format(zfil_score_full))
+print("Post-process: Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
 print("Post-process: Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
 print("Post-process: Z-Filtering - Test DET (full): {}".format(zfil_det_full))
-print("Post-process: Spurious Detection - Test IoU (full): {}".format(spu_score_full))
+print("Post-process: Spurious Detection - Test IoU (full): {}".format(spu_jac_full))
 print("Post-process: Spurious Detection - VOC (full): {}".format(spu_voc_full))
 print("Post-process: Spurious Detection - DET (full): {}".format(spu_det_full))
-print("Post-process: Watershed - Test IoU (full): {}".format(wa_score_full))
+print("Post-process: Watershed - Test IoU (full): {}".format(wa_jac_full))
 print("Post-process: Watershed - VOC (full): {}".format(wa_voc_full))
 print("Post-process: Watershed - DET (full): {}".format(wa_det_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test IoU (full): {}".format(spu_wa_zfil_score_full))
+print("Post-process: Spurious + Watershed + Z-Filtering - Test IoU (full): {}".format(spu_wa_zfil_jac_full))
 print("Post-process: Spurious + Watershed + Z-Filtering - Test VOC (full): {}".format(spu_wa_zfil_voc_full))
 print("Post-process: Spurious + Watershed + Z-Filtering - Test DET (full): {}".format(spu_wa_zfil_det_full))
 

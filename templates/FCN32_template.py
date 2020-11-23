@@ -60,22 +60,20 @@ import time
 import tensorflow as tf
 from data_2D_manipulation import load_and_prepare_2D_data, crop_data_with_overlap,\
                                  merge_data_with_overlap
-from sota_implementations.MNet_Fu_2018.custom_da_gen_MNet import ImageDataGenerator
-from sota_implementations.MNet_Fu_2018.MNet import MNet
+from generators.custom_da_gen import ImageDataGenerator
+from generators.keras_da_gen import keras_da_generator, keras_gen_samples
+from networks.fcn_vgg import FCN32_VGG16
 from metrics import jaccard_index_numpy, voc_calculation, DET_calculation
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
 from PIL import Image
 from tqdm import tqdm
-from sota_implementations.MNet_Fu_2018.smooth_tiled_predictions_MNet import \
-                                          predict_img_with_smooth_windowing, \
-                                          ensemble8_2d_predictions  
+from smooth_tiled_predictions import predict_img_with_smooth_windowing
 from tensorflow.keras.utils import plot_model
 from callbacks import ModelCheckpoint
 from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
-                            boundary_refinement_watershed2
-from metrics import binary_crossentropy_weighted, jaccard_index, \
-                    weighted_bce_dice_loss 
+                            boundary_refinement_watershed2,\
+                            ensemble8_2d_predictions
 
 
 ############
@@ -163,7 +161,7 @@ custom_da = False
 aug_examples = True 
 # To shuffle the training data on every epoch:
 # (Best options: Keras->False, Custom->True)
-shuffle_train_data_each_epoch = True
+shuffle_train_data_each_epoch = custom_da
 # To shuffle the validation data on every epoch:
 # (Best option: False in both cases)
 shuffle_val_data_each_epoch = False
@@ -229,11 +227,11 @@ weight_files_prefix = 'model.fibsem_'
 # this template type: please use big_data_template.py instead.
 loss_type = "bce"
 # Batch size value
-batch_size_value = 4
+batch_size_value = 6
 # Optimizer to use. Possible values: "sgd" or "adam"
-optimizer = "sgd"
+optimizer = "adam"
 # Learning rate used by the optimization method
-learning_rate_value = 0.01
+learning_rate_value = 0.0001
 # Number of epochs to train the network
 epochs_value = 360
 # Number of epochs to stop the training process after no improvement
@@ -245,11 +243,15 @@ weights_on_data = True if loss_type == "w_bce" else False
 ### Network architecture specific parameters
 # Number of classes. To generate data with more than 1 channel custom DA need to
 # be selected. It can be 1 or 2.                                                                   
-n_classes = 1
+n_classes = 2
 # Adjust the metric used accordingly to the number of clases. This code is planned 
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)
-metric = "average_jaccard_index"
+metric = "jaccard_index"
+# To take only the last class of the predictions, which corresponds to the
+# foreground in a binary problem. If n_classes > 2 this should be disabled to
+# ensure all classes are preserved
+last_class = True if n_classes <= 2 else False
 
 
 ### DET metric variables
@@ -389,76 +391,112 @@ if duplicate_train != 0:
 else:
     steps_per_epoch_value = int(X_train.shape[0]/batch_size_value)
 
+# Add extra train data generated with DA
+if extra_train_data != 0:
+    if custom_da == False:
+        # Keras DA generated extra data
+
+        extra_x, extra_y = keras_gen_samples(
+            extra_train_data, X_data=X_train, Y_data=Y_train, 
+            batch_size_value=batch_size_value, zoom=k_zoom, 
+            w_shift_r=k_w_shift_r, h_shift_r=k_h_shift_r,
+            k_shear_range=k_shear_range, brightness_range=k_brightness_range,
+            rotation_range=rotation_range, vflip=vflips, hflip=hflips)
+    else:
+        # Custom DA generated extra data
+        extra_gen_args = dict(
+            X=X_train, Y=Y_train, batch_size=batch_size_value,
+            shape=(img_height,img_width,img_channels), shuffle=True, da=True, 
+            hist_eq=hist_eq, rotation90=rotation90, rotation_range=rotation_range,                   
+            vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,             
+            median_blur=median_blur, gamma_contrast=gamma_contrast,                 
+            random_crops_in_DA=random_crops_in_DA)
+
+        extra_generator = ImageDataGenerator(**extra_gen_args)
+
+        extra_x, extra_y = extra_generator.get_transformed_samples(
+            extra_train_data, force_full_images=True)
+
+    X_train = np.vstack((X_train, extra_x))
+    Y_train = np.vstack((Y_train, extra_y))
+    print("{} extra train data generated, the new shape of the train now is {}"\
+          .format(extra_train_data, X_train.shape))
+
 
 print("#######################\n"
       "#  DATA AUGMENTATION  #\n"
       "#######################\n")
 
-# Calculate the probability map per image
-train_prob = None
-if probability_map:
-    prob_map_file = os.path.join(prob_map_dir, 'prob_map.npy')
-    if os.path.exists(prob_map_dir):
-        train_prob = np.load(prob_map_file)
-    else:
-        train_prob = calculate_2D_volume_prob_map(
-            Y_train, w_foreground, w_background, save_file=prob_map_file)
+if custom_da == False:                                                          
+    print("Keras DA selected")
 
-# Custom Data Augmentation                                                  
-data_gen_args = dict(
-    X=X_train, Y=Y_train, batch_size=batch_size_value,     
-    shape=(img_height,img_width,img_channels),
-    shuffle=shuffle_train_data_each_epoch, da=True, hist_eq=hist_eq,
-    rotation90=rotation90, rotation_range=rotation_range,
-    vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,
-    median_blur=median_blur, gamma_contrast=gamma_contrast,
-    random_crops_in_DA=random_crops_in_DA, prob_map=probability_map, 
-    train_prob=train_prob, n_classes=n_classes,
-    extra_data_factor=duplicate_train)
-data_gen_val_args = dict(
-    X=X_val, Y=Y_val, batch_size=batch_size_value, 
-    shape=(img_height,img_width,img_channels), 
-    shuffle=shuffle_val_data_each_epoch, da=False, 
-    random_crops_in_DA=random_crops_in_DA, val=True, n_classes=n_classes)
-train_generator = ImageDataGenerator(**data_gen_args)                       
-val_generator = ImageDataGenerator(**data_gen_val_args)                     
-                                                                            
-# Generate examples of data augmentation                                    
-if aug_examples:                                                    
-    train_generator.get_transformed_samples(
-        10, save_to_dir=True, train=False, out_dir=da_samples_dir)
+    # Keras Data Augmentation                                                   
+    train_generator, \
+    val_generator = keras_da_generator(
+        X_train=X_train, Y_train=Y_train, X_val=X_val, Y_val=Y_val, 
+        batch_size_value=batch_size_value, save_examples=aug_examples,
+        out_dir=da_samples_dir, shuffle_train=shuffle_train_data_each_epoch, 
+        shuffle_val=shuffle_val_data_each_epoch, zoom=k_zoom, 
+        rotation_range=rotation_range, random_crops_in_DA=random_crops_in_DA,
+        crop_length=crop_shape[0], w_shift_r=k_w_shift_r, h_shift_r=k_h_shift_r,    
+        shear_range=k_shear_range, brightness_range=k_brightness_range,
+        weights_on_data=weights_on_data, weights_path=loss_weight_dir,
+        vflip=vflips, hflip=hflips)
+else:                                                                           
+    print("Custom DA selected")
+
+    # Calculate the probability map per image
+    train_prob = None
+    if probability_map:
+        prob_map_file = os.path.join(prob_map_dir, 'prob_map.npy')
+        if os.path.exists(prob_map_dir):
+            train_prob = np.load(prob_map_file)
+        else:
+            train_prob = calculate_2D_volume_prob_map(
+                Y_train, w_foreground, w_background, save_file=prob_map_file)
+
+    # Custom Data Augmentation                                                  
+    data_gen_args = dict(
+        X=X_train, Y=Y_train, batch_size=batch_size_value,     
+        shape=(img_height,img_width,img_channels),
+        shuffle=shuffle_train_data_each_epoch, da=True, hist_eq=hist_eq,
+        rotation90=rotation90, rotation_range=rotation_range,
+        vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,
+        median_blur=median_blur, gamma_contrast=gamma_contrast,
+        random_crops_in_DA=random_crops_in_DA, prob_map=probability_map, 
+        train_prob=train_prob, n_classes=n_classes,
+        extra_data_factor=duplicate_train)
+    data_gen_val_args = dict(
+        X=X_val, Y=Y_val, batch_size=batch_size_value, 
+        shape=(img_height,img_width,img_channels), 
+        shuffle=shuffle_val_data_each_epoch, da=False, 
+        random_crops_in_DA=random_crops_in_DA, val=True, n_classes=n_classes)
+    train_generator = ImageDataGenerator(**data_gen_args)                       
+    val_generator = ImageDataGenerator(**data_gen_val_args)                     
+                                                                                
+    # Generate examples of data augmentation                                    
+    if aug_examples:                                                    
+        train_generator.get_transformed_samples(
+            10, save_to_dir=True, train=False, out_dir=da_samples_dir)
 
 
 print("#################################\n"
       "#  BUILD AND TRAIN THE NETWORK  #\n"
       "#################################\n")
-print("Creating the network . . .")                                             
-model = MNet((None, None, img_channels))                                        
-                                                                                
-# Select the optimizer                                                          
-if optimizer == "sgd":                                                          
-    opt = tf.keras.optimizers.SGD(                                              
-        lr=learning_rate_value, momentum=0.99, decay=0.0, nesterov=False)       
-elif optimizer == "adam":                                                       
-    opt = tf.keras.optimizers.Adam(                                             
-        lr=learning_rate_value, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0,
-        amsgrad=False)                                                          
-else:                                                                           
-    raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")          
-                                                                                
-# Compile the model                                                             
-model.compile(optimizer=opt, loss="binary_crossentropy",                        
-              metrics=[jaccard_index], loss_weights=[0.1, 0.1, 0.1, 0.1, 0.6])  
-     
+
+print("Creating the network . . .")
+model = FCN32_VGG16((img_height, img_width, img_channels), n_classes=n_classes,
+                    lr=learning_rate_value, optimizer=optimizer)
+
 # Check the network created
 model.summary(line_length=150)
 os.makedirs(char_dir, exist_ok=True)
 model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
-h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights     
-                     + '_' + str(args.run_id) + '.h5')  
-
+h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights        
+                     + '_' + str(args.run_id) + '.h5')                      
+ 
 if load_previous_weights == False:
     results = model.fit(train_generator, validation_data=val_generator,
         validation_steps=math.ceil(X_val.shape[0]/batch_size_value),
@@ -493,20 +531,13 @@ if random_crops_in_DA:
         X_test, crop_shape, data_mask=Y_test, overlap=overlap)
 
 print("Evaluating test data . . .")
-score_per_crop = model.evaluate(                                                
-    [X_test], [Y_test, Y_test, Y_test,Y_test,Y_test], batch_size=batch_size_value, verbose=1)
-print("score_per_crop: {}".format(score_per_crop))
-loss_per_crop = score_per_crop[5]
-jac_per_crop = score_per_crop[-1]
-
-print("Test loss: {}".format(loss_per_crop))
-print("Test IoU (per crop): {}".format(jac_per_crop))
-import sys
-sys.exit(0)
+score_per_crop = model.evaluate(
+    X_test, Y_test, batch_size=batch_size_value, verbose=1)
+loss_per_crop = score_per_crop[0]
+jac_per_crop = score_per_crop[1]
 
 print("Making the predictions on test data . . .")
-preds_test = np.array(model.predict(X_test, batch_size=batch_size_value, verbose=1))
-preds_test = preds_test[-1] 
+preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
 # Take only the foreground class                                                
 if n_classes > 1:                                                               
@@ -608,9 +639,7 @@ print("############################################################\n"
 print("Making the predictions on test data (50% overlap) . . .")                
 X_test = crop_data_with_overlap(X_test, crop_shape, overlap=(0.5, 0.5))         
                                                                                 
-Y_test_50ov = np.array(model.predict(X_test, batch_size=batch_size_value, verbose=1))     
-Y_test_50ov = Y_test_50ov[-1] 
-
+Y_test_50ov = model.predict(X_test, batch_size=batch_size_value, verbose=1)     
 # Take only the foreground class                                                
 if n_classes > 1:                                                               
     Y_test_50ov = np.expand_dims(Y_test_50ov[...,1], -1)                        
@@ -638,7 +667,7 @@ Y_test_50ov_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
 for i in tqdm(range(X_test.shape[0])):
     pred_ensembled = ensemble8_2d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        n_classes=n_classes)
+        n_classes=n_classes, last_class=last_class)
     Y_test_50ov_ensemble[i] = pred_ensembled
 Y_test_50ov_ensemble = merge_data_with_overlap(
     Y_test_50ov_ensemble, orig_test_shape, overlap=(0.5, 0.5))
@@ -683,8 +712,7 @@ print("########################\n"
       "########################\n")
 
 print("Making the predictions on test data . . .")
-preds_test_full = np.array(model.predict(X_test, batch_size=batch_size_value, verbose=1))
-preds_test_full = preds_test_full[-1]
+preds_test_full = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
 if n_classes > 1:
     preds_test_full = np.expand_dims(preds_test_full[...,1], -1)
@@ -709,7 +737,7 @@ Y_test_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
 for i in tqdm(range(X_test.shape[0])):
     pred_ensembled = ensemble8_2d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        n_classes=n_classes)
+        n_classes=n_classes, last_class=last_class)
     Y_test_ensemble[i] = pred_ensembled
 
 print("Saving smooth predicted images . . .")

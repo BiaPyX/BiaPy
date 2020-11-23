@@ -62,7 +62,7 @@ from data_3D_manipulation import load_and_prepare_3D_data,\
                                  merge_3D_data_with_overlap, \
                                  crop_3D_data_with_overlap
 from generators.data_3D_generators import VoxelDataGenerator
-from networks.unet_3d import U_Net_3D
+from networks.attention_unet_3d import Attention_U_Net_3D
 from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.models import load_model
@@ -405,11 +405,12 @@ print("#################################\n"
       "#################################\n")
 
 print("Creating the network . . .")
-model = U_Net_3D(train_3d_desired_shape, activation=activation, depth=depth,
-                 feature_maps=feature_maps, drop_values=dropout_values,
-                 spatial_dropout=spatial_dropout, batch_norm=batch_normalization,
-                 k_init=kernel_init, optimizer=optimizer, lr=learning_rate_value,
-                 n_classes=n_classes)
+model = Attention_U_Net_3D(
+    train_3d_desired_shape, activation=activation, depth=depth,
+    feature_maps=feature_maps, drop_values=dropout_values,
+    spatial_dropout=spatial_dropout, batch_norm=batch_normalization,
+    k_init=kernel_init, optimizer=optimizer, lr=learning_rate_value,
+    n_classes=n_classes)
 
 # Check the network created
 model.summary(line_length=150)
