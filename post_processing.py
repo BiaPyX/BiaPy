@@ -252,11 +252,12 @@ def calculate_z_filtering(data, mf_size=5):
        mf_size += 1
 
     for i in range(data.shape[2]):
-        sl = (data[:, :, i, 0]).astype(np.float32)
+        sl = (data[:, :, i]).astype(np.float32)
         sl = cv2.medianBlur(sl, mf_size)
         out_data[:, :, i] = sl
 
-    return np.expand_dims(out_data, axis=-1)
+    return out_data
+
 
 def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=2,
                              last_class=True):
