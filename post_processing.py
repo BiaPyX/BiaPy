@@ -48,21 +48,22 @@ def spuriuous_detection_filter(Y, low_score_th=0.6, th=0.45):
     if th < 0 or th > 1:
         raise ValueError("'th' must be a float between 0 and 1")
 
-    class_Y = np.zeros(Y.shape[:3], dtype=np.uint8)
-    class_Y[Y[...,0]>th] = 1 
+    class_Y = np.zeros(Y.shape, dtype=np.uint8)                         
+    class_Y[Y>th] = 1
     
     for i in range(class_Y.shape[0]):
         im = class_Y[i]
         im, num = measure.label(im, connectivity=2, background=0, return_num=True)
-    
+   
         for j in range(1,num):
-            c_conf = np.mean(Y[i,...,0][im==j])
-            if c_conf < low_score_th:
-                print("Slice {}: removing artifact {} - pixels: {}"
-                      .format(i, j, np.count_nonzero(Y[i,...,0][im==j])))
-                class_Y[i][im==j] = 0
+            for k in range(Y.shape[-1]):
+                c_conf = np.mean(Y[i,...,k][im[...,k]==j])
+                if c_conf < low_score_th:
+                    print("Slice {} channel {}: removing artifact {} - pixels: {}"
+                          .format(i, k, j, np.count_nonzero(Y[i,...,k][im[...,k]==j])))
+                    class_Y[i,...,k][im[...,k]==j] = 0
 
-    return np.expand_dims(class_Y, -1)
+    return class_Y
 
 
 def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
@@ -245,7 +246,6 @@ def calculate_z_filtering(data, mf_size=5):
     """
 
     out_data = np.copy(data)
-    out_data = np.squeeze(out_data)
 
     # Must be odd
     if mf_size % 2 == 0:
@@ -254,6 +254,7 @@ def calculate_z_filtering(data, mf_size=5):
     for i in range(data.shape[2]):
         sl = (data[:, :, i]).astype(np.float32)
         sl = cv2.medianBlur(sl, mf_size)
+        sl = np.expand_dims(sl,-1) if sl.ndim == 2 else sl
         out_data[:, :, i] = sl
 
     return out_data
