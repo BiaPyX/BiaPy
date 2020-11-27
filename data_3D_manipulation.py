@@ -340,20 +340,23 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0)):
     # X
     vols_per_x = math.ceil(data.shape[1]/(vol_shape[1]*overlap_x))
     excess_x = int((vols_per_x*vol_shape[1])-((vols_per_x-1)*overlap[0]*vol_shape[1]))-data.shape[1]
-    step_x = int(vol_shape[1]*overlap_x)-int(excess_x/(vols_per_x-1))
-    last_x = excess_x%(vols_per_x-1)
+    ex = 0 if vols_per_x == 1 else int(excess_x/(vols_per_x-1))
+    step_x = int(vol_shape[1]*overlap_x)-ex
+    last_x = 0 if vols_per_x == 1 else excess_x%(vols_per_x-1)
 
     # Y
     vols_per_y = math.ceil(data.shape[2]/(vol_shape[2]*overlap_y))
     excess_y = int((vols_per_y*vol_shape[2])-((vols_per_y-1)*overlap[1]*vol_shape[2]))-data.shape[2]
-    step_y = int(vol_shape[2]*overlap_y)-int(excess_y/(vols_per_y-1))      
-    last_y = excess_y%(vols_per_y-1)
+    ex = 0 if vols_per_y == 1 else int(excess_y/(vols_per_y-1))
+    step_y = int(vol_shape[2]*overlap_y)-ex
+    last_y = 0 if vols_per_y == 1 else excess_y%(vols_per_y-1)
 
     # Z
     vols_per_z = math.ceil(data.shape[0]/(vol_shape[0]*overlap_z))              
     excess_z = int((vols_per_z*vol_shape[0])-((vols_per_z-1)*overlap[2]*vol_shape[0]))-data.shape[0]
-    step_z = int(vol_shape[0]*overlap_z)-int(excess_z/(vols_per_z-1))           
-    last_z = excess_z%(vols_per_z-1)
+    ex = 0 if vols_per_z == 1 else int(excess_z/(vols_per_z-1))
+    step_z = int(vol_shape[0]*overlap_z)-ex
+    last_z = 0 if vols_per_z == 1 else excess_z%(vols_per_z-1)
     
     # Real overlap calculation for printing 
     real_ov_x = (vol_shape[1]-step_x)/vol_shape[1]
