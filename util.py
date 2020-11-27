@@ -1264,7 +1264,7 @@ def load_data_from_dir(data_dir, shape):
         if len(img.shape) == 2:
             img = np.expand_dims(img, axis=-1)
 
-        data[n] = img
+        data[n,0:img.shape[0],0:img.shape[1],0:img.shape[2]] = img
 
     print("*** Loaded data shape is {}".format(data.shape))
     return data
