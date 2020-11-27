@@ -40,6 +40,37 @@ def jaccard_index_numpy(y_true, y_pred):
     return jac
 
 
+def jaccard_index_numpy_without_background(y_true, y_pred):
+    """Define Jaccard index excluding the background class (first channel). 
+
+       Parameters
+       ----------
+       y_true : N dim Numpy array
+           Ground truth masks. E.g. ``(num_of_images, x, y, channels)`` for 2D
+           images or ``(volume_number, z, x, y, channels)`` for 3D volumes.
+
+       y_pred : N dim Numpy array
+           Predicted masks. E.g. ``(num_of_images, x, y, channels)`` for 2D
+           images or ``(volume_number, z, x, y, channels)`` for 3D volumes.
+
+       Returns
+       -------
+       jac : float
+           Jaccard index value.
+    """
+
+    TP = np.count_nonzero(y_pred[...,1:] * y_true[...,1:])
+    FP = np.count_nonzero(y_pred[...,1:] * (y_true[...,1:] - 1))
+    FN = np.count_nonzero((y_pred[...,1:] - 1) * y_true[...,1:])
+
+    if (TP + FP + FN) == 0:
+        jac = 0
+    else:
+        jac = TP / (TP + FP + FN)
+
+    return jac
+
+
 def jaccard_index(y_true, y_pred, t=0.5):
     """Define Jaccard index.
 
@@ -66,6 +97,39 @@ def jaccard_index(y_true, y_pred, t=0.5):
     TP = tf.math.count_nonzero(y_pred_ * y_true)
     FP = tf.math.count_nonzero(y_pred_ * (y_true - 1))
     FN = tf.math.count_nonzero((y_pred_ - 1) * y_true)
+
+    jac = tf.cond(tf.greater((TP + FP + FN), 0), lambda: TP / (TP + FP + FN),
+                  lambda: K.cast(0.000, dtype='float64'))
+
+    return jac
+
+
+def jaccard_index_without_background(y_true, y_pred, t=0.5):
+    """Define Jaccard index.
+
+       Parameters
+       ----------
+       y_true : Tensor
+           Ground truth masks.
+
+       y_pred : Tensor
+           Predicted masks.
+
+       t : float, optional
+           Threshold to be applied.
+
+       Returns
+       -------
+       jac : Tensor
+           Jaccard index value
+    """
+
+    _y_pred = tf.cast(y_pred[...,1:] > t, dtype=tf.int32)
+    _y_true = tf.cast(y_true[...,1:], dtype=tf.int32)
+
+    TP = tf.math.count_nonzero(_y_pred * _y_true)
+    FP = tf.math.count_nonzero(_y_pred * (_y_true - 1))
+    FN = tf.math.count_nonzero((_y_pred - 1) * _y_true)
 
     jac = tf.cond(tf.greater((TP + FP + FN), 0), lambda: TP / (TP + FP + FN),
                   lambda: K.cast(0.000, dtype='float64'))
