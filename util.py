@@ -600,27 +600,31 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
             d = len(str(Y.shape[0]*Y.shape[3]))
             for i in tqdm(range(Y.shape[0])):
                 for j in range(Y.shape[3]):
-                    im = Image.fromarray(Y[i,:,:,j,0]*v)
-                    im = im.convert('L')
-                    if filenames is None:
-                        f = os.path.join(mask_dir, p_y + str(i).zfill(d) + "_" \
-                                         + str(j).zfill(d) + extension)
-                    else:
-                        f = os.path.join(data_dir, filenames[(i*j)+j] + extension)
-
-                    im.save(f)
+                    for k in range(Y.shape[-1]):
+                        im = Image.fromarray(Y[i,:,:,j,k]*v)
+                        im = im.convert('L')
+                        if filenames is None:
+                            c = "" if Y.shape[-1] == 1 else "_c"+str(j)
+                            f = os.path.join(mask_dir, p_y + str(i).zfill(d) + "_" \
+                                             + str(j).zfill(d)+c+extension)
+                        else:
+                            f = os.path.join(data_dir, filenames[(i*j)+j] + extension)
+    
+                        im.save(f)
         else:
             d = len(str(Y.shape[0]))
             for i in tqdm(range(0, Y.shape[0])):
-                im = Image.fromarray(Y[i,:,:,0]*v)         
-                im = im.convert('L')                                                
+                for j in range(Y.shape[-1]):
+                    im = Image.fromarray(Y[i,:,:,j]*v)         
+                    im = im.convert('L')                                                
+    
+                    if filenames is None:
+                        c = "" if Y.shape[-1] == 1 else "_c"+str(j)
+                        f = os.path.join(mask_dir, p_y+str(i).zfill(d)+c+extension)
+                    else:
+                        f = os.path.join(mask_dir, filenames[i] + extension)
 
-                if filenames is None:
-                    f = os.path.join(mask_dir, p_y + str(i).zfill(d) + extension)
-                else:
-                    f = os.path.join(mask_dir, filenames[i] + extension)
-
-                im.save(f)
+                    im.save(f)
        
 
 def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
