@@ -159,11 +159,11 @@ g_blur = False
 # Gamma contrast 
 gamma_contrast = False
 # Flag to extract random subvolumnes during the DA
-random_subvolumes_in_DA = True
+random_subvolumes_in_DA = False
 # Calculate probability map to make random subvolumes to be extracted with high
 # probability of having a mitochondria on the middle of it. Useful to avoid
 # extracting a subvolume which less mitochondria information.
-probability_map = True # Only active with random_subvolumes_in_DA
+probability_map = False # Only active with random_subvolumes_in_DA
 w_foreground = 0.94 # Only active with probability_map
 w_background = 0.06 # Only active with probability_map
 
@@ -179,7 +179,7 @@ extra_train_data = 0
 ### Load previously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
-load_previous_weights = True
+load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
 # Prefix of the files where the weights are stored/loaded from
@@ -195,9 +195,9 @@ batch_size_value = 3
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "adam"
 # Learning rate used by the optimization method
-learning_rate_value = 0.001
+learning_rate_value = 0.0001
 # Number of epochs to train the network
-epochs_value = 100
+epochs_value = 150
 # Number of epochs to stop the training process after no improvement
 patience = 50
 
@@ -271,11 +271,16 @@ prob_map_dir = os.path.join(args.result_dir, 'prob_map')
 
 
 ### Callbacks
-# To measure the time
-time_callback = TimeHistory()
-# Stop early and restore the best model weights when finished the training
-earlystopper = EarlyStopping(
-    patience=patience, verbose=1, restore_best_weights=True)
+# To measure the time                                                           
+time_callback = TimeHistory()                                                   
+# Stop early and restore the best model weights when finished the training      
+earlystopper = EarlyStopping(                                                   
+    monitor='loss', patience=patience, verbose=1, restore_best_weights=True)                    
+# Save the best model into a h5 file in case one need again the weights learned 
+os.makedirs(h5_dir, exist_ok=True)                                              
+checkpointer = ModelCheckpoint(                                                 
+    os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),         
+    monitor='loss', verbose=1, save_best_only=True)    
 
 
 print("###################\n"
@@ -391,15 +396,16 @@ model.summary(line_length=150)
 os.makedirs(char_dir, exist_ok=True)
 model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
+
 h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights     
                                  + '_' + str(args.run_id) + '.h5')
 if load_previous_weights == False:
     results = model.fit(x=train_generator, steps_per_epoch=steps_per_epoch_value, 
-        epochs=epochs_value, callbacks=[earlystopper, time_callback])
+        epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
     model.save(h5_file)
-else:
-    print("Loading model weights from h5_file: {}".format(h5_file))
-    model.load_weights(h5_file)
+
+print("Loading model weights from h5_file: {}".format(h5_file))
+model.load_weights(h5_file)
 
 
 print("################################\n"
@@ -469,10 +475,10 @@ save_img(Y=(Y_test_smooth > 0.5).astype(np.uint8),
          mask_dir=smo_bin_dir_per_image, prefix="test_out_smo")                                              
                                                                                 
 print("Calculate metrics (smooth + per subvolume). . .")                        
-smo_score_per_image = jaccard_index_numpy(                                  
+smo_jac_per_image = jaccard_index_numpy(                                  
     Y_test, (Y_test_smooth > 0.5).astype(np.uint8))                             
 smo_voc_per_image = voc_calculation(                                        
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smo_score_per_image)    
+    Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smo_jac_per_image)    
 smo_det_per_image = -1
 
 print("~~~~ Z-Filtering (per image) ~~~~")                                      
@@ -483,10 +489,10 @@ save_img(Y=zfil_preds_test, mask_dir=zfil_dir_per_image,
          prefix="test_out_zfil")
                                                                                 
 print("Calculate metrics (Z-filtering + per crop) . . .")                       
-zfil_score_per_image = jaccard_index_numpy(                                     
+zfil_jac_per_image = jaccard_index_numpy(                                     
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))                           
 zfil_voc_per_image = voc_calculation(                                           
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_score_per_image)     
+    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_jac_per_image)     
 zfil_det_per_image = -1
 del zfil_preds_test
                                                                                 
@@ -498,11 +504,11 @@ save_img(Y=smo_zfil_preds_test, mask_dir=smo_zfil_dir_per_image,
          prefix="test_out_smoo_zfil")                                           
                                                                                 
 print("Calculate metrics (Smooth + Z-filtering per crop) . . .")                
-smo_zfil_score_per_image = jaccard_index_numpy(                                 
+smo_zfil_jac_per_image = jaccard_index_numpy(                                 
     Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8))                       
 smo_zfil_voc_per_image = voc_calculation(                                       
     Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8),                       
-    smo_zfil_score_per_image)                                                   
+    smo_zfil_jac_per_image)                                                   
 smo_zfil_det_per_image = -1
 del Y_test_smooth, smo_zfil_preds_test                                          
                                         
@@ -543,7 +549,7 @@ for i in tqdm(range(X_test.shape[0])):
     predictions_ensembled = ensemble16_3d_predictions(X_test[i],                       
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),   
         n_classes=n_classes, last_class=last_class)                                                    
-    Y_test_50ov[i] = predictions_ensembled
+    Y_test_50ov_ensemble[i] = predictions_ensembled
 
 Y_test_50ov_ensemble = merge_3D_data_with_overlap(
     Y_test_50ov_ensemble, orig_test_shape, overlap=(0.5,0.5,0.5))
@@ -568,11 +574,11 @@ print("Saving Z-filtered images . . .")
 save_img(Y=zfil_preds_test, mask_dir=ens_zfil_dir_50ov, prefix="test_out_zfil")
 
 print("Calculate metrics (Z-filtering + 50% overlap) . . .")
-zfil_score_50ov = jaccard_index_numpy(
+ens_zfil_jac_50ov = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
-zfil_voc_50ov = voc_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_score_50ov)
-zfil_det_50ov = -1
+ens_zfil_voc_50ov = voc_calculation(
+    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), ens_zfil_jac_50ov)
+ens_zfil_det_50ov = -1
 del Y_test_50ov_ensemble, zfil_preds_test
 
 
@@ -584,11 +590,11 @@ jac_full = -1
 voc_full = -1
 det_full = -1
 
-smo_score_full = -1
+smo_jac_full = -1
 smo_voc_full = -1
 smo_det_full = -1
 
-zfil_score_full = -1
+zfil_jac_full = -1
 zfil_voc_full = -1
 zfil_det_full = -1
 
@@ -599,8 +605,8 @@ print("Saving spurious detection filtering resulting images . . .")
 save_img(Y=spu_preds_test, mask_dir=spu_dir_full, prefix="test_out_spu")
 
 print("Calculate metrics (Spurious + full image) . . .")
-spu_score_full = jaccard_index_numpy(Y_test, spu_preds_test)
-spu_voc_full = voc_calculation(Y_test, spu_preds_test, spu_score_full)
+spu_jac_full = jaccard_index_numpy(Y_test, spu_preds_test)
+spu_voc_full = voc_calculation(Y_test, spu_preds_test, spu_jac_full)
 spu_det_full = -1
               
 print("~~~~ Watershed (full image) ~~~~")
@@ -614,8 +620,8 @@ save_img(Y=(wa_preds_test).astype(np.uint8), mask_dir=wa_dir_full,
          prefix="test_out_wa")
 
 print("Calculate metrics (Watershed + full image) . . .")
-wa_score_full = jaccard_index_numpy(Y_test, wa_preds_test)
-wa_voc_full = voc_calculation(Y_test, wa_preds_test, wa_score_full)
+wa_jac_full = jaccard_index_numpy(Y_test, wa_preds_test)
+wa_voc_full = voc_calculation(Y_test, wa_preds_test, wa_jac_full)
 wa_det_full = -1
 del preds_test, wa_preds_test
 
@@ -633,11 +639,11 @@ save_img(Y=spu_wa_zfil_preds_test, mask_dir=spu_wa_zfil_dir_full,
          prefix="test_out_spu_wa_zfil")
 
 print("Calculate metrics (Z-filtering + full image) . . .")
-spu_wa_zfil_score_full = jaccard_index_numpy(
+spu_wa_zfil_jac_full = jaccard_index_numpy(
     Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8))
 spu_wa_zfil_voc_full = voc_calculation(
     Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8),
-    spu_wa_zfil_score_full)
+    spu_wa_zfil_jac_full)
 spu_wa_zfil_det_full = -1
 del spu_wa_zfil_preds_test, spu_preds_test
 
@@ -648,12 +654,9 @@ print("####################################\n"
 
 if load_previous_weights == False:
     print("Epoch average time: {}".format(np.mean(time_callback.times)))
-    print("Epoch number: {}".format(len(results.history['val_loss'])))
     print("Train time (s): {}".format(np.sum(time_callback.times)))
     print("Train loss: {}".format(np.min(results.history['loss'])))
     print("Train IoU: {}".format(np.max(results.history[metric])))
-    print("Validation loss: {}".format(np.min(results.history['val_loss'])))
-    print("Validation IoU: {}".format(np.max(results.history['val_'+metric])))
 
 print("Test loss: {}".format(loss_per_crop))
 print("Test IoU (per crop): {}".format(jac_per_crop))
@@ -661,13 +664,13 @@ print("Test IoU (per crop): {}".format(jac_per_crop))
 print("Test IoU (merge into complete image): {}".format(jac_per_image))
 print("Test VOC (merge into complete image): {}".format(voc_per_image))
 print("Test DET (merge into complete image): {}".format(det_per_image))
-print("Post-process: Smooth - Test IoU (merge into complete image): {}".format(smo_score_per_image))
+print("Post-process: Smooth - Test IoU (merge into complete image): {}".format(smo_jac_per_image))
 print("Post-process: Smooth - Test VOC (merge into complete image): {}".format(smo_voc_per_image))
 print("Post-process: Smooth - Test DET (merge into complete image): {}".format(smo_det_per_image))
-print("Post-process: Z-Filtering - Test IoU (merge into complete image): {}".format(zfil_score_per_image))
+print("Post-process: Z-Filtering - Test IoU (merge into complete image): {}".format(zfil_jac_per_image))
 print("Post-process: Z-Filtering - Test VOC (merge into complete image): {}".format(zfil_voc_per_image))
 print("Post-process: Z-Filtering - Test DET (merge into complete image): {}".format(zfil_det_per_image))
-print("Post-process: Smooth + Z-Filtering - Test IoU (merge into complete image): {}".format(smo_zfil_score_per_image))
+print("Post-process: Smooth + Z-Filtering - Test IoU (merge into complete image): {}".format(smo_zfil_jac_per_image))
 print("Post-process: Smooth + Z-Filtering - Test VOC (merge into complete image): {}".format(smo_zfil_voc_per_image))
 print("Post-process: Smooth + Z-Filtering - Test DET (merge into complete image): {}".format(smo_zfil_det_per_image))
 
@@ -684,19 +687,19 @@ print("Post-process: Ensemble + Z-Filtering - Test DET (merge with 50% overlap):
 print("Test IoU (full): {}".format(jac_full))
 print("Test VOC (full): {}".format(voc_full))
 print("Test DET (full): {}".format(det_full))
-print("Post-process: Ensemble - Test IoU (full): {}".format(smo_score_full))
+print("Post-process: Ensemble - Test IoU (full): {}".format(smo_jac_full))
 print("Post-process: Ensemble - Test VOC (full): {}".format(smo_voc_full))
 print("Post-process: Ensemble - Test DET (full): {}".format(smo_det_full))
-print("Post-process: Z-Filtering - Test IoU (full): {}".format(zfil_score_full))
+print("Post-process: Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
 print("Post-process: Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
 print("Post-process: Z-Filtering - Test DET (full): {}".format(zfil_det_full))
-print("Post-process: Spurious Detection - Test IoU (full): {}".format(spu_score_full))
+print("Post-process: Spurious Detection - Test IoU (full): {}".format(spu_jac_full))
 print("Post-process: Spurious Detection - VOC (full): {}".format(spu_voc_full))
 print("Post-process: Spurious Detection - DET (full): {}".format(spu_det_full))
-print("Post-process: Watershed - Test IoU (full): {}".format(wa_score_full))
+print("Post-process: Watershed - Test IoU (full): {}".format(wa_jac_full))
 print("Post-process: Watershed - VOC (full): {}".format(wa_voc_full))
 print("Post-process: Watershed - DET (full): {}".format(wa_det_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test IoU (full): {}".format(spu_wa_zfil_score_full))
+print("Post-process: Spurious + Watershed + Z-Filtering - Test IoU (full): {}".format(spu_wa_zfil_jac_full))
 print("Post-process: Spurious + Watershed + Z-Filtering - Test VOC (full): {}".format(spu_wa_zfil_voc_full))
 print("Post-process: Spurious + Watershed + Z-Filtering - Test DET (full): {}".format(spu_wa_zfil_det_full))
 
@@ -707,8 +710,8 @@ if not load_previous_weights:
         or "_per_image" in name or "_full" in name):
             scores[name] = eval(name)
 
-    store_history(results, scores, time_callback, args.result_dir, job_identifier, 
-                  metric=metric)
-    create_plots(results, job_identifier, char_dir, metric=metric)
+#    store_history(results, scores, time_callback, args.result_dir, job_identifier, 
+#                  metric=metric)
+#    create_plots(results, job_identifier, char_dir, metric=metric)
 
 print("FINISHED JOB {} !!".format(job_identifier))
