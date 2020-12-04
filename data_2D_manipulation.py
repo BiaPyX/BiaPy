@@ -416,14 +416,14 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0)):
     excess_x = int((crops_per_x*crop_shape[0])-((crops_per_x-1)*overlap[0]*crop_shape[0]))-data.shape[1]
     ex = 0 if crops_per_x == 1 else int(excess_x/(crops_per_x-1))
     step_x = int(crop_shape[0]*overlap_x)-ex
-    last_x = excess_x%(crops_per_x-1)
+    last_x = 0 if crops_per_x == 1 else excess_x%(crops_per_x-1)
 
     # Y
     crops_per_y = math.ceil(data.shape[2]/(crop_shape[1]*overlap_y))
     excess_y = int((crops_per_y*crop_shape[1])-((crops_per_y-1)*overlap[1]*crop_shape[1]))-data.shape[2]
     ex = 0 if crops_per_y == 1 else int(excess_y/(crops_per_y-1))
     step_y = int(crop_shape[1]*overlap_y)-ex
-    last_y = excess_y%(crops_per_y-1)
+    last_y = 0 if crops_per_y == 1 else excess_y%(crops_per_y-1)
 
     # Real overlap calculation for printing 
     real_ov_x = (crop_shape[0]-step_x)/crop_shape[0]
@@ -609,14 +609,14 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
     excess_x = int((crops_per_x*data.shape[1])-((crops_per_x-1)*overlap[0]*data.shape[1]))-original_shape[1]
     ex = 0 if crops_per_x == 1 else int(excess_x/(crops_per_x-1))
     step_x = int(data.shape[1]*overlap_x)-ex
-    last_x = excess_x%(crops_per_x-1)
+    last_x = 0 if crops_per_x == 1 else excess_x%(crops_per_x-1)
     
     # Y
     crops_per_y = math.ceil(original_shape[2]/(data.shape[2]*overlap_y))
     excess_y = int((crops_per_y*data.shape[2])-((crops_per_y-1)*overlap[1]*data.shape[2]))-original_shape[2]
     ex = 0 if crops_per_y == 1 else int(excess_y/(crops_per_y-1))
     step_y = int(data.shape[2]*overlap_y)-ex
-    last_y = excess_y%(crops_per_y-1)
+    last_y = 0 if crops_per_y == 1 else excess_y%(crops_per_y-1)
 
     # Real overlap calculation for printing                                     
     real_ov_x = (data.shape[1]-step_x)/data.shape[1]                              
