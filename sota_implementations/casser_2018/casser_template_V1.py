@@ -37,7 +37,7 @@ os.chdir(args.base_work_dir)
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
                  TimeHistory, threshold_plots, save_img, \
-                 calculate_2D_volume_prob_map, check_binary_masks, \
+                 calculate_2D_volume_prob_map, check_masks, \
                  img_to_onehot_encoding
 limit_threads()
 
@@ -264,6 +264,10 @@ n_classes = 1
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)
 metric = "jaccard_index_softmax" if n_classes > 1 else "jaccard_index"
+# To take only the last class of the predictions, which corresponds to the
+# foreground in a binary problem. If n_classes > 2 this should be disabled to
+# ensure all classes are preserved
+last_class = True if n_classes <= 2 else False
 
 
 ### DET metric variables
@@ -351,8 +355,8 @@ print("###################\n"
       "#  SANITY CHECKS  #\n"
       "###################\n")
 
-check_binary_masks(train_mask_path)
-check_binary_masks(test_mask_path)
+check_masks(train_mask_path)
+check_masks(test_mask_path)
 
 
 print("###############\n"
@@ -683,7 +687,7 @@ Y_test_50ov_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
 for i in tqdm(range(X_test.shape[0])):
     pred_ensembled = ensemble8_2d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        n_classes=n_classes)
+        n_classes=n_classes, last_class=last_class)
     Y_test_50ov_ensemble[i] = pred_ensembled
 Y_test_50ov_ensemble = merge_data_with_overlap(
     Y_test_50ov_ensemble, orig_test_shape, overlap=(0.5, 0.5))
@@ -753,7 +757,7 @@ Y_test_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
 for i in tqdm(range(X_test.shape[0])):
     pred_ensembled = ensemble8_2d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        n_classes=n_classes)
+        n_classes=n_classes, last_class=last_class)
     Y_test_ensemble[i] = pred_ensembled
 
 print("Saving smooth predicted images . . .")
