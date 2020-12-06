@@ -1332,3 +1332,70 @@ def load_ct_data_from_dir(data_dir, shape=None):
     print("*** Loaded data shape is {}".format(data.shape))
     return data
 
+
+def load_3d_images_from_dir(data_dir, shape=None):
+    """Load data from a directory.
+
+       Parameters
+       ----------
+       data_dir : str
+           Path to read the data from.
+
+       shape : 4D int tuple
+           Shape of the data. E.g. ``(x, y, z, channels)``.
+
+       Returns
+       -------
+       data : 5D Numpy array
+           Data loaded. E.g. ``(num_of_images, z, y, x, channels)``.
+
+       Examples
+       --------
+       ::
+           # EXAMPLE 1
+           # Case where we need to load 20 images of shape (1024, 1024, 91, 1)
+           data_path = "data/train/x"
+           data_shape = (1024, 1024, 91, 1)
+
+           load_data_from_dir(data_path, data_shape)
+           # The function will print the shape of the created array. In this example:
+           #     *** Loaded data shape is (20, 91, 1024, 1024, 1)
+           # Notice height, width and depth swap as skimage.io imread function 
+           # is used to load images 
+    """
+    if shape is not None:
+        if len(shape) != 4:
+            raise ValueError("'shape' must be 4 length tuple")
+
+    print("Loading data from {}".format(data_dir))
+    ids = sorted(next(os.walk(data_dir))[2])
+
+    if shape is None:
+        # Determine max in each dimension first
+        max_x = 0
+        max_y = 0
+        max_z = 0
+        for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+            img = imread(os.path.join(data_dir, id_))
+
+            max_x = img.shape[1] if max_x < img.shape[1] else max_x
+            max_y = img.shape[2] if max_y < img.shape[2] else max_y
+            max_z = img.shape[0] if max_z < img.shape[0] else max_z
+        c = 1 if img.ndim == 3 else img.shape[-1] 
+        _shape = (max_z, max_y, max_x, c)
+        print("Shape is {}".format(_shape))
+    else:
+        _shape = (shape[2], shape[1], shape[0], shape[3])
+
+    data = np.zeros((len(ids), ) + _shape)
+    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+        img = imread(os.path.join(data_dir, id_))
+
+        if len(img.shape) == 3:
+            img = np.expand_dims(img, axis=-1)
+
+        data[n,0:img.shape[0],0:img.shape[1],0:img.shape[2]] = img
+
+    print("*** Loaded data shape is {}".format(data.shape))
+    return data
+
