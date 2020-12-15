@@ -325,7 +325,7 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0)):
            Data to crop. E.g. ``(num_of_images, x, y, channels)``.
         
        crop_shape : 3 int tuple
-           Shape of the crops to created. E.g. ``(x, y, channels)``.
+           Shape of the crops to create. E.g. ``(x, y, channels)``.
         
        data_mask : 4D Numpy array, optional
            Data mask to crop. E.g. ``(num_of_images, x, y, channels)``.

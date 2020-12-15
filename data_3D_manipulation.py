@@ -381,7 +381,9 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
     tr_shape = (image_train_shape[1], image_train_shape[0], image_train_shape[2], 
                 image_train_shape[3])
     print("0) Loading train images . . .")
-    X_train = load_3d_images_from_dir(train_path, tr_shape)
+    X_train = load_3d_images_from_dir(train_path, tr_shape, crop=True, subvol_shape=train_subvol_shape, overlap=ov)
+    import sys
+    sys.exit(0)
     print("1) Loading train masks . . .")
     Y_train = load_3d_images_from_dir(train_mask_path, tr_shape)
 
@@ -475,7 +477,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
            Data to crop. E.g. ``(num_of_images, x, y, channels)``.
 
        vol_shape : 4D int tuple
-           Shape of the volumes to created. E.g. ``(x, y, z, channels)``.
+           Shape of the volumes to create. E.g. ``(x, y, z, channels)``.
         
        data_mask : 4D Numpy array, optional
             Data mask to crop. E.g. ``(num_of_images, x, y, channels)``.
@@ -646,7 +648,7 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False, verbose=True):
            Data. E.g. ``(num_of_images, x, y, channels)``.      
                                                                            
        vol_shape : 4D int tuple
-           Shape of the volumes to created. E.g. ``(x, y, z, channels)``.
+           Shape of the volumes to create. E.g. ``(x, y, z, channels)``.
 
        data_mask : Numpy 4D array, optional
            Mask data. E.g. ``(num_of_images, x, y, channels)``.
@@ -834,7 +836,7 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
            Data to crop. E.g. ``(volume_number, x, y, z, channels)``.
 
        orig_vol_shape : 4D int tuple
-           Shape of the volumes to created.
+           Shape of the volumes to create.
 
        data_mask : 4D Numpy array, optional
            Data mask to crop. E.g. ``(volume_number, x, y, z, channels)``.
