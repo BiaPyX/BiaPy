@@ -186,8 +186,6 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
     print("3) Loading test masks . . .")
     Y_test = load_data_from_dir(test_mask_path, te_shape)
 
-    orig_test_shape = tuple(Y_test.shape[i] for i in [0, 1, 2, 3])
-
     if not random_subvolumes_in_DA:
         print("Cropping train data into 3D subvolumes . . .")
         if overlap_train:
@@ -204,8 +202,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
         s = (r, )+X_test.shape[1:]
         X_test = np.concatenate((X_test,np.zeros((s))), axis=0)
         Y_test = np.concatenate((Y_test,np.zeros((s))), axis=0)
-        print("X_test shape: {}".format(X_test.shape))
-        print("Y_test shape: {}".format(Y_test.shape))
+    orig_test_shape = tuple(Y_test.shape[i] for i in [0, 1, 2, 3])
     
     print("Cropping test data into 3D subvolumes . . .")
     X_test, Y_test = crop_3D_data_with_overlap(
