@@ -1,4 +1,4 @@
-3D U-Net                                                                        
+U-Net 3D                                                                       
 ========
                                                                                 
 .. automodule:: networks.unet_3d

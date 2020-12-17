@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Xiao loss &mdash; EM Image Segmentation  documentation</title>
+  <title>U-Net 3D &mdash; EM Image Segmentation  documentation</title>
   
 
   
@@ -35,7 +35,9 @@
 
     
     <link rel="index" title="Index" href="genindex.html" />
-    <link rel="search" title="Search" href="search.html" /> 
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="U-Net 3D" href="networks_unet_3d.html" />
+    <link rel="prev" title="U-Net 2D + SE" href="networks_se_unet_2d.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -82,21 +84,32 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+</ul>
+<p class="caption"><span class="caption-text">2D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">Data manipulation 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator_keras.html">2D generator (Keras)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator.html">2D generator (Custom)</a></li>
+</ul>
+<p class="caption"><span class="caption-text">3D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">Data manipulation 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="3d_generator.html">3D generator</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">U-Net 3D</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="networks_unet_3d.html">U-Net 3D</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_resunet_3d.html">Residual U-Net 3D</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_att_unet_3d.html">U-Net 3D + Attention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_se_unet_3d.html">U-Net 3D + SE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
@@ -111,6 +124,7 @@
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
@@ -159,7 +173,7 @@
     
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
         
-      <li>Xiao loss</li>
+      <li>U-Net 3D</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -176,30 +190,18 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="module-sota_implementations.xiao_2018.loss">
-<span id="xiao-loss"></span><h1>Xiao loss<a class="headerlink" href="#module-sota_implementations.xiao_2018.loss" title="Permalink to this headline">¶</a></h1>
-<dl class="py function">
-<dt id="sota_implementations.xiao_2018.loss.custom_loss">
-<code class="sig-prename descclassname">sota_implementations.xiao_2018.loss.</code><code class="sig-name descname">custom_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">aux1</span></em>, <em class="sig-param"><span class="n">aux2</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/sota_implementations/xiao_2018/loss.html#custom_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sota_implementations.xiao_2018.loss.custom_loss" title="Permalink to this definition">¶</a></dt>
-<dd><p>Loss function based on Xiao et al. using 2 auxiliary classifiers.</p>
-<p>The regularization term defined in the loss is not here but in each conv
-layer as Keras supports.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>aux1</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code>) – 2º upsample layer output tensor.</p></li>
-<li><p><strong>aux2</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code>) – 3º upsample layer output tensor.</p></li>
+  <div class="section" id="u-net-3d">
+<h1>U-Net 3D<a class="headerlink" href="#u-net-3d" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+<p class="caption"><span class="caption-text">U-Net 3D</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">U-Net 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">Residual U-Net 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_att_unet_3d.html">U-Net 3D + Attention</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">U-Net 3D + SE</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
 </ul>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p><strong>loss</strong> – Loss function defined in Xiao et al.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">function</span></code></p>
-</dd>
-</dl>
-</dd></dl>
-
+</div>
 </div>
 
 
@@ -207,6 +209,15 @@ layer as Keras supports.</p>
            
           </div>
           <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="networks_unet_3d.html" class="btn btn-neutral float-right" title="U-Net 3D" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="networks_se_unet_2d.html" class="btn btn-neutral float-left" title="U-Net 2D + SE" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
   
 
   <hr/>

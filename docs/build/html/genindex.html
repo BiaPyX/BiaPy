@@ -85,7 +85,6 @@
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
@@ -100,13 +99,8 @@
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">U-Net 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
@@ -121,6 +115,7 @@
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
@@ -216,17 +211,8 @@
 <h2 id="A">A</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li>
-    adabound
-
-      <ul>
-        <li><a href="adabound.html#module-adabound">module</a>
+      <li><a href="adabound.html#aux.adabound.AdaBound">AdaBound (class in aux.adabound)</a>
 </li>
-      </ul></li>
-      <li><a href="adabound.html#adabound.AdaBound">AdaBound (class in adabound)</a>
-</li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="3d_generator.html#generators.data_3D_generators.VoxelDataGenerator.apply_transform">apply_transform() (generators.data_3D_generators.VoxelDataGenerator method)</a>
 </li>
       <li><a href="util.html#util.array_to_img">array_to_img() (in module util)</a>
@@ -235,6 +221,39 @@
 </li>
       <li><a href="cheng_network.html#sota_implementations.cheng_2017.cheng_network.asymmetric_network">asymmetric_network() (in module sota_implementations.cheng_2017.cheng_network)</a>
 </li>
+      <li><a href="networks_att_unet_2d.html#networks.attention_unet_2d.Attention_U_Net_2D">Attention_U_Net_2D() (in module networks.attention_unet_2d)</a>
+</li>
+      <li><a href="networks_att_unet_3d.html#networks.attention_unet_3d.Attention_U_Net_3D">Attention_U_Net_3D() (in module networks.attention_unet_3d)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="networks_att_unet_2d.html#networks.attention_unet_2d.AttentionBlock">AttentionBlock() (in module networks.attention_unet_2d)</a>
+
+      <ul>
+        <li><a href="networks_att_unet_3d.html#networks.attention_unet_3d.AttentionBlock">(in module networks.attention_unet_3d)</a>
+</li>
+      </ul></li>
+      <li>
+    aux.adabound
+
+      <ul>
+        <li><a href="adabound.html#module-aux.adabound">module</a>
+</li>
+      </ul></li>
+      <li>
+    aux.callbacks
+
+      <ul>
+        <li><a href="callbacks.html#module-aux.callbacks">module</a>
+</li>
+      </ul></li>
+      <li>
+    aux.Grad_CAM.grad_cam
+
+      <ul>
+        <li><a href="grad_cam.html#module-aux.Grad_CAM.grad_cam">module</a>
+</li>
+      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -271,23 +290,16 @@
         <li><a href="cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D.call">(sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D method)</a>
 </li>
       </ul></li>
-      <li>
-    callbacks
-
-      <ul>
-        <li><a href="callbacks.html#module-callbacks">module</a>
-</li>
-      </ul></li>
-      <li><a href="util.html#util.check_binary_masks">check_binary_masks() (in module util)</a>
-</li>
       <li><a href="data_2d_manipulation.html#data_2D_manipulation.check_crops">check_crops() (in module data_2D_manipulation)</a>
+</li>
+      <li><a href="util.html#util.check_masks">check_masks() (in module util)</a>
 </li>
       <li><a href="oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.cnn_oztel">cnn_oztel() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.cnn_oztel_test">cnn_oztel_test() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="2d_generator_keras.html#generators.keras_da_gen.combine_generators">combine_generators() (in module generators.keras_da_gen)</a>
 </li>
       <li><a href="cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D.compute_output_shape">compute_output_shape() (sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D method)</a>
@@ -361,6 +373,12 @@
 </li>
       </ul></li>
   </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="post_processing.html#post_processing.ensemble16_3d_predictions">ensemble16_3d_predictions() (in module post_processing)</a>
+</li>
+      <li><a href="post_processing.html#post_processing.ensemble8_2d_predictions">ensemble8_2d_predictions() (in module post_processing)</a>
+</li>
+  </ul></td>
 </tr></table>
 
 <h2 id="F">F</h2>
@@ -411,7 +429,7 @@
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="adabound.html#adabound.AdaBound.get_config">get_config() (adabound.AdaBound method)</a>
+      <li><a href="adabound.html#aux.adabound.AdaBound.get_config">get_config() (aux.adabound.AdaBound method)</a>
 </li>
       <li><a href="2d_generator.html#generators.custom_da_gen.ImageDataGenerator.get_transformed_samples">get_transformed_samples() (generators.custom_da_gen.ImageDataGenerator method)</a>
 
@@ -419,16 +437,9 @@
         <li><a href="3d_generator.html#generators.data_3D_generators.VoxelDataGenerator.get_transformed_samples">(generators.data_3D_generators.VoxelDataGenerator method)</a>
 </li>
       </ul></li>
-      <li><a href="adabound.html#adabound.AdaBound.get_updates">get_updates() (adabound.AdaBound method)</a>
+      <li><a href="adabound.html#aux.adabound.AdaBound.get_updates">get_updates() (aux.adabound.AdaBound method)</a>
 </li>
-      <li>
-    Grad_CAM.grad_cam
-
-      <ul>
-        <li><a href="grad_cam.html#module-Grad_CAM.grad_cam">module</a>
-</li>
-      </ul></li>
-      <li><a href="grad_cam.html#Grad_CAM.grad_cam.grad_cam_sample">grad_cam_sample() (in module Grad_CAM.grad_cam)</a>
+      <li><a href="grad_cam.html#aux.Grad_CAM.grad_cam.grad_cam_sample">grad_cam_sample() (in module aux.Grad_CAM.grad_cam)</a>
 </li>
       <li><a href="util.html#util.grayscale_2D_image_to_3D">grayscale_2D_image_to_3D() (in module util)</a>
 </li>
@@ -456,9 +467,13 @@
 </li>
       <li><a href="metrics.html#metrics.jaccard_index_numpy">jaccard_index_numpy() (in module metrics)</a>
 </li>
+      <li><a href="metrics.html#metrics.jaccard_index_numpy_without_background">jaccard_index_numpy_without_background() (in module metrics)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="metrics.html#metrics.jaccard_index_softmax">jaccard_index_softmax() (in module metrics)</a>
+</li>
+      <li><a href="metrics.html#metrics.jaccard_index_without_background">jaccard_index_without_background() (in module metrics)</a>
 </li>
       <li><a href="metrics.html#metrics.jaccard_loss">jaccard_loss() (in module metrics)</a>
 </li>
@@ -490,11 +505,15 @@
       </ul></li>
       <li><a href="util.html#util.limit_threads">limit_threads() (in module util)</a>
 </li>
+      <li><a href="util.html#util.load_3d_images_from_dir">load_3d_images_from_dir() (in module util)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="data_2d_manipulation.html#data_2D_manipulation.load_and_prepare_2D_data">load_and_prepare_2D_data() (in module data_2D_manipulation)</a>
 </li>
       <li><a href="data_3d_manipulation.html#data_3D_manipulation.load_and_prepare_3D_data">load_and_prepare_3D_data() (in module data_3D_manipulation)</a>
+</li>
+      <li><a href="data_3d_manipulation.html#data_3D_manipulation.load_and_prepare_3D_data_v2">load_and_prepare_3D_data_v2() (in module data_3D_manipulation)</a>
 </li>
       <li><a href="util.html#util.load_ct_data_from_dir">load_ct_data_from_dir() (in module util)</a>
 </li>
@@ -523,15 +542,17 @@
       </ul></li>
       <li><a href="networks_mnet.html#sota_implementations.MNet_Fu_2018.MNet.MNet">MNet() (in module sota_implementations.MNet_Fu_2018.MNet)</a>
 </li>
-      <li><a href="callbacks.html#callbacks.ModelCheckpoint">ModelCheckpoint (class in callbacks)</a>
+      <li><a href="callbacks.html#aux.callbacks.ModelCheckpoint">ModelCheckpoint (class in aux.callbacks)</a>
 </li>
       <li>
     module
 
       <ul>
-        <li><a href="adabound.html#module-adabound">adabound</a>
+        <li><a href="adabound.html#module-aux.adabound">aux.adabound</a>
 </li>
-        <li><a href="callbacks.html#module-callbacks">callbacks</a>
+        <li><a href="callbacks.html#module-aux.callbacks">aux.callbacks</a>
+</li>
+        <li><a href="grad_cam.html#module-aux.Grad_CAM.grad_cam">aux.Grad_CAM.grad_cam</a>
 </li>
         <li><a href="data_2d_manipulation.html#module-data_2D_manipulation">data_2D_manipulation</a>
 </li>
@@ -543,9 +564,11 @@
 </li>
         <li><a href="2d_generator_keras.html#module-generators.keras_da_gen">generators.keras_da_gen</a>
 </li>
-        <li><a href="grad_cam.html#module-Grad_CAM.grad_cam">Grad_CAM.grad_cam</a>
-</li>
         <li><a href="metrics.html#module-metrics">metrics</a>
+</li>
+        <li><a href="networks_att_unet_2d.html#module-networks.attention_unet_2d">networks.attention_unet_2d</a>
+</li>
+        <li><a href="networks_att_unet_3d.html#module-networks.attention_unet_3d">networks.attention_unet_3d</a>
 </li>
         <li><a href="networks_fc_densetnet103.html#module-networks.fc_densenet103">networks.fc_densenet103</a>
 </li>
@@ -601,6 +624,20 @@
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li>
+    networks.attention_unet_2d
+
+      <ul>
+        <li><a href="networks_att_unet_2d.html#module-networks.attention_unet_2d">module</a>
+</li>
+      </ul></li>
+      <li>
+    networks.attention_unet_3d
+
+      <ul>
+        <li><a href="networks_att_unet_3d.html#module-networks.attention_unet_3d">module</a>
+</li>
+      </ul></li>
+      <li>
     networks.fc_densenet103
 
       <ul>
@@ -628,6 +665,8 @@
         <li><a href="networks_resunet.html#module-networks.resunet">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     networks.resunet_3d
 
@@ -635,8 +674,6 @@
         <li><a href="networks_resunet_3d.html#module-networks.resunet_3d">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     networks.se_unet_2d
 
@@ -672,7 +709,7 @@
         <li><a href="networks_vanilla_unet_3d.html#module-networks.vanilla_unet_3d">module</a>
 </li>
       </ul></li>
-      <li><a href="grad_cam.html#Grad_CAM.grad_cam.normalize">normalize() (in module Grad_CAM.grad_cam)</a>
+      <li><a href="grad_cam.html#aux.Grad_CAM.grad_cam.normalize">normalize() (in module aux.Grad_CAM.grad_cam)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -682,7 +719,7 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="util.html#util.TimeHistory.on_epoch_begin">on_epoch_begin() (util.TimeHistory method)</a>
 </li>
-      <li><a href="callbacks.html#callbacks.ModelCheckpoint.on_epoch_end">on_epoch_end() (callbacks.ModelCheckpoint method)</a>
+      <li><a href="callbacks.html#aux.callbacks.ModelCheckpoint.on_epoch_end">on_epoch_end() (aux.callbacks.ModelCheckpoint method)</a>
 
       <ul>
         <li><a href="2d_generator.html#generators.custom_da_gen.ImageDataGenerator.on_epoch_end">(generators.custom_da_gen.ImageDataGenerator method)</a>
@@ -695,6 +732,8 @@
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="util.html#util.TimeHistory.on_train_begin">on_train_begin() (util.TimeHistory method)</a>
+</li>
+      <li><a href="util.html#util.onehot_encoding_to_img">onehot_encoding_to_img() (in module util)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -845,9 +884,9 @@
 <h2 id="T">T</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="grad_cam.html#Grad_CAM.grad_cam.target_category_loss">target_category_loss() (in module Grad_CAM.grad_cam)</a>
+      <li><a href="grad_cam.html#aux.Grad_CAM.grad_cam.target_category_loss">target_category_loss() (in module aux.Grad_CAM.grad_cam)</a>
 </li>
-      <li><a href="grad_cam.html#Grad_CAM.grad_cam.target_category_loss_output_shape">target_category_loss_output_shape() (in module Grad_CAM.grad_cam)</a>
+      <li><a href="grad_cam.html#aux.Grad_CAM.grad_cam.target_category_loss_output_shape">target_category_loss_output_shape() (in module aux.Grad_CAM.grad_cam)</a>
 </li>
       <li><a href="util.html#util.threshold_plots">threshold_plots() (in module util)</a>
 </li>

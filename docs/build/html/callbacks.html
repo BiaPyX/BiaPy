@@ -83,30 +83,40 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+</ul>
+<p class="caption"><span class="caption-text">2D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">Data manipulation 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator_keras.html">2D generator (Keras)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator.html">2D generator (Custom)</a></li>
+</ul>
+<p class="caption"><span class="caption-text">3D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">Data manipulation 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="3d_generator.html">3D generator</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">U-Net 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Callbacks</a></li>
 </ul>
@@ -172,12 +182,12 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="module-callbacks">
-<span id="callbacks"></span><h1>Callbacks<a class="headerlink" href="#module-callbacks" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-aux.callbacks">
+<span id="callbacks"></span><h1>Callbacks<a class="headerlink" href="#module-aux.callbacks" title="Permalink to this headline">¶</a></h1>
 <p>Code copied from <a class="reference external" href="https://github.com/tensorflow/tensorflow/blob/b36436b087bd8e8701ef51718179037cccdfc26e/tensorflow/python/keras/callbacks.py#L1057">Tensorflow/keras/callbacks.py</a> just inserting a few lines on the prints to avoid this <a class="reference external" href="https://github.com/tensorflow/tensorflow/issues/35100">error</a>.</p>
 <dl class="py class">
-<dt id="callbacks.ModelCheckpoint">
-<em class="property">class </em><code class="sig-prename descclassname">callbacks.</code><code class="sig-name descname">ModelCheckpoint</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">filepath</span></em>, <em class="sig-param"><span class="n">monitor</span><span class="o">=</span><span class="default_value">'val_loss'</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">save_best_only</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">save_weights_only</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">mode</span><span class="o">=</span><span class="default_value">'auto'</span></em>, <em class="sig-param"><span class="n">period</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/callbacks.html#ModelCheckpoint"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#callbacks.ModelCheckpoint" title="Permalink to this definition">¶</a></dt>
+<dt id="aux.callbacks.ModelCheckpoint">
+<em class="property">class </em><code class="sig-prename descclassname">aux.callbacks.</code><code class="sig-name descname">ModelCheckpoint</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">filepath</span></em>, <em class="sig-param"><span class="n">monitor</span><span class="o">=</span><span class="default_value">'val_loss'</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">save_best_only</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">save_weights_only</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">mode</span><span class="o">=</span><span class="default_value">'auto'</span></em>, <em class="sig-param"><span class="n">period</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/aux/callbacks.html#ModelCheckpoint"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aux.callbacks.ModelCheckpoint" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.callbacks.Callback</span></code></p>
 <p>Save the model after every epochimport tensorflow.keras.callbacks.Callback .
 <cite>filepath</cite> can contain named formatting options,
@@ -223,7 +233,7 @@ inferred from the name of the monitored quantity.</p></li>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_epoch_begin</span></code>(epoch[, logs])</p></td>
 <td><p>Called at the start of an epoch.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#callbacks.ModelCheckpoint.on_epoch_end" title="callbacks.ModelCheckpoint.on_epoch_end"><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_epoch_end</span></code></a>(epoch[, logs])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#aux.callbacks.ModelCheckpoint.on_epoch_end" title="aux.callbacks.ModelCheckpoint.on_epoch_end"><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_epoch_end</span></code></a>(epoch[, logs])</p></td>
 <td><p>Called at the end of an epoch.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_predict_batch_begin</span></code>(batch[, logs])</p></td>
@@ -279,8 +289,8 @@ inferred from the name of the monitored quantity.</p></li>
 </tbody>
 </table>
 <dl class="py method">
-<dt id="callbacks.ModelCheckpoint.on_epoch_end">
-<code class="sig-name descname">on_epoch_end</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">epoch</span></em>, <em class="sig-param"><span class="n">logs</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/callbacks.html#ModelCheckpoint.on_epoch_end"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#callbacks.ModelCheckpoint.on_epoch_end" title="Permalink to this definition">¶</a></dt>
+<dt id="aux.callbacks.ModelCheckpoint.on_epoch_end">
+<code class="sig-name descname">on_epoch_end</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">epoch</span></em>, <em class="sig-param"><span class="n">logs</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/aux/callbacks.html#ModelCheckpoint.on_epoch_end"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aux.callbacks.ModelCheckpoint.on_epoch_end" title="Permalink to this definition">¶</a></dt>
 <dd><p>Called at the end of an epoch.</p>
 <p>Subclasses should override for any actions to run. This function should only
 be called during TRAIN mode.</p>

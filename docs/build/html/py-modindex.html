@@ -88,7 +88,6 @@
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
@@ -103,13 +102,8 @@
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">U-Net 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
@@ -124,6 +118,7 @@
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
@@ -192,7 +187,6 @@
 
    <div class="modindex-jumpbox">
    <a href="#cap-a"><strong>a</strong></a> | 
-   <a href="#cap-c"><strong>c</strong></a> | 
    <a href="#cap-d"><strong>d</strong></a> | 
    <a href="#cap-g"><strong>g</strong></a> | 
    <a href="#cap-m"><strong>m</strong></a> | 
@@ -207,17 +201,25 @@
      <tr class="cap" id="cap-a"><td></td><td>
        <strong>a</strong></td><td></td></tr>
      <tr>
-       <td></td>
+       <td><img src="_static/minus.png" class="toggler"
+              id="toggle-1" style="display: none" alt="-" /></td>
        <td>
-       <a href="adabound.html#module-adabound"><code class="xref">adabound</code></a></td><td>
+       <code class="xref">aux</code></td><td>
        <em></em></td></tr>
-     <tr class="pcap"><td></td><td>&#160;</td><td></td></tr>
-     <tr class="cap" id="cap-c"><td></td><td>
-       <strong>c</strong></td><td></td></tr>
-     <tr>
+     <tr class="cg-1">
        <td></td>
-       <td>
-       <a href="callbacks.html#module-callbacks"><code class="xref">callbacks</code></a></td><td>
+       <td>&#160;&#160;&#160;
+       <a href="adabound.html#module-aux.adabound"><code class="xref">aux.adabound</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-1">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="callbacks.html#module-aux.callbacks"><code class="xref">aux.callbacks</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-1">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="grad_cam.html#module-aux.Grad_CAM.grad_cam"><code class="xref">aux.Grad_CAM.grad_cam</code></a></td><td>
        <em></em></td></tr>
      <tr class="pcap"><td></td><td>&#160;</td><td></td></tr>
      <tr class="cap" id="cap-d"><td></td><td>
@@ -237,35 +239,24 @@
        <strong>g</strong></td><td></td></tr>
      <tr>
        <td><img src="_static/minus.png" class="toggler"
-              id="toggle-1" style="display: none" alt="-" /></td>
-       <td>
-       <code class="xref">generators</code></td><td>
-       <em></em></td></tr>
-     <tr class="cg-1">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="2d_generator.html#module-generators.custom_da_gen"><code class="xref">generators.custom_da_gen</code></a></td><td>
-       <em></em></td></tr>
-     <tr class="cg-1">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="3d_generator.html#module-generators.data_3D_generators"><code class="xref">generators.data_3D_generators</code></a></td><td>
-       <em></em></td></tr>
-     <tr class="cg-1">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="2d_generator_keras.html#module-generators.keras_da_gen"><code class="xref">generators.keras_da_gen</code></a></td><td>
-       <em></em></td></tr>
-     <tr>
-       <td><img src="_static/minus.png" class="toggler"
               id="toggle-2" style="display: none" alt="-" /></td>
        <td>
-       <code class="xref">Grad_CAM</code></td><td>
+       <code class="xref">generators</code></td><td>
        <em></em></td></tr>
      <tr class="cg-2">
        <td></td>
        <td>&#160;&#160;&#160;
-       <a href="grad_cam.html#module-Grad_CAM.grad_cam"><code class="xref">Grad_CAM.grad_cam</code></a></td><td>
+       <a href="2d_generator.html#module-generators.custom_da_gen"><code class="xref">generators.custom_da_gen</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-2">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="3d_generator.html#module-generators.data_3D_generators"><code class="xref">generators.data_3D_generators</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-2">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="2d_generator_keras.html#module-generators.keras_da_gen"><code class="xref">generators.keras_da_gen</code></a></td><td>
        <em></em></td></tr>
      <tr class="pcap"><td></td><td>&#160;</td><td></td></tr>
      <tr class="cap" id="cap-m"><td></td><td>
@@ -283,6 +274,16 @@
               id="toggle-3" style="display: none" alt="-" /></td>
        <td>
        <code class="xref">networks</code></td><td>
+       <em></em></td></tr>
+     <tr class="cg-3">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="networks_att_unet_2d.html#module-networks.attention_unet_2d"><code class="xref">networks.attention_unet_2d</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-3">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="networks_att_unet_3d.html#module-networks.attention_unet_3d"><code class="xref">networks.attention_unet_3d</code></a></td><td>
        <em></em></td></tr>
      <tr class="cg-3">
        <td></td>

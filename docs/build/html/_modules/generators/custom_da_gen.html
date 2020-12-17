@@ -85,7 +85,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../../metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../grad_cam.html">Grad-CAM</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
@@ -100,13 +99,8 @@
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_se_unet_3d.html">SE+3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_unet3d.html">U-Net 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../networks_multiresunet.html">MultiResUNet</a></li>
@@ -121,6 +115,7 @@
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../callbacks.html">Callbacks</a></li>
 </ul>
@@ -214,7 +209,7 @@
 <span class="sd">           Data. E.g. ``(num_of_images, x, y, channels)``.</span>
 
 <span class="sd">       Y : 4D Numpy array</span>
-<span class="sd">           Mask data. E.g. ``(num_of_images, x, y, channels)``.</span>
+<span class="sd">           Mask data. E.g. ``(num_of_images, x, y, 1)``.</span>
 
 <span class="sd">       batch_size : int, optional</span>
 <span class="sd">           Size of the batches.</span>
@@ -352,7 +347,8 @@
             
         <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">=</span> <span class="n">shape</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="n">batch_size</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">divide</span> <span class="o">=</span> <span class="kc">True</span> <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">divideX</span> <span class="o">=</span> <span class="kc">True</span> <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">divideY</span> <span class="o">=</span> <span class="kc">True</span> <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">Y</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="kc">False</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">shuffle</span> <span class="o">=</span> <span class="n">shuffle</span>
@@ -434,7 +430,7 @@
         <span class="n">indexes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="n">index</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">:(</span><span class="n">index</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">]</span>
 
         <span class="n">batch_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">indexes</span><span class="p">),</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
-        <span class="n">batch_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">indexes</span><span class="p">),</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+        <span class="n">batch_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">indexes</span><span class="p">),</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="mi">1</span><span class="p">,)),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
 
         <span class="c1"># Generate indexes of the batch</span>
         <span class="n">indexes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="n">index</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">:(</span><span class="n">index</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">]</span>
@@ -458,16 +454,18 @@
                 
         <span class="c1"># Need to divide before transformations as some imgaug library functions</span>
         <span class="c1"># need uint8 datatype</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">divide</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">divideX</span><span class="p">:</span>
             <span class="n">batch_x</span> <span class="o">=</span> <span class="n">batch_x</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
-            <span class="n">batch_y</span> <span class="o">=</span> <span class="n">batch_y</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
             <span class="n">batch_x</span> <span class="o">*=</span> <span class="mf">1.</span><span class="o">/</span><span class="mi">255</span>
-            <span class="n">batch_y</span> <span class="o">*=</span> <span class="mf">1.</span><span class="o">/</span><span class="mi">255</span>
+        <span class="c1">#if self.divideY:</span>
+        <span class="c1">#    batch_y *= 1./255</span>
+        <span class="n">batch_y</span> <span class="o">=</span> <span class="n">batch_y</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float32&#39;</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
             <span class="n">batch_y_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">indexes</span><span class="p">),)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span><span class="p">,))</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">indexes</span><span class="p">)):</span>
-                <span class="n">batch_y_</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">img_to_onehot_encoding</span><span class="p">(</span><span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+                <span class="n">batch_y_</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">img_to_onehot_encoding</span><span class="p">(</span>
+                                             <span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span><span class="p">))</span>
 
             <span class="n">batch_y</span> <span class="o">=</span> <span class="n">batch_y_</span>
 
@@ -487,8 +485,8 @@
 <span class="sd">           </span>
 <span class="sd">           Parameters</span>
 <span class="sd">           ----------                                                                </span>
-<span class="sd">           im : 2D Numpy array</span>
-<span class="sd">               Image to be modified. E. g. ``(x, y)``</span>
+<span class="sd">           im : 3D Numpy array</span>
+<span class="sd">               Image to be modified. E. g. ``(x, y, channels)``</span>
 <span class="sd">                </span>
 <span class="sd">           grid_width : int, optional</span>
 <span class="sd">               Grid&#39;s width. </span>
@@ -498,7 +496,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">grid_width</span><span class="p">):</span>
-            <span class="n">im</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">v</span>
+            <span class="n">im</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">grid_width</span><span class="p">):</span>
             <span class="n">im</span><span class="p">[:,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
 
@@ -636,10 +634,10 @@
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">random_crops_in_DA</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">force_full_images</span><span class="p">:</span>
             <span class="n">batch_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_examples</span><span class="p">,)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
-            <span class="n">batch_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_examples</span><span class="p">,)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+            <span class="n">batch_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_examples</span><span class="p">,)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="mi">1</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">batch_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_examples</span><span class="p">,)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
-            <span class="n">batch_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_examples</span><span class="p">,)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+            <span class="n">batch_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_examples</span><span class="p">,)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">3</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="mi">1</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">save_to_dir</span><span class="p">:</span>
             <span class="n">p</span> <span class="o">=</span> <span class="s1">&#39;_&#39;</span> <span class="k">if</span> <span class="n">save_prefix</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">save_prefix</span><span class="p">)</span>
@@ -666,10 +664,14 @@
                 <span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="p">[</span><span class="n">pos</span><span class="p">]</span>
 
             <span class="k">if</span> <span class="ow">not</span> <span class="n">train</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">__draw_grid</span><span class="p">(</span><span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="o">...</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">__draw_grid</span><span class="p">(</span><span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="o">...</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span> <span class="n">v</span><span class="o">=</span><span class="mi">255</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__draw_grid</span><span class="p">(</span><span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__draw_grid</span><span class="p">(</span><span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">v</span><span class="o">=</span><span class="mi">255</span><span class="p">)</span>
+
             <span class="k">if</span> <span class="n">save_to_dir</span><span class="p">:</span>
-                <span class="n">o_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="o">...</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>                                 
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">o_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>                                 
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">o_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="o">...</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
                 <span class="n">o_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="o">...</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
 
             <span class="c1"># Apply transformations</span>
@@ -686,26 +688,45 @@
                 <span class="c1"># Save original images</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">__draw_grid</span><span class="p">(</span><span class="n">o_x</span><span class="p">)</span>                                           
                 <span class="bp">self</span><span class="o">.</span><span class="n">__draw_grid</span><span class="p">(</span><span class="n">o_y</span><span class="p">,</span> <span class="n">v</span><span class="o">=</span><span class="mi">255</span><span class="p">)</span>  
-                <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">o_x</span><span class="p">)</span>
-                <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>                                            
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">o_x</span><span class="p">,</span> <span class="s1">&#39;RGB&#39;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">o_x</span><span class="p">)</span>
+                    <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>                                            
                 <span class="n">im</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span><span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;_orig_x&#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">t_made</span><span class="o">+</span><span class="s2">&quot;.png&quot;</span><span class="p">))</span>
                 <span class="n">mask</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">o_y</span><span class="p">)</span>
                 <span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>                                        
                 <span class="n">mask</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span><span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;_orig_y&#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">t_made</span><span class="o">+</span><span class="s2">&quot;.png&quot;</span><span class="p">))</span>
 
                 <span class="c1"># Save transformed images</span>
-                <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="mi">0</span><span class="p">])</span>
-                <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="s1">&#39;RGB&#39;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="mi">0</span><span class="p">])</span>
+                    <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>
                 <span class="n">im</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span><span class="o">+</span><span class="n">p</span><span class="o">+</span><span class="s1">&#39;x&#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">t_made</span><span class="o">+</span><span class="s2">&quot;.png&quot;</span><span class="p">))</span>
                 <span class="n">mask</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:,</span><span class="mi">0</span><span class="p">])</span>
                 <span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>
                 <span class="n">mask</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span><span class="o">+</span><span class="n">p</span><span class="o">+</span><span class="s1">&#39;y&#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">t_made</span><span class="o">+</span><span class="s2">&quot;.png&quot;</span><span class="p">))</span>
 
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">h_maks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span><span class="p">,))</span>
+                    <span class="n">h_maks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">img_to_onehot_encoding</span><span class="p">(</span>
+                                          <span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span><span class="p">))</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;h_maks: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">h_maks</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+                    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span><span class="p">):</span>
+                        <span class="n">a</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">h_maks</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="mi">255</span><span class="p">)</span>
+                        <span class="n">a</span><span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;L&#39;</span><span class="p">)</span>
+                        <span class="n">a</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span><span class="o">+</span><span class="s2">&quot;h_mask_&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">+</span><span class="s2">&quot;.png&quot;</span><span class="p">))</span>
+
                 <span class="c1"># Save the original images with a point that represents the </span>
                 <span class="c1"># selected coordinates to be the center of the crop</span>
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">random_crops_in_DA</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_prob</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>\
                    <span class="ow">and</span> <span class="ow">not</span> <span class="n">force_full_images</span><span class="p">:</span>
-                    <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">pos</span><span class="p">,:,:,</span><span class="mi">0</span><span class="p">])</span> 
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                        <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">pos</span><span class="p">],</span> <span class="s1">&#39;RGB&#39;</span><span class="p">)</span> 
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">pos</span><span class="p">,:,:,</span><span class="mi">0</span><span class="p">])</span> 
                     <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;RGB&#39;</span><span class="p">)</span>                                                  
                     <span class="n">px</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>                                                          
                         

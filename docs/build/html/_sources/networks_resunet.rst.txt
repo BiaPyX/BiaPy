@@ -1,4 +1,4 @@
-2D Residual U-Net                                                                        
+Residual U-Net 2D
 =================
                                                                                 
 .. automodule:: networks.resunet

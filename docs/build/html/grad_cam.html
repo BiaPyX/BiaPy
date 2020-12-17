@@ -36,8 +36,8 @@
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="2D U-Net" href="networks_unet.html" />
-    <link rel="prev" title="Util" href="util.html" /> 
+    <link rel="next" title="Adabound" href="adabound.html" />
+    <link rel="prev" title="Oztel et al." href="oztel.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -82,32 +82,42 @@
               
             
             
-              <ul class="current">
+              <ul>
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Grad-CAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+</ul>
+<p class="caption"><span class="caption-text">2D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">Data manipulation 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator_keras.html">2D generator (Keras)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator.html">2D generator (Custom)</a></li>
+</ul>
+<p class="caption"><span class="caption-text">3D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">Data manipulation 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="3d_generator.html">3D generator</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">U-Net 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
-<ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
@@ -173,12 +183,12 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="module-Grad_CAM.grad_cam">
-<span id="grad-cam"></span><h1>Grad-CAM<a class="headerlink" href="#module-Grad_CAM.grad_cam" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-aux.Grad_CAM.grad_cam">
+<span id="grad-cam"></span><h1>Grad-CAM<a class="headerlink" href="#module-aux.Grad_CAM.grad_cam" title="Permalink to this headline">¶</a></h1>
 <p>Code extracted from <a class="reference external" href="https://github.com/jacobgil/keras-grad-cam">https://github.com/jacobgil/keras-grad-cam</a></p>
 <dl class="py function">
-<dt id="Grad_CAM.grad_cam.grad_cam_sample">
-<code class="sig-prename descclassname">Grad_CAM.grad_cam.</code><code class="sig-name descname">grad_cam_sample</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_model</span></em>, <em class="sig-param"><span class="n">image</span></em>, <em class="sig-param"><span class="n">predicted_class</span></em>, <em class="sig-param"><span class="n">layer_name</span></em>, <em class="sig-param"><span class="n">out_dir</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">2</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Grad_CAM/grad_cam.html#grad_cam_sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#Grad_CAM.grad_cam.grad_cam_sample" title="Permalink to this definition">¶</a></dt>
+<dt id="aux.Grad_CAM.grad_cam.grad_cam_sample">
+<code class="sig-prename descclassname">aux.Grad_CAM.grad_cam.</code><code class="sig-name descname">grad_cam_sample</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_model</span></em>, <em class="sig-param"><span class="n">image</span></em>, <em class="sig-param"><span class="n">predicted_class</span></em>, <em class="sig-param"><span class="n">layer_name</span></em>, <em class="sig-param"><span class="n">out_dir</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">2</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/aux/Grad_CAM/grad_cam.html#grad_cam_sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aux.Grad_CAM.grad_cam.grad_cam_sample" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates an image with the activation maps in charge of the class
 decision on a specific layer.</p>
 <p>For a more detailed information refer to the paper:
@@ -253,18 +263,18 @@ Localization</a>.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="Grad_CAM.grad_cam.target_category_loss">
-<code class="sig-prename descclassname">Grad_CAM.grad_cam.</code><code class="sig-name descname">target_category_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">predicted_class</span></em>, <em class="sig-param"><span class="n">n_classes</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Grad_CAM/grad_cam.html#target_category_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#Grad_CAM.grad_cam.target_category_loss" title="Permalink to this definition">¶</a></dt>
+<dt id="aux.Grad_CAM.grad_cam.target_category_loss">
+<code class="sig-prename descclassname">aux.Grad_CAM.grad_cam.</code><code class="sig-name descname">target_category_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">predicted_class</span></em>, <em class="sig-param"><span class="n">n_classes</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/aux/Grad_CAM/grad_cam.html#target_category_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aux.Grad_CAM.grad_cam.target_category_loss" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt id="Grad_CAM.grad_cam.target_category_loss_output_shape">
-<code class="sig-prename descclassname">Grad_CAM.grad_cam.</code><code class="sig-name descname">target_category_loss_output_shape</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_shape</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Grad_CAM/grad_cam.html#target_category_loss_output_shape"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#Grad_CAM.grad_cam.target_category_loss_output_shape" title="Permalink to this definition">¶</a></dt>
+<dt id="aux.Grad_CAM.grad_cam.target_category_loss_output_shape">
+<code class="sig-prename descclassname">aux.Grad_CAM.grad_cam.</code><code class="sig-name descname">target_category_loss_output_shape</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_shape</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/aux/Grad_CAM/grad_cam.html#target_category_loss_output_shape"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aux.Grad_CAM.grad_cam.target_category_loss_output_shape" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt id="Grad_CAM.grad_cam.normalize">
-<code class="sig-prename descclassname">Grad_CAM.grad_cam.</code><code class="sig-name descname">normalize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Grad_CAM/grad_cam.html#normalize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#Grad_CAM.grad_cam.normalize" title="Permalink to this definition">¶</a></dt>
+<dt id="aux.Grad_CAM.grad_cam.normalize">
+<code class="sig-prename descclassname">aux.Grad_CAM.grad_cam.</code><code class="sig-name descname">normalize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/aux/Grad_CAM/grad_cam.html#normalize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aux.Grad_CAM.grad_cam.normalize" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </div>
@@ -277,10 +287,10 @@ Localization</a>.</p>
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="networks_unet.html" class="btn btn-neutral float-right" title="2D U-Net" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="adabound.html" class="btn btn-neutral float-right" title="Adabound" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="util.html" class="btn btn-neutral float-left" title="Util" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="oztel.html" class="btn btn-neutral float-left" title="Oztel et al." accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

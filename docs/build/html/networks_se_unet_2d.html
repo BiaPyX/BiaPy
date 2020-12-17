@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>SE+2D U-Net &mdash; EM Image Segmentation  documentation</title>
+  <title>U-Net 2D + SE &mdash; EM Image Segmentation  documentation</title>
   
 
   
@@ -36,8 +36,8 @@
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="3D U-Net" href="networks_unet_3d.html" />
-    <link rel="prev" title="2D Residual U-Net" href="networks_resunet.html" /> 
+    <link rel="next" title="U-Net 3D" href="networks_unet3d.html" />
+    <link rel="prev" title="U-Net 2D + Attention" href="networks_att_unet_2d.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -84,30 +84,46 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+</ul>
+<p class="caption"><span class="caption-text">2D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">Data manipulation 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator_keras.html">2D generator (Keras)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator.html">2D generator (Custom)</a></li>
+</ul>
+<p class="caption"><span class="caption-text">3D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">Data manipulation 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="3d_generator.html">3D generator</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="networks_unet2d.html">U-Net 2D</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="networks_unet.html">U-Net 2D</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_resunet.html">Residual U-Net 2D</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networks_att_unet_2d.html">U-Net 2D + Attention</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">U-Net 2D + SE</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">U-Net 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
@@ -156,7 +172,9 @@
     
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
         
-      <li>SE+2D U-Net</li>
+          <li><a href="networks_unet2d.html">U-Net 2D</a> &raquo;</li>
+        
+      <li>U-Net 2D + SE</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -174,7 +192,7 @@
            <div itemprop="articleBody">
             
   <div class="section" id="module-networks.se_unet_2d">
-<span id="se-2d-u-net"></span><h1>SE+2D U-Net<a class="headerlink" href="#module-networks.se_unet_2d" title="Permalink to this headline">¶</a></h1>
+<span id="u-net-2d-se"></span><h1>U-Net 2D + SE<a class="headerlink" href="#module-networks.se_unet_2d" title="Permalink to this headline">¶</a></h1>
 <dl class="py function">
 <dt id="networks.se_unet_2d.SE_U_Net_2D">
 <code class="sig-prename descclassname">networks.se_unet_2d.</code><code class="sig-name descname">SE_U_Net_2D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">feature_maps</span><span class="o">=</span><span class="default_value">[16, 32, 64, 128, 256]</span></em>, <em class="sig-param"><span class="n">depth</span><span class="o">=</span><span class="default_value">4</span></em>, <em class="sig-param"><span class="n">drop_values</span><span class="o">=</span><span class="default_value">[0.1, 0.1, 0.2, 0.2, 0.3]</span></em>, <em class="sig-param"><span class="n">spatial_dropout</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">batch_norm</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">loss_type</span><span class="o">=</span><span class="default_value">'bce'</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'sgd'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.002</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/networks/se_unet_2d.html#SE_U_Net_2D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#networks.se_unet_2d.SE_U_Net_2D" title="Permalink to this definition">¶</a></dt>
@@ -247,10 +265,10 @@ network:</p>
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="networks_unet_3d.html" class="btn btn-neutral float-right" title="3D U-Net" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="networks_unet3d.html" class="btn btn-neutral float-right" title="U-Net 3D" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="networks_resunet.html" class="btn btn-neutral float-left" title="2D Residual U-Net" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="networks_att_unet_2d.html" class="btn btn-neutral float-left" title="U-Net 2D + Attention" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

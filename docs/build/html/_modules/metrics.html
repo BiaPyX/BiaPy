@@ -85,7 +85,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../grad_cam.html">Grad-CAM</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
@@ -100,13 +99,8 @@
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_se_unet_3d.html">SE+3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_unet3d.html">U-Net 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../networks_multiresunet.html">MultiResUNet</a></li>
@@ -121,6 +115,7 @@
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../callbacks.html">Callbacks</a></li>
 </ul>
@@ -229,6 +224,37 @@
     <span class="k">return</span> <span class="n">jac</span></div>
 
 
+<div class="viewcode-block" id="jaccard_index_numpy_without_background"><a class="viewcode-back" href="../metrics.html#metrics.jaccard_index_numpy_without_background">[docs]</a><span class="k">def</span> <span class="nf">jaccard_index_numpy_without_background</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Define Jaccard index excluding the background class (first channel). </span>
+
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       y_true : N dim Numpy array</span>
+<span class="sd">           Ground truth masks. E.g. ``(num_of_images, x, y, channels)`` for 2D</span>
+<span class="sd">           images or ``(volume_number, z, x, y, channels)`` for 3D volumes.</span>
+
+<span class="sd">       y_pred : N dim Numpy array</span>
+<span class="sd">           Predicted masks. E.g. ``(num_of_images, x, y, channels)`` for 2D</span>
+<span class="sd">           images or ``(volume_number, z, x, y, channels)`` for 3D volumes.</span>
+
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       jac : float</span>
+<span class="sd">           Jaccard index value.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">TP</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">y_pred</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">1</span><span class="p">:]</span> <span class="o">*</span> <span class="n">y_true</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">1</span><span class="p">:])</span>
+    <span class="n">FP</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">y_pred</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">1</span><span class="p">:]</span> <span class="o">*</span> <span class="p">(</span><span class="n">y_true</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">1</span><span class="p">:]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">FN</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">((</span><span class="n">y_pred</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">1</span><span class="p">:]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">y_true</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">1</span><span class="p">:])</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">TP</span> <span class="o">+</span> <span class="n">FP</span> <span class="o">+</span> <span class="n">FN</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">jac</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">jac</span> <span class="o">=</span> <span class="n">TP</span> <span class="o">/</span> <span class="p">(</span><span class="n">TP</span> <span class="o">+</span> <span class="n">FP</span> <span class="o">+</span> <span class="n">FN</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">jac</span></div>
+
+
 <div class="viewcode-block" id="jaccard_index"><a class="viewcode-back" href="../metrics.html#metrics.jaccard_index">[docs]</a><span class="k">def</span> <span class="nf">jaccard_index</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Define Jaccard index.</span>
 
@@ -255,6 +281,39 @@
     <span class="n">TP</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">y_pred_</span> <span class="o">*</span> <span class="n">y_true</span><span class="p">)</span>
     <span class="n">FP</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">y_pred_</span> <span class="o">*</span> <span class="p">(</span><span class="n">y_true</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
     <span class="n">FN</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">((</span><span class="n">y_pred_</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">y_true</span><span class="p">)</span>
+
+    <span class="n">jac</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cond</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">greater</span><span class="p">((</span><span class="n">TP</span> <span class="o">+</span> <span class="n">FP</span> <span class="o">+</span> <span class="n">FN</span><span class="p">),</span> <span class="mi">0</span><span class="p">),</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">TP</span> <span class="o">/</span> <span class="p">(</span><span class="n">TP</span> <span class="o">+</span> <span class="n">FP</span> <span class="o">+</span> <span class="n">FN</span><span class="p">),</span>
+                  <span class="k">lambda</span><span class="p">:</span> <span class="n">K</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="mf">0.000</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float64&#39;</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">jac</span></div>
+
+
+<div class="viewcode-block" id="jaccard_index_without_background"><a class="viewcode-back" href="../metrics.html#metrics.jaccard_index_without_background">[docs]</a><span class="k">def</span> <span class="nf">jaccard_index_without_background</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Define Jaccard index.</span>
+
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       y_true : Tensor</span>
+<span class="sd">           Ground truth masks.</span>
+
+<span class="sd">       y_pred : Tensor</span>
+<span class="sd">           Predicted masks.</span>
+
+<span class="sd">       t : float, optional</span>
+<span class="sd">           Threshold to be applied.</span>
+
+<span class="sd">       Returns</span>
+<span class="sd">       -------</span>
+<span class="sd">       jac : Tensor</span>
+<span class="sd">           Jaccard index value</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">_y_pred</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">y_pred</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">1</span><span class="p">:]</span> <span class="o">&gt;</span> <span class="n">t</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="n">_y_true</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">y_true</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="mi">1</span><span class="p">:],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+
+    <span class="n">TP</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">_y_pred</span> <span class="o">*</span> <span class="n">_y_true</span><span class="p">)</span>
+    <span class="n">FP</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">_y_pred</span> <span class="o">*</span> <span class="p">(</span><span class="n">_y_true</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">FN</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">((</span><span class="n">_y_pred</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">_y_true</span><span class="p">)</span>
 
     <span class="n">jac</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">cond</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">greater</span><span class="p">((</span><span class="n">TP</span> <span class="o">+</span> <span class="n">FP</span> <span class="o">+</span> <span class="n">FN</span><span class="p">),</span> <span class="mi">0</span><span class="p">),</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">TP</span> <span class="o">/</span> <span class="p">(</span><span class="n">TP</span> <span class="o">+</span> <span class="n">FP</span> <span class="o">+</span> <span class="n">FN</span><span class="p">),</span>
                   <span class="k">lambda</span><span class="p">:</span> <span class="n">K</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="mf">0.000</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float64&#39;</span><span class="p">))</span>

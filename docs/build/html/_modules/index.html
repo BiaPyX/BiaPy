@@ -85,7 +85,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../grad_cam.html">Grad-CAM</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
@@ -100,13 +99,8 @@
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_se_unet_3d.html">SE+3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_unet3d.html">U-Net 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../networks_multiresunet.html">MultiResUNet</a></li>
@@ -121,6 +115,7 @@
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../callbacks.html">Callbacks</a></li>
 </ul>
@@ -185,17 +180,18 @@
            <div itemprop="articleBody">
             
   <h1>All modules for which code is available</h1>
-<ul><li><a href="Grad_CAM/grad_cam.html">Grad_CAM.grad_cam</a></li>
-<li><a href="adabound.html">adabound</a></li>
-<li><a href="callbacks.html">callbacks</a></li>
+<ul><li><a href="aux/Grad_CAM/grad_cam.html">aux.Grad_CAM.grad_cam</a></li>
+<li><a href="aux/adabound.html">aux.adabound</a></li>
+<li><a href="aux/callbacks.html">aux.callbacks</a></li>
 <li><a href="data_2D_manipulation.html">data_2D_manipulation</a></li>
 <li><a href="data_3D_manipulation.html">data_3D_manipulation</a></li>
-<li><a href="data_manipulation.html">data_manipulation</a></li>
 <li><a href="generators/custom_da_gen.html">generators.custom_da_gen</a></li>
 <li><a href="generators/data_3D_generators.html">generators.data_3D_generators</a></li>
 <li><a href="generators/keras_da_gen.html">generators.keras_da_gen</a></li>
 <li><a href="metrics.html">metrics</a></li>
 <li><a href="networks/MultiResUNet.html">networks.MultiResUNet</a></li>
+<li><a href="networks/attention_unet_2d.html">networks.attention_unet_2d</a></li>
+<li><a href="networks/attention_unet_3d.html">networks.attention_unet_3d</a></li>
 <li><a href="networks/fc_densenet103.html">networks.fc_densenet103</a></li>
 <li><a href="networks/fcn_vgg.html">networks.fcn_vgg</a></li>
 <li><a href="networks/resunet.html">networks.resunet</a></li>
@@ -213,7 +209,6 @@
 <li><a href="sota_implementations/cheng_2017/cheng_network.html">sota_implementations.cheng_2017.cheng_network</a></li>
 <li><a href="sota_implementations/cheng_2017/loss.html">sota_implementations.cheng_2017.loss</a></li>
 <li><a href="sota_implementations/oztel_2017/cnn_oztel.html">sota_implementations.oztel_2017.cnn_oztel</a></li>
-<li><a href="sota_implementations/xiao_2018/loss.html">sota_implementations.xiao_2018.loss</a></li>
 <li><a href="sota_implementations/xiao_2018/unet_3d_xiao.html">sota_implementations.xiao_2018.unet_3d_xiao</a></li>
 <li><a href="util.html">util</a></li>
 </ul>

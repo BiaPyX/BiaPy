@@ -37,7 +37,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="2D generator (Keras)" href="2d_generator_keras.html" />
-    <link rel="prev" title="Grad-CAM" href="grad_cam.html" /> 
+    <link rel="prev" title="Post processing" href="post_processing.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -87,7 +87,6 @@
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul class="current">
@@ -102,13 +101,8 @@
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">U-Net 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
@@ -123,6 +117,7 @@
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
@@ -315,7 +310,7 @@ overlap.</p>
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to crop. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>crop_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Shape of the crops to created. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>crop_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Shape of the crops to create. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>data_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Data mask to crop. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>overlap</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x and y dimensions. The values must be on
 range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap. E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
@@ -706,7 +701,7 @@ The opposite function of <a class="reference internal" href="#data_2D_manipulati
         <a href="2d_generator_keras.html" class="btn btn-neutral float-right" title="2D generator (Keras)" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="grad_cam.html" class="btn btn-neutral float-left" title="Grad-CAM" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="post_processing.html" class="btn btn-neutral float-left" title="Post processing" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

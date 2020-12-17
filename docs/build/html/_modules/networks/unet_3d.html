@@ -85,7 +85,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../../metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../grad_cam.html">Grad-CAM</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
@@ -100,13 +99,8 @@
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_se_unet_3d.html">SE+3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_unet3d.html">U-Net 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../networks_multiresunet.html">MultiResUNet</a></li>
@@ -121,6 +115,7 @@
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../callbacks.html">Callbacks</a></li>
 </ul>
@@ -267,10 +262,11 @@
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">drop_values</span><span class="p">)</span> <span class="o">!=</span> <span class="n">depth</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span>                                             
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;drop_values&#39; dimension must be equal depth+1&quot;</span><span class="p">)</span>       
 
-    <span class="c1">#dinamic_dim = (None,)*(len(image_shape)-1) + (1,)</span>
-    <span class="c1">#inputs = Input(dinamic_dim)</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="n">Input</span><span class="p">(</span><span class="n">image_shape</span><span class="p">)</span>
-    <span class="n">inputs</span> <span class="o">=</span> <span class="n">x</span>
+    <span class="n">dinamic_dim</span> <span class="o">=</span> <span class="p">(</span><span class="kc">None</span><span class="p">,)</span><span class="o">*</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">image_shape</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">image_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],)</span>
+    <span class="n">inputs</span> <span class="o">=</span> <span class="n">Input</span><span class="p">(</span><span class="n">dinamic_dim</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">inputs</span>
+    <span class="c1">#x = Input(image_shape)</span>
+    <span class="c1">#inputs = x</span>
         
     <span class="k">if</span> <span class="n">loss_type</span> <span class="o">==</span> <span class="s2">&quot;w_bce&quot;</span><span class="p">:</span>
         <span class="n">weights</span> <span class="o">=</span> <span class="n">Input</span><span class="p">(</span><span class="n">image_shape</span><span class="p">)</span>

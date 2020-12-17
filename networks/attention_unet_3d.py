@@ -67,11 +67,27 @@ def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128,
        Calling this function with its default parameters returns the following
        network:
 
+
+       Example
+       -------
+
+       Calling this function with its default parameters returns the following
+       network:
+
        .. image:: img/unet_3d.png
            :width: 100%
            :align: center
 
        Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
+
+       That networks incorporates in skip connecions Attention Gates (AG), which
+       can be seen as follows:
+
+       .. image:: img/attention_gate.png
+           :width: 100%
+           :align: center
+
+       Image extracted from `Attention U-Net: Learning Where to Look for the Pancreas <https://arxiv.org/abs/1804.03999>`_.
     """
 
     if len(feature_maps) != depth+1:                                            

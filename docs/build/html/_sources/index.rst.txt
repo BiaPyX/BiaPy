@@ -17,7 +17,6 @@ Some of state-of-the-art approaches have been reproduced and implemented to comp
    metrics
    util
    post_processing
-   grad_cam
 
 
 .. toctree::                                                                    
@@ -38,16 +37,11 @@ Some of state-of-the-art approaches have been reproduced and implemented to comp
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Networks
 
-   networks_unet
-   networks_resunet
-   networks_se_unet_2d
-   networks_unet_3d
-   networks_resunet_3d
-   networks_se_unet_3d
-   networks_vanilla_unet_3d
+   networks_unet2d
+   networks_unet3d
    networks_fcn
    networks_fc_densetnet103
    networks_multiresunet
@@ -68,7 +62,9 @@ Some of state-of-the-art approaches have been reproduced and implemented to comp
    :maxdepth: 2
    :caption: Auxiliary code
 
+   grad_cam
    adabound
    callbacks   
+   
 
 

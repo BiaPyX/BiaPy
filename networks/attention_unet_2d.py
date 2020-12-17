@@ -67,6 +67,11 @@ def Attention_U_Net_2D(image_shape, activation='elu',
        -------                                                                 
        model : Keras model
            Model containing the U-Net.              
+
+
+       Example
+       -------
+
        Calling this function with its default parameters returns the following  
        network:                                                                 
                                                                                 
@@ -75,6 +80,15 @@ def Attention_U_Net_2D(image_shape, activation='elu',
            :align: center                                                       
                                                                                 
        Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
+
+       That networks incorporates in skip connecions Attention Gates (AG), which
+       can be seen as follows:
+
+       .. image:: img/attention_gate.png
+           :width: 100%
+           :align: center
+       
+       Image extracted from `Attention U-Net: Learning Where to Look for the Pancreas <https://arxiv.org/abs/1804.03999>`_.
     """
 
     if len(feature_maps) != depth+1:

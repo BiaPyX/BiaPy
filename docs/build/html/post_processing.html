@@ -36,8 +36,8 @@
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Data manipulation" href="data_manipulation.html" />
-    <link rel="prev" title="How to run" href="how_to_run.html" /> 
+    <link rel="next" title="Data manipulation 2D" href="data_2d_manipulation.html" />
+    <link rel="prev" title="Util" href="util.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -84,30 +84,40 @@
             
               <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="data_manipulation.html">Data manipulation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Post processing</a></li>
+</ul>
+<p class="caption"><span class="caption-text">2D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">Data manipulation 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator_keras.html">2D generator (Keras)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2d_generator.html">2D generator (Custom)</a></li>
+</ul>
+<p class="caption"><span class="caption-text">3D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">Data manipulation 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="3d_generator.html">3D generator</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">U-Net 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
 <li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
@@ -312,6 +322,88 @@ debugging.</p></li>
 </dl>
 </dd></dl>
 
+<dl class="py function">
+<dt id="post_processing.ensemble8_2d_predictions">
+<code class="sig-prename descclassname">post_processing.</code><code class="sig-name descname">ensemble8_2d_predictions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">o_img</span></em>, <em class="sig-param"><span class="n">pred_func</span></em>, <em class="sig-param"><span class="n">batch_size_value</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">2</span></em>, <em class="sig-param"><span class="n">last_class</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/post_processing.html#ensemble8_2d_predictions"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#post_processing.ensemble8_2d_predictions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Outputs the mean prediction of a given image generating its 8 possible
+rotations and flips.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>o_img</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Input image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>pred_func</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">function</span></code>) – Function to make predictions.</p></li>
+<li><p><strong>batch_size_value</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Batch size value.</p></li>
+<li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes.</p></li>
+<li><p><strong>last_class</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To preserve only the last class. Useful when a binary classification
+and want to take only the foreground.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>out</strong> – Output image ensembled. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
+<span class="c1"># Apply ensemble to each image of X_test</span>
+<span class="n">X_test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">out_X_test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+    <span class="n">pred_ensembled</span> <span class="o">=</span> <span class="n">ensemble8_2d_predictions</span><span class="p">(</span><span class="n">X_test</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+        <span class="n">pred_func</span><span class="o">=</span><span class="p">(</span><span class="k">lambda</span> <span class="n">img_batch_subdiv</span><span class="p">:</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">img_batch_subdiv</span><span class="p">)),</span>
+        <span class="n">n_classes</span><span class="o">=</span><span class="n">n_classes</span><span class="p">)</span>
+    <span class="n">out_X_test</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">pred_ensembled</span>
+
+<span class="c1"># Notice that here pred_func is created based on model.predict function</span>
+<span class="c1"># of Keras</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="post_processing.ensemble16_3d_predictions">
+<code class="sig-prename descclassname">post_processing.</code><code class="sig-name descname">ensemble16_3d_predictions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">vol</span></em>, <em class="sig-param"><span class="n">pred_func</span></em>, <em class="sig-param"><span class="n">batch_size_value</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">2</span></em>, <em class="sig-param"><span class="n">last_class</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/post_processing.html#ensemble16_3d_predictions"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#post_processing.ensemble16_3d_predictions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Outputs the mean prediction of a given image generating its 16 possible
+rotations and flips.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>o_img</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Input image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>pred_func</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">function</span></code>) – Function to make predictions.</p></li>
+<li><p><strong>batch_size_value</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Batch size value.</p></li>
+<li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes.</p></li>
+<li><p><strong>last_class</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To preserve only the last class. Useful when a binary classification
+and want to take only the foreground.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>out</strong> – Output image ensembled. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
+<span class="c1"># Apply ensemble to each image of X_test</span>
+<span class="n">X_test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">10</span><span class="p">,</span> <span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">out_X_test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+    <span class="n">pred_ensembled</span> <span class="o">=</span> <span class="n">ensemble8_2d_predictions</span><span class="p">(</span><span class="n">X_test</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+        <span class="n">pred_func</span><span class="o">=</span><span class="p">(</span><span class="k">lambda</span> <span class="n">img_batch_subdiv</span><span class="p">:</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">img_batch_subdiv</span><span class="p">)),</span>
+        <span class="n">n_classes</span><span class="o">=</span><span class="n">n_classes</span><span class="p">)</span>
+    <span class="n">out_X_test</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">pred_ensembled</span>
+
+<span class="c1"># Notice that here pred_func is created based on model.predict function</span>
+<span class="c1"># of Keras</span>
+</pre></div>
+</div>
+</dd></dl>
+
 </div>
 
 
@@ -322,10 +414,10 @@ debugging.</p></li>
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="data_manipulation.html" class="btn btn-neutral float-right" title="Data manipulation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="data_2d_manipulation.html" class="btn btn-neutral float-right" title="Data manipulation 2D" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="how_to_run.html" class="btn btn-neutral float-left" title="How to run" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="util.html" class="btn btn-neutral float-left" title="Util" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

@@ -7,12 +7,12 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>callbacks &mdash; EM Image Segmentation  documentation</title>
+  <title>aux.callbacks &mdash; EM Image Segmentation  documentation</title>
   
 
   
-  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
 
   
   
@@ -21,21 +21,21 @@
 
   
   <!--[if lt IE 9]>
-    <script src="../_static/js/html5shiv.min.js"></script>
+    <script src="../../_static/js/html5shiv.min.js"></script>
   <![endif]-->
   
     
-      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-        <script src="../_static/jquery.js"></script>
-        <script src="../_static/underscore.js"></script>
-        <script src="../_static/doctools.js"></script>
-        <script src="../_static/language_data.js"></script>
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/language_data.js"></script>
     
-    <script type="text/javascript" src="../_static/js/theme.js"></script>
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
 
     
-    <link rel="index" title="Index" href="../genindex.html" />
-    <link rel="search" title="Search" href="../search.html" /> 
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -49,7 +49,7 @@
           
 
           
-            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+            <a href="../../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
           
 
           
@@ -62,7 +62,7 @@
 
           
 <div role="search">
-  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
@@ -81,48 +81,43 @@
             
             
               <ul>
-<li class="toctree-l1"><a class="reference internal" href="../how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../grad_cam.html">Grad-CAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run.html">How to run</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../post_processing.html">Post processing</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../data_2d_manipulation.html">Data manipulation 2D</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../2d_generator_keras.html">2D generator (Keras)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../2d_generator.html">2D generator (Custom)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../data_2d_manipulation.html">Data manipulation 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../2d_generator_keras.html">2D generator (Keras)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../2d_generator.html">2D generator (Custom)</a></li>
 </ul>
 <p class="caption"><span class="caption-text">3D Data</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../data_3d_manipulation.html">Data manipulation 3D</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../3d_generator.html">3D generator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../data_3d_manipulation.html">Data manipulation 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../3d_generator.html">3D generator</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_se_unet_3d.html">SE+3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_fcn.html">FCN</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_multiresunet.html">MultiResUNet</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_mnet.html">MNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_unet3d.html">U-Net 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_fcn.html">FCN</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_mnet.html">MNet</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../casser.html">Casser et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../xiao.html">Xiao et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../cheng.html">Cheng et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../oztel.html">Oztel et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../casser.html">Casser et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../cheng.html">Cheng et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../oztel.html">Oztel et al.</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../adabound.html">Adabound</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../callbacks.html">Callbacks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../grad_cam.html">Grad-CAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../callbacks.html">Callbacks</a></li>
 </ul>
 
             
@@ -138,7 +133,7 @@
       <nav class="wy-nav-top" aria-label="top navigation">
         
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../index.html">EM Image Segmentation</a>
+          <a href="../../index.html">EM Image Segmentation</a>
         
       </nav>
 
@@ -167,11 +162,11 @@
 
   <ul class="wy-breadcrumbs">
     
-      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
         
-          <li><a href="index.html">Module code</a> &raquo;</li>
+          <li><a href="../index.html">Module code</a> &raquo;</li>
         
-      <li>callbacks</li>
+      <li>aux.callbacks</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -186,14 +181,14 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <h1>Source code for callbacks</h1><div class="highlight"><pre>
+  <h1>Source code for aux.callbacks</h1><div class="highlight"><pre>
 <span></span><span class="s2">&quot;Code copied from `Tensorflow/keras/callbacks.py &lt;https://github.com/tensorflow/tensorflow/blob/b36436b087bd8e8701ef51718179037cccdfc26e/tensorflow/python/keras/callbacks.py#L1057&gt;`_ just inserting a few lines on the prints to avoid this `error &lt;https://github.com/tensorflow/tensorflow/issues/35100&gt;`_.&quot;</span>
 
 <span class="kn">import</span> <span class="nn">warnings</span>
 <span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 
-<div class="viewcode-block" id="ModelCheckpoint"><a class="viewcode-back" href="../callbacks.html#callbacks.ModelCheckpoint">[docs]</a><span class="k">class</span> <span class="nc">ModelCheckpoint</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">callbacks</span><span class="o">.</span><span class="n">Callback</span><span class="p">):</span>
+<div class="viewcode-block" id="ModelCheckpoint"><a class="viewcode-back" href="../../callbacks.html#aux.callbacks.ModelCheckpoint">[docs]</a><span class="k">class</span> <span class="nc">ModelCheckpoint</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">callbacks</span><span class="o">.</span><span class="n">Callback</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Save the model after every epochimport tensorflow.keras.callbacks.Callback .</span>
 <span class="sd">       `filepath` can contain named formatting options,</span>
 <span class="sd">       which will be filled with the values of `epoch` and</span>
@@ -266,7 +261,7 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">monitor_op</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">less</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">best</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">Inf</span>
 
-<div class="viewcode-block" id="ModelCheckpoint.on_epoch_end"><a class="viewcode-back" href="../callbacks.html#callbacks.ModelCheckpoint.on_epoch_end">[docs]</a>    <span class="k">def</span> <span class="nf">on_epoch_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epoch</span><span class="p">,</span> <span class="n">logs</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="viewcode-block" id="ModelCheckpoint.on_epoch_end"><a class="viewcode-back" href="../../callbacks.html#aux.callbacks.ModelCheckpoint.on_epoch_end">[docs]</a>    <span class="k">def</span> <span class="nf">on_epoch_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epoch</span><span class="p">,</span> <span class="n">logs</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="n">logs</span> <span class="o">=</span> <span class="n">logs</span> <span class="ow">or</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">epochs_since_last_save</span> <span class="o">+=</span> <span class="mi">1</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">epochs_since_last_save</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">period</span><span class="p">:</span>

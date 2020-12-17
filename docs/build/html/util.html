@@ -87,7 +87,6 @@
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
@@ -102,13 +101,8 @@
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet.html">2D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_2d.html">SE+2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet_3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_resunet_3d.html">3D Residual U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_se_unet_3d.html">SE+3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_vanilla_unet_3d.html">Vanilla 3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">U-Net 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">U-Net 3D</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
@@ -123,6 +117,7 @@
 </ul>
 <p class="caption"><span class="caption-text">Auxiliary code</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
 <li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
@@ -363,14 +358,14 @@ epochs. History object is returned by Keras <a class="reference external" href="
 <col style="width: 50%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><div class="figure align-center" id="id4">
+<tr class="row-odd"><td><div class="figure align-center" id="id6">
 <a class="reference internal image-reference" href="_images/chart_loss.png"><img alt="_images/chart_loss.png" src="_images/chart_loss.png" style="width: 80%;" /></a>
-<p class="caption"><span class="caption-text">Loss values on each epoch</span><a class="headerlink" href="#id4" title="Permalink to this image">¶</a></p>
+<p class="caption"><span class="caption-text">Loss values on each epoch</span><a class="headerlink" href="#id6" title="Permalink to this image">¶</a></p>
 </div>
 </td>
-<td><div class="figure align-center" id="id5">
+<td><div class="figure align-center" id="id7">
 <a class="reference internal image-reference" href="_images/chart_jaccard_index.png"><img alt="_images/chart_jaccard_index.png" src="_images/chart_jaccard_index.png" style="width: 80%;" /></a>
-<p class="caption"><span class="caption-text">Jaccard index values on each epoch</span><a class="headerlink" href="#id5" title="Permalink to this image">¶</a></p>
+<p class="caption"><span class="caption-text">Jaccard index values on each epoch</span><a class="headerlink" href="#id7" title="Permalink to this image">¶</a></p>
 </div>
 </td>
 </tr>
@@ -459,7 +454,7 @@ of <code class="docutils literal notranslate"><span class="pre">0.4</span></code
 
 <dl class="py function">
 <dt id="util.save_img">
-<code class="sig-prename descclassname">util.</code><code class="sig-name descname">save_img</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">data_dir</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">Y</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">mask_dir</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#save_img"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.save_img" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">save_img</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">data_dir</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">Y</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">mask_dir</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">scale_mask</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">prefix</span><span class="o">=</span><span class="default_value">''</span></em>, <em class="sig-param"><span class="n">extension</span><span class="o">=</span><span class="default_value">'.png'</span></em>, <em class="sig-param"><span class="n">filenames</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#save_img"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.save_img" title="Permalink to this definition">¶</a></dt>
 <dd><p>Save images in the given directory.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -469,8 +464,15 @@ images. E.g. <code class="docutils literal notranslate"><span class="pre">(num_o
 <li><p><strong>data_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to store X images.</p></li>
 <li><p><strong>Y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Masks to save as images. The first dimension must be the number of
 images. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>scale_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To allow mask be multiplied by 255.</p></li>
 <li><p><strong>mask_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to store Y images.</p></li>
 <li><p><strong>prefix</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to store generated charts.</p></li>
+<li><p><strong>filenames</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code>, <em>optional</em>) – Filenames that should be used when saving each image. If any provided
+each image should be named as: <code class="docutils literal notranslate"><span class="pre">prefix</span> <span class="pre">+</span> <span class="pre">&quot;_x_&quot;</span> <span class="pre">+</span> <span class="pre">image_number</span> <span class="pre">+</span>
+<span class="pre">extension</span></code> when <code class="docutils literal notranslate"><span class="pre">X.ndim</span> <span class="pre">&lt;</span> <span class="pre">4</span></code> and <code class="docutils literal notranslate"><span class="pre">prefix</span> <span class="pre">+</span> <span class="pre">&quot;_x_&quot;</span> <span class="pre">+</span> <span class="pre">image_number</span> <span class="pre">+</span>
+<span class="pre">&quot;_&quot;</span> <span class="pre">+</span> <span class="pre">slice_numger</span> <span class="pre">+</span> <span class="pre">extension</span></code> otherwise. E.g. <code class="docutils literal notranslate"><span class="pre">prefix_x_000.png</span></code>
+when <code class="docutils literal notranslate"><span class="pre">X.ndim</span> <span class="pre">&lt;</span> <span class="pre">4</span></code> or <code class="docutils literal notranslate"><span class="pre">prefix_x_000_000.png</span></code> when <code class="docutils literal notranslate"><span class="pre">X.ndim</span> <span class="pre">&gt;=</span> <span class="pre">4</span></code>.
+The same applies to <code class="docutils literal notranslate"><span class="pre">Y</span></code>.</p></li>
 </ul>
 </dd>
 </dl>
@@ -686,14 +688,17 @@ amount of data in z to be created and reduce computational time.</p></li>
 </dd></dl>
 
 <dl class="py function">
-<dt id="util.check_binary_masks">
-<code class="sig-prename descclassname">util.</code><code class="sig-name descname">check_binary_masks</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#check_binary_masks"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.check_binary_masks" title="Permalink to this definition">¶</a></dt>
-<dd><p>Check wheter the data masks is binary checking a few random images of the
-given path. If the function gives no error one should assume that the
-masks are correct.</p>
+<dt id="util.check_masks">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">check_masks</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">path</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">2</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#check_masks"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.check_masks" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check wheter the data masks have the correct labels inspection a few
+random images of the given path. If the function gives no error one
+should assume that the masks are correct.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the data mask.</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the data mask.</p></li>
+<li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Maximum classes that the masks must contain.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -702,6 +707,7 @@ masks are correct.</p>
 <dt id="util.img_to_onehot_encoding">
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">img_to_onehot_encoding</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">img</span></em>, <em class="sig-param"><span class="n">num_classes</span><span class="o">=</span><span class="default_value">2</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#img_to_onehot_encoding"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.img_to_onehot_encoding" title="Permalink to this definition">¶</a></dt>
 <dd><p>Converts image given into one-hot encode format.</p>
+<p>The opposite function is <a class="reference internal" href="#util.onehot_encoding_to_img" title="util.onehot_encoding_to_img"><code class="xref py py-func docutils literal notranslate"><span class="pre">onehot_encoding_to_img()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -710,10 +716,30 @@ masks are correct.</p>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p><strong>one_hot_labels</strong> – Data one-hot encoded. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">num_classes)</span></code>.</p>
+<dd class="field-even"><p><strong>one_hot_labels</strong> – Data one-hot encoded. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">num_classes)</span></code> or
+<code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">num_classes)</span></code>.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">4D</span> <span class="pre">array</span></code></p>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">3D/4D</span> <span class="pre">array</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.onehot_encoding_to_img">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">onehot_encoding_to_img</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">encoded_image</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#onehot_encoding_to_img"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.onehot_encoding_to_img" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts one-hot encode image into an image with jus tone channel and all
+the classes represented by an integer.</p>
+<p>The opposite function is <a class="reference internal" href="#util.img_to_onehot_encoding" title="util.img_to_onehot_encoding"><code class="xref py py-func docutils literal notranslate"><span class="pre">img_to_onehot_encoding()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>encoded_image</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">3D/4D</span> <span class="pre">array</span></code>) – Image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code> or <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>img</strong> – Data one-hot encoded. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">num_classes)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">3D/4D</span> <span class="pre">array</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -781,6 +807,48 @@ data_shape = (1024, 768, 1)</p>
 <span class="c1"># Notice height and width swap because of Numpy ndarray terminology</span>
 </pre></div>
 </div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="util.load_3d_images_from_dir">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_3d_images_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">crop</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">subvol_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_3d_images_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_3d_images_from_dir" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load data from a directory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to read the data from.</p></li>
+<li><p><strong>shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Shape of the images to load. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>crop</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Crop each 3D image when readed.</p></li>
+<li><p><strong>subvol_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">4</span> <span class="pre">ints</span></code>, <em>optional</em>) – Shape of the subvolumes to create when cropping.
+E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>overlap</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x, y and z dimensions. The values must
+be on range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap.
+E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z)</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data loaded. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code> if <code class="docutils literal notranslate"><span class="pre">crop</span></code>
+enabled, <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">z,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code> otherwise.</p></li>
+<li><p><strong>data_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">tuples</span></code>, <em>optional</em>) – Shapes of all 3D images readed. Useful to reconstruct the original
+images.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<dl>
+<dt>::</dt><dd><p># EXAMPLE 1
+# Case where we need to load 20 images of shape (1024, 1024, 91, 1)
+data_path = “data/train/x”
+data_shape = (1024, 1024, 91, 1)</p>
+<p>load_data_from_dir(data_path, data_shape)
+# The function will print the shape of the created array. In this example:
+#     <a href="#id4"><span class="problematic" id="id5">**</span></a>* Loaded data shape is (20, 91, 1024, 1024, 1)
+# Notice height, width and depth swap as skimage.io imread function
+# is used to load images</p>
+</dd>
+</dl>
 </dd></dl>
 
 </div>
