@@ -1333,7 +1333,8 @@ def load_ct_data_from_dir(data_dir, shape=None):
     return data
 
 
-def load_3d_images_from_dir(data_dir, shape=None):
+def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
+                            overlap=(0,0,0)):
     """Load data from a directory.
 
        Parameters
@@ -1342,12 +1343,29 @@ def load_3d_images_from_dir(data_dir, shape=None):
            Path to read the data from.
 
        shape : 4D int tuple
-           Shape of the data. E.g. ``(x, y, z, channels)``.
+           Shape of the images to load. E.g. ``(x, y, z, channels)``.
 
+       crop : bool, optional
+           Crop each 3D image when readed.
+
+       subvol_shape : Tuple of 4 ints, optional
+           Shape of the subvolumes to create when cropping. 
+           E.g. ``(x, y, z, channels)``.
+
+       overlap : Tuple of 3 floats, optional
+           Amount of minimum overlap on x, y and z dimensions. The values must
+           be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. 
+           E. g. ``(x, y, z)``.
+        
        Returns
        -------
        data : 5D Numpy array
-           Data loaded. E.g. ``(num_of_images, z, y, x, channels)``.
+           Data loaded. E.g. ``(num_of_images, x, y, z, channels)`` if ``crop``
+           enabled, ``(num_of_images, z, y, x, channels)`` otherwise.
+
+       data_shape : List of tuples, optional 
+           Shapes of all 3D images readed. Useful to reconstruct the original 
+           images. 
 
        Examples
        --------
@@ -1366,12 +1384,15 @@ def load_3d_images_from_dir(data_dir, shape=None):
     if shape is not None:
         if len(shape) != 4:
             raise ValueError("'shape' must be 4 length tuple")
+    if crop and subvol_shape is None:
+        raise ValueError("'subvol_shape' must be provided when 'crop' is True")
 
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
 
-    if shape is None:
-        # Determine max in each dimension first
+    # Determine shape if it is not given 
+    if shape is None and not crop:
+        print("Determine max in each dimension first")
         max_x = 0
         max_y = 0
         max_z = 0
@@ -1383,19 +1404,42 @@ def load_3d_images_from_dir(data_dir, shape=None):
             max_z = img.shape[0] if max_z < img.shape[0] else max_z
         c = 1 if img.ndim == 3 else img.shape[-1] 
         _shape = (max_z, max_y, max_x, c)
-        print("Shape is {}".format(_shape))
     else:
-        _shape = (shape[2], shape[1], shape[0], shape[3])
+        if crop:
+            _shape = subvol_shape
+        else:
+            _shape = (shape[2], shape[1], shape[0], shape[3])
 
-    data = np.zeros((len(ids), ) + _shape)
+    if crop:
+        from data_3D_manipulation import crop_3D_data_with_overlap
+        data = None
+        data_shape = []
+    else:
+        data = np.zeros((len(ids), ) + _shape)
+
+    # Read images 
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         img = imread(os.path.join(data_dir, id_))
 
-        if len(img.shape) == 3:
-            img = np.expand_dims(img, axis=-1)
-
-        data[n,0:img.shape[0],0:img.shape[1],0:img.shape[2]] = img
+        if len(img.shape) == 3:                                                 
+            img = np.expand_dims(img, axis=-1)                                  
+            
+        if crop:
+            data_shape.append(img.shape)
+            img_cropped = crop_3D_data_with_overlap(
+                img, subvol_shape, overlap=overlap, verbose=False)                 
+        
+            if data is None:
+                data = img_cropped
+            else:
+                data = img_cropped if data is None else np.concatenate((data,img_cropped))
+        else:
+            img = np.transpose(img, (1,2,0,3))
+            data[n,0:img.shape[0],0:img.shape[1],0:img.shape[2]] = img
 
     print("*** Loaded data shape is {}".format(data.shape))
-    return data
+    if crop:
+        return data, data_shape
+    else:
+        return data
 

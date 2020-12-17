@@ -248,8 +248,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
 def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path, 
     test_mask_path, image_train_shape, image_test_shape, test_subvol_shape,
     train_subvol_shape, create_val=True, shuffle_val=True, val_split=0.1, 
-    seedValue=42, random_subvolumes_in_DA=False, ov=(0,0,0), overlap_train=False,
-    use_rest_train=True):         
+    seedValue=42, random_subvolumes_in_DA=False, ov=(0,0,0)):
     """Load train, validation and test images from the given paths to create a 
        3D data representation. All the test data will be used to create a 3D
        volume of ``test_subvol_shape`` shape (considering ``ov``).
@@ -305,14 +304,6 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
            be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.      
            E. g. ``(x, y, z)``.   
   
-       overlap_train : bool, optional
-           To make training subvolumes as overlapping patches using ``ov``.
-
-       use_rest_train : bool, optional
-           Wheter to use the train data remainder when the subvolume shape
-           selected has no exact division with it. More info at :func:`~crop_data`
-           function.
-
        Returns
        -------                                                         
        X_train : 5D Numpy array                                                 
@@ -378,56 +369,29 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
    
     print("### LOAD ###")
                                                                         
+    # Disable crops when random_subvolumes_in_DA is selected 
+    crop = False if random_subvolumes_in_DA else True
+
     tr_shape = (image_train_shape[1], image_train_shape[0], image_train_shape[2], 
                 image_train_shape[3])
+
     print("0) Loading train images . . .")
-    X_train = load_3d_images_from_dir(train_path, tr_shape, crop=True, subvol_shape=train_subvol_shape, overlap=ov)
-    import sys
-    sys.exit(0)
+    X_train, _ = load_3d_images_from_dir(train_path, None, crop=crop,
+        subvol_shape=train_subvol_shape, overlap=ov)
     print("1) Loading train masks . . .")
-    Y_train = load_3d_images_from_dir(train_mask_path, tr_shape)
+    Y_train, _ = load_3d_images_from_dir(
+        train_mask_path, None, crop=crop, subvol_shape=train_subvol_shape, 
+        overlap=ov)
 
     te_shape = (image_test_shape[1], image_test_shape[0], image_test_shape[2], 
                 image_test_shape[3])
     print("2) Loading test images . . .")
-    X_test = load_3d_images_from_dir(test_path, te_shape)
+    X_test, orig_test_img_shapes = load_3d_images_from_dir(
+        test_path, None, crop=True, subvol_shape=test_subvol_shape, overlap=ov)
     print("3) Loading test masks . . .")
-    Y_test = load_3d_images_from_dir(test_mask_path, te_shape)
+    Y_test, _ = load_3d_images_from_dir(test_mask_path, None, crop=True,            
+        subvol_shape=test_subvol_shape, overlap=ov)
 
-    orig_test_shape = tuple(Y_test.shape[i] for i in [0, 1, 2, 3, 4])
-
-    if not random_subvolumes_in_DA:
-        print("Cropping train data into 3D subvolumes . . .")
-        _X_train = None
-        _Y_train = None
-        for i in tqdm(range(X_train.shape[0])):
-            if overlap_train:
-                r_X_train, r_Y_train = crop_3D_data_with_overlap(
-                    X_train[i], train_subvol_shape, data_mask=Y_train[i], overlap=ov,
-                    verbose=False) 
-            else:
-                r_X_train, r_Y_train = crop_3D_data(
-                    X_train[i], train_subvol_shape, use_rest=use_rest_train,
-                    data_mask=Y_train[i], verbose=False)
-            _X_train = r_X_train if _X_train is None else np.concatenate((_X_train,r_X_train))
-            _Y_train = r_Y_train if _Y_train is None else np.concatenate((_Y_train,r_Y_train))
-        X_train = _X_train
-        Y_train = _Y_train
-        del _X_train, _Y_train, r_X_train, r_Y_train
-
-    print("Cropping test data into 3D subvolumes . . .")
-    _X_test = None
-    _Y_test = None
-    for i in tqdm(range(X_test.shape[0])):
-        r_X_test, r_Y_test = crop_3D_data_with_overlap(
-            X_test[i], test_subvol_shape, data_mask=Y_test[i], overlap=ov, verbose=False)
-
-        _X_test = r_X_test if _X_test is None else np.concatenate((_X_test,r_X_test))
-        _Y_test = r_Y_test if _Y_test is None else np.concatenate((_Y_test,r_Y_test))
-    X_test = _X_test
-    Y_test = _Y_test
-    del _X_test, _Y_test, r_X_test, r_Y_test
-        
     # Create validation data splitting the train
     if create_val:
         X_train, X_val, \
@@ -452,8 +416,8 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
         # Calculate normalization value
         norm_value = np.mean(X_train)
 
-        return X_train, Y_train, X_val, Y_val, X_test, Y_test, orig_test_shape, \
-               norm_value
+        return X_train, Y_train, X_val, Y_val, X_test, Y_test, \
+               orig_test_img_shapes, norm_value
     else:                                                               
         print("*** Loaded train data shape is: {}".format(X_train.shape))
         print("*** Loaded test data shape is: {}".format(X_test.shape))
@@ -462,7 +426,7 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
         # Calculate normalization value
         norm_value = np.mean(X_train)
 
-        return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value
+        return X_train, Y_train, X_test, Y_test, orig_test_img_shapes, norm_value
 
 
 def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
