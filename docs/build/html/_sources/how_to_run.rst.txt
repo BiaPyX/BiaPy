@@ -1,6 +1,3 @@
-How to run
-==========
-
 Step 0: Prepare environment 
 ---------------------------
 

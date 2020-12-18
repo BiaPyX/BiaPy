@@ -1,6 +1,6 @@
 # EM image segmentation
 
-This repository contains a complete workflow to make semantic segmentation for EM images. The code is based on Keras and TensorFlow as backend. Find the documentation of this project [here](https://em-image-segmentation.readthedocs.io/en/latest/).
+This repository contains a complete workflow to make semantic segmentation for EM images. The code is based on Keras and TensorFlow as backend. For further implementation details and project usage please visit our [documentation](https://em-image-segmentation.readthedocs.io/en/latest/).
 
 ![.](https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/img/predictions.gif)
 
@@ -15,10 +15,10 @@ conda env create -f DL_EM_base_env.yml
 ```
 
 ### Choose a template
-In [templates](templates/) directory are located different templates that reproduce the results presented in our paper. Some of them differ just in the network used, and other minor changes to adapt our workflow for each case, but some templates need an special explanation:
+In [templates](templates/) directory are located different templates that reproduce the results presented in our paper. [U-Net_2D_template.py](templates/U-Net_2D_template.py) and [U-Net_3D_template.py](templates/U-Net_3D_template.py) are the main templatesi and the rest differ in the network used (together with other minor changes in cases where the network needs them). As an exception, two different templates on this folder need an special explanation:
 
-- [big_data_template.py](templates/big_data_template.py): use this template as a baseline to make segmantic segmentation with an 2D U-Net on small datasets. The difference between with [U-Net_2D_template.py](templates/U-Net_2D_template.py) is that this template should be used with large datasets, as it uses `flow_from_directory()` instead of `flow()` function of Keras. Notice that the dataset directory structure changes.
-- [general_template.py](templates/general_template.py): in this template we gather all implemented options that this project covers. Should be used to extract different code blocks your are interested in. 
+- [big_data_template.py](templates/big_data_template.py): use this template as a baseline to make segmantic segmentation with an U-Net 2D. The difference with [U-Net_2D_template.py](templates/U-Net_2D_template.py) is that this template should be used with large datasets, as it uses `flow_from_directory()` instead of `flow()` function of Keras. Notice that the dataset directory structure changes.
+- [general_template.py](templates/general_template.py): in this template we gather all implemented options that this project covers. Should be used to extract different code blocks you are interested in. 
 
 To run state-of-the-art works implemented in this project you can use the template prepared on each case: [xiao_template_V1.py](sota_implementations/xiao_2018/xiao_template_V1.py), [cheng_template_V1.py](sota_implementations/cheng_2017/cheng_template_V1.py), [oztel_template_V0.py](sota_implementations/oztel_2017/oztel_template_V0.py) or [casser_template_V1.py](sota_implementations/casser_2018/casser_template_V1.py). 
 
