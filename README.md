@@ -15,7 +15,8 @@ conda env create -f DL_EM_base_env.yml
 ```
 
 ### Choose a template
-In [templates](templates/) directory are located different templates that reproduce the results presented in our paper. [U-Net_2D_template.py](templates/U-Net_2D_template.py) and [U-Net_3D_template.py](templates/U-Net_3D_template.py) are the main templatesi and the rest differ in the network used (together with other minor changes in cases where the network needs them). As an exception, two different templates on this folder need an special explanation:
+In [templates](templates/) directory are located different templates that reproduce the results presented in our paper. 
+[U-Net_2D_template.py](templates/U-Net_2D_template.py) and [U-Net_3D_template.py](templates/U-Net_3D_template.py) are the main templates and the rest differ in the network used (together with other minor changes in cases where the network needs them). As an exception, two different templates on this folder need an special explanation:
 
 - [big_data_template.py](templates/big_data_template.py): use this template as a baseline to make segmantic segmentation with an U-Net 2D. The difference with [U-Net_2D_template.py](templates/U-Net_2D_template.py) is that this template should be used with large datasets, as it uses `flow_from_directory()` instead of `flow()` function of Keras. Notice that the dataset directory structure changes.
 - [general_template.py](templates/general_template.py): in this template we gather all implemented options that this project covers. Should be used to extract different code blocks you are interested in. 
