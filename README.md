@@ -1,8 +1,8 @@
-# Deep Learning for EM images
+# EM image segmentation
 
-This repository contains the code to make semantic segmentation using U-Net based architecture for EM images. This code is based on Keras and TensorFlow as backend. 
+This repository contains a complete workflow to make semantic segmentation for EM images. The code is based on Keras and TensorFlow as backend. For further implementation details and project usage please visit our [documentation](https://em-image-segmentation.readthedocs.io/en/latest/).
 
-Furthemore, some of state-of-the-art approaches have been reproduced and implemented to compare our method in a more robust way, with the goal of supplement the lack of information in some of those works. 
+![.](https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/img/predictions.gif)
 
 ## Getting started 
 These instructions will get you a copy of the project up and running on your machine.
@@ -15,15 +15,14 @@ conda env create -f DL_EM_base_env.yml
 ```
 
 ### Choose a template
-In [templates](templates/) directory are located a few different templates that could be used to start your project. Each one is suited to different settings:
+In [templates](templates/) directory are located different templates that reproduce the results presented in our paper. 
 
-- [U-Net_2D_template.py](templates/U-Net_2D_template.py): use this template as a baseline to make segmantic segmentation with an 2D U-Net on small datasets.
-- [Residual_U-Net_2D_template.py](templates/Residual_U-Net_2D_template.py): use this template as a baseline to make segmantic segmentation with a Residual 2D U-Net on small datasets.
-- [U-Net_3D_template.py](templates/U-Net_2D_template.py): use this template as a baseline to make segmantic segmentation with an 3D U-Net on small datasets.
-- [Residual_U-Net_3D_template.py](templates/Residual_U-Net_3D_template.py): use this template as a baseline to make segmantic segmentation with a Residual 3D U-Net on small datasets.
-- [big_data_template.py](templates/big_data_template.py): same as the first, but should be used with large datasets, as it makes use of `flow_from_directory()` instead of `flow()` method. Notice that the dataset directory structure changes.
+[U-Net_2D_template.py](templates/U-Net_2D_template.py) and [U-Net_3D_template.py](templates/U-Net_3D_template.py) are the main templates and the rest differ in the network used (together with other minor changes in cases where the network needs them). As an exception, two different templates on this folder need an special explanation:
 
-In case you are interested in reproducing one of the state-of-the-art works implemented in this project, you can use the template prepared on each case: [xiao_template.py](xiao_2018/xiao_template.py), [cheng_template.py](cheng_2017/cheng_template.py), [oztel_template.py](oztel_2017/oztel_template.py) or [casser_template.py](casser_2018/casser_template.py). 
+- [big_data_template.py](templates/big_data_template.py): use this template as a baseline to make segmantic segmentation with an U-Net 2D. The difference with [U-Net_2D_template.py](templates/U-Net_2D_template.py) is that this template should be used with large datasets, as it uses `flow_from_directory()` instead of `flow()` function of Keras. Notice that the dataset directory structure changes.
+- [general_template.py](templates/general_template.py): in this template we gather all implemented options that this project covers. Should be used to extract different code blocks you are interested in. 
+
+To run state-of-the-art works implemented in this project you can use the template prepared on each case: [xiao_template_V1.py](sota_implementations/xiao_2018/xiao_template_V1.py), [cheng_template_V1.py](sota_implementations/cheng_2017/cheng_template_V1.py), [oztel_template_V0.py](sota_implementations/oztel_2017/oztel_template_V0.py) or [casser_template_V1.py](sota_implementations/casser_2018/casser_template_V1.py). 
 
 ### Data structure
 
@@ -75,19 +74,22 @@ dataset/
 └── train
     ├── x
     │   └── x
-	│   	├── im0500.png
-	│       ├── im0501.png
-	│       ├── . . .
+    │       ├── im0500.png
+    │       ├── im0501.png
+    │       ├── . . .
     └── y
         └── y
             ├── mask_0097.tif
             ├── mask_0098.tif
-		    ├── mask_0097.tif
+            ├── mask_0097.tif
             ├── . . .
 ```
 </details>
 
-For instance, one of EM datasets used on this work can be downloaded [here](https://www.epfl.ch/labs/cvlab/data/data-em/ "EPFL").
+EM datasets used on this work:
+- [Lucchi](https://www.epfl.ch/labs/cvlab/data/data-em/ "EPFL")
+- [Lucchi++](https://sites.google.com/view/connectomics/ "Lucchi++")
+- [Kasthuri++](https://sites.google.com/view/connectomics/ "Kasthuri++")
 
 ### Run the code 
 An example to run it in bash shell could be this:
@@ -109,29 +111,30 @@ python -u template.py ${code_dir} "${data_dir}" "${job_dir}" --id "${jobID}" --r
 
 The following state-of-the-art approaches for EM semantic segmentation have been implemented:
 
-- 3D U-Net + post-processing. Everything contained in [xiao_2018](xiao_2018). 
+- U-Net 3D + post-processing. Everything contained in [xiao_2018](sota_implementations/xiao_2018). 
 ```
 Chi Xiao, Xi Chen, Weifu Li, Linlin Li, Lu Wang, Qiwei Xie, and Hua Han, "Automatic mitochondria 
 segmentation for em data using a 3d supervised convolutional network", Frontiers in Neuroanatomy 
 12 (2018), 92.
 ```
 
-- 2D and 3D U-Net with proposed stochastic downsampling layer. Everything contained in [cheng_2017](cheng_2017).
+- 2D and 3D U-Net with proposed stochastic downsampling layer. Everything contained in [cheng_2017](sota_implementations/cheng_2017).
 ```
 H. Cheng and A. Varshney, "Volume segmentation using convolutional neural networks with limited 
 training data," 2017 IEEE International Conference on Image Processing (ICIP), Beijing, 2017, 
 pp. 590-594.
 ```
 
-- CNN + post-processing. Everything contained in [oztel_2017](oztel_2017).
+- CNN + post-processing. Everything contained in [oztel_2017](sota_implementations/oztel_2017).
 ```
 Ismail Oztel, Gozde Yolcu, Ilker Ersoy, Tommi White, and Filiz Bunyak, "Mitochondria segmentation 
 in electron microscopy volumes using deep convolutional neural network", 2017 IEEE International 
 Conference on Bioinformatics and Biomedicine (BIBM), IEEE, 2017, pp. 1195-1200.
 ``` 
 
-- 2D U-Net + post-processing. Everything contained in [casser_2018](casser_2018).
+- U-Net 2D + post-processing. Everything contained in [casser_2018](sota_implementations/casser_2018).
 ```
 Vincent Casser, Kai Kang, Hanspeter Pfister, and Daniel Haehn, "Fast mitochondria segmentation 
 for connectomics", arXiv preprint arXiv:1812.06024 (2018).
 ```
+

@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>How to run &mdash; EM Image Segmentation  documentation</title>
+  <title>Step 0: Prepare environment &mdash; EM Image Segmentation  documentation</title>
   
 
   
@@ -36,7 +36,7 @@
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Metrics" href="metrics.html" />
+    <link rel="next" title="Data manipulation 2D" href="data_2d_manipulation.html" />
     <link rel="prev" title="Welcome to EM Image Segmentation’s documentation!" href="index.html" /> 
 </head>
 
@@ -82,25 +82,20 @@
               
             
             
-              <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">How to run</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#step-0-prepare-environment">Step 0: Prepare environment</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#option-a-in-your-shell">Option A: In your shell</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#option-b-singularity-container">Option B: Singularity container</a></li>
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Step 0: Prepare environment</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#option-a-in-your-shell">Option A: In your shell</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#option-b-singularity-container">Option B: Singularity container</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#step-1-choose-a-template">Step 1: Choose a template</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#step-2-data-structure">Step 2: Data structure</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#step-3-run-the-code">Step 3: Run the code</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#option-a-in-bash">Option A: In Bash</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id2">Option B: Singularity container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#step-1-choose-a-template">Step 1: Choose a template</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#step-2-data-structure">Step 2: Data structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#step-3-run-the-code">Step 3: Run the code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#option-a-in-bash">Option A: In Bash</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id2">Option B: Singularity container</a></li>
 </ul>
 </li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
@@ -121,6 +116,12 @@
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Utilities</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
@@ -180,7 +181,7 @@
     
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
         
-      <li>How to run</li>
+      <li>Step 0: Prepare environment</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -197,10 +198,8 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="how-to-run">
-<h1>How to run<a class="headerlink" href="#how-to-run" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="step-0-prepare-environment">
-<h2>Step 0: Prepare environment<a class="headerlink" href="#step-0-prepare-environment" title="Permalink to this headline">¶</a></h2>
+  <div class="section" id="step-0-prepare-environment">
+<h1>Step 0: Prepare environment<a class="headerlink" href="#step-0-prepare-environment" title="Permalink to this headline">¶</a></h1>
 <p>Firstly, you need to clone the <a class="reference external" href="https://github.com/danifranco/DeepLearning_EM">repository</a>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">clone</span> <span class="o">--</span><span class="n">recursive</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">danifranco</span><span class="o">/</span><span class="n">DeepLearning_EM</span><span class="o">.</span><span class="n">git</span>
 </pre></div>
@@ -208,7 +207,7 @@
 <p>After that, you need to set up an environment to run the code. There are two ways
 to do it, which both relies on Anaconda environments.</p>
 <div class="section" id="option-a-in-your-shell">
-<h3>Option A: In your shell<a class="headerlink" href="#option-a-in-your-shell" title="Permalink to this headline">¶</a></h3>
+<h2>Option A: In your shell<a class="headerlink" href="#option-a-in-your-shell" title="Permalink to this headline">¶</a></h2>
 <p>You can set-up a development environment with all necessary dependencies creating
 directly a <code class="docutils literal notranslate"><span class="pre">conda</span></code> environment using the file located in
 [env/DL_EM_base_env.yml](env/DL_EM_base_env.yml):</p>
@@ -217,7 +216,7 @@ directly a <code class="docutils literal notranslate"><span class="pre">conda</s
 </div>
 </div>
 <div class="section" id="option-b-singularity-container">
-<h3>Option B: Singularity container<a class="headerlink" href="#option-b-singularity-container" title="Permalink to this headline">¶</a></h3>
+<h2>Option B: Singularity container<a class="headerlink" href="#option-b-singularity-container" title="Permalink to this headline">¶</a></h2>
 <p>Another option is the usage of containers, which increases the consistency of
 reproducibility between different machines. <code class="docutils literal notranslate"><span class="pre">conda</span></code> is used again inside the
 container, so with this option only the host GPU, and its driver, that the
@@ -231,7 +230,7 @@ follows:</p>
 </div>
 </div>
 <div class="section" id="step-1-choose-a-template">
-<h2>Step 1: Choose a template<a class="headerlink" href="#step-1-choose-a-template" title="Permalink to this headline">¶</a></h2>
+<h1>Step 1: Choose a template<a class="headerlink" href="#step-1-choose-a-template" title="Permalink to this headline">¶</a></h1>
 <p>In <a class="reference external" href="https://github.com/danifranco/DeepLearning_EM/blob/master/templates">templates</a> directory are located a few different templates that could be used to start your project. Each one is suited to different settings:</p>
 <ul class="simple">
 <li><p><a class="reference external" href="https://github.com/danifranco/DeepLearning_EM/blob/master/templates/U-Net_2D_template.py">U-Net_2D_template.py</a>: use this template as a baseline to make segmantic segmentation with an 2D U-Net on small datasets.</p></li>
@@ -244,7 +243,7 @@ follows:</p>
 <p>In case you are interested in reproducing one of the state-of-the-art works implemented in this project, you can use the template prepared on each case: <a class="reference external" href="https://github.com/danifranco/DeepLearning_EM/blob/master/xiao_2018/xiao_template.py">xiao_template.py</a>, <a class="reference external" href="https://github.com/danifranco/DeepLearning_EM/blob/master/cheng_2017/cheng_template.py">cheng_template.py</a>, <a class="reference external" href="https://github.com/danifranco/DeepLearning_EM/blob/master/oztel_2017/oztel_template.py">oztel_template.py</a> or <a class="reference external" href="https://github.com/danifranco/DeepLearning_EM/blob/master/casser_2018/casser_template.py">casser_template.py</a>.</p>
 </div>
 <div class="section" id="step-2-data-structure">
-<h2>Step 2: Data structure<a class="headerlink" href="#step-2-data-structure" title="Permalink to this headline">¶</a></h2>
+<h1>Step 2: Data structure<a class="headerlink" href="#step-2-data-structure" title="Permalink to this headline">¶</a></h1>
 <p>This project follows the same directory structure as <a class="reference external" href="https://keras.io/preprocessing/image/">ImageDataGenerator</a> class of Keras. The data directory tree should be this:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>dataset/
 ├── test
@@ -297,7 +296,7 @@ follows:</p>
 <p>For instance, one of EM datasets used on this work can be downloaded <a class="reference external" href="https://www.epfl.ch/labs/cvlab/data/data-em/">here</a>.</p>
 </div>
 <div class="section" id="step-3-run-the-code">
-<h2>Step 3: Run the code<a class="headerlink" href="#step-3-run-the-code" title="Permalink to this headline">¶</a></h2>
+<h1>Step 3: Run the code<a class="headerlink" href="#step-3-run-the-code" title="Permalink to this headline">¶</a></h1>
 <p>If you are using e.g. <code class="docutils literal notranslate"><span class="pre">bash</span></code> shell you can declare first the needed
 paths for the template:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">code_dir</span><span class="o">=</span><span class="s2">&quot;/home/user/DeepLearning_EM&quot;</span>  <span class="c1"># Path to this repo code</span>
@@ -309,7 +308,7 @@ paths for the template:</p>
 </pre></div>
 </div>
 <div class="section" id="option-a-in-bash">
-<h3>Option A: In Bash<a class="headerlink" href="#option-a-in-bash" title="Permalink to this headline">¶</a></h3>
+<h2>Option A: In Bash<a class="headerlink" href="#option-a-in-bash" title="Permalink to this headline">¶</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span># Load the environment created first
 conda activate DL_EM_base_env
 
@@ -318,7 +317,7 @@ python -u template.py ${code_dir} &quot;${data_dir}&quot; &quot;${job_dir}&quot;
 </div>
 </div>
 <div class="section" id="id2">
-<h3>Option B: Singularity container<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h3>
+<h2>Option B: Singularity container<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h2>
 <p>To have a clear separation of the folder and files multiple paths are mounted
 into the container. The folders <code class="docutils literal notranslate"><span class="pre">/wd</span></code>, <code class="docutils literal notranslate"><span class="pre">/code</span></code>, <code class="docutils literal notranslate"><span class="pre">/data</span></code>, <code class="docutils literal notranslate"><span class="pre">/out_dir</span></code> are
 created in the container on its creation which you should use as mount point.</p>
@@ -339,7 +338,6 @@ not modify anything else:</p>
 <p>For more information regarding the container please refer to <a class="reference external" href="https://sylabs.io/guides/3.6/user-guide/index.html">Singularity</a>.</p>
 </div>
 </div>
-</div>
 
 
            </div>
@@ -349,7 +347,7 @@ not modify anything else:</p>
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="metrics.html" class="btn btn-neutral float-right" title="Metrics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="data_2d_manipulation.html" class="btn btn-neutral float-right" title="Data manipulation 2D" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="index.html" class="btn btn-neutral float-left" title="Welcome to EM Image Segmentation’s documentation!" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

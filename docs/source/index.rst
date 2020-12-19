@@ -6,18 +6,18 @@
 Welcome to EM Image Segmentation's documentation!
 =================================================
 
-This documentation tries to explain better the code of the project `EM Image Segmentation <https://github.com/danifranco/DeepLearning_EM>`_, which is used to make semantic segmentation using U-Net based architecture for EM images. The code is based on Keras and TensorFlow as backend.
+This documentation tries to explain better the code of the project `EM Image Segmentation <https://github.com/danifranco/DeepLearning_EM>`_, which is used to make semantic segmentation for EM images. The code is based on Keras and TensorFlow as backend.
 
-Some of state-of-the-art approaches have been reproduced and implemented to compare our method in a more robust way, with the goal of supplement the lack of information in some of those works.
+                                                                                
+.. image:: img/predictions.gif
+           :width: 100%                                                         
+           :align: center 
 
 .. toctree::
    :maxdepth: 2
+   :caption: How to run
 
    how_to_run  
-   metrics
-   util
-   post_processing
-
 
 .. toctree::                                                                    
    :maxdepth: 2                                                                 
@@ -46,6 +46,14 @@ Some of state-of-the-art approaches have been reproduced and implemented to comp
    networks_fc_densetnet103
    networks_multiresunet
    networks_mnet
+
+.. toctree::                                                                    
+   :maxdepth: 3                                                                 
+   :caption: Utilities 
+
+   metrics                                                                      
+   util                                                                         
+   post_processing     
 
 
 .. toctree::
