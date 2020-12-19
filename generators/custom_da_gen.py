@@ -66,6 +66,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        gamma_contrast : bool, optional
            To insert gamma constrast changes on images.
 
+       zoom : float or  [lower, upper], optional
+           Range for random zoom. If a float, ``[lower, upper] = [1-zoom_range, 
+           1+zoom_range]``.
+
        random_crops_in_DA : bool, optional
            Decide to make random crops in DA (before transformations).
 
@@ -148,7 +152,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
     def __init__(self, X, Y, batch_size=32, shape=(256,256,1), shuffle=False,
                  da=True, hist_eq=False, rotation90=False, rotation_range=0.0,
                  vflip=False, hflip=False, elastic=False, g_blur=False,
-                 median_blur=False, gamma_contrast=False,
+                 median_blur=False, gamma_contrast=False, zoom=0.0,
                  random_crops_in_DA=False, prob_map=False, train_prob=None, 
                  val=False, n_classes=1, extra_data_factor=1):
 
@@ -160,6 +164,16 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         if random_crops_in_DA and (shape[0] != shape[1]):
             raise ValuError("When 'random_crops_in_DA' is selected the shape "
                             "given must be square, e.g. (256, 256, 1)")
+    
+        if isinstance(zoom, (float, int)):
+            self.zoom = [1 - zoom, 1 + zoom]
+        elif (len(zoom) == 2 and
+              all(isinstance(val, (float, int)) for val in zoom)):
+            self.zoom = [zoom[0], zoom[1]]
+        else:
+            raise ValueError('`zoom` should be a float or '
+                             'a tuple or list of two floats. '
+                             'Received: %s' % (zoom,))
             
         self.shape = shape
         self.batch_size = batch_size
@@ -213,6 +227,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         if gamma_contrast:
             da_options.append(iaa.Sometimes(0.5,iaa.GammaContrast((1.25, 1.75))))
             self.t_made += '_gcontrast'
+        if self.zoom[0] != 1 or self.zoom[1] != 1:
+            da_options.append(iaa.Sometimes(1,iaa.Affine(scale={"x": (self.zoom[0], self.zoom[1]), 
+                                                                "y": (self.zoom[0], self.zoom[1])})))
+            self.t_made += '_zoom'
+            
         self.seq = iaa.Sequential(da_options)
         self.t_made = '_none' if self.t_made == '' else self.t_made
 
