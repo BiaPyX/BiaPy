@@ -11,7 +11,7 @@ These instructions will get you a copy of the project up and running on your mac
 To set-up a development environment with all necessary dependencies, you can use the  file located in [env/DL_EM_base_env.yml](env/DL_EM_base_env.yml) to create it as follows:
 
 ```
-conda env create -f DL_EM_base_env.yml
+conda env create -f env/DL_EM_base_env.yml
 ```
 
 ### Choose a template
@@ -97,12 +97,12 @@ An example to run it in bash shell could be this:
 # Load the environment created first
 conda activate DL_EM_base_env     
 
-code_dir="/home/user/DeepLearning_EM"  # Path to this repo code 
-data_dir="/home/user/dataset"          # Path to the dataset
-job_dir="/home/user/out_dir"           # Path where the output data will be generated
-job_id="400"                           # Just a string to identify the job 
-job_counter=0                          # Number that should be increased when one need to run the same job multiple times
-gpu_number="0"                         # Number of the GPU to run the job in (according to 'nvidia-smi' command)
+code_dir="/home/user/EM_Image_Segmentation"  # Path to this repo code 
+data_dir="/home/user/dataset"                # Path to the dataset
+job_dir="/home/user/out_dir"                 # Path where the output data will be generated
+job_id="400"                                 # Just a string to identify the job 
+job_counter=0                                # Number that should be increased when one need to run the same job multiple times
+gpu_number="0"                               # Number of the GPU to run the job in (according to 'nvidia-smi' command)
 
 python -u template.py ${code_dir} "${data_dir}" "${job_dir}" --id "${jobID}" --rid "${jobCounter}" --gpu ${gpu_number} 
 ```
