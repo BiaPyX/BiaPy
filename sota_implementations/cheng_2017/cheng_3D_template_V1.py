@@ -65,7 +65,8 @@ from data_3D_manipulation import load_and_prepare_3D_data,\
 from generators.data_3D_generators import VoxelDataGenerator
 from cheng_3D_network import asymmetric_3D_network
 from metrics import jaccard_index_numpy, voc_calculation
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.callbacks import EarlyStopping
+from aux.callbacks import ModelCheckpoint
 from tensorflow.keras.models import load_model
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
@@ -197,7 +198,7 @@ optimizer = "adam"
 # Learning rate used by the optimization method
 learning_rate_value = 0.0001
 # Number of epochs to train the network
-epochs_value = 150
+epochs_value = 130
 # Number of epochs to stop the training process after no improvement
 patience = 50
 

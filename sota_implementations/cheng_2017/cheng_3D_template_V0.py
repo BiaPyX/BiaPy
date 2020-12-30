@@ -65,7 +65,8 @@ from data_3D_manipulation import load_and_prepare_3D_data,\
 from generators.data_3D_generators import VoxelDataGenerator
 from cheng_3D_network import asymmetric_3D_network
 from metrics import jaccard_index_numpy, voc_calculation
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.callbacks import EarlyStopping
+from aux.callbacks import ModelCheckpoint
 from tensorflow.keras.models import load_model
 from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
@@ -171,7 +172,7 @@ w_background = 0.06 # Only active with probability_map
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when 
 # "random_subvolumes_in_DA" is made, as more original train data can be cover
-duplicate_train = 0
+duplicate_train = 3
 # Extra number of images to add to the train data. Applied after duplicate_train
 extra_train_data = 0
 
@@ -191,7 +192,7 @@ use_LRFinder = False
 
 ### Experiment main parameters
 # Batch size value
-batch_size_value = 1
+batch_size_value = 3
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "sgd"
 # Learning rate used by the optimization method
