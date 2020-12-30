@@ -1365,7 +1365,11 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
 
        data_shape : List of tuples, optional 
            Shapes of all 3D images readed. Useful to reconstruct the original 
-           images. 
+           images together with ``crop_shape``. 
+
+       crop_shape : List of tuples, optional
+           Shape of the loaded 3D images after cropping. Useful to reconstruct 
+           the original images together with ``data_shape``.
 
        Examples
        --------
@@ -1414,6 +1418,7 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
         from data_3D_manipulation import crop_3D_data_with_overlap
         data = None
         data_shape = []
+        crop_shape = []
     else:
         data = np.zeros((len(ids), ) + _shape)
 
@@ -1427,7 +1432,8 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
         if crop:
             data_shape.append(img.shape)
             img_cropped = crop_3D_data_with_overlap(
-                img, subvol_shape, overlap=overlap, verbose=False)                 
+                img, subvol_shape, overlap=overlap, verbose=True)                 
+            crop_shape.append(img_cropped.shape)
         
             if data is None:
                 data = img_cropped
@@ -1439,7 +1445,7 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
 
     print("*** Loaded data shape is {}".format(data.shape))
     if crop:
-        return data, data_shape
+        return data, data_shape, crop_shape
     else:
         return data
 
