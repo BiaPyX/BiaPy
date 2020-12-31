@@ -60,7 +60,7 @@ import tensorflow as tf
 from data_manipulation import load_and_prepare_2D_data, crop_data,\
                               merge_data_without_overlap,\
                               crop_data_with_overlap, merge_data_with_overlap, \
-                              check_binary_masks, img_to_onehot_encoding
+                              check_masks, img_to_onehot_encoding
 from generators.custom_da_gen import ImageDataGenerator
 from generators.keras_da_gen import keras_da_generator, keras_gen_samples
 from networks.unet import U_Net_2D
@@ -314,6 +314,10 @@ activation = "elu"
 # Active flag if softmax or one channel per class is used as the last layer of
 # the network. Custom DA needed.
 softmax_out = False
+# To take only the last class of the predictions, which corresponds to the
+# foreground in a binary problem. If n_classes > 2 this should be disabled to
+# ensure all classes are preserved
+last_class = True if n_classes <= 2 else False
 
 
 ### DET metric variables
@@ -426,11 +430,11 @@ print("###################\n"
       "#  SANITY CHECKS  #\n"
       "###################\n")
 
-check_binary_masks(train_mask_path)
-check_binary_masks(test_mask_path)
+check_masks(train_mask_path)
+check_masks(test_mask_path)
 if extra_datasets_mask_list: 
     for i in range(len(extra_datasets_mask_list)):
-        check_binary_masks(extra_datasets_mask_list[i])
+        check_masks(extra_datasets_mask_list[i])
 
 
 print("##########################################\n"
@@ -718,7 +722,7 @@ print("########################################\n"
       "########################################\n")
 
 # Merge crops
-if make_crops or (random_crops_in_DA and test_ov_crops == 1):
+if make_crops:
     h_num = math.ceil(orig_test_shape[1]/preds_test.shape[1])
     v_num = math.ceil(orig_test_shape[2]/preds_test.shape[2])
 
@@ -734,7 +738,7 @@ if make_crops or (random_crops_in_DA and test_ov_crops == 1):
     Y_test = merge_data_without_overlap(
         Y_test, math.ceil(Y_test.shape[0]/(h_num*v_num)),
         out_shape=[h_num, v_num], grid=False)
-elif random_crops_in_DA and test_ov_crops > 1:
+elif random_crops_in_DA:
     print("Reconstruct X_test . . .")
     X_test = merge_data_with_overlap(
         X_test, orig_test_shape, crop_shape[0], test_ov_crops)
