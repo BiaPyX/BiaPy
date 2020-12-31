@@ -73,7 +73,7 @@ from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap,\
                                      ensemble8_2d_predictions
 from tensorflow.keras.utils import plot_model
-from callbacks import ModelCheckpoint
+from aux.callbacks import ModelCheckpoint
 from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
                             boundary_refinement_watershed2
 
@@ -214,8 +214,6 @@ shuffle_train_data_each_epoch = custom_da
 shuffle_val_data_each_epoch = False
 
 ### Options available for Keras Data Augmentation
-# Make a bit of zoom in the images
-k_zoom = False 
 # widtk_h_shift_range (more details in Keras ImageDataGenerator class)
 k_w_shift_r = 0.0
 # height_shift_range (more details in Keras ImageDataGenerator class)
@@ -247,13 +245,15 @@ rotation_range = 180
 vflips = True
 # To make horizontal flips
 hflips = True
+# Make a bit of zoom in the images
+zoom = False
 
 
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when "random_crops_in_DA"
 # is made, as more original train data can be cover
-duplicate_train = 0
-# Extra number of images to add to the train data. Applied after duplicate_train 
+replicate_train = 0
+# Extra number of images to add to the train data. Applied after replicate_train 
 extra_train_data = 0
 
 
@@ -527,9 +527,9 @@ print("###########################\n"
       "###########################\n")
 
 # Calculate the steps_per_epoch value to train in case
-if duplicate_train != 0:
-    steps_per_epoch_value = int((duplicate_train*X_train.shape[0])/batch_size_value)
-    print("Data doubled by {} ; Steps per epoch = {}".format(duplicate_train,
+if replicate_train != 0:
+    steps_per_epoch_value = int((replicate_train*X_train.shape[0])/batch_size_value)
+    print("Data doubled by {} ; Steps per epoch = {}".format(replicate_train,
           steps_per_epoch_value))
 else:
     steps_per_epoch_value = int(X_train.shape[0]/batch_size_value)
@@ -541,7 +541,7 @@ if extra_train_data != 0:
 
         extra_x, extra_y = keras_gen_samples(
             extra_train_data, X_data=X_train, Y_data=Y_train, 
-            batch_size_value=batch_size_value, zoom=k_zoom, 
+            batch_size_value=batch_size_value, zoom=zoom, 
             k_w_shift_r=k_w_shift_r, k_h_shift_r=k_h_shift_r, k_shear_range=k_shear_range,
             k_brightness_range=k_brightness_range, rotation_range=rotation_range,
             vflip=vflips, hflip=hflips, median_filter_size=median_filter_size, 
@@ -554,7 +554,7 @@ if extra_train_data != 0:
             shape=(img_height,img_width,img_channels), shuffle=True, da=True, 
             hist_eq=hist_eq, rotation90=rotation90, rotation_range=rotation_range,                   
             vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,             
-            median_blur=median_blur, gamma_contrast=gamma_contrast,                 
+            median_blur=median_blur, gamma_contrast=gamma_contrast, zoom=zoom,                
             random_crops_in_DA=random_crops_in_DA)
 
         extra_generator = ImageDataGenerator(**extra_gen_args)
@@ -581,7 +581,7 @@ if custom_da == False:
         X_train=X_train, Y_train=Y_train, X_val=X_val, Y_val=Y_val, 
         batch_size_value=batch_size_value, save_examples=aug_examples,
         out_dir=da_samples_dir, shuffle_train=shuffle_train_data_each_epoch, 
-        shuffle_val=shuffle_val_data_each_epoch, zoom=k_zoom, 
+        shuffle_val=shuffle_val_data_each_epoch, zoom=zoom, 
         rotation_range=rotation_range, random_crops_in_DA=random_crops_in_DA,
         crop_length=crop_shape[0], w_shift_r=k_w_shift_r, h_shift_r=k_h_shift_r,    
         shear_range=k_shear_range, brightness_range=k_brightness_range,
@@ -607,10 +607,10 @@ else:
         shuffle=shuffle_train_data_each_epoch, da=True, hist_eq=hist_eq,
         rotation90=rotation90, rotation_range=rotation_range,
         vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,
-        median_blur=median_blur, gamma_contrast=gamma_contrast,
+        median_blur=median_blur, gamma_contrast=gamma_contrast, zoom=zoom,
         random_crops_in_DA=random_crops_in_DA, prob_map=probability_map, 
         train_prob=train_prob, softmax_out=softmax_out,
-        extra_data_factor=duplicate_train)
+        extra_data_factor=replicate_train)
     data_gen_val_args = dict(
         X=X_val, Y=Y_val, batch_size=batch_size_value, 
         shape=(img_height,img_width,img_channels), 
@@ -677,12 +677,17 @@ print("################################\n"
       "################################\n")
 
 # Prepare test data for its use
-Y_test /= 255 if np.max(Y_test) > 2 else Y_test
-X_test /= 255 if np.max(X_test) > 2 else X_test
+if np.max(Y_test) > n_classes:
+    Y_test = Y_test.astype('float32')
+    Y_test *= 1./255
+if np.max(X_test) > 2:
+    X_test = X_test.astype('float32')
+    X_test *= 1./255
+
 if softmax_out:
     Y_test_one_hot = np.zeros(Y_test.shape[:3] + (2,))
     for i in range(Y_test.shape[0]):
-        Y_test_one_hot[i] = np.asarray(img_to_onehot_encoding(Y_test[i]))
+        Y_test_one_hot[i] = np.asarray(img_to_onehot_encoding(Y_test[i], n_classes))
     Y_test = Y_test_one_hot
 
 

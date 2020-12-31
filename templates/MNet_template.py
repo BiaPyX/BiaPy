@@ -62,7 +62,7 @@ from data_2D_manipulation import load_and_prepare_2D_data, crop_data_with_overla
                                  merge_data_with_overlap
 from sota_implementations.MNet_Fu_2018.custom_da_gen_MNet import ImageDataGenerator
 from sota_implementations.MNet_Fu_2018.MNet import MNet
-from metrics import jaccard_index_numpy, voc_calculation, DET_calculation
+from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
 from PIL import Image
@@ -71,7 +71,7 @@ from sota_implementations.MNet_Fu_2018.smooth_tiled_predictions_MNet import \
                                           predict_img_with_smooth_windowing, \
                                           ensemble8_2d_predictions  
 from tensorflow.keras.utils import plot_model
-from callbacks import ModelCheckpoint
+from aux.callbacks import ModelCheckpoint
 from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
                             boundary_refinement_watershed2
 from metrics import binary_crossentropy_weighted, jaccard_index, \
@@ -146,14 +146,6 @@ w_foreground = 0.94
 w_background = 0.06
 
 
-### Normalization
-# To normalize the data dividing by the mean pixel value
-normalize_data = False                                                          
-# Force the normalization value to the given number instead of the mean pixel 
-# value
-norm_value_forced = -1                                                          
-
-
 ### Data augmentation (DA) variables
 # To decide which type of DA implementation will be used. Select False to 
 # use Keras API provided DA, otherwise, a custom implementation will be used
@@ -169,8 +161,6 @@ shuffle_train_data_each_epoch = True
 shuffle_val_data_each_epoch = False
 
 ### Options available for Keras Data Augmentation
-# Range for random zoom
-k_zoom = 0.0
 # widtk_h_shift_range (more details in Keras ImageDataGenerator class)
 k_w_shift_r = 0.0
 # height_shift_range (more details in Keras ImageDataGenerator class)
@@ -202,13 +192,15 @@ rotation_range = 180
 vflips = True
 # To make horizontal flips
 hflips = True
+# Range for random zoom
+zoom = 0.0
 
 
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when "random_crops_in_DA"
 # is made, as more original train data can be cover
-duplicate_train = 0
-# Extra number of images to add to the train data. Applied after duplicate_train 
+replicate_train = 0
+# Extra number of images to add to the train data. Applied after replicate_train 
 extra_train_data = 0
 
 
@@ -250,25 +242,6 @@ n_classes = 1
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)
 metric = "average_jaccard_index"
-
-
-### DET metric variables
-# More info of the metric at http://celltrackingchallenge.net/evaluation-methodology/ 
-# and https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf
-# NEEDED CODE REFACTORING OF THIS VARIABLE
-det_eval_ge_path = os.path.join(args.result_dir, "..", 'cell_challenge_eval',
-                                 'gen_' + job_identifier)
-# Path where the evaluation of the metric will be done
-det_eval_path = os.path.join(args.result_dir, "..", 'cell_challenge_eval', 
-                             args.job_id, job_identifier)
-# Path where the evaluation of the metric for the post processing methods will 
-# be done
-det_eval_post_path = os.path.join(args.result_dir, "..", 'cell_challenge_eval', 
-                                  args.job_id, job_identifier + '_s')
-# Path were the binaries of the DET metric is stored
-det_bin = os.path.join(args.base_work_dir, 'cell_cha_eval' ,'Linux', 'DETMeasure')
-# Number of digits used for encoding temporal indices of the DET metric
-n_dig = "3"
 
 
 ### Paths of the results                                             
@@ -354,17 +327,6 @@ orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(
     overlap_train=ov_train, check_crop=check_crop,
     check_crop_path=check_crop_path)
 
-# Normalize the data
-if normalize_data:
-    if norm_value_forced != -1: 
-        print("Forced normalization value to {}".format(norm_value_forced))
-        norm_value = norm_value_forced
-    else:
-        print("Normalization value calculated: {}".format(norm_value))
-    X_train -= int(norm_value)
-    X_val -= int(norm_value)
-    X_test -= int(norm_value)
-    
 # Crop the data to the desired size
 if (make_crops and crops_made) or random_crops_in_DA:
     img_width = crop_shape[0]
@@ -381,10 +343,10 @@ print("###########################\n"
       "###########################\n")
 
 # Calculate the steps_per_epoch value to train in case we need to increase the 
-# train data samples by multiplying the number of images with 'duplicate_train'
-if duplicate_train != 0:
-    steps_per_epoch_value = int((duplicate_train*X_train.shape[0])/batch_size_value)
-    print("Data doubled by {} ; Steps per epoch = {}".format(duplicate_train,
+# train data samples by multiplying the number of images with 'replicate_train'
+if replicate_train != 0:
+    steps_per_epoch_value = int((replicate_train*X_train.shape[0])/batch_size_value)
+    print("Data doubled by {} ; Steps per epoch = {}".format(replicate_train,
           steps_per_epoch_value))
 else:
     steps_per_epoch_value = int(X_train.shape[0]/batch_size_value)
@@ -414,7 +376,7 @@ data_gen_args = dict(
     median_blur=median_blur, gamma_contrast=gamma_contrast,
     random_crops_in_DA=random_crops_in_DA, prob_map=probability_map, 
     train_prob=train_prob, n_classes=n_classes,
-    extra_data_factor=duplicate_train)
+    extra_data_factor=replicate_train)
 data_gen_val_args = dict(
     X=X_val, Y=Y_val, batch_size=batch_size_value, 
     shape=(img_height,img_width,img_channels), 
@@ -474,12 +436,17 @@ print("################################\n"
       "################################\n")
 
 # Prepare test data for its use
-Y_test /= 255 if np.max(Y_test) > 2 else Y_test
-X_test /= 255 if np.max(X_test) > 2 else X_test
+if np.max(Y_test) > n_classes:
+    Y_test = Y_test.astype('float32')
+    Y_test *= 1./255
+if np.max(X_test) > 2:
+    X_test = X_test.astype('float32')
+    X_test *= 1./255
+
 if n_classes > 1:
     Y_test_one_hot = np.zeros(Y_test.shape[:3] + (n_classes,))
     for i in range(Y_test.shape[0]):
-        Y_test_one_hot[i] = np.asarray(img_to_onehot_encoding(Y_test[i]))
+        Y_test_one_hot[i] = np.asarray(img_to_onehot_encoding(Y_test[i], n_classes))
     Y_test = Y_test_one_hot
 
 
@@ -536,9 +503,6 @@ print("Calculate metrics (per image) . . .")
 jac_per_image = jaccard_index_numpy(Y_test, (preds_test > 0.5).astype(np.uint8))
 voc_per_image = voc_calculation(
     Y_test, (preds_test > 0.5).astype(np.uint8), jac_per_image)
-det_per_image = DET_calculation(
-    Y_test, (preds_test > 0.5).astype(np.uint8), det_eval_ge_path, det_eval_path,
-    det_bin, n_dig, args.job_id)
 
 print("~~~~ Smooth (per image) ~~~~")
 Y_test_smooth = np.zeros(X_test.shape, dtype=np.float32)
@@ -562,9 +526,6 @@ smo_jac_per_image = jaccard_index_numpy(
     Y_test, (Y_test_smooth > 0.5).astype(np.uint8))
 smo_voc_per_image = voc_calculation(
     Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smo_jac_per_image)
-smo_det_per_image = DET_calculation(
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_post_path, det_bin, n_dig, args.job_id)
 
 print("~~~~ Z-Filtering (per image) ~~~~")
 zfil_preds_test = calculate_z_filtering(preds_test)
@@ -577,9 +538,6 @@ zfil_jac_per_image = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
 zfil_voc_per_image = voc_calculation(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_jac_per_image)
-zfil_det_per_image = DET_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_post_path, det_bin, n_dig, args.job_id)
 del zfil_preds_test, preds_test
 
 print("~~~~ Smooth + Z-Filtering (per image) ~~~~")
@@ -595,9 +553,6 @@ smo_zfil_jac_per_image = jaccard_index_numpy(
 smo_zfil_voc_per_image = voc_calculation(
     Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8),
     smo_zfil_jac_per_image)
-smo_zfil_det_per_image = DET_calculation(
-    Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8),
-    det_eval_ge_path, det_eval_post_path, det_bin, n_dig, args.job_id)
 del Y_test_smooth, smo_zfil_preds_test
 
 
@@ -628,9 +583,6 @@ print("Calculate metrics (50% overlap) . . .")
 jac_50ov = jaccard_index_numpy(Y_test, (Y_test_50ov > 0.5).astype(np.float32))
 voc_50ov = voc_calculation(
     Y_test, (Y_test_50ov > 0.5).astype(np.float32), jac_50ov)
-det_50ov = DET_calculation(
-    Y_test, (Y_test_50ov > 0.5).astype(np.float32), det_eval_ge_path,
-    det_eval_path, det_bin, n_dig, args.job_id)
 del Y_test_50ov
 
 print("~~~~ 8-Ensemble (50% overlap) ~~~~")
@@ -654,9 +606,6 @@ ens_jac_50ov = jaccard_index_numpy(
     Y_test, (Y_test_50ov_ensemble > 0.5).astype(np.float32))
 ens_voc_50ov = voc_calculation(
     Y_test, (Y_test_50ov_ensemble > 0.5).astype(np.float32), jac_50ov)
-ens_det_50ov = DET_calculation(
-    Y_test, (Y_test_50ov_ensemble > 0.5).astype(np.float32), det_eval_ge_path,
-    det_eval_path, det_bin, n_dig, args.job_id)
 
 print("~~~~ 8-Ensemble + Z-Filtering (50% overlap) ~~~~")
 zfil_preds_test = calculate_z_filtering(Y_test_50ov_ensemble)
@@ -669,9 +618,6 @@ ens_zfil_jac_50ov = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
 ens_zfil_voc_50ov = voc_calculation(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8), ens_zfil_jac_50ov)
-ens_zfil_det_50ov = DET_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_post_path, det_bin, n_dig, args.job_id)
 del Y_test_50ov_ensemble, zfil_preds_test
 
 # Merge X_test 
@@ -699,9 +645,6 @@ print("Calculate metrics (full image) . . .")
 jac_full = jaccard_index_numpy(Y_test, (preds_test_full > 0.5).astype(np.uint8))
 voc_full = voc_calculation(Y_test, (preds_test_full > 0.5).astype(np.uint8),
                            jac_full)
-det_full = DET_calculation(
-    Y_test, (preds_test_full > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_path, det_bin, n_dig, args.job_id)
 
 print("~~~~ 8-Ensemble (full image) ~~~~")
 Y_test_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
@@ -723,9 +666,6 @@ smo_jac_full = jaccard_index_numpy(
     Y_test, (Y_test_ensemble > 0.5).astype(np.uint8))
 smo_voc_full = voc_calculation(
     Y_test, (Y_test_ensemble > 0.5).astype(np.uint8), smo_jac_full)
-smo_det_full = DET_calculation(
-    Y_test, (Y_test_ensemble > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_path, det_bin, n_dig, args.job_id)
 del Y_test_ensemble
 
 print("~~~~ Z-Filtering (full image) ~~~~")
@@ -739,9 +679,6 @@ zfil_jac_full = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
 zfil_voc_full = voc_calculation(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_jac_full)
-zfil_det_full = DET_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_post_path, det_bin, n_dig, args.job_id)
 
 del zfil_preds_test
 
@@ -754,8 +691,6 @@ save_img(Y=spu_preds_test, mask_dir=spu_dir_full, prefix="test_out_spu")
 print("Calculate metrics (Spurious + full image) . . .")
 spu_jac_full = jaccard_index_numpy(Y_test, spu_preds_test)
 spu_voc_full = voc_calculation(Y_test, spu_preds_test, spu_jac_full)
-spu_det_full = DET_calculation(Y_test, spu_preds_test, det_eval_ge_path,
-                               det_eval_post_path, det_bin, n_dig, args.job_id)
 
 print("~~~~ Watershed (full image) ~~~~")
 wa_preds_test = boundary_refinement_watershed2(
@@ -770,8 +705,6 @@ save_img(Y=(wa_preds_test).astype(np.uint8), mask_dir=wa_dir_full,
 print("Calculate metrics (Watershed + full image) . . .")
 wa_jac_full = jaccard_index_numpy(Y_test, wa_preds_test)
 wa_voc_full = voc_calculation(Y_test, wa_preds_test, wa_jac_full)
-wa_det_full = DET_calculation(Y_test, wa_preds_test, det_eval_ge_path,
-                              det_eval_post_path, det_bin, n_dig, args.job_id)
 del preds_test_full, wa_preds_test
 
 print("~~~~ Spurious Detection + Watershed + Z-filtering (full image) ~~~~")
@@ -793,9 +726,6 @@ spu_wa_zfil_jac_full = jaccard_index_numpy(
 spu_wa_zfil_voc_full = voc_calculation(
     Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8),
     spu_wa_zfil_jac_full)
-spu_wa_zfil_det_full = DET_calculation(
-    Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_post_path, det_bin, n_dig, args.job_id)
 del spu_wa_zfil_preds_test, spu_preds_test
 
 
@@ -818,43 +748,30 @@ print("Test IoU (per crop): {}".format(jac_per_crop))
 
 print("Test IoU (merge into complete image): {}".format(jac_per_image))
 print("Test VOC (merge into complete image): {}".format(voc_per_image))
-print("Test DET (merge into complete image): {}".format(det_per_image))
 print("Post-process: Smooth - Test IoU (merge into complete image): {}".format(smo_jac_per_image))
 print("Post-process: Smooth - Test VOC (merge into complete image): {}".format(smo_voc_per_image))
-print("Post-process: Smooth - Test DET (merge into complete image): {}".format(smo_det_per_image))
 print("Post-process: Z-Filtering - Test IoU (merge into complete image): {}".format(zfil_jac_per_image))
 print("Post-process: Z-Filtering - Test VOC (merge into complete image): {}".format(zfil_voc_per_image))
-print("Post-process: Z-Filtering - Test DET (merge into complete image): {}".format(zfil_det_per_image))
 print("Post-process: Smooth + Z-Filtering - Test IoU (merge into complete image): {}".format(smo_zfil_jac_per_image))
 print("Post-process: Smooth + Z-Filtering - Test VOC (merge into complete image): {}".format(smo_zfil_voc_per_image))
-print("Post-process: Smooth + Z-Filtering - Test DET (merge into complete image): {}".format(smo_zfil_det_per_image))
 print("Test IoU (merge with 50% overlap): {}".format(jac_50ov))
 print("Test VOC (merge with 50% overlap): {}".format(voc_50ov))
-print("Test DET (merge with with 50% overlap): {}".format(det_50ov))
 print("Post-process: Ensemble - Test IoU (merge with 50% overlap): {}".format(ens_jac_50ov))
 print("Post-process: Ensemble - Test VOC (merge with 50% overlap): {}".format(ens_voc_50ov))
-print("Post-process: Ensemble - Test DET (merge with 50% overlap): {}".format(ens_det_50ov))
 print("Post-process: Ensemble + Z-Filtering - Test IoU (merge with 50% overlap): {}".format(ens_zfil_jac_50ov))
 print("Post-process: Ensemble + Z-Filtering - Test VOC (merge with 50% overlap): {}".format(ens_zfil_voc_50ov))
-print("Post-process: Ensemble + Z-Filtering - Test DET (merge with 50% overlap): {}".format(ens_zfil_det_50ov))
 print("Test IoU (full): {}".format(jac_full))
 print("Test VOC (full): {}".format(voc_full))
-print("Test DET (full): {}".format(det_full))
 print("Post-process: Ensemble - Test IoU (full): {}".format(smo_jac_full))
 print("Post-process: Ensemble - Test VOC (full): {}".format(smo_voc_full))
-print("Post-process: Ensemble - Test DET (full): {}".format(smo_det_full))
 print("Post-process: Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
 print("Post-process: Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
-print("Post-process: Z-Filtering - Test DET (full): {}".format(zfil_det_full))
 print("Post-process: Spurious Detection - Test IoU (full): {}".format(spu_jac_full))
 print("Post-process: Spurious Detection - VOC (full): {}".format(spu_voc_full))
-print("Post-process: Spurious Detection - DET (full): {}".format(spu_det_full))
 print("Post-process: Watershed - Test IoU (full): {}".format(wa_jac_full))
 print("Post-process: Watershed - VOC (full): {}".format(wa_voc_full))
-print("Post-process: Watershed - DET (full): {}".format(wa_det_full))
 print("Post-process: Spurious + Watershed + Z-Filtering - Test IoU (full): {}".format(spu_wa_zfil_jac_full))
 print("Post-process: Spurious + Watershed + Z-Filtering - Test VOC (full): {}".format(spu_wa_zfil_voc_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test DET (full): {}".format(spu_wa_zfil_det_full))
 
 if not load_previous_weights:
     scores = {}
@@ -863,8 +780,6 @@ if not load_previous_weights:
         or "_per_image" in name or "_full" in name):
             scores[name] = eval(name)
 
-    store_history(results, scores, time_callback, args.result_dir, job_identifier, 
-                  metric=metric)
     create_plots(results, job_identifier, char_dir, metric=metric)
 
 print("FINISHED JOB {} !!".format(job_identifier))
