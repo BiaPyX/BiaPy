@@ -168,7 +168,7 @@ replicate_train = 0
 ### Load previously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
-load_previous_weights = True
+load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
 # Prefix of the files where the weights are stored/loaded from
@@ -184,7 +184,7 @@ batch_size_value = 2
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "adam"
 # Learning rate used by the optimization method
-learning_rate_value = 0.0005
+learning_rate_value = 0.0001
 # Number of epochs to train the network
 epochs_value = 100
 # Number of epochs to stop the training process after no improvement
