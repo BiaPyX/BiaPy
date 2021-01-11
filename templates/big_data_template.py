@@ -169,10 +169,6 @@ flips = True
 load_previous_weights = False
 # ID of the previous experiment to load the weigths from
 previous_job_weights = args.job_id
-# Flag to activate the fine tunning
-fine_tunning = False
-# ID of the previous weigths to load the weigths from to make the fine tunning
-fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.c_human_'
 
@@ -331,8 +327,8 @@ print("###################\n#  TRAIN PROCESS  #\n###################\n")
 print("Creating the network . . .")
 model = U_Net(img_train_shape, numInitChannels=num_init_channels, 
               fixed_dropout=fixed_dropout_value, spatial_dropout=spatial_dropout,
-              loss_type=loss_type, optimizer=optimizer, lr=learning_rate_value,
-              fine_tunning=fine_tunning)
+              loss_type=loss_type, optimizer=optimizer, lr=learning_rate_value)
+              
 
 # Check the network created
 model.summary(line_length=150)
@@ -341,13 +337,6 @@ model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
-    if fine_tunning == True:
-        h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths
-                                     + '_' + args.run_id + '.h5')
-        print("Fine-tunning: loading model weights from h5_file: {}"
-              .format(h5_file))
-        model.load_weights(h5_file)
-
     results = model.fit_generator(
         train_generator, validation_data=val_generator,
         validation_steps=math.ceil(n_val_samples/batch_size_value),

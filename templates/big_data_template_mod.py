@@ -174,10 +174,6 @@ flips = True
 load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
-# Flag to activate the fine tunning
-fine_tunning = False
-# ID of the previous weigths to load the weigths from to make the fine tunning 
-fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.c_human_'
 # Wheter to find the best learning rate plot. If this options is selected the
@@ -339,9 +335,6 @@ print("###################\n"
 
 check_binary_masks(train_mask_path)
 check_binary_masks(test_mask_path)
-if extra_datasets_mask_list: 
-    for i in range(len(extra_datasets_mask_list)):
-        check_binary_masks(extra_datasets_mask_list[i])
 
 
 print("#######################\n"
@@ -383,7 +376,7 @@ model = U_Net_2D([img_height, img_width, img_channels], activation=activation,
                  drop_values=dropout_values, spatial_dropout=spatial_dropout,
                  batch_norm=batch_normalization, k_init=kernel_init,
                  loss_type=loss_type, optimizer=optimizer, 
-                 lr=learning_rate_value, fine_tunning=fine_tunning)
+                 lr=learning_rate_value)
 
 # Check the network created
 model.summary(line_length=150)
@@ -392,13 +385,6 @@ model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 if load_previous_weights == False:
-    if fine_tunning:                                                    
-        h5_file=os.path.join(h5_dir, weight_files_prefix + fine_tunning_weigths 
-                             + '_' + args.run_id + '.h5')     
-        print("Fine-tunning: loading model weights from h5_file: {}"
-              .format(h5_file))
-        model.load_weights(h5_file)                                             
-   
     if use_LRFinder:
         print("Training just for 10 epochs . . .")
         results = model.fit_generator(
