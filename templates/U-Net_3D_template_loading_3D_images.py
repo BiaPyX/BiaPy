@@ -58,7 +58,7 @@ import numpy as np
 import math
 import time
 import tensorflow as tf
-from data_3D_manipulation2 import load_and_prepare_3D_data_v2,\
+from data_3D_manipulation import load_and_prepare_3D_data_v2,\
                                  merge_3D_data_with_overlap, \
                                  crop_3D_data_with_overlap
 from generators.data_3D_generators import VoxelDataGenerator
@@ -74,6 +74,7 @@ from tensorflow.keras.utils import plot_model
 from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
                             boundary_refinement_watershed2, \
                             ensemble16_3d_predictions
+from skimage.io import imsave
 
 
 ############
@@ -167,7 +168,7 @@ replicate_train = 0
 ### Load previously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
-load_previous_weights = False
+load_previous_weights = True
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
 # Prefix of the files where the weights are stored/loaded from
@@ -183,7 +184,7 @@ batch_size_value = 2
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "adam"
 # Learning rate used by the optimization method
-learning_rate_value = 0.0001
+learning_rate_value = 0.0005
 # Number of epochs to train the network
 epochs_value = 100
 # Number of epochs to stop the training process after no improvement
@@ -296,13 +297,21 @@ print("###############\n"
 
 X_train, Y_train, X_val,\
 Y_val, X_test, Y_test,\
-orig_test_shape, norm_value = load_and_prepare_3D_data_v2(
+orig_test_shape, crop_test_shapes, norm_value = load_and_prepare_3D_data_v2(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
     img_test_shape, val_split=perc_used_as_val, create_val=True,
     shuffle_val=random_val_data, random_subvolumes_in_DA=random_subvolumes_in_DA,
     test_subvol_shape=test_3d_desired_shape,
-    train_subvol_shape=train_3d_desired_shape, use_rest_train=use_rest_train,
-    overlap_train=ov_train, ov=overlap)
+    train_subvol_shape=train_3d_desired_shape, ov=overlap)
+
+#print("{} {} {}".format(X_train.shape, np.min(X_train), np.max(X_train)))
+#print("{} {} {}".format(Y_train.shape, np.min(Y_train), np.max(Y_train)))
+#print("{}".format(X_train.dtype))
+#from skimage.io import imsave
+#imsave(os.path.join(result_dir, 'a.tiff'), X_train[0].transpose(2,0,1,3))
+#save_img(X=X_train, data_dir=os.path.join(result_dir, 'X_train'), Y=Y_train, mask_dir=os.path.join(result_dir, 'Y_train'))
+#save_img(X=X_val, data_dir=os.path.join(result_dir, 'X_val'), Y=Y_val, mask_dir=os.path.join(result_dir, 'Y_val'))
+#save_img(X=X_test, data_dir=os.path.join(result_dir, 'X_test'), Y=Y_test, mask_dir=os.path.join(result_dir, 'Y_test'))
 
 # Instance segmentation to binary mask
 Y_train[Y_train>=1] = 1
@@ -432,35 +441,48 @@ print("#############################################\n"
       "#  Metrics (per image, merging subvolumes)  #\n"
       "#############################################\n")
 
-# Merge the volumes and convert them into 2D data                               
-_preds_test = None
-_Y_test = None
-for i in tqdm(range(preds_test.shape[0])):
-    r_preds_test, r_Y_test = merge_3D_data_with_overlap(
-        preds_test[i], orig_test_shape, data_mask=Y_test[i], overlap=overlap, verbose=False)
+# Merge the volumes to the original 3D images 
+jac = 0
+voc = 0
+index = 0
+for i in tqdm(range(len(orig_test_shape))):
+    original_3d_shape = orig_test_shape[i]
+    crop_3d_shape = crop_test_shapes[i]
+    
+    print("Original shape is {}".format(original_3d_shape))
+    orig_preds_test, orig_Y_test = merge_3D_data_with_overlap(
+        preds_test[index:index+crop_3d_shape[0]], original_3d_shape, 
+        data_mask=Y_test[index:index+crop_3d_shape[0]], overlap=overlap, 
+        verbose=True)
 
-    if _preds_test is None:
-        _preds_test = r_preds_test
-        _Y_test = r_Y_test
-    else:
-        _preds_test = np.concatenate((_preds_test,r_preds_test))
-        _Y_test = np.concatenate((_Y_test,r_Y_test))
-preds_test = _preds_test
-Y_test = _Y_test
-del _preds_test, _Y_test, r_preds_test, r_Y_test
+    print("Saving predicted images . . .")                                          
+    os.makedirs(result_bin_dir_per_image, exist_ok=True)
+    imsave(os.path.join(result_bin_dir_per_image, str(i)+'.tiff'),
+           (orig_preds_test> 0.5).astype(np.uint8))
+    os.makedirs(result_no_bin_dir_per_image, exist_ok=True)
+    imsave(os.path.join(result_no_bin_dir_per_image, str(i)+'.tiff'), 
+           orig_preds_test)
+                                                                                    
+    print("Calculate the Jaccard of the image 3D")
+    j = jaccard_index_numpy(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8))
+    v = voc_calculation(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8), j)
+    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
+    jac += j
+    voc += v
 
-print("Saving predicted images . . .")                                          
-save_img(Y=(preds_test > 0.5).astype(np.uint8), 
-         mask_dir=result_bin_dir_per_image, prefix="test_out_bin")                                                 
-save_img(Y=preds_test, mask_dir=result_no_bin_dir_per_image, 
-         prefix="test_out_no_bin")     
-                                                                                
+    index += crop_3d_shape[0]
+del orig_preds_test, orig_Y_test
+
 print("Calculate metrics (per image) . . .")                                                
-jac_per_image = jaccard_index_numpy(                                        
-    Y_test, (preds_test > 0.5).astype(np.uint8))                                 
-voc_per_image = voc_calculation(                                            
-    Y_test, (preds_test > 0.5).astype(np.uint8), jac_per_image)              
+jac_per_image = jac/preds_test.shape[0]
+voc_per_image = voc/preds_test.shape[0]
 det_per_image = -1
+
+print("jac_per_image: {}".format(jac_per_image))
+print("voc_per_image: {}".format(voc_per_image))
+import sys
+print("YAAA")
+sys.exit(0)
 
 print("~~~~ 16-Ensemble (per image) ~~~~")                                     
 Y_test_smooth = np.zeros(X_test.shape, dtype=np.float32)                        
@@ -470,118 +492,129 @@ for i in tqdm(range(X_test.shape[0])):
         n_classes=n_classes, last_class=last_class)   
     Y_test_smooth[i] = predictions_smooth
                                                                                 
-# Merge the volumes and convert them into the original data shape
-_Y_test_smooth = None
-for i in tqdm(range(preds_test.shape[0])):
-    r_Y_test_smooth = merge_3D_data_with_overlap(
-        Y_test_smooth[i], orig_test_shape, overlap=overlap, verbose=False)
+# Merge the volumes to the original 3D images
+jac = 0
+voc = 0
+jac_z = 0
+voc_z = 0
+jac_s_z = 0
+voc_s_z = 0
+index = 0
+for i in tqdm(range(len(orig_test_shape))):
+    original_3d_shape = orig_test_shape[i]
+    crop_3d_shape = crop_test_shapes[i]    
 
-    if _Y_test_smooth is None:
-        _Y_test_smooth = r_Y_test_smooth
-    else:
-        _Y_test_smooth = np.concatenate((_Y_test_smooth,r_Y_test_smooth))
-Y_test_smooth = _Y_test_smooth
-del _Y_test_smooth, r_Y_test_smooth
+    orig_preds_test, orig_Y_test = merge_3D_data_with_overlap(
+        Y_test_smooth[index:index+crop_3d_shape[0]], original_3d_shape,
+        data_mask=Y_test[index:index+crop_3d_shape[0]],
+        overlap=overlap, verbose=False)
 
-print("Saving smooth predicted images . . .")                                   
-save_img(Y=Y_test_smooth, mask_dir=smo_no_bin_dir_per_image,
-         prefix="test_out_smo_no_bin")                                       
-save_img(Y=(Y_test_smooth > 0.5).astype(np.uint8), 
-         mask_dir=smo_bin_dir_per_image, prefix="test_out_smo")                                              
-                                                                                
-print("Calculate metrics (smooth + per subvolume). . .")                        
-smo_jac_per_image = jaccard_index_numpy(                                  
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8))                             
-smo_voc_per_image = voc_calculation(                                        
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smo_jac_per_image)    
+    print("Saving predicted images . . .")
+    os.makedirs(smo_no_bin_dir_per_image, exist_ok=True)
+    imsave(os.path.join(smo_no_bin_dir_per_image, str(i)+'.tiff'),
+           (orig_preds_test> 0.5).astype(np.uint8))
+    os.makedirs(smo_bin_dir_per_image, exist_ok=True)
+    imsave(os.path.join(smo_bin_dir_per_image, str(i)+'.tiff'),
+           orig_preds_test)
 
-print("~~~~ Z-Filtering (per image) ~~~~")                                      
-zfil_preds_test = calculate_z_filtering(preds_test)                             
+    print("Calculate metrics (smooth + per subvolume). . .")
+    j = jaccard_index_numpy(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8))
+    v = voc_calculation(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8), j)
+    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
+    jac += j
+    voc += v
+
+    print("~~~~ Z-Filtering (per image) ~~~~")
+    zfil_preds_test = calculate_z_filtering(orig_preds_test)
+
+    print("Saving Z-filtered images . . .")
+    os.makedirs(zfil_dir_per_image, exist_ok=True)
+    imsave(os.path.join(zfil_dir_per_image, str(i)+'.tiff'),
+           (zfil_preds_test> 0.5).astype(np.uint8))
+
+    print("Calculate metrics (Z-filtering + per crop) . . .")
+    j = jaccard_index_numpy(orig_Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
+    v = voc_calculation(orig_Y_test, (zfil_preds_test > 0.5).astype(np.uint8), j)
+    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
+    jac_z += j
+    voc_z += v
+
+    print("~~~~ Smooth + Z-Filtering (per subvolume) ~~~~")
+    smo_zfil_preds_test = calculate_z_filtering(orig_preds_test)
+    
+    print("Saving smoothed + Z-filtered images . . .")
+    os.makedirs(smo_zfil_dir_per_image, exist_ok=True)
+    imsave(os.path.join(smo_zfil_dir_per_image, str(i)+'.tiff'),
+           (smo_zfil_preds_test > 0.5).astype(np.uint8))
+
+    print("Calculate metrics (Smooth + Z-filtering per crop) . . .")
+    j = jaccard_index_numpy(orig_Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8))
+    v = voc_calculation(orig_Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8), j)
+    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
+    jac_s_z += j
+    voc_s_z += v
+
+    index += crop_3d_shape[0]
+del orig_preds_test, orig_Y_test, zfil_preds_test, smo_zfil_preds_test
+
+smo_jac_per_image = jac/preds_test.shape[0]
+smo_voc_per_image = voc/preds_test.shape[0]
                                                                                 
-print("Saving Z-filtered images . . .")                                         
-save_img(Y=zfil_preds_test, mask_dir=zfil_dir_per_image, 
-         prefix="test_out_zfil")
+zfil_jac_per_image = jac_z/preds_test.shape[0]
+zfil_voc_per_image = voc_z/preds_test.shape[0]
                                                                                 
-print("Calculate metrics (Z-filtering + per crop) . . .")                       
-zfil_jac_per_image = jaccard_index_numpy(                                     
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8))                           
-zfil_voc_per_image = voc_calculation(                                           
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_jac_per_image)     
-del zfil_preds_test
-                                                                                
-print("~~~~ Smooth + Z-Filtering (per subvolume) ~~~~")                             
-smo_zfil_preds_test = calculate_z_filtering(Y_test_smooth)                      
-                                                                                
-print("Saving smoothed + Z-filtered images . . .")                              
-save_img(Y=smo_zfil_preds_test, mask_dir=smo_zfil_dir_per_image,                
-         prefix="test_out_smoo_zfil")                                           
-                                                                                
-print("Calculate metrics (Smooth + Z-filtering per crop) . . .")                
-smo_zfil_jac_per_image = jaccard_index_numpy(                                 
-    Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8))                       
-smo_zfil_voc_per_image = voc_calculation(                                       
-    Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8),                       
-    smo_zfil_jac_per_image)                                                   
-del Y_test_smooth, smo_zfil_preds_test                                          
+smo_zfil_jac_per_image = jac_s_z/preds_test.shape[0]
+smo_zfil_voc_per_image = voc_s_z/preds_test.shape[0]
                                         
 
 print("############################################################\n"
       "#  Metrics (per image, merging crops with 50% of overlap)  #\n"
       "############################################################\n")
 
-print("Merge X_test to crop it again with 50% overlap and make the prediction")
-_X_test = None
-for i in tqdm(range(preds_test.shape[0])):
-    r_X_test = merge_3D_data_with_overlap(
-        X_test[i], orig_test_shape, overlap=overlap, verbose=False)
-    
-    if _X_test is None:
-        _X_test = r_X_test
-    else:
-        _X_test = np.concatenate((_X_test,r_X_test))
-X_test = _X_test
+jac = 0
+voc = 0
+index = 0
+for i in tqdm(range(len(orig_test_shape))):
+    original_3d_shape = orig_test_shape[i]
+    crop_3d_shape = crop_test_shapes[i]    
 
-# Crop again with 50% of overlap
-for i in tqdm(range(preds_test.shape[0])):
-    r_X_test = crop_3D_data_with_overlap(
-        X_test[i], test_3d_desired_shape, overlap=(0.5,0.5,0.5), verbose=False)
+    orig_X_test = merge_3D_data_with_overlap(
+        X_test[index:index+crop_3d_shape[0]], original_3d_shape,
+        overlap=overlap, verbose=False)
 
-    if _X_test is None:
-        _X_test = r_X_test
-    else:
-        _X_test = np.concatenate((_X_test,r_X_test))
-X_test = _X_test
-del _X_test, r_X_test
+    orig_X_test = crop_3D_data_with_overlap(
+        orig_X_test, test_3d_desired_shape, overlap=(0.5,0.5,0.5), verbose=False)
 
-Y_test_50ov = model.predict(X_test, batch_size=batch_size_value, verbose=1) 
-# Take only the foreground class                                                
-if n_classes > 1:                                                               
-    Y_test_50ov = np.expand_dims(Y_test_50ov[...,1], -1)                          
+    Y_test_50ov = model.predict(orig_X_test, batch_size=batch_size_value, verbose=1) 
+
+    # Take only the foreground class                                                
+    if n_classes > 1:                                                               
+        Y_test_50ov = np.expand_dims(Y_test_50ov[...,1], -1)                          
  
-_Y_test_50ov = None
-for i in tqdm(range(preds_test.shape[0])):
-    r_Y_test_50ov = merge_3D_data_with_overlap(
-        Y_test_50ov[i], orig_test_shape, overlap=(0.5,0.5,0.5), verbose=False)
+    Y_test_50ov = merge_3D_data_with_overlap(
+        Y_test_50ov, original_3d_shape, overlap=(0.5,0.5,0.5), verbose=False)
 
-    if _Y_test_50ov is None:
-        _Y_test_50ov = r_Y_test_50ov
-    else:
-        _Y_test_50ov = np.concatenate((_Y_test_50ov,r_Y_test_50ov))
-Y_test_50ov = _Y_test_50ov
-del _Y_test_50ov, r_Y_test_50ov
+    print("Saving 50% overlap predicted images . . .")
+    os.makedirs(result_bin_dir_50ov, exist_ok=True)
+    imsave(os.path.join(result_bin_dir_50ov, str(i)+'.tiff'),
+           (Y_test_50ov> 0.5).astype(np.uint8))
+    os.makedirs(result_no_bin_dir_50ov, exist_ok=True)
+    imsave(os.path.join(result_no_bin_dir_50ov, str(i)+'.tiff'), Y_test_50ov)
 
-print("Saving 50% overlap predicted images . . .")                          
-save_img(Y=(Y_test_50ov > 0.5).astype(np.float32),                          
-         mask_dir=result_bin_dir_50ov, prefix="test_out_bin_50ov")          
-save_img(Y=Y_test_50ov, mask_dir=result_no_bin_dir_50ov,                    
-         prefix="test_out_no_bin_50ov")                                     
-                                                                            
-print("Calculate metrics (50% overlap) . . .")                              
-jac_50ov = jaccard_index_numpy(Y_test, (Y_test_50ov > 0.5).astype(np.float32))
-voc_50ov = voc_calculation(                                                 
-    Y_test, (Y_test_50ov > 0.5).astype(np.float32), jac_50ov)               
+    print("Calculate metrics (50% overlap) . . .")
+    j = jaccard_index_numpy(orig_Y_test, (Y_test_50ov > 0.5).astype(np.uint8))
+    v = voc_calculation(orig_Y_test, (Y_test_50ov > 0.5).astype(np.uint8), j)
+    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
+    jac += j
+    voc += v
+
+    index += crop_3d_shape[0]
+
+del orig_X_test, Y_test_50ov
+
+jac_50ov = j/preds_test.shape[0]
+voc_50ov = v/preds_test.shape[0]
 det_50ov = -1                                                               
-del Y_test_50ov     
 
 print("~~~~ 16-Ensemble ~~~~")                                      
 Y_test_50ov_ensemble = np.zeros(X_test.shape, dtype=np.float32)                        
@@ -591,42 +624,54 @@ for i in tqdm(range(X_test.shape[0])):
         n_classes=n_classes, last_class=last_class)                                                    
     Y_test_50ov_ensemble[i] = predictions_ensembled
 
-_Y_test_50ov_ensemble = None
-for i in tqdm(range(preds_test.shape[0])):
-    r_Y_test_50ov_ensemble = merge_3D_data_with_overlap(
-        Y_test_50ov_ensemble[i], orig_test_shape, overlap=(0.5,0.5,0.5), verbose=False)
+jac = 0
+voc = 0
+jac_z = 0
+voc_z = 0
+index = 0
+for i in tqdm(range(len(orig_test_shape))):
+    original_3d_shape = orig_test_shape[i]
+    crop_3d_shape = crop_test_shapes[i]    
 
-    if _Y_test_50ov_ensemble is None:
-        _Y_test_50ov_ensemble = r_Y_test_50ov_ensemble
-    else:
-        _Y_test_50ov_ensemble = np.concatenate((_Y_test_50ov_ensemble,r_Y_test_50ov_ensemble))
-Y_test_50ov_ensemble = _Y_test_50ov_ensemble
-del _Y_test_50ov_ensemble, r_Y_test_50ov_ensemble
+    orig_preds_test, orig_Y_test = merge_3D_data_with_overlap(
+        Y_test_50ov_ensemble[index:index+crop_3d_shape[0]], original_3d_shape,
+        data_mask=Y_test[index:index+crop_3d_shape[0]],
+        overlap=overlap, verbose=False)
 
-print("Saving 50% overlap predicted images . . .")
-save_img(Y=(Y_test_50ov_ensemble > 0.5).astype(np.float32),
-         mask_dir=ens_bin_dir_50ov, prefix="test_out_bin_50ov")
-save_img(Y=Y_test_50ov_ensemble, mask_dir=ens_no_bin_dir_50ov,
-         prefix="test_out_no_bin_50ov")
+    print("Saving 50% overlap predicted images . . .")
+    imsave(os.path.join(ens_bin_dir_50ov, str(i)+'.tiff'),
+           (orig_preds_test> 0.5).astype(np.uint8))
+    imsave(os.path.join(ens_no_bin_dir_50ov, str(i)+'.tiff'),
+           orig_preds_test)
 
-print("Calculate metrics (50% overlap) . . .")
-ens_jac_50ov = jaccard_index_numpy(
-    Y_test, (Y_test_50ov_ensemble > 0.5).astype(np.float32))
-ens_voc_50ov = voc_calculation(
-    Y_test, (Y_test_50ov_ensemble > 0.5).astype(np.float32), ens_jac_50ov)
+    print("Calculate metrics (50% overlap) . . .")
+    j = jaccard_index_numpy(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8))
+    v = voc_calculation(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8), j)
+    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
+    jac += j
+    voc += v
 
-print("~~~~ Z-Filtering (50% overlap) ~~~~")
-zfil_preds_test = calculate_z_filtering(Y_test_50ov_ensemble)
+    print("~~~~ Z-Filtering (50% overlap) ~~~~")
+    zfil_preds_test = calculate_z_filtering(orig_preds_test)
+    
+    print("Saving Z-filtered images . . .")
+    imsave(os.path.join(ens_zfil_dir_50ov, str(i)+'.tiff'), zfil_preds_test)
 
-print("Saving Z-filtered images . . .")
-save_img(Y=zfil_preds_test, mask_dir=ens_zfil_dir_50ov, prefix="test_out_zfil")
+    print("Calculate metrics (Z-filtering + 50% overlap) . . .")
+    j = jaccard_index_numpy(orig_Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
+    v = voc_calculation(orig_Y_test, (zfil_preds_test > 0.5).astype(np.uint8), j)
+    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
+    jac_z += j
+    voc_z += v
 
-print("Calculate metrics (Z-filtering + 50% overlap) . . .")
-ens_zfil_jac_50ov = jaccard_index_numpy(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
-ens_zfil_voc_50ov = voc_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), ens_zfil_jac_50ov)
-del Y_test_50ov_ensemble, zfil_preds_test
+    index += original_3d_shape[0]
+del orig_preds_test, orig_Y_test, zfil_preds_test
+
+ens_jac_50ov = jac/preds_test.shape[0]
+ens_voc_50ov = voc/preds_test.shape[0]
+
+ens_zfil_jac_50ov = jac_z/preds_test.shape[0]
+ens_zfil_voc_50ov = voc_z/preds_test.shape[0]
 
 
 print("########################\n"
@@ -643,52 +688,14 @@ smo_voc_full = -1
 zfil_jac_full = -1
 zfil_voc_full = -1
 
-print("~~~~ Spurious Detection (full image) ~~~~")
-spu_preds_test = spuriuous_detection_filter(preds_test)
-
-print("Saving spurious detection filtering resulting images . . .")
-save_img(Y=spu_preds_test, mask_dir=spu_dir_full, prefix="test_out_spu")
-
-print("Calculate metrics (Spurious + full image) . . .")
-spu_jac_full = jaccard_index_numpy(Y_test, spu_preds_test)
-spu_voc_full = voc_calculation(Y_test, spu_preds_test, spu_jac_full)
+spu_jac_full = -1
+spu_voc_full = -1
               
-print("~~~~ Watershed (full image) ~~~~")
-wa_preds_test = boundary_refinement_watershed2(
-    preds_test, (preds_test > 0.5).astype(np.uint8),
-    save_marks_dir=wa_debug_dir_full)
-    #X_test, (preds_test> 0.5).astype(np.uint8), save_marks_dir=watershed_debug_dir)
+wa_jac_full = -1
+wa_voc_full = -1
 
-print("Saving watershed resulting images . . .")
-save_img(Y=(wa_preds_test).astype(np.uint8), mask_dir=wa_dir_full,
-         prefix="test_out_wa")
-
-print("Calculate metrics (Watershed + full image) . . .")
-wa_jac_full = jaccard_index_numpy(Y_test, wa_preds_test)
-wa_voc_full = voc_calculation(Y_test, wa_preds_test, wa_jac_full)
-del preds_test, wa_preds_test
-
-print("~~~~ Spurious Detection + Watershed + Z-filtering (full image) ~~~~")
-# Use spu_preds_test
-spu_wa_zfil_preds_test = boundary_refinement_watershed2(
-    spu_preds_test, (spu_preds_test> 0.5).astype(np.uint8),
-    save_marks_dir=spu_wa_zfil_wa_debug_dir)
-    #X_test, (preds_test> 0.5).astype(np.uint8), save_marks_dir=watershed_debug_dir)
-
-spu_wa_zfil_preds_test = calculate_z_filtering(spu_wa_zfil_preds_test)
-
-print("Saving Z-filtered images . . .")
-save_img(Y=spu_wa_zfil_preds_test, mask_dir=spu_wa_zfil_dir_full,
-         prefix="test_out_spu_wa_zfil")
-
-print("Calculate metrics (Z-filtering + full image) . . .")
-spu_wa_zfil_jac_full = jaccard_index_numpy(
-    Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8))
-spu_wa_zfil_voc_full = voc_calculation(
-    Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8),
-    spu_wa_zfil_jac_full)
-del spu_wa_zfil_preds_test, spu_preds_test
-
+spu_wa_zfil_jac_full = -1
+spu_wa_zfil_voc_full = -1
 
 print("####################################\n"
       "#  PRINT AND SAVE SCORES OBTAINED  #\n"
