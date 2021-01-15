@@ -103,10 +103,10 @@ train_mask_path = os.path.join(args.data_dir, 'train', 'y')
 test_path = os.path.join(args.data_dir, 'test', 'x')
 test_mask_path = os.path.join(args.data_dir, 'test', 'y')
 # Percentage of the training data used as validation                            
-perc_used_as_val = 0
+perc_used_as_val = 0.1
 # Create the validation data with random images of the training data. If False
 # the validation data will be the last portion of training images.
-random_val_data = False
+random_val_data = True
 
 
 ### Data shape
@@ -163,7 +163,7 @@ w_background = 0.06 # Only active with probability_map
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when 
 # "random_subvolumes_in_DA" is made, as more original train data can be cover
-replicate_train = 12
+replicate_train = 0
 
 
 ### Load previously generated model weigths
@@ -187,9 +187,9 @@ optimizer = "adam"
 # Learning rate used by the optimization method
 learning_rate_value = 0.0001
 # Number of epochs to train the network
-epochs_value = 130
+epochs_value = 250
 # Number of epochs to stop the training process after no improvement
-patience = 50
+patience = 30
 
 
 ### Network architecture specific parameters
@@ -261,16 +261,16 @@ prob_map_dir = os.path.join(args.result_dir, 'prob_map')
 
 
 ### Callbacks
-# To measure the time                                                           
-time_callback = TimeHistory()                                                   
-# Stop early and restore the best model weights when finished the training      
-earlystopper = EarlyStopping(                                                   
-    monitor='loss', patience=patience, verbose=1, restore_best_weights=True)                    
-# Save the best model into a h5 file in case one need again the weights learned 
-os.makedirs(h5_dir, exist_ok=True)                                              
-checkpointer = ModelCheckpoint(                                                 
-    os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),         
-    monitor='loss', verbose=1, save_best_only=True)    
+# To measure the time
+time_callback = TimeHistory()
+# Stop early and restore the best model weights when finished the training
+earlystopper = EarlyStopping(
+    patience=patience, verbose=1, restore_best_weights=True)
+# Save the best model into a h5 file in case one need again the weights learned
+os.makedirs(h5_dir, exist_ok=True)
+checkpointer = ModelCheckpoint(
+    os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
+    verbose=1, save_best_only=True)
 
 
 print("###################\n"
@@ -285,16 +285,15 @@ print("###############\n"
       "#  LOAD DATA  #\n"
       "###############\n")
 
-X_train, Y_train,\
-X_test, Y_test,\
+X_train, Y_train, X_val,\
+Y_val, X_test, Y_test,\
 orig_test_shape, norm_value = load_and_prepare_3D_data(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
-    img_test_shape, val_split=perc_used_as_val, create_val=False,
+    img_test_shape, val_split=perc_used_as_val, create_val=True,
     shuffle_val=random_val_data, random_subvolumes_in_DA=random_subvolumes_in_DA,
     test_subvol_shape=test_3d_desired_shape,
     train_subvol_shape=train_3d_desired_shape, use_rest_train=use_rest_train,
     overlap_train=ov_train, ov=overlap)
-
 
 print("###########################\n"
       "#  EXTRA DATA GENERATION  #\n"
@@ -323,6 +322,14 @@ if probability_map == True:
         train_prob = calculate_3D_volume_prob_map(
             Y_train, w_foreground, w_background, save_file=prob_map_file)
 
+print("Preparing validation data generator . . .")
+val_generator = VoxelDataGenerator(
+    X_val, Y_val, random_subvolumes_in_DA=random_subvolumes_in_DA,
+    subvol_shape=train_3d_desired_shape,
+    shuffle_each_epoch=shuffle_val_data_each_epoch, batch_size=batch_size_value,
+    da=False, n_classes=n_classes, val=True)
+del X_val, Y_val
+ 
 print("Preparing train data generator . . .")
 train_generator = VoxelDataGenerator(                                           
     X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,          
@@ -363,11 +370,12 @@ model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights     
-                                 + '_' + str(args.run_id) + '.h5')
+                     + '_' + str(args.run_id) + '.h5')
 if load_previous_weights == False:
-    results = model.fit(x=train_generator, steps_per_epoch=steps_per_epoch_value, 
-        epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback])
-    model.save(h5_file)
+    results = model.fit(x=train_generator, validation_data=val_generator,
+        validation_steps=len(val_generator), 
+        steps_per_epoch=steps_per_epoch_value, epochs=epochs_value,
+        callbacks=[earlystopper, checkpointer, time_callback])
 
 print("Loading model weights from h5_file: {}".format(h5_file))
 model.load_weights(h5_file)
@@ -612,10 +620,13 @@ print("####################################\n"
       "####################################\n")
 
 if load_previous_weights == False:
-    print("Epoch average time: {}".format(np.mean(time_callback.times)))
-    print("Train time (s): {}".format(np.sum(time_callback.times)))
-    print("Train loss: {}".format(np.min(results.history['loss'])))
-    print("Train IoU: {}".format(np.max(results.history[metric])))
+    print("Epoch average time: {}".format(np.mean(time_callback.times)))        
+    print("Epoch number: {}".format(len(results.history['val_loss'])))          
+    print("Train time (s): {}".format(np.sum(time_callback.times)))             
+    print("Train loss: {}".format(np.min(results.history['loss'])))             
+    print("Train IoU: {}".format(np.max(results.history[metric])))              
+    print("Validation loss: {}".format(np.min(results.history['val_loss'])))    
+    print("Validation IoU: {}".format(np.max(results.history['val_'+metric])))  
 
 print("Test loss: {}".format(loss_per_crop))
 print("Test IoU (per crop): {}".format(jac_per_crop))

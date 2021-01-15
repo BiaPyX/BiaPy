@@ -103,10 +103,10 @@ train_mask_path = os.path.join(args.data_dir, 'train', 'y')
 test_path = os.path.join(args.data_dir, 'test', 'x')
 test_mask_path = os.path.join(args.data_dir, 'test', 'y')
 # Percentage of the training data used as validation                            
-perc_used_as_val = 0
+perc_used_as_val = 0.1
 # Create the validation data with random images of the training data. If False
 # the validation data will be the last portion of training images.
-random_val_data = False
+random_val_data = True
 
 
 ### Data shape
@@ -151,11 +151,11 @@ g_blur = False
 # Gamma contrast 
 gamma_contrast = False
 # Flag to extract random subvolumnes during the DA
-random_subvolumes_in_DA = True
+random_subvolumes_in_DA = False
 # Calculate probability map to make random subvolumes to be extracted with high
 # probability of having a mitochondria on the middle of it. Useful to avoid
 # extracting a subvolume which less mitochondria information.
-probability_map = True # Only active with random_subvolumes_in_DA
+probability_map = False # Only active with random_subvolumes_in_DA
 w_foreground = 0.94 # Only active with probability_map
 w_background = 0.06 # Only active with probability_map
 
@@ -163,7 +163,7 @@ w_background = 0.06 # Only active with probability_map
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when 
 # "random_subvolumes_in_DA" is made, as more original train data can be cover
-replicate_train = 3
+replicate_train = 0
 
 
 ### Load previously generated model weigths
@@ -204,6 +204,10 @@ n_classes = 2
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)              
 metric = "jaccard_index_softmax" if n_classes > 1 else "jaccard_index" 
+# To take only the last class of the predictions, which corresponds to the
+# foreground in a binary problem. If n_classes > 2 this should be disabled to
+# ensure all classes are preserved
+last_class = True if n_classes <= 2 else False
 
 
 ### Paths of the results                                             
@@ -262,14 +266,20 @@ time_callback = TimeHistory()
 # Stop early and restore the best model weights when finished the training
 earlystopper = EarlyStopping(
     patience=patience, verbose=1, restore_best_weights=True)
-# Define lr decay as in the paper                                               
-def scheduler(epoch, lr):                                                       
+# Define lr decay as in the paper
+def scheduler(epoch, lr):
     # 50% and 75% of the training
-    if epoch == 272 or epoch == 408:                                                
-        return lr*0.1                                                           
-    else:                                                                       
-        return lr                                                               
-lr_callback = tf.keras.callbacks.LearningRateScheduler(scheduler, verbose=1)  
+    if epoch == 272 or epoch == 408:
+        return lr*0.1
+    else:
+        return lr
+lr_callback = tf.keras.callbacks.LearningRateScheduler(scheduler, verbose=1)
+# Save the best model into a h5 file in case one need again the weights learned
+os.makedirs(h5_dir, exist_ok=True)
+checkpointer = ModelCheckpoint(
+    os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
+    verbose=1, save_best_only=True)
+
 
 print("###################\n"
       "#  SANITY CHECKS  #\n"
@@ -283,11 +293,11 @@ print("###############\n"
       "#  LOAD DATA  #\n"
       "###############\n")
 
-X_train, Y_train,\
-X_test, Y_test,\
+X_train, Y_train, X_val,\
+Y_val, X_test, Y_test,\
 orig_test_shape, norm_value = load_and_prepare_3D_data(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
-    img_test_shape, val_split=perc_used_as_val, create_val=False,
+    img_test_shape, val_split=perc_used_as_val, create_val=True,
     shuffle_val=random_val_data, random_subvolumes_in_DA=random_subvolumes_in_DA,
     test_subvol_shape=test_3d_desired_shape,
     train_subvol_shape=train_3d_desired_shape, use_rest_train=use_rest_train,
@@ -320,6 +330,14 @@ if probability_map == True:
         train_prob = calculate_3D_volume_prob_map(
             Y_train, w_foreground, w_background, save_file=prob_map_file)
 
+print("Preparing validation data generator . . .")
+val_generator = VoxelDataGenerator(
+    X_val, Y_val, random_subvolumes_in_DA=random_subvolumes_in_DA,
+    subvol_shape=train_3d_desired_shape,
+    shuffle_each_epoch=shuffle_val_data_each_epoch, batch_size=batch_size_value,
+    da=False, n_classes=n_classes, val=True)
+del X_val, Y_val
+ 
 print("Preparing train data generator . . .")
 train_generator = VoxelDataGenerator(                                           
     X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,          
@@ -360,11 +378,12 @@ model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights     
-                                 + '_' + str(args.run_id) + '.h5')
+                     + '_' + str(args.run_id) + '.h5')
 if load_previous_weights == False:
-    results = model.fit(x=train_generator, steps_per_epoch=steps_per_epoch_value, 
-        epochs=epochs_value, callbacks=[earlystopper, time_callback, lr_callback])
-    model.save(h5_file)
+    results = model.fit(x=train_generator, validation_data=val_generator,
+        validation_steps=len(val_generator), 
+        steps_per_epoch=steps_per_epoch_value, epochs=epochs_value,
+        callbacks=[earlystopper, checkpointer, time_callback, lr_callback])
 
 print("Loading model weights from h5_file: {}".format(h5_file))
 model.load_weights(h5_file)
@@ -609,10 +628,13 @@ print("####################################\n"
       "####################################\n")
 
 if load_previous_weights == False:
-    print("Epoch average time: {}".format(np.mean(time_callback.times)))
-    print("Train time (s): {}".format(np.sum(time_callback.times)))
-    print("Train loss: {}".format(np.min(results.history['loss'])))
-    print("Train IoU: {}".format(np.max(results.history[metric])))
+    print("Epoch average time: {}".format(np.mean(time_callback.times)))        
+    print("Epoch number: {}".format(len(results.history['val_loss'])))          
+    print("Train time (s): {}".format(np.sum(time_callback.times)))             
+    print("Train loss: {}".format(np.min(results.history['loss'])))             
+    print("Train IoU: {}".format(np.max(results.history[metric])))              
+    print("Validation loss: {}".format(np.min(results.history['val_loss'])))    
+    print("Validation IoU: {}".format(np.max(results.history['val_'+metric])))  
 
 print("Test loss: {}".format(loss_per_crop))
 print("Test IoU (per crop): {}".format(jac_per_crop))
