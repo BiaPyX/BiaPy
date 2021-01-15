@@ -662,21 +662,20 @@ smo_jac_full = jaccard_index_numpy(
     Y_test, (Y_test_ensemble > 0.5).astype(np.uint8))
 smo_voc_full = voc_calculation(
     Y_test, (Y_test_ensemble > 0.5).astype(np.uint8), smo_jac_full)
-del Y_test_ensemble
 
-print("~~~~ Z-Filtering (full image) ~~~~")
-zfil_preds_test = calculate_z_filtering(preds_test_full)
+print("~~~~ 8-Ensemble + Z-Filtering (full image) ~~~~")
+zfil_preds_test = calculate_z_filtering(Y_test_ensemble)
 
 print("Saving Z-filtered images . . .")
 save_img(Y=zfil_preds_test, mask_dir=zfil_dir_full, prefix="test_out_zfil")
 
-print("Calculate metrics (Z-filtering + full image) . . .")
+print("Calculate metrics (8-Ensemble + Z-filtering + full image) . . .")
 zfil_jac_full = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
 zfil_voc_full = voc_calculation(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_jac_full)
 
-del zfil_preds_test
+del zfil_preds_test, Y_test_ensemble
 
 print("~~~~ Spurious Detection (full image) ~~~~")
 spu_preds_test = spuriuous_detection_filter(preds_test_full)
@@ -760,8 +759,8 @@ print("Test IoU (full): {}".format(jac_full))
 print("Test VOC (full): {}".format(voc_full))
 print("Post-process: Ensemble - Test IoU (full): {}".format(smo_jac_full))
 print("Post-process: Ensemble - Test VOC (full): {}".format(smo_voc_full))
-print("Post-process: Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
-print("Post-process: Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
+print("Post-process: Ensemble + Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
+print("Post-process: Ensemble + Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
 print("Post-process: Spurious Detection - Test IoU (full): {}".format(spu_jac_full))
 print("Post-process: Spurious Detection - VOC (full): {}".format(spu_voc_full))
 print("Post-process: Watershed - Test IoU (full): {}".format(wa_jac_full))

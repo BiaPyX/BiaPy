@@ -200,8 +200,6 @@ zoom = 0.0
 # Number of times to duplicate the train data. Useful when "random_crops_in_DA"
 # is made, as more original train data can be cover
 replicate_train = 0
-# Extra number of images to add to the train data. Applied after replicate_train 
-extra_train_data = 0
 
 
 ### Load previously generated model weigths
@@ -242,6 +240,10 @@ n_classes = 1
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)
 metric = "average_jaccard_index"
+# To take only the last class of the predictions, which corresponds to the
+# foreground in a binary problem. If n_classes > 2 this should be disabled to
+# ensure all classes are preserved
+last_class = True if n_classes <= 2 else False
 
 
 ### Paths of the results                                             
@@ -448,6 +450,7 @@ if n_classes > 1:
     for i in range(Y_test.shape[0]):
         Y_test_one_hot[i] = np.asarray(img_to_onehot_encoding(Y_test[i], n_classes))
     Y_test = Y_test_one_hot
+    del Y_test_one_hot
 
 
 print("##########################\n"
@@ -465,11 +468,6 @@ score_per_crop = model.evaluate(
 print("score_per_crop: {}".format(score_per_crop))
 loss_per_crop = score_per_crop[5]
 jac_per_crop = score_per_crop[-1]
-
-print("Test loss: {}".format(loss_per_crop))
-print("Test IoU (per crop): {}".format(jac_per_crop))
-import sys
-sys.exit(0)
 
 print("Making the predictions on test data . . .")
 preds_test = np.array(model.predict(X_test, batch_size=batch_size_value, verbose=1))
@@ -590,7 +588,7 @@ Y_test_50ov_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
 for i in tqdm(range(X_test.shape[0])):
     pred_ensembled = ensemble8_2d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        n_classes=n_classes)
+        n_classes=n_classes, last_class=last_class)
     Y_test_50ov_ensemble[i] = pred_ensembled
 Y_test_50ov_ensemble = merge_data_with_overlap(
     Y_test_50ov_ensemble, orig_test_shape, overlap=(0.5, 0.5))
@@ -652,7 +650,7 @@ Y_test_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
 for i in tqdm(range(X_test.shape[0])):
     pred_ensembled = ensemble8_2d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        n_classes=n_classes)
+        n_classes=n_classes, last_class=last_class)
     Y_test_ensemble[i] = pred_ensembled
 
 print("Saving smooth predicted images . . .")
@@ -666,21 +664,20 @@ smo_jac_full = jaccard_index_numpy(
     Y_test, (Y_test_ensemble > 0.5).astype(np.uint8))
 smo_voc_full = voc_calculation(
     Y_test, (Y_test_ensemble > 0.5).astype(np.uint8), smo_jac_full)
-del Y_test_ensemble
 
-print("~~~~ Z-Filtering (full image) ~~~~")
-zfil_preds_test = calculate_z_filtering(preds_test_full)
+print("~~~~ 8-Ensemble + Z-Filtering (full image) ~~~~")
+zfil_preds_test = calculate_z_filtering(Y_test_ensemble)
 
 print("Saving Z-filtered images . . .")
 save_img(Y=zfil_preds_test, mask_dir=zfil_dir_full, prefix="test_out_zfil")
 
-print("Calculate metrics (Z-filtering + full image) . . .")
+print("Calculate metrics (8-Ensemble + Z-filtering + full image) . . .")
 zfil_jac_full = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
 zfil_voc_full = voc_calculation(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_jac_full)
 
-del zfil_preds_test
+del zfil_preds_test, Y_test_ensemble
 
 print("~~~~ Spurious Detection (full image) ~~~~")
 spu_preds_test = spuriuous_detection_filter(preds_test_full)
@@ -764,8 +761,8 @@ print("Test IoU (full): {}".format(jac_full))
 print("Test VOC (full): {}".format(voc_full))
 print("Post-process: Ensemble - Test IoU (full): {}".format(smo_jac_full))
 print("Post-process: Ensemble - Test VOC (full): {}".format(smo_voc_full))
-print("Post-process: Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
-print("Post-process: Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
+print("Post-process: Ensemble + Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
+print("Post-process: Ensemble + Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
 print("Post-process: Spurious Detection - Test IoU (full): {}".format(spu_jac_full))
 print("Post-process: Spurious Detection - VOC (full): {}".format(spu_voc_full))
 print("Post-process: Watershed - Test IoU (full): {}".format(wa_jac_full))
