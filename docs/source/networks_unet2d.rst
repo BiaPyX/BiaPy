@@ -1,5 +1,5 @@
 --------
-U-Net 2D
+2D U-Net
 --------
 
 .. toctree::

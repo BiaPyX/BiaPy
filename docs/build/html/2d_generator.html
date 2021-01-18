@@ -82,11 +82,12 @@
               
             
             
-              <ul>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">Step 0: Prepare environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-2-data-structure">Step 2: Data structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-3-run-the-code">Step 3: Run the code</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul class="current">
@@ -107,6 +108,12 @@
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Utilities</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
@@ -187,7 +194,7 @@
 <span id="d-generator-custom"></span><h1>2D generator (Custom)<a class="headerlink" href="#module-generators.custom_da_gen" title="Permalink to this headline">¶</a></h1>
 <dl class="py class">
 <dt id="generators.custom_da_gen.ImageDataGenerator">
-<em class="property">class </em><code class="sig-prename descclassname">generators.custom_da_gen.</code><code class="sig-name descname">ImageDataGenerator</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span></em>, <em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">batch_size</span><span class="o">=</span><span class="default_value">32</span></em>, <em class="sig-param"><span class="n">shape</span><span class="o">=</span><span class="default_value">256, 256, 1</span></em>, <em class="sig-param"><span class="n">shuffle</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">da</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">hist_eq</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">rotation90</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">rotation_range</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">vflip</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">hflip</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">elastic</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">g_blur</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">median_blur</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">gamma_contrast</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">random_crops_in_DA</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">prob_map</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">train_prob</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">val</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">extra_data_factor</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/generators/custom_da_gen.html#ImageDataGenerator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#generators.custom_da_gen.ImageDataGenerator" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">generators.custom_da_gen.</code><code class="sig-name descname">ImageDataGenerator</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span></em>, <em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">batch_size</span><span class="o">=</span><span class="default_value">32</span></em>, <em class="sig-param"><span class="n">shape</span><span class="o">=</span><span class="default_value">256, 256, 1</span></em>, <em class="sig-param"><span class="n">shuffle</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">da</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">hist_eq</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">rotation90</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">rotation_range</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">vflip</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">hflip</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">elastic</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">g_blur</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">median_blur</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">gamma_contrast</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">zoom</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">random_crops_in_DA</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">prob_map</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">train_prob</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">val</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">extra_data_factor</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/generators/custom_da_gen.html#ImageDataGenerator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#generators.custom_da_gen.ImageDataGenerator" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.utils.data_utils.Sequence</span></code></p>
 <p>Custom ImageDataGenerator based on <a class="reference external" href="https://github.com/aleju/imgaug-doc">imgaug</a>
 transformations.</p>
@@ -211,6 +218,8 @@ transformations.</p>
 <li><p><strong>g_blur</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To insert gaussian blur on the images.</p></li>
 <li><p><strong>median_blur</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To insert median blur.</p></li>
 <li><p><strong>gamma_contrast</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To insert gamma constrast changes on images.</p></li>
+<li><p><strong>zoom</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code> or  [lower, <code class="xref py py-class docutils literal notranslate"><span class="pre">upper]</span></code>, <em>optional</em>) – Range for random zoom. If a float, <code class="docutils literal notranslate"><span class="pre">[lower,</span> <span class="pre">upper]</span> <span class="pre">=</span> <span class="pre">[1-zoom_range,</span>
+<span class="pre">1+zoom_range]</span></code>.</p></li>
 <li><p><strong>random_crops_in_DA</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Decide to make random crops in DA (before transformations).</p></li>
 <li><p><strong>prob_map</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Take the crop center based on a given probability ditribution.</p></li>
 <li><p><strong>train_prob</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Probabilities of each pixels to use with <code class="docutils literal notranslate"><span class="pre">prob_map=True</span></code>.
@@ -474,7 +483,7 @@ Selecting random rotations between 0 and 180 degrees should generate the followi
   <div role="contentinfo">
     <p>
         
-        &copy; Copyright 2020, Daniel Franco
+        &copy; Copyright 2021, Daniel Franco
 
     </p>
   </div>

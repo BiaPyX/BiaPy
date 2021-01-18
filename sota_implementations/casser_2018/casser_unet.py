@@ -12,7 +12,7 @@ def U_Net_2D(image_shape, start_filters=16, dr_rate=0.2, optimizer="adam",
              lr=0.0005):
     """Create 2D U-Net.
                                                                                 
-       Copied from <https://github.com/mpsych/mitochondria>_.
+       Copied from https://github.com/mpsych/mitochondria
 
        Parameters
        ----------
@@ -37,16 +37,6 @@ def U_Net_2D(image_shape, start_filters=16, dr_rate=0.2, optimizer="adam",
        -------                                                                 
        model : Keras model
            Model containing the U-Net.              
-
-
-       Calling this function with its default parameters returns the following  
-       network:                                                                 
-                                                                                
-       .. image:: img/unet.png                                                  
-           :width: 100%                                                         
-           :align: center                                                       
-                                                                                
-       Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
     """
 
     dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)                           

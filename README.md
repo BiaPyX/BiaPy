@@ -19,7 +19,7 @@ In [templates](templates/) directory are located different templates that reprod
 
 [U-Net_2D_template.py](templates/U-Net_2D_template.py) and [U-Net_3D_template.py](templates/U-Net_3D_template.py) are the main templates and the rest differ in the network used (together with other minor changes in cases where the network needs them). As an exception, two different templates on this folder need an special explanation:
 
-- [big_data_template.py](templates/big_data_template.py): use this template as a baseline to make segmantic segmentation with an U-Net 2D. The difference with [U-Net_2D_template.py](templates/U-Net_2D_template.py) is that this template should be used with large datasets, as it uses `flow_from_directory()` instead of `flow()` function of Keras. Notice that the dataset directory structure changes.
+- [big_data_template.py](templates/big_data_template.py): use this template as a baseline to make segmantic segmentation with an 2D U-Net. The difference with [U-Net_2D_template.py](templates/U-Net_2D_template.py) is that this template should be used with large datasets, as it uses `flow_from_directory()` instead of `flow()` function of Keras. Notice that the dataset directory structure changes.
 - [general_template.py](templates/general_template.py): in this template we gather all implemented options that this project covers. Should be used to extract different code blocks you are interested in. 
 
 To run state-of-the-art works implemented in this project you can use the template prepared on each case: [xiao_template_V1.py](sota_implementations/xiao_2018/xiao_template_V1.py), [cheng_template_V1.py](sota_implementations/cheng_2017/cheng_template_V1.py), [oztel_template_V0.py](sota_implementations/oztel_2017/oztel_template_V0.py) or [casser_template_V1.py](sota_implementations/casser_2018/casser_template_V1.py). 
@@ -111,7 +111,7 @@ python -u template.py ${code_dir} "${data_dir}" "${job_dir}" --id "${jobID}" --r
 
 The following state-of-the-art approaches for EM semantic segmentation have been implemented:
 
-- U-Net 3D + post-processing. Everything contained in [xiao_2018](sota_implementations/xiao_2018). 
+- 3D U-Net + post-processing. Everything contained in [xiao_2018](sota_implementations/xiao_2018). 
 ```
 Chi Xiao, Xi Chen, Weifu Li, Linlin Li, Lu Wang, Qiwei Xie, and Hua Han, "Automatic mitochondria 
 segmentation for em data using a 3d supervised convolutional network", Frontiers in Neuroanatomy 
@@ -132,7 +132,7 @@ in electron microscopy volumes using deep convolutional neural network", 2017 IE
 Conference on Bioinformatics and Biomedicine (BIBM), IEEE, 2017, pp. 1195-1200.
 ``` 
 
-- U-Net 2D + post-processing. Everything contained in [casser_2018](sota_implementations/casser_2018).
+- 2D U-Net + post-processing. Everything contained in [casser_2018](sota_implementations/casser_2018).
 ```
 Vincent Casser, Kai Kang, Hanspeter Pfister, and Daniel Haehn, "Fast mitochondria segmentation 
 for connectomics", arXiv preprint arXiv:1812.06024 (2018).

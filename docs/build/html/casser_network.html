@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Search &mdash; EM Image Segmentation  documentation</title>
+  <title>Casser 2D U-Net &mdash; EM Image Segmentation  documentation</title>
   
 
   
@@ -20,7 +20,6 @@
   
 
   
-    
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -35,9 +34,8 @@
     <script type="text/javascript" src="_static/js/theme.js"></script>
 
     
-    <script type="text/javascript" src="_static/searchtools.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
-    <link rel="search" title="Search" href="#" /> 
+    <link rel="search" title="Search" href="search.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -64,7 +62,7 @@
 
           
 <div role="search">
-  <form id="rtd-search-form" class="wy-form" action="#" method="get">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
@@ -173,7 +171,7 @@
     
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
         
-      <li>Search</li>
+      <li>Casser 2D U-Net</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -190,18 +188,36 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <noscript>
-  <div id="fallback" class="admonition warning">
-    <p class="last">
-      Please activate JavaScript to enable the search functionality.
-    </p>
-  </div>
-  </noscript>
+  <div class="section" id="module-sota_implementations.casser_2018.casser_unet">
+<span id="casser-2d-u-net"></span><h1>Casser 2D U-Net<a class="headerlink" href="#module-sota_implementations.casser_2018.casser_unet" title="Permalink to this headline">¶</a></h1>
+<dl class="py function">
+<dt id="sota_implementations.casser_2018.casser_unet.U_Net_2D">
+<code class="sig-prename descclassname">sota_implementations.casser_2018.casser_unet.</code><code class="sig-name descname">U_Net_2D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">start_filters</span><span class="o">=</span><span class="default_value">16</span></em>, <em class="sig-param"><span class="n">dr_rate</span><span class="o">=</span><span class="default_value">0.2</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'adam'</span></em>, <em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.0005</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/sota_implementations/casser_2018/casser_unet.html#U_Net_2D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sota_implementations.casser_2018.casser_unet.U_Net_2D" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create 2D U-Net.</p>
+<p>Copied from <a class="reference external" href="https://github.com/mpsych/mitochondria">https://github.com/mpsych/mitochondria</a></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">tuple</span></code>) – Dimensions of the input image.</p></li>
+<li><p><strong>start_filters</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Feature maps to start with in the first level of the unet. It will
+be doubled on each downsampling.</p></li>
+<li><p><strong>drop_value</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Dropout value to be fixed.</p></li>
+<li><p><strong>optimizer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Optimizer used to minimize the loss function. Posible options:
+<code class="docutils literal notranslate"><span class="pre">sgd</span></code> or <code class="docutils literal notranslate"><span class="pre">adam</span></code>.</p></li>
+<li><p><strong>lr</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Learning rate value.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – Model containing the U-Net.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code></p>
+</dd>
+</dl>
+</dd></dl>
 
-  
-  <div id="search-results">
-  
-  </div>
+</div>
+
 
            </div>
            
@@ -246,14 +262,7 @@
   
   
     
-  
-  <script type="text/javascript">
-    jQuery(function() { Search.loadIndex("searchindex.js"); });
-  </script>
-  
-  <script type="text/javascript" id="searchindexloader"></script>
    
-
 
 </body>
 </html>

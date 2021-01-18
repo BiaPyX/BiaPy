@@ -1,0 +1,351 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>sota_implementations.casser_2018.casser_unet &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run.html">Step 0: Prepare environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run.html#step-2-data-structure">Step 2: Data structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run.html#step-3-run-the-code">Step 3: Run the code</a></li>
+</ul>
+<p class="caption"><span class="caption-text">2D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../data_2d_manipulation.html">Data manipulation 2D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../2d_generator_keras.html">2D generator (Keras)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../2d_generator.html">2D generator (Custom)</a></li>
+</ul>
+<p class="caption"><span class="caption-text">3D Data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../data_3d_manipulation.html">Data manipulation 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../3d_generator.html">3D generator</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Networks</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_unet2d.html">2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_unet3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_fcn.html">FCN</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../networks_mnet.html">MNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Utilities</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../post_processing.html">Post processing</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Reproduced methods</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../casser.html">Casser et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../xiao.html">Xiao et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../cheng.html">Cheng et al.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../oztel.html">Oztel et al.</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Auxiliary code</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../grad_cam.html">Grad-CAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../callbacks.html">Callbacks</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>sota_implementations.casser_2018.casser_unet</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for sota_implementations.casser_2018.casser_unet</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras.layers</span> <span class="kn">import</span> <span class="n">Dropout</span><span class="p">,</span> <span class="n">SpatialDropout2D</span><span class="p">,</span> <span class="n">Conv2D</span><span class="p">,</span>\
+                                    <span class="n">Conv2DTranspose</span><span class="p">,</span> <span class="n">MaxPooling2D</span><span class="p">,</span> <span class="n">concatenate</span><span class="p">,</span>\
+                                    <span class="n">ELU</span><span class="p">,</span> <span class="n">BatchNormalization</span><span class="p">,</span> <span class="n">Activation</span><span class="p">,</span> \
+                                    <span class="n">ZeroPadding2D</span><span class="p">,</span> <span class="n">UpSampling2D</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras</span> <span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">Input</span>
+<span class="kn">from</span> <span class="nn">metrics</span> <span class="kn">import</span> <span class="n">binary_crossentropy_weighted</span><span class="p">,</span> <span class="n">jaccard_index</span><span class="p">,</span> \
+                    <span class="n">jaccard_index_softmax</span><span class="p">,</span> <span class="n">weighted_bce_dice_loss</span>
+
+
+<div class="viewcode-block" id="U_Net_2D"><a class="viewcode-back" href="../../../casser_network.html#sota_implementations.casser_2018.casser_unet.U_Net_2D">[docs]</a><span class="k">def</span> <span class="nf">U_Net_2D</span><span class="p">(</span><span class="n">image_shape</span><span class="p">,</span> <span class="n">start_filters</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">dr_rate</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">optimizer</span><span class="o">=</span><span class="s2">&quot;adam&quot;</span><span class="p">,</span>
+             <span class="n">lr</span><span class="o">=</span><span class="mf">0.0005</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create 2D U-Net.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">       Copied from https://github.com/mpsych/mitochondria</span>
+
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       image_shape : 2D tuple</span>
+<span class="sd">           Dimensions of the input image.              </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       start_filters : int, optional</span>
+<span class="sd">           Feature maps to start with in the first level of the unet. It will </span>
+<span class="sd">           be doubled on each downsampling.</span>
+<span class="sd">                                                                           </span>
+<span class="sd">       drop_value : float, optional</span>
+<span class="sd">           Dropout value to be fixed.</span>
+<span class="sd">                                                                           </span>
+<span class="sd">       optimizer : str, optional</span>
+<span class="sd">           Optimizer used to minimize the loss function. Posible options: </span>
+<span class="sd">           ``sgd`` or ``adam``.                 </span>
+<span class="sd">                                                                           </span>
+<span class="sd">       lr : float, optional</span>
+<span class="sd">           Learning rate value.                          </span>
+<span class="sd">        </span>
+<span class="sd">       Returns</span>
+<span class="sd">       -------                                                                 </span>
+<span class="sd">       model : Keras model</span>
+<span class="sd">           Model containing the U-Net.              </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">dinamic_dim</span> <span class="o">=</span> <span class="p">(</span><span class="kc">None</span><span class="p">,)</span><span class="o">*</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">image_shape</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">image_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],)</span>                           
+    <span class="n">x</span> <span class="o">=</span> <span class="n">Input</span><span class="p">(</span><span class="n">dinamic_dim</span><span class="p">)</span>                                                      
+    <span class="c1">#inputs = Input((img_rows, img_cols, MEMORY))</span>
+    <span class="n">inputs</span> <span class="o">=</span> <span class="n">x</span>
+    
+        
+    <span class="c1"># ENCODER</span>
+    <span class="n">conv1</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">inputs</span><span class="p">)</span>
+    <span class="n">conv1</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">conv1</span><span class="p">)</span>
+    <span class="n">pool1</span> <span class="o">=</span> <span class="n">MaxPooling2D</span><span class="p">(</span><span class="n">pool_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))(</span><span class="n">conv1</span><span class="p">)</span>
+
+    <span class="n">conv2</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">pool1</span><span class="p">)</span>
+    <span class="n">conv2</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">conv2</span><span class="p">)</span>
+    <span class="n">pool2</span> <span class="o">=</span> <span class="n">MaxPooling2D</span><span class="p">(</span><span class="n">pool_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))(</span><span class="n">conv2</span><span class="p">)</span>
+
+    <span class="n">conv3</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">pool2</span><span class="p">)</span>
+    <span class="n">conv3</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">conv3</span><span class="p">)</span>
+    <span class="n">pool3</span> <span class="o">=</span> <span class="n">MaxPooling2D</span><span class="p">(</span><span class="n">pool_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))(</span><span class="n">conv3</span><span class="p">)</span>
+
+    <span class="n">conv4</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">8</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">pool3</span><span class="p">)</span>
+    <span class="n">conv4</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">8</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">conv4</span><span class="p">)</span>
+    <span class="n">drop4</span> <span class="o">=</span> <span class="n">Dropout</span><span class="p">(</span><span class="n">dr_rate</span><span class="p">)(</span><span class="n">conv4</span><span class="p">)</span>
+    <span class="n">pool4</span> <span class="o">=</span> <span class="n">MaxPooling2D</span><span class="p">(</span><span class="n">pool_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))(</span><span class="n">drop4</span><span class="p">)</span>
+
+    <span class="c1"># BOTTLENECK</span>
+    <span class="n">conv5</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">16</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">pool4</span><span class="p">)</span>
+    <span class="n">conv5</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">16</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">conv5</span><span class="p">)</span>
+    <span class="n">drop5</span> <span class="o">=</span> <span class="n">Dropout</span><span class="p">(</span><span class="n">dr_rate</span><span class="p">)(</span><span class="n">conv5</span><span class="p">)</span>
+
+    <span class="c1"># DECODER</span>
+    <span class="n">up6</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">8</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">UpSampling2D</span><span class="p">(</span><span class="n">size</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))(</span><span class="n">drop5</span><span class="p">))</span>
+    <span class="n">merge6</span> <span class="o">=</span> <span class="n">concatenate</span><span class="p">([</span><span class="n">drop4</span><span class="p">,</span><span class="n">up6</span><span class="p">])</span>
+    <span class="n">conv6</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">8</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">merge6</span><span class="p">)</span>
+    <span class="n">conv6</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">8</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">conv6</span><span class="p">)</span>
+
+    <span class="n">up7</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">UpSampling2D</span><span class="p">(</span><span class="n">size</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))(</span><span class="n">conv6</span><span class="p">))</span>
+    <span class="n">merge7</span> <span class="o">=</span> <span class="n">concatenate</span><span class="p">([</span><span class="n">conv3</span><span class="p">,</span><span class="n">up7</span><span class="p">])</span>
+    <span class="n">conv7</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">merge7</span><span class="p">)</span>
+    <span class="n">conv7</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">conv7</span><span class="p">)</span>
+
+    <span class="n">up8</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">UpSampling2D</span><span class="p">(</span><span class="n">size</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))(</span><span class="n">conv7</span><span class="p">))</span>
+    <span class="n">merge8</span> <span class="o">=</span> <span class="n">concatenate</span><span class="p">([</span><span class="n">conv2</span><span class="p">,</span><span class="n">up8</span><span class="p">])</span>
+    <span class="n">conv8</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">merge8</span><span class="p">)</span>
+    <span class="n">conv8</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">conv8</span><span class="p">)</span>
+
+    <span class="n">up9</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">UpSampling2D</span><span class="p">(</span><span class="n">size</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))(</span><span class="n">conv8</span><span class="p">))</span>
+    <span class="n">merge9</span> <span class="o">=</span> <span class="n">concatenate</span><span class="p">([</span><span class="n">conv1</span><span class="p">,</span><span class="n">up9</span><span class="p">])</span>
+    <span class="n">conv9</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">merge9</span><span class="p">)</span>
+    <span class="n">conv9</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="n">start_filters</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">conv9</span><span class="p">)</span>
+    <span class="n">conv9</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;relu&#39;</span><span class="p">,</span> <span class="n">padding</span> <span class="o">=</span> <span class="s1">&#39;same&#39;</span><span class="p">,</span> <span class="n">kernel_initializer</span> <span class="o">=</span> <span class="s1">&#39;he_normal&#39;</span><span class="p">)(</span><span class="n">conv9</span><span class="p">)</span>
+    <span class="n">outputs</span> <span class="o">=</span> <span class="n">Conv2D</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">activation</span> <span class="o">=</span> <span class="s1">&#39;sigmoid&#39;</span><span class="p">)(</span><span class="n">conv9</span><span class="p">)</span>
+    
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Model</span><span class="p">(</span><span class="n">inputs</span><span class="o">=</span><span class="p">[</span><span class="n">inputs</span><span class="p">],</span> <span class="n">outputs</span><span class="o">=</span><span class="p">[</span><span class="n">outputs</span><span class="p">])</span>
+
+    <span class="c1"># Select the optimizer</span>
+    <span class="k">if</span> <span class="n">optimizer</span> <span class="o">==</span> <span class="s2">&quot;sgd&quot;</span><span class="p">:</span>
+        <span class="n">opt</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span>
+            <span class="n">lr</span><span class="o">=</span><span class="n">lr</span><span class="p">,</span> <span class="n">momentum</span><span class="o">=</span><span class="mf">0.99</span><span class="p">,</span> <span class="n">decay</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">nesterov</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">optimizer</span> <span class="o">==</span> <span class="s2">&quot;adam&quot;</span><span class="p">:</span>
+        <span class="n">opt</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span>
+            <span class="n">lr</span><span class="o">=</span><span class="n">lr</span><span class="p">,</span> <span class="n">beta_1</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">beta_2</span><span class="o">=</span><span class="mf">0.999</span><span class="p">,</span> <span class="n">epsilon</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">decay</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+            <span class="n">amsgrad</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Error: optimizer value must be &#39;sgd&#39; or &#39;adam&#39;&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Compile the model</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;binary_crossentropy&#39;</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">model</span></div>
+
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2021, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

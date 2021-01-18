@@ -100,8 +100,8 @@
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_unet2d.html">U-Net 2D</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../networks_unet3d.html">U-Net 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_unet2d.html">2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../networks_unet3d.html">3D U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../networks_multiresunet.html">MultiResUNet</a></li>
@@ -257,6 +257,10 @@
 <span class="sd">       gamma_contrast : bool, optional</span>
 <span class="sd">           To insert gamma constrast changes on images.</span>
 
+<span class="sd">       zoom : float or  [lower, upper], optional</span>
+<span class="sd">           Range for random zoom. If a float, ``[lower, upper] = [1-zoom_range, </span>
+<span class="sd">           1+zoom_range]``.</span>
+
 <span class="sd">       random_crops_in_DA : bool, optional</span>
 <span class="sd">           Decide to make random crops in DA (before transformations).</span>
 
@@ -339,7 +343,7 @@
     <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span><span class="mi">256</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                  <span class="n">da</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">hist_eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">rotation90</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">rotation_range</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
                  <span class="n">vflip</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hflip</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">elastic</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">g_blur</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                 <span class="n">median_blur</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">gamma_contrast</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                 <span class="n">median_blur</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">gamma_contrast</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">zoom</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
                  <span class="n">random_crops_in_DA</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">prob_map</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">train_prob</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> 
                  <span class="n">val</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">n_classes</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">extra_data_factor</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
 
@@ -351,6 +355,16 @@
         <span class="k">if</span> <span class="n">random_crops_in_DA</span> <span class="ow">and</span> <span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
             <span class="k">raise</span> <span class="n">ValuError</span><span class="p">(</span><span class="s2">&quot;When &#39;random_crops_in_DA&#39; is selected the shape &quot;</span>
                             <span class="s2">&quot;given must be square, e.g. (256, 256, 1)&quot;</span><span class="p">)</span>
+    
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">zoom</span><span class="p">,</span> <span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">)):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">zoom</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="o">-</span> <span class="n">zoom</span><span class="p">,</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">zoom</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">zoom</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span>
+              <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">))</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">zoom</span><span class="p">)):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">zoom</span> <span class="o">=</span> <span class="p">[</span><span class="n">zoom</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">zoom</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;`zoom` should be a float or &#39;</span>
+                             <span class="s1">&#39;a tuple or list of two floats. &#39;</span>
+                             <span class="s1">&#39;Received: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">zoom</span><span class="p">,))</span>
             
         <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">=</span> <span class="n">shape</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="n">batch_size</span>
@@ -404,6 +418,11 @@
         <span class="k">if</span> <span class="n">gamma_contrast</span><span class="p">:</span>
             <span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span><span class="n">iaa</span><span class="o">.</span><span class="n">GammaContrast</span><span class="p">((</span><span class="mf">1.25</span><span class="p">,</span> <span class="mf">1.75</span><span class="p">))))</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">t_made</span> <span class="o">+=</span> <span class="s1">&#39;_gcontrast&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">zoom</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">zoom</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">iaa</span><span class="o">.</span><span class="n">Affine</span><span class="p">(</span><span class="n">scale</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;x&quot;</span><span class="p">:</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">zoom</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">zoom</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> 
+                                                                <span class="s2">&quot;y&quot;</span><span class="p">:</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">zoom</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">zoom</span><span class="p">[</span><span class="mi">1</span><span class="p">])})))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">t_made</span> <span class="o">+=</span> <span class="s1">&#39;_zoom&#39;</span>
+            
         <span class="bp">self</span><span class="o">.</span><span class="n">seq</span> <span class="o">=</span> <span class="n">iaa</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span><span class="n">da_options</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">t_made</span> <span class="o">=</span> <span class="s1">&#39;_none&#39;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">t_made</span> <span class="o">==</span> <span class="s1">&#39;&#39;</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">t_made</span>
 
@@ -792,7 +811,7 @@
   <div role="contentinfo">
     <p>
         
-        &copy; Copyright 2020, Daniel Franco
+        &copy; Copyright 2021, Daniel Franco
 
     </p>
   </div>

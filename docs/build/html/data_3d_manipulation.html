@@ -82,11 +82,12 @@
               
             
             
-              <ul>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">Step 0: Prepare environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-2-data-structure">Step 2: Data structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-3-run-the-code">Step 3: Run the code</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
@@ -107,6 +108,12 @@
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Utilities</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul>
@@ -560,7 +567,7 @@ E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <s
 <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">crop_3D_data_with_overlap</span><span class="p">(</span>
      <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span><span class="mf">0.5</span><span class="p">,</span><span class="mf">0.5</span><span class="p">))</span>
 <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">merge_3D_data_with_overlap</span><span class="p">(</span>
-     <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span><span class="mf">0.5</span><span class="p">,</span><span class="mf">0.5</span><span class="p">))</span>
+     <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span><span class="mf">0.5</span><span class="p">,</span><span class="mf">0.5</span><span class="p">))</span>
 
 <span class="c1"># The function will print the shape of the generated arrays. In this example:</span>
 <span class="c1">#     **** New data shape is: (165, 768, 1024, 1)</span>
@@ -570,7 +577,7 @@ E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <s
 <span class="c1"># should be as follows:</span>
 
 <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">merge_3D_data_with_overlap</span><span class="p">(</span>
-     <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">))</span>
+     <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">))</span>
 
 <span class="c1"># The function will print the shape of the generated arrays. In this example:</span>
 <span class="c1">#     **** New data shape is: (165, 768, 1024, 1)</span>
@@ -601,7 +608,7 @@ E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <s
   <div role="contentinfo">
     <p>
         
-        &copy; Copyright 2020, Daniel Franco
+        &copy; Copyright 2021, Daniel Franco
 
     </p>
   </div>

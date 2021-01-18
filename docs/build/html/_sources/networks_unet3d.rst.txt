@@ -1,10 +1,10 @@
 --------
-U-Net 3D
+3D U-Net 
 --------
 
 .. toctree::
    :maxdepth: 2
-   :caption: U-Net 3D
+   :caption: 3D U-Net
 
    networks_unet_3d
    networks_resunet_3d

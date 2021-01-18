@@ -1,5 +1,5 @@
-U-Net 2D + SE
-=============
+2D SE U-Net 
+===========
                                                                                 
 .. automodule:: networks.se_unet_2d
     :members:                                                                   

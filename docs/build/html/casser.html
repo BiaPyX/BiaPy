@@ -37,7 +37,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Xiao et al." href="xiao.html" />
-    <link rel="prev" title="MNet" href="networks_mnet.html" /> 
+    <link rel="prev" title="Post processing" href="post_processing.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -82,11 +82,12 @@
               
             
             
-              <ul>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">How to run</a></li>
-<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">Step 0: Prepare environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-2-data-structure">Step 2: Data structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-3-run-the-code">Step 3: Run the code</a></li>
 </ul>
 <p class="caption"><span class="caption-text">2D Data</span></p>
 <ul>
@@ -107,6 +108,12 @@
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Utilities</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Reproduced methods</span></p>
 <ul class="current">
@@ -199,7 +206,13 @@ that do not provide code. In this case the following paper has been reproduced:<
 <li><p><a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/casser_2018/casser_template_V1.py">casser_template_V1.py</a> : changes made respect to V0 with which we have achieved better results.</p></li>
 </ul>
 </div></blockquote>
-<p>The architecture of the network can be reproduced used our <a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/blob/master/networks/unet.py">U-Net 2D</a> code. Here is a picture of the network extracted from the original paper:</p>
+<dl class="simple">
+<dt>The implementation is based in one file:</dt><dd><ul class="simple">
+<li><p><a class="reference external" href="casser_network.html">2D U-Net</a>: proposed 2D U-Net (recently submitted by the authors <a class="reference external" href="https://github.com/mpsych/mitochondria">here</a>).</p></li>
+</ul>
+</dd>
+</dl>
+<p>Here is a picture of the network extracted from the original paper:</p>
 <a class="reference internal image-reference" href="_images/casser_network.png"><img alt="_images/casser_network.png" class="align-center" src="_images/casser_network.png" style="width: 100%;" /></a>
 </div>
 
@@ -214,7 +227,7 @@ that do not provide code. In this case the following paper has been reproduced:<
         <a href="xiao.html" class="btn btn-neutral float-right" title="Xiao et al." accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="networks_mnet.html" class="btn btn-neutral float-left" title="MNet" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="post_processing.html" class="btn btn-neutral float-left" title="Post processing" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
@@ -224,7 +237,7 @@ that do not provide code. In this case the following paper has been reproduced:<
   <div role="contentinfo">
     <p>
         
-        &copy; Copyright 2020, Daniel Franco
+        &copy; Copyright 2021, Daniel Franco
 
     </p>
   </div>
