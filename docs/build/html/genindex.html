@@ -301,12 +301,6 @@
 </li>
       <li><a href="util.html#util.check_masks">check_masks() (in module util)</a>
 </li>
-      <li><a href="oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.cnn_oztel">cnn_oztel() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
-</li>
-      <li><a href="oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.cnn_oztel_test">cnn_oztel_test() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
-</li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="2d_generator_keras.html#generators.keras_da_gen.combine_generators">combine_generators() (in module generators.keras_da_gen)</a>
 </li>
       <li><a href="cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D.compute_output_shape">compute_output_shape() (sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D method)</a>
@@ -315,7 +309,13 @@
         <li><a href="cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D.compute_output_shape">(sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D method)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="networks_multiresunet.html#networks.MultiResUNet.conv2d_bn">conv2d_bn() (in module networks.MultiResUNet)</a>
+</li>
+      <li><a href="oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model">create_oztel_model() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
+</li>
+      <li><a href="oztel_utils.html#sota_implementations.oztel_2017.utils.create_oztel_patches">create_oztel_patches() (in module sota_implementations.oztel_2017.utils)</a>
 </li>
       <li><a href="util.html#util.create_plots">create_plots() (in module util)</a>
 </li>
@@ -384,7 +384,11 @@
       <li><a href="post_processing.html#post_processing.ensemble16_3d_predictions">ensemble16_3d_predictions() (in module post_processing)</a>
 </li>
       <li><a href="post_processing.html#post_processing.ensemble8_2d_predictions">ensemble8_2d_predictions() (in module post_processing)</a>
+
+      <ul>
+        <li><a href="oztel_utils.html#sota_implementations.oztel_2017.utils.ensemble8_2d_predictions">(in module sota_implementations.oztel_2017.utils)</a>
 </li>
+      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -458,11 +462,13 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="2d_generator.html#generators.custom_da_gen.ImageDataGenerator">ImageDataGenerator (class in generators.custom_da_gen)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="util.html#util.img_to_array">img_to_array() (in module util)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="util.html#util.img_to_onehot_encoding">img_to_onehot_encoding() (in module util)</a>
+</li>
+      <li><a href="oztel_utils.html#sota_implementations.oztel_2017.utils.improve_components">improve_components() (in module sota_implementations.oztel_2017.utils)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -614,6 +620,8 @@
         <li><a href="networks_mnet.html#module-sota_implementations.MNet_Fu_2018.MNet">sota_implementations.MNet_Fu_2018.MNet</a>
 </li>
         <li><a href="oztel_network.html#module-sota_implementations.oztel_2017.cnn_oztel">sota_implementations.oztel_2017.cnn_oztel</a>
+</li>
+        <li><a href="oztel_utils.html#module-sota_implementations.oztel_2017.utils">sota_implementations.oztel_2017.utils</a>
 </li>
         <li><a href="xiao_network.html#module-sota_implementations.xiao_2018.unet_3d_xiao">sota_implementations.xiao_2018.unet_3d_xiao</a>
 </li>
@@ -843,8 +851,6 @@
         <li><a href="cheng_loss.html#module-sota_implementations.cheng_2017.loss">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     sota_implementations.cheng_2017.StochasticDownsampling2D
 
@@ -852,6 +858,8 @@
         <li><a href="cheng_sto2D.html#module-sota_implementations.cheng_2017.StochasticDownsampling2D">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     sota_implementations.cheng_2017.StochasticDownsampling3D
 
@@ -874,6 +882,13 @@
 </li>
       </ul></li>
       <li>
+    sota_implementations.oztel_2017.utils
+
+      <ul>
+        <li><a href="oztel_utils.html#module-sota_implementations.oztel_2017.utils">module</a>
+</li>
+      </ul></li>
+      <li>
     sota_implementations.xiao_2018.unet_3d_xiao
 
       <ul>
@@ -881,7 +896,11 @@
 </li>
       </ul></li>
       <li><a href="post_processing.html#post_processing.spuriuous_detection_filter">spuriuous_detection_filter() (in module post_processing)</a>
+
+      <ul>
+        <li><a href="oztel_utils.html#sota_implementations.oztel_2017.utils.spuriuous_detection_filter">(in module sota_implementations.oztel_2017.utils)</a>
 </li>
+      </ul></li>
       <li><a href="networks_se_unet_2d.html#networks.se_unet_2d.squeeze_excite_block">squeeze_excite_block() (in module networks.se_unet_2d)</a>
 
       <ul>
@@ -960,6 +979,10 @@
 
 <h2 id="W">W</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="oztel_utils.html#sota_implementations.oztel_2017.utils.watershed_refinement">watershed_refinement() (in module sota_implementations.oztel_2017.utils)</a>
+</li>
+  </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="metrics.html#metrics.weighted_bce_dice_loss">weighted_bce_dice_loss() (in module metrics)</a>
 </li>

@@ -10,62 +10,6 @@ from skimage.filters import rank
 from scipy.ndimage import rotate
 
 
-def spuriuous_detection_filter(Y, low_score_th=0.6, th=0.45):
-    """Based on the first post-processing method proposed in `Oztel et al.` where 
-       removes the artifacts with low class score.
-
-       Based on post-processing made in `Oztel et al <https://ieeexplore.ieee.org/abstract/document/8217827?casa_token=ga4A1VzvnykAAAAA:U7iBJ2H0qD4MU4Z1JzdzobNx_vCxwM89fzy39IwAPT8TsRuESFu_rFzKKHspp6-EKTGRoOHh2g>`_.
-       
-       Parameters
-       ----------
-       Y : 4D Numpy array
-           Data to apply the filter. E.g. ``(img_number, x, y, channels)``. 
-    
-       low_score_th : float, optional
-           Minimun class score that the artifact must have to not be discarded. 
-           Must be a value between ``0`` and ``1``. 
-            
-       th : float, optional
-           Threshold applied to binarize the given images. Must be a vaue 
-           between ``0`` and ``1``.
-
-       Returns
-       -------
-       Array : 4D Numpy array
-           Filtered data. E.g. ``(img_number, x, y, channels)``. 
-
-       Raises
-       ------
-       ValueError
-           If ``low_score_th`` not in ``[0, 1]``
-
-       ValueError
-           If ``th`` not in ``[0, 1]``
-    """
-        
-    if low_score_th < 0 or low_score_th > 1:
-        raise ValueError("'low_score_th' must be a float between 0 and 1")
-    if th < 0 or th > 1:
-        raise ValueError("'th' must be a float between 0 and 1")
-
-    class_Y = np.zeros(Y.shape, dtype=np.uint8)                         
-    class_Y[Y>th] = 1
-    
-    for i in range(class_Y.shape[0]):
-        im = class_Y[i]
-        im, num = measure.label(im, connectivity=2, background=0, return_num=True)
-   
-        for j in range(1,num):
-            for k in range(Y.shape[-1]):
-                c_conf = np.mean(Y[i,...,k][im[...,k]==j])
-                if c_conf < low_score_th:
-                    print("Slice {} channel {}: removing artifact {} - pixels: {}"
-                          .format(i, k, j, np.count_nonzero(Y[i,...,k][im[...,k]==j])))
-                    class_Y[i,...,k][im[...,k]==j] = 0
-
-    return class_Y
-
-
 def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
     """Apply watershed to the given predictions with the goal of refine the 
        boundaries of the artifacts.

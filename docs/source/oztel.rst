@@ -13,6 +13,10 @@ that do not provide code. In this case the following paper has been reproduced:
 
 `[Paper] <https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=8217827&casa_token=-CdPSq_MS4kAAAAA:1quEAbjWYORjalAGIeVYYeYSW1URl7G3i2pZLXtw9XXuj9WP6LHz3lRu-JvzXOPeRfJs458xJA&tag=1>`_ `[Our code] <https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/oztel_2017>`_
 
+We have prepared one template:
+
+    -  `oztel_template_V0.py <https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/oztel_2017/oztel_template_V0.py>`_ : exact parameters and training workflow as described in the paper.
 
 The implementation is based in one file:                                        
     - `Oztel CNN <oztel_network.html>`_ : proposed network by the authors.
+    - `Utils <oztel_utils.html>`_ : post-processing methods proposed by the authors and other needed functions. 

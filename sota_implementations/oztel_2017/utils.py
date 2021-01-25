@@ -27,10 +27,10 @@ def create_oztel_patches(imgs, lbls):
     Returns 
     -------
     class0_patches: List
-        List of class 0 image patches.
+        List of class ``0`` image patches.
 
     class1_patches: List
-        List of class 1 image patches.
+        List of class ``1`` image patches.
     """
 
     original_size = imgs[0].shape
@@ -89,9 +89,11 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=2,
        out : 3D Numpy array
            Output image ensembled. E.g. ``(x, y, channels)``.
 
+
        Examples
        --------
        ::
+
            # EXAMPLE 1   
            # Apply ensemble to each image of X_test
            X_test = np.ones((165, 768, 1024, 1))
@@ -171,6 +173,7 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=2,
 def spuriuous_detection_filter(Y, low_score_th=0.6, verbose=False):
     """Based on the first post-processing method proposed in `Oztel et al.` where 
        removes the artifacts with low class score.
+
        Based on post-processing made in `Oztel et al <https://ieeexplore.ieee.org/abstract/document/8217827?casa_token=ga4A1VzvnykAAAAA:U7iBJ2H0qD4MU4Z1JzdzobNx_vCxwM89fzy39IwAPT8TsRuESFu_rFzKKHspp6-EKTGRoOHh2g>`_.
        
        Parameters
@@ -185,7 +188,7 @@ def spuriuous_detection_filter(Y, low_score_th=0.6, verbose=False):
        verbose : boolean, optional
            Flag to print deleted objects
             
-      Returns
+       Returns
        -------
        Array : 4D Numpy array
            Filtered data. E.g. ``(img_number, x, y, channels)``. 
@@ -220,11 +223,11 @@ def spuriuous_detection_filter(Y, low_score_th=0.6, verbose=False):
     return class_Y
 
 
-def watershed_refinement(binary_input, gray_input, open_iter = 3,
-    """ Apply watershed to given input. """
-
-    dilate_iter = 15, erode_iter = 7, gauss_sigma=3, canny_sigma=3, 
+def watershed_refinement(binary_input, gray_input, open_iter=3,
+    dilate_iter=15, erode_iter=7, gauss_sigma=3, canny_sigma=3, 
     save_marks_dir=None):
+
+    """ Apply watershed to given input. """
 
     if save_marks_dir is not None:
         os.makedirs(save_marks_dir, exist_ok=True)
