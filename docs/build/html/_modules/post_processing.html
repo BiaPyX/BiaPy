@@ -201,62 +201,6 @@
 <span class="kn">from</span> <span class="nn">scipy.ndimage</span> <span class="kn">import</span> <span class="n">rotate</span>
 
 
-<div class="viewcode-block" id="spuriuous_detection_filter"><a class="viewcode-back" href="../post_processing.html#post_processing.spuriuous_detection_filter">[docs]</a><span class="k">def</span> <span class="nf">spuriuous_detection_filter</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">low_score_th</span><span class="o">=</span><span class="mf">0.6</span><span class="p">,</span> <span class="n">th</span><span class="o">=</span><span class="mf">0.45</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Based on the first post-processing method proposed in `Oztel et al.` where </span>
-<span class="sd">       removes the artifacts with low class score.</span>
-
-<span class="sd">       Based on post-processing made in `Oztel et al &lt;https://ieeexplore.ieee.org/abstract/document/8217827?casa_token=ga4A1VzvnykAAAAA:U7iBJ2H0qD4MU4Z1JzdzobNx_vCxwM89fzy39IwAPT8TsRuESFu_rFzKKHspp6-EKTGRoOHh2g&gt;`_.</span>
-<span class="sd">       </span>
-<span class="sd">       Parameters</span>
-<span class="sd">       ----------</span>
-<span class="sd">       Y : 4D Numpy array</span>
-<span class="sd">           Data to apply the filter. E.g. ``(img_number, x, y, channels)``. </span>
-<span class="sd">    </span>
-<span class="sd">       low_score_th : float, optional</span>
-<span class="sd">           Minimun class score that the artifact must have to not be discarded. </span>
-<span class="sd">           Must be a value between ``0`` and ``1``. </span>
-<span class="sd">            </span>
-<span class="sd">       th : float, optional</span>
-<span class="sd">           Threshold applied to binarize the given images. Must be a vaue </span>
-<span class="sd">           between ``0`` and ``1``.</span>
-
-<span class="sd">       Returns</span>
-<span class="sd">       -------</span>
-<span class="sd">       Array : 4D Numpy array</span>
-<span class="sd">           Filtered data. E.g. ``(img_number, x, y, channels)``. </span>
-
-<span class="sd">       Raises</span>
-<span class="sd">       ------</span>
-<span class="sd">       ValueError</span>
-<span class="sd">           If ``low_score_th`` not in ``[0, 1]``</span>
-
-<span class="sd">       ValueError</span>
-<span class="sd">           If ``th`` not in ``[0, 1]``</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-        
-    <span class="k">if</span> <span class="n">low_score_th</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">low_score_th</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;low_score_th&#39; must be a float between 0 and 1&quot;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">th</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">th</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;th&#39; must be a float between 0 and 1&quot;</span><span class="p">)</span>
-
-    <span class="n">class_Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>                         
-    <span class="n">class_Y</span><span class="p">[</span><span class="n">Y</span><span class="o">&gt;</span><span class="n">th</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
-    
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">class_Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">im</span> <span class="o">=</span> <span class="n">class_Y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-        <span class="n">im</span><span class="p">,</span> <span class="n">num</span> <span class="o">=</span> <span class="n">measure</span><span class="o">.</span><span class="n">label</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">connectivity</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">background</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">return_num</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-   
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">num</span><span class="p">):</span>
-            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
-                <span class="n">c_conf</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">Y</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="o">...</span><span class="p">,</span><span class="n">k</span><span class="p">][</span><span class="n">im</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">k</span><span class="p">]</span><span class="o">==</span><span class="n">j</span><span class="p">])</span>
-                <span class="k">if</span> <span class="n">c_conf</span> <span class="o">&lt;</span> <span class="n">low_score_th</span><span class="p">:</span>
-                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Slice </span><span class="si">{}</span><span class="s2"> channel </span><span class="si">{}</span><span class="s2">: removing artifact </span><span class="si">{}</span><span class="s2"> - pixels: </span><span class="si">{}</span><span class="s2">&quot;</span>
-                          <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">Y</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="o">...</span><span class="p">,</span><span class="n">k</span><span class="p">][</span><span class="n">im</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">k</span><span class="p">]</span><span class="o">==</span><span class="n">j</span><span class="p">])))</span>
-                    <span class="n">class_Y</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="o">...</span><span class="p">,</span><span class="n">k</span><span class="p">][</span><span class="n">im</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">k</span><span class="p">]</span><span class="o">==</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
-
-    <span class="k">return</span> <span class="n">class_Y</span></div>
-
-
 <div class="viewcode-block" id="boundary_refinement_watershed"><a class="viewcode-back" href="../post_processing.html#post_processing.boundary_refinement_watershed">[docs]</a><span class="k">def</span> <span class="nf">boundary_refinement_watershed</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Y_pred</span><span class="p">,</span> <span class="n">erode</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">save_marks_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Apply watershed to the given predictions with the goal of refine the </span>
 <span class="sd">       boundaries of the artifacts.</span>
