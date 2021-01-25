@@ -270,7 +270,8 @@ fine_tunning_weigths = args.job_id
 # Prefix of the files where the weights are stored/loaded from
 weight_files_prefix = 'model.fibsem_'
 # Wheter to find the best learning rate plot. If this options is selected the
-# training will stop when 5 epochs are done
+# training will stop when 5 epochs are done. To enable this functionality place
+# the following repo on the root folder of 'Em_Image_Segmentation': https://github.com/danifranco/LRFinder
 use_LRFinder = False
 
 
