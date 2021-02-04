@@ -435,9 +435,9 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0)):
     print("{} patches per (x,y) axis".format((crops_per_x,crops_per_y)))
 
     total_vol = data.shape[0]*(crops_per_x)*(crops_per_y)
-    cropped_data = np.zeros((total_vol,) + crop_shape)
+    cropped_data = np.zeros((total_vol,) + crop_shape, dtype=data.dtype)
     if data_mask is not None:
-        cropped_data_mask = np.zeros((total_vol,)+crop_shape[:2]+(data_mask.shape[-1],))
+        cropped_data_mask = np.zeros((total_vol,)+crop_shape[:2]+(data_mask.shape[-1],), dtype=data_mask.dtype)
 
     c = 0
     for z in range(data.shape[0]):
@@ -450,6 +450,7 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0)):
                     data[z,
                          x*step_x-d_x:x*step_x+crop_shape[0]-d_x,
                          y*step_y-d_y:y*step_y+crop_shape[1]-d_y]
+
                 if data_mask is not None:
                     cropped_data_mask[c] = \
                         data_mask[z,
@@ -593,9 +594,9 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
     if (overlap[0] >= 1 or overlap[0] < 0) and (overlap[1] >= 1 or overlap[1] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 
-    merged_data = np.zeros((original_shape))
+    merged_data = np.zeros((original_shape), dtype=data.dtype)
     if data_mask is not None:
-        merged_data_mask = np.zeros((original_shape))
+        merged_data_mask = np.zeros((original_shape), dtype=data_mask.dtype)
     ov_map_counter = np.zeros(original_shape, dtype=np.int32)
     if out_dir is not None:
         crop_grid = np.zeros(original_shape[1:], dtype=np.int32)
