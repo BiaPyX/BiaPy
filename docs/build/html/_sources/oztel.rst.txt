@@ -16,7 +16,8 @@ that do not provide code. In this case the following paper has been reproduced:
 We have prepared one template:
 
     -  `oztel_template_V0.py <https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/oztel_2017/oztel_template_V0.py>`_ : exact parameters and training workflow as described in the paper.
+    -  `oztel_template_V1.py <https://github.com/danifranco/EM_Image_Segmentation/tree/master/sota_implementations/oztel_2017/oztel_template_V1.py>`_ : own changes made V0 to achieve better results.
 
 The implementation is based in one file:                                        
-    - `Oztel CNN <oztel_network.html>`_ : proposed network by the authors.
+    - `Oztel CNN <oztel_network.html>`_ : proposed network by the authors together with our proposed V1.
     - `Utils <oztel_utils.html>`_ : post-processing methods proposed by the authors and other needed functions. 

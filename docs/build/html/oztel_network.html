@@ -214,6 +214,30 @@
 <a class="reference internal image-reference" href="_images/oztel_network.png"><img alt="_images/oztel_network.png" class="align-center" src="_images/oztel_network.png" style="width: 100%;" /></a>
 </dd></dl>
 
+<dl class="py function">
+<dt id="sota_implementations.oztel_2017.cnn_oztel.create_oztel_model_V1">
+<code class="sig-prename descclassname">sota_implementations.oztel_2017.cnn_oztel.</code><code class="sig-name descname">create_oztel_model_V1</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_classes</span><span class="o">=</span><span class="default_value">2</span></em>, <em class="sig-param"><span class="n">input_shape</span><span class="o">=</span><span class="default_value">None, None, 1</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'adam'</span></em>, <em class="sig-param"><span class="n">loss</span><span class="o">=</span><span class="default_value">'categorical_crossentropy'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/sota_implementations/oztel_2017/cnn_oztel.html#create_oztel_model_V1"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model_V1" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create the CNN proposed by Oztel et. al.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>num_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes to predict.</p></li>
+<li><p><strong>input_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">tuple</span></code>, <em>optional</em>) – Dimensions of the input image.</p></li>
+<li><p><strong>optimizer</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Optimizer used to minimize the loss function.</p></li>
+<li><p><strong>loss</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Loss function to use according to Keras options.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – Model containing the CNN created.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code></p>
+</dd>
+</dl>
+<p>Here is a picture of the network extracted from the original paper:</p>
+<a class="reference internal image-reference" href="_images/oztel_network.png"><img alt="_images/oztel_network.png" class="align-center" src="_images/oztel_network.png" style="width: 100%;" /></a>
+</dd></dl>
+
 </div>
 
 
