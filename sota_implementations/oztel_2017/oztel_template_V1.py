@@ -61,7 +61,7 @@ import math
 import time
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from cnn_oztel import create_oztel_model
+from cnn_oztel import create_oztel_model_V1
 from metrics import jaccard_index_numpy, voc_calculation, jaccard_index
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
@@ -170,10 +170,8 @@ patience = 25
 # Number of classes. To generate data with more than 1 channel custom DA need to
 # be selected. It can be 1 or 2.                                                                   
 n_classes = 2
-# Adjust the metric used accordingly to the number of clases. This code is planned 
-# to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
-# will only calculate the IoU for the foreground class (channel 1)
-metric = "jaccard_index_softmax" if n_classes > 1 else "jaccard_index"
+# Metric used                                                                   
+metric = "accuracy" 
 # To take only the last class of the predictions, which corresponds to the
 # foreground in a binary problem. If n_classes > 2 this should be disabled to
 # ensure all classes are preserved
@@ -366,7 +364,7 @@ print("#################################\n"
 optim = tf.keras.optimizers.Adam(learning_rate=learning_rate_value)
 
 # Create model
-model = create_oztel_model(optimizer=optim, loss=loss)
+model = create_oztel_model_V1(optimizer=optim, loss=loss)
 
 # Check the network created                                                     
 model.summary(line_length=150)
