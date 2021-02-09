@@ -10,6 +10,7 @@ from PIL import ImageEnhance, Image
 from tqdm import tqdm
 import copy
 from skimage import measure
+from skimage.transform import resize
 import scipy.ndimage
 from skimage.segmentation import clear_border
 import tensorflow as tf 
@@ -1224,6 +1225,43 @@ def onehot_encoding_to_img(encoded_image):
     return img
 
 
+def load_data_from_dir2(data_dir, shape):
+    """Load data with unknown shape from a directory.    """
+    from data_2D_manipulation import crop_data_with_overlap
+
+    print("Loading data from {}".format(data_dir))
+
+    ids = sorted(next(os.walk(data_dir))[2])
+
+    hr_data = []
+    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+        img = imread(os.path.join(data_dir, id_))
+
+        if len(img.shape) == 2:
+            img = np.expand_dims(img, axis=-1)
+        img = np.expand_dims(img, axis=0)
+
+        img_cropped = crop_data_with_overlap(img, shape)
+        
+        hr_data.append(img_cropped)
+
+    hr_data = np.concatenate(hr_data)
+    hr_data = (hr_data).astype(img.dtype)
+
+    lr_data = []
+    lr_shape = (shape[0]/2, shape[0]/2, 3)
+    for i in tqdm(range(hr_data.shape[0])):
+        lr_img = resize(hr_data[i], lr_shape, order=3, preserve_range=True) # bicubic 
+        lr_data.append(np.expand_dims(lr_img, axis=0))
+    lr_data = np.concatenate(lr_data)
+    lr_data = (lr_data).astype(img.dtype)
+
+    print("*** HR created data shape is {}".format(hr_data.shape))
+    print("*** LR created data shape is {}".format(lr_data.shape))
+
+    return hr_data, lr_data
+
+
 def load_data_from_dir(data_dir, shape):
     """Load data from a directory.
 
@@ -1416,7 +1454,7 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
 
     if crop:
         from data_3D_manipulation import crop_3D_data_with_overlap
-        data = None
+        data = []
         data_shape = []
         crop_shape = []
     else:
@@ -1435,13 +1473,12 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
                 img, subvol_shape, overlap=overlap, verbose=True)                 
             crop_shape.append(img_cropped.shape)
         
-            if data is None:
-                data = img_cropped
-            else:
-                data = img_cropped if data is None else np.concatenate((data,img_cropped))
+            data.append(img_cropped)
         else:
             img = np.transpose(img, (1,2,0,3))
             data[n,0:img.shape[0],0:img.shape[1],0:img.shape[2]] = img
+
+    if crop: data = np.concatenate(data)
 
     print("*** Loaded data shape is {}".format(data.shape))
     if crop:
