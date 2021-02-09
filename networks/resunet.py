@@ -224,14 +224,16 @@ def residual_block(x, f_maps, f_size, activation='elu', k_init='he_normal',
     # Main path                                                                 
     if not first_block:                                                         
         x = BatchNormalization()(x) if bn else x                                
-        x = ELU(alpha=1.0) (x)                                                  
+        if activation == 'elu':
+            x = ELU(alpha=1.0) (x)                                                  
                                                                                 
     x = Conv2D(f_maps, f_size, activation=None,                            
                kernel_initializer=k_init, padding='same') (x)                   
                                                                                 
     x = Dropout(drop_value) (x) if drop_value > 0 else x                        
     x = BatchNormalization()(x) if bn else x                                    
-    x = ELU(alpha=1.0) (x)                                                      
+    if activation == 'elu':
+        x = ELU(alpha=1.0) (x)                                                      
                                                                                 
     x = Conv2D(f_maps, f_size, activation=None,                            
                kernel_initializer=k_init, padding='same') (x)                   
