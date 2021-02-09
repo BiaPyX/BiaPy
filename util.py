@@ -539,7 +539,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
            The same applies to ``Y``.
     """   
 
-    if prefix is "":
+    if prefix == "":
         p_x = "x_"
         p_y = "y_"
     else:
@@ -561,10 +561,10 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
             for i in tqdm(range(X.shape[0])):
                 for j in range(X.shape[3]):
                     if X.shape[-1] == 1:
-                        im = Image.fromarray(X[i,:,:,j,0]*v)
+                        im = Image.fromarray((X[i,:,:,j,0]*v).astype(np.uint8))
                         im = im.convert('L')
                     else:
-                        im = Image.fromarray(X[i,:,:,j]*v, 'RGB')
+                        im = Image.fromarray((X[i,:,:,j]*v).astype(np.uint8), 'RGB')
                     
                     if filenames is None:
                         f = os.path.join(data_dir, p_x + str(i).zfill(d) + "_" \
@@ -576,10 +576,10 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
             d = len(str(X.shape[0]))
             for i in tqdm(range(X.shape[0])):
                 if X.shape[-1] == 1:
-                    im = Image.fromarray(X[i,:,:,0]*v)
+                    im = Image.fromarray((X[i,:,:,0]*v).astype(np.uint8))
                     im = im.convert('L')                                                
                 else:
-                    im = Image.fromarray(X[i]*v, 'RGB')
+                    im = Image.fromarray((X[i]*v).astype(np.uint8), 'RGB')
 
                 if filenames is None:
                     f = os.path.join(data_dir, p_x + str(i).zfill(d) + extension)
@@ -602,7 +602,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
             for i in tqdm(range(Y.shape[0])):
                 for j in range(Y.shape[3]):
                     for k in range(Y.shape[-1]):
-                        im = Image.fromarray(Y[i,:,:,j,k]*v)
+                        im = Image.fromarray((Y[i,:,:,j,k]*v).astype(np.uint8))
                         im = im.convert('L')
                         if filenames is None:
                             c = "" if Y.shape[-1] == 1 else "_c"+str(j)
@@ -616,7 +616,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
             d = len(str(Y.shape[0]))
             for i in tqdm(range(0, Y.shape[0])):
                 for j in range(Y.shape[-1]):
-                    im = Image.fromarray(Y[i,:,:,j]*v)         
+                    im = Image.fromarray((Y[i,:,:,j]*v).astype(np.uint8))         
                     im = im.convert('L')                                                
     
                     if filenames is None:
