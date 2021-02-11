@@ -71,9 +71,7 @@ from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing
 from tensorflow.keras.utils import plot_model
 from aux.callbacks import ModelCheckpoint
-from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
-                            boundary_refinement_watershed2,\
-                            ensemble8_2d_predictions
+from post_processing import calculate_z_filtering, ensemble8_2d_predictions
 
 
 ############
@@ -129,7 +127,7 @@ check_crop = True
 overlap = (0,0)
 # Use 'overlap' also in training data. If False overlap in train will be
 # minimum: (0,0)
-ov_train = False
+ov_train = True
 # Instead of make the crops before the network training, this flag activates
 # the option to extract a random crop of each train image during data 
 # augmentation (with a crop shape defined by "crop_shape" variable). This flag
@@ -284,11 +282,6 @@ result_no_bin_dir_full = os.path.join(result_dir, 'full_no_binarized')
 smo_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')
 smo_no_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')
 zfil_dir_full = os.path.join(result_dir, 'full_zfil')
-spu_dir_full = os.path.join(result_dir, 'full_spu')
-wa_debug_dir_full = os.path.join(result_dir, 'full_watershed_debug')
-wa_dir_full = os.path.join(result_dir, 'full_watershed')
-spu_wa_zfil_wa_debug_dir = os.path.join(result_dir, 'full_wa_spu_zfil_wa_debug')
-spu_wa_zfil_dir_full = os.path.join(result_dir, 'full_wa_spu_zfil')
 
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
@@ -695,52 +688,6 @@ zfil_voc_full = voc_calculation(
 
 del zfil_preds_test, Y_test_ensemble
 
-print("~~~~ Spurious Detection (full image) ~~~~")
-spu_preds_test = spuriuous_detection_filter(preds_test_full)
-
-print("Saving spurious detection filtering resulting images . . .")
-save_img(Y=spu_preds_test, mask_dir=spu_dir_full, prefix="test_out_spu")
-
-print("Calculate metrics (Spurious + full image) . . .")
-spu_jac_full = jaccard_index_numpy(Y_test, spu_preds_test)
-spu_voc_full = voc_calculation(Y_test, spu_preds_test, spu_jac_full)
-
-print("~~~~ Watershed (full image) ~~~~")
-wa_preds_test = boundary_refinement_watershed2(
-    preds_test_full, (preds_test_full> 0.5).astype(np.uint8),
-    save_marks_dir=wa_debug_dir_full)
-    #X_test, (preds_test> 0.5).astype(np.uint8), save_marks_dir=watershed_debug_dir)
-
-print("Saving watershed resulting images . . .")
-save_img(Y=(wa_preds_test).astype(np.uint8), mask_dir=wa_dir_full,
-         prefix="test_out_wa")
-
-print("Calculate metrics (Watershed + full image) . . .")
-wa_jac_full = jaccard_index_numpy(Y_test, wa_preds_test)
-wa_voc_full = voc_calculation(Y_test, wa_preds_test, wa_jac_full)
-del preds_test_full, wa_preds_test
-
-print("~~~~ Spurious Detection + Watershed + Z-filtering (full image) ~~~~")
-# Use spu_preds_test
-spu_wa_zfil_preds_test = boundary_refinement_watershed2(
-    spu_preds_test, (spu_preds_test> 0.5).astype(np.uint8),
-    save_marks_dir=spu_wa_zfil_wa_debug_dir)
-    #X_test, (preds_test> 0.5).astype(np.uint8), save_marks_dir=watershed_debug_dir)
-
-spu_wa_zfil_preds_test = calculate_z_filtering(spu_wa_zfil_preds_test)
-
-print("Saving Z-filtered images . . .")
-save_img(Y=spu_wa_zfil_preds_test, mask_dir=spu_wa_zfil_dir_full,
-         prefix="test_out_spu_wa_zfil")
-
-print("Calculate metrics (Z-filtering + full image) . . .")
-spu_wa_zfil_jac_full = jaccard_index_numpy(
-    Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8))
-spu_wa_zfil_voc_full = voc_calculation(
-    Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8),
-    spu_wa_zfil_jac_full)
-del spu_wa_zfil_preds_test, spu_preds_test
-
 
 print("####################################\n"
       "#  PRINT AND SAVE SCORES OBTAINED  #\n"
@@ -779,12 +726,6 @@ print("Post-process: Ensemble - Test IoU (full): {}".format(smo_jac_full))
 print("Post-process: Ensemble - Test VOC (full): {}".format(smo_voc_full))
 print("Post-process: Ensemble + Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
 print("Post-process: Ensemble + Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
-print("Post-process: Spurious Detection - Test IoU (full): {}".format(spu_jac_full))
-print("Post-process: Spurious Detection - VOC (full): {}".format(spu_voc_full))
-print("Post-process: Watershed - Test IoU (full): {}".format(wa_jac_full))
-print("Post-process: Watershed - VOC (full): {}".format(wa_voc_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test IoU (full): {}".format(spu_wa_zfil_jac_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test VOC (full): {}".format(spu_wa_zfil_voc_full))
 
 if not load_previous_weights:
     scores = {}

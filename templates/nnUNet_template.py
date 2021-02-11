@@ -131,7 +131,7 @@ check_crop = False
 overlap = (0,0)
 # Use 'overlap' also in training data. If False overlap in train will be
 # minimum: (0,0)
-ov_train = False
+ov_train = True
 # Instead of make the crops before the network training, this flag activates
 # the option to extract a random crop of each train image during data 
 # augmentation (with a crop shape defined by "crop_shape" variable). This flag

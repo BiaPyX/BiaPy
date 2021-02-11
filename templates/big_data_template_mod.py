@@ -62,7 +62,7 @@ from data_manipulation import load_data_from_dir, merge_data_without_overlap,\
 from custom_da_gen import ImageDataGenerator
 from keras_da_gen import keras_da_generator, keras_gen_samples
 from networks.unet import U_Net_2D
-from metrics import jaccard_index_numpy, voc_calculation, DET_calculation
+from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
 from PIL import Image
@@ -72,8 +72,7 @@ from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      ensemble8_2d_predictions
 from tensorflow.keras.utils import plot_model
 from callbacks import ModelCheckpoint
-from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
-                            boundary_refinement_watershed2
+from post_processing import calculate_z_filtering
 
 
 ############
@@ -223,25 +222,6 @@ activation = "elu"
 softmax_out = False
 
 
-### DET metric variables
-# More info of the metric at http://celltrackingchallenge.net/evaluation-methodology/ 
-# and https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf
-# NEEDED CODE REFACTORING OF THIS VARIABLE
-det_eval_ge_path = os.path.join(args.result_dir, "..", 'cell_challenge_eval',
-                                 'gen_' + job_identifier)
-# Path where the evaluation of the metric will be done
-det_eval_path = os.path.join(args.result_dir, "..", 'cell_challenge_eval', 
-                             args.job_id, job_identifier)
-# Path where the evaluation of the metric for the post processing methods will 
-# be done
-det_eval_post_path = os.path.join(args.result_dir, "..", 'cell_challenge_eval', 
-                                  args.job_id, job_identifier + '_s')
-# Path were the binaries of the DET metric is stored
-det_bin = os.path.join(args.base_work_dir, 'cell_cha_eval' ,'Linux', 'DETMeasure')
-# Number of digits used for encoding temporal indices of the DET metric
-n_dig = "3"
-
-
 ### Paths of the results                                             
 result_dir = os.path.join(args.result_dir, 'results', job_identifier)
 
@@ -277,18 +257,6 @@ smo_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')
 smo_no_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')
 # Folder where the images with the z-filter applied will be stored
 zfil_dir_full = os.path.join(result_dir, 'full_zfil')
-# Folder where the images passed through the spurious detection filtering will
-# be saved in
-spu_dir_full = os.path.join(result_dir, 'full_spu')
-# Folder where watershed debugging images will be placed in
-wa_debug_dir_full = os.path.join(result_dir, 'full_watershed_debug')
-# Folder where watershed output images will be placed in
-wa_dir_full = os.path.join(result_dir, 'full_watershed')
-# Folder where spurious detection + watershed + z-filter images' watershed
-# markers will be placed in
-spu_wa_zfil_wa_debug_dir = os.path.join(result_dir, 'full_wa_spu_zfil_wa_debug')
-# Folder where spurious detection + watershed + z-filter images will be placed in
-spu_wa_zfil_dir_full = os.path.join(result_dir, 'full_wa_spu_zfil')
 
 # Name of the folder where the charts of the loss and metrics values while 
 # training the network will be shown. This folder will be created under the
@@ -487,9 +455,6 @@ print("Calculate metrics (per image) . . .")
 jac_per_image = jaccard_index_numpy(Y_test, (preds_test > 0.5).astype(np.uint8))
 voc_per_image = voc_calculation(
     Y_test, (preds_test > 0.5).astype(np.uint8), jac_per_image)
-det_per_image = DET_calculation(
-    Y_test, (preds_test > 0.5).astype(np.uint8), det_eval_ge_path, det_eval_path,
-    det_bin, n_dig, args.job_id)
 
 print("~~~~ Smooth (per image) ~~~~")
 Y_test_smooth = np.zeros(X_test.shape, dtype=np.float32)
@@ -549,9 +514,6 @@ smo_score_per_image = jaccard_index_numpy(
     Y_test, (Y_test_smooth > 0.5).astype(np.uint8))
 smo_voc_per_image = voc_calculation(
     Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smo_score_per_image)
-smo_det_per_image = DET_calculation(
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_post_path, det_bin, n_dig, args.job_id)
 
 print("~~~~ Z-Filtering (per image) ~~~~")
 zfil_preds_test = calculate_z_filtering(preds_test)
@@ -564,9 +526,6 @@ zfil_score_per_image = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
 zfil_voc_per_image = voc_calculation(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_score_per_image)
-zfil_det_per_image = DET_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_post_path, det_bin, n_dig, args.job_id)
 del zfil_preds_test, preds_test
 
 print("~~~~ Smooth + Z-Filtering (per image) ~~~~")
@@ -582,10 +541,6 @@ smo_zfil_score_per_image = jaccard_index_numpy(
 smo_zfil_voc_per_image = voc_calculation(
     Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8),
     smo_zfil_score_per_image)
-smo_zfil_det_per_image = DET_calculation(
-    Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8),
-    det_eval_ge_path, det_eval_post_path, det_bin, n_dig, args.job_id)
-
 del Y_test_smooth, smo_zfil_preds_test
 
 
@@ -612,9 +567,6 @@ print("Calculate metrics (50% overlap) . . .")
 jac_50ov = jaccard_index_numpy(Y_test, (Y_test_50ov > 0.5).astype(np.float32))
 voc_50ov = voc_calculation(
     Y_test, (Y_test_50ov > 0.5).astype(np.float32), jac_50ov)
-det_50ov = DET_calculation(
-    Y_test, (Y_test_50ov > 0.5).astype(np.float32), det_eval_ge_path,
-    det_eval_path, det_bin, n_dig, args.job_id)
 
 print("~~~~ Z-Filtering (50% overlap) ~~~~")
 zfil_preds_test = calculate_z_filtering(Y_test_50ov)
@@ -627,9 +579,6 @@ zfil_score_50ov = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
 zfil_voc_50ov = voc_calculation(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_score_50ov)
-zfil_det_50ov = DET_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_post_path, det_bin, n_dig, args.job_id)
 del Y_test_50ov, zfil_preds_test
 
 
@@ -653,9 +602,6 @@ print("Calculate metrics (full image) . . .")
 jac_full = jaccard_index_numpy(Y_test, (preds_test_full > 0.5).astype(np.uint8))
 voc_full = voc_calculation(Y_test, (preds_test_full > 0.5).astype(np.uint8),
                            jac_full)
-det_full = DET_calculation(
-    Y_test, (preds_test_full > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_path, det_bin, n_dig, args.job_id)
 
 print("~~~~ 8-Ensemble (full image) ~~~~")
 Y_test_smooth = np.zeros(X_test.shape, dtype=(np.float32))
@@ -678,9 +624,6 @@ smo_score_full = jaccard_index_numpy(
     Y_test, (Y_test_smooth > 0.5).astype(np.uint8))
 smo_voc_full = voc_calculation(
     Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smo_score_full)
-smo_det_full = DET_calculation(
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_path, det_bin, n_dig, args.job_id)
 del Y_test_smooth
 
 print("~~~~ Z-Filtering (full image) ~~~~")
@@ -694,64 +637,7 @@ zfil_score_full = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
 zfil_voc_full = voc_calculation(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_score_full)
-zfil_det_full = DET_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_post_path, det_bin, n_dig, args.job_id)
-
 del zfil_preds_test
-
-print("~~~~ Spurious Detection (full image) ~~~~")
-spu_preds_test = spuriuous_detection_filter(preds_test_full)
-
-print("Saving spurious detection filtering resulting images . . .")
-save_img(Y=spu_preds_test, mask_dir=spu_dir_full, prefix="test_out_spu")
-
-print("Calculate metrics (Spurious + full image) . . .")
-spu_score_full = jaccard_index_numpy(Y_test, spu_preds_test)
-spu_voc_full = voc_calculation(Y_test, spu_preds_test, spu_score_full)
-spu_det_full = DET_calculation(Y_test, spu_preds_test, det_eval_ge_path,
-                               det_eval_post_path, det_bin, n_dig, args.job_id)
-
-print("~~~~ Watershed (full image) ~~~~")
-wa_preds_test = boundary_refinement_watershed2(
-    preds_test_full, (preds_test_full> 0.5).astype(np.uint8),
-    save_marks_dir=wa_debug_dir_full)
-    #X_test, (preds_test> 0.5).astype(np.uint8), save_marks_dir=watershed_debug_dir)
-
-print("Saving watershed resulting images . . .")
-save_img(Y=(wa_preds_test).astype(np.uint8), mask_dir=wa_dir_full,
-         prefix="test_out_wa")
-
-print("Calculate metrics (Watershed + full image) . . .")
-wa_score_full = jaccard_index_numpy(Y_test, wa_preds_test)
-wa_voc_full = voc_calculation(Y_test, wa_preds_test, wa_score_full)
-wa_det_full = DET_calculation(Y_test, wa_preds_test, det_eval_ge_path,
-                              det_eval_post_path, det_bin, n_dig, args.job_id)
-del preds_test_full, wa_preds_test
-
-print("~~~~ Spurious Detection + Watershed + Z-filtering (full image) ~~~~")
-# Use spu_preds_test
-spu_wa_zfil_preds_test = boundary_refinement_watershed2(
-    spu_preds_test, (spu_preds_test> 0.5).astype(np.uint8),
-    save_marks_dir=spu_wa_zfil_wa_debug_dir)
-    #X_test, (preds_test> 0.5).astype(np.uint8), save_marks_dir=watershed_debug_dir)
-
-spu_wa_zfil_preds_test = calculate_z_filtering(spu_wa_zfil_preds_test)
-
-print("Saving Z-filtered images . . .")
-save_img(Y=spu_wa_zfil_preds_test, mask_dir=spu_wa_zfil_dir_full,
-         prefix="test_out_spu_wa_zfil")
-
-print("Calculate metrics (Z-filtering + full image) . . .")
-spu_wa_zfil_score_full = jaccard_index_numpy(
-    Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8))
-spu_wa_zfil_voc_full = voc_calculation(
-    Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8),
-    spu_wa_zfil_score_full)
-spu_wa_zfil_det_full = DET_calculation(
-    Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8), det_eval_ge_path,
-    det_eval_post_path, det_bin, n_dig, args.job_id)
-del spu_wa_zfil_preds_test, spu_preds_test, Y_test
 
 
 print("####################################\n"
@@ -773,42 +659,24 @@ print("Test IoU (per crop): {}".format(jac_per_crop))
 
 print("Test IoU (merge into complete image): {}".format(jac_per_image))
 print("Test VOC (merge into complete image): {}".format(voc_per_image))
-print("Test DET (merge into complete image): {}".format(det_per_image))
 print("Post-process: Smooth - Test IoU (merge into complete image): {}".format(smo_score_per_image))
 print("Post-process: Smooth - Test VOC (merge into complete image): {}".format(smo_voc_per_image))
-print("Post-process: Smooth - Test DET (merge into complete image): {}".format(smo_det_per_image))
 print("Post-process: Z-Filtering - Test IoU (merge into complete image): {}".format(zfil_score_per_image))
 print("Post-process: Z-Filtering - Test VOC (merge into complete image): {}".format(zfil_voc_per_image))
-print("Post-process: Z-Filtering - Test DET (merge into complete image): {}".format(zfil_det_per_image))
 print("Post-process: Smooth + Z-Filtering - Test IoU (merge into complete image): {}".format(smo_zfil_score_per_image))
 print("Post-process: Smooth + Z-Filtering - Test VOC (merge into complete image): {}".format(smo_zfil_voc_per_image))
-print("Post-process: Smooth + Z-Filtering - Test DET (merge into complete image): {}".format(smo_zfil_det_per_image))
 
 print("Test IoU (merge with 50% overlap): {}".format(jac_50ov))
 print("Test VOC (merge with 50% overlap): {}".format(voc_50ov))
-print("Test DET (merge with with 50% overlap): {}".format(det_50ov))
 print("Post-process: Z-Filtering - Test IoU (merge with 50% overlap): {}".format(zfil_score_50ov))
 print("Post-process: Z-Filtering - Test VOC (merge with 50% overlap): {}".format(zfil_voc_50ov))
-print("Post-process: Z-Filtering - Test DET (merge with 50% overlap): {}".format(zfil_det_50ov))
 
 print("Test IoU (full): {}".format(jac_full))
 print("Test VOC (full): {}".format(voc_full))
-print("Test DET (full): {}".format(det_full))
 print("Post-process: Ensemble - Test IoU (full): {}".format(smo_score_full))
 print("Post-process: Ensemble - Test VOC (full): {}".format(smo_voc_full))
-print("Post-process: Ensemble - Test DET (full): {}".format(smo_det_full))
 print("Post-process: Z-Filtering - Test IoU (full): {}".format(zfil_score_full))
 print("Post-process: Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
-print("Post-process: Z-Filtering - Test DET (full): {}".format(zfil_det_full))
-print("Post-process: Spurious Detection - Test IoU (full): {}".format(spu_score_full))
-print("Post-process: Spurious Detection - VOC (full): {}".format(spu_voc_full))
-print("Post-process: Spurious Detection - DET (full): {}".format(spu_det_full))
-print("Post-process: Watershed - Test IoU (full): {}".format(wa_score_full))
-print("Post-process: Watershed - VOC (full): {}".format(wa_voc_full))
-print("Post-process: Watershed - DET (full): {}".format(wa_det_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test IoU (full): {}".format(spu_wa_zfil_score_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test VOC (full): {}".format(spu_wa_zfil_voc_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test DET (full): {}".format(spu_wa_zfil_det_full))
 
 if not load_previous_weights:
     scores = {}

@@ -117,7 +117,7 @@ train_3d_desired_shape = (256, 256, 40, 1)
 # Train shape of the 3D subvolumes
 test_3d_desired_shape = (256, 256, 40, 1)
 # Make overlap on train data                                                    
-ov_train = False
+ov_train = True
 # Wheter to use the rest of the train data when there is no exact division between
 # it and the subvolume shape needed (train_3d_desired_shape). Only has sense when 
 # ov_train is False                                                             
@@ -205,6 +205,10 @@ batch_normalization = False
 kernel_init = 'he_normal'
 # Activation function to use
 activation = "elu"
+# Downsampling to be made in Z. This value will be the third integer of the
+# MaxPooling operation. When facing anysotropic datasets set it to get better
+# performance
+z_down = 1
 # Number of classes. To generate data with more than 1 channel custom DA need to
 # be selected. It can be 1 or 2.                                                                   
 n_classes = 1
@@ -378,7 +382,7 @@ model = U_Net_3D(train_3d_desired_shape, activation=activation, depth=depth,
                  feature_maps=feature_maps, drop_values=dropout_values,
                  spatial_dropout=spatial_dropout, batch_norm=batch_normalization,
                  k_init=kernel_init, optimizer=optimizer, lr=learning_rate_value,
-                 n_classes=n_classes)
+                 n_classes=n_classes, z_down=z_down)
 
 # Check the network created
 model.summary(line_length=150)

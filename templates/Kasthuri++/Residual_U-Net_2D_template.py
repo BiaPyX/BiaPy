@@ -62,7 +62,7 @@ from data_2D_manipulation import load_and_prepare_2D_data, crop_data_with_overla
                                  merge_data_with_overlap
 from generators.custom_da_gen import ImageDataGenerator
 from generators.keras_da_gen import keras_da_generator, keras_gen_samples
-from networks.fcn_vgg import FCN8_VGG16
+from networks.resunet import ResUNet_2D
 from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
@@ -111,8 +111,13 @@ random_val_data = True
 # making the predictions. Be sure to take care of this if you are not going to
 # use "crop_data_with_overlap()" with the arg force_shape, as this function 
 # resolves the problem creating always crops of the same dimension
-img_train_shape = (1024, 768, 1)
-img_test_shape = (1024, 768, 1)
+img_train_shape = (1463, 1613, 1)
+#img_test_shape = (1334, 1553, 1) Original shape
+img_test_shape = (1344, 1568, 1)
+# We add here a bit of margin in test data to pass through the network, as with the
+# original data shape the architecture of our network will throw an error. This is
+# because the division is not exact and the skip connection concatenation will
+# not match in shape. We remove added pixels one the prediction in done.
 
 
 ### Crop variables
@@ -145,7 +150,7 @@ w_background = 0.06
 ### Data augmentation (DA) variables
 # To decide which type of DA implementation will be used. Select False to 
 # use Keras API provided DA, otherwise, a custom implementation will be used
-custom_da = True
+custom_da = False
 # Create samples of the DA made. Useful to check the output images made. 
 # This option is available for both Keras and custom DA
 aug_examples = True 
@@ -217,9 +222,9 @@ loss_type = "bce"
 # Batch size value
 batch_size_value = 6
 # Optimizer to use. Possible values: "sgd" or "adam"
-optimizer = "adam"
+optimizer = "sgd"
 # Learning rate used by the optimization method
-learning_rate_value = 0.0001
+learning_rate_value = 0.002
 # Number of epochs to train the network
 epochs_value = 360
 # Number of epochs to stop the training process after no improvement
@@ -229,9 +234,25 @@ weights_on_data = True if loss_type == "w_bce" else False
 
 
 ### Network architecture specific parameters
+# Number of feature maps on each level of the network. It's dimension must be 
+# equal depth+1.
+feature_maps = [16, 32, 64, 128, 256]
+# Depth of the network
+depth = 4
+# To activate the Spatial Dropout instead of use the "normal" dropout layer
+spatial_dropout = False
+# Values to make the dropout with. It's dimension must be equal depth+1. Set to
+# 0 to prevent dropout 
+dropout_values = [0.1, 0.1, 0.2, 0.2, 0.3]
+# To active batch normalization
+batch_normalization = False
+# Kernel type to use on convolution layers
+kernel_init = 'he_normal'
+# Activation function to use                                                    
+activation = "elu" 
 # Number of classes. To generate data with more than 1 channel custom DA need to
 # be selected. It can be 1 or 2.                                                                   
-n_classes = 2
+n_classes = 1
 # Adjust the metric used accordingly to the number of clases. This code is planned 
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)
@@ -407,8 +428,10 @@ print("#################################\n"
       "#################################\n")
 
 print("Creating the network . . .")
-model = FCN8_VGG16((img_height, img_width, img_channels), n_classes=n_classes, 
-                   lr=learning_rate_value, optimizer=optimizer)
+model = ResUNet_2D([img_height, img_width, img_channels], activation=activation,
+                   depth=depth, feature_maps=feature_maps, optimizer=optimizer,
+                   drop_values=dropout_values, batch_norm=batch_normalization,
+                   k_init=kernel_init, lr=learning_rate_value)
 
 # Check the network created
 model.summary(line_length=150)
@@ -485,6 +508,11 @@ X_test, Y_test = merge_data_with_overlap(
 print("Reconstruct preds_test . . .")
 preds_test = merge_data_with_overlap(preds_test, orig_test_shape, overlap=overlap)
 
+# Recover original shape discarding few extra pixels added
+test_shape = (75, 1553, 1334, 1)
+preds_test = preds_test[:test_shape[0],:test_shape[1],:test_shape[2],:]
+Y_test = Y_test[:test_shape[0],:test_shape[1],:test_shape[2],:]
+
 print("Saving predicted images . . .")
 save_img(Y=(preds_test > 0.5).astype(np.uint8),
          mask_dir=result_bin_dir_per_image, prefix="test_out_bin")
@@ -506,6 +534,9 @@ for i in tqdm(range(X_test.shape[0])):
         Y_test_smooth[i] = np.expand_dims(predictions_smooth[...,1], axis=-1)
     else:
         Y_test_smooth[i] = predictions_smooth
+
+# Recover original shape discarding few extra pixels added
+Y_test_smooth = Y_test_smooth[:test_shape[0],:test_shape[1],:test_shape[2],:]
 
 print("Saving smooth predicted images . . .")
 save_img(Y=Y_test_smooth, mask_dir=smo_no_bin_dir_per_image,
@@ -563,6 +594,9 @@ if n_classes > 1:
 Y_test_50ov = merge_data_with_overlap(                                          
     Y_test_50ov, orig_test_shape, overlap=(0.5, 0.5))  
 
+# Recover original shape discarding few extra pixels added
+Y_test_50ov = Y_test_50ov[:test_shape[0],:test_shape[1],:test_shape[2],:]
+
 print("Saving 50% overlap predicted images . . .")
 save_img(Y=(Y_test_50ov > 0.5).astype(np.uint8),
          mask_dir=result_bin_dir_50ov, prefix="test_out_bin_50ov")
@@ -582,8 +616,12 @@ for i in tqdm(range(X_test.shape[0])):
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
         n_classes=n_classes, last_class=last_class)
     Y_test_50ov_ensemble[i] = pred_ensembled
+
 Y_test_50ov_ensemble = merge_data_with_overlap(
     Y_test_50ov_ensemble, orig_test_shape, overlap=(0.5, 0.5))
+
+# Recover original shape discarding few extra pixels added
+Y_test_50ov_ensemble = Y_test_50ov_ensemble[:test_shape[0],:test_shape[1],:test_shape[2],:]
 
 print("Saving 50% overlap + 8-Ensemble predicted images . . .")
 save_img(Y=(Y_test_50ov_ensemble > 0.5).astype(np.uint8),
@@ -621,6 +659,9 @@ print("########################\n"
 print("Making the predictions on test data . . .")
 preds_test_full = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
+# Recover original shape discarding few extra pixels added
+preds_test_full = preds_test_full[:test_shape[0],:test_shape[1],:test_shape[2],:]
+
 if n_classes > 1:
     preds_test_full = np.expand_dims(preds_test_full[...,1], -1)
 
@@ -643,6 +684,9 @@ for i in tqdm(range(X_test.shape[0])):
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
         n_classes=n_classes, last_class=last_class)
     Y_test_ensemble[i] = pred_ensembled
+
+# Recover original shape discarding few extra pixels added
+Y_test_ensemble = Y_test_ensemble[:test_shape[0],:test_shape[1],:test_shape[2],:]
 
 print("Saving smooth predicted images . . .")
 save_img(Y=Y_test_ensemble, mask_dir=smo_no_bin_dir_full,

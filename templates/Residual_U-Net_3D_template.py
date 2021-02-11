@@ -71,9 +71,7 @@ from tqdm import tqdm
 from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
                                      predict_img_with_overlap
 from tensorflow.keras.utils import plot_model
-from post_processing import spuriuous_detection_filter, calculate_z_filtering,\
-                            boundary_refinement_watershed2, \
-                            ensemble16_3d_predictions
+from post_processing import calculate_z_filtering, ensemble16_3d_predictions
 
 
 ############
@@ -119,7 +117,7 @@ train_3d_desired_shape = (80, 80, 80, 1)
 # Train shape of the 3D subvolumes
 test_3d_desired_shape = (80, 80, 80, 1)
 # Make overlap on train data                                                    
-ov_train = False                                                                
+ov_train = True                                                                
 # Wheter to use the rest of the train data when there is no exact division between
 # it and the subvolume shape needed (train_3d_desired_shape). Only has sense when 
 # ov_train is False                                                             
@@ -207,6 +205,10 @@ batch_normalization = False
 kernel_init = 'he_normal'
 # Activation function to use
 activation = "elu"
+# Downsampling to be made in Z. This value will be the third integer of the
+# MaxPooling operation. When facing anysotropic datasets set it to get better
+# performance
+z_down = 2
 # Number of classes. To generate data with more than 1 channel custom DA need to
 # be selected. It can be 1 or 2.                                                                   
 n_classes = 1
@@ -245,11 +247,6 @@ result_no_bin_dir_full = os.path.join(result_dir, 'full_no_binarized')
 smo_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')
 smo_no_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')
 zfil_dir_full = os.path.join(result_dir, 'full_zfil')
-spu_dir_full = os.path.join(result_dir, 'full_spu')
-wa_debug_dir_full = os.path.join(result_dir, 'full_watershed_debug')
-wa_dir_full = os.path.join(result_dir, 'full_watershed')
-spu_wa_zfil_wa_debug_dir = os.path.join(result_dir, 'full_wa_spu_zfil_wa_debug')
-spu_wa_zfil_dir_full = os.path.join(result_dir, 'full_wa_spu_zfil')
 
 # Name of the folder where the charts of the loss and metrics values while
 # training the network will be shown. This folder will be created under the
@@ -373,7 +370,7 @@ model = ResUNet_3D(train_3d_desired_shape, activation=activation, depth=depth,
                    feature_maps=feature_maps, drop_values=dropout_values,
                    batch_norm=batch_normalization, k_init=kernel_init, 
                    optimizer=optimizer, lr=learning_rate_value, 
-                   n_classes=n_classes)
+                   n_classes=n_classes, z_down=z_down)
 
 # Check the network created
 model.summary(line_length=150)
@@ -581,52 +578,6 @@ smo_voc_full = -1
 zfil_jac_full = -1
 zfil_voc_full = -1
 
-print("~~~~ Spurious Detection (full image) ~~~~")
-spu_preds_test = spuriuous_detection_filter(preds_test)
-
-print("Saving spurious detection filtering resulting images . . .")
-save_img(Y=spu_preds_test, mask_dir=spu_dir_full, prefix="test_out_spu")
-
-print("Calculate metrics (Spurious + full image) . . .")
-spu_jac_full = jaccard_index_numpy(Y_test, spu_preds_test)
-spu_voc_full = voc_calculation(Y_test, spu_preds_test, spu_jac_full)
-              
-print("~~~~ Watershed (full image) ~~~~")
-wa_preds_test = boundary_refinement_watershed2(
-    preds_test, (preds_test > 0.5).astype(np.uint8),
-    save_marks_dir=wa_debug_dir_full)
-    #X_test, (preds_test> 0.5).astype(np.uint8), save_marks_dir=watershed_debug_dir)
-
-print("Saving watershed resulting images . . .")
-save_img(Y=(wa_preds_test).astype(np.uint8), mask_dir=wa_dir_full,
-         prefix="test_out_wa")
-
-print("Calculate metrics (Watershed + full image) . . .")
-wa_jac_full = jaccard_index_numpy(Y_test, wa_preds_test)
-wa_voc_full = voc_calculation(Y_test, wa_preds_test, wa_jac_full)
-del preds_test, wa_preds_test
-
-print("~~~~ Spurious Detection + Watershed + Z-filtering (full image) ~~~~")
-# Use spu_preds_test
-spu_wa_zfil_preds_test = boundary_refinement_watershed2(
-    spu_preds_test, (spu_preds_test> 0.5).astype(np.uint8),
-    save_marks_dir=spu_wa_zfil_wa_debug_dir)
-    #X_test, (preds_test> 0.5).astype(np.uint8), save_marks_dir=watershed_debug_dir)
-
-spu_wa_zfil_preds_test = calculate_z_filtering(spu_wa_zfil_preds_test)
-
-print("Saving Z-filtered images . . .")
-save_img(Y=spu_wa_zfil_preds_test, mask_dir=spu_wa_zfil_dir_full,
-         prefix="test_out_spu_wa_zfil")
-
-print("Calculate metrics (Z-filtering + full image) . . .")
-spu_wa_zfil_jac_full = jaccard_index_numpy(
-    Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8))
-spu_wa_zfil_voc_full = voc_calculation(
-    Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8),
-    spu_wa_zfil_jac_full)
-del spu_wa_zfil_preds_test, spu_preds_test
-
 
 print("####################################\n"
       "#  PRINT AND SAVE SCORES OBTAINED  #\n"
@@ -666,12 +617,6 @@ print("Post-process: Ensemble - Test IoU (full): {}".format(smo_jac_full))
 print("Post-process: Ensemble - Test VOC (full): {}".format(smo_voc_full))
 print("Post-process: Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
 print("Post-process: Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
-print("Post-process: Spurious Detection - Test IoU (full): {}".format(spu_jac_full))
-print("Post-process: Spurious Detection - VOC (full): {}".format(spu_voc_full))
-print("Post-process: Watershed - Test IoU (full): {}".format(wa_jac_full))
-print("Post-process: Watershed - VOC (full): {}".format(wa_voc_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test IoU (full): {}".format(spu_wa_zfil_jac_full))
-print("Post-process: Spurious + Watershed + Z-Filtering - Test VOC (full): {}".format(spu_wa_zfil_voc_full))
 
 if not load_previous_weights:
     scores = {}

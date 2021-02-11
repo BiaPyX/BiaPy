@@ -62,7 +62,7 @@ from data_3D_manipulation import load_and_prepare_3D_data,\
                                  merge_3D_data_with_overlap, \
                                  crop_3D_data_with_overlap
 from generators.data_3D_generators import VoxelDataGenerator
-from networks.unet_3d import U_Net_3D
+from networks.resunet_3d import ResUNet_3D
 from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping
 from aux.callbacks import ModelCheckpoint
@@ -107,8 +107,13 @@ random_val_data = False
 
 
 ### Data shape
-img_train_shape = (1024, 768, 1)
-img_test_shape = (1024, 768, 1)
+img_train_shape = (1463, 1613, 1)
+#img_test_shape = (1334, 1553, 1) Original shape
+img_test_shape = (1344, 1568, 1)
+# We add here a bit of margin in test data to pass through the network, as with the
+# original data shape the architecture of our network will throw an error. This is
+# because the division is not exact and the skip connection concatenation will
+# not match in shape. We remove added pixels one the prediction in done.
 
 
 ### 3D volume variables
@@ -191,7 +196,7 @@ patience = 200
 
 ### Network architecture specific parameters
 # Number of feature maps on each level of the network
-feature_maps = [28, 36, 48, 64]
+feature_maps = [36, 48, 64, 80]
 # Depth of the network
 depth = 3
 # Flag to activate the Spatial Dropout instead of use the "normal" dropout layer
@@ -208,7 +213,7 @@ activation = "elu"
 # Downsampling to be made in Z. This value will be the third integer of the
 # MaxPooling operation. When facing anysotropic datasets set it to get better
 # performance
-z_down = 2
+z_down = 1
 # Number of classes. To generate data with more than 1 channel custom DA need to
 # be selected. It can be 1 or 2.                                                                   
 n_classes = 1
@@ -366,11 +371,11 @@ print("#################################\n"
       "#################################\n")
 
 print("Creating the network . . .")
-model = U_Net_3D(train_3d_desired_shape, activation=activation, depth=depth,
-                 feature_maps=feature_maps, drop_values=dropout_values,
-                 spatial_dropout=spatial_dropout, batch_norm=batch_normalization,
-                 k_init=kernel_init, optimizer=optimizer, lr=learning_rate_value,
-                 n_classes=n_classes, z_down=z_down)
+model = ResUNet_3D(train_3d_desired_shape, activation=activation, depth=depth,
+                   feature_maps=feature_maps, drop_values=dropout_values,
+                   batch_norm=batch_normalization, k_init=kernel_init, 
+                   optimizer=optimizer, lr=learning_rate_value, 
+                   n_classes=n_classes, z_down=z_down)
 
 # Check the network created
 model.summary(line_length=150)
@@ -430,6 +435,11 @@ print("#############################################\n"
 preds_test, Y_test = merge_3D_data_with_overlap(                                 
     preds_test, orig_test_shape, data_mask=Y_test, overlap=overlap) 
 
+# Recover original shape discarding few extra pixels added
+test_shape = (75, 1553, 1334, 1)
+preds_test = preds_test[:test_shape[0],:test_shape[1],:test_shape[2],:]
+Y_test = Y_test[:test_shape[0],:test_shape[1],:test_shape[2],:]
+
 print("Saving predicted images . . .")                                          
 save_img(Y=(preds_test > 0.5).astype(np.uint8), 
          mask_dir=result_bin_dir_per_image, prefix="test_out_bin")                                                 
@@ -455,6 +465,9 @@ for i in tqdm(range(X_test.shape[0])):
 Y_test_smooth = merge_3D_data_with_overlap(                                     
     Y_test_smooth, orig_test_shape, overlap=overlap)                          
                                                                                 
+# Recover original shape discarding few extra pixels added
+Y_test_smooth = Y_test_smooth[:test_shape[0],:test_shape[1],:test_shape[2],:]
+
 print("Saving smooth predicted images . . .")                                   
 save_img(Y=Y_test_smooth, mask_dir=smo_no_bin_dir_per_image,
          prefix="test_out_smo_no_bin")                                       
@@ -514,6 +527,9 @@ if n_classes > 1:
 Y_test_50ov = merge_3D_data_with_overlap(                                   
     Y_test_50ov, orig_test_shape, overlap=(0.5,0.5,0.5))                    
                                                                             
+# Recover original shape discarding few extra pixels added
+Y_test_50ov = Y_test_50ov[:test_shape[0],:test_shape[1],:test_shape[2],:]
+
 print("Saving 50% overlap predicted images . . .")                          
 save_img(Y=(Y_test_50ov > 0.5).astype(np.float32),                          
          mask_dir=result_bin_dir_50ov, prefix="test_out_bin_50ov")          
@@ -537,6 +553,9 @@ for i in tqdm(range(X_test.shape[0])):
 
 Y_test_50ov_ensemble = merge_3D_data_with_overlap(
     Y_test_50ov_ensemble, orig_test_shape, overlap=(0.5,0.5,0.5))
+
+# Recover original shape discarding few extra pixels added
+Y_test_50ov_ensemble = Y_test_50ov_ensemble[:test_shape[0],:test_shape[1],:test_shape[2],:]
 
 print("Saving 50% overlap predicted images . . .")
 save_img(Y=(Y_test_50ov_ensemble > 0.5).astype(np.float32),
