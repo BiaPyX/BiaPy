@@ -301,19 +301,6 @@ orig_test_shape, crop_test_shapes, norm_value = load_and_prepare_3D_data_v2(
     test_subvol_shape=test_3d_desired_shape,
     train_subvol_shape=train_3d_desired_shape, ov=overlap)
 
-#print("{} {} {}".format(X_train.shape, np.min(X_train), np.max(X_train)))
-#print("{} {} {}".format(Y_train.shape, np.min(Y_train), np.max(Y_train)))
-#print("{}".format(X_train.dtype))
-#from skimage.io import imsave
-#imsave(os.path.join(result_dir, 'a.tiff'), X_train[0].transpose(2,0,1,3))
-#save_img(X=X_train, data_dir=os.path.join(result_dir, 'X_train'), Y=Y_train, mask_dir=os.path.join(result_dir, 'Y_train'))
-#save_img(X=X_val, data_dir=os.path.join(result_dir, 'X_val'), Y=Y_val, mask_dir=os.path.join(result_dir, 'Y_val'))
-#save_img(X=X_test, data_dir=os.path.join(result_dir, 'X_test'), Y=Y_test, mask_dir=os.path.join(result_dir, 'Y_test'))
-
-# Instance segmentation to binary mask
-Y_train[Y_train>=1] = 1
-Y_test[Y_test>=1] = 1
-
 
 print("###########################\n"
       "#  EXTRA DATA GENERATION  #\n"
