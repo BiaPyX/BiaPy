@@ -10,8 +10,8 @@ from metrics import binary_crossentropy_weighted, jaccard_index, \
 
 def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], 
                        depth=3, drop_values=[0.1,0.1,0.1,0.1], spatial_dropout=False, 
-                       batch_norm=False, k_init='he_normal', loss_type="bce",
-                       optimizer="sgd", lr=0.001, n_classes=1):
+                       batch_norm=False, k_init='he_normal', z_down=2,
+                       loss_type="bce", optimizer="sgd", lr=0.001, n_classes=1):
     """Create 3D U-Net with Attention blocks.                                   
                                                                                 
        Based on `Attention U-Net: Learning Where to Look for the Pancreas <https://arxiv.org/abs/1804.03999>`_.
@@ -43,6 +43,10 @@ def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128,
        k_init : string, optional
            Kernel initialization for convolutional layers.
 
+       z_down : int, optional
+           Downsampling used in z dimension. Set it to 1 if the dataset is not 
+           isotropic.
+        
        loss_type : str, optional
            Loss type to use, three type available: ``bce`` (Binary Cross Entropy) 
            , ``w_bce`` (Weighted BCE, based on weigth maps) and ``w_bce_dice`` 
@@ -125,7 +129,7 @@ def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128,
 
         l.append(x)
     
-        x = MaxPooling3D((2, 2, 2))(x)
+        x = MaxPooling3D((2, 2, z_down))(x)
 
     # BOTTLENECK
     x = Conv3D(feature_maps[depth], (3, 3, 3), activation=None,
@@ -146,7 +150,7 @@ def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128,
     # DECODER
     for i in range(depth-1, -1, -1):
         x = Conv3DTranspose(feature_maps[i], (2, 2, 2),                            
-                            strides=(2, 2, 2), padding='same') (x)                 
+                            strides=(2, 2, z_down), padding='same') (x)                 
         attn = AttentionBlock(x, l[i], feature_maps[i], batch_norm)               
         x = concatenate([x, attn])  
         x = Conv3D(feature_maps[i], (3, 3, 3), activation=None,

@@ -9,8 +9,8 @@ from metrics import binary_crossentropy_weighted, jaccard_index, \
 
 def ResUNet_3D(image_shape, activation='elu', k_init='he_normal', 
                drop_values=[0.1,0.1,0.1,0.1,0.1], batch_norm=False, 
-               feature_maps=[16,32,64,128,256], depth=4, loss_type="bce", 
-               optimizer="sgd", lr=0.001, n_classes=1):
+               feature_maps=[16,32,64,128,256], depth=4, z_down=2,
+               loss_type="bce", optimizer="sgd", lr=0.001, n_classes=1):
 
     """Create 3D Residual_U-Net.
 
@@ -38,6 +38,10 @@ def ResUNet_3D(image_shape, activation='elu', k_init='he_normal',
        depth : int, optional
            Depth of the network.                        
                                                                            
+       z_down : int, optional
+           Downsampling used in z dimension. Set it to 1 if the dataset is not
+           isotropic.
+
        loss_type : str, optional
            Loss type to use, three type available: ``bce`` (Binary Cross Entropy),
            ``w_bce`` (Weighted BCE, based on weigth maps) and ``w_bce_dice``
@@ -168,10 +172,10 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values,
     if depth > 0:                                                               
         r = residual_block(x, f_maps[depth], filter_size, activation, k_init,           
                            drop_values[depth], batch_norm, first_block)                 
-        x = MaxPooling3D((2, 2, 2)) (r)                                         
+        x = MaxPooling3D((2, 2, z_down)) (r)                                         
         x = level_block(x, depth-1, f_maps, filter_size, activation, k_init, 
                         drop_values, batch_norm, False)                          
-        x = Conv3DTranspose(f_maps[depth], (2, 2, 2), strides=(2, 2, 2), padding='same') (x)
+        x = Conv3DTranspose(f_maps[depth], (2, 2, 2), strides=(2, 2, z_down), padding='same') (x)
 
         # Adjust shape introducing zero padding to allow the concatenation
         a = x.shape[3]
