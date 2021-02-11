@@ -36,7 +36,7 @@ sys.path.insert(0, args.base_work_dir)
 os.chdir(args.base_work_dir)
 
 # Create job directory
-os.makedirs(result_dir, exist_ok=True)
+os.makedirs(args.result_dir, exist_ok=True)
 
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
