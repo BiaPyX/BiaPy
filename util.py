@@ -1372,7 +1372,7 @@ def load_ct_data_from_dir(data_dir, shape=None):
 
 
 def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
-                            overlap=(0,0,0)):
+                            overlap=(0,0,0), return_filenames=False):
     """Load data from a directory.
 
        Parameters
@@ -1394,6 +1394,9 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
            Amount of minimum overlap on x, y and z dimensions. The values must
            be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. 
            E. g. ``(x, y, z)``.
+
+       return_filenames : bool, optional
+           Return a list with the loaded filenames. 
         
        Returns
        -------
@@ -1428,6 +1431,9 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
             raise ValueError("'shape' must be 4 length tuple")
     if crop and subvol_shape is None:
         raise ValueError("'subvol_shape' must be provided when 'crop' is True")
+
+    if return_filenames:
+        filenames = []
 
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
@@ -1464,6 +1470,9 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         img = imread(os.path.join(data_dir, id_))
 
+        if return_filenames:
+            filenames.append(id_)
+
         if len(img.shape) == 3:                                                 
             img = np.expand_dims(img, axis=-1)                                  
             
@@ -1482,7 +1491,12 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
 
     print("*** Loaded data shape is {}".format(data.shape))
     if crop:
-        return data, data_shape, crop_shape
+        if return_filenames:
+            return data, data_shape, crop_shape, filenames
+        else:
+            return data, data_shape, crop_shape
     else:
-        return data
-
+        if return_filenames:
+            return data, filenames
+        else:
+            return data

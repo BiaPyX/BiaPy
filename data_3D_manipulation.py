@@ -376,8 +376,9 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
                 image_train_shape[3])
 
     print("0) Loading train images . . .")
-    X_train, _, _ = load_3d_images_from_dir(train_path, None, crop=crop,
-        subvol_shape=train_subvol_shape, overlap=ov)
+    X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, None, 
+        crop=crop, subvol_shape=train_subvol_shape, overlap=ov, 
+        return_filenames=True)
 
     print("1) Loading train masks . . .")
     Y_train, _, _ = load_3d_images_from_dir(
@@ -387,11 +388,17 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
     te_shape = (image_test_shape[1], image_test_shape[0], image_test_shape[2], 
                 image_test_shape[3])
     print("2) Loading test images . . .")
-    X_test, orig_test_img_shapes, crop_test_img_shapes = load_3d_images_from_dir(
-        test_path, None, crop=True, subvol_shape=test_subvol_shape, overlap=ov)
+    X_test, orig_test_img_shapes, crop_test_img_shapes, te_filenames = load_3d_images_from_dir(
+        test_path, None, crop=True, subvol_shape=test_subvol_shape, overlap=ov,
+        return_filenames=True)
     print("3) Loading test masks . . .")
     Y_test, _, _ = load_3d_images_from_dir(test_mask_path, None, crop=True,            
         subvol_shape=test_subvol_shape, overlap=ov)
+
+    # Save train and test filenames
+    filenames = []
+    filenames.append(t_filenames)
+    filenames.append(te_filenames)
 
     # Create validation data splitting the train
     if create_val:
@@ -414,21 +421,15 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
         print("*** Loaded test data shape is: {}".format(X_test.shape))
         print("### END LOAD ###")
 
-        # Calculate normalization value
-        norm_value = np.mean(X_train)
-
         return X_train, Y_train, X_val, Y_val, X_test, Y_test, \
-               orig_test_img_shapes, crop_test_img_shapes, norm_value
+               orig_test_img_shapes, crop_test_img_shapes, filenames
     else:                                                               
         print("*** Loaded train data shape is: {}".format(X_train.shape))
         print("*** Loaded test data shape is: {}".format(X_test.shape))
         print("### END LOAD ###")
 
-        # Calculate normalization value
-        norm_value = np.mean(X_train)
-
         return X_train, Y_train, X_test, Y_test, orig_test_img_shapes, \
-               crop_test_img_shapes, norm_value
+               crop_test_img_shapes, filenames
 
 
 def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
