@@ -352,18 +352,19 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
            train_3d_shape = (256, 256, 40, 1)
            test_3d_shape = (256, 256, 40, 1)
 
-           X_train, Y_train, X_val,
-           Y_val, X_test, Y_test,
-           orig_test_shape, norm_value = load_and_prepare_3D_data_v2(
+           X_train, Y_train, X_val,\
+           Y_val, X_test, Y_test,\
+           orig_test_shape, crop_test_shapes,\
+           filenames = load_and_prepare_3D_data_v2(
                train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
                img_test_shape, val_split=0.1, create_val=True, shuffle_val=True,
-               ov_=(0,0,0), train_subvol_shape=train_3d_shape,
-               test_subvol_shape=test_3d_shape)
+               test_subvol_shape=test_3d_shape, train_subvol_shape=train_3d_shape, 
+               ov=(0,0,0))
 
            # The function will print the shapes of the generated arrays. In this example:
-           #     *** Loaded train data shape is: (648, 256, 256, 40, 1)
-           #     *** Loaded validation data shape is: (72, 256, 256, 40, 1)
-           #     *** Loaded test data shape is: (240, 256, 256, 40, 1)
+           #     *** Loaded train data shape is: (315, 256, 256, 40, 1)
+           #     *** Loaded validation data shape is: (35, 256, 256, 40, 1)
+           #     *** Loaded test data shape is: (178, 256, 256, 40, 1)
            #
     """      
    
