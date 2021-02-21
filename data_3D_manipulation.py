@@ -329,8 +329,9 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
        orig_test_shape : 4D int tuple
            Test data original shape. E.g. ``(num_of_images, x, y, channels)``.
 
-       norm_value : int
-           Normalization value calculated.
+       filenames : List of str
+           Loaded train and test filenames. filenames[0] are train filenames and 
+           filenames[1] are test filenames.
 
        Examples
        --------

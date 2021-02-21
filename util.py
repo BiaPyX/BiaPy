@@ -1392,11 +1392,12 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
 
        overlap : Tuple of 3 floats, optional
            Amount of minimum overlap on x, y and z dimensions. The values must
-           be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. 
+           be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.  
            E. g. ``(x, y, z)``.
 
        return_filenames : bool, optional
-           Return a list with the loaded filenames. 
+           Return a list with the loaded filenames. Useful when you need to save
+           them afterwards with the same names as the original ones.
         
        Returns
        -------
@@ -1411,6 +1412,9 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
        crop_shape : List of tuples, optional
            Shape of the loaded 3D images after cropping. Useful to reconstruct 
            the original images together with ``data_shape``.
+    
+       filenames : List of str, optional
+           Loaded filenames.
 
        Examples
        --------
@@ -1420,11 +1424,27 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
            data_path = "data/train/x"
            data_shape = (1024, 1024, 91, 1)
 
-           load_data_from_dir(data_path, data_shape)
+           data = load_data_from_dir(data_path, data_shape)
            # The function will print the shape of the created array. In this example:
            #     *** Loaded data shape is (20, 91, 1024, 1024, 1)
            # Notice height, width and depth swap as skimage.io imread function 
            # is used to load images 
+    
+           # EXAMPLE 2
+           # Same as example 1 but with unknown shape, cropping them into (256, 256, 40, 1) subvolumes
+           # with minimum overlap and storing filenames.
+           data_path = "data/train/x"
+
+           X_test, orig_test_img_shapes, \
+           crop_test_img_shapes, te_filenames = load_3d_images_from_dir(
+               test_path, None, crop=True, subvol_shape=(256, 256, 40, 1),
+               overlap=(0,0,0), return_filenames=True)
+           # The function will print the shape of the created array which its size is 
+           # the concatenation in 0 axis of all subvolumes created for each 3D image in the
+           # given path. For example:
+           #     *** Loaded data shape is (350, 256, 256, 40, 1)
+           # Notice height, width and depth swap as skimage.io imread function
+           # is used to load images.
     """
     if shape is not None:
         if len(shape) != 4:
