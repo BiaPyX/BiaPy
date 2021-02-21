@@ -102,8 +102,9 @@
 </ul>
 <p class="caption"><span class="caption-text">Networks</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">U-Net 2D</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">U-Net 3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">2D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_nnunet.html">nnU-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
@@ -752,6 +753,12 @@ the classes represented by an integer.</p>
 </dd></dl>
 
 <dl class="py function">
+<dt id="util.load_data_from_dir2">
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_data_from_dir2</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_data_from_dir2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_data_from_dir2" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load data with unknown shape from a directory.</p>
+</dd></dl>
+
+<dl class="py function">
 <dt id="util.load_data_from_dir">
 <code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_data_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_data_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_data_from_dir" title="Permalink to this definition">¶</a></dt>
 <dd><p>Load data from a directory.</p>
@@ -818,7 +825,7 @@ data_shape = (1024, 768, 1)</p>
 
 <dl class="py function">
 <dt id="util.load_3d_images_from_dir">
-<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_3d_images_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">crop</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">subvol_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_3d_images_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_3d_images_from_dir" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_3d_images_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">crop</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">subvol_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">return_filenames</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_3d_images_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_3d_images_from_dir" title="Permalink to this definition">¶</a></dt>
 <dd><p>Load data from a directory.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -831,6 +838,7 @@ E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <sp
 <li><p><strong>overlap</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x, y and z dimensions. The values must
 be on range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap.
 E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z)</span></code>.</p></li>
+<li><p><strong>return_filenames</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Return a list with the loaded filenames.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>

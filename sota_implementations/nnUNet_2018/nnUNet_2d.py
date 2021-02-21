@@ -8,8 +8,8 @@ from metrics import jaccard_index
 
 def nnUNet_2D(image_shape, feature_maps=32, max_fa=480, num_pool=8, 
               k_init='he_normal', optimizer="sgd", lr=0.002, n_classes=1):
-    """Create nnUNet 2D. This implementations tries to be a Keras version of the
-       original nnUNet 2D presented in `nnUNet Github <https://github.com/MIC-DKFZ/nnUNet>_`.
+    """Create nnU-Net 2D. This implementations tries to be a Keras version of the
+       original nnU-Net 2D presented in `nnU-Net Github <https://github.com/MIC-DKFZ/nnUNet>`_.
                                                                                 
        Parameters
        ----------

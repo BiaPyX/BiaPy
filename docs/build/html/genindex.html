@@ -102,6 +102,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">2D U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_nnunet.html">nnU-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
@@ -313,6 +314,8 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="networks_multiresunet.html#networks.MultiResUNet.conv2d_bn">conv2d_bn() (in module networks.MultiResUNet)</a>
 </li>
+      <li><a href="networks_nnunet.html#sota_implementations.nnUNet_2018.nnUNet_2d.ConvDropoutNormNonlin">ConvDropoutNormNonlin() (in module sota_implementations.nnUNet_2018.nnUNet_2d)</a>
+</li>
       <li><a href="oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model">create_oztel_model() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
 </li>
       <li><a href="oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model_V1">create_oztel_model_V1() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
@@ -522,10 +525,10 @@
 </li>
       <li><a href="util.html#util.load_3d_images_from_dir">load_3d_images_from_dir() (in module util)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="data_2d_manipulation.html#data_2D_manipulation.load_and_prepare_2D_data">load_and_prepare_2D_data() (in module data_2D_manipulation)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="data_3d_manipulation.html#data_3D_manipulation.load_and_prepare_3D_data">load_and_prepare_3D_data() (in module data_3D_manipulation)</a>
 </li>
       <li><a href="data_3d_manipulation.html#data_3D_manipulation.load_and_prepare_3D_data_v2">load_and_prepare_3D_data_v2() (in module data_3D_manipulation)</a>
@@ -533,6 +536,8 @@
       <li><a href="util.html#util.load_ct_data_from_dir">load_ct_data_from_dir() (in module util)</a>
 </li>
       <li><a href="util.html#util.load_data_from_dir">load_data_from_dir() (in module util)</a>
+</li>
+      <li><a href="util.html#util.load_data_from_dir2">load_data_from_dir2() (in module util)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -621,6 +626,8 @@
 </li>
         <li><a href="networks_mnet.html#module-sota_implementations.MNet_Fu_2018.MNet">sota_implementations.MNet_Fu_2018.MNet</a>
 </li>
+        <li><a href="networks_nnunet.html#module-sota_implementations.nnUNet_2018.nnUNet_2d">sota_implementations.nnUNet_2018.nnUNet_2d</a>
+</li>
         <li><a href="oztel_network.html#module-sota_implementations.oztel_2017.cnn_oztel">sota_implementations.oztel_2017.cnn_oztel</a>
 </li>
         <li><a href="oztel_utils.html#module-sota_implementations.oztel_2017.utils">sota_implementations.oztel_2017.utils</a>
@@ -684,8 +691,6 @@
         <li><a href="networks_resunet.html#module-networks.resunet">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     networks.resunet_3d
 
@@ -693,6 +698,8 @@
         <li><a href="networks_resunet_3d.html#module-networks.resunet_3d">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     networks.se_unet_2d
 
@@ -728,6 +735,8 @@
         <li><a href="networks_vanilla_unet_3d.html#module-networks.vanilla_unet_3d">module</a>
 </li>
       </ul></li>
+      <li><a href="networks_nnunet.html#sota_implementations.nnUNet_2018.nnUNet_2d.nnUNet_2D">nnUNet_2D() (in module sota_implementations.nnUNet_2018.nnUNet_2d)</a>
+</li>
       <li><a href="grad_cam.html#aux.Grad_CAM.grad_cam.normalize">normalize() (in module aux.Grad_CAM.grad_cam)</a>
 </li>
   </ul></td>
@@ -860,8 +869,6 @@
         <li><a href="cheng_sto2D.html#module-sota_implementations.cheng_2017.StochasticDownsampling2D">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     sota_implementations.cheng_2017.StochasticDownsampling3D
 
@@ -869,11 +876,20 @@
         <li><a href="cheng_sto3D.html#module-sota_implementations.cheng_2017.StochasticDownsampling3D">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     sota_implementations.MNet_Fu_2018.MNet
 
       <ul>
         <li><a href="networks_mnet.html#module-sota_implementations.MNet_Fu_2018.MNet">module</a>
+</li>
+      </ul></li>
+      <li>
+    sota_implementations.nnUNet_2018.nnUNet_2d
+
+      <ul>
+        <li><a href="networks_nnunet.html#module-sota_implementations.nnUNet_2018.nnUNet_2d">module</a>
 </li>
       </ul></li>
       <li>
@@ -905,6 +921,8 @@
         <li><a href="networks_se_unet_3d.html#networks.se_unet_3d.squeeze_excite_block">(in module networks.se_unet_3d)</a>
 </li>
       </ul></li>
+      <li><a href="networks_nnunet.html#sota_implementations.nnUNet_2018.nnUNet_2d.StackedConvLayers">StackedConvLayers() (in module sota_implementations.nnUNet_2018.nnUNet_2d)</a>
+</li>
       <li><a href="cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D">StochasticDownsampling2D (class in sota_implementations.cheng_2017.StochasticDownsampling2D)</a>
 </li>
       <li><a href="cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D">StochasticDownsampling3D (class in sota_implementations.cheng_2017.StochasticDownsampling3D)</a>

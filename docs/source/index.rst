@@ -42,6 +42,7 @@ This documentation tries to explain better the code of the project `EM Image Seg
 
    networks_unet2d
    networks_unet3d
+   networks_nnunet
    networks_fcn
    networks_fc_densetnet103
    networks_multiresunet

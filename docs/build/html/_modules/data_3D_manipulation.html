@@ -102,6 +102,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../networks_unet2d.html">2D U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../networks_unet3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks_nnunet.html">nnU-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../networks_multiresunet.html">MultiResUNet</a></li>
@@ -567,8 +568,9 @@
                 <span class="n">image_train_shape</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;0) Loading train images . . .&quot;</span><span class="p">)</span>
-    <span class="n">X_train</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">load_3d_images_from_dir</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="n">crop</span><span class="p">,</span>
-        <span class="n">subvol_shape</span><span class="o">=</span><span class="n">train_subvol_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">ov</span><span class="p">)</span>
+    <span class="n">X_train</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">t_filenames</span> <span class="o">=</span> <span class="n">load_3d_images_from_dir</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> 
+        <span class="n">crop</span><span class="o">=</span><span class="n">crop</span><span class="p">,</span> <span class="n">subvol_shape</span><span class="o">=</span><span class="n">train_subvol_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">ov</span><span class="p">,</span> 
+        <span class="n">return_filenames</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;1) Loading train masks . . .&quot;</span><span class="p">)</span>
     <span class="n">Y_train</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">load_3d_images_from_dir</span><span class="p">(</span>
@@ -578,11 +580,17 @@
     <span class="n">te_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">image_test_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">image_test_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">image_test_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> 
                 <span class="n">image_test_shape</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;2) Loading test images . . .&quot;</span><span class="p">)</span>
-    <span class="n">X_test</span><span class="p">,</span> <span class="n">orig_test_img_shapes</span><span class="p">,</span> <span class="n">crop_test_img_shapes</span> <span class="o">=</span> <span class="n">load_3d_images_from_dir</span><span class="p">(</span>
-        <span class="n">test_path</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">subvol_shape</span><span class="o">=</span><span class="n">test_subvol_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">ov</span><span class="p">)</span>
+    <span class="n">X_test</span><span class="p">,</span> <span class="n">orig_test_img_shapes</span><span class="p">,</span> <span class="n">crop_test_img_shapes</span><span class="p">,</span> <span class="n">te_filenames</span> <span class="o">=</span> <span class="n">load_3d_images_from_dir</span><span class="p">(</span>
+        <span class="n">test_path</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">subvol_shape</span><span class="o">=</span><span class="n">test_subvol_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">ov</span><span class="p">,</span>
+        <span class="n">return_filenames</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;3) Loading test masks . . .&quot;</span><span class="p">)</span>
     <span class="n">Y_test</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">load_3d_images_from_dir</span><span class="p">(</span><span class="n">test_mask_path</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>            
         <span class="n">subvol_shape</span><span class="o">=</span><span class="n">test_subvol_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">ov</span><span class="p">)</span>
+
+    <span class="c1"># Save train and test filenames</span>
+    <span class="n">filenames</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">filenames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t_filenames</span><span class="p">)</span>
+    <span class="n">filenames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">te_filenames</span><span class="p">)</span>
 
     <span class="c1"># Create validation data splitting the train</span>
     <span class="k">if</span> <span class="n">create_val</span><span class="p">:</span>
@@ -605,21 +613,15 @@
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;*** Loaded test data shape is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### END LOAD ###&quot;</span><span class="p">)</span>
 
-        <span class="c1"># Calculate normalization value</span>
-        <span class="n">norm_value</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">X_train</span><span class="p">)</span>
-
         <span class="k">return</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span> <span class="n">Y_val</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span> \
-               <span class="n">orig_test_img_shapes</span><span class="p">,</span> <span class="n">crop_test_img_shapes</span><span class="p">,</span> <span class="n">norm_value</span>
+               <span class="n">orig_test_img_shapes</span><span class="p">,</span> <span class="n">crop_test_img_shapes</span><span class="p">,</span> <span class="n">filenames</span>
     <span class="k">else</span><span class="p">:</span>                                                               
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;*** Loaded train data shape is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">X_train</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;*** Loaded test data shape is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### END LOAD ###&quot;</span><span class="p">)</span>
 
-        <span class="c1"># Calculate normalization value</span>
-        <span class="n">norm_value</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">X_train</span><span class="p">)</span>
-
         <span class="k">return</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span> <span class="n">orig_test_img_shapes</span><span class="p">,</span> \
-               <span class="n">crop_test_img_shapes</span><span class="p">,</span> <span class="n">norm_value</span></div>
+               <span class="n">crop_test_img_shapes</span><span class="p">,</span> <span class="n">filenames</span></div>
 
 
 <div class="viewcode-block" id="crop_3D_data_with_overlap"><a class="viewcode-back" href="../data_3d_manipulation.html#data_3D_manipulation.crop_3D_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">crop_3D_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">vol_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span>
