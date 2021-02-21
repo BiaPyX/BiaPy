@@ -22,7 +22,7 @@ In [templates](templates/) directory are located different templates that reprod
 - [big_data_template.py](templates/big_data_template.py): use this template as a baseline to make segmantic segmentation with an 2D U-Net. The difference with [U-Net_2D_template.py](templates/U-Net_2D_template.py) is that this template should be used with large datasets, as it uses `flow_from_directory()` instead of `flow()` function of Keras. Notice that the dataset directory structure changes.
 - [general_template.py](templates/general_template.py): in this template we gather all implemented options that this project covers. Should be used to extract different code blocks you are interested in. 
 
-To run state-of-the-art works implemented in this project you can use the template prepared on each case: [xiao_template_V1.py](sota_implementations/xiao_2018/xiao_template_V1.py), [cheng_template_V1.py](sota_implementations/cheng_2017/cheng_template_V1.py), [oztel_template_V0.py](sota_implementations/oztel_2017/oztel_template_V0.py) or [casser_template_V1.py](sota_implementations/casser_2018/casser_template_V1.py). 
+To run state-of-the-art works implemented in this project you can use the template prepared on each case: [xiao_template_V1.py](sota_implementations/xiao_2018/xiao_template_V1.py), [cheng_2D_template_V1.py](sota_implementations/cheng_2017/cheng_2D_template_V1.py), [cheng_3D_template_V1.py](sota_implementations/cheng_2017/cheng_3D_template_V1.py), [oztel_template_V1.py](sota_implementations/oztel_2017/oztel_template_V1.py) or [casser_template_V1.py](sota_implementations/casser_2018/casser_template_V1.py). 
 
 ### Data structure
 
@@ -104,7 +104,7 @@ job_id="400"                                 # Just a string to identify the job
 job_counter=0                                # Number that should be increased when one need to run the same job multiple times
 gpu_number="0"                               # Number of the GPU to run the job in (according to 'nvidia-smi' command)
 
-python -u template.py ${code_dir} "${data_dir}" "${job_dir}" --id "${jobID}" --rid "${jobCounter}" --gpu ${gpu_number} 
+python -u template.py $code_dir $data_dir $job_dir --id $jobID --rid $jobCounter --gpu $gpu_number 
 ```
 
 ### Other state-of-the-art implementations
