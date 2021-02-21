@@ -4,6 +4,8 @@ This repository contains a complete workflow to make semantic segmentation for E
 
 ![.](https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/img/predictions.gif)
 
+![.](https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/img/predictions2.gif)
+
 ## Getting started 
 These instructions will get you a copy of the project up and running on your machine.
 
