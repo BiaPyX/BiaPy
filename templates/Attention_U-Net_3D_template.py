@@ -71,8 +71,6 @@ from tensorflow.keras.callbacks import EarlyStopping
 from aux.callbacks import ModelCheckpoint
 from tensorflow.keras.models import load_model
 from tqdm import tqdm
-from smooth_tiled_predictions import predict_img_with_smooth_windowing, \
-                                     predict_img_with_overlap
 from tensorflow.keras.utils import plot_model
 from post_processing import calculate_z_filtering, ensemble16_3d_predictions
 
@@ -232,10 +230,10 @@ result_dir = os.path.join(args.result_dir, 'results', job_identifier)
 # per-image directories
 result_bin_dir_per_image = os.path.join(result_dir, 'per_image_binarized')
 result_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_no_binarized')
-smo_bin_dir_per_image = os.path.join(result_dir, 'per_image_smooth')
-smo_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_smooth_no_bin')
+ens_bin_dir_per_image = os.path.join(result_dir, 'per_image_ensemble')
+ens_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_ensemble_no_bin')
 zfil_dir_per_image = os.path.join(result_dir, 'per_image_zfil')
-smo_zfil_dir_per_image = os.path.join(result_dir, 'per_image_smo_zfil')
+ens_zfil_dir_per_image = os.path.join(result_dir, 'per_image_ens_zfil')
 
 # 50% overlap directories 
 result_bin_dir_50ov = os.path.join(result_dir, '50ov_binarized')
@@ -247,8 +245,8 @@ ens_zfil_dir_50ov = os.path.join(result_dir, '50ov_8ensemble_zfil')
 # Full image directories                                                        
 result_bin_dir_full = os.path.join(result_dir, 'full_binarized')
 result_no_bin_dir_full = os.path.join(result_dir, 'full_no_binarized')
-smo_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')
-smo_no_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')
+ens_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')
+ens_no_bin_dir_full = os.path.join(result_dir, 'full_8ensemble')
 zfil_dir_full = os.path.join(result_dir, 'full_zfil')
 
 # Name of the folder where the charts of the loss and metrics values while
@@ -448,28 +446,28 @@ voc_per_image = voc_calculation(
 det_per_image = -1
 
 print("~~~~ 16-Ensemble (per image) ~~~~")                                     
-Y_test_smooth = np.zeros(X_test.shape, dtype=np.float32)                        
+Y_test_ensemble = np.zeros(X_test.shape, dtype=np.float32)                        
 for i in tqdm(range(X_test.shape[0])):                                          
-    predictions_smooth = ensemble16_3d_predictions(X_test[i],                       
+    predictions_ensemble = ensemble16_3d_predictions(X_test[i],                       
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
         n_classes=n_classes, last_class=last_class)   
-    Y_test_smooth[i] = predictions_smooth
+    Y_test_ensemble[i] = predictions_ensemble
                                                                                 
 # Merge the volumes and convert them into 2D data                               
-Y_test_smooth = merge_3D_data_with_overlap(                                     
-    Y_test_smooth, orig_test_shape, overlap=overlap)                          
+Y_test_ensemble = merge_3D_data_with_overlap(                                     
+    Y_test_ensemble, orig_test_shape, overlap=overlap)                          
                                                                                 
-print("Saving smooth predicted images . . .")                                   
-save_img(Y=Y_test_smooth, mask_dir=smo_no_bin_dir_per_image,
-         prefix="test_out_smo_no_bin")                                       
-save_img(Y=(Y_test_smooth > 0.5).astype(np.uint8), 
-         mask_dir=smo_bin_dir_per_image, prefix="test_out_smo")                                              
+print("Saving ensemble predicted images . . .")                                   
+save_img(Y=Y_test_ensemble, mask_dir=ens_no_bin_dir_per_image,
+         prefix="test_out_ens_no_bin")                                       
+save_img(Y=(Y_test_ensemble > 0.5).astype(np.uint8), 
+         mask_dir=ens_bin_dir_per_image, prefix="test_out_smo")                                              
                                                                                 
-print("Calculate metrics (smooth + per subvolume). . .")                        
-smo_jac_per_image = jaccard_index_numpy(                                  
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8))                             
-smo_voc_per_image = voc_calculation(                                        
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smo_jac_per_image)    
+print("Calculate metrics (ensemble + per subvolume). . .")                        
+ens_jac_per_image = jaccard_index_numpy(                                  
+    Y_test, (Y_test_ensemble > 0.5).astype(np.uint8))                             
+ens_voc_per_image = voc_calculation(                                        
+    Y_test, (Y_test_ensemble > 0.5).astype(np.uint8), ens_jac_per_image)    
 
 print("~~~~ Z-Filtering (per image) ~~~~")                                      
 zfil_preds_test = calculate_z_filtering(preds_test)                             
@@ -485,20 +483,20 @@ zfil_voc_per_image = voc_calculation(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_jac_per_image)     
 del zfil_preds_test
                                                                                 
-print("~~~~ Smooth + Z-Filtering (per subvolume) ~~~~")                             
-smo_zfil_preds_test = calculate_z_filtering(Y_test_smooth)                      
+print("~~~~ Ensemble + Z-Filtering (per subvolume) ~~~~")                             
+ens_zfil_preds_test = calculate_z_filtering(Y_test_ensemble)                      
                                                                                 
-print("Saving smoothed + Z-filtered images . . .")                              
-save_img(Y=smo_zfil_preds_test, mask_dir=smo_zfil_dir_per_image,                
+print("Saving ensembleed + Z-filtered images . . .")                              
+save_img(Y=ens_zfil_preds_test, mask_dir=ens_zfil_dir_per_image,                
          prefix="test_out_smoo_zfil")                                           
                                                                                 
-print("Calculate metrics (Smooth + Z-filtering per crop) . . .")                
-smo_zfil_jac_per_image = jaccard_index_numpy(                                 
-    Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8))                       
-smo_zfil_voc_per_image = voc_calculation(                                       
-    Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8),                       
-    smo_zfil_jac_per_image)                                                   
-del Y_test_smooth, smo_zfil_preds_test                                          
+print("Calculate metrics (Ensemble + Z-filtering per crop) . . .")                
+ens_zfil_jac_per_image = jaccard_index_numpy(                                 
+    Y_test, (ens_zfil_preds_test > 0.5).astype(np.uint8))                       
+ens_zfil_voc_per_image = voc_calculation(                                       
+    Y_test, (ens_zfil_preds_test > 0.5).astype(np.uint8),                       
+    ens_zfil_jac_per_image)                                                   
+del Y_test_ensemble, ens_zfil_preds_test                                          
                                         
 
 print("############################################################\n"
@@ -576,8 +574,8 @@ jac_full = -1
 voc_full = -1
 det_full = -1
 
-smo_jac_full = -1
-smo_voc_full = -1
+ens_jac_full = -1
+ens_voc_full = -1
 
 zfil_jac_full = -1
 zfil_voc_full = -1
@@ -601,12 +599,12 @@ print("Test IoU (per crop): {}".format(jac_per_crop))
 
 print("Test IoU (merge into complete image): {}".format(jac_per_image))
 print("Test VOC (merge into complete image): {}".format(voc_per_image))
-print("Post-process: Smooth - Test IoU (merge into complete image): {}".format(smo_jac_per_image))
-print("Post-process: Smooth - Test VOC (merge into complete image): {}".format(smo_voc_per_image))
+print("Post-process: Ensemble - Test IoU (merge into complete image): {}".format(ens_jac_per_image))
+print("Post-process: Ensemble - Test VOC (merge into complete image): {}".format(ens_voc_per_image))
 print("Post-process: Z-Filtering - Test IoU (merge into complete image): {}".format(zfil_jac_per_image))
 print("Post-process: Z-Filtering - Test VOC (merge into complete image): {}".format(zfil_voc_per_image))
-print("Post-process: Smooth + Z-Filtering - Test IoU (merge into complete image): {}".format(smo_zfil_jac_per_image))
-print("Post-process: Smooth + Z-Filtering - Test VOC (merge into complete image): {}".format(smo_zfil_voc_per_image))
+print("Post-process: Ensemble + Z-Filtering - Test IoU (merge into complete image): {}".format(ens_zfil_jac_per_image))
+print("Post-process: Ensemble + Z-Filtering - Test VOC (merge into complete image): {}".format(ens_zfil_voc_per_image))
 
 print("Test IoU (merge with 50% overlap): {}".format(jac_50ov))
 print("Test VOC (merge with 50% overlap): {}".format(voc_50ov))
@@ -617,8 +615,8 @@ print("Post-process: Ensemble + Z-Filtering - Test VOC (merge with 50% overlap):
 
 print("Test IoU (full): {}".format(jac_full))
 print("Test VOC (full): {}".format(voc_full))
-print("Post-process: Ensemble - Test IoU (full): {}".format(smo_jac_full))
-print("Post-process: Ensemble - Test VOC (full): {}".format(smo_voc_full))
+print("Post-process: Ensemble - Test IoU (full): {}".format(ens_jac_full))
+print("Post-process: Ensemble - Test VOC (full): {}".format(ens_voc_full))
 print("Post-process: Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
 print("Post-process: Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
 
