@@ -2,9 +2,7 @@
 
 This repository contains a complete workflow to make semantic segmentation for EM images. The code is based on Keras and TensorFlow as backend. For further implementation details and project usage please visit our [documentation](https://em-image-segmentation.readthedocs.io/en/latest/).
 
-![.](https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/img/predictions.gif)
-
-![.](https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/img/predictions2.gif)
+![.](https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/img/seg.gif)
 
 ## Getting started 
 These instructions will get you a copy of the project up and running on your machine.
