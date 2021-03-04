@@ -66,7 +66,7 @@ from data_2D_manipulation import load_and_prepare_2D_data, crop_data_with_overla
 from generators.custom_da_gen import ImageDataGenerator
 from generators.keras_da_gen import keras_da_generator, keras_gen_samples
 from networks.unet import U_Net_2D
-from metrics import jaccard_index_numpy, verall_IoU_calculation
+from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
 from PIL import Image
@@ -490,7 +490,7 @@ save_img(Y=preds_test_full, mask_dir=result_no_bin_dir_full,
 
 print("Calculate metrics (full image) . . .")
 iou_full = jaccard_index_numpy(Y_test, (preds_test_full > 0.5).astype(np.uint8))
-overall_IoU_full = VOC_calculation(Y_test, (preds_test_full > 0.5).astype(np.uint8),
+overall_IoU_full = voc_calculation(Y_test, (preds_test_full > 0.5).astype(np.uint8),
                            iou_full)
 
 print("~~~~ 8-Ensemble (full image) ~~~~")
@@ -511,7 +511,7 @@ save_img(Y=(Y_test_ensemble > 0.5).astype(np.uint8), mask_dir=smo_bin_dir_full,
 print("Calculate metrics (8-Ensemble + full image) . . .")
 smo_iou_full = jaccard_index_numpy(
     Y_test, (Y_test_ensemble > 0.5).astype(np.uint8))
-smo_overall_IoU_full = VOC_calculation(
+smo_overall_IoU_full = voc_calculation(
     Y_test, (Y_test_ensemble > 0.5).astype(np.uint8), smo_iou_full)
 
 print("~~~~ 8-Ensemble + Z-Filtering (full image) ~~~~")
@@ -523,7 +523,7 @@ save_img(Y=zfil_preds_test, mask_dir=zfil_dir_full, prefix="test_out_zfil")
 print("Calculate metrics (8-Ensemble + Z-filtering + full image) . . .")
 zfil_iou_full = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
-zfil_overall_IoU_full = VOC_calculation(
+zfil_overall_IoU_full = voc_calculation(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_iou_full)
 
 del zfil_preds_test, Y_test_ensemble
