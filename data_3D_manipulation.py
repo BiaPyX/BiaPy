@@ -374,9 +374,6 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
     # Disable crops when random_subvolumes_in_DA is selected 
     crop = False if random_subvolumes_in_DA else True
 
-    tr_shape = (image_train_shape[1], image_train_shape[0], image_train_shape[2], 
-                image_train_shape[3])
-
     print("0) Loading train images . . .")
     X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, None, 
         crop=crop, subvol_shape=train_subvol_shape, overlap=ov, 
@@ -387,8 +384,6 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
         train_mask_path, None, crop=crop, subvol_shape=train_subvol_shape, 
         overlap=ov)
 
-    te_shape = (image_test_shape[1], image_test_shape[0], image_test_shape[2], 
-                image_test_shape[3])
     print("2) Loading test images . . .")
     X_test, orig_test_img_shapes, crop_test_img_shapes, te_filenames = load_3d_images_from_dir(
         test_path, None, crop=True, subvol_shape=test_subvol_shape, overlap=ov,

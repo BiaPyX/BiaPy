@@ -21,9 +21,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
     def __init__(self, X, Y, random_subvolumes_in_DA=False, subvol_shape=None,
                  seed=42, shuffle_each_epoch=False, batch_size=32, da=True, 
-                 shift_range=0, hist_eq=False, flip=False, rotation=False, 
-                 elastic=False, g_blur=False, gamma_contrast=False, 
-                 n_classes=1, val=False, prob_map=None, extra_data_factor=1):
+                 shift_range=0, flip=False, rotation=False, elastic=False,
+                 g_blur=False, gamma_contrast=False, n_classes=1, val=False,
+                 prob_map=None, extra_data_factor=1):
         """ImageDataGenerator constructor. Based on transformations from 
            https://github.com/aleju/imgaug.
                                                                                 
@@ -51,9 +51,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             shift_range (float, optional): range to make a shift. It must be a 
             number between 0 and 1. 
 
-            hist_eq (bool, optional): flag to make histogram equalization on 
-            images.
-    
             flip (bool, optional): flag to activate flips.
         
             rotation (bool, optional): flag to make 90º, 180º or 270º rotations.
@@ -81,10 +78,11 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             ``extra_data_factor`` times.
         """
 
-        if X.shape != Y.shape:
-            raise ValueError("The shape of X and Y must be the same")
         if X.ndim != 5 or Y.ndim != 5:
             raise ValueError("X and Y must be a 5D Numpy array")
+        if X.shape[:4] != Y.shape[:4]:                                          
+            raise ValueError("The shape of X and Y must be the same. {} != {}"
+                             .format(X.shape[:4], Y.shape[:4]))
         if random_subvolumes_in_DA:
             if subvol_shape is None:
                 raise ValueError("'subvol_shape' must be provided when "
@@ -93,9 +91,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                subvol_shape[2] > X.shape[3]:
                 raise ValueError("Given 'subvol_shape' is bigger than the data "
                                  "provided")
-        self.divide = True if np.max(X) > 1 else False
-        self.X = (X).astype(np.uint8)
-        self.Y = (Y).astype(np.uint8)
+
+        self.X = (X).astype(np.float32) if np.max(self.X) > 1 else (X).astype(np.float32)
+        self.Y = self.Y.astype(np.float32)
         self.n_classes = n_classes
         self.random_subvolumes_in_DA = random_subvolumes_in_DA
         self.seed = seed
@@ -114,6 +112,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.shape = subvol_shape
         else:
             self.shape = X.shape[1:]
+        self.channels = Y.shape[-1]
         self.flip = flip
         self.rotation = rotation
         self.shift_range = shift_range 
@@ -122,10 +121,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
         da_options = []
         self.trans_made = ''
-        if hist_eq:
-            da_options.append(iaa.HistogramEqualization())
-            self.trans_made += '_heq'
-            self.imgaug = True
         if elastic:
             da_options.append(iaa.Sometimes(0.5,iaa.ElasticTransformation(alpha=(240, 250), sigma=25, mode="reflect")))
             self.trans_made += '_elastic'
@@ -161,8 +156,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         """
 
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        batch_x = np.zeros((len(indexes), ) + self.shape, dtype=np.uint8)
-        batch_y = np.zeros((len(indexes), ) + self.shape, dtype=np.uint8)
+        batch_x = np.zeros((len(indexes), ) + self.shape)
+        batch_y = np.zeros((len(indexes), ) + self.shape[:3]+(self.channels,))
 
         for i, j in zip(range(len(indexes)), indexes):
             if self.random_subvolumes_in_DA:
@@ -175,12 +170,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
             if self.da:
                 batch_x[i], batch_y[i], _ = self.apply_transform(batch_x[i], batch_y[i])
-        
-        # Need to divide before transformations as some imgaug library functions
-        # need uint8 datatype
-        if self.divide:
-            batch_x = batch_x/255
-            batch_y = batch_y/255
 
         if self.n_classes > 1:
             batch_y_ = np.zeros((len(indexes), ) + self.shape[:3] + (self.n_classes,))
@@ -190,7 +179,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             batch_y = batch_y_
 
         self.total_batches_seen += 1
-        return batch_x, batch_y    
+
+        return batch_x, batch_y
 
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
@@ -219,7 +209,13 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         """
         trans_made = ''
         image = image[...,0]
-        mask = mask[...,0]
+       
+        if mask.shape[-1] == 1:
+            mask = mask[...,0]
+        else:
+            l_mask = []
+            for i in range(mask.shape[-1]):
+                l_mask.append(mask[...,i])
         
         # [0-0.25): x axis flip
         # [0.25-0.5): y axis flip
@@ -230,17 +226,29 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         prob = random.uniform(0, 1)
         if self.flip and prob < 0.25:
             image = np.flip(image, 0)
-            mask = np.flip(mask, 0)
+            if mask.shape[-1] == 1:
+                mask = np.flip(mask, 0)
+            else:
+                for i in range(mask.shape[-1]):
+                    l_mask[i] = np.flip(l_mask[i], 0)
             trans_made = '_xf'
         # y axis flip
         elif self.flip and 0.25 <= prob < 0.5:
             image = np.flip(image, 1)
-            mask = np.flip(mask, 1)
+            if mask.shape[-1] == 1:
+                mask = np.flip(mask, 1)
+            else:
+                for i in range(mask.shape[-1]):
+                    l_mask[i] = np.flip(l_mask[i], 1)
             trans_made = '_yf'
         # z axis flip
         elif self.flip and 0.5 <= prob < 0.75:
             image = np.flip(image, 2)                               
-            mask = np.flip(mask, 2)
+            if mask.shape[-1] == 1:
+                mask = np.flip(mask, 2)
+            else:
+                for i in range(mask.shape[-1]):
+                    l_mask[i] = np.flip(l_mask[i], 2)
             trans_made = '_zf'
        
         # [0-0.25): 90º rotation
@@ -252,21 +260,36 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if self.rotation and prob < 0.25: 
             image = rotate(image, axes=(0, 1), angle=90, mode='reflect',
                            reshape=False)
-            mask = rotate(mask, axes=(0, 1), angle=90, mode='reflect',
+            if mask.shape[-1] == 1:
+                mask = rotate(mask, axes=(0, 1), angle=90, mode='reflect',
+                          reshape=False)
+            else:
+                for i in range(mask.shape[-1]):
+                    l_mask[i] = rotate(l_mask[i], axes=(0, 1), angle=90, mode='reflect',
                           reshape=False)
             trans_made += '_yr90'
         # 180º rotation on x axis
         elif self.rotation and 0.25 <= prob < 0.5:
             image = rotate(image, axes=(0, 1), angle=180, mode='reflect',
                            reshape=False)
-            mask = rotate(mask, axes=(0, 1), angle=180, mode='reflect',
+            if mask.shape[-1] == 1:
+                mask = rotate(mask, axes=(0, 1), angle=180, mode='reflect',
+                          reshape=False)
+            else:
+                for i in range(mask.shape[-1]):
+                    l_mask[i] = rotate(l_mask[i], axes=(0, 1), angle=180, mode='reflect',
                           reshape=False)
             trans_made += '_yr180'
         # 270º rotation on x axis
         elif self.rotation and 0.5 <= prob < 0.75:
             image = rotate(image, axes=(0, 1), angle=270, mode='reflect',
                            reshape=False)
-            mask = rotate(mask, axes=(0, 1), angle=270, mode='reflect',
+            if mask.shape[-1] == 1:
+                mask = rotate(mask, axes=(0, 1), angle=270, mode='reflect',
+                          reshape=False)
+            else:
+                for i in range(mask.shape[-1]):
+                    l_mask[i] = rotate(l_mask[i], axes=(0, 1), angle=270, mode='reflect',
                           reshape=False)
             trans_made += '_yr270'
 
@@ -281,34 +304,62 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             s = [0] * image.ndim
             s[0] = int(self.shift_range * image.shape[0])
             shift(image, shift=s, mode='reflect')
-            shift(mask, shift=s, mode='reflect')
+            if mask.shape[-1] == 1:
+                shift(mask, shift=s, mode='reflect')
+            else:
+                for i in range(mask.shape[-1]):
+                    shift(l_mask[i], shift=s, mode='reflect')
             trans_made += '_xs' 
         # y axis shift 
         elif self.shift_range != 0 and 0.25 <= prob < 0.5:                   
             s = [0] * image.ndim                                          
             s[1] = int(self.shift_range * image.shape[1])          
             shift(image, shift=s, mode='reflect')
-            shift(mask, shift=s, mode='reflect')
+            if mask.shape[-1] == 1:
+                shift(mask, shift=s, mode='reflect')
+            else:
+                for i in range(mask.shape[-1]):
+                    shift(l_mask[i], shift=s, mode='reflect')
             trans_made += '_ys'
         # z axis shift
         elif self.shift_range != 0 and 0.5 <= prob < 0.75:                   
             s = [0] * image.ndim                                          
             s[2] = int(self.shift_range * image.shape[2])          
             shift(image, shift=s, mode='reflect')
-            shift(mask, shift=s, mode='reflect')
+            if mask.shape[-1] == 1:
+                shift(mask, shift=s, mode='reflect')
+            else:
+                for i in range(mask.shape[-1]):
+                    shift(l_mask[i], shift=s, mode='reflect')
             trans_made += '_zs'
 
         if self.imgaug:
-            segmap = SegmentationMapsOnImage(mask, shape=mask.shape)
-            image, vol_mask = self.seq(image=image, segmentation_maps=segmap)
-            mask = vol_mask.get_arr()
+            if mask.shape[-1] == 1:
+                segmap = SegmentationMapsOnImage(mask, shape=mask.shape)
+                image, vol_mask = self.seq(image=image, segmentation_maps=segmap)
+                mask = vol_mask.get_arr()
+            else:
+                for i in range(mask.shape[-1]):
+                    segmap = SegmentationMapsOnImage(l_mask[i], shape=l_mask[i].shape)
+                    if i == 0:
+                        image, vol_mask = self.seq(image=image, segmentation_maps=segmap)
+                    else:
+                        _, vol_mask = self.seq(image=image, segmentation_maps=segmap)
+                    l_mask[i] = vol_mask.get_arr()
             trans_made += self.trans_made
         
         if trans_made == '':
             trans_made = '_none'
 
-        return np.expand_dims(image, axis=-1), np.expand_dims(mask, axis=-1), \
-               trans_made
+        if mask.shape[-1] == 1:
+            return np.expand_dims(image, axis=-1), np.expand_dims(mask, axis=-1), \
+                   trans_made
+        else:
+            for i in range(mask.shape[-1]):
+                l_mask[i] = np.expand_dims(l_mask[i], -1)
+
+            return np.expand_dims(image, axis=-1), np.concatenate(l_mask, axis=-1), \
+                   trans_made 
 
     def get_transformed_samples(self, num_examples, random_images=True, 
                                 save_to_dir=True, out_dir='aug_3d'):
@@ -330,8 +381,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 examples will be stored. 
         """    
 
-        sample_x = np.zeros((num_examples, ) + self.shape, dtype=np.uint8)
-        sample_y = np.zeros((num_examples, ) + self.shape, dtype=np.uint8)
+        sample_x = np.zeros((num_examples, ) + self.shape)
+        sample_y = np.zeros((num_examples, ) + self.shape[:3]+(self.channels,))
 
         # Generate the examples 
         print("0) Creating samples of data augmentation . . .")
@@ -358,12 +409,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             else:
                 sample_x[i], sample_y[i], t_str = \
                     self.apply_transform(vol, vol_mask)
-
-            # Need to divide before transformations as some imgaug library 
-            # functions need uint8 datatype
-            if self.divide:
-                sample_x = sample_x/255
-                sample_y = sample_y/255
 
             # Save transformed 3D volumes 
             if save_to_dir:
