@@ -109,14 +109,14 @@ random_val_data = False
 
 
 ### Data shape: (x, y, z, channels) 
-img_train_shape = (1024, 1024, 91, 1)
-img_test_shape = (1024, 1024, 91, 1)
+img_train_shape = (1024, 1024, 91, 3)
+img_test_shape = (1024, 1024, 91, 3)
 
 ### 3D volume variables: (x, y, z, channels)
-# Train shape of the 3D subvolumes
-train_3d_desired_shape = (256, 256, 40, 1)
-# Train shape of the 3D subvolumes
-test_3d_desired_shape = (256, 256, 40, 1)
+# Train shape of the 3D subvolumes (channels for the masks are automatically selected)
+train_3d_desired_shape = (256, 256, 40, 3)
+# Train shape of the 3D subvolumes (channels for the masks are automatically selected)
+test_3d_desired_shape = (256, 256, 40, 3)
 # Make overlap on train data                                                    
 ov_train = True
 # Wheter to use the rest of the train data when there is no exact division between
@@ -136,14 +136,12 @@ aug_examples = True
 shuffle_train_data_each_epoch = True
 # Flag to shuffle the validation data on every epoch
 shuffle_val_data_each_epoch = False
-# Histogram equalization
-hist_eq = False
 # Rotation of 90º to the subvolumes
 rotation = True
 # Flag to make flips on the subvolumes (horizontal and vertical)
 flips = True
 # Elastic transformations
-elastic = False
+elastic = True
 # Gaussian blur
 g_blur = False
 # Gamma contrast 
@@ -279,6 +277,15 @@ os.makedirs(h5_dir, exist_ok=True)
 checkpointer = ModelCheckpoint(
     os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
     verbose=1, save_best_only=True)
+# Necessary when using TF version < 2.2 as pointed out in:
+#     https://github.com/tensorflow/tensorflow/issues/35911
+class OnEpochEnd(tf.keras.callbacks.Callback):
+  def __init__(self, callbacks):
+    self.callbacks = callbacks
+
+  def on_epoch_end(self, epoch, logs=None):
+    for callback in self.callbacks:
+      callback()
 
 
 print("###################\n"
@@ -344,10 +351,9 @@ train_generator = VoxelDataGenerator(
     X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,          
     subvol_shape=train_3d_desired_shape,                                        
     shuffle_each_epoch=shuffle_train_data_each_epoch,                           
-    batch_size=batch_size_value, da=da, hist_eq=hist_eq, flip=flips,            
-    rotation=rotation, elastic=elastic, g_blur=g_blur,                          
-    gamma_contrast=gamma_contrast, n_classes=n_classes, prob_map=train_prob,    
-    extra_data_factor=replicate_train) 
+    batch_size=batch_size_value, da=da, flip=flips, rotation=rotation,
+    elastic=elastic, g_blur=g_blur, gamma_contrast=gamma_contrast, 
+    n_classes=n_classes, prob_map=train_prob, extra_data_factor=replicate_train) 
 del X_train, Y_train
 
 # Create the test data generator without DA
@@ -357,10 +363,9 @@ test_generator = VoxelDataGenerator(
     batch_size=batch_size_value, da=False, n_classes=n_classes)
 
 # Generate examples of data augmentation
-if aug_examples == True:
+if aug_examples:
     train_generator.get_transformed_samples(
         5, random_images=False, save_to_dir=True, out_dir=da_samples_dir)
-
 
 print("#################################\n"
       "#  BUILD AND TRAIN THE NETWORK  #\n"
@@ -386,7 +391,8 @@ if load_previous_weights == False:
     results = model.fit(x=train_generator, validation_data=val_generator,
         validation_steps=len(val_generator), 
         steps_per_epoch=steps_per_epoch_value, epochs=epochs_value,
-        callbacks=[earlystopper, checkpointer, time_callback])
+        callbacks=[earlystopper, checkpointer, time_callback, 
+                   OnEpochEnd([train_generator.on_epoch_end])])
 
 print("Loading model weights from h5_file: {}".format(h5_file))
 model.load_weights(h5_file)
@@ -413,7 +419,7 @@ print("##########################\n"
 print("Evaluating test data . . .")
 score_per_crop = model.evaluate(test_generator, verbose=1)
 loss_per_crop = score_per_crop[0]
-jac_per_crop = score_per_crop[1]
+iou_per_crop = score_per_crop[1]
 
 print("Making the predictions on test data . . .")
 preds_test = model.predict(test_generator, verbose=1)
@@ -428,15 +434,14 @@ print("#############################################\n"
       "#############################################\n")
 
 # Merge the volumes to the original 3D images 
-jac = 0
-voc = 0
+iou = 0
+ov_iou = 0
 index = 0
 for i in tqdm(range(len(orig_test_shape))):
-    original_3d_shape = orig_test_shape[i]
+    original_3d_shape = orig_test_shape[i][:3]+(n_classes, )
     crop_3d_shape = crop_test_shapes[i]
     f_name = filenames[1][i]
     
-    print("Original shape is {}".format(original_3d_shape))
     orig_preds_test, orig_Y_test = merge_3D_data_with_overlap(
         preds_test[index:index+crop_3d_shape[0]], original_3d_shape, 
         data_mask=Y_test[index:index+crop_3d_shape[0]], overlap=overlap, 
@@ -446,45 +451,47 @@ for i in tqdm(range(len(orig_test_shape))):
 
     print("Saving predicted images . . .")                                          
     os.makedirs(result_bin_dir_per_image, exist_ok=True)
-    imsave(os.path.join(result_bin_dir_per_image, f_name+'.tiff'),
-           (orig_preds_test> 0.5).astype(np.uint8))
+    aux = np.expand_dims((orig_preds_test>0.5).astype(np.uint8), 1)
+    f = os.path.join(result_bin_dir_per_image, f_name)
+    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
     os.makedirs(result_no_bin_dir_per_image, exist_ok=True)
-    imsave(os.path.join(result_no_bin_dir_per_image, f_name+'.tiff'), 
-           orig_preds_test)
+    aux = np.expand_dims(orig_preds_test.astype(np.uint8), 1)                 
+    f = os.path.join(result_no_bin_dir_per_image, f_name)                  
+    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
                                                                                     
     print("Calculate the Jaccard of the image 3D")
     j = jaccard_index_numpy(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8))
     v = voc_calculation(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8), j)
-    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
-    jac += j
-    voc += v
+    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
+    iou += j
+    ov_iou += v
 
     index += crop_3d_shape[0]
 del orig_preds_test
 
 print("Calculate metrics (per image) . . .")                                                
-jac_per_image = jac/len(orig_test_shape)
-voc_per_image = voc/len(orig_test_shape)
+iou_per_image = iou/len(orig_test_shape)
+ov_iou_per_image = ov_iou/len(orig_test_shape)
 det_per_image = -1
 
 print("~~~~ 16-Ensemble (per image) ~~~~")                                     
 Y_test_ensemble = np.zeros(X_test.shape, dtype=np.float32)                        
 for i in tqdm(range(X_test.shape[0])):                                          
-    predictions_ensemble = ensemble16_3d_predictions(X_test[i],                       
+    predictions_ensemble = ensemble16_3d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
         n_classes=n_classes, last_class=last_class)   
     Y_test_ensemble[i] = predictions_ensemble
                                                                                 
 # Merge the volumes to the original 3D images
-jac = 0
-voc = 0
-jac_z = 0
-voc_z = 0
-jac_s_z = 0
-voc_s_z = 0
+iou = 0
+ov_iou = 0
+iou_z = 0
+ov_iou_z = 0
+iou_s_z = 0
+ov_iou_s_z = 0
 index = 0
 for i in tqdm(range(len(orig_test_shape))):
-    original_3d_shape = orig_test_shape[i]
+    original_3d_shape = orig_test_shape[i][:3]+(n_classes, )
     crop_3d_shape = crop_test_shapes[i]    
     f_name = filenames[1][i]
 
@@ -496,74 +503,78 @@ for i in tqdm(range(len(orig_test_shape))):
     orig_Y_test = orig_Y_test.astype(np.float32)
 
     print("Saving predicted images . . .")
-    os.makedirs(ens_no_bin_dir_per_image, exist_ok=True)
-    imsave(os.path.join(ens_no_bin_dir_per_image, f_name+'.tiff'),
-           (orig_preds_test> 0.5).astype(np.uint8))
-    os.makedirs(ens_bin_dir_per_image, exist_ok=True)
-    imsave(os.path.join(ens_bin_dir_per_image, f_name+'.tiff'),
-           orig_preds_test)
+    os.makedirs(ens_bin_dir_per_image, exist_ok=True)                     
+    aux = np.expand_dims((orig_preds_test>0.5).astype(np.uint8), 1)                 
+    f = os.path.join(ens_bin_dir_per_image, f_name)               
+    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})   
+    os.makedirs(ens_no_bin_dir_per_image, exist_ok=True)                        
+    aux = np.expand_dims(orig_preds_test.astype(np.uint8), 1)             
+    f = os.path.join(ens_no_bin_dir_per_image, f_name)                  
+    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
 
     print("Calculate metrics (ensemble + per subvolume). . .")
     j = jaccard_index_numpy(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8))
     v = voc_calculation(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8), j)
-    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
-    jac += j
-    voc += v
+    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
+    iou += j
+    ov_iou += v
 
     print("~~~~ Z-Filtering (per image) ~~~~")
     zfil_preds_test = calculate_z_filtering(orig_preds_test)
     zfil_preds_test = zfil_preds_test.astype(np.float32)
 
     print("Saving Z-filtered images . . .")
-    os.makedirs(zfil_dir_per_image, exist_ok=True)
-    imsave(os.path.join(zfil_dir_per_image, f_name+'.tiff'),
-           (zfil_preds_test> 0.5).astype(np.uint8))
+    os.makedirs(zfil_dir_per_image, exist_ok=True)                        
+    aux = np.expand_dims(zfil_preds_test.astype(np.uint8), 1)                   
+    f = os.path.join(zfil_dir_per_image, f_name)                  
+    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})   
 
     print("Calculate metrics (Z-filtering + per crop) . . .")
     j = jaccard_index_numpy(orig_Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
     v = voc_calculation(orig_Y_test, (zfil_preds_test > 0.5).astype(np.uint8), j)
-    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
-    jac_z += j
-    voc_z += v
+    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
+    iou_z += j
+    ov_iou_z += v
 
     print("~~~~ Ensemble + Z-Filtering (per subvolume) ~~~~")
     ens_zfil_preds_test = calculate_z_filtering(orig_preds_test)
     ens_zfil_preds_test = ens_zfil_preds_test.astype(np.float32)
     
     print("Saving ensembleed + Z-filtered images . . .")
-    os.makedirs(ens_zfil_dir_per_image, exist_ok=True)
-    imsave(os.path.join(ens_zfil_dir_per_image, f_name+'.tiff'),
-           (ens_zfil_preds_test > 0.5).astype(np.uint8))
+    os.makedirs(ens_zfil_dir_per_image, exist_ok=True)                              
+    aux = np.expand_dims(ens_zfil_preds_test.astype(np.uint8), 1)                   
+    f = os.path.join(ens_zfil_dir_per_image, f_name)                        
+    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
 
     print("Calculate metrics (Ensemble + Z-filtering per crop) . . .")
     j = jaccard_index_numpy(orig_Y_test, (ens_zfil_preds_test > 0.5).astype(np.uint8))
     v = voc_calculation(orig_Y_test, (ens_zfil_preds_test > 0.5).astype(np.uint8), j)
-    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
-    jac_s_z += j
-    voc_s_z += v
+    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
+    iou_s_z += j
+    ov_iou_s_z += v
 
     index += crop_3d_shape[0]
 del orig_preds_test, zfil_preds_test, ens_zfil_preds_test
 
-ens_jac_per_image = jac/len(orig_test_shape)
-ens_voc_per_image = voc/len(orig_test_shape)
+ens_iou_per_image = iou/len(orig_test_shape)
+ens_ov_iou_per_image = voc/len(orig_test_shape)
                                                                                 
-zfil_jac_per_image = jac_z/len(orig_test_shape)
-zfil_voc_per_image = voc_z/len(orig_test_shape)
+zfil_iou_per_image = iou_z/len(orig_test_shape)
+zfil_ov_iou_per_image = ov_iou_z/len(orig_test_shape)
                                                                                 
-ens_zfil_jac_per_image = jac_s_z/len(orig_test_shape)
-ens_zfil_voc_per_image = voc_s_z/len(orig_test_shape)
+ens_zfil_iou_per_image = iou_s_z/len(orig_test_shape)
+ens_zfil_ov_iou_per_image = ov_iou_s_z/len(orig_test_shape)
                                         
 
 print("############################################################\n"
       "#  Metrics (per image, merging crops with 50% of overlap)  #\n"
       "############################################################\n")
 
-jac = 0
-voc = 0
+iou = 0
+ov_iou = 0
 index = 0
 for i in tqdm(range(len(orig_test_shape))):
-    original_3d_shape = orig_test_shape[i]
+    original_3d_shape = orig_test_shape[i][:3]+(n_classes, )
     crop_3d_shape = crop_test_shapes[i]    
     f_name = filenames[1][i]
 
@@ -586,35 +597,38 @@ for i in tqdm(range(len(orig_test_shape))):
     Y_test_50ov = Y_test_50ov.astype(np.float32)
     
     print("Saving 50% overlap predicted images . . .")
-    os.makedirs(result_bin_dir_50ov, exist_ok=True)
-    imsave(os.path.join(result_bin_dir_50ov, f_name+'.tiff'),
-           (Y_test_50ov> 0.5).astype(np.uint8))
-    os.makedirs(result_no_bin_dir_50ov, exist_ok=True)
-    imsave(os.path.join(result_no_bin_dir_50ov, f_name+'.tiff'), Y_test_50ov)
+    os.makedirs(result_bin_dir_50ov, exist_ok=True)                          
+    aux = np.expand_dims((Y_test_50ov> 0.5).astype(np.uint8), 1)               
+    f = os.path.join(result_bin_dir_50ov, f_name)                    
+    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}) 
+    os.makedirs(result_no_bin_dir_50ov, exist_ok=True)                          
+    aux = np.expand_dims(Y_test_50ov.astype(np.uint8), 1)               
+    f = os.path.join(result_no_bin_dir_50ov, f_name)                    
+    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}) 
 
     print("Calculate metrics (50% overlap) . . .")
     j = jaccard_index_numpy(orig_Y_test, (Y_test_50ov > 0.5).astype(np.uint8)) 
     v = voc_calculation(orig_Y_test, (Y_test_50ov > 0.5).astype(np.uint8), j)
-    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
-    jac += j
-    voc += v
+    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
+    iou += j
+    ov_iou += v
 
     index += crop_3d_shape[0]
 
 del orig_X_test, Y_test_50ov
 
-jac_50ov = j/len(orig_test_shape)
-voc_50ov = v/len(orig_test_shape)
+iou_50ov = j/len(orig_test_shape)
+ov_iou_50ov = v/len(orig_test_shape)
 det_50ov = -1                                                               
 
 print("~~~~ 16-Ensemble ~~~~")                                      
-jac = 0
-voc = 0
-jac_z = 0
-voc_z = 0
+iou = 0
+ov_iou = 0
+iou_z = 0
+ov_iou_z = 0
 index = 0
 for i in tqdm(range(len(orig_test_shape))):
-    original_3d_shape = orig_test_shape[i]
+    original_3d_shape = orig_test_shape[i][:3]+(n_classes, )
     crop_3d_shape = crop_test_shapes[i]    
     f_name = filenames[1][i]
 
@@ -642,59 +656,48 @@ for i in tqdm(range(len(orig_test_shape))):
     orig_preds_test = orig_preds_test.astype(np.float32)    
     
     print("Saving 50% overlap predicted images . . .")
-    os.makedirs(ens_bin_dir_50ov, exist_ok=True)
-    imsave(os.path.join(ens_bin_dir_50ov, f_name+'.tiff'),
-           (orig_preds_test> 0.5).astype(np.uint8))
-    os.makedirs(ens_no_bin_dir_50ov, exist_ok=True)
-    imsave(os.path.join(ens_no_bin_dir_50ov, f_name+'.tiff'),
-           orig_preds_test)
+    os.makedirs(ens_bin_dir_50ov, exist_ok=True)                          
+    aux = np.expand_dims((orig_preds_test> 0.5).astype(np.uint8), 1)                       
+    f = os.path.join(ens_bin_dir_50ov, f_name)                    
+    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
+    os.makedirs(ens_no_bin_dir_50ov, exist_ok=True)                          
+    aux = np.expand_dims(orig_preds_test.astype(np.uint8), 1)                       
+    f = os.path.join(ens_no_bin_dir_50ov, f_name)                    
+    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
 
     print("Calculate metrics (50% overlap) . . .")
     j = jaccard_index_numpy(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8))
     v = voc_calculation(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8), j)
-    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
-    jac += j
-    voc += v
+    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
+    iou += j
+    ov_iou += v
 
     print("~~~~ Z-Filtering (50% overlap) ~~~~")
     zfil_preds_test = calculate_z_filtering(orig_preds_test)
     zfil_preds_test = zfil_preds_test.astype(np.float32)
 
     print("Saving Z-filtered images . . .")
-    os.makedirs(ens_zfil_dir_50ov, exist_ok=True)
-    imsave(os.path.join(ens_zfil_dir_50ov, f_name+'.tiff'), zfil_preds_test)
+    os.makedirs(ens_zfil_dir_50ov, exist_ok=True)                             
+    aux = np.expand_dims(zfil_preds_test.astype(np.uint8), 1)                   
+    f = os.path.join(ens_zfil_dir_50ov, f_name)                       
+    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
 
     print("Calculate metrics (Z-filtering + 50% overlap) . . .")
     j = jaccard_index_numpy(orig_Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
     v = voc_calculation(orig_Y_test, (zfil_preds_test > 0.5).astype(np.uint8), j)
-    print("Image {} ; IoU: {} ; VOC: {}".format(i,j,v))
-    jac_z += j
-    voc_z += v
+    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
+    iou_z += j
+    ov_iou_z += v
 
     index += crop_3d_shape[0]
 
 del orig_preds_test, orig_Y_test, zfil_preds_test, Y_test_50ov_ensemble
 
-ens_jac_50ov = jac/len(orig_test_shape)
-ens_voc_50ov = voc/len(orig_test_shape)
+ens_iou_50ov = iou/len(orig_test_shape)
+ens_ov_iou_50ov = voc/len(orig_test_shape)
 
-ens_zfil_jac_50ov = jac_z/len(orig_test_shape)
-ens_zfil_voc_50ov = voc_z/len(orig_test_shape)
-
-
-print("########################\n"
-      "# Metrics (full image) #\n"
-      "########################\n")
-
-jac_full = -1
-voc_full = -1
-det_full = -1
-
-ens_jac_full = -1
-ens_voc_full = -1
-
-zfil_jac_full = -1
-zfil_voc_full = -1
+ens_zfil_iou_50ov = iou_z/len(orig_test_shape)
+ens_zfil_ov_iou_50ov = ov_iou_z/len(orig_test_shape)
 
 
 print("####################################\n"
@@ -706,35 +709,28 @@ if load_previous_weights == False:
     print("Epoch number: {}".format(len(results.history['val_loss'])))
     print("Train time (s): {}".format(np.sum(time_callback.times)))
     print("Train loss: {}".format(np.min(results.history['loss'])))
-    print("Train IoU: {}".format(np.max(results.history[metric])))
+    print("Train Foreground IoU: {}".format(np.max(results.history[metric])))
     print("Validation loss: {}".format(np.min(results.history['val_loss'])))
-    print("Validation IoU: {}".format(np.max(results.history['val_'+metric])))
+    print("Validation Foreground IoU: {}".format(np.max(results.history['val_'+metric])))
 
 print("Test loss: {}".format(loss_per_crop))
-print("Test IoU (per crop): {}".format(jac_per_crop))
+print("Test Foreground IoU (per crop): {}".format(iou_per_crop))
 
-print("Test IoU (merge into complete image): {}".format(jac_per_image))
-print("Test VOC (merge into complete image): {}".format(voc_per_image))
-print("Post-process: Ensemble - Test IoU (merge into complete image): {}".format(ens_jac_per_image))
-print("Post-process: Ensemble - Test VOC (merge into complete image): {}".format(ens_voc_per_image))
-print("Post-process: Z-Filtering - Test IoU (merge into complete image): {}".format(zfil_jac_per_image))
-print("Post-process: Z-Filtering - Test VOC (merge into complete image): {}".format(zfil_voc_per_image))
-print("Post-process: Ensemble + Z-Filtering - Test IoU (merge into complete image): {}".format(ens_zfil_jac_per_image))
-print("Post-process: Ensemble + Z-Filtering - Test VOC (merge into complete image): {}".format(ens_zfil_voc_per_image))
+print("Test Foreground IoU (merge into complete image): {}".format(iou_per_image))
+print("Test Overall IoU (merge into complete image): {}".format(ov_iou_per_image))
+print("Post-process: Ensemble - Test Foreground IoU (merge into complete image): {}".format(ens_iou_per_image))
+print("Post-process: Ensemble - Test Overall IoU (merge into complete image): {}".format(ens_ov_iou_per_image))
+print("Post-process: Z-Filtering - Test Foreground IoU (merge into complete image): {}".format(zfil_iou_per_image))
+print("Post-process: Z-Filtering - Test Overall IoU (merge into complete image): {}".format(zfil_ov_iou_per_image))
+print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (merge into complete image): {}".format(ens_zfil_iou_per_image))
+print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (merge into complete image): {}".format(ens_zfil_ov_iou_per_image))
 
-print("Test IoU (merge with 50% overlap): {}".format(jac_50ov))
-print("Test VOC (merge with 50% overlap): {}".format(voc_50ov))
-print("Post-process: Ensemble - Test IoU (merge with 50% overlap): {}".format(ens_jac_50ov))
-print("Post-process: Ensemble - Test VOC (merge with 50% overlap): {}".format(ens_voc_50ov))
-print("Post-process: Ensemble + Z-Filtering - Test IoU (merge with 50% overlap): {}".format(ens_zfil_jac_50ov))
-print("Post-process: Ensemble + Z-Filtering - Test VOC (merge with 50% overlap): {}".format(ens_zfil_voc_50ov))
-
-print("Test IoU (full): {}".format(jac_full))
-print("Test VOC (full): {}".format(voc_full))
-print("Post-process: Ensemble - Test IoU (full): {}".format(ens_jac_full))
-print("Post-process: Ensemble - Test VOC (full): {}".format(ens_voc_full))
-print("Post-process: Ensemble + Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
-print("Post-process: Ensemble + Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
+print("Test Foreground IoU (merge with 50% overlap): {}".format(iou_50ov))
+print("Test Overall IoU (merge with 50% overlap): {}".format(ov_iou_50ov))
+print("Post-process: Ensemble - Test Foreground IoU (merge with 50% overlap): {}".format(ens_iou_50ov))
+print("Post-process: Ensemble - Test Overall IoU (merge with 50% overlap): {}".format(ens_ov_iou_50ov))
+print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (merge with 50% overlap): {}".format(ens_zfil_iou_50ov))
+print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (merge with 50% overlap): {}".format(ens_zfil_ov_iou_50ov))
 
 if not load_previous_weights:
     scores = {}

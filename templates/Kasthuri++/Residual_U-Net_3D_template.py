@@ -141,8 +141,6 @@ aug_examples = True
 shuffle_train_data_each_epoch = True
 # Flag to shuffle the validation data on every epoch
 shuffle_val_data_each_epoch = False
-# Histogram equalization
-hist_eq = False
 # Rotation of 90º to the subvolumes
 rotation = True
 # Flag to make flips on the subvolumes (horizontal and vertical)
@@ -284,6 +282,15 @@ os.makedirs(h5_dir, exist_ok=True)
 checkpointer = ModelCheckpoint(
     os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
     verbose=1, save_best_only=True)
+# Necessary when using TF version < 2.2 as pointed out in:                      
+#     https://github.com/tensorflow/tensorflow/issues/35911                     
+class OnEpochEnd(tf.keras.callbacks.Callback):                                  
+  def __init__(self, callbacks):                                                
+    self.callbacks = callbacks                                                  
+                                                                                
+  def on_epoch_end(self, epoch, logs=None):                                     
+    for callback in self.callbacks:                                             
+      callback()                                                                
 
 
 print("###################\n"
@@ -349,10 +356,9 @@ train_generator = VoxelDataGenerator(
     X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,          
     subvol_shape=train_3d_desired_shape,                                        
     shuffle_each_epoch=shuffle_train_data_each_epoch,                           
-    batch_size=batch_size_value, da=da, hist_eq=hist_eq, flip=flips,            
-    rotation=rotation, elastic=elastic, g_blur=g_blur,                          
-    gamma_contrast=gamma_contrast, n_classes=n_classes, prob_map=train_prob,    
-    extra_data_factor=replicate_train) 
+    batch_size=batch_size_value, da=da, flip=flips, rotation=rotation,
+    elastic=elastic, g_blur=g_blur, gamma_contrast=gamma_contrast,
+    n_classes=n_classes, prob_map=train_prob, extra_data_factor=replicate_train) 
 del X_train, Y_train
 
 # Create the test data generator without DA
@@ -391,7 +397,8 @@ if load_previous_weights == False:
     results = model.fit(x=train_generator, validation_data=val_generator,
         validation_steps=len(val_generator), 
         steps_per_epoch=steps_per_epoch_value, epochs=epochs_value,
-        callbacks=[earlystopper, checkpointer, time_callback])
+        callbacks=[earlystopper, checkpointer, time_callback,                   
+                   OnEpochEnd([train_generator.on_epoch_end])])
 
 print("Loading model weights from h5_file: {}".format(h5_file))
 model.load_weights(h5_file)
@@ -584,21 +591,6 @@ ens_zfil_voc_50ov = voc_calculation(
 del Y_test_50ov_ensemble, zfil_preds_test
 
 
-print("########################\n"
-      "# Metrics (full image) #\n"
-      "########################\n")
-
-jac_full = -1
-voc_full = -1
-det_full = -1
-
-ens_jac_full = -1
-ens_voc_full = -1
-
-zfil_jac_full = -1
-zfil_voc_full = -1
-
-
 print("####################################\n"
       "#  PRINT AND SAVE SCORES OBTAINED  #\n"
       "####################################\n")
@@ -630,13 +622,6 @@ print("Post-process: Ensemble - Test IoU (merge with 50% overlap): {}".format(en
 print("Post-process: Ensemble - Test VOC (merge with 50% overlap): {}".format(ens_voc_50ov))
 print("Post-process: Ensemble + Z-Filtering - Test IoU (merge with 50% overlap): {}".format(ens_zfil_jac_50ov))
 print("Post-process: Ensemble + Z-Filtering - Test VOC (merge with 50% overlap): {}".format(ens_zfil_voc_50ov))
-
-print("Test IoU (full): {}".format(jac_full))
-print("Test VOC (full): {}".format(voc_full))
-print("Post-process: Ensemble - Test IoU (full): {}".format(ens_jac_full))
-print("Post-process: Ensemble - Test VOC (full): {}".format(ens_voc_full))
-print("Post-process: Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
-print("Post-process: Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
 
 if not load_previous_weights:
     scores = {}
