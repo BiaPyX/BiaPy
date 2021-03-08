@@ -385,7 +385,8 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
         overlap=ov)
 
     print("2) Loading test images . . .")
-    X_test, orig_test_img_shapes, crop_test_img_shapes, te_filenames = load_3d_images_from_dir(
+    X_test, orig_test_img_shapes, \
+    crop_test_img_shapes, te_filenames = load_3d_images_from_dir(
         test_path, None, crop=True, subvol_shape=test_subvol_shape, overlap=ov,
         return_filenames=True)
     print("3) Loading test masks . . .")
@@ -567,7 +568,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
     total_vol = vols_per_z*vols_per_x*vols_per_y
     cropped_data = np.zeros((total_vol,) + vol_shape)
     if data_mask is not None:
-        cropped_data_mask = np.zeros((total_vol,) + vol_shape)
+        cropped_data_mask = np.zeros((total_vol,) + vol_shape[:3]+(data_mask.shape[-1],))
 
     c = 0
     for z in range(vols_per_z):
@@ -743,7 +744,7 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False, verbose=True):
                                                                                 
     cropped_data = np.zeros((num_sub_volum, ) + vol_shape)
     if data_mask is not None:
-        cropped_data_mask = np.zeros((num_sub_volum, ) + vol_shape)
+        cropped_data_mask = np.zeros((num_sub_volum, ) + vol_shape[:3]+(data_mask.shape[-1],))
                                                                                 
     if verbose:
         print("{},{},{} patches per x,y,z axis"
@@ -864,7 +865,7 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
 
     merged_data = np.zeros((orig_vol_shape))
     if data_mask is not None:
-        merged_data_mask = np.zeros((orig_vol_shape))
+        merged_data_mask = np.zeros(orig_vol_shape[:3]+(data_mask.shape[-1],) )
     ov_map_counter = np.zeros((orig_vol_shape))
 
     # Calculate overlapping variables                                           

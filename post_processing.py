@@ -360,53 +360,61 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2,
            # Notice that here pred_func is created based on model.predict function
            # of Keras
     """  
-
-    aug_vols = []
-        
-    # Convert into square image to make the rotations properly
-    pad_to_square = vol.shape[0] - vol.shape[1]
-   
-    if pad_to_square < 0:
-        volume = np.pad(vol, [(abs(pad_to_square),0), (0,0), (0,0), (0,0)], 'reflect') 
-    else:
-        volume = np.pad(vol, [(0,0), (pad_to_square,0), (0,0), (0,0)], 'reflect')
     
-    # Remove the last channel to make the transformations correctly             
-    volume = volume[...,0]
+    total_vol = []
+    for channel in range(vol.shape[-1]):
 
-    # Make 16 different combinations of the volume 
-    aug_vols.append(volume) 
-    aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=90, reshape=False))
-    aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=180, reshape=False))
-    aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=270, reshape=False))
-    volume_aux = np.flip(volume, 0)
-    aug_vols.append(volume_aux)
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
-    volume_aux = np.flip(volume, 1)
-    aug_vols.append(volume_aux)
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
-    volume_aux = np.flip(volume, 2)
-    aug_vols.append(volume_aux)
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
-    aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
-    del volume_aux
-    aug_vols = np.array(aug_vols)
-    
-    # Add the last channel again
-    aug_vols = np.expand_dims(aug_vols, -1)
-    volume = np.expand_dims(volume, -1)
+        aug_vols = []
+            
+        # Transformations per channel
+        _vol = vol[...,channel]
 
-    decoded_aug_vols = np.zeros(aug_vols.shape)
-    for i in range(aug_vols.shape[0]):
-        if n_classes > 1 and last_class:
-            decoded_aug_vols[i] = np.expand_dims(pred_func(np.expand_dims(aug_vols[i], 0))[...,1], -1)
+        # Convert into square image to make the rotations properly
+        pad_to_square = _vol.shape[0] - _vol.shape[1]
+       
+        if pad_to_square < 0:
+            volume = np.pad(_vol, [(abs(pad_to_square),0), (0,0), (0,0)], 'reflect') 
         else:
-            decoded_aug_vols[i] = pred_func(np.expand_dims(aug_vols[i], 0))
+            volume = np.pad(_vol, [(0,0), (pad_to_square,0), (0,0)], 'reflect')
+        
+        # Make 16 different combinations of the volume 
+        aug_vols.append(volume) 
+        aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=90, reshape=False))
+        aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=180, reshape=False))
+        aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=270, reshape=False))
+        volume_aux = np.flip(volume, 0)
+        aug_vols.append(volume_aux)
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
+        volume_aux = np.flip(volume, 1)
+        aug_vols.append(volume_aux)
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
+        volume_aux = np.flip(volume, 2)
+        aug_vols.append(volume_aux)
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
+        del volume_aux
+        aug_vols = np.array(aug_vols)
+        
+        # Add the last channel again
+        aug_vols = np.expand_dims(aug_vols, -1)
+        total_vol.append(aug_vols)
+
+    # Merge channels
+    total_vol = np.concatenate(total_vol, -1)
+
+    decoded_aug_vols = np.zeros(total_vol.shape)
+    for i in range(total_vol.shape[0]):
+        if n_classes > 1 and last_class:
+            decoded_aug_vols[i] = np.expand_dims(pred_func(np.expand_dims(total_vol[i], 0))[...,1], -1)
+        else:
+            decoded_aug_vols[i] = pred_func(np.expand_dims(total_vol[i], 0))
+    
+    volume = np.expand_dims(volume, -1)
 
     # Remove the last channel to make the transformations correctly
     decoded_aug_vols = decoded_aug_vols[...,0]

@@ -4,7 +4,7 @@ import random
 import os
 from tqdm import tqdm
 from skimage.io import imread
-from util import save_img, img_to_onehot_encoding 
+from util import img_to_onehot_encoding 
 from scipy.ndimage import rotate
 from scipy.ndimage.interpolation import shift
 from PIL import Image
@@ -13,6 +13,7 @@ from imgaug import augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 import imgaug as ia
 from imgaug import parameters as iap
+from skimage.io import imsave                                                   
 
 
 class VoxelDataGenerator(tf.keras.utils.Sequence):
@@ -27,55 +28,69 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         """ImageDataGenerator constructor. Based on transformations from 
            https://github.com/aleju/imgaug.
                                                                                 
-       Args:                                                                    
-            X (Numpy 5D array): data. E.g. (num_of_images, x, y, z, channels).
+           Parameters
+           ----------
+           X : Numpy 5D array
+               Data. E.g. ``(num_of_images, x, y, z, channels)``.
 
-            Y (Numpy 5D array): mask data. E.g. (num_of_images, x, y, z, channels).
+           Y : Numpy 5D array
+               Mask data. E.g. ``(num_of_images, x, y, z, channels)``.
 
-            random_subvolumes_in_DA (bool, optional): flag to extract random 
-            subvolumes from the given data. If not, the data must be 5D and is 
-            assumed that the subvolumes are prepared. 
+           random_subvolumes_in_DA : bool, optional
+               To extract random subvolumes from the given data. If not, the 
+               data must be 5D and is assumed that the subvolumes are prepared. 
     
-            subvol_shape (4D tuple of ints, optional): shape of the subvolume to
-            be extracted randomly from the data. E. g. (x, y, z, channels).
+           subvol_shape : 4D tuple of ints, optional
+               Shape of the subvolume to be extracted randomly from the data. 
+               E. g. ``(x, y, z, channels)``.
             
-            seed (int, optional): seed for random functions.
+           seed : int, optional
+               Seed for random functions.
                 
-            shuffle_each_epoch (bool, optional): flag to shuffle data after each 
-            epoch.
+           shuffle_each_epoch : bool, optional
+               To shuffle data after each epoch.
 
-            batch_size (int, optional): size of the batches.
+           batch_size : int, optional
+               Size of the batches.
             
-            da (bool, optional): flag to activate the data augmentation.
+           da : bool, optional
+               To activate the data augmentation.
             
-            shift_range (float, optional): range to make a shift. It must be a 
-            number between 0 and 1. 
+           shift_range : float, optional
+               Range to make a shift. It must be a number between ``0`` and ``1``. 
 
-            flip (bool, optional): flag to activate flips.
+           flip : bool, optional
+               To activate flips.
         
-            rotation (bool, optional): flag to make 90º, 180º or 270º rotations.
+           rotation : bool, optional
+               To make ``[-180, 180]`` degree range rotations.
 
-            elastic (bool, optional): flag to make elastic deformations.
+           elastic : bool, optional
+               To make elastic deformations.
             
-            g_blur (bool, optional): flag to insert gaussian blur on the images.
+           g_blur : bool, optional
+               To insert gaussian blur on the images.
 
-            gamma_contrast (bool, optional): flag to insert gamma constrast 
-            changes on images. 
+           gamma_contrast : bool, optional
+               To insert gamma constrast changes on images. 
 
-            n_classes (int, optional): number of classes. If ``> 1`` one-hot    
-            encoding will be done on the ground truth.
+           n_classes : int, optional
+               Number of classes. If ``> 1`` one-hot encoding will be done on 
+               the ground truth.
 
-            val (bool, optional): advice the generator that the volumes will be
-            used to validate the model to not make random crops (as the val. 
-            data must be the same on each epoch). Valid when 
-            random_subvolumes_in_DA is set.
+           val : bool, optional
+               Advice the generator that the volumes will be used to validate
+               the model to not make random crops (as the validation data must
+               be the same on each epoch). Valid when ``random_subvolumes_in_DA`` 
+               is set.
 
-            prob_map (5D Numpy array, optional): probability map used to make
-            random crops when random_subvolumes_in_DA is set.
+           prob_map : 5D Numpy array, optional
+               Probability map used to make random crops when
+               ``random_subvolumes_in_DA`` is set.
             
-            extra_data_factor (int, optional): factor to multiply the batches
-            yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated
-            ``extra_data_factor`` times.
+           extra_data_factor : int, optional
+               Factor to multiply the batches yielded in a epoch. It acts as if
+               ``X`` and ``Y``` where concatenated ``extra_data_factor`` times.
         """
 
         if X.ndim != 5 or Y.ndim != 5:
@@ -92,9 +107,11 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 raise ValueError("Given 'subvol_shape' is bigger than the data "
                                  "provided")
 
-        self.X = (X).astype(np.float32) if np.max(self.X) > 1 else (X).astype(np.float32)
-        self.Y = self.Y.astype(np.float32)
+        self.X = (X/255).astype(np.float32) if np.max(X) > 250 else X.astype(np.float32)
+        self.Y = (Y/255).astype(np.uint8) if np.max(Y) > 250 else Y.astype(np.uint8)
+        self.rgb = True if self.X.shape[-1] != 1 else False
         self.n_classes = n_classes
+        self.channels = Y.shape[-1] 
         self.random_subvolumes_in_DA = random_subvolumes_in_DA
         self.seed = seed
         self.shuffle_each_epoch = shuffle_each_epoch
@@ -112,29 +129,28 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.shape = subvol_shape
         else:
             self.shape = X.shape[1:]
-        self.channels = Y.shape[-1]
         self.flip = flip
         self.rotation = rotation
         self.shift_range = shift_range 
         self.total_batches_seen = 0
         self.imgaug = False
 
-        da_options = []
+        self.da_options = []
         self.trans_made = ''
         if elastic:
-            da_options.append(iaa.Sometimes(0.5,iaa.ElasticTransformation(alpha=(240, 250), sigma=25, mode="reflect")))
+            self.da_options.append(iaa.Sometimes(0.5,iaa.ElasticTransformation(alpha=(240, 250), sigma=25, mode="reflect")))
             self.trans_made += '_elastic'
             self.imgaug = True
         if g_blur:
-            da_options.append(iaa.Sometimes(0.5,iaa.GaussianBlur(sigma=(1.0, 2.0))))
+            self.da_options.append(iaa.Sometimes(0.5,iaa.GaussianBlur(sigma=(1.0, 2.0))))
             self.trans_made += '_gblur'
             self.imgaug = True
         if gamma_contrast:
-            da_options.append(iaa.Sometimes(0.5,iaa.GammaContrast((1.25, 1.75))))
+            self.da_options.append(iaa.Sometimes(0.5,iaa.GammaContrast((1.25, 1.75))))
             self.trans_made += '_gcontrast'
             self.imgaug = True
-        self.seq = iaa.Sequential(da_options)
-
+        self.seq = iaa.Sequential(self.da_options)
+        ia.seed(seed)
         self.on_epoch_end()
 
     def __len__(self):
@@ -142,22 +158,56 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
     
         return int(np.ceil(self.X.shape[0]*self.extra_data_factor/self.batch_size))
 
+    def __draw_grid(self, im, grid_width=50, v=1):
+        """Draw grid of the specified size on an image. 
+           
+           Parameters
+           ----------                                                                
+           im : 4D Numpy array
+               Image to be modified. E. g. ``(x, y, z, channels)``
+                
+           grid_width : int, optional
+               Grid's width. 
+
+           v : int, optional
+               Value to create the grid with.
+        """
+
+        for k in range(0, im.shape[2]):
+            for i in range(0, im.shape[0], grid_width):
+                if im.shape[-1] == 1:
+                    im[i,:,k] = v
+                else:
+                    im[i,:,k] = [v]*im.shape[-1]
+            for j in range(0, im.shape[1], grid_width):
+                if im.shape[-1] == 1:
+                    im[:,j,k] = v
+                else:
+                    im[:,j,k] = [v]*im.shape[-1]
+
     def __getitem__(self, index):
         """Generation of one batch of data. 
-           Args:
-                index (int): batch index counter.
+           
+           Parameters
+           ----------
+           index : int
+               Batch index counter.
             
-           Returns:
-                batch_x (Numpy array): corresponding X elements of the batch.
-                E.g. (batch_size_value, x, y, z, channels).
+           Returns
+           -------  
+           batch_x : 5D Numpy array
+               Corresponding X elements of the batch.
+               E.g. ``(batch_size_value, x, y, z, channels)``.
 
-                batch_y (Numpy array): corresponding Y elements of the batch.
-                E.g. (batch_size_value, x, y, z, channels).
+           batch_y : 5D Numpy array
+               Corresponding Y elements of the batch.
+               E.g. ``(batch_size_value, x, y, z, channels)``.
         """
 
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         batch_x = np.zeros((len(indexes), ) + self.shape)
-        batch_y = np.zeros((len(indexes), ) + self.shape[:3]+(self.channels,))
+        batch_y = np.zeros((len(indexes), ) + self.shape[:3]+(self.channels,), 
+                           dtype=np.uint8)
 
         for i, j in zip(range(len(indexes)), indexes):
             if self.random_subvolumes_in_DA:
@@ -171,7 +221,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             if self.da:
                 batch_x[i], batch_y[i], _ = self.apply_transform(batch_x[i], batch_y[i])
 
-        if self.n_classes > 1:
+        if self.n_classes > 1 and (self.n_classes != self.channels):
             batch_y_ = np.zeros((len(indexes), ) + self.shape[:3] + (self.n_classes,))
             for i in range(len(indexes)):
                 batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[i]))
@@ -185,6 +235,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
 
+        ia.seed(self.seed + self.total_batches_seen)
         self.indexes = self.o_indexes
         if self.shuffle_each_epoch:
             random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
@@ -193,24 +244,34 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         """Transform the input image and its mask at the same time with one of
            the selected choices based on a probability.
     
-           Args:
-                image (4D Numpy array): image to transform.
-                E.g. (x, y, z, channels).
+           Parameters
+           ----------
+           image : 4D Numpy array
+               Image to transform. E.g. ``(x, y, z, channels)``.
 
-                mask (4D Numpy array): mask to transform.
-                E.g. (x, y, z, channels).
+           mask : 4D Numpy array
+               Mask to transform. E.g. ``(x, y, z, channels)``.
     
-           Returns:
-                trans_image (4D Numpy array): transformed image.
-                E.g. (x, y, z, channels).
+           Returns
+           -------
+           trans_image : 4D Numpy array
+               Transformed image. E.g. ``(x, y, z, channels)``.
 
-                trans_mask (4D Numpy array): transformed image mask.
-                E.g. (x, y, z, channels).
+           trans_mask : 4D Numpy array
+               Transformed image mask. E.g. ``(x, y, z, channels)``.
         """
         trans_made = ''
-        image = image[...,0]
-       
-        if mask.shape[-1] == 1:
+
+        # IMG
+        if not self.rgb:
+            image = image[...,0]
+        else:
+            l_image = []
+            for i in range(image.shape[-1]):
+                l_image.append(image[...,i])
+        # MASK
+        m_channel = mask.shape[-1]
+        if m_channel == 1:
             mask = mask[...,0]
         else:
             l_mask = []
@@ -224,9 +285,15 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         #
         # x axis flip
         prob = random.uniform(0, 1)
-        if self.flip and prob < 0.25:
-            image = np.flip(image, 0)
-            if mask.shape[-1] == 1:
+        if self.flip and prob < 0.25:   
+            # IMG
+            if not self.rgb:
+                image = np.flip(image, 0)
+            else:
+                for i in range(image.shape[-1]):
+                    l_image[i] = np.flip(l_image[i], 0)
+            # MASK
+            if m_channel == 1:
                 mask = np.flip(mask, 0)
             else:
                 for i in range(mask.shape[-1]):
@@ -234,8 +301,14 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             trans_made = '_xf'
         # y axis flip
         elif self.flip and 0.25 <= prob < 0.5:
-            image = np.flip(image, 1)
-            if mask.shape[-1] == 1:
+            # IMG
+            if not self.rgb:                                                        
+                image = np.flip(image, 1)
+            else:
+                for i in range(image.shape[-1]):                                
+                    l_image[i] = np.flip(l_image[i], 1)                         
+            # MASK
+            if m_channel == 1:
                 mask = np.flip(mask, 1)
             else:
                 for i in range(mask.shape[-1]):
@@ -243,8 +316,14 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             trans_made = '_yf'
         # z axis flip
         elif self.flip and 0.5 <= prob < 0.75:
-            image = np.flip(image, 2)                               
-            if mask.shape[-1] == 1:
+            # IMG
+            if not self.rgb:                                                        
+                image = np.flip(image, 2)       
+            else:
+                for i in range(image.shape[-1]):                                
+                    l_image[i] = np.flip(l_image[i], 2)                         
+            # MASK
+            if m_channel == 1:
                 mask = np.flip(mask, 2)
             else:
                 for i in range(mask.shape[-1]):
@@ -257,10 +336,17 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         # [0.75-1]: nothing
         # 90º rotation on x axis
         prob = random.uniform(0, 1)
-        if self.rotation and prob < 0.25: 
-            image = rotate(image, axes=(0, 1), angle=90, mode='reflect',
-                           reshape=False)
-            if mask.shape[-1] == 1:
+        if self.rotation and prob < 0.25:   
+            # IMG
+            if not self.rgb:
+                image = rotate(image, axes=(0, 1), angle=90, mode='reflect',    
+                               reshape=False)
+            else:
+                for i in range(image.shape[-1]):                                 
+                    l_image[i] = rotate(l_image[i], axes=(0, 1), angle=90, mode='reflect',
+                                        reshape=False)
+            # MASK
+            if m_channel == 1:
                 mask = rotate(mask, axes=(0, 1), angle=90, mode='reflect',
                           reshape=False)
             else:
@@ -270,9 +356,16 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             trans_made += '_yr90'
         # 180º rotation on x axis
         elif self.rotation and 0.25 <= prob < 0.5:
-            image = rotate(image, axes=(0, 1), angle=180, mode='reflect',
-                           reshape=False)
-            if mask.shape[-1] == 1:
+            # IMG
+            if not self.rgb:
+                image = rotate(image, axes=(0, 1), angle=180, mode='reflect',
+                               reshape=False)
+            else:
+                for i in range(image.shape[-1]):                                
+                    l_image[i] = rotate(l_image[i], axes=(0, 1), angle=180, mode='reflect',
+                                        reshape=False)                          
+            # MASK
+            if m_channel == 1:
                 mask = rotate(mask, axes=(0, 1), angle=180, mode='reflect',
                           reshape=False)
             else:
@@ -282,9 +375,16 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             trans_made += '_yr180'
         # 270º rotation on x axis
         elif self.rotation and 0.5 <= prob < 0.75:
-            image = rotate(image, axes=(0, 1), angle=270, mode='reflect',
-                           reshape=False)
-            if mask.shape[-1] == 1:
+            # IMG
+            if not self.rgb:
+                image = rotate(image, axes=(0, 1), angle=270, mode='reflect',
+                               reshape=False)
+            else:
+                for i in range(image.shape[-1]):                                
+                    l_image[i] = rotate(l_image[i], axes=(0, 1), angle=270, mode='reflect',
+                                        reshape=False)                          
+            # MASK
+            if m_channel == 1:
                 mask = rotate(mask, axes=(0, 1), angle=270, mode='reflect',
                           reshape=False)
             else:
@@ -303,90 +403,139 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if self.shift_range != 0 and prob < 0.25:
             s = [0] * image.ndim
             s[0] = int(self.shift_range * image.shape[0])
-            shift(image, shift=s, mode='reflect')
-            if mask.shape[-1] == 1:
-                shift(mask, shift=s, mode='reflect')
-            else:
-                for i in range(mask.shape[-1]):
-                    shift(l_mask[i], shift=s, mode='reflect')
             trans_made += '_xs' 
         # y axis shift 
         elif self.shift_range != 0 and 0.25 <= prob < 0.5:                   
             s = [0] * image.ndim                                          
             s[1] = int(self.shift_range * image.shape[1])          
-            shift(image, shift=s, mode='reflect')
-            if mask.shape[-1] == 1:
-                shift(mask, shift=s, mode='reflect')
-            else:
-                for i in range(mask.shape[-1]):
-                    shift(l_mask[i], shift=s, mode='reflect')
             trans_made += '_ys'
         # z axis shift
         elif self.shift_range != 0 and 0.5 <= prob < 0.75:                   
             s = [0] * image.ndim                                          
             s[2] = int(self.shift_range * image.shape[2])          
-            shift(image, shift=s, mode='reflect')
-            if mask.shape[-1] == 1:
-                shift(mask, shift=s, mode='reflect')
-            else:
-                for i in range(mask.shape[-1]):
-                    shift(l_mask[i], shift=s, mode='reflect')
             trans_made += '_zs'
 
+        if self.shift_range != 0 and prob < 0.75:
+            # IMG                                                               
+            if not self.rgb:                                                    
+                shift(image, shift=s, mode='reflect')                           
+            else:                                                               
+                for i in range(image.shape[-1]):                                
+                    shift(l_image[i], shift=s, mode='reflect')                  
+            # MASK                                                              
+            if m_channel == 1:                                             
+                shift(mask, shift=s, mode='reflect')                            
+            else:                                                               
+                for i in range(mask.shape[-1]):                                 
+                    shift(l_mask[i], shift=s, mode='reflect')
+
         if self.imgaug:
-            if mask.shape[-1] == 1:
+            self.seq.deterministic = True
+            if m_channel == 1 and not self.rgb:
                 segmap = SegmentationMapsOnImage(mask, shape=mask.shape)
                 image, vol_mask = self.seq(image=image, segmentation_maps=segmap)
                 mask = vol_mask.get_arr()
-            else:
-                for i in range(mask.shape[-1]):
+            elif mask.shape[-1] != 1 and not self.rgb:
+                for i in range(mask.shape[-1]):                             
+                    self.seq.to_deterministic()
                     segmap = SegmentationMapsOnImage(l_mask[i], shape=l_mask[i].shape)
-                    if i == 0:
+                    if i == 0:                                              
                         image, vol_mask = self.seq(image=image, segmentation_maps=segmap)
-                    else:
+                    else:                                                   
                         _, vol_mask = self.seq(image=image, segmentation_maps=segmap)
                     l_mask[i] = vol_mask.get_arr()
+            elif m_channel == 1 and self.rgb:
+                mask = mask.astype(np.uint8)
+                segmap = SegmentationMapsOnImage(mask, shape=mask.shape)
+                for i in range(image.shape[-1]):                                 
+                    if i == 0:                                                  
+                        l_image[i], vol_mask = self.seq(image=l_image[i], segmentation_maps=segmap)
+                    else:                                                       
+                        l_image[i] = self.seq(image=l_image[i])
+                mask = vol_mask.get_arr()
+            else:
+                for i in range(image.shape[-1]):                             
+                    if i < len(l_mask):
+                        segmap = SegmentationMapsOnImage(l_mask[i], shape=l_mask[i].shape)
+
+                    l_image[i], vol_mask = self.seq(image=l_image[i], segmentation_maps=segmap)
+
+                    if i < len(l_mask):
+                        l_mask[i] = vol_mask.get_arr()
+                
+                # Apply transformations to the rest of the masks (if any)
+                if len(l_mask) > len(l_image):
+                    offset = len(l_mask) - len(l_image)
+                    for i in range(offset):
+                        self.seq.to_deterministic()
+                        j = len(l_image) + i
+                        segmap = SegmentationMapsOnImage(l_mask[j], shape=l_mask[j].shape)
+                        _, vol_mask = self.seq(image=l_image[-1], segmentation_maps=segmap)
+                    l_mask[j] = vol_mask.get_arr() 
+
+            self.seq.deterministic = False
             trans_made += self.trans_made
         
         if trans_made == '':
             trans_made = '_none'
 
-        if mask.shape[-1] == 1:
-            return np.expand_dims(image, axis=-1), np.expand_dims(mask, axis=-1), \
-                   trans_made
+        # IMG
+        if not self.rgb:
+            image = np.expand_dims(image, axis=-1)
         else:
-            for i in range(mask.shape[-1]):
-                l_mask[i] = np.expand_dims(l_mask[i], -1)
+            for i in range(image.shape[-1]):                                     
+                    l_image[i] = np.expand_dims(l_image[i], -1)
+            image = np.concatenate(l_image, axis=-1)
 
-            return np.expand_dims(image, axis=-1), np.concatenate(l_mask, axis=-1), \
-                   trans_made 
+        # MASK
+        if m_channel == 1:
+            mask = np.expand_dims(mask, axis=-1)
+        else:
+            for i in range(mask.shape[-1]):                                 
+                    l_mask[i] = np.expand_dims(l_mask[i], -1)                   
+            mask = np.concatenate(l_mask, axis=-1)
+
+        return image, mask, trans_made
 
     def get_transformed_samples(self, num_examples, random_images=True, 
-                                save_to_dir=True, out_dir='aug_3d'):
+                                save_to_dir=True, out_dir='aug_3d', train=False):
         """Apply selected transformations to a defined number of images from
            the dataset. 
             
-           Args:
-                num_examples (int): number of examples to generate.
+           Parameters
+           ----------
+           num_examples : int
+               Number of examples to generate.
             
-                random_images (bool, optional): randomly select images from the
-                dataset. If False the examples will be generated from the start
-                of the dataset. 
+           random_images : bool, optional
+               Randomly select images from the dataset. If False the examples
+               will be generated from the start of the dataset. 
 
-                save_to_dir (bool, optional): save the images generated. The 
-                purpose of this variable is to check the images generated by 
-                data augmentation.
+           save_to_dir : bool, optional
+               Save the images generated. The purpose of this variable is to
+               check the images generated by data augmentation.
 
-                out_dir (str, optional): name of the folder where the
-                examples will be stored. 
+           out_dir : str, optional
+               Name of the folder where the examples will be stored. 
+
+           train : bool, optional
+               To avoid drawing a grid on the generated images. This should be
+               set when the samples will be used for training.
         """    
 
-        sample_x = np.zeros((num_examples, ) + self.shape)
-        sample_y = np.zeros((num_examples, ) + self.shape[:3]+(self.channels,))
+        if random_images == False and num_examples > self.X.shape[0]:   
+            num_examples = self.X.shape[0]
+            print("WARNING: More samples requested than the ones available. "
+                  "'num_examples' fixed to {}".format(num_examples))
+            
+        sample_x = np.zeros((num_examples, ) + self.shape, dtype=np.float32)
+        sample_y = np.zeros((num_examples, ) + self.shape[:3]+(self.channels,),
+                            dtype=np.uint8)
 
         # Generate the examples 
         print("0) Creating samples of data augmentation . . .")
         for i in tqdm(range(num_examples)):
+            ia.seed(i)
             if random_images or self.random_subvolumes_in_DA:
                 pos = random.randint(0,self.X.shape[0]-1) 
             else:
@@ -402,19 +551,40 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 vol = np.copy(self.X[pos])
                 vol_mask = np.copy(self.Y[pos])
 
-            if self.da == False:
+            if not self.da:
                 sample_x[i] = vol
                 sample_y[i] = vol_mask
                 t_str = ''
             else:
+                if not train:
+                    self.__draw_grid(vol)
+                    self.__draw_grid(vol_mask)
+
                 sample_x[i], sample_y[i], t_str = \
                     self.apply_transform(vol, vol_mask)
 
             # Save transformed 3D volumes 
             if save_to_dir:
-                save_img(X=np.expand_dims(sample_x[i], axis=0), data_dir=out_dir, 
-                         Y=np.expand_dims(sample_y[i], axis=0), mask_dir=out_dir, 
-                         prefix="aug_3d_smp_" + str(pos) + t_str)
+                os.makedirs(out_dir, exist_ok=True)
+                # Original image/mask
+                f = os.path.join(out_dir, "orig_x_"+str(pos)+t_str+'.tiff')
+                aux = self.X[pos].copy()
+                self.__draw_grid(aux)
+                aux = np.expand_dims((np.transpose(aux, (2,0,1,3))*255).astype(np.uint8), 1)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
+                f = os.path.join(out_dir, "orig_y_"+str(pos)+t_str+'.tiff')
+                aux = self.Y[pos].copy()
+                self.__draw_grid(aux)
+                aux = np.expand_dims((np.transpose(aux, (2,0,1,3))*255).astype(np.uint8), 1)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
+                # Transformed
+                f = os.path.join(out_dir, "x_aug_"+str(pos)+t_str+'.tiff')
+                aux = np.expand_dims((np.transpose(sample_x[i], (2,0,1,3))*255).astype(np.uint8), 1)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
+                # Mask
+                f = os.path.join(out_dir, "y_aug_"+str(pos)+t_str+'.tiff')
+                aux = np.expand_dims((np.transpose(sample_y[i], (2,0,1,3))*255).astype(np.uint8), 1)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
 
                 # Save the original images with a red point and a blue square 
                 # that represents the point selected with the probability map 
