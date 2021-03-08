@@ -445,7 +445,7 @@ for i in tqdm(range(len(orig_test_shape))):
     orig_preds_test, orig_Y_test = merge_3D_data_with_overlap(
         preds_test[index:index+crop_3d_shape[0]], original_3d_shape, 
         data_mask=Y_test[index:index+crop_3d_shape[0]], overlap=overlap, 
-        verbose=True)
+        verbose=False)
     orig_preds_test = orig_preds_test.astype(np.float32)
     orig_Y_test = orig_Y_test.astype(np.float32)
 
@@ -472,10 +472,9 @@ del orig_preds_test
 print("Calculate metrics (per image) . . .")                                                
 iou_per_image = iou/len(orig_test_shape)
 ov_iou_per_image = ov_iou/len(orig_test_shape)
-det_per_image = -1
 
 print("~~~~ 16-Ensemble (per image) ~~~~")                                     
-Y_test_ensemble = np.zeros(X_test.shape, dtype=np.float32)                        
+Y_test_ensemble = np.zeros(Y_test.shape, dtype=np.float32)                        
 for i in tqdm(range(X_test.shape[0])):                                          
     predictions_ensemble = ensemble16_3d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
@@ -557,7 +556,7 @@ for i in tqdm(range(len(orig_test_shape))):
 del orig_preds_test, zfil_preds_test, ens_zfil_preds_test
 
 ens_iou_per_image = iou/len(orig_test_shape)
-ens_ov_iou_per_image = voc/len(orig_test_shape)
+ens_ov_iou_per_image = ov_iou/len(orig_test_shape)
                                                                                 
 zfil_iou_per_image = iou_z/len(orig_test_shape)
 zfil_ov_iou_per_image = ov_iou_z/len(orig_test_shape)
@@ -574,17 +573,17 @@ iou = 0
 ov_iou = 0
 index = 0
 for i in tqdm(range(len(orig_test_shape))):
-    original_3d_shape = orig_test_shape[i][:3]+(n_classes, )
+    original_3d_shape = orig_test_shape[i]
     crop_3d_shape = crop_test_shapes[i]    
     f_name = filenames[1][i]
 
     orig_X_test, orig_Y_test = merge_3D_data_with_overlap(
         X_test[index:index+crop_3d_shape[0]], original_3d_shape,
         data_mask=Y_test[index:index+crop_3d_shape[0]],
-        overlap=overlap, verbose=True)
+        overlap=overlap, verbose=False)
 
     orig_X_test = crop_3D_data_with_overlap(
-        orig_X_test, test_3d_desired_shape, overlap=(0.5,0.5,0.5), verbose=True)
+        orig_X_test, test_3d_desired_shape, overlap=(0.5,0.5,0.5), verbose=False)
 
     Y_test_50ov = model.predict(orig_X_test, batch_size=batch_size_value, verbose=1) 
 
@@ -593,7 +592,7 @@ for i in tqdm(range(len(orig_test_shape))):
         Y_test_50ov = np.expand_dims(Y_test_50ov[...,1], -1)                          
  
     Y_test_50ov = merge_3D_data_with_overlap(
-        Y_test_50ov, original_3d_shape, overlap=(0.5,0.5,0.5), verbose=True)
+        Y_test_50ov, original_3d_shape, overlap=(0.5,0.5,0.5), verbose=False)
     Y_test_50ov = Y_test_50ov.astype(np.float32)
     
     print("Saving 50% overlap predicted images . . .")
@@ -617,9 +616,8 @@ for i in tqdm(range(len(orig_test_shape))):
 
 del orig_X_test, Y_test_50ov
 
-iou_50ov = j/len(orig_test_shape)
-ov_iou_50ov = v/len(orig_test_shape)
-det_50ov = -1                                                               
+iou_50ov = iou/len(orig_test_shape)
+ov_iou_50ov = ov_iou/len(orig_test_shape)
 
 print("~~~~ 16-Ensemble ~~~~")                                      
 iou = 0
@@ -628,19 +626,19 @@ iou_z = 0
 ov_iou_z = 0
 index = 0
 for i in tqdm(range(len(orig_test_shape))):
-    original_3d_shape = orig_test_shape[i][:3]+(n_classes, )
+    original_3d_shape = orig_test_shape[i]
     crop_3d_shape = crop_test_shapes[i]    
     f_name = filenames[1][i]
 
     orig_X_test, orig_Y_test = merge_3D_data_with_overlap(                      
         X_test[index:index+crop_3d_shape[0]], original_3d_shape,                
         data_mask=Y_test[index:index+crop_3d_shape[0]],                         
-        overlap=overlap, verbose=True)                                          
+        overlap=overlap, verbose=False)                                          
 
     orig_X_test = crop_3D_data_with_overlap(                                    
-        orig_X_test, test_3d_desired_shape, overlap=(0.5,0.5,0.5), verbose=True)
+        orig_X_test, test_3d_desired_shape, overlap=(0.5,0.5,0.5), verbose=False)
 
-    Y_test_50ov_ensemble = np.zeros(orig_X_test.shape, dtype=np.float32)
+    Y_test_50ov_ensemble = np.zeros(orig_X_test.shape[:4]+(n_classes,), dtype=np.float32)
     for j in tqdm(range(orig_X_test.shape[0])):
         predictions_ensembled = ensemble16_3d_predictions(orig_X_test[j],
             pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),   
@@ -652,7 +650,7 @@ for i in tqdm(range(len(orig_test_shape))):
         Y_test_50ov_ensemble = np.expand_dims(Y_test_50ov_ensemble[...,1], -1)                    
                                                                                 
     orig_preds_test = merge_3D_data_with_overlap(                                   
-        Y_test_50ov_ensemble, original_3d_shape, overlap=(0.5,0.5,0.5), verbose=True)    
+        Y_test_50ov_ensemble, original_3d_shape, overlap=(0.5,0.5,0.5), verbose=False)    
     orig_preds_test = orig_preds_test.astype(np.float32)    
     
     print("Saving 50% overlap predicted images . . .")
@@ -694,7 +692,7 @@ for i in tqdm(range(len(orig_test_shape))):
 del orig_preds_test, orig_Y_test, zfil_preds_test, Y_test_50ov_ensemble
 
 ens_iou_50ov = iou/len(orig_test_shape)
-ens_ov_iou_50ov = voc/len(orig_test_shape)
+ens_ov_iou_50ov = ov_iou/len(orig_test_shape)
 
 ens_zfil_iou_50ov = iou_z/len(orig_test_shape)
 ens_zfil_ov_iou_50ov = ov_iou_z/len(orig_test_shape)
