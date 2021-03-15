@@ -301,7 +301,10 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
        ov : Tuple of 3 floats, optional                                         
            Amount of minimum overlap on x, y and z dimensions. The values must 
            be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.      
-           E. g. ``(x, y, z)``.   
+           E. g. ``(x, y, z)``.  
+           
+       padding : 4D Numpy array, optional
+           Size of padding to be added on each side     
   
        Returns
        -------                                                         
@@ -376,12 +379,12 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
     print("0) Loading train images . . .")
     X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, None, 
         crop=crop, subvol_shape=train_subvol_shape, overlap=ov, 
-        return_filenames=True, padding=padding)
+        return_filenames=True)
 
     print("1) Loading train masks . . .")
     Y_train, _, _ = load_3d_images_from_dir(
         train_mask_path, None, crop=crop, subvol_shape=train_subvol_shape, 
-        overlap=ov, padding=padding)
+        overlap=ov)
 
     print("2) Loading test images . . .")
     X_test, orig_test_img_shapes, \
@@ -879,10 +882,6 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
 
     data = data[:, padding[0]:data.shape[1]-padding[0], padding[1]:data.shape[2]-padding[1], padding[2]:data.shape[3]-padding[2], :]
     
-    import matplotlib.pyplot as plt
-    plt.imshow(data[1, :, :, 10, 0])
-    plt.savefig('img.png')
-
     if (overlap[0] >= 1 or overlap[0] < 0)\
        and (overlap[1] >= 1 or overlap[1] < 0)\
        and (overlap[2] >= 1 or overlap[2] < 0):                                 
