@@ -41,7 +41,6 @@ def limit_threads(threads_number='1'):
 def set_seed(seedValue=42, determinism=False):
     """Sets the seed on multiple python modules to obtain results as 
        reproducible as possible.
-
        Parameters
        ----------
        seedValue : int, optional
@@ -75,23 +74,19 @@ class TimeHistory(tf.keras.callbacks.Callback):
 
 def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
     """Create loss and main metric plots with the given results.
-
        Parameters
        ----------
        results : Keras History object
            Record of training loss values and metrics values at successive 
            epochs. History object is returned by Keras `fit() 
            <https://keras.io/api/models/model_training_apis/#fit-method>`_ method.
-
        job_id : str
            Jod identifier.
-
        chartOutDir : str    
            Path where the charts will be stored into.
             
        metric : str, optional
            Metric used.
-
        Examples
        --------
        
@@ -134,16 +129,13 @@ def store_history(results, score, time_callback, log_dir, job_file,
                   metric='jaccard_index'):
     """Stores the results obtained as csv to manipulate them later 
        and labeled in another file as historic results.
-
        Parameters
        ----------
        results : Keras History object
            Record of training loss values and metrics values at successive 
            epochs.
-
        score : Dictionary
            Contains all metrics values extracted from training and inference. 
-
        time_callback : ``util.TimeHistory``
            Time structure with the time of each epoch.
     """
@@ -304,46 +296,33 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path,
        ----------                                                                    
        preds_test : 4D Numpy array
            Predictions made by the model. E.g. ``(num_of_images, x, y, channels)``.
-
        Y_test : 4D Numpy array
            Ground truth of the data. E.g. ``(num_of_images, x, y, channels)``.
-
        det_eval_ge_path : str
            Path where the ground truth is stored for the DET calculation.
-
        det_eval_path : str
            Path where the evaluation of the metric will be done.
-
        det_bin : str 
            Path to the DET binary.
-
        n_dig : int
            The number of digits used for encoding temporal indices (e.g. ``3``).
            Used by the DET calculation binary.
-
        job_id : str
            Id of the job.
-
        job_file : str
            Id and run number of the job.
-
        char_dir : str
            Path to store the charts generated.
-
        r_val : float, optional
            Threshold values to return. 
-
        Returns
        -------
        t_jac : float
            Value of the Jaccard index when the threshold is ``r_val``.
-
        t_voc : float
            Value of VOC when the threshold is ``r_val``.
-
        t_det : float
            Value of DET when the threshold is ``r_val``.
-
        Examples
        -------- 
        ::
@@ -351,16 +330,13 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path,
            jac, voc, det = threshold_plots(
                preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin, 
                n_dig, args.job_id, '278_3', char_dir)
-
        Will generate 3 charts, one per each metric: IoU, VOC and DET. In the x
        axis represents the 9 different thresholds applied, that is: ``0.1, 0.2, 
        0.3, ..., 0.9``. The y axis is the value of the metric in each chart. For 
        instance, the Jaccard/IoU chart will look like this:
-
        .. image:: img/278_3_threshold_Jaccard.png
            :width: 60%
            :align: center
-
        In this example, the best value, ``0.868``, is obtained with a threshold 
        of ``0.4``.
     """
@@ -436,9 +412,7 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path,
 
 def array_to_img(x, data_format='channels_last', scale=True, dtype='float32'):
     """Converts a 3D Numpy array to a PIL Image instance.
-
        As the Keras array_to_img function in:
-
             `keras_preprocessing/image/utils.py <https://github.com/keras-team/keras-preprocessing/blob/28b8c9a57703b60ea7d23a196c59da1edf987ca0/keras_preprocessing/image/utils.py#L230>`_
     """
     if Image is None:
@@ -481,7 +455,6 @@ def array_to_img(x, data_format='channels_last', scale=True, dtype='float32'):
 
 def img_to_array(img, data_format='channels_last', dtype='float32'):
     """Converts a PIL Image instance to a Numpy array.
-
        It's a copy of the function `keras_preprocessing/image/utils.py <https://github.com/keras-team/keras-preprocessing/blob/28b8c9a57703b60ea7d23a196c59da1edf987ca0/keras_preprocessing/image/utils.py#L288>`_.
     """
 
@@ -507,7 +480,6 @@ def img_to_array(img, data_format='channels_last', dtype='float32'):
 def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True, 
              prefix="", extension=".png", filenames=None):
     """Save images in the given directory. 
-
        Parameters
        ----------                                                                    
        X : 4D numpy array, optional
@@ -516,20 +488,15 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
     
        data_dir : str, optional
            Path to store X images.
-
        Y : 4D numpy array, optional
            Masks to save as images. The first dimension must be the number of 
            images. E.g. ``(num_of_images, x, y, channels)``.
-
        scale_mask : bool, optional
            To allow mask be multiplied by 255.
-
        mask_dir : str, optional
            Path to store Y images. 
-
        prefix : str, optional
            Path to store generated charts.
-
        filenames : list, optional
            Filenames that should be used when saving each image. If any provided
            each image should be named as: ``prefix + "_x_" + image_number + 
@@ -632,7 +599,6 @@ def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
     """Generates a weight map in order to make the U-Net learn better the          
        borders of cells and distinguish individual cells that are tightly packed.  
        These weight maps follow the methodology of the original U-Net paper.
-
        Based on `unet/py_files/helpers.py <https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py>`_.
    
        Parameters
@@ -789,15 +755,12 @@ def do_save_wm(labels, path, binary = True, w0 = 10, sigma = 5):
 
 def foreground_percentage(mask, class_tag):
     """Percentage of pixels that corresponds to the class in the given image.
-
        Parameters
        ----------
        mask : 2D Numpy array
            Image mask to analize.
-
        class_tag : int
            Class to find in the image.
-
        Returns
        -------
        x : float
@@ -824,17 +787,13 @@ def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, th=0.8):
        data : 4D numpy array
            Data to save as images. The first dimension must be the number of 
            images. ``E.g. (num_of_images, x, y, channels)``.
-
        data_mask : 4D numpy array
            Data mask to save as images.  The first dimension must be the number 
            of images. ``E.g. (num_of_images, x, y, channels)``.
-
        out_dir : str
            Path to save the images.
-
        num_classes : int, optional
            Number of classes. 
-
        th : float, optional
            Percentage of the pixels that must be labeled as a class to save it
            inside that class folder. 
@@ -870,12 +829,10 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="",
        ``name`` will be prioritized. 
     
        Inspired by https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks
-
        Parameters
        ----------
        model : Keras Model
            Model where the layers are stored.
-
        out_dir : str
            Path where the image will be stored.
         
@@ -884,27 +841,21 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="",
             
        name : str, optional
            Name of the layer to extract filters from.
-
        prefix : str, optional
            Prefix to add to the output image name. 
         
        img_per_row : int, optional
            Filters per row on the image.
-
        Raises   
        ------
        ValueError
            if ``l_num`` and ``name`` not provided.     
-
        Examples
        --------
        To save the filters learned by the layer called ``conv1`` one can call 
        the function as follows ::
-
            save_filters_of_convlayer(model, char_dir, name="conv1", prefix="model")
-
        That will save in ``out_dir`` an image like this:
-
        .. image:: img/save_filters.png 
            :width: 60%
            :align: center 
@@ -951,32 +902,25 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="",
 def calculate_2D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
                                  save_file=None):
     """Calculate the probability map of the given 2D data.
-
        Parameters
        ----------
        Y : 4D Numpy array
            Data to calculate the probability map from. E. g. ``(num_of_images, x, 
            y, channel)``
-
        w_foreground : float, optional
            Weight of the foreground. This value plus ``w_background`` must be 
            equal ``1``.
-
        w_background : float, optional
            Weight of the background. This value plus ``w_foreground`` must be 
            equal ``1``.
-
        save_file : str, optional
            Path to the file where the probability map will be stored.
-
        Raises
        ------
        ValueError
            if ``Y`` does not have 4 dimensions.                     
-
        ValueError
            if ``w_foreground + w_background > 1``.
-
        Returns
        -------
        Array : 4D Numpy array
@@ -1024,23 +968,18 @@ def calculate_3D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
        Y : 5D Numpy array
            Data to calculate the probability map from. E. g. ``(num_subvolumes,
            x, y, z, channel)``
-
        w_foreground : float, optional
            Weight of the foreground. This value plus ``w_background`` must be 
            equal ``1``.
-
        w_background : float, optional
            Weight of the background. This value plus ``w_foreground`` must be 
            equal ``1``.
-
        save_file : str, optional
            Path to the file where the probability map will be stored.
-
        Returns
        -------
        Array : 5D Numpy array
            Probability map of the given data.
-
        Raises
        ------
        ValueError
@@ -1088,22 +1027,18 @@ def grayscale_2D_image_to_3D(X, Y, th=127):
        X : 4D numpy array
            Data that contains the images to create the surfaces from. E.g. 
            ``(num_of_images, x, y, channels)``.
-
        Y : 4D numpy array
            Data mask of the same shape of X that will be converted into 3D volume,
            stacking multiple times each image. Useful if you need the two data
            arrays to be of the same shape. E.g. ``(num_of_images, x, y, channels)``.
-
        th : int, optional
            Values to ommit when creating the surfaces. Useful to reduce the
            amount of data in z to be created and reduce computational time.
-
        Returns
        -------
        Array : 5D numpy array
            3D surface of each image provided. E.g. ``(num_of_images, z, x, y, 
            channels)``.
-
        Array : 5D numpy array
            3D stack of each mask provided. E.g. ``(num_of_images, z, x, y, 
            channels)``.
@@ -1139,7 +1074,6 @@ def check_masks(path, n_classes=2):
        ----------                                                               
        path : str                                                               
            Path to the data mask.                                               
-
        n_classes : int, optional
            Maximum classes that the masks must contain. 
     """                                                                         
@@ -1162,17 +1096,13 @@ def check_masks(path, n_classes=2):
 
 def img_to_onehot_encoding(img, num_classes=2):
     """Converts image given into one-hot encode format.
-
        The opposite function is :func:`~onehot_encoding_to_img`.
-
        Parameters
        ----------
        img : Numpy 3D/4D array
            Image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
-
        num_classes : int, optional
            Number of classes to distinguish.
-
        Returns
        -------
        one_hot_labels : Numpy 3D/4D array
@@ -1199,14 +1129,11 @@ def img_to_onehot_encoding(img, num_classes=2):
 def onehot_encoding_to_img(encoded_image):
     """Converts one-hot encode image into an image with jus tone channel and all
        the classes represented by an integer. 
-
        The opposite function is :func:`~img_to_onehot_encoding`.
-
        Parameters
        ----------
        encoded_image : Numpy 3D/4D array
            Image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
-
        Returns
        -------
        img : Numpy 3D/4D array
@@ -1264,7 +1191,6 @@ def load_data_from_dir2(data_dir, shape):
 
 def load_data_from_dir(data_dir, shape):
     """Load data from a directory.
-
        Parameters
        ----------
        data_dir : str 
@@ -1277,7 +1203,6 @@ def load_data_from_dir(data_dir, shape):
        -------        
        data : 4D Numpy array
            Data loaded. E.g. ``(num_of_images, y, x, channels)``.
-
        Examples
        --------
        ::
@@ -1310,31 +1235,24 @@ def load_data_from_dir(data_dir, shape):
 
 def load_ct_data_from_dir(data_dir, shape=None):
     """Load CT data from a directory.
-
        Parameters
        ----------
        data_dir : str
            Path to read the data from.
-
        shape : optional, 3D int tuple
            Shape of the data. E.g. ``(x, y, channels)``.
-
        Returns
        -------
        data : 4D Numpy array
            Data loaded. E.g. ``(num_of_images, y, x, channels)``.
-
        Examples
        --------
        ::
-
            # EXAMPLE 1
            # Case where we need to load 165 images of shape (1024, 768)
            data_path = "data/train/x"
            data_shape = (1024, 768, 1)
-
            load_data_from_dir(data_path, data_shape)
-
            # The function will print the shape of the created array. In this example:
            #     *** Loaded data shape is (165, 768, 1024, 1)
            # Notice height and width swap because of Numpy ndarray terminology
@@ -1372,50 +1290,43 @@ def load_ct_data_from_dir(data_dir, shape=None):
 
 
 def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
-                            overlap=(0,0,0), return_filenames=False):
+                            overlap=(0,0,0), padding=(0,0,0), return_filenames=False):
     """Load data from a directory.
-
        Parameters
        ----------
        data_dir : str
            Path to read the data from.
-
        shape : 4D int tuple
            Shape of the images to load. E.g. ``(x, y, z, channels)``.
-
        crop : bool, optional
            Crop each 3D image when readed.
-
        subvol_shape : Tuple of 4 ints, optional
            Shape of the subvolumes to create when cropping. 
            E.g. ``(x, y, z, channels)``.
-
        overlap : Tuple of 3 floats, optional
            Amount of minimum overlap on x, y and z dimensions. The values must
            be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.  
            E. g. ``(x, y, z)``.
-
        return_filenames : bool, optional
            Return a list with the loaded filenames. Useful when you need to save
            them afterwards with the same names as the original ones.
-        
+       padding : 4D Numpy array, optional
+            Size of padding to be added on each side
+       
        Returns
        -------
        data : 5D Numpy array
            Data loaded. E.g. ``(num_of_images, x, y, z, channels)`` if ``crop``
            enabled, ``(num_of_images, z, y, x, channels)`` otherwise.
-
        data_shape : List of tuples, optional 
            Shapes of all 3D images readed. Useful to reconstruct the original 
            images together with ``crop_shape``. 
-
        crop_shape : List of tuples, optional
            Shape of the loaded 3D images after cropping. Useful to reconstruct 
            the original images together with ``data_shape``.
     
        filenames : List of str, optional
            Loaded filenames.
-
        Examples
        --------
        ::
@@ -1423,7 +1334,6 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
            # Case where we need to load 20 images of shape (1024, 1024, 91, 1)
            data_path = "data/train/x"
            data_shape = (1024, 1024, 91, 1)
-
            data = load_data_from_dir(data_path, data_shape)
            # The function will print the shape of the created array. In this example:
            #     *** Loaded data shape is (20, 91, 1024, 1024, 1)
@@ -1434,7 +1344,6 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
            # Same as example 1 but with unknown shape, cropping them into (256, 256, 40, 1) subvolumes
            # with minimum overlap and storing filenames.
            data_path = "data/train/x"
-
            X_test, orig_test_img_shapes, \
            crop_test_img_shapes, te_filenames = load_3d_images_from_dir(
                test_path, None, crop=True, subvol_shape=(256, 256, 40, 1),
@@ -1499,7 +1408,7 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
         if crop:
             data_shape.append(img.shape)
             img_cropped = crop_3D_data_with_overlap(
-                img, subvol_shape[:3]+(img.shape[-1],), overlap=overlap,
+                img, subvol_shape[:3]+(img.shape[-1],), overlap=overlap, padding=padding,
                 verbose=True)
             crop_shape.append(img_cropped.shape)
         
@@ -1521,3 +1430,4 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
             return data, filenames
         else:
             return data
+
