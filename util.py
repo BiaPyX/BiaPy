@@ -1498,9 +1498,12 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
             
         if crop:
             data_shape.append(img.shape)
-            img_cropped = crop_3D_data_with_overlap(
-                img, subvol_shape[:3]+(img.shape[-1],), overlap=overlap,
-                verbose=True)
+            if img.shape != subvol_shape[:3]+(img.shape[-1],):
+                img_cropped = crop_3D_data_with_overlap(
+                    img, subvol_shape[:3]+(img.shape[-1],), overlap=overlap,
+                    verbose=True)
+            else:
+                img_cropped = np.expand_dims(img, 0)
             crop_shape.append(img_cropped.shape)
         
             data.append(img_cropped)
