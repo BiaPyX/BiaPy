@@ -39,9 +39,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        da : bool, optional
            To activate the data augmentation.
 
-       hist_eq : bool, optional
-           To make histogram equalization on images.
-
        rotation90 : bool, optional
            To make rotations of ``90º``, ``180º`` or ``270º``.
 
@@ -88,6 +85,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        n_classes : int, optional
            Number of classes. If ``> 1`` one-hot encoding will be done on
            the ground truth.
+
+       out_number : int, optional
+           Number of output returned by the network. Used to produce same number
+           of ground truth data on each batch. 
 
        extra_data_factor : int, optional
            Factor to multiply the batches yielded in a epoch. It acts as if
@@ -150,11 +151,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
     """
 
     def __init__(self, X, Y, batch_size=32, shape=(256,256,1), shuffle=False,
-                 da=True, hist_eq=False, rotation90=False, rotation_range=0.0,
-                 vflip=False, hflip=False, elastic=False, g_blur=False,
-                 median_blur=False, gamma_contrast=False, zoom=0.0,
-                 random_crops_in_DA=False, prob_map=False, train_prob=None, 
-                 val=False, n_classes=1, out_number=1, extra_data_factor=1):
+                 da=True, rotation90=False, rotation_range=0.0, vflip=False,
+                 hflip=False, elastic=False, g_blur=False, median_blur=False,
+                 gamma_contrast=False, zoom=0.0, random_crops_in_DA=False,
+                 prob_map=False, train_prob=None, val=False, n_classes=1,
+                 out_number=1, extra_data_factor=1):
 
         if rotation_range != 0 and rotation90:
             raise ValueError("'rotation_range' and 'rotation90' can not be set "
@@ -177,10 +178,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             
         self.shape = shape
         self.batch_size = batch_size
-        self.divideX = True if np.max(X) > 1 else False
-        self.divideY = True if np.max(Y) > 1 else False
-        self.X = np.asarray(X, dtype=np.uint8)
-        self.Y = np.asarray(Y, dtype=np.uint8)
+        self.X = (X/255).astype(np.float32) if np.max(X) > 2 else (X).astype(np.float32)
+        self.Y = (Y/255).astype(np.uint8) if np.max(Y) > 2 else (Y).astype(np.uint8)
         self.shuffle = shuffle
         self.n_classes = n_classes
         self.out_number = out_number
@@ -198,9 +197,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         
         da_options = []
         self.t_made = ''
-        if hist_eq:
-            da_options.append(iaa.HistogramEqualization())
-            self.t_made += '_heq'
         if rotation90:
             da_options.append(iaa.Rot90((0, 3)))
             self.t_made += '_rot[0,90,180,270]'
@@ -265,7 +261,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
 
-        batch_x = np.zeros((len(indexes), *self.shape), dtype=np.uint8)
+        batch_x = np.zeros((len(indexes), *self.shape))
         batch_y = np.zeros((len(indexes), *self.shape[:2]+(1,)), dtype=np.uint8)
 
         # Generate indexes of the batch
@@ -284,25 +280,16 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     batch_y[i], shape=batch_y[i].shape)
                 t_img, t_mask = self.seq(
                     image=batch_x[i], segmentation_maps=segmap)
-                t_mask = t_mask.get_arr()                                       
+                t_mask = t_mask.get_arr()
                 batch_x[i] = t_img
                 batch_y[i] = t_mask
                 
-        # Need to divide before transformations as some imgaug library functions
-        # need uint8 datatype
-        if self.divideX:
-            batch_x = batch_x.astype('float32')
-            batch_x *= 1./255
-        #if self.divideY:
-        #    batch_y *= 1./255
-        batch_y = batch_y.astype('float32')
-
         if self.n_classes > 1:
-            batch_y_ = np.zeros((len(indexes),) + self.shape[:2] + (self.n_classes,))
+            batch_y_ = np.zeros((len(indexes),) + self.shape[:2] + (self.n_classes,), 
+                                dtype=np.uint8)
             for i in range(len(indexes)):
                 batch_y_[i] = np.asarray(img_to_onehot_encoding(
-                                             batch_y[i], self.n_classes))
-
+                                         batch_y[i], self.n_classes))
             batch_y = batch_y_
 
         if self.out_number == 1:
@@ -472,10 +459,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         print("### TR-SAMPLES ###")
 
         if self.random_crops_in_DA and not force_full_images:
-            batch_x = np.zeros((num_examples,) + self.shape, dtype=np.uint8)
+            batch_x = np.zeros((num_examples,) + self.shape)
             batch_y = np.zeros((num_examples,) + self.shape[:2]+(1,), dtype=np.uint8)
         else:
-            batch_x = np.zeros((num_examples,) + self.X.shape[1:], dtype=np.uint8)
+            batch_x = np.zeros((num_examples,) + self.X.shape[1:])
             batch_y = np.zeros((num_examples,) + self.Y.shape[1:3]+(1,), dtype=np.uint8)
 
         if save_to_dir:
@@ -504,7 +491,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
             if not train:
                 self.__draw_grid(batch_x[i])
-                self.__draw_grid(batch_y[i], v=255)
+                self.__draw_grid(batch_y[i])
 
             if save_to_dir:
                 if self.X.shape[-1] > 1:
@@ -526,7 +513,9 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             if save_to_dir:
                 # Save original images
                 self.__draw_grid(o_x)                                           
-                self.__draw_grid(o_y, v=255)  
+                self.__draw_grid(o_y)
+                o_x = o_x*255
+                o_y = o_y*255
                 if self.X.shape[-1] > 1:
                     im = Image.fromarray(o_x, 'RGB')
                 else:
@@ -539,12 +528,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
                 # Save transformed images
                 if self.X.shape[-1] > 1:
-                    im = Image.fromarray(batch_x[i], 'RGB')
+                    im = Image.fromarray(batch_x[i]*255, 'RGB')
                 else:
-                    im = Image.fromarray(batch_x[i,:,:,0])
+                    im = Image.fromarray(batch_x[i,:,:,0]*255)
                     im = im.convert('L')
                 im.save(os.path.join(out_dir, str(pos)+p+'x'+self.t_made+".png"))
-                mask = Image.fromarray(batch_y[i,:,:,0])
+                mask = Image.fromarray(batch_y[i,:,:,0]*255)
                 mask = mask.convert('L')
                 mask.save(os.path.join(out_dir, str(pos)+p+'y'+self.t_made+".png"))
 
@@ -552,9 +541,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     h_maks = np.zeros(self.shape[:2] + (self.n_classes,))
                     h_maks = np.asarray(img_to_onehot_encoding(
                                           batch_y[i], self.n_classes))
-                    print("h_maks: {}".format(h_maks.shape))
                     for i in range(self.n_classes):
-                        a = Image.fromarray(h_maks[...,i]*255)
+                        a = Image.fromarray(h_maks[...,i])
                         a= a.convert('L')
                         a.save(os.path.join(out_dir, str(pos)+"h_mask_"+str(i)+".png"))
 
@@ -563,9 +551,9 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 if self.random_crops_in_DA and self.train_prob is not None\
                    and not force_full_images:
                     if self.X.shape[-1] > 1:
-                        im = Image.fromarray(self.X[pos], 'RGB') 
+                        im = Image.fromarray(self.X[pos]*255, 'RGB') 
                     else:
-                        im = Image.fromarray(self.X[pos,:,:,0]) 
+                        im = Image.fromarray(self.X[pos*255,:,:,0]) 
                     im = im.convert('RGB')                                                  
                     px = im.load()                                                          
                         
