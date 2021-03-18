@@ -154,7 +154,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                  vflip=False, hflip=False, elastic=False, g_blur=False,
                  median_blur=False, gamma_contrast=False, zoom=0.0,
                  random_crops_in_DA=False, prob_map=False, train_prob=None, 
-                 val=False, n_classes=1, extra_data_factor=1):
+                 val=False, n_classes=1, out_number=1, extra_data_factor=1):
 
         if rotation_range != 0 and rotation90:
             raise ValueError("'rotation_range' and 'rotation90' can not be set "
@@ -183,6 +183,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         self.Y = np.asarray(Y, dtype=np.uint8)
         self.shuffle = shuffle
         self.n_classes = n_classes
+        self.out_number = out_number
         self.da = da
         self.random_crops_in_DA = random_crops_in_DA
         self.train_prob = train_prob
@@ -304,7 +305,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
             batch_y = batch_y_
 
-        return batch_x, batch_y
+        if self.out_number == 1:
+            return batch_x, batch_y
+        else:
+            return ([batch_x], [batch_y]*self.out_number)
 
 
     def on_epoch_end(self):
