@@ -23,8 +23,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
     def __init__(self, X, Y, random_subvolumes_in_DA=False, subvol_shape=None,
                  seed=42, shuffle_each_epoch=False, batch_size=32, da=True, 
                  shift_range=0, flip=False, rotation=False, elastic=False,
-                 g_blur=False, gamma_contrast=False, n_classes=1, val=False,
-                 prob_map=None, extra_data_factor=1):
+                 g_blur=False, gamma_contrast=False, n_classes=1, out_number=1,
+                 val=False, prob_map=None, extra_data_factor=1):
         """ImageDataGenerator constructor. Based on transformations from 
            https://github.com/aleju/imgaug.
                                                                                 
@@ -78,6 +78,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                Number of classes. If ``> 1`` one-hot encoding will be done on 
                the ground truth.
 
+           out_number : int, optional                                               
+               Number of output returned by the network. Used to produce same 
+               number of ground truth data on each batch. 
+
            val : bool, optional
                Advice the generator that the volumes will be used to validate
                the model to not make random crops (as the validation data must
@@ -111,6 +115,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.Y = (Y/255).astype(np.uint8) if np.max(Y) > 250 else Y.astype(np.uint8)
         self.rgb = True if self.X.shape[-1] != 1 else False
         self.n_classes = n_classes
+        self.out_number = out_number
         self.channels = Y.shape[-1] 
         self.random_subvolumes_in_DA = random_subvolumes_in_DA
         self.seed = seed
@@ -229,8 +234,11 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             batch_y = batch_y_
 
         self.total_batches_seen += 1
-
-        return batch_x, batch_y
+                                                                                        
+        if self.out_number == 1:                                                
+            return batch_x, batch_y                                             
+        else:                                                                   
+            return ([batch_x], [batch_y]*self.out_number)
 
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
