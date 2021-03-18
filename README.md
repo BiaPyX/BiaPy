@@ -97,9 +97,9 @@ An example to run it in bash shell could be this:
 # Load the environment created first
 conda activate DL_EM_base_env     
 
-code_dir="/home/user/EM_Image_Segmentation"  # Path to this repo code 
-data_dir="/home/user/dataset"                # Path to the dataset
-job_dir="/home/user/out_dir"                 # Path where the output data will be generated
+code_dir="/home/user/EM_Image_Segmentation"  # Absolute path to this repo code 
+data_dir="/home/user/dataset"                # Absolute path to the dataset
+job_dir="/home/user/out_dir"                 # Absolute path where the output data will be generated
 job_id="400"                                 # Just a string to identify the job 
 job_counter=0                                # Number that should be increased when one need to run the same job multiple times
 gpu_number="0"                               # Number of the GPU to run the job in (according to 'nvidia-smi' command)

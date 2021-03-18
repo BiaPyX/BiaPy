@@ -9,7 +9,7 @@ Welcome to EM Image Segmentation's documentation!
 This documentation tries to explain better the code of the project `EM Image Segmentation <https://github.com/danifranco/DeepLearning_EM>`_, which is used to make semantic segmentation for EM images. The code is based on Keras and TensorFlow as backend.
 
                                                                                 
-.. image:: img/predictions.gif
+.. image:: img/seg.gif
            :width: 100%                                                         
            :align: center 
 
