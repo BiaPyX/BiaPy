@@ -184,6 +184,8 @@ def _windowed_subdivs(padded_img, window_size, subdivisions, n_classes, pred_fun
     gc.collect()
 
     subdivs = pred_func(subdivs)
+    if isinstance(subdivs, list):                                             
+        subdivs = subdivs[-1]
     gc.collect()
     subdivs = np.array([patch * WINDOW_SPLINE_2D for patch in subdivs])
     gc.collect()
