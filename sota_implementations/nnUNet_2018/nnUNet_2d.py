@@ -3,7 +3,7 @@ import numpy as np
 from tensorflow.keras.layers import Conv2D,Conv2DTranspose, concatenate,\
                                     BatchNormalization, LeakyReLU, ZeroPadding2D
 from tensorflow.keras import Model, Input
-from metrics import jaccard_index
+from metrics import jaccard_index_softmax
 
 
 def nnUNet_2D(image_shape, feature_maps=32, max_fa=480, num_pool=8, 
@@ -84,7 +84,7 @@ def nnUNet_2D(image_shape, feature_maps=32, max_fa=480, num_pool=8,
 
         # conv_blocks_localization
         x = StackedConvLayers(x, fa_save[-(i+1)], k_init, first_conv_stride=1)
-        seg_outputs.append(Conv2D(n_classes, (1, 1), use_bias=False) (x))   
+        seg_outputs.append(Conv2D(n_classes, (1, 1), use_bias=False, activation="softmax") (x))   
 
     outputs = seg_outputs
     
@@ -120,7 +120,7 @@ def nnUNet_2D(image_shape, feature_maps=32, max_fa=480, num_pool=8,
 
     # Compile the model
     model.compile(optimizer=opt, loss='binary_crossentropy',
-                  metrics=[jaccard_index], loss_weights=list(weights))
+                  metrics=[jaccard_index_softmax], loss_weights=list(weights))
 
     return model
 
