@@ -224,9 +224,9 @@ optimizer = "sgd"
 # Learning rate used by the optimization method
 learning_rate_value = 0.002
 # Number of epochs to train the network
-epochs_value = 360
+epochs_value = 100
 # Number of epochs to stop the training process after no improvement
-patience = 200
+patience = 30
 # If weights on data are going to be applied. To true when loss_type is 'w_bce' 
 weights_on_data = True if loss_type == "w_bce" else False
 
@@ -255,10 +255,6 @@ n_classes = 1
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)
 metric = "jaccard_index_softmax" if n_classes > 1 else "jaccard_index"
-# To take only the last class of the predictions, which corresponds to the
-# foreground in a binary problem. If n_classes > 2 this should be disabled to
-# ensure all classes are preserved
-last_class = True if n_classes <= 2 else False
 
 
 ### Paths of the results                                             
@@ -499,7 +495,7 @@ Y_test_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
 for i in tqdm(range(X_test.shape[0])):
     pred_ensembled = ensemble8_2d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        n_classes=n_classes, last_class=last_class)
+        n_classes=n_classes)
     Y_test_ensemble[i] = pred_ensembled
 
 print("Saving smooth predicted images . . .")
