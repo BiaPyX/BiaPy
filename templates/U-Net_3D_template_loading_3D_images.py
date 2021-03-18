@@ -420,9 +420,8 @@ iou_per_crop = score_per_crop[1]
 print("Making the predictions on test data . . .")
 preds_test = model.predict(test_generator, verbose=1)
 
-# Take only the foreground class                                                
 if n_classes > 1:
-    preds_test = np.expand_dims(preds_test[...,1], -1)
+    preds_test = np.expand_dims(np.argmax(preds_test,-1), -1)
 
 
 print("#############################################\n"
@@ -583,9 +582,8 @@ for i in tqdm(range(len(orig_test_shape))):
 
     Y_test_50ov = model.predict(orig_X_test, batch_size=batch_size_value, verbose=1) 
 
-    # Take only the foreground class                                                
     if n_classes > 1:                                                               
-        Y_test_50ov = np.expand_dims(Y_test_50ov[...,1], -1)                          
+        Y_test_50ov = np.expand_dims(np.argmax(Y_test_50ov,-1), -1)                          
  
     Y_test_50ov = merge_3D_data_with_overlap(
         Y_test_50ov, original_3d_shape, overlap=(0.5,0.5,0.5), verbose=False)
@@ -641,9 +639,8 @@ for i in tqdm(range(len(orig_test_shape))):
             n_classes=n_classes)
         Y_test_50ov_ensemble[j] = predictions_ensembled
 
-    # Take only the foreground class                                                
     if n_classes > 1:                                                           
-        Y_test_50ov_ensemble = np.expand_dims(Y_test_50ov_ensemble[...,1], -1)                    
+        Y_test_50ov_ensemble = np.expand_dims(np.argmax(Y_test_50ov_ensemble,-1), -1)                    
                                                                                 
     orig_preds_test = merge_3D_data_with_overlap(                                   
         Y_test_50ov_ensemble, original_3d_shape, overlap=(0.5,0.5,0.5), verbose=False)    

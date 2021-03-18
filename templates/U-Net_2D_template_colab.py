@@ -478,7 +478,7 @@ print("Making the predictions on test data . . .")
 preds_test_full = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
 if n_classes > 1:
-    preds_test_full = np.expand_dims(preds_test_full[...,1], -1)
+    preds_test_full = np.expand_dims(np.argmax(preds_test_full,-1), -1)
 
 print("Saving predicted images . . .")
 save_img(Y=preds_test_full, mask_dir=result_no_bin_dir_full)

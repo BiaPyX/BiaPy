@@ -711,8 +711,8 @@ print("Making the predictions on test data . . .")
 preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
 if softmax_out:
-    preds_test = np.expand_dims(preds_test[...,1], -1)
-    Y_test = np.expand_dims(Y_test[...,1], -1)
+    preds_test = np.expand_dims(np.argmax(preds_test,-1), -1)
+    Y_test = np.expand_dims(np.argmax(Y_test,-1), -1)
 
 
 print("########################################\n"
@@ -873,7 +873,7 @@ print("Making the predictions on test data . . .")
 preds_test_full = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
 if softmax_out:
-    preds_test_full = np.expand_dims(preds_test_full[...,1], -1)
+    preds_test_full = np.expand_dims(np.argmax(preds_test_full,-1), -1)
 
 print("Saving predicted images . . .")
 save_img(Y=(preds_test_full > 0.5).astype(np.uint8),

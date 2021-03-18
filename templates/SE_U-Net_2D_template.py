@@ -485,10 +485,10 @@ iou_per_crop = score_per_crop[1]
 print("Making the predictions on test data . . .")
 preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
-# Take only the foreground class                                                
+                                                
 if n_classes > 1:                                                               
-    preds_test = np.expand_dims(preds_test[...,1], -1)                          
-    Y_test = np.expand_dims(Y_test[...,1], -1) 
+    preds_test = np.expand_dims(np.argmax(preds_test,-1), -1)                          
+    Y_test = np.expand_dims(np.argmax(Y_test,-1), -1) 
 
 
 print("########################################\n"
@@ -521,7 +521,7 @@ for i in tqdm(range(X_test.shape[0])):
         X_test[i], window_size=crop_shape[0], subdivisions=2, n_classes=n_classes,
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
     if n_classes > 1:
-        Y_test_blending[i] = np.expand_dims(predictions_blending[...,1], axis=-1)
+        Y_test_blending[i] = np.expand_dims(np.argmax(predictions_blending,-1), axis=-1)
     else:
         Y_test_blending[i] = predictions_blending
 
@@ -574,9 +574,9 @@ print("Making the predictions on test data (50% overlap) . . .")
 X_test = crop_data_with_overlap(X_test, crop_shape, overlap=(0.5, 0.5))         
                                                                                 
 Y_test_50ov = model.predict(X_test, batch_size=batch_size_value, verbose=1)     
-# Take only the foreground class                                                
+                                                
 if n_classes > 1:                                                               
-    Y_test_50ov = np.expand_dims(Y_test_50ov[...,1], -1)                        
+    Y_test_50ov = np.expand_dims(np.argmax(Y_test_50ov,-1), -1)                        
                                                                                 
 Y_test_50ov = merge_data_with_overlap(                                          
     Y_test_50ov, orig_test_shape, overlap=(0.5, 0.5))  
@@ -640,7 +640,7 @@ print("Making the predictions on test data . . .")
 preds_test_full = model.predict(X_test, batch_size=batch_size_value, verbose=1)
 
 if n_classes > 1:
-    preds_test_full = np.expand_dims(preds_test_full[...,1], -1)
+    preds_test_full = np.expand_dims(np.argmax(preds_test_full,-1), -1)
 
 print("Saving predicted images . . .")
 save_img(Y=(preds_test_full > 0.5).astype(np.uint8),
