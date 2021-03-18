@@ -204,8 +204,7 @@ def calculate_z_filtering(data, mf_size=5):
     return out_data
 
 
-def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=2,
-                             last_class=True):
+def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=2):
     """Outputs the mean prediction of a given image generating its 8 possible 
        rotations and flips.
 
@@ -223,10 +222,6 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=2,
        n_classes : int, optional
            Number of classes.
     
-       last_class : bool, optional
-           To preserve only the last class. Useful when a binary classification 
-           and want to take only the foreground. 
-
        Returns
        -------
        out : 3D Numpy array
@@ -276,10 +271,16 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=2,
     decoded_aug_img = np.zeros(aug_img.shape)
     
     for i in range(aug_img.shape[0]):
-        if n_classes > 1 and last_class:
-            decoded_aug_img[i] = np.expand_dims(pred_func(np.expand_dims(aug_img[i], 0))[...,1], -1)
-        else:
-            decoded_aug_img[i] = pred_func(np.expand_dims(aug_img[i], 0))
+        r_aux = pred_func(np.expand_dims(aug_img[i], 0))                      
+                                                                                
+        # Take just the last output of the network in case it returns more than one output
+        if isinstance(r_aux, list):                                             
+            r_aux = np.array(r_aux[-1])                                         
+                                                                                
+        if n_classes > 1:                                                       
+            r_aux = np.expand_dims(np.argmax(r_aux, -1), -1)                    
+                                                                                
+        decoded_aug_img[i] = r_aux   
 
     # Undo the combinations of the img
     out_img = []
@@ -314,8 +315,7 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=2,
     return np.mean(out, axis=0)
 
 
-def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2,
-                              last_class=True):
+def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2):
     """Outputs the mean prediction of a given image generating its 16 possible   
        rotations and flips.                                                     
                                                                                 
@@ -333,10 +333,6 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2,
        n_classes : int, optional                                                
            Number of classes.                                                   
 
-       last_class : bool, optional
-           To preserve only the last class. Useful when a binary classification
-           and want to take only the foreground.
-                                                                                
        Returns                                                                  
        -------                                                                  
        out : 4D Numpy array                                                     
@@ -409,10 +405,16 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2,
 
     decoded_aug_vols = np.zeros(total_vol.shape)
     for i in range(total_vol.shape[0]):
-        if n_classes > 1 and last_class:
-            decoded_aug_vols[i] = np.expand_dims(pred_func(np.expand_dims(total_vol[i], 0))[...,1], -1)
-        else:
-            decoded_aug_vols[i] = pred_func(np.expand_dims(total_vol[i], 0))
+        r_aux = pred_func(np.expand_dims(total_vol[i], 0))
+
+        # Take just the last output of the network in case it returns more than one output
+        if isinstance(r_aux, list):                                         
+            r_aux = np.array(r_aux[-1])
+        
+        if n_classes > 1:
+            r_aux = np.expand_dims(np.argmax(r_aux, -1), -1)
+
+        decoded_aug_vols[i] = r_aux
     
     volume = np.expand_dims(volume, -1)
 
