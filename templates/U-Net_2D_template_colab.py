@@ -171,8 +171,6 @@ k_shear_range = 0.0
 k_brightness_range = None 
 
 ### Options available for Custom Data Augmentation 
-# Histogram equalization
-hist_eq = False  
 # Elastic transformations
 elastic = False
 # Median blur                                                             
@@ -396,7 +394,7 @@ else:
     data_gen_args = dict(
         X=X_train, Y=Y_train, batch_size=batch_size_value,     
         shape=(img_height,img_width,img_channels),
-        shuffle=shuffle_train_data_each_epoch, da=True, hist_eq=hist_eq,
+        shuffle=shuffle_train_data_each_epoch, da=True, 
         rotation90=rotation90, rotation_range=rotation_range,
         vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,
         median_blur=median_blur, gamma_contrast=gamma_contrast, zoom=zoom,
@@ -467,6 +465,10 @@ if n_classes > 1:
     Y_test = Y_test_one_hot
     del Y_test_one_hot
 
+# Merge crops                                                                   
+print("Reconstruct X_test/Y_test . . .")                                        
+X_test, Y_test = merge_data_with_overlap(                                       
+    X_test, orig_test_shape, Y_test, overlap=overlap)
 
 print("########################\n"
       "# Metrics (full image) #\n"
@@ -479,10 +481,7 @@ if n_classes > 1:
     preds_test_full = np.expand_dims(preds_test_full[...,1], -1)
 
 print("Saving predicted images . . .")
-save_img(Y=(preds_test_full > 0.5).astype(np.uint8),
-         mask_dir=result_bin_dir_full, prefix="test_out_bin_full")
-save_img(Y=preds_test_full, mask_dir=result_no_bin_dir_full,
-         prefix="test_out_no_bin_full")
+save_img(Y=preds_test_full, mask_dir=result_no_bin_dir_full)
 
 print("Calculate metrics (full image) . . .")
 iou_full = jaccard_index_numpy(Y_test, (preds_test_full > 0.5).astype(np.uint8))
@@ -499,10 +498,7 @@ for i in tqdm(range(X_test.shape[0])):
     Y_test_ensemble[i] = pred_ensembled
 
 print("Saving smooth predicted images . . .")
-save_img(Y=Y_test_ensemble, mask_dir=smo_no_bin_dir_full,
-         prefix="test_out_ens_no_bin")
-save_img(Y=(Y_test_ensemble > 0.5).astype(np.uint8), mask_dir=smo_bin_dir_full,
-         prefix="test_out_ens")
+save_img(Y=Y_test_ensemble, mask_dir=smo_no_bin_dir_full)
 
 print("Calculate metrics (8-Ensemble + full image) . . .")
 smo_iou_full = jaccard_index_numpy(
@@ -514,7 +510,7 @@ print("~~~~ 8-Ensemble + Z-Filtering (full image) ~~~~")
 zfil_preds_test = calculate_z_filtering(Y_test_ensemble)
 
 print("Saving Z-filtered images . . .")
-save_img(Y=zfil_preds_test, mask_dir=zfil_dir_full, prefix="test_out_zfil")
+save_img(Y=zfil_preds_test, mask_dir=zfil_dir_full)
 
 print("Calculate metrics (8-Ensemble + Z-filtering + full image) . . .")
 zfil_iou_full = jaccard_index_numpy(
