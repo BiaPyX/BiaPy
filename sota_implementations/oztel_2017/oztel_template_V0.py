@@ -34,6 +34,8 @@ sys.path.insert(0, os.path.join("sota_implementations", "oztel_2017"))
 
 # Working dir
 os.chdir(args.base_work_dir)
+# Create job directory
+os.makedirs(args.result_dir, exist_ok=True)
 
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
@@ -174,10 +176,6 @@ n_classes = 2
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)
 metric = "jaccard_index_softmax" if n_classes > 1 else "jaccard_index"
-# To take only the last class of the predictions, which corresponds to the
-# foreground in a binary problem. If n_classes > 2 this should be disabled to
-# ensure all classes are preserved
-last_class = True if n_classes <= 2 else False
 
 
 ### Paths of the results                                             
@@ -186,8 +184,8 @@ result_dir = os.path.join(args.result_dir, 'results', job_identifier)
 # per-image directories
 result_bin_dir_per_image = os.path.join(result_dir, 'per_image_binarized')
 result_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_no_binarized')
-smo_bin_dir_per_image = os.path.join(result_dir, 'per_image_smooth')
-smo_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_smooth_no_bin')
+smo_bin_dir_per_image = os.path.join(result_dir, 'per_image_blending')
+smo_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_blending_no_bin')
 zfil_dir_per_image = os.path.join(result_dir, 'per_image_zfil')
 smo_zfil_dir_per_image = os.path.join(result_dir, 'per_image_smo_zfil')
 
@@ -427,28 +425,28 @@ Y_test = np.expand_dims( Y_test, axis=-1 )
 
 score_per_crop = -1
 loss_per_crop = -1
-jac_per_crop = -1
+iou_per_crop = -1
 
-jac_per_image = -1
-voc_per_image = -1
+iou_per_image = -1
+ov_iou_per_image = -1
 
-smo_jac_per_image = -1
-smo_voc_per_image = -1
+smo_iou_per_image = -1
+smo_ov_iou_per_image = -1
 
-zfil_jac_per_image = -1
-zfil_voc_per_image = -1
+zfil_iou_per_image = -1
+zfil_ov_iou_per_image = -1
 
-smo_zfil_jac_per_image = -1
-smo_zfil_voc_per_image = -1
+smo_zfil_iou_per_image = -1
+smo_zfil_ov_iou_per_image = -1
 
-jac_50ov = -1
-voc_50ov = -1 
+iou_50ov = -1
+ov_iou_50ov = -1 
 
-ens_jac_50ov = -1
-ens_voc_50ov = -1
+ens_iou_50ov = -1
+ens_ov_iou_50ov = -1
 
-ens_zfil_jac_50ov = -1
-ens_zfil_voc_50ov = -1
+ens_zfil_iou_50ov = -1
+ens_zfil_ov_iou_50ov = -1
 
 print("########################\n"
       "# Metrics (full image) #\n"
@@ -467,9 +465,9 @@ save_img(Y=np.expand_dims(preds_test_full[...,1],-1), mask_dir=result_no_bin_dir
          prefix="test_out_no_bin_full")
 
 print("Calculate metrics (full image) . . .")
-jac_full = jaccard_index_numpy(Y_test, (np.expand_dims(preds_test_full[...,1],-1) > 0.5).astype(np.uint8))
-voc_full = voc_calculation(Y_test, (np.expand_dims(preds_test_full[...,1],-1) > 0.5).astype(np.uint8),
-                           jac_full)
+iou_full = jaccard_index_numpy(Y_test, (np.expand_dims(preds_test_full[...,1],-1) > 0.5).astype(np.uint8))
+ov_iou_full = voc_calculation(Y_test, (np.expand_dims(preds_test_full[...,1],-1) > 0.5).astype(np.uint8),
+                           iou_full)
 
 print("~~~~ 8-Ensemble (full image) ~~~~")
 Y_test_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
@@ -477,7 +475,7 @@ Y_test_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
 for i in tqdm(range(X_test.shape[0])):
     pred_ensembled = ensemble8_2d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        n_classes=n_classes, last_class=last_class)
+        n_classes=n_classes)
     Y_test_ensemble[i] = pred_ensembled
 
 print("Saving smooth predicted images . . .")
@@ -487,10 +485,10 @@ save_img(Y=(Y_test_ensemble > 0.5).astype(np.uint8), mask_dir=smo_bin_dir_full,
          prefix="test_out_ens")
 
 print("Calculate metrics (8-Ensemble + full image) . . .")
-smo_jac_full = jaccard_index_numpy(
+smo_iou_full = jaccard_index_numpy(
     Y_test, (Y_test_ensemble > 0.5).astype(np.uint8))
-smo_voc_full = voc_calculation(
-    Y_test, (Y_test_ensemble > 0.5).astype(np.uint8), smo_jac_full)
+smo_ov_iou_full = voc_calculation(
+    Y_test, (Y_test_ensemble > 0.5).astype(np.uint8), smo_iou_full)
 
 print("~~~~ 8-Ensemble + Z-Filtering (full image) ~~~~")
 zfil_preds_test = calculate_z_filtering(Y_test_ensemble)
@@ -499,10 +497,10 @@ print("Saving Z-filtered images . . .")
 save_img(Y=zfil_preds_test, mask_dir=zfil_dir_full, prefix="test_out_zfil")
 
 print("Calculate metrics (8-Ensemble + Z-filtering + full image) . . .")
-zfil_jac_full = jaccard_index_numpy(
+zfil_iou_full = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
-zfil_voc_full = voc_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_jac_full)
+zfil_ov_iou_full = voc_calculation(
+    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_iou_full)
 
 del zfil_preds_test, Y_test_ensemble
 
@@ -516,8 +514,8 @@ print("Saving spurious detection filtering resulting images . . .")
 save_img(Y=spu_preds_test, mask_dir=spu_dir_full, prefix="test_out_spu")
 
 print("Calculate metrics (Spurious + full image) . . .")
-spu_jac_full = jaccard_index_numpy(Y_test, spu_preds_test)
-spu_voc_full = voc_calculation(Y_test, spu_preds_test, spu_jac_full)
+spu_iou_full = jaccard_index_numpy(Y_test, spu_preds_test)
+spu_ov_iou_full = voc_calculation(Y_test, spu_preds_test, spu_iou_full)
 
 print("~~~~ Spurious Detection + Watershed (full image) ~~~~")
 wa_preds_test = watershed_refinement(spu_preds_test, X_test, open_iter = 3, 
@@ -528,8 +526,8 @@ save_img(Y=(wa_preds_test).astype(np.uint8), mask_dir=wa_dir_full,
          prefix="test_out_wa")
 
 print("Calculate metrics (Watershed + full image) . . .")
-wa_jac_full = jaccard_index_numpy(Y_test, wa_preds_test)
-wa_voc_full = voc_calculation(Y_test, wa_preds_test, wa_jac_full)
+wa_iou_full = jaccard_index_numpy(Y_test, wa_preds_test)
+wa_ov_iou_full = voc_calculation(Y_test, wa_preds_test, wa_iou_full)
 
 print("~~~~ Spurious Detection + Watershed + Z-filtering (full image) ~~~~")
 spu_wa_zfil_preds_test = improve_components(wa_preds_test, depth=9 ) 
@@ -539,11 +537,11 @@ save_img(Y=spu_wa_zfil_preds_test, mask_dir=spu_wa_zfil_dir_full,
          prefix="test_out_spu_wa_zfil")
 
 print("Calculate metrics (Z-filtering + full image) . . .")
-spu_wa_zfil_jac_full = jaccard_index_numpy(
+spu_wa_zfil_iou_full = jaccard_index_numpy(
     Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8))
-spu_wa_zfil_voc_full = voc_calculation(
+spu_wa_zfil_ov_iou_full = voc_calculation(
     Y_test, (spu_wa_zfil_preds_test > 0.5).astype(np.uint8),
-    spu_wa_zfil_jac_full)
+    spu_wa_zfil_iou_full)
 
 
 print("####################################\n"
@@ -561,34 +559,34 @@ if load_previous_weights == False:
           .format(np.max(results.history['val_'+metric])))
 
 print("Test loss: {}".format(loss_per_crop))
-print("Test IoU (per crop): {}".format(jac_per_crop))
+print("Test Foreground IoU (per crop): {}".format(iou_per_crop))
 
-print("Test IoU (merge into complete image): {}".format(jac_per_image))
-print("Test VOC (merge into complete image): {}".format(voc_per_image))
-print("Post-process: Smooth - Test IoU (merge into complete image): {}".format(smo_jac_per_image))
-print("Post-process: Smooth - Test VOC (merge into complete image): {}".format(smo_voc_per_image))
-print("Post-process: Z-Filtering - Test IoU (merge into complete image): {}".format(zfil_jac_per_image))
-print("Post-process: Z-Filtering - Test VOC (merge into complete image): {}".format(zfil_voc_per_image))
-print("Post-process: Smooth + Z-Filtering - Test IoU (merge into complete image): {}".format(smo_zfil_jac_per_image))
-print("Post-process: Smooth + Z-Filtering - Test VOC (merge into complete image): {}".format(smo_zfil_voc_per_image))
-print("Test IoU (merge with 50% overlap): {}".format(jac_50ov))
-print("Test VOC (merge with 50% overlap): {}".format(voc_50ov))
-print("Post-process: Ensemble - Test IoU (merge with 50% overlap): {}".format(ens_jac_50ov))
-print("Post-process: Ensemble - Test VOC (merge with 50% overlap): {}".format(ens_voc_50ov))
-print("Post-process: Ensemble + Z-Filtering - Test IoU (merge with 50% overlap): {}".format(ens_zfil_jac_50ov))
-print("Post-process: Ensemble + Z-Filtering - Test VOC (merge with 50% overlap): {}".format(ens_zfil_voc_50ov))
-print("Test IoU (full): {}".format(jac_full))
-print("Test VOC (full): {}".format(voc_full))
-print("Post-process: Ensemble - Test IoU (full): {}".format(smo_jac_full))
-print("Post-process: Ensemble - Test VOC (full): {}".format(smo_voc_full))
-print("Post-process: Ensemble + Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
-print("Post-process: Ensemble + Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
-print("Post-process: Spurious Detection - Test IoU (full): {}".format(spu_jac_full))
-print("Post-process: Spurious Detection - VOC (full): {}".format(spu_voc_full))
-print("Post-process: Spurious Detection + Watershed - Test IoU (full): {}".format(wa_jac_full))
-print("Post-process: Spurious Detection + Watershed - VOC (full): {}".format(wa_voc_full))
-print("Post-process: Spurious Detection + Watershed + Z-Filtering - Test IoU (full): {}".format(spu_wa_zfil_jac_full))
-print("Post-process: Spurious Detection + Watershed + Z-Filtering - VOC (full): {}".format(spu_wa_zfil_voc_full))
+print("Test Foreground IoU (merge into complete image): {}".format(iou_per_image))
+print("Test Overall IoU (merge into complete image): {}".format(ov_iou_per_image))
+print("Post-process: Blending - Test Foreground IoU (merge into complete image): {}".format(smo_iou_per_image))
+print("Post-process: Blending - Test Overall IoU (merge into complete image): {}".format(smo_ov_iou_per_image))
+print("Post-process: Z-Filtering - Test Foreground IoU (merge into complete image): {}".format(zfil_iou_per_image))
+print("Post-process: Z-Filtering - Test Overall IoU (merge into complete image): {}".format(zfil_ov_iou_per_image))
+print("Post-process: Blending + Z-Filtering - Test Foreground IoU (merge into complete image): {}".format(smo_zfil_iou_per_image))
+print("Post-process: Blending + Z-Filtering - Test Overall IoU (merge into complete image): {}".format(smo_zfil_ov_iou_per_image))
+print("Test Foreground IoU (merge with 50% overlap): {}".format(iou_50ov))
+print("Test Overall IoU (merge with 50% overlap): {}".format(ov_iou_50ov))
+print("Post-process: Ensemble - Test Foreground IoU (merge with 50% overlap): {}".format(ens_iou_50ov))
+print("Post-process: Ensemble - Test Overall IoU (merge with 50% overlap): {}".format(ens_ov_iou_50ov))
+print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (merge with 50% overlap): {}".format(ens_zfil_iou_50ov))
+print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (merge with 50% overlap): {}".format(ens_zfil_ov_iou_50ov))
+print("Test Foreground IoU (full): {}".format(iou_full))
+print("Test Overall IoU (full): {}".format(ov_iou_full))
+print("Post-process: Ensemble - Test Foreground IoU (full): {}".format(smo_iou_full))
+print("Post-process: Ensemble - Test Overall IoU (full): {}".format(smo_ov_iou_full))
+print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (full): {}".format(zfil_iou_full))
+print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (full): {}".format(zfil_ov_iou_full))
+print("Post-process: Spurious Detection - Test Foreground IoU (full): {}".format(spu_iou_full))
+print("Post-process: Spurious Detection - Overall IoU (full): {}".format(spu_ov_iou_full))
+print("Post-process: Spurious Detection + Watershed - Test Foreground IoU (full): {}".format(wa_iou_full))
+print("Post-process: Spurious Detection + Watershed - Overall IoU (full): {}".format(wa_ov_iou_full))
+print("Post-process: Spurious Detection + Watershed + Z-Filtering - Test Foreground IoU (full): {}".format(spu_wa_zfil_iou_full))
+print("Post-process: Spurious Detection + Watershed + Z-Filtering - Overall IoU (full): {}".format(spu_wa_zfil_ov_iou_full))
 
 if not load_previous_weights:
     scores = {}

@@ -220,10 +220,6 @@ n_classes = 1
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)              
 metric = "jaccard_index_softmax" if n_classes > 1 else "jaccard_index" 
-# To take only the last class of the predictions, which corresponds to the
-# foreground in a binary problem. If n_classes > 2 this should be disabled to
-# ensure all classes are preserved
-last_class = True if n_classes <= 2 else False
 
 
 ### Paths of the results                                             
@@ -466,7 +462,7 @@ Y_test_ensemble = np.zeros(X_test.shape, dtype=np.float32)
 for i in tqdm(range(X_test.shape[0])):                                          
     predictions_ensemble = ensemble16_3d_predictions(X_test[i],                       
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        n_classes=n_classes, last_class=last_class)   
+        n_classes=n_classes)
     Y_test_ensemble[i] = predictions_ensemble
                                                                                 
 # Merge the volumes and convert them into 2D data                               
@@ -556,7 +552,7 @@ Y_test_50ov_ensemble = np.zeros(X_test.shape, dtype=np.float32)
 for i in tqdm(range(X_test.shape[0])):                                          
     predictions_ensembled = ensemble16_3d_predictions(X_test[i],                       
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),   
-        n_classes=n_classes, last_class=last_class)                                                    
+        n_classes=n_classes)
     Y_test_50ov_ensemble[i] = predictions_ensembled
 
 Y_test_50ov_ensemble = merge_3D_data_with_overlap(
@@ -608,20 +604,20 @@ print("Test loss: {}".format(loss_per_crop))
 print("Test Foreground IoU (per crop): {}".format(iou_per_crop))
 
 print("Test Foreground IoU (merge into complete image): {}".format(iou_per_image))
-print("Test Overall Foreground IoU (merge into complete image): {}".format(ov_iou_per_image))
+print("Test Overall IoU (merge into complete image): {}".format(ov_iou_per_image))
 print("Post-process: Ensemble - Test Foreground IoU (merge into complete image): {}".format(ens_iou_per_image))
-print("Post-process: Ensemble - Test Overall Foreground IoU (merge into complete image): {}".format(ens_ov_iou_per_image))
+print("Post-process: Ensemble - Test Overall IoU (merge into complete image): {}".format(ens_ov_iou_per_image))
 print("Post-process: Z-Filtering - Test Foreground IoU (merge into complete image): {}".format(zfil_iou_per_image))
-print("Post-process: Z-Filtering - Test Overall Foreground IoU (merge into complete image): {}".format(zfil_ov_iou_per_image))
+print("Post-process: Z-Filtering - Test Overall IoU (merge into complete image): {}".format(zfil_ov_iou_per_image))
 print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (merge into complete image): {}".format(ens_zfil_iou_per_image))
-print("Post-process: Ensemble + Z-Filtering - Test Overall Foreground IoU (merge into complete image): {}".format(ens_zfil_ov_iou_per_image))
+print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (merge into complete image): {}".format(ens_zfil_ov_iou_per_image))
 
 print("Test Foreground IoU (merge with 50% overlap): {}".format(iou_50ov))
-print("Test Overall Foreground IoU (merge with 50% overlap): {}".format(ov_iou_50ov))
+print("Test Overall IoU (merge with 50% overlap): {}".format(ov_iou_50ov))
 print("Post-process: Ensemble - Test Foreground IoU (merge with 50% overlap): {}".format(ens_iou_50ov))
-print("Post-process: Ensemble - Test Overall Foreground IoU (merge with 50% overlap): {}".format(ens_ov_iou_50ov))
+print("Post-process: Ensemble - Test Overall IoU (merge with 50% overlap): {}".format(ens_ov_iou_50ov))
 print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (merge with 50% overlap): {}".format(ens_zfil_iou_50ov))
-print("Post-process: Ensemble + Z-Filtering - Test Overall Foreground IoU (merge with 50% overlap): {}".format(ens_zfil_ov_iou_50ov))
+print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (merge with 50% overlap): {}".format(ens_zfil_ov_iou_50ov))
 
 if not load_previous_weights:
     scores = {}

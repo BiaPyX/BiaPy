@@ -261,8 +261,8 @@ result_dir = os.path.join(args.result_dir, 'results', job_identifier)
 # per-image directories
 result_bin_dir_per_image = os.path.join(result_dir, 'per_image_binarized')
 result_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_no_binarized')
-smo_bin_dir_per_image = os.path.join(result_dir, 'per_image_smooth')
-smo_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_smooth_no_bin')
+smo_bin_dir_per_image = os.path.join(result_dir, 'per_image_blending')
+smo_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_blending_no_bin')
 zfil_dir_per_image = os.path.join(result_dir, 'per_image_zfil')
 smo_zfil_dir_per_image = os.path.join(result_dir, 'per_image_smo_zfil')
 
@@ -535,12 +535,12 @@ if load_previous_weights == False:
     print("Validation Foreground IoU: {}"
           .format(np.max(results.history['val_'+metric])))
 
-print("Test Foreground IoU (full): {}".format(iou_full))
-print("Test Overall IoU (full): {}".format(overall_IoU_full))
-print("Post-process: Ensemble - Test Foreground IoU (full): {}".format(smo_iou_full))
-print("Post-process: Ensemble - Test Overall IoU (full): {}".format(smo_overall_IoU_full))
-print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (full): {}".format(zfil_iou_full))
-print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (full): {}".format(zfil_overall_IoU_full))
+print("Test Foreground Foreground IoU (full): {}".format(iou_full))
+print("Test Overall Foreground IoU (full): {}".format(overall_IoU_full))
+print("Post-process: Ensemble - Test Foreground Foreground IoU (full): {}".format(smo_iou_full))
+print("Post-process: Ensemble - Test Overall Foreground IoU (full): {}".format(smo_overall_IoU_full))
+print("Post-process: Ensemble + Z-Filtering - Test Foreground Foreground IoU (full): {}".format(zfil_iou_full))
+print("Post-process: Ensemble + Z-Filtering - Test Overall Foreground IoU (full): {}".format(zfil_overall_IoU_full))
 
 if not load_previous_weights:
     scores = {}

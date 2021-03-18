@@ -215,10 +215,6 @@ n_classes = 1
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)              
 metric = "jaccard_index_softmax" if n_classes > 1 else "jaccard_index" 
-# To take only the last class of the predictions, which corresponds to the
-# foreground in a binary problem. If n_classes > 2 this should be disabled to
-# ensure all classes are preserved
-last_class = True if n_classes <= 2 else False
 
 
 ### Paths of the results                                             
@@ -478,7 +474,7 @@ Y_test_ensemble = np.zeros(Y_test.shape, dtype=np.float32)
 for i in tqdm(range(X_test.shape[0])):                                          
     predictions_ensemble = ensemble16_3d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        n_classes=n_classes, last_class=last_class)   
+        n_classes=n_classes)
     Y_test_ensemble[i] = predictions_ensemble
                                                                                 
 # Merge the volumes to the original 3D images
@@ -642,7 +638,7 @@ for i in tqdm(range(len(orig_test_shape))):
     for j in tqdm(range(orig_X_test.shape[0])):
         predictions_ensembled = ensemble16_3d_predictions(orig_X_test[j],
             pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),   
-            n_classes=n_classes, last_class=last_class)
+            n_classes=n_classes)
         Y_test_50ov_ensemble[j] = predictions_ensembled
 
     # Take only the foreground class                                                

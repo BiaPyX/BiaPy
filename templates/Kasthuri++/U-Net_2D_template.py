@@ -176,8 +176,6 @@ k_shear_range = 0.0
 k_brightness_range = None 
 
 ### Options available for Custom Data Augmentation 
-# Histogram equalization
-hist_eq = False  
 # Elastic transformations
 elastic = False
 # Median blur                                                             
@@ -260,10 +258,6 @@ n_classes = 1
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)
 metric = "jaccard_index_softmax" if n_classes > 1 else "jaccard_index"
-# To take only the last class of the predictions, which corresponds to the
-# foreground in a binary problem. If n_classes > 2 this should be disabled to
-# ensure all classes are preserved
-last_class = True if n_classes <= 2 else False
 
 
 ### Paths of the results                                             
@@ -272,8 +266,8 @@ result_dir = os.path.join(args.result_dir, 'results', job_identifier)
 # per-image directories
 result_bin_dir_per_image = os.path.join(result_dir, 'per_image_binarized')
 result_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_no_binarized')
-smo_bin_dir_per_image = os.path.join(result_dir, 'per_image_smooth')
-smo_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_smooth_no_bin')
+smo_bin_dir_per_image = os.path.join(result_dir, 'per_image_blending')
+smo_no_bin_dir_per_image = os.path.join(result_dir, 'per_image_blending_no_bin')
 zfil_dir_per_image = os.path.join(result_dir, 'per_image_zfil')
 smo_zfil_dir_per_image = os.path.join(result_dir, 'per_image_smo_zfil')
 
@@ -321,6 +315,15 @@ os.makedirs(h5_dir, exist_ok=True)
 checkpointer = ModelCheckpoint(
     os.path.join(h5_dir, weight_files_prefix + job_identifier + '.h5'),
     verbose=1, save_best_only=True)
+# Necessary when using TF version < 2.2 as pointed out in:                      
+#     https://github.com/tensorflow/tensorflow/issues/35911                     
+class OnEpochEnd(tf.keras.callbacks.Callback):                                  
+  def __init__(self, callbacks):                                                
+    self.callbacks = callbacks                                                  
+                                                                                
+  def on_epoch_end(self, epoch, logs=None):                                     
+    for callback in self.callbacks:                                             
+      callback() 
 
 
 print("###################\n"
@@ -405,7 +408,7 @@ else:
     data_gen_args = dict(
         X=X_train, Y=Y_train, batch_size=batch_size_value,     
         shape=(img_height,img_width,img_channels),
-        shuffle=shuffle_train_data_each_epoch, da=True, hist_eq=hist_eq,
+        shuffle=shuffle_train_data_each_epoch, da=True, 
         rotation90=rotation90, rotation_range=rotation_range,
         vflip=vflips, hflip=hflips, elastic=elastic, g_blur=g_blur,
         median_blur=median_blur, gamma_contrast=gamma_contrast, zoom=zoom,
@@ -451,7 +454,8 @@ if load_previous_weights == False:
     results = model.fit(train_generator, validation_data=val_generator,
         validation_steps=math.ceil(X_val.shape[0]/batch_size_value),
         steps_per_epoch=steps_per_epoch_value, epochs=epochs_value,
-        callbacks=[earlystopper, checkpointer, time_callback])
+        callbacks=[earlystopper, checkpointer, time_callback,                   
+                   OnEpochEnd([train_generator.on_epoch_end])])
 
 print("Loading model weights from h5_file: {}".format(h5_file))
 model.load_weights(h5_file)
@@ -490,7 +494,7 @@ print("Evaluating test data . . .")
 score_per_crop = model.evaluate(
     X_test, Y_test, batch_size=batch_size_value, verbose=1)
 loss_per_crop = score_per_crop[0]
-jac_per_crop = score_per_crop[1]
+iou_per_crop = score_per_crop[1]
 
 print("Making the predictions on test data . . .")
 preds_test = model.predict(X_test, batch_size=batch_size_value, verbose=1)
@@ -525,35 +529,35 @@ save_img(Y=preds_test, mask_dir=result_no_bin_dir_per_image,
          prefix="test_out_no_bin")
 
 print("Calculate metrics (per image) . . .")
-jac_per_image = jaccard_index_numpy(Y_test, (preds_test > 0.5).astype(np.uint8))
-voc_per_image = voc_calculation(
-    Y_test, (preds_test > 0.5).astype(np.uint8), jac_per_image)
+iou_per_image = jaccard_index_numpy(Y_test, (preds_test > 0.5).astype(np.uint8))
+ov_iou_per_image = voc_calculation(
+    Y_test, (preds_test > 0.5).astype(np.uint8), iou_per_image)
 
-print("~~~~ Smooth (per image) ~~~~")
-Y_test_smooth = np.zeros(X_test.shape, dtype=np.float32)
+print("~~~~ Blending (per image) ~~~~")
+Y_test_blending = np.zeros(X_test.shape, dtype=np.float32)
 for i in tqdm(range(X_test.shape[0])):
-    predictions_smooth = predict_img_with_smooth_windowing(
+    predictions_blending = predict_img_with_smooth_windowing(
         X_test[i], window_size=crop_shape[0], subdivisions=2, n_classes=n_classes,
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)))
     if n_classes > 1:
-        Y_test_smooth[i] = np.expand_dims(predictions_smooth[...,1], axis=-1)
+        Y_test_blending[i] = np.expand_dims(predictions_blending[...,1], axis=-1)
     else:
-        Y_test_smooth[i] = predictions_smooth
+        Y_test_blending[i] = predictions_blending
 
 # Recover original shape discarding few extra pixels added
-Y_test_smooth = Y_test_smooth[:test_shape[0],:test_shape[1],:test_shape[2],:]
+Y_test_blending = Y_test_blending[:test_shape[0],:test_shape[1],:test_shape[2],:]
 
 print("Saving smooth predicted images . . .")
-save_img(Y=Y_test_smooth, mask_dir=smo_no_bin_dir_per_image,
+save_img(Y=Y_test_blending, mask_dir=smo_no_bin_dir_per_image,
          prefix="test_out_smo_no_bin")
-save_img(Y=(Y_test_smooth > 0.5).astype(np.uint8), mask_dir=smo_bin_dir_per_image,
+save_img(Y=(Y_test_blending > 0.5).astype(np.uint8), mask_dir=smo_bin_dir_per_image,
          prefix="test_out_smo")
 
 print("Calculate metrics (smooth + per crop) . . .")
-smo_jac_per_image = jaccard_index_numpy(
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8))
-smo_voc_per_image = voc_calculation(
-    Y_test, (Y_test_smooth > 0.5).astype(np.uint8), smo_jac_per_image)
+smo_iou_per_image = jaccard_index_numpy(
+    Y_test, (Y_test_blending > 0.5).astype(np.uint8))
+smo_ov_iou_per_image = voc_calculation(
+    Y_test, (Y_test_blending > 0.5).astype(np.uint8), smo_iou_per_image)
 
 print("~~~~ Z-Filtering (per image) ~~~~")
 zfil_preds_test = calculate_z_filtering(preds_test)
@@ -562,26 +566,26 @@ print("Saving Z-filtered images . . .")
 save_img(Y=zfil_preds_test, mask_dir=zfil_dir_per_image, prefix="test_out_zfil")
 
 print("Calculate metrics (Z-filtering + per crop) . . .")
-zfil_jac_per_image = jaccard_index_numpy(
+zfil_iou_per_image = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
-zfil_voc_per_image = voc_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_jac_per_image)
+zfil_ov_iou_per_image = voc_calculation(
+    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_iou_per_image)
 del zfil_preds_test, preds_test
 
-print("~~~~ Smooth + Z-Filtering (per image) ~~~~")
-smo_zfil_preds_test = calculate_z_filtering(Y_test_smooth)
+print("~~~~ Blending + Z-Filtering (per image) ~~~~")
+smo_zfil_preds_test = calculate_z_filtering(Y_test_blending)
 
 print("Saving smoothed + Z-filtered images . . .")
 save_img(Y=smo_zfil_preds_test, mask_dir=smo_zfil_dir_per_image,
          prefix="test_out_smoo_zfil")
 
-print("Calculate metrics (Smooth + Z-filtering per crop) . . .")
-smo_zfil_jac_per_image = jaccard_index_numpy(
+print("Calculate metrics (Blending + Z-filtering per crop) . . .")
+smo_zfil_iou_per_image = jaccard_index_numpy(
     Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8))
-smo_zfil_voc_per_image = voc_calculation(
+smo_zfil_ov_iou_per_image = voc_calculation(
     Y_test, (smo_zfil_preds_test > 0.5).astype(np.uint8),
-    smo_zfil_jac_per_image)
-del Y_test_smooth, smo_zfil_preds_test
+    smo_zfil_iou_per_image)
+del Y_test_blending, smo_zfil_preds_test
 
 
 print("############################################################\n"
@@ -609,9 +613,9 @@ save_img(Y=Y_test_50ov, mask_dir=result_no_bin_dir_50ov,
          prefix="test_out_no_bin_50ov")
 
 print("Calculate metrics (50% overlap) . . .")
-jac_50ov = jaccard_index_numpy(Y_test, (Y_test_50ov > 0.5).astype(np.float32))
-voc_50ov = voc_calculation(
-    Y_test, (Y_test_50ov > 0.5).astype(np.float32), jac_50ov)
+iou_50ov = jaccard_index_numpy(Y_test, (Y_test_50ov > 0.5).astype(np.float32))
+ov_iou_50ov = voc_calculation(
+    Y_test, (Y_test_50ov > 0.5).astype(np.float32), iou_50ov)
 del Y_test_50ov
 
 print("~~~~ 8-Ensemble (50% overlap) ~~~~")
@@ -619,7 +623,7 @@ Y_test_50ov_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
 for i in tqdm(range(X_test.shape[0])):
     pred_ensembled = ensemble8_2d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        n_classes=n_classes, last_class=last_class)
+        n_classes=n_classes)
     Y_test_50ov_ensemble[i] = pred_ensembled
 
 Y_test_50ov_ensemble = merge_data_with_overlap(
@@ -635,10 +639,10 @@ save_img(Y=Y_test_50ov_ensemble, mask_dir=ens_no_bin_dir_50ov,
          prefix="test_out_no_bin_ens8_50ov")
 
 print("Calculate metrics (50% overlap + 8-Ensemble) . . .")
-ens_jac_50ov = jaccard_index_numpy(
+ens_iou_50ov = jaccard_index_numpy(
     Y_test, (Y_test_50ov_ensemble > 0.5).astype(np.float32))
-ens_voc_50ov = voc_calculation(
-    Y_test, (Y_test_50ov_ensemble > 0.5).astype(np.float32), jac_50ov)
+ens_ov_iou_50ov = voc_calculation(
+    Y_test, (Y_test_50ov_ensemble > 0.5).astype(np.float32), iou_50ov)
 
 print("~~~~ 8-Ensemble + Z-Filtering (50% overlap) ~~~~")
 zfil_preds_test = calculate_z_filtering(Y_test_50ov_ensemble)
@@ -647,10 +651,10 @@ print("Saving Z-filtered images . . .")
 save_img(Y=zfil_preds_test, mask_dir=ens_zfil_dir_50ov, prefix="test_out_zfil")
 
 print("Calculate metrics (50% overlap + 8-Ensemble + Z-filtering) . . .")
-ens_zfil_jac_50ov = jaccard_index_numpy(
+ens_zfil_iou_50ov = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
-ens_zfil_voc_50ov = voc_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), ens_zfil_jac_50ov)
+ens_zfil_ov_iou_50ov = voc_calculation(
+    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), ens_zfil_iou_50ov)
 del Y_test_50ov_ensemble, zfil_preds_test
 
 # Merge X_test 
@@ -677,9 +681,9 @@ save_img(Y=preds_test_full, mask_dir=result_no_bin_dir_full,
          prefix="test_out_no_bin_full")
 
 print("Calculate metrics (full image) . . .")
-jac_full = jaccard_index_numpy(Y_test, (preds_test_full > 0.5).astype(np.uint8))
-voc_full = voc_calculation(Y_test, (preds_test_full > 0.5).astype(np.uint8),
-                           jac_full)
+iou_full = jaccard_index_numpy(Y_test, (preds_test_full > 0.5).astype(np.uint8))
+ov_iou_full = voc_calculation(Y_test, (preds_test_full > 0.5).astype(np.uint8),
+                           iou_full)
 
 print("~~~~ 8-Ensemble (full image) ~~~~")
 Y_test_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
@@ -687,7 +691,7 @@ Y_test_ensemble = np.zeros(X_test.shape, dtype=(np.float32))
 for i in tqdm(range(X_test.shape[0])):
     pred_ensembled = ensemble8_2d_predictions(X_test[i],
         pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-        n_classes=n_classes, last_class=last_class)
+        n_classes=n_classes)
     Y_test_ensemble[i] = pred_ensembled
 
 # Recover original shape discarding few extra pixels added
@@ -700,10 +704,10 @@ save_img(Y=(Y_test_ensemble > 0.5).astype(np.uint8), mask_dir=smo_bin_dir_full,
          prefix="test_out_ens")
 
 print("Calculate metrics (8-Ensemble + full image) . . .")
-smo_jac_full = jaccard_index_numpy(
+smo_iou_full = jaccard_index_numpy(
     Y_test, (Y_test_ensemble > 0.5).astype(np.uint8))
-smo_voc_full = voc_calculation(
-    Y_test, (Y_test_ensemble > 0.5).astype(np.uint8), smo_jac_full)
+smo_ov_iou_full = voc_calculation(
+    Y_test, (Y_test_ensemble > 0.5).astype(np.uint8), smo_iou_full)
 
 print("~~~~ 8-Ensemble + Z-Filtering (full image) ~~~~")
 zfil_preds_test = calculate_z_filtering(Y_test_ensemble)
@@ -712,10 +716,10 @@ print("Saving Z-filtered images . . .")
 save_img(Y=zfil_preds_test, mask_dir=zfil_dir_full, prefix="test_out_zfil")
 
 print("Calculate metrics (8-Ensemble + Z-filtering + full image) . . .")
-zfil_jac_full = jaccard_index_numpy(
+zfil_iou_full = jaccard_index_numpy(
     Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
-zfil_voc_full = voc_calculation(
-    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_jac_full)
+zfil_ov_iou_full = voc_calculation(
+    Y_test, (zfil_preds_test > 0.5).astype(np.uint8), zfil_iou_full)
 
 del zfil_preds_test, Y_test_ensemble
 
@@ -735,28 +739,28 @@ if load_previous_weights == False:
           .format(np.max(results.history['val_'+metric])))
 
 print("Test loss: {}".format(loss_per_crop))
-print("Test IoU (per crop): {}".format(jac_per_crop))
+print("Test Foreground IoU (per crop): {}".format(iou_per_crop))
 
-print("Test IoU (merge into complete image): {}".format(jac_per_image))
-print("Test VOC (merge into complete image): {}".format(voc_per_image))
-print("Post-process: Smooth - Test IoU (merge into complete image): {}".format(smo_jac_per_image))
-print("Post-process: Smooth - Test VOC (merge into complete image): {}".format(smo_voc_per_image))
-print("Post-process: Z-Filtering - Test IoU (merge into complete image): {}".format(zfil_jac_per_image))
-print("Post-process: Z-Filtering - Test VOC (merge into complete image): {}".format(zfil_voc_per_image))
-print("Post-process: Smooth + Z-Filtering - Test IoU (merge into complete image): {}".format(smo_zfil_jac_per_image))
-print("Post-process: Smooth + Z-Filtering - Test VOC (merge into complete image): {}".format(smo_zfil_voc_per_image))
-print("Test IoU (merge with 50% overlap): {}".format(jac_50ov))
-print("Test VOC (merge with 50% overlap): {}".format(voc_50ov))
-print("Post-process: Ensemble - Test IoU (merge with 50% overlap): {}".format(ens_jac_50ov))
-print("Post-process: Ensemble - Test VOC (merge with 50% overlap): {}".format(ens_voc_50ov))
-print("Post-process: Ensemble + Z-Filtering - Test IoU (merge with 50% overlap): {}".format(ens_zfil_jac_50ov))
-print("Post-process: Ensemble + Z-Filtering - Test VOC (merge with 50% overlap): {}".format(ens_zfil_voc_50ov))
-print("Test IoU (full): {}".format(jac_full))
-print("Test VOC (full): {}".format(voc_full))
-print("Post-process: Ensemble - Test IoU (full): {}".format(smo_jac_full))
-print("Post-process: Ensemble - Test VOC (full): {}".format(smo_voc_full))
-print("Post-process: Ensemble + Z-Filtering - Test IoU (full): {}".format(zfil_jac_full))
-print("Post-process: Ensemble + Z-Filtering - Test VOC (full): {}".format(zfil_voc_full))
+print("Test Foreground IoU (merge into complete image): {}".format(iou_per_image))
+print("Test Overall IoU (merge into complete image): {}".format(ov_iou_per_image))
+print("Post-process: Blending - Test Foreground IoU (merge into complete image): {}".format(smo_iou_per_image))
+print("Post-process: Blending - Test Overall IoU (merge into complete image): {}".format(smo_ov_iou_per_image))
+print("Post-process: Z-Filtering - Test Foreground IoU (merge into complete image): {}".format(zfil_iou_per_image))
+print("Post-process: Z-Filtering - Test Overall IoU (merge into complete image): {}".format(zfil_ov_iou_per_image))
+print("Post-process: Blending + Z-Filtering - Test Foreground IoU (merge into complete image): {}".format(smo_zfil_iou_per_image))
+print("Post-process: Blending + Z-Filtering - Test Overall IoU (merge into complete image): {}".format(smo_zfil_ov_iou_per_image))
+print("Test Foreground IoU (merge with 50% overlap): {}".format(iou_50ov))
+print("Test Overall IoU (merge with 50% overlap): {}".format(ov_iou_50ov))
+print("Post-process: Ensemble - Test Foreground IoU (merge with 50% overlap): {}".format(ens_iou_50ov))
+print("Post-process: Ensemble - Test Overall IoU (merge with 50% overlap): {}".format(ens_ov_iou_50ov))
+print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (merge with 50% overlap): {}".format(ens_zfil_iou_50ov))
+print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (merge with 50% overlap): {}".format(ens_zfil_ov_iou_50ov))
+print("Test Foreground IoU (full): {}".format(iou_full))
+print("Test Overall IoU (full): {}".format(ov_iou_full))
+print("Post-process: Ensemble - Test Foreground IoU (full): {}".format(smo_iou_full))
+print("Post-process: Ensemble - Test Overall IoU (full): {}".format(smo_ov_iou_full))
+print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (full): {}".format(zfil_iou_full))
+print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (full): {}".format(zfil_ov_iou_full))
 
 if not load_previous_weights:
     scores = {}
