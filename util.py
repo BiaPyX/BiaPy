@@ -1372,7 +1372,8 @@ def load_ct_data_from_dir(data_dir, shape=None):
 
 
 def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
-                            overlap=(0,0,0), return_filenames=False):
+                            overlap=(0,0,0), padding=(0,0,0), 
+                            return_filenames=False):
     """Load data from a directory.
 
        Parameters
@@ -1394,6 +1395,9 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
            Amount of minimum overlap on x, y and z dimensions. The values must
            be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.  
            E. g. ``(x, y, z)``.
+           
+       padding : 4D Numpy array, optional
+            Size of padding to be added on each side
 
        return_filenames : bool, optional
            Return a list with the loaded filenames. Useful when you need to save
@@ -1501,7 +1505,7 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
             if img.shape != subvol_shape[:3]+(img.shape[-1],):
                 img_cropped = crop_3D_data_with_overlap(
                     img, subvol_shape[:3]+(img.shape[-1],), overlap=overlap,
-                    verbose=True)
+                    padding=padding, verbose=True)
             else:
                 img_cropped = np.expand_dims(img, 0)
             crop_shape.append(img_cropped.shape)
