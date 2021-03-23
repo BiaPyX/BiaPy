@@ -7,7 +7,7 @@ This repository contains a complete workflow to make semantic segmentation for E
 ## Getting started 
 These instructions will get you a copy of the project up and running on your machine.
 
-Run a fast-version of 2D U-Net template in Colab here: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://github.com/danifranco/EM_Image_Segmentation/tree/master/templates/U-Net_2D_workflow.ipynb) 
+Run a fast-version of 2D U-Net template in Colab here: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/danifranco/EM_Image_Segmentation/blob/master/templates/U-Net_2D_workflow.ipynb) 
 
 ### Prerequisites
 To set-up a development environment with all necessary dependencies, you can use the  file located in [env/DL_EM_base_env.yml](env/DL_EM_base_env.yml) to create it as follows:
