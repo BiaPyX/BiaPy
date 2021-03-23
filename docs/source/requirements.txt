@@ -41,7 +41,7 @@ oauthlib==3.1.0
 olefile==0.46
 opencv-python==4.2.0.34
 packaging==20.4
-Pillow==7.1.0
+Pillow==8.1.1
 pockets==0.9.1
 pyasn1==0.4.8
 pyasn1-modules==0.2.7
