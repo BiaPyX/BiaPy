@@ -111,8 +111,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 raise ValueError("Given 'subvol_shape' is bigger than the data "
                                  "provided")
 
-        self.X = (X/255).astype(np.float32) if np.max(X) > 250 else X.astype(np.float32)
-        self.Y = (Y/255).astype(np.uint8) if np.max(Y) > 250 else Y.astype(np.uint8)
+        self.X = (X/255).astype(np.float32) if np.max(X) > 100 else X.astype(np.float32)
+        self.Y = (Y/255).astype(np.uint8) if np.max(Y) > 100 else Y.astype(np.uint8)
         self.rgb = True if self.X.shape[-1] != 1 else False
         self.n_classes = n_classes
         self.out_number = out_number

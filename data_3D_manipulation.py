@@ -936,8 +936,6 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
     for z in range(vols_per_z):
         for x in range(vols_per_x):
             for y in range(vols_per_y):  
-                print("x {}, y {}, z {}".format(x,y,z))
-                   
                 d_x = 0 if (x*step_x+data.shape[1]) < orig_vol_shape[1] else last_x
                 d_y = 0 if (y*step_y+data.shape[2]) < orig_vol_shape[2] else last_y
                 d_z = 0 if (z*step_z+data.shape[3]) < orig_vol_shape[0] else last_z

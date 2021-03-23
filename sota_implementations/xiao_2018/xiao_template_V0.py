@@ -64,7 +64,7 @@ import tensorflow as tf
 from data_3D_manipulation import load_and_prepare_3D_data,\
                                  merge_3D_data_with_overlap, \
                                  crop_3D_data_with_overlap
-from generators.data_3D_generator import VoxelDataGenerator
+from generators.data_3D_generators import VoxelDataGenerator
 from unet_3d_xiao import U_Net_3D_Xiao
 from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping
@@ -195,7 +195,7 @@ n_classes = 2
 # Adjust the metric used accordingly to the number of clases. This code is planned 
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 
 # will only calculate the IoU for the foreground class (channel 1)              
-metric = "jaccard_index_softmax" if n_classes > 1 else "jaccard_index" 
+metric = "main_classifier_jaccard_index_softmax"
 # Number of outputs predicted by the network                                    
 out_number = 3
 
@@ -381,10 +381,10 @@ print("################################\n"
       "################################\n")
 
 # Prepare test data for its use
-if np.max(Y_test) > n_classes:
+if np.max(Y_test) > 100:
     Y_test = Y_test.astype('float32')
     Y_test *= 1./255
-if np.max(X_test) > 2:
+if np.max(X_test) > 100:
     X_test = X_test.astype('float32')
     X_test *= 1./255
 
@@ -403,10 +403,16 @@ iou_per_crop = score_per_crop[-1]
 print("Making the predictions on test data . . .")
 preds_test = model.predict(test_generator, verbose=1)
 preds_test = np.array(preds_test)[-1]
+<<<<<<< HEAD
+                                                
+if n_classes > 1:
+    preds_test = np.expand_dims(np.argmax(preds_test, -1), -1)
+=======
 
                                                 
 if n_classes > 1:
     preds_test = np.expand_dims(np.argmax(preds_test,-1), -1)
+>>>>>>> a481f9c375ec290c747ffe01d96d2a02a0742bad
 
 
 print("#############################################\n"
@@ -496,9 +502,14 @@ X_test = crop_3D_data_with_overlap(
 Y_test_50ov = model.predict(X_test, batch_size=batch_size_value, verbose=1) 
 Y_test_50ov = np.array(Y_test_50ov)[-1]                                           
 
+<<<<<<< HEAD
+if n_classes > 1:                                                               
+    Y_test_50ov = np.expand_dims(np.argmax(Y_test_50ov, -1), -1)
+=======
                                                 
 if n_classes > 1:                                                               
     Y_test_50ov = np.expand_dims(np.argmax(Y_test_50ov,-1), -1)                          
+>>>>>>> a481f9c375ec290c747ffe01d96d2a02a0742bad
  
 Y_test_50ov = merge_3D_data_with_overlap(                                   
     Y_test_50ov, orig_test_shape, overlap=(0.5,0.5,0.5))                    
