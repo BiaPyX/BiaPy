@@ -26,7 +26,7 @@ idna==2.9
 imageio==2.8.0
 imagesize==1.2.0
 imgaug==0.4.0
-Jinja2==2.11.2
+Jinja2==2.11.3
 joblib==0.14.1
 Keras-Applications==1.0.8
 Keras-Preprocessing==1.1.0
