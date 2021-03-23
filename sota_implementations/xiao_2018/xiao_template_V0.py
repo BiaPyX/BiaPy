@@ -403,16 +403,9 @@ iou_per_crop = score_per_crop[-1]
 print("Making the predictions on test data . . .")
 preds_test = model.predict(test_generator, verbose=1)
 preds_test = np.array(preds_test)[-1]
-<<<<<<< HEAD
-                                                
-if n_classes > 1:
-    preds_test = np.expand_dims(np.argmax(preds_test, -1), -1)
-=======
-
                                                 
 if n_classes > 1:
     preds_test = np.expand_dims(np.argmax(preds_test,-1), -1)
->>>>>>> a481f9c375ec290c747ffe01d96d2a02a0742bad
 
 
 print("#############################################\n"
@@ -502,14 +495,8 @@ X_test = crop_3D_data_with_overlap(
 Y_test_50ov = model.predict(X_test, batch_size=batch_size_value, verbose=1) 
 Y_test_50ov = np.array(Y_test_50ov)[-1]                                           
 
-<<<<<<< HEAD
 if n_classes > 1:                                                               
     Y_test_50ov = np.expand_dims(np.argmax(Y_test_50ov, -1), -1)
-=======
-                                                
-if n_classes > 1:                                                               
-    Y_test_50ov = np.expand_dims(np.argmax(Y_test_50ov,-1), -1)                          
->>>>>>> a481f9c375ec290c747ffe01d96d2a02a0742bad
  
 Y_test_50ov = merge_3D_data_with_overlap(                                   
     Y_test_50ov, orig_test_shape, overlap=(0.5,0.5,0.5))                    
