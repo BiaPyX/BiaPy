@@ -247,7 +247,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
 def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path, 
     test_mask_path, image_train_shape, image_test_shape, test_subvol_shape,
     train_subvol_shape, create_val=True, shuffle_val=True, val_split=0.1, 
-    seedValue=42, random_subvolumes_in_DA=False, ov=(0,0,0), padding=(0,0,0)):
+    seedValue=42, random_subvolumes_in_DA=False, ov=(0,0,0), padding=(0,0,0), median_padding=False):
     """Load train, validation and test images from the given paths to create a 
        3D data representation. All the test data will be used to create a 3D
        volume of ``test_subvol_shape`` shape (considering ``ov``).
@@ -304,7 +304,10 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
            E. g. ``(x, y, z)``.  
            
        padding : 4D Numpy array, optional
-           Size of padding to be added on each side     
+           Size of padding to be added on each side  
+           
+       median_padding: bool
+           If True the padding value is the median value. If False, the added values are zeroes.   
   
        Returns
        -------                                                         
@@ -390,10 +393,10 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
     X_test, orig_test_img_shapes, \
     crop_test_img_shapes, te_filenames = load_3d_images_from_dir(
         test_path, None, crop=True, subvol_shape=test_subvol_shape, overlap=ov,
-        return_filenames=True, padding=padding)
+        return_filenames=True, padding=padding, median_padding=median_padding)
     print("3) Loading test masks . . .")
     Y_test, _, _ = load_3d_images_from_dir(test_mask_path, None, crop=True,            
-        subvol_shape=test_subvol_shape, overlap=ov, padding=padding)
+        subvol_shape=test_subvol_shape, overlap=ov, padding=padding, median_padding=median_padding)
 
     # Save train and test filenames
     filenames = []
@@ -433,7 +436,7 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
 
 
 def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
-                              verbose=True, padding=(0,0,0)):
+                              verbose=True, padding=(0,0,0), median_padding=False):
     """Crop 3D data into smaller volumes with a defined overlap.
        The opposite function is :func:`~merge_3D_data_with_overlap`.
        Parameters
@@ -457,6 +460,9 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
        padding : 4D Numpy array, optional
             Size of padding to be added on each side
     
+       median_padding: bool
+           If True the padding value is the median value. If False, the added values are zeroes.   
+  
        Returns
        -------
        cropped_data : 5D Numpy array
@@ -514,7 +520,13 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
     padded_data = np.zeros((data.shape[0]+2*padding[2],data.shape[1]+2*padding[0], data.shape[2]+2*padding[1], data.shape[3]))
     padded_data[padding[2]:padding[2]+data.shape[0], padding[0]:padding[0]+data.shape[1], padding[1]:padding[1]+data.shape[2], 0:data.shape[3]] = data 
     
-    #Minimum overlap           
+    if median_padding:
+    	padded_data[0:padding[2], :, :, :] = np.median(data[0, :, :, :])
+    	padded_data[padding[2]+data.shape[0]:2*padding[2]+data.shape[0], :, :, :] = np.median(data[-1, :, :, :])
+    	padded_data[:, 0:padding[0], :, :] = np.median(data[:, 0, :, :])
+    	padded_data[:, padding[0]+data.shape[1]:2*padding[0]+data.shape[0], :, :] = np.median(data[:, -1, :, :])
+    	padded_data[:, :, 0:padding[1], :] = np.median(data[:, :, 0, :])
+    	padded_data[ :, :, padding[1]+data.shape[2]:2*padding[1]+data.shape[2], :] = np.median(data[:, :, -1, :])
 
 
     #Original vol shape (no padding)
