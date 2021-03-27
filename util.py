@@ -1372,7 +1372,7 @@ def load_ct_data_from_dir(data_dir, shape=None):
 
 
 def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
-                            overlap=(0,0,0), padding=(0,0,0), 
+                            overlap=(0,0,0), padding=(0,0,0), median_padding=False,
                             return_filenames=False):
     """Load data from a directory.
 
@@ -1399,6 +1399,9 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
        padding : 4D Numpy array, optional
             Size of padding to be added on each side
 
+       median_padding: bool
+           If True the padding value is the median value. If False, the added values are zeroes.   
+  
        return_filenames : bool, optional
            Return a list with the loaded filenames. Useful when you need to save
            them afterwards with the same names as the original ones.
@@ -1505,7 +1508,7 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
             if img.shape != subvol_shape[:3]+(img.shape[-1],):
                 img_cropped = crop_3D_data_with_overlap(
                     img, subvol_shape[:3]+(img.shape[-1],), overlap=overlap,
-                    padding=padding, verbose=True)
+                    padding=padding, median_padding=median_padding, verbose=True)
             else:
                 img_cropped = np.expand_dims(img, 0)
             crop_shape.append(img_cropped.shape)
