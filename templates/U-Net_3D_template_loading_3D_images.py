@@ -64,7 +64,7 @@ import tensorflow as tf
 from data_3D_manipulation import load_and_prepare_3D_data_v2,\
                                  merge_3D_data_with_overlap, \
                                  crop_3D_data_with_overlap
-from generators.data_3D_generators import VoxelDataGenerator
+from generators.data_3D_generators_v2 import VoxelDataGenerator
 from networks.unet_3d import U_Net_3D
 from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping
@@ -125,11 +125,17 @@ ov_train = True
 use_rest_train = False
 # Percentage of overlap in (x, y, z). Set to 0 to calculate the minimun overlap 
 overlap = (0,0,0)
-
+# Padding to be done in (x, y, z) when reconstructing test data. Useful to avoid
+# patch 'border effect'.
+padding = (64, 64, 16)
+# Wheter to use median values to fill padded pixels or zeros
+median_padding = True
 
 ### Data augmentation (DA) variables. Based on https://github.com/aleju/imgaug
 # Flag to activate DA
 da = True
+# Probability of each transformation
+da_prob = 1
 # Create samples of the DA made. Useful to check the output images made.
 aug_examples = True
 # Flag to shuffle the training data on every epoch 
@@ -137,15 +143,59 @@ shuffle_train_data_each_epoch = True
 # Flag to shuffle the validation data on every epoch
 shuffle_val_data_each_epoch = False
 # Rotation of 90º to the subvolumes
-rotation = True
-# Flag to make flips on the subvolumes (horizontal and vertical)
-flips = True
-# Elastic transformations
-elastic = True
-# Gaussian blur
+rotation90 = False
+# Random rotation between a defined range 
+rand_rot = False
+# Range of random rotations
+rnd_rot_range = (-180, 180)
+# Apply shear to images
+shear = False
+# Shear range
+shear_range = (-20, 20)
+# Apply zoom to images
+zoom = False
+# Zoom range
+zoom_range = (0.8, 1.2)
+# Apply shift 
+shift=False   
+# Shift range             
+shift_range=(0.1, 0.2)
+# Flag to make flips on the subvolumes (horizontal and vertical)                
+flip = False
+# Elastic transformations                                                       
+elastic = False
+# Strength of the distortion field
+e_alpha = (240, 250)
+# Standard deviation of the gaussian kernel used to smooth the distortion fields
+e_sigma = 25
+# Parameter that defines the handling of newly created pixels with the elastic
+# transformation
+e_mode = 'constant'
+# Gaussian blur                                                                 
 g_blur = False
-# Gamma contrast 
+# Standard deviation of the gaussian kernel
+g_sigma = (1.0, 2.0)
+# To blur an image by computing median values over neighbourhoods
+median_blur = False
+# Median blur kernel size
+mb_kernel = (3, 7)
+# Gamma contrast                                                                
 gamma_contrast = False
+# Exponent for the contrast adjustment. Higher values darken the image
+gc_gamma = (1.25, 1.75)
+# To fill one or more rectangular areas in an image using a fill mode
+cutout = False
+# Range of number of areas to fill the image with
+cout_nb_iterations = (1, 3)
+# Size of the areas in % of the corresponding image size
+cout_size = 0.2
+# Parameter that defines the handling of newly created pixels with cutout
+cout_fill_mode = 'constant'
+# Set a certain fraction of pixels in images to zero. Not get confuse with the 
+# dropout concept of neural networks, this is just for DA
+dropout = False
+# Range to take the probability to drop a pixel 
+drop_range = (0, 0.2)
 # Flag to extract random subvolumnes during the DA
 random_subvolumes_in_DA = False
 # Calculate probability map to make random subvolumes to be extracted with high
@@ -303,8 +353,8 @@ filenames = load_and_prepare_3D_data_v2(
     train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
     img_test_shape, val_split=perc_used_as_val, create_val=True,
     shuffle_val=random_val_data, random_subvolumes_in_DA=random_subvolumes_in_DA,
-    test_subvol_shape=test_3d_desired_shape,
-    train_subvol_shape=train_3d_desired_shape, ov=overlap)
+    test_subvol_shape=test_3d_desired_shape, train_subvol_shape=train_3d_desired_shape,
+    ov=overlap, padding=padding, median_padding=median_padding)
 
 
 print("###########################\n"
@@ -347,9 +397,16 @@ train_generator = VoxelDataGenerator(
     X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,          
     subvol_shape=train_3d_desired_shape,                                        
     shuffle_each_epoch=shuffle_train_data_each_epoch,                           
-    batch_size=batch_size_value, da=da, flip=flips, rotation=rotation,
-    elastic=elastic, g_blur=g_blur, gamma_contrast=gamma_contrast, 
-    n_classes=n_classes, prob_map=train_prob, extra_data_factor=replicate_train) 
+    batch_size=batch_size_value, da=da, da_prob=da_prob,
+    rotation90=rotation90, rand_rot=rand_rot, rnd_rot_range=rnd_rot_range,
+    shear=shear,shear_range=shear_range, zoom=zoom, zoom_range=zoom_range,
+    shift=shift, shift_range=shift_range, flip=flip, elastic=elastic, 
+    e_alpha=e_alpha, e_sigma=e_sigma, e_mode=e_mode, g_blur=g_blur, 
+    g_sigma=g_sigma, median_blur=median_blur, mb_kernel=mb_kernel, 
+    gamma_contrast=gamma_contrast, gc_gamma=gc_gamma, cutout=cutout, 
+    cout_nb_iterations=cout_nb_iterations, cout_size=cout_size, dropout=dropout,
+    drop_range=drop_range, cout_fill_mode=cout_fill_mode, n_classes=n_classes,
+    prob_map=train_prob, extra_data_factor=replicate_train) 
 del X_train, Y_train
 
 # Create the test data generator without DA
@@ -440,7 +497,7 @@ for i in tqdm(range(len(orig_test_shape))):
     orig_preds_test, orig_Y_test = merge_3D_data_with_overlap(
         preds_test[index:index+crop_3d_shape[0]], original_3d_shape, 
         data_mask=Y_test[index:index+crop_3d_shape[0]], overlap=overlap, 
-        verbose=False)
+        padding=padding, verbose=False)
     orig_preds_test = orig_preds_test.astype(np.float32)
     orig_Y_test = orig_Y_test.astype(np.float32)
 
@@ -558,137 +615,137 @@ zfil_ov_iou_per_image = ov_iou_z/len(orig_test_shape)
                                                                                 
 ens_zfil_iou_per_image = iou_s_z/len(orig_test_shape)
 ens_zfil_ov_iou_per_image = ov_iou_s_z/len(orig_test_shape)
-                                        
-
-print("############################################################\n"
-      "#  Metrics (per image, merging crops with 50% of overlap)  #\n"
-      "############################################################\n")
-
-iou = 0
-ov_iou = 0
-index = 0
-for i in tqdm(range(len(orig_test_shape))):
-    original_3d_shape = orig_test_shape[i]
-    crop_3d_shape = crop_test_shapes[i]    
-    f_name = filenames[1][i]
-
-    orig_X_test, orig_Y_test = merge_3D_data_with_overlap(
-        X_test[index:index+crop_3d_shape[0]], original_3d_shape,
-        data_mask=Y_test[index:index+crop_3d_shape[0]],
-        overlap=overlap, verbose=False)
-
-    orig_X_test = crop_3D_data_with_overlap(
-        orig_X_test, test_3d_desired_shape, overlap=(0.5,0.5,0.5), verbose=False)
-
-    Y_test_50ov = model.predict(orig_X_test, batch_size=batch_size_value, verbose=1) 
-
-    if n_classes > 1:                                                               
-        Y_test_50ov = np.expand_dims(np.argmax(Y_test_50ov,-1), -1)                          
- 
-    Y_test_50ov = merge_3D_data_with_overlap(
-        Y_test_50ov, original_3d_shape, overlap=(0.5,0.5,0.5), verbose=False)
-    Y_test_50ov = Y_test_50ov.astype(np.float32)
-    
-    print("Saving 50% overlap predicted images . . .")
-    os.makedirs(result_bin_dir_50ov, exist_ok=True)                          
-    aux = np.expand_dims((Y_test_50ov> 0.5).astype(np.uint8), 1)               
-    f = os.path.join(result_bin_dir_50ov, f_name)                    
-    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}) 
-    os.makedirs(result_no_bin_dir_50ov, exist_ok=True)                          
-    aux = np.expand_dims(Y_test_50ov.astype(np.uint8), 1)               
-    f = os.path.join(result_no_bin_dir_50ov, f_name)                    
-    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}) 
-
-    print("Calculate metrics (50% overlap) . . .")
-    j = jaccard_index_numpy(orig_Y_test, (Y_test_50ov > 0.5).astype(np.uint8)) 
-    v = voc_calculation(orig_Y_test, (Y_test_50ov > 0.5).astype(np.uint8), j)
-    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
-    iou += j
-    ov_iou += v
-
-    index += crop_3d_shape[0]
-
-del orig_X_test, Y_test_50ov
-
-iou_50ov = iou/len(orig_test_shape)
-ov_iou_50ov = ov_iou/len(orig_test_shape)
-
-print("~~~~ 16-Ensemble ~~~~")                                      
-iou = 0
-ov_iou = 0
-iou_z = 0
-ov_iou_z = 0
-index = 0
-for i in tqdm(range(len(orig_test_shape))):
-    original_3d_shape = orig_test_shape[i]
-    crop_3d_shape = crop_test_shapes[i]    
-    f_name = filenames[1][i]
-
-    orig_X_test, orig_Y_test = merge_3D_data_with_overlap(                      
-        X_test[index:index+crop_3d_shape[0]], original_3d_shape,                
-        data_mask=Y_test[index:index+crop_3d_shape[0]],                         
-        overlap=overlap, verbose=False)                                          
-
-    orig_X_test = crop_3D_data_with_overlap(                                    
-        orig_X_test, test_3d_desired_shape, overlap=(0.5,0.5,0.5), verbose=False)
-
-    Y_test_50ov_ensemble = np.zeros(orig_X_test.shape[:4]+(n_classes,), dtype=np.float32)
-    for j in tqdm(range(orig_X_test.shape[0])):
-        predictions_ensembled = ensemble16_3d_predictions(orig_X_test[j],
-            pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),   
-            n_classes=n_classes)
-        Y_test_50ov_ensemble[j] = predictions_ensembled
-
-    if n_classes > 1:                                                           
-        Y_test_50ov_ensemble = np.expand_dims(np.argmax(Y_test_50ov_ensemble,-1), -1)                    
-                                                                                
-    orig_preds_test = merge_3D_data_with_overlap(                                   
-        Y_test_50ov_ensemble, original_3d_shape, overlap=(0.5,0.5,0.5), verbose=False)    
-    orig_preds_test = orig_preds_test.astype(np.float32)    
-    
-    print("Saving 50% overlap predicted images . . .")
-    os.makedirs(ens_bin_dir_50ov, exist_ok=True)                          
-    aux = np.expand_dims((orig_preds_test> 0.5).astype(np.uint8), 1)                       
-    f = os.path.join(ens_bin_dir_50ov, f_name)                    
-    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
-    os.makedirs(ens_no_bin_dir_50ov, exist_ok=True)                          
-    aux = np.expand_dims(orig_preds_test.astype(np.uint8), 1)                       
-    f = os.path.join(ens_no_bin_dir_50ov, f_name)                    
-    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
-
-    print("Calculate metrics (50% overlap) . . .")
-    j = jaccard_index_numpy(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8))
-    v = voc_calculation(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8), j)
-    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
-    iou += j
-    ov_iou += v
-
-    print("~~~~ Z-Filtering (50% overlap) ~~~~")
-    zfil_preds_test = calculate_z_filtering(orig_preds_test)
-    zfil_preds_test = zfil_preds_test.astype(np.float32)
-
-    print("Saving Z-filtered images . . .")
-    os.makedirs(ens_zfil_dir_50ov, exist_ok=True)                             
-    aux = np.expand_dims(zfil_preds_test.astype(np.uint8), 1)                   
-    f = os.path.join(ens_zfil_dir_50ov, f_name)                       
-    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
-
-    print("Calculate metrics (Z-filtering + 50% overlap) . . .")
-    j = jaccard_index_numpy(orig_Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
-    v = voc_calculation(orig_Y_test, (zfil_preds_test > 0.5).astype(np.uint8), j)
-    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
-    iou_z += j
-    ov_iou_z += v
-
-    index += crop_3d_shape[0]
-
-del orig_preds_test, orig_Y_test, zfil_preds_test, Y_test_50ov_ensemble
-
-ens_iou_50ov = iou/len(orig_test_shape)
-ens_ov_iou_50ov = ov_iou/len(orig_test_shape)
-
-ens_zfil_iou_50ov = iou_z/len(orig_test_shape)
-ens_zfil_ov_iou_50ov = ov_iou_z/len(orig_test_shape)
+#                                        
+#
+#print("############################################################\n"
+#      "#  Metrics (per image, merging crops with 50% of overlap)  #\n"
+#      "############################################################\n")
+#
+#iou = 0
+#ov_iou = 0
+#index = 0
+#for i in tqdm(range(len(orig_test_shape))):
+#    original_3d_shape = orig_test_shape[i]
+#    crop_3d_shape = crop_test_shapes[i]    
+#    f_name = filenames[1][i]
+#
+#    orig_X_test, orig_Y_test = merge_3D_data_with_overlap(
+#        X_test[index:index+crop_3d_shape[0]], original_3d_shape,
+#        data_mask=Y_test[index:index+crop_3d_shape[0]],
+#        overlap=overlap, verbose=False)
+#
+#    orig_X_test = crop_3D_data_with_overlap(
+#        orig_X_test, test_3d_desired_shape, overlap=(0.5,0.5,0.5), verbose=False)
+#
+#    Y_test_50ov = model.predict(orig_X_test, batch_size=batch_size_value, verbose=1) 
+#
+#    if n_classes > 1:                                                               
+#        Y_test_50ov = np.expand_dims(np.argmax(Y_test_50ov,-1), -1)                          
+# 
+#    Y_test_50ov = merge_3D_data_with_overlap(
+#        Y_test_50ov, original_3d_shape, overlap=(0.5,0.5,0.5), verbose=False)
+#    Y_test_50ov = Y_test_50ov.astype(np.float32)
+#    
+#    print("Saving 50% overlap predicted images . . .")
+#    os.makedirs(result_bin_dir_50ov, exist_ok=True)                          
+#    aux = np.expand_dims((Y_test_50ov> 0.5).astype(np.uint8), 1)               
+#    f = os.path.join(result_bin_dir_50ov, f_name)                    
+#    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}) 
+#    os.makedirs(result_no_bin_dir_50ov, exist_ok=True)                          
+#    aux = np.expand_dims(Y_test_50ov.astype(np.uint8), 1)               
+#    f = os.path.join(result_no_bin_dir_50ov, f_name)                    
+#    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}) 
+#
+#    print("Calculate metrics (50% overlap) . . .")
+#    j = jaccard_index_numpy(orig_Y_test, (Y_test_50ov > 0.5).astype(np.uint8)) 
+#    v = voc_calculation(orig_Y_test, (Y_test_50ov > 0.5).astype(np.uint8), j)
+#    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
+#    iou += j
+#    ov_iou += v
+#
+#    index += crop_3d_shape[0]
+#
+#del orig_X_test, Y_test_50ov
+#
+#iou_50ov = iou/len(orig_test_shape)
+#ov_iou_50ov = ov_iou/len(orig_test_shape)
+#
+#print("~~~~ 16-Ensemble ~~~~")                                      
+#iou = 0
+#ov_iou = 0
+#iou_z = 0
+#ov_iou_z = 0
+#index = 0
+#for i in tqdm(range(len(orig_test_shape))):
+#    original_3d_shape = orig_test_shape[i]
+#    crop_3d_shape = crop_test_shapes[i]    
+#    f_name = filenames[1][i]
+#
+#    orig_X_test, orig_Y_test = merge_3D_data_with_overlap(                      
+#        X_test[index:index+crop_3d_shape[0]], original_3d_shape,                
+#        data_mask=Y_test[index:index+crop_3d_shape[0]],                         
+#        overlap=overlap, verbose=False)                                          
+#
+#    orig_X_test = crop_3D_data_with_overlap(                                    
+#        orig_X_test, test_3d_desired_shape, overlap=(0.5,0.5,0.5), verbose=False)
+#
+#    Y_test_50ov_ensemble = np.zeros(orig_X_test.shape[:4]+(n_classes,), dtype=np.float32)
+#    for j in tqdm(range(orig_X_test.shape[0])):
+#        predictions_ensembled = ensemble16_3d_predictions(orig_X_test[j],
+#            pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),   
+#            n_classes=n_classes)
+#        Y_test_50ov_ensemble[j] = predictions_ensembled
+#
+#    if n_classes > 1:                                                           
+#        Y_test_50ov_ensemble = np.expand_dims(np.argmax(Y_test_50ov_ensemble,-1), -1)                    
+#                                                                                
+#    orig_preds_test = merge_3D_data_with_overlap(                                   
+#        Y_test_50ov_ensemble, original_3d_shape, overlap=(0.5,0.5,0.5), verbose=False)    
+#    orig_preds_test = orig_preds_test.astype(np.float32)    
+#    
+#    print("Saving 50% overlap predicted images . . .")
+#    os.makedirs(ens_bin_dir_50ov, exist_ok=True)                          
+#    aux = np.expand_dims((orig_preds_test> 0.5).astype(np.uint8), 1)                       
+#    f = os.path.join(ens_bin_dir_50ov, f_name)                    
+#    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
+#    os.makedirs(ens_no_bin_dir_50ov, exist_ok=True)                          
+#    aux = np.expand_dims(orig_preds_test.astype(np.uint8), 1)                       
+#    f = os.path.join(ens_no_bin_dir_50ov, f_name)                    
+#    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
+#
+#    print("Calculate metrics (50% overlap) . . .")
+#    j = jaccard_index_numpy(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8))
+#    v = voc_calculation(orig_Y_test, (orig_preds_test > 0.5).astype(np.uint8), j)
+#    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
+#    iou += j
+#    ov_iou += v
+#
+#    print("~~~~ Z-Filtering (50% overlap) ~~~~")
+#    zfil_preds_test = calculate_z_filtering(orig_preds_test)
+#    zfil_preds_test = zfil_preds_test.astype(np.float32)
+#
+#    print("Saving Z-filtered images . . .")
+#    os.makedirs(ens_zfil_dir_50ov, exist_ok=True)                             
+#    aux = np.expand_dims(zfil_preds_test.astype(np.uint8), 1)                   
+#    f = os.path.join(ens_zfil_dir_50ov, f_name)                       
+#    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
+#
+#    print("Calculate metrics (Z-filtering + 50% overlap) . . .")
+#    j = jaccard_index_numpy(orig_Y_test, (zfil_preds_test > 0.5).astype(np.uint8))
+#    v = voc_calculation(orig_Y_test, (zfil_preds_test > 0.5).astype(np.uint8), j)
+#    print("Image {} ; Foreground IoU: {} ; Overall IoU: {}".format(i,j,v))
+#    iou_z += j
+#    ov_iou_z += v
+#
+#    index += crop_3d_shape[0]
+#
+#del orig_preds_test, orig_Y_test, zfil_preds_test, Y_test_50ov_ensemble
+#
+#ens_iou_50ov = iou/len(orig_test_shape)
+#ens_ov_iou_50ov = ov_iou/len(orig_test_shape)
+#
+#ens_zfil_iou_50ov = iou_z/len(orig_test_shape)
+#ens_zfil_ov_iou_50ov = ov_iou_z/len(orig_test_shape)
 
 
 print("####################################\n"
@@ -716,12 +773,12 @@ print("Post-process: Z-Filtering - Test Overall IoU (merge into complete image):
 print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (merge into complete image): {}".format(ens_zfil_iou_per_image))
 print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (merge into complete image): {}".format(ens_zfil_ov_iou_per_image))
 
-print("Test Foreground IoU (merge with 50% overlap): {}".format(iou_50ov))
-print("Test Overall IoU (merge with 50% overlap): {}".format(ov_iou_50ov))
-print("Post-process: Ensemble - Test Foreground IoU (merge with 50% overlap): {}".format(ens_iou_50ov))
-print("Post-process: Ensemble - Test Overall IoU (merge with 50% overlap): {}".format(ens_ov_iou_50ov))
-print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (merge with 50% overlap): {}".format(ens_zfil_iou_50ov))
-print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (merge with 50% overlap): {}".format(ens_zfil_ov_iou_50ov))
+#print("Test Foreground IoU (merge with 50% overlap): {}".format(iou_50ov))
+#print("Test Overall IoU (merge with 50% overlap): {}".format(ov_iou_50ov))
+#print("Post-process: Ensemble - Test Foreground IoU (merge with 50% overlap): {}".format(ens_iou_50ov))
+#print("Post-process: Ensemble - Test Overall IoU (merge with 50% overlap): {}".format(ens_ov_iou_50ov))
+#print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (merge with 50% overlap): {}".format(ens_zfil_iou_50ov))
+#print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (merge with 50% overlap): {}".format(ens_zfil_ov_iou_50ov))
 
 if not load_previous_weights:
     scores = {}
