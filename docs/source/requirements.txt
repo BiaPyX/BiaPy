@@ -48,7 +48,7 @@ pyasn1-modules==0.2.7
 pycosat==0.6.3
 pycparser==2.20
 pydot==1.4.1
-Pygments==2.6.1
+Pygments==2.7.4
 PyJWT==1.7.1
 pyOpenSSL==19.1.0
 pyparsing==2.4.6
