@@ -211,6 +211,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.seed = seed
         self.shuffle_each_epoch = shuffle_each_epoch
         self.da = da
+        self.da_prob = da_prob
+        self.flip = flip
         self.val = val
         self.batch_size = batch_size
         self.o_indexes = np.arange(len(self.X))
@@ -380,6 +382,18 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            trans_mask : 4D Numpy array
                Transformed image mask. E.g. ``(x, y, z, channels)``.
         """
+
+        # Apply flips in z as imgaug can not do it 
+        prob = random.uniform(0, 1)
+        if self.flip and prob < self.da_prob:
+            l_image = []
+            l_mask = []
+            for i in range(image.shape[-1]):                                
+                l_image.append(np.expand_dims(np.flip(image[...,i], 2), -1))
+            for i in range(mask.shape[-1]):
+                l_mask.append(np.expand_dims(np.flip(mask[...,i], 2), -1))
+            image = np.concatenate(l_image, axis=-1)
+            mask = np.concatenate(l_mask, axis=-1)
 
         # Reshape 3D volumes to 2D image type with multiple channels to pass 
         # through imgaug lib
