@@ -1,34 +1,34 @@
 # EM image segmentation
 
-This repository contains a complete workflow to make semantic segmentation for EM images. The code is based on Keras and TensorFlow as backend. For further implementation details and project usage please visit our [documentation](https://em-image-segmentation.readthedocs.io/en/latest/).
+This repository contains a complete workflow to perform semantic segmentation of electron microscopy (EM) images. The code is based on Keras and TensorFlow as backend. For further implementation details and project usage please visit our [documentation site](https://em-image-segmentation.readthedocs.io/en/latest/).
 
 ![.](https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/img/seg.gif)
 
 ## Getting started 
 These instructions will get you a copy of the project up and running on your machine.
 
-Run a fast-version of 2D U-Net template in Colab here: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/danifranco/EM_Image_Segmentation/blob/master/templates/U-Net_2D_workflow.ipynb) 
+Alternatively, you can run a fast-version of our 2D U-Net template for mitochondria segmentation in Colab: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/danifranco/EM_Image_Segmentation/blob/master/templates/U-Net_2D_workflow.ipynb) 
 
 ### Prerequisites
-To set-up a development environment with all necessary dependencies, you can use the  file located in [env/DL_EM_base_env.yml](env/DL_EM_base_env.yml) to create it as follows:
+The fastest way to set-up a development environment with all necessary dependencies is to use [Conda](https://docs.conda.io/projects/conda/en/latest/index.html) and the file located in [env/DL_EM_base_env.yml](env/DL_EM_base_env.yml) as follows:
 
 ```
 conda env create -f env/DL_EM_base_env.yml
 ```
 
 ### Choose a template
-In [templates](templates/) directory are located different templates that reproduce the results presented in our paper. 
+Different templates that reproduce the results presented in our paper are located in the [templates](templates/) directory. 
 
-[U-Net_2D_template.py](templates/U-Net_2D_template.py) and [U-Net_3D_template.py](templates/U-Net_3D_template.py) are the main templates and the rest differ in the network used (together with other minor changes in cases where the network needs them). As an exception, two different templates on this folder need an special explanation:
+[U-Net_2D_template.py](templates/U-Net_2D_template.py) and [U-Net_3D_template.py](templates/U-Net_3D_template.py) are our baseline templates for segmentation using 2D and 3D basic U-Net architectures. The rest of templates differ mainly in the architecture used, together with minor changes in the training or inference workflow as described in the manuscript. As an exception, two different templates on this folder need an special explanation:
 
-- [big_data_template.py](templates/big_data_template.py): use this template as a baseline to make segmantic segmentation with an 2D U-Net. The difference with [U-Net_2D_template.py](templates/U-Net_2D_template.py) is that this template should be used with large datasets, as it uses `flow_from_directory()` instead of `flow()` function of Keras. Notice that the dataset directory structure changes.
-- [general_template.py](templates/general_template.py): in this template we gather all implemented options that this project covers. Should be used to extract different code blocks you are interested in. 
+- [big_data_template.py](templates/big_data_template.py): use this template as a baseline to make segmantic segmentation of large datasets with a 2D U-Net. The main difference with [U-Net_2D_template.py](templates/U-Net_2D_template.py) is that this template uses `flow_from_directory()` instead of `flow()` function of Keras to avoid running out of memory. Notice the dataset directory structure changes.
+- [general_template.py](templates/general_template.py): in this template we gather all the options implemented in this project and can be used to extract different code blocks you are interested in. 
 
-To run state-of-the-art works implemented in this project you can use the template prepared on each case: [xiao_template_V1.py](sota_implementations/xiao_2018/xiao_template_V1.py), [cheng_2D_template_V1.py](sota_implementations/cheng_2017/cheng_2D_template_V1.py), [cheng_3D_template_V1.py](sota_implementations/cheng_2017/cheng_3D_template_V1.py), [oztel_template_V1.py](sota_implementations/oztel_2017/oztel_template_V1.py) or [casser_template_V1.py](sota_implementations/casser_2018/casser_template_V1.py). 
+To run the third-party state-of-the-art methods reproduced in this project you can use the template prepared on each case. Namely: [xiao_template_V1.py](sota_implementations/xiao_2018/xiao_template_V1.py), [cheng_2D_template_V1.py](sota_implementations/cheng_2017/cheng_2D_template_V1.py), [cheng_3D_template_V1.py](sota_implementations/cheng_2017/cheng_3D_template_V1.py), [oztel_template_V1.py](sota_implementations/oztel_2017/oztel_template_V1.py) or [casser_template_V1.py](sota_implementations/casser_2018/casser_template_V1.py). 
 
 ### Data structure
 
-This project follows the same directory structure as [ImageDataGenerator](https://keras.io/preprocessing/image/) class of Keras. The data directory tree should be this:
+This project follows the same directory structure as in the [ImageDataGenerator](https://keras.io/preprocessing/image/) class of Keras. The data directory tree should be this:
 
 <details> <summary>Details</summary>
 
@@ -56,7 +56,7 @@ dataset/
 
 </details>
 
-However, as you should be familiarized with, when big datasets are used, which should be using a code based on 3D_template.py, the directory tree changes a little bit. This is because the usage of `flow_from_directory()`, which needs the data to be structured as follows:
+When big datasets are used, which should be using a code based on 3D_template.py, the directory tree changes a little bit. This is because the usage of `flow_from_directory()` needs the data to be structured as follows:
 
 <details> <summary>Details</summary>
 
@@ -94,7 +94,7 @@ EM datasets used on this work:
 - [Kasthuri++](https://sites.google.com/view/connectomics/ "Kasthuri++")
 
 ### Run the code 
-An example to run it in bash shell could be this:
+Every template can be run from a terminal like this:
 ```Bash
 # Load the environment created first
 conda activate DL_EM_base_env     
@@ -111,7 +111,7 @@ python -u template.py $code_dir $data_dir $job_dir --id $jobID --rid $jobCounter
 
 ### Other state-of-the-art implementations
 
-The following state-of-the-art approaches for EM semantic segmentation have been implemented:
+The following third-party state-of-the-art methods for mitochondria semantic segmentation in EM images have been implemented:
 
 - 3D U-Net + post-processing. Everything contained in [xiao_2018](sota_implementations/xiao_2018). 
 ```
