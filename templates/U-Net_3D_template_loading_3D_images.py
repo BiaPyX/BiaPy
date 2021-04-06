@@ -135,7 +135,7 @@ median_padding = True
 # Flag to activate DA
 da = True
 # Probability of each transformation
-da_prob = 1
+da_prob = 0.5
 # Create samples of the DA made. Useful to check the output images made.
 aug_examples = True
 # Flag to shuffle the training data on every epoch 
@@ -157,9 +157,9 @@ zoom = False
 # Zoom range
 zoom_range = (0.8, 1.2)
 # Apply shift 
-shift=False   
+shift = False   
 # Shift range             
-shift_range=(0.1, 0.2)
+shift_range = (0.1, 0.2)
 # Flag to make flips on the subvolumes (horizontal and vertical)                
 flip = False
 # Elastic transformations                                                       
@@ -171,7 +171,7 @@ e_sigma = 25
 # Parameter that defines the handling of newly created pixels with the elastic
 # transformation
 e_mode = 'constant'
-# Gaussian blur                                                                 
+# Gaussian blur
 g_blur = False
 # Standard deviation of the gaussian kernel
 g_sigma = (1.0, 2.0)
@@ -179,10 +179,19 @@ g_sigma = (1.0, 2.0)
 median_blur = False
 # Median blur kernel size
 mb_kernel = (3, 7)
-# Gamma contrast                                                                
+# Blur images in a way that fakes camera or object movements
+motion_blur = False
+# Kernel size to use in motion blur
+motb_k_range = (3, 8)
+# Gamma contrast
 gamma_contrast = False
 # Exponent for the contrast adjustment. Higher values darken the image
 gc_gamma = (1.25, 1.75)
+# Set a certain fraction of pixels in images to zero. Not get confuse with the
+# dropout concept of neural networks, this is just for DA
+dropout = False
+# Range to take the probability to drop a pixel
+drop_range = (0, 0.2)
 # To fill one or more rectangular areas in an image using a fill mode
 cutout = False
 # Range of number of areas to fill the image with
@@ -191,11 +200,19 @@ cout_nb_iterations = (1, 3)
 cout_size = 0.2
 # Parameter that defines the handling of newly created pixels with cutout
 cout_fill_mode = 'constant'
-# Set a certain fraction of pixels in images to zero. Not get confuse with the 
-# dropout concept of neural networks, this is just for DA
-dropout = False
-# Range to take the probability to drop a pixel 
-drop_range = (0, 0.2)
+# To apply cutblur operation
+cutblur = False
+# Size of the region to apply cutblur
+cblur_size = 0.4
+# Range of the downsampling to be made in cutblur
+cblur_down_range = (2, 8)
+# Wheter to apply cut-and-paste just LR into HR image. If False, HR to LR will
+# be applied also (see Figure 1 of the paper https://arxiv.org/pdf/2004.00448.pdf)
+cblur_inside = True
+# Apply cutmix operation
+cutmix = False
+# Size of the region to apply cutmix
+cmix_size = 0.4
 # Flag to extract random subvolumnes during the DA
 random_subvolumes_in_DA = False
 # Calculate probability map to make random subvolumes to be extracted with high
@@ -394,19 +411,22 @@ del X_val, Y_val
 
 print("Preparing train data generator . . .")
 train_generator = VoxelDataGenerator(                                           
-    X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,          
-    subvol_shape=train_3d_desired_shape,                                        
-    shuffle_each_epoch=shuffle_train_data_each_epoch,                           
+    X_train, Y_train, random_subvolumes_in_DA=random_subvolumes_in_DA,
+    subvol_shape=train_3d_desired_shape,
+    shuffle_each_epoch=shuffle_train_data_each_epoch,
     batch_size=batch_size_value, da=da, da_prob=da_prob,
     rotation90=rotation90, rand_rot=rand_rot, rnd_rot_range=rnd_rot_range,
     shear=shear,shear_range=shear_range, zoom=zoom, zoom_range=zoom_range,
-    shift=shift, shift_range=shift_range, flip=flip, elastic=elastic, 
-    e_alpha=e_alpha, e_sigma=e_sigma, e_mode=e_mode, g_blur=g_blur, 
-    g_sigma=g_sigma, median_blur=median_blur, mb_kernel=mb_kernel, 
-    gamma_contrast=gamma_contrast, gc_gamma=gc_gamma, cutout=cutout, 
-    cout_nb_iterations=cout_nb_iterations, cout_size=cout_size, dropout=dropout,
-    drop_range=drop_range, cout_fill_mode=cout_fill_mode, n_classes=n_classes,
-    prob_map=train_prob, extra_data_factor=replicate_train) 
+    shift=shift, shift_range=shift_range, flip=flip, elastic=elastic,
+    e_alpha=e_alpha, e_sigma=e_sigma, e_mode=e_mode, g_blur=g_blur,
+    g_sigma=g_sigma, median_blur=median_blur, mb_kernel=mb_kernel,
+    motion_blur=motion_blur, motb_k_range=motb_k_range,
+    gamma_contrast=gamma_contrast, gc_gamma=gc_gamma, dropout=dropout,
+    drop_range=drop_range, cutout=cutout, cout_nb_iterations=cout_nb_iterations,
+    cout_size=cout_size, cout_fill_mode=cout_fill_mode, cutblur=cutblur,
+    cblur_size=cblur_size, cblur_down_range=cblur_down_range,
+    cblur_inside=cblur_inside, cutmix=cutmix, cmix_size=cmix_size,
+    n_classes=n_classes, prob_map=train_prob, extra_data_factor=replicate_train)
 del X_train, Y_train
 
 # Create the test data generator without DA

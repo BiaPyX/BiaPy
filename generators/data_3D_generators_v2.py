@@ -14,7 +14,7 @@ from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 import imgaug as ia
 from imgaug import parameters as iap
 from skimage.io import imsave                                                   
-
+from .augmentors import cutblur, cutmix
 
 class VoxelDataGenerator(tf.keras.utils.Sequence):
     """Custom ImageDataGenerator for 3D images.
@@ -28,11 +28,13 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                  shift_range=(0.1,0.2), flip=False, elastic=False, 
                  e_alpha=(240,250), e_sigma=25, e_mode='constant', g_blur=False,
                  g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7),
-                 gamma_contrast=False, gc_gamma=(1.25,1.75), cutout=False,  
-                 cout_nb_iterations=(1,3), cout_size=0.2,
-                 cout_fill_mode='constant', dropout=False, drop_range=(0, 0.2),
-                 n_classes=1, out_number=1, val=False, prob_map=None,
-                 extra_data_factor=1):
+                 motion_blur=False, motb_k_range=(3,8), gamma_contrast=False,
+                 gc_gamma=(1.25,1.75), dropout=False, drop_range=(0, 0.2),
+                 cutout=False, cout_nb_iterations=(1,3), cout_size=0.2,
+                 cout_fill_mode='constant', cutblur=False, cblur_size=0.4,
+                 cblur_down_range=(2,8), cblur_inside=True, cutmix=False,
+                 cmix_size=0.4, n_classes=1, out_number=1, val=False,
+                 prob_map=None, extra_data_factor=1):
         """ImageDataGenerator constructor. Based on transformations from 
            `imgaug <https://github.com/aleju/imgaug>`_ library. Here a brief
            description of each transformation parameter is made. Find a complete
@@ -76,7 +78,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            rand_rot : bool, optional                                            
                To make random degree range rotations.                  
            
-           rand_rot_range : tuple of float, optional
+           rnd_rot_range : tuple of float, optional
                Range of random rotations. E. g. ``(-180, 180)``.
 
            shear : bool, optional
@@ -125,6 +127,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                                                                                 
            mb_kernel : tuple of ints, optional                                  
                Median blur kernel size. E. g. ``(3, 7)``.                                   
+
+           motion_blur : bool, optional
+               Blur images in a way that fakes camera or object movements.
+
+           motb_k_range : int, optional
+               Kernel size to use in motion blur. 
            
            gamma_contrast : bool, optional
                To insert gamma constrast changes on images. 
@@ -132,6 +140,15 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            gc_gamma : tuple of floats, optional                                  
                Exponent for the contrast adjustment. Higher values darken the 
                image. E. g. ``(1.25, 1.75)``. 
+
+           dropout : bool, optional
+               To set a certain fraction of pixels in images to zero.
+
+           drop_range : tuple of floats, optional
+               Range to take a probability ``p`` to drop pixels. E.g. ``(0, 0.2)``
+               will take a ``p`` folowing ``0<=p<=0.2`` and then drop ``p``
+               percent of all pixels in the image (i.e. convert them to black
+               pixels).
 
            cutout : bool, optional                                      
                To fill one or more rectangular areas in an image using a fill 
@@ -148,14 +165,25 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                Parameter that defines the handling of newly created pixels with
                cutout.
 
-           dropout : bool, optional
-               To set a certain fraction of pixels in images to zero.
-           
-           drop_range : tuple of floats, optional
-               Range to take a probability ``p`` to drop pixels. E.g. ``(0, 0.2)``
-               will take a ``p`` folowing ``0<=p<=0.2`` and then drop ``p`` 
-               percent of all pixels in the image (i.e. convert them to black 
-               pixels).
+           cutblur : boolean, optional
+               Blur a rectangular area of the image by downsampling and upsampling
+               it again. 
+
+           cblur_size : float, optional
+               Size of the area to apply cutblur on.
+        
+           cblur_inside : boolean, optional
+               If ``True`` only the region inside will be modified (cut LR into HR
+               image). If ``False`` the ``50%`` of the times the region inside will
+               be modified (cut LR into HR image) and the other ``50%`` the inverse
+               will be done (cut HR into LR image). See Figure 1 of the official
+               `paper <https://arxiv.org/pdf/2004.00448.pdf>`_.
+
+           cutmix : boolean, optional
+               Combine two images pasting a region of one image to another.
+
+           cmix_size : float, optional
+               Size of the area to paste one image into another. 
 
            n_classes : int, optional
                Number of classes. If ``> 1`` one-hot encoding will be done on 
@@ -213,6 +241,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.da = da
         self.da_prob = da_prob
         self.flip = flip
+        self.cutblur = cutblur
+        self.cblur_size = cblur_size
+        self.cblur_down_range = cblur_down_range
+        self.cblur_inside = cblur_inside
+        self.cutmix = cutmix
+        self.cmix_size = cmix_size
         self.val = val
         self.batch_size = batch_size
         self.o_indexes = np.arange(len(self.X))
@@ -234,8 +268,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Rot90((1, 3))))
             self.trans_made += '_rot[90,180,270]'
         if rand_rot:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=rand_rot_range)))
-            self.trans_made += '_rrot'+str(rand_rot_range)
+            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=rnd_rot_range)))
+            self.trans_made += '_rrot'+str(rnd_rot_range)
         if shear:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range)))                                
             self.trans_made += '_shear'+str(shear_range)
@@ -255,19 +289,24 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if g_blur:
             self.da_options.append(iaa.Sometimes(da_prob,iaa.GaussianBlur(g_sigma)))
             self.trans_made += '_gblur'+str(g_sigma)
-        if gamma_contrast:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.GammaContrast(gc_gamma)))
-            self.trans_made += '_gcontrast'+str(gc_gamma)
         if median_blur:
             self.da_options.append(iaa.Sometimes(da_prob,iaa.MedianBlur(k=mb_kernel)))
             self.trans_made += '_mblur'+str(mb_kernel)
-        if cutout:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Cutout(nb_iterations=cout_nb_iterations, size=cout_size, fill_mode=cout_fill_mode, squared=False)))       
-            self.trans_made += '_cout'+str(cout_nb_iterations)+'+'+str(cout_size)+'+'+str(cout_fill_mode)
-        if dropout: 
+        if motion_blur:
+            self.da_options.append(iaa.Sometimes(da_prob,iaa.MotionBlur(k=motb_k_range)))
+            self.trans_made += '_motb'+str(motb_k_range)
+        if gamma_contrast:
+            self.da_options.append(iaa.Sometimes(da_prob,iaa.GammaContrast(gc_gamma)))
+            self.trans_made += '_gcontrast'+str(gc_gamma)
+        if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += '_drop'+str(drop_range)
-
+        if cutout:
+            self.da_options.append(iaa.Sometimes(da_prob, iaa.Cutout(nb_iterations=cout_nb_iterations, size=cout_size, fill_mode=cout_fill_mode, squared=False)))
+            self.trans_made += '_cout'+str(cout_nb_iterations)+'+'+str(cout_size)+'+'+str(cout_fill_mode)
+        if cutblur: self.trans_made += '_cblur'+str(cblur_size)+'+'+str(cblur_down_range)+'+'+str(cblur_inside)
+        if cutmix: self.trans_made += '_cmix'+str(cmix_size)
+            
         self.trans_made = self.trans_made.replace(" ", "")
         self.seq = iaa.Sequential(self.da_options)
         ia.seed(seed)
@@ -324,7 +363,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         """
 
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        batch_x = np.zeros((len(indexes), ) + self.shape)
+        batch_x = np.zeros((len(indexes), ) + self.shape, dtype=np.float32)
         batch_y = np.zeros((len(indexes), ) + self.shape[:3]+(self.channels,), 
                            dtype=np.uint8)
 
@@ -338,7 +377,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 batch_y[i] = np.copy(self.Y[j])
 
             if self.da:
-                batch_x[i], batch_y[i] = self.apply_transform(batch_x[i], batch_y[i])
+                extra_img = np.random.randint(0, self.X.shape[0])
+                batch_x[i], batch_y[i] = self.apply_transform(
+                    batch_x[i], batch_y[i], e_im=self.X[extra_img], 
+                    e_mask=self.Y[extra_img])
 
         if self.n_classes > 1 and (self.n_classes != self.channels):
             batch_y_ = np.zeros((len(indexes), ) + self.shape[:3] + (self.n_classes,))
@@ -362,7 +404,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if self.shuffle_each_epoch:
             random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
 
-    def apply_transform(self, image, mask, grid=False):
+    def apply_transform(self, image, mask, grid=False, e_im=None, e_mask=None):
         """Transform the input image and its mask at the same time with one of
            the selected choices based on a probability.
     
@@ -401,12 +443,25 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         o_mask_shape = mask.shape 
         image = image.reshape(image.shape[:2]+(self.X_z*self.X_c, ))
         mask = mask.reshape(mask.shape[:2]+(self.Y_z*self.Y_c, ))
-      
+        if e_im is not None: e_im = e_im.reshape(e_im.shape[:2]+(self.X_z*self.X_c, )) 
+        if e_mask is not None: e_mask = e_mask.reshape(e_mask.shape[:2]+(self.Y_z*self.Y_c, )) 
+
+        # Apply cblur 
+        prob = random.uniform(0, 1)
+        if self.cutblur and prob < self.da_prob:
+            image = cutblur(image, self.cblur_size, self.cblur_down_range, 
+                            self.cblur_inside)
+
+        # Apply cutmix
+        prob = random.uniform(0, 1)
+        if self.cutmix and prob < self.da_prob:
+            image, mask = cutmix(image, e_im, mask, e_mask, self.cmix_size)
+
         # Apply transformations to the volume and its mask
         segmap = SegmentationMapsOnImage(mask, shape=mask.shape)            
         image, vol_mask = self.seq(image=image, segmentation_maps=segmap)   
         mask = vol_mask.get_arr()
-        
+
         # Recover the original shape 
         image = image.reshape(o_img_shape)
         mask = mask.reshape(o_mask_shape)
@@ -476,7 +531,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     self.__draw_grid(vol)
                     self.__draw_grid(vol_mask)
 
-                sample_x[i], sample_y[i] = self.apply_transform(vol, vol_mask)
+                extra_img = np.random.randint(0, self.X.shape[0])
+                sample_x[i], sample_y[i] = self.apply_transform(
+                    vol, vol_mask, e_im=self.X[extra_img],
+                    e_mask=self.Y[extra_img])
 
             # Save transformed 3D volumes 
             if save_to_dir:
