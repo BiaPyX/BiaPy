@@ -1564,7 +1564,8 @@
 
 
 <div class="viewcode-block" id="load_3d_images_from_dir"><a class="viewcode-back" href="../util.html#util.load_3d_images_from_dir">[docs]</a><span class="k">def</span> <span class="nf">load_3d_images_from_dir</span><span class="p">(</span><span class="n">data_dir</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">subvol_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-                            <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">return_filenames</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+                            <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">padding</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">median_padding</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                            <span class="n">return_filenames</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Load data from a directory.</span>
 
 <span class="sd">       Parameters</span>
@@ -1584,11 +1585,18 @@
 
 <span class="sd">       overlap : Tuple of 3 floats, optional</span>
 <span class="sd">           Amount of minimum overlap on x, y and z dimensions. The values must</span>
-<span class="sd">           be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. </span>
+<span class="sd">           be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.  </span>
 <span class="sd">           E. g. ``(x, y, z)``.</span>
+<span class="sd">           </span>
+<span class="sd">       padding : 4D Numpy array, optional</span>
+<span class="sd">            Size of padding to be added on each side</span>
 
+<span class="sd">       median_padding: bool</span>
+<span class="sd">           If True the padding value is the median value. If False, the added values are zeroes.   </span>
+<span class="sd">  </span>
 <span class="sd">       return_filenames : bool, optional</span>
-<span class="sd">           Return a list with the loaded filenames. </span>
+<span class="sd">           Return a list with the loaded filenames. Useful when you need to save</span>
+<span class="sd">           them afterwards with the same names as the original ones.</span>
 <span class="sd">        </span>
 <span class="sd">       Returns</span>
 <span class="sd">       -------</span>
@@ -1603,6 +1611,9 @@
 <span class="sd">       crop_shape : List of tuples, optional</span>
 <span class="sd">           Shape of the loaded 3D images after cropping. Useful to reconstruct </span>
 <span class="sd">           the original images together with ``data_shape``.</span>
+<span class="sd">    </span>
+<span class="sd">       filenames : List of str, optional</span>
+<span class="sd">           Loaded filenames.</span>
 
 <span class="sd">       Examples</span>
 <span class="sd">       --------</span>
@@ -1612,11 +1623,27 @@
 <span class="sd">           data_path = &quot;data/train/x&quot;</span>
 <span class="sd">           data_shape = (1024, 1024, 91, 1)</span>
 
-<span class="sd">           load_data_from_dir(data_path, data_shape)</span>
+<span class="sd">           data = load_data_from_dir(data_path, data_shape)</span>
 <span class="sd">           # The function will print the shape of the created array. In this example:</span>
 <span class="sd">           #     *** Loaded data shape is (20, 91, 1024, 1024, 1)</span>
 <span class="sd">           # Notice height, width and depth swap as skimage.io imread function </span>
 <span class="sd">           # is used to load images </span>
+<span class="sd">    </span>
+<span class="sd">           # EXAMPLE 2</span>
+<span class="sd">           # Same as example 1 but with unknown shape, cropping them into (256, 256, 40, 1) subvolumes</span>
+<span class="sd">           # with minimum overlap and storing filenames.</span>
+<span class="sd">           data_path = &quot;data/train/x&quot;</span>
+
+<span class="sd">           X_test, orig_test_img_shapes, \</span>
+<span class="sd">           crop_test_img_shapes, te_filenames = load_3d_images_from_dir(</span>
+<span class="sd">               test_path, None, crop=True, subvol_shape=(256, 256, 40, 1),</span>
+<span class="sd">               overlap=(0,0,0), return_filenames=True)</span>
+<span class="sd">           # The function will print the shape of the created array which its size is </span>
+<span class="sd">           # the concatenation in 0 axis of all subvolumes created for each 3D image in the</span>
+<span class="sd">           # given path. For example:</span>
+<span class="sd">           #     *** Loaded data shape is (350, 256, 256, 40, 1)</span>
+<span class="sd">           # Notice height, width and depth swap as skimage.io imread function</span>
+<span class="sd">           # is used to load images.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
@@ -1670,8 +1697,12 @@
             
         <span class="k">if</span> <span class="n">crop</span><span class="p">:</span>
             <span class="n">data_shape</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
-            <span class="n">img_cropped</span> <span class="o">=</span> <span class="n">crop_3D_data_with_overlap</span><span class="p">(</span>
-                <span class="n">img</span><span class="p">,</span> <span class="n">subvol_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">overlap</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>                 
+            <span class="k">if</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">subvol_shape</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],):</span>
+                <span class="n">img_cropped</span> <span class="o">=</span> <span class="n">crop_3D_data_with_overlap</span><span class="p">(</span>
+                    <span class="n">img</span><span class="p">,</span> <span class="n">subvol_shape</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],),</span> <span class="n">overlap</span><span class="o">=</span><span class="n">overlap</span><span class="p">,</span>
+                    <span class="n">padding</span><span class="o">=</span><span class="n">padding</span><span class="p">,</span> <span class="n">median_padding</span><span class="o">=</span><span class="n">median_padding</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">img_cropped</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
             <span class="n">crop_shape</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">img_cropped</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
         
             <span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">img_cropped</span><span class="p">)</span>

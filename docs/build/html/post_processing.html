@@ -104,6 +104,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">2D U-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">3D U-Net</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks_nnunet.html">nnU-Net</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
@@ -300,7 +301,7 @@ debugging.</p></li>
 
 <dl class="py function">
 <dt id="post_processing.ensemble8_2d_predictions">
-<code class="sig-prename descclassname">post_processing.</code><code class="sig-name descname">ensemble8_2d_predictions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">o_img</span></em>, <em class="sig-param"><span class="n">pred_func</span></em>, <em class="sig-param"><span class="n">batch_size_value</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">2</span></em>, <em class="sig-param"><span class="n">last_class</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/post_processing.html#ensemble8_2d_predictions"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#post_processing.ensemble8_2d_predictions" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">post_processing.</code><code class="sig-name descname">ensemble8_2d_predictions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">o_img</span></em>, <em class="sig-param"><span class="n">pred_func</span></em>, <em class="sig-param"><span class="n">batch_size_value</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">2</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/post_processing.html#ensemble8_2d_predictions"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#post_processing.ensemble8_2d_predictions" title="Permalink to this definition">¶</a></dt>
 <dd><p>Outputs the mean prediction of a given image generating its 8 possible
 rotations and flips.</p>
 <dl class="field-list simple">
@@ -310,8 +311,6 @@ rotations and flips.</p>
 <li><p><strong>pred_func</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">function</span></code>) – Function to make predictions.</p></li>
 <li><p><strong>batch_size_value</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Batch size value.</p></li>
 <li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes.</p></li>
-<li><p><strong>last_class</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To preserve only the last class. Useful when a binary classification
-and want to take only the foreground.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -341,7 +340,7 @@ and want to take only the foreground.</p></li>
 
 <dl class="py function">
 <dt id="post_processing.ensemble16_3d_predictions">
-<code class="sig-prename descclassname">post_processing.</code><code class="sig-name descname">ensemble16_3d_predictions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">vol</span></em>, <em class="sig-param"><span class="n">pred_func</span></em>, <em class="sig-param"><span class="n">batch_size_value</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">2</span></em>, <em class="sig-param"><span class="n">last_class</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/post_processing.html#ensemble16_3d_predictions"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#post_processing.ensemble16_3d_predictions" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">post_processing.</code><code class="sig-name descname">ensemble16_3d_predictions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">vol</span></em>, <em class="sig-param"><span class="n">pred_func</span></em>, <em class="sig-param"><span class="n">batch_size_value</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">2</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/post_processing.html#ensemble16_3d_predictions"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#post_processing.ensemble16_3d_predictions" title="Permalink to this definition">¶</a></dt>
 <dd><p>Outputs the mean prediction of a given image generating its 16 possible
 rotations and flips.</p>
 <dl class="field-list simple">
@@ -351,8 +350,6 @@ rotations and flips.</p>
 <li><p><strong>pred_func</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">function</span></code>) – Function to make predictions.</p></li>
 <li><p><strong>batch_size_value</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Batch size value.</p></li>
 <li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes.</p></li>
-<li><p><strong>last_class</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To preserve only the last class. Useful when a binary classification
-and want to take only the foreground.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>

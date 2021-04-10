@@ -366,14 +366,14 @@ epochs. History object is returned by Keras <a class="reference external" href="
 <col style="width: 50%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><div class="figure align-center" id="id6">
+<tr class="row-odd"><td><div class="figure align-center" id="id8">
 <a class="reference internal image-reference" href="_images/chart_loss.png"><img alt="_images/chart_loss.png" src="_images/chart_loss.png" style="width: 80%;" /></a>
-<p class="caption"><span class="caption-text">Loss values on each epoch</span><a class="headerlink" href="#id6" title="Permalink to this image">¶</a></p>
+<p class="caption"><span class="caption-text">Loss values on each epoch</span><a class="headerlink" href="#id8" title="Permalink to this image">¶</a></p>
 </div>
 </td>
-<td><div class="figure align-center" id="id7">
+<td><div class="figure align-center" id="id9">
 <a class="reference internal image-reference" href="_images/chart_jaccard_index.png"><img alt="_images/chart_jaccard_index.png" src="_images/chart_jaccard_index.png" style="width: 80%;" /></a>
-<p class="caption"><span class="caption-text">Jaccard index values on each epoch</span><a class="headerlink" href="#id7" title="Permalink to this image">¶</a></p>
+<p class="caption"><span class="caption-text">Jaccard index values on each epoch</span><a class="headerlink" href="#id9" title="Permalink to this image">¶</a></p>
 </div>
 </td>
 </tr>
@@ -825,7 +825,7 @@ data_shape = (1024, 768, 1)</p>
 
 <dl class="py function">
 <dt id="util.load_3d_images_from_dir">
-<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_3d_images_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">crop</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">subvol_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">return_filenames</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_3d_images_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_3d_images_from_dir" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_3d_images_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">crop</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">subvol_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">median_padding</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">return_filenames</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_3d_images_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_3d_images_from_dir" title="Permalink to this definition">¶</a></dt>
 <dd><p>Load data from a directory.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -838,7 +838,10 @@ E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <sp
 <li><p><strong>overlap</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x, y and z dimensions. The values must
 be on range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap.
 E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z)</span></code>.</p></li>
-<li><p><strong>return_filenames</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Return a list with the loaded filenames.</p></li>
+<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Size of padding to be added on each side</p></li>
+<li><p><strong>median_padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True the padding value is the median value. If False, the added values are zeroes.</p></li>
+<li><p><strong>return_filenames</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Return a list with the loaded filenames. Useful when you need to save
+them afterwards with the same names as the original ones.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -849,6 +852,7 @@ enabled, <code class="docutils literal notranslate"><span class="pre">(num_of_im
 images together with <code class="docutils literal notranslate"><span class="pre">crop_shape</span></code>.</p></li>
 <li><p><strong>crop_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">tuples</span></code>, <em>optional</em>) – Shape of the loaded 3D images after cropping. Useful to reconstruct
 the original images together with <code class="docutils literal notranslate"><span class="pre">data_shape</span></code>.</p></li>
+<li><p><strong>filenames</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Loaded filenames.</p></li>
 </ul>
 </p>
 </dd>
@@ -859,11 +863,26 @@ the original images together with <code class="docutils literal notranslate"><sp
 # Case where we need to load 20 images of shape (1024, 1024, 91, 1)
 data_path = “data/train/x”
 data_shape = (1024, 1024, 91, 1)</p>
-<p>load_data_from_dir(data_path, data_shape)
+<p>data = load_data_from_dir(data_path, data_shape)
 # The function will print the shape of the created array. In this example:
 #     <a href="#id4"><span class="problematic" id="id5">**</span></a>* Loaded data shape is (20, 91, 1024, 1024, 1)
 # Notice height, width and depth swap as skimage.io imread function
 # is used to load images</p>
+<p># EXAMPLE 2
+# Same as example 1 but with unknown shape, cropping them into (256, 256, 40, 1) subvolumes
+# with minimum overlap and storing filenames.
+data_path = “data/train/x”</p>
+<dl class="simple">
+<dt>X_test, orig_test_img_shapes,            crop_test_img_shapes, te_filenames = load_3d_images_from_dir(</dt><dd><p>test_path, None, crop=True, subvol_shape=(256, 256, 40, 1),
+overlap=(0,0,0), return_filenames=True)</p>
+</dd>
+</dl>
+<p># The function will print the shape of the created array which its size is
+# the concatenation in 0 axis of all subvolumes created for each 3D image in the
+# given path. For example:
+#     <a href="#id6"><span class="problematic" id="id7">**</span></a>* Loaded data shape is (350, 256, 256, 40, 1)
+# Notice height, width and depth swap as skimage.io imread function
+# is used to load images.</p>
 </dd>
 </dl>
 </dd></dl>

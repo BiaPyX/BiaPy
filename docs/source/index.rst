@@ -13,6 +13,21 @@ This documentation tries to explain better the code of the project `EM Image Seg
            :width: 100%                                                         
            :align: center 
 
+Citation
+========
+
+This repository is the base of the following work: ::
+
+    @misc{francobarranco2021stable,
+          title={Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes},
+          author={Daniel Franco-Barranco and Arrate Muñoz-Barrutia and Ignacio Arganda-Carreras},
+          year={2021},
+          eprint={2104.03577},
+          archivePrefix={arXiv},
+          primaryClass={eess.IV}
+    }
+
+
 .. toctree::
    :maxdepth: 2
    :caption: How to run

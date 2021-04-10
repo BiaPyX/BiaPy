@@ -317,7 +317,7 @@ function.</p></li>
 
 <dl class="py function">
 <dt id="data_3D_manipulation.load_and_prepare_3D_data_v2">
-<code class="sig-prename descclassname">data_3D_manipulation.</code><code class="sig-name descname">load_and_prepare_3D_data_v2</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">train_path</span></em>, <em class="sig-param"><span class="n">train_mask_path</span></em>, <em class="sig-param"><span class="n">test_path</span></em>, <em class="sig-param"><span class="n">test_mask_path</span></em>, <em class="sig-param"><span class="n">image_train_shape</span></em>, <em class="sig-param"><span class="n">image_test_shape</span></em>, <em class="sig-param"><span class="n">test_subvol_shape</span></em>, <em class="sig-param"><span class="n">train_subvol_shape</span></em>, <em class="sig-param"><span class="n">create_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">shuffle_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">val_split</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">seedValue</span><span class="o">=</span><span class="default_value">42</span></em>, <em class="sig-param"><span class="n">random_subvolumes_in_DA</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">ov</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_3D_manipulation.html#load_and_prepare_3D_data_v2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_3D_manipulation.load_and_prepare_3D_data_v2" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">data_3D_manipulation.</code><code class="sig-name descname">load_and_prepare_3D_data_v2</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">train_path</span></em>, <em class="sig-param"><span class="n">train_mask_path</span></em>, <em class="sig-param"><span class="n">test_path</span></em>, <em class="sig-param"><span class="n">test_mask_path</span></em>, <em class="sig-param"><span class="n">image_train_shape</span></em>, <em class="sig-param"><span class="n">image_test_shape</span></em>, <em class="sig-param"><span class="n">test_subvol_shape</span></em>, <em class="sig-param"><span class="n">train_subvol_shape</span></em>, <em class="sig-param"><span class="n">create_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">shuffle_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">val_split</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">seedValue</span><span class="o">=</span><span class="default_value">42</span></em>, <em class="sig-param"><span class="n">random_subvolumes_in_DA</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">ov</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">median_padding</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_3D_manipulation.html#load_and_prepare_3D_data_v2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_3D_manipulation.load_and_prepare_3D_data_v2" title="Permalink to this definition">¶</a></dt>
 <dd><p>Load train, validation and test images from the given paths to create a
 3D data representation. All the test data will be used to create a 3D
 volume of <code class="docutils literal notranslate"><span class="pre">test_subvol_shape</span></code> shape (considering <code class="docutils literal notranslate"><span class="pre">ov</span></code>).</p>
@@ -344,6 +344,8 @@ be used for that.</p></li>
 <li><p><strong>ov</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x, y and z dimensions. The values must
 be on range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap.
 E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z)</span></code>.</p></li>
+<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Size of padding to be added on each side</p></li>
+<li><p><strong>median_padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True the padding value is the median value. If False, the added values are zeroes.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -357,7 +359,8 @@ E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <s
 <li><p><strong>X_test</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Test images. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>Y_test</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Test images’ mask. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>orig_test_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Test data original shape. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>norm_value</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Normalization value calculated.</p></li>
+<li><p><strong>filenames</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Loaded train and test filenames. filenames[0] are train filenames and
+filenames[1] are test filenames.</p></li>
 </ul>
 </p>
 </dd>
@@ -379,18 +382,16 @@ E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <s
 <span class="n">train_3d_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">40</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
 <span class="n">test_3d_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">40</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
 
-<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span>
-<span class="n">Y_val</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span>
-<span class="n">orig_test_shape</span><span class="p">,</span> <span class="n">norm_value</span> <span class="o">=</span> <span class="n">load_and_prepare_3D_data_v2</span><span class="p">(</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span>           <span class="n">Y_val</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span>           <span class="n">orig_test_shape</span><span class="p">,</span> <span class="n">crop_test_shapes</span><span class="p">,</span>           <span class="n">filenames</span> <span class="o">=</span> <span class="n">load_and_prepare_3D_data_v2</span><span class="p">(</span>
     <span class="n">train_path</span><span class="p">,</span> <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">test_path</span><span class="p">,</span> <span class="n">test_mask_path</span><span class="p">,</span> <span class="n">img_train_shape</span><span class="p">,</span>
     <span class="n">img_test_shape</span><span class="p">,</span> <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">create_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-    <span class="n">ov_</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">train_subvol_shape</span><span class="o">=</span><span class="n">train_3d_shape</span><span class="p">,</span>
-    <span class="n">test_subvol_shape</span><span class="o">=</span><span class="n">test_3d_shape</span><span class="p">)</span>
+    <span class="n">test_subvol_shape</span><span class="o">=</span><span class="n">test_3d_shape</span><span class="p">,</span> <span class="n">train_subvol_shape</span><span class="o">=</span><span class="n">train_3d_shape</span><span class="p">,</span>
+    <span class="n">ov</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">))</span>
 
 <span class="c1"># The function will print the shapes of the generated arrays. In this example:</span>
-<span class="c1">#     *** Loaded train data shape is: (648, 256, 256, 40, 1)</span>
-<span class="c1">#     *** Loaded validation data shape is: (72, 256, 256, 40, 1)</span>
-<span class="c1">#     *** Loaded test data shape is: (240, 256, 256, 40, 1)</span>
+<span class="c1">#     *** Loaded train data shape is: (315, 256, 256, 40, 1)</span>
+<span class="c1">#     *** Loaded validation data shape is: (35, 256, 256, 40, 1)</span>
+<span class="c1">#     *** Loaded test data shape is: (178, 256, 256, 40, 1)</span>
 <span class="c1">#</span>
 </pre></div>
 </div>
@@ -398,23 +399,25 @@ E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <s
 
 <dl class="py function">
 <dt id="data_3D_manipulation.crop_3D_data_with_overlap">
-<code class="sig-prename descclassname">data_3D_manipulation.</code><code class="sig-name descname">crop_3D_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">vol_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_3D_manipulation.html#crop_3D_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_3D_manipulation.crop_3D_data_with_overlap" title="Permalink to this definition">¶</a></dt>
-<dd><p>Crop 3D data into smaller volumes with a defined overlap.</p>
-<p>The opposite function is <a class="reference internal" href="#data_3D_manipulation.merge_3D_data_with_overlap" title="data_3D_manipulation.merge_3D_data_with_overlap"><code class="xref py py-func docutils literal notranslate"><span class="pre">merge_3D_data_with_overlap()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to crop. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<code class="sig-prename descclassname">data_3D_manipulation.</code><code class="sig-name descname">crop_3D_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">vol_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">median_padding</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_3D_manipulation.html#crop_3D_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_3D_manipulation.crop_3D_data_with_overlap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Crop 3D data into smaller volumes with a defined overlap.
+The opposite function is <a class="reference internal" href="#data_3D_manipulation.merge_3D_data_with_overlap" title="data_3D_manipulation.merge_3D_data_with_overlap"><code class="xref py py-func docutils literal notranslate"><span class="pre">merge_3D_data_with_overlap()</span></code></a>.
+:Parameters: * <strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to crop. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+<blockquote>
+<div><ul class="simple">
 <li><p><strong>vol_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Shape of the volumes to create. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>data_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Data mask to crop. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>overlap</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x, y and z dimensions. The values must
 be on range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap.
 E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z)</span></code>.</p></li>
 <li><p><strong>verbose</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To print information about the crop to be made.</p></li>
+<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Size of padding to be added on each side</p></li>
+<li><p><strong>median_padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True the padding value is the median value. If False, the added values are zeroes.</p></li>
 </ul>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p><ul class="simple">
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><ul class="simple">
 <li><p><strong>cropped_data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Cropped image data. E.g. <code class="docutils literal notranslate"><span class="pre">(vol_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>cropped_data_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Cropped image data masks. E.g. <code class="docutils literal notranslate"><span class="pre">(vol_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
 </ul>
@@ -422,21 +425,21 @@ E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <s
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
-<span class="c1"># Following the example introduced in load_and_prepare_3D_data function, the</span>
-<span class="c1"># cropping of a volume with shape (165, 1024, 765) should be done by the</span>
-<span class="c1"># following call:</span>
-
-<span class="n">X_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
-<span class="n">Y_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
-
-<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">crop_3D_data_with_overlap</span><span class="p">(</span>
-     <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span><span class="mf">0.5</span><span class="p">,</span><span class="mf">0.5</span><span class="p">))</span>
-
-<span class="c1"># The function will print the shape of the generated arrays. In this example:</span>
-<span class="c1">#     **** New data shape is: (2600, 80, 80, 80, 1)</span>
-</pre></div>
-</div>
+<dl>
+<dt>::</dt><dd><p># EXAMPLE 1
+# Following the example introduced in load_and_prepare_3D_data function, the
+# cropping of a volume with shape (165, 1024, 765) should be done by the
+# following call:
+X_train = np.ones((165, 768, 1024, 1))
+Y_train = np.ones((165, 768, 1024, 1))
+X_train, Y_train = crop_3D_data_with_overlap(</p>
+<blockquote>
+<div><p>X_train, (80, 80, 80, 1), data_mask=Y_train, overlap=(0.5,0.5,0.5))</p>
+</div></blockquote>
+<p># The function will print the shape of the generated arrays. In this example:
+#     <a href="#id1"><span class="problematic" id="id2">**</span></a>** New data shape is: (2600, 80, 80, 80, 1)</p>
+</dd>
+</dl>
 <p>A visual explanation of the process:</p>
 <a class="reference internal image-reference" href="_images/crop_3D_ov.png"><img alt="_images/crop_3D_ov.png" class="align-center" src="_images/crop_3D_ov.png" style="width: 80%;" /></a>
 <p>Note: this image do not respect the proportions.</p>
@@ -451,6 +454,12 @@ E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <s
 <span class="c1">#</span>
 <span class="c1"># Notice how differs the amount of subvolumes created compared to the</span>
 <span class="c1"># first example</span>
+
+<span class="c1">#EXAMPLE 2</span>
+<span class="c1">#In the same way, if the addition of (64,64,64) padding is required, the call</span>
+<span class="c1">#should be done as shown:</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">crop_3D_data_with_overlap</span><span class="p">(</span>
+     <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span><span class="mf">0.5</span><span class="p">,</span><span class="mf">0.5</span><span class="p">),</span> <span class="n">padding</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span><span class="mi">64</span><span class="p">,</span><span class="mi">64</span><span class="p">))</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -533,7 +542,7 @@ also prints the number of zeros added per each axis <code class="docutils litera
 
 <dl class="py function">
 <dt id="data_3D_manipulation.merge_3D_data_with_overlap">
-<code class="sig-prename descclassname">data_3D_manipulation.</code><code class="sig-name descname">merge_3D_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">orig_vol_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_3D_manipulation.html#merge_3D_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_3D_manipulation.merge_3D_data_with_overlap" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">data_3D_manipulation.</code><code class="sig-name descname">merge_3D_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">orig_vol_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_3D_manipulation.html#merge_3D_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_3D_manipulation.merge_3D_data_with_overlap" title="Permalink to this definition">¶</a></dt>
 <dd><p>Merge 3D subvolumes in a 3D volume with a defined overlap.</p>
 <p>The opposite function is <a class="reference internal" href="#data_3D_manipulation.crop_3D_data_with_overlap" title="data_3D_manipulation.crop_3D_data_with_overlap"><code class="xref py py-func docutils literal notranslate"><span class="pre">crop_3D_data_with_overlap()</span></code></a>.</p>
 <dl class="field-list simple">
@@ -547,6 +556,7 @@ same as used in <a class="reference internal" href="#data_3D_manipulation.crop_3
 be on range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap.
 E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z)</span></code>.</p></li>
 <li><p><strong>verbose</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To print information about the crop to be made.</p></li>
+<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Size of padding to be added on each side</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -579,6 +589,16 @@ E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <s
 
 <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">merge_3D_data_with_overlap</span><span class="p">(</span>
      <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">))</span>
+
+<span class="c1"># The function will print the shape of the generated arrays. In this example:</span>
+<span class="c1">#     **** New data shape is: (165, 768, 1024, 1)</span>
+
+<span class="c1"># EXAMPLE 3</span>
+<span class="c1"># On the contrary, if no overlap in cropping was selected but a padding of shape</span>
+<span class="c1"># (64,64,64) is needed, the merge call should be as follows:</span>
+
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">merge_3D_data_with_overlap</span><span class="p">(</span>
+     <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">padding</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span><span class="mi">64</span><span class="p">,</span><span class="mi">64</span><span class="p">))</span>
 
 <span class="c1"># The function will print the shape of the generated arrays. In this example:</span>
 <span class="c1">#     **** New data shape is: (165, 768, 1024, 1)</span>

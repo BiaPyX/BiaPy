@@ -436,11 +436,10 @@
 
         <span class="k">return</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span> <span class="n">orig_test_shape</span><span class="p">,</span> <span class="n">norm_value</span></div>
 
-
 <div class="viewcode-block" id="load_and_prepare_3D_data_v2"><a class="viewcode-back" href="../data_3d_manipulation.html#data_3D_manipulation.load_and_prepare_3D_data_v2">[docs]</a><span class="k">def</span> <span class="nf">load_and_prepare_3D_data_v2</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">test_path</span><span class="p">,</span> 
     <span class="n">test_mask_path</span><span class="p">,</span> <span class="n">image_train_shape</span><span class="p">,</span> <span class="n">image_test_shape</span><span class="p">,</span> <span class="n">test_subvol_shape</span><span class="p">,</span>
     <span class="n">train_subvol_shape</span><span class="p">,</span> <span class="n">create_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> 
-    <span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">random_subvolumes_in_DA</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ov</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)):</span>
+    <span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">random_subvolumes_in_DA</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ov</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">padding</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">median_padding</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Load train, validation and test images from the given paths to create a </span>
 <span class="sd">       3D data representation. All the test data will be used to create a 3D</span>
 <span class="sd">       volume of ``test_subvol_shape`` shape (considering ``ov``).</span>
@@ -494,7 +493,13 @@
 <span class="sd">       ov : Tuple of 3 floats, optional                                         </span>
 <span class="sd">           Amount of minimum overlap on x, y and z dimensions. The values must </span>
 <span class="sd">           be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.      </span>
-<span class="sd">           E. g. ``(x, y, z)``.   </span>
+<span class="sd">           E. g. ``(x, y, z)``.  </span>
+<span class="sd">           </span>
+<span class="sd">       padding : 4D Numpy array, optional</span>
+<span class="sd">           Size of padding to be added on each side  </span>
+<span class="sd">           </span>
+<span class="sd">       median_padding: bool</span>
+<span class="sd">           If True the padding value is the median value. If False, the added values are zeroes.   </span>
 <span class="sd">  </span>
 <span class="sd">       Returns</span>
 <span class="sd">       -------                                                         </span>
@@ -521,8 +526,9 @@
 <span class="sd">       orig_test_shape : 4D int tuple</span>
 <span class="sd">           Test data original shape. E.g. ``(num_of_images, x, y, channels)``.</span>
 
-<span class="sd">       norm_value : int</span>
-<span class="sd">           Normalization value calculated.</span>
+<span class="sd">       filenames : List of str</span>
+<span class="sd">           Loaded train and test filenames. filenames[0] are train filenames and </span>
+<span class="sd">           filenames[1] are test filenames.</span>
 
 <span class="sd">       Examples</span>
 <span class="sd">       --------</span>
@@ -544,18 +550,19 @@
 <span class="sd">           train_3d_shape = (256, 256, 40, 1)</span>
 <span class="sd">           test_3d_shape = (256, 256, 40, 1)</span>
 
-<span class="sd">           X_train, Y_train, X_val,</span>
-<span class="sd">           Y_val, X_test, Y_test,</span>
-<span class="sd">           orig_test_shape, norm_value = load_and_prepare_3D_data_v2(</span>
+<span class="sd">           X_train, Y_train, X_val,\</span>
+<span class="sd">           Y_val, X_test, Y_test,\</span>
+<span class="sd">           orig_test_shape, crop_test_shapes,\</span>
+<span class="sd">           filenames = load_and_prepare_3D_data_v2(</span>
 <span class="sd">               train_path, train_mask_path, test_path, test_mask_path, img_train_shape,</span>
 <span class="sd">               img_test_shape, val_split=0.1, create_val=True, shuffle_val=True,</span>
-<span class="sd">               ov_=(0,0,0), train_subvol_shape=train_3d_shape,</span>
-<span class="sd">               test_subvol_shape=test_3d_shape)</span>
+<span class="sd">               test_subvol_shape=test_3d_shape, train_subvol_shape=train_3d_shape, </span>
+<span class="sd">               ov=(0,0,0))</span>
 
 <span class="sd">           # The function will print the shapes of the generated arrays. In this example:</span>
-<span class="sd">           #     *** Loaded train data shape is: (648, 256, 256, 40, 1)</span>
-<span class="sd">           #     *** Loaded validation data shape is: (72, 256, 256, 40, 1)</span>
-<span class="sd">           #     *** Loaded test data shape is: (240, 256, 256, 40, 1)</span>
+<span class="sd">           #     *** Loaded train data shape is: (315, 256, 256, 40, 1)</span>
+<span class="sd">           #     *** Loaded validation data shape is: (35, 256, 256, 40, 1)</span>
+<span class="sd">           #     *** Loaded test data shape is: (178, 256, 256, 40, 1)</span>
 <span class="sd">           #</span>
 <span class="sd">    &quot;&quot;&quot;</span>      
    
@@ -563,9 +570,6 @@
                                                                         
     <span class="c1"># Disable crops when random_subvolumes_in_DA is selected </span>
     <span class="n">crop</span> <span class="o">=</span> <span class="kc">False</span> <span class="k">if</span> <span class="n">random_subvolumes_in_DA</span> <span class="k">else</span> <span class="kc">True</span>
-
-    <span class="n">tr_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">image_train_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">image_train_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">image_train_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> 
-                <span class="n">image_train_shape</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;0) Loading train images . . .&quot;</span><span class="p">)</span>
     <span class="n">X_train</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">t_filenames</span> <span class="o">=</span> <span class="n">load_3d_images_from_dir</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> 
@@ -577,15 +581,14 @@
         <span class="n">train_mask_path</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="n">crop</span><span class="p">,</span> <span class="n">subvol_shape</span><span class="o">=</span><span class="n">train_subvol_shape</span><span class="p">,</span> 
         <span class="n">overlap</span><span class="o">=</span><span class="n">ov</span><span class="p">)</span>
 
-    <span class="n">te_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">image_test_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">image_test_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">image_test_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> 
-                <span class="n">image_test_shape</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;2) Loading test images . . .&quot;</span><span class="p">)</span>
-    <span class="n">X_test</span><span class="p">,</span> <span class="n">orig_test_img_shapes</span><span class="p">,</span> <span class="n">crop_test_img_shapes</span><span class="p">,</span> <span class="n">te_filenames</span> <span class="o">=</span> <span class="n">load_3d_images_from_dir</span><span class="p">(</span>
+    <span class="n">X_test</span><span class="p">,</span> <span class="n">orig_test_img_shapes</span><span class="p">,</span> \
+    <span class="n">crop_test_img_shapes</span><span class="p">,</span> <span class="n">te_filenames</span> <span class="o">=</span> <span class="n">load_3d_images_from_dir</span><span class="p">(</span>
         <span class="n">test_path</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">subvol_shape</span><span class="o">=</span><span class="n">test_subvol_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">ov</span><span class="p">,</span>
-        <span class="n">return_filenames</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">return_filenames</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="n">padding</span><span class="p">,</span> <span class="n">median_padding</span><span class="o">=</span><span class="n">median_padding</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;3) Loading test masks . . .&quot;</span><span class="p">)</span>
     <span class="n">Y_test</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">load_3d_images_from_dir</span><span class="p">(</span><span class="n">test_mask_path</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>            
-        <span class="n">subvol_shape</span><span class="o">=</span><span class="n">test_subvol_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">ov</span><span class="p">)</span>
+        <span class="n">subvol_shape</span><span class="o">=</span><span class="n">test_subvol_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">ov</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="n">padding</span><span class="p">,</span> <span class="n">median_padding</span><span class="o">=</span><span class="n">median_padding</span><span class="p">)</span>
 
     <span class="c1"># Save train and test filenames</span>
     <span class="n">filenames</span> <span class="o">=</span> <span class="p">[]</span>
@@ -625,16 +628,13 @@
 
 
 <div class="viewcode-block" id="crop_3D_data_with_overlap"><a class="viewcode-back" href="../data_3d_manipulation.html#data_3D_manipulation.crop_3D_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">crop_3D_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">vol_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span>
-                              <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+                              <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">median_padding</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Crop 3D data into smaller volumes with a defined overlap.</span>
-
 <span class="sd">       The opposite function is :func:`~merge_3D_data_with_overlap`.</span>
-
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------</span>
 <span class="sd">       data : 4D Numpy array</span>
 <span class="sd">           Data to crop. E.g. ``(num_of_images, x, y, channels)``.</span>
-
 <span class="sd">       vol_shape : 4D int tuple</span>
 <span class="sd">           Shape of the volumes to create. E.g. ``(x, y, z, channels)``.</span>
 <span class="sd">        </span>
@@ -645,36 +645,36 @@
 <span class="sd">            Amount of minimum overlap on x, y and z dimensions. The values must</span>
 <span class="sd">            be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. </span>
 <span class="sd">            E. g. ``(x, y, z)``.</span>
-
+<span class="sd">            </span>
 <span class="sd">       verbose : bool, optional</span>
 <span class="sd">            To print information about the crop to be made.</span>
+<span class="sd">            </span>
+<span class="sd">       padding : 4D Numpy array, optional</span>
+<span class="sd">            Size of padding to be added on each side</span>
 <span class="sd">    </span>
+<span class="sd">       median_padding: bool</span>
+<span class="sd">           If True the padding value is the median value. If False, the added values are zeroes.   </span>
+<span class="sd">  </span>
 <span class="sd">       Returns</span>
 <span class="sd">       -------</span>
 <span class="sd">       cropped_data : 5D Numpy array</span>
 <span class="sd">           Cropped image data. E.g. ``(vol_number, x, y, z, channels)``.</span>
-
 <span class="sd">       cropped_data_mask : 5D Numpy array, optional</span>
 <span class="sd">           Cropped image data masks. E.g. ``(vol_number, x, y, z, channels)``.</span>
 <span class="sd">        </span>
 <span class="sd">       Examples</span>
 <span class="sd">       --------</span>
 <span class="sd">       ::</span>
-
 <span class="sd">           # EXAMPLE 1   </span>
 <span class="sd">           # Following the example introduced in load_and_prepare_3D_data function, the </span>
 <span class="sd">           # cropping of a volume with shape (165, 1024, 765) should be done by the </span>
 <span class="sd">           # following call: </span>
-
 <span class="sd">           X_train = np.ones((165, 768, 1024, 1))</span>
 <span class="sd">           Y_train = np.ones((165, 768, 1024, 1))</span>
-
 <span class="sd">           X_train, Y_train = crop_3D_data_with_overlap(</span>
 <span class="sd">                X_train, (80, 80, 80, 1), data_mask=Y_train, overlap=(0.5,0.5,0.5))</span>
-
 <span class="sd">           # The function will print the shape of the generated arrays. In this example:</span>
 <span class="sd">           #     **** New data shape is: (2600, 80, 80, 80, 1)</span>
-
 <span class="sd">       A visual explanation of the process:                                     </span>
 <span class="sd">                                                                                </span>
 <span class="sd">       .. image:: img/crop_3D_ov.png                                               </span>
@@ -682,9 +682,7 @@
 <span class="sd">           :align: center</span>
 <span class="sd">    </span>
 <span class="sd">       Note: this image do not respect the proportions.</span>
-
 <span class="sd">       ::  </span>
-
 <span class="sd">           # EXAMPLE 2 </span>
 <span class="sd">           # Same data crop but without overlap</span>
 <span class="sd">          </span>
@@ -696,6 +694,12 @@
 <span class="sd">           #</span>
 <span class="sd">           # Notice how differs the amount of subvolumes created compared to the </span>
 <span class="sd">           # first example</span>
+<span class="sd">           </span>
+<span class="sd">           #EXAMPLE 2</span>
+<span class="sd">           #In the same way, if the addition of (64,64,64) padding is required, the call</span>
+<span class="sd">           #should be done as shown:</span>
+<span class="sd">           X_train, Y_train = crop_3D_data_with_overlap(</span>
+<span class="sd">                X_train, (80, 80, 80, 1), data_mask=Y_train, overlap=(0.5,0.5,0.5), padding=(64,64,64))</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
@@ -704,8 +708,24 @@
               <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">vol_shape</span><span class="p">))</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Minimum overlap selected: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">overlap</span><span class="p">))</span>
 
-    <span class="n">vol_shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">vol_shape</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+                         
+    <span class="n">padded_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]))</span>
+    <span class="n">padded_data</span><span class="p">[</span><span class="n">padding</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span><span class="n">padding</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="mi">0</span><span class="p">:</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]]</span> <span class="o">=</span> <span class="n">data</span> 
+    
+    <span class="k">if</span> <span class="n">median_padding</span><span class="p">:</span>
+    	<span class="n">padded_data</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">padding</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="p">:,</span> <span class="p">:,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="p">:])</span>
+    	<span class="n">padded_data</span><span class="p">[</span><span class="n">padding</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">:,</span> <span class="p">:,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="p">:])</span>
+    	<span class="n">padded_data</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">:</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">:,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">data</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:])</span>
+    	<span class="n">padded_data</span><span class="p">[:,</span> <span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">:,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">data</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:])</span>
+    	<span class="n">padded_data</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">:</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">data</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:])</span>
+    	<span class="n">padded_data</span><span class="p">[</span> <span class="p">:,</span> <span class="p">:,</span> <span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">data</span><span class="p">[:,</span> <span class="p">:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:])</span>
 
+
+    <span class="c1">#Original vol shape (no padding)</span>
+    <span class="n">vol_shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">vol_shape</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+    <span class="n">padded_vol_shape</span> <span class="o">=</span> <span class="n">vol_shape</span>
+    <span class="n">vol_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+    
     <span class="k">if</span> <span class="p">(</span><span class="n">overlap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>\
        <span class="ow">and</span> <span class="p">(</span><span class="n">overlap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>\
        <span class="ow">and</span> <span class="p">(</span><span class="n">overlap</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">):</span> 
@@ -721,7 +741,6 @@
     <span class="k">if</span> <span class="n">vol_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;vol_shape[2]&#39; </span><span class="si">{}</span><span class="s2"> greater than </span><span class="si">{}</span><span class="s2">&quot;</span>
                          <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
-  
     <span class="c1"># Calculate overlapping variables</span>
     <span class="n">overlap_x</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">1</span><span class="o">-</span><span class="n">overlap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>                       
     <span class="n">overlap_y</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">1</span><span class="o">-</span><span class="n">overlap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>                       
@@ -760,9 +779,9 @@
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> patches per (x,y,z) axis&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">vols_per_x</span><span class="p">,</span><span class="n">vols_per_y</span><span class="p">,</span><span class="n">vols_per_z</span><span class="p">)))</span>
 
     <span class="n">total_vol</span> <span class="o">=</span> <span class="n">vols_per_z</span><span class="o">*</span><span class="n">vols_per_x</span><span class="o">*</span><span class="n">vols_per_y</span>
-    <span class="n">cropped_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">total_vol</span><span class="p">,)</span> <span class="o">+</span> <span class="n">vol_shape</span><span class="p">)</span>
+    <span class="n">cropped_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">total_vol</span><span class="p">,)</span> <span class="o">+</span> <span class="n">padded_vol_shape</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">data_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">cropped_data_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">total_vol</span><span class="p">,)</span> <span class="o">+</span> <span class="n">vol_shape</span><span class="p">)</span>
+        <span class="n">cropped_data_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">total_vol</span><span class="p">,)</span> <span class="o">+</span> <span class="n">vol_shape</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],))</span>
 
     <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">vols_per_z</span><span class="p">):</span>
@@ -773,9 +792,9 @@
                 <span class="n">d_z</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="p">(</span><span class="n">z</span><span class="o">*</span><span class="n">step_z</span><span class="o">+</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">else</span> <span class="n">last_z</span>
 
                 <span class="n">cropped_data</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> \
-                    <span class="n">data</span><span class="p">[</span><span class="n">z</span><span class="o">*</span><span class="n">step_z</span><span class="o">-</span><span class="n">d_z</span><span class="p">:(</span><span class="n">z</span><span class="o">*</span><span class="n">step_z</span><span class="p">)</span><span class="o">+</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">d_z</span><span class="p">,</span>
-                         <span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">-</span><span class="n">d_x</span><span class="p">:</span><span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">+</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">d_x</span><span class="p">,</span>
-                         <span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">-</span><span class="n">d_y</span><span class="p">:</span><span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">+</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="n">d_y</span><span class="p">]</span>
+                    <span class="n">padded_data</span><span class="p">[</span><span class="n">z</span><span class="o">*</span><span class="n">step_z</span><span class="o">-</span><span class="n">d_z</span><span class="p">:(</span><span class="n">z</span><span class="o">*</span><span class="n">step_z</span><span class="p">)</span><span class="o">+</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">d_z</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+                         <span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">-</span><span class="n">d_x</span><span class="p">:</span><span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">+</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">d_x</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                         <span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">-</span><span class="n">d_y</span><span class="p">:</span><span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">+</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="n">d_y</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
                 <span class="k">if</span> <span class="n">data_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="n">cropped_data_mask</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> \
                         <span class="n">data_mask</span><span class="p">[</span><span class="n">z</span><span class="o">*</span><span class="n">step_z</span><span class="o">-</span><span class="n">d_z</span><span class="p">:(</span><span class="n">z</span><span class="o">*</span><span class="n">step_z</span><span class="p">)</span><span class="o">+</span><span class="n">vol_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">d_z</span><span class="p">,</span>
@@ -794,7 +813,7 @@
         <span class="k">return</span> <span class="n">cropped_data</span><span class="p">,</span> <span class="n">cropped_data_mask</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">cropped_data</span></div>
-
+    
 
 <div class="viewcode-block" id="crop_3D_data"><a class="viewcode-back" href="../data_3d_manipulation.html#data_3D_manipulation.crop_3D_data">[docs]</a><span class="k">def</span> <span class="nf">crop_3D_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">vol_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">use_rest</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Crop 3D data into smaller volumes without overlap. If there is no exact</span>
@@ -938,7 +957,7 @@
                                                                                 
     <span class="n">cropped_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_sub_volum</span><span class="p">,</span> <span class="p">)</span> <span class="o">+</span> <span class="n">vol_shape</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">data_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">cropped_data_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_sub_volum</span><span class="p">,</span> <span class="p">)</span> <span class="o">+</span> <span class="n">vol_shape</span><span class="p">)</span>
+        <span class="n">cropped_data_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_sub_volum</span><span class="p">,</span> <span class="p">)</span> <span class="o">+</span> <span class="n">vol_shape</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],))</span>
                                                                                 
     <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">,</span><span class="si">{}</span><span class="s2">,</span><span class="si">{}</span><span class="s2"> patches per x,y,z axis&quot;</span>
@@ -983,7 +1002,7 @@
 
 
 <div class="viewcode-block" id="merge_3D_data_with_overlap"><a class="viewcode-back" href="../data_3d_manipulation.html#data_3D_manipulation.merge_3D_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">merge_3D_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">orig_vol_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-                               <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+                               <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)):</span>
     <span class="sd">&quot;&quot;&quot;Merge 3D subvolumes in a 3D volume with a defined overlap.</span>
 
 <span class="sd">       The opposite function is :func:`~crop_3D_data_with_overlap`.</span>
@@ -1008,6 +1027,9 @@
 
 <span class="sd">       verbose : bool, optional</span>
 <span class="sd">            To print information about the crop to be made.</span>
+<span class="sd">            </span>
+<span class="sd">       padding : 4D Numpy array, optional</span>
+<span class="sd">            Size of padding to be added on each side</span>
 
 <span class="sd">       Returns</span>
 <span class="sd">       -------</span>
@@ -1045,6 +1067,16 @@
 <span class="sd">                                                                                </span>
 <span class="sd">           # The function will print the shape of the generated arrays. In this example:  </span>
 <span class="sd">           #     **** New data shape is: (165, 768, 1024, 1)</span>
+<span class="sd">                                                                                           </span>
+<span class="sd">           # EXAMPLE 3                                                          </span>
+<span class="sd">           # On the contrary, if no overlap in cropping was selected but a padding of shape</span>
+<span class="sd">           # (64,64,64) is needed, the merge call should be as follows:</span>
+<span class="sd">                                                                                </span>
+<span class="sd">           X_train, Y_train = merge_3D_data_with_overlap(</span>
+<span class="sd">                X_train, (165, 768, 1024, 1), data_mask=Y_train, overlap=(0,0,0), padding=(64,64,64))   </span>
+<span class="sd">                                                                                </span>
+<span class="sd">           # The function will print the shape of the generated arrays. In this example:  </span>
+<span class="sd">           #     **** New data shape is: (165, 768, 1024, 1)</span>
 <span class="sd">    &quot;&quot;&quot;</span> 
 
     <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
@@ -1052,6 +1084,8 @@
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Merging </span><span class="si">{}</span><span class="s2"> images into </span><span class="si">{}</span><span class="s2"> with overlapping . . .&quot;</span>               
               <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">orig_vol_shape</span><span class="p">))</span> 
 
+    <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[:,</span> <span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">padding</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">-</span><span class="n">padding</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="p">:]</span>
+    
     <span class="k">if</span> <span class="p">(</span><span class="n">overlap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>\
        <span class="ow">and</span> <span class="p">(</span><span class="n">overlap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>\
        <span class="ow">and</span> <span class="p">(</span><span class="n">overlap</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">):</span>                                 
@@ -1059,7 +1093,9 @@
 
     <span class="n">merged_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">orig_vol_shape</span><span class="p">))</span>
     <span class="k">if</span> <span class="n">data_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">merged_data_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">orig_vol_shape</span><span class="p">))</span>
+        <span class="n">data_mask</span> <span class="o">=</span> <span class="n">data_mask</span><span class="p">[:,</span> <span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">padding</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">-</span><span class="n">padding</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="p">:]</span>
+        <span class="n">merged_data_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">orig_vol_shape</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],)</span> <span class="p">)</span>
+
     <span class="n">ov_map_counter</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">orig_vol_shape</span><span class="p">))</span>
 
     <span class="c1"># Calculate overlapping variables                                           </span>
@@ -1099,10 +1135,11 @@
 
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> patches per (x,y,z) axis&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">vols_per_x</span><span class="p">,</span><span class="n">vols_per_y</span><span class="p">,</span><span class="n">vols_per_z</span><span class="p">)))</span>
 
+	
     <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">vols_per_z</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">vols_per_x</span><span class="p">):</span>
-            <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">vols_per_y</span><span class="p">):</span>     
+            <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">vols_per_y</span><span class="p">):</span>  
                 <span class="n">d_x</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="p">(</span><span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">orig_vol_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">else</span> <span class="n">last_x</span>
                 <span class="n">d_y</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="p">(</span><span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">orig_vol_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">else</span> <span class="n">last_y</span>
                 <span class="n">d_z</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="p">(</span><span class="n">z</span><span class="o">*</span><span class="n">step_z</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">orig_vol_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">else</span> <span class="n">last_z</span>
@@ -1133,6 +1170,7 @@
         <span class="k">return</span> <span class="n">merged_data</span><span class="p">,</span> <span class="n">merged_data_mask</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">merged_data</span></div>
+        
 </pre></div>
 
            </div>

@@ -195,7 +195,7 @@
 <span id="d-generator"></span><h1>3D generator<a class="headerlink" href="#module-generators.data_3D_generators" title="Permalink to this headline">¶</a></h1>
 <dl class="py class">
 <dt id="generators.data_3D_generators.VoxelDataGenerator">
-<em class="property">class </em><code class="sig-prename descclassname">generators.data_3D_generators.</code><code class="sig-name descname">VoxelDataGenerator</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span></em>, <em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">random_subvolumes_in_DA</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">subvol_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">seed</span><span class="o">=</span><span class="default_value">42</span></em>, <em class="sig-param"><span class="n">shuffle_each_epoch</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">batch_size</span><span class="o">=</span><span class="default_value">32</span></em>, <em class="sig-param"><span class="n">da</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">shift_range</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">hist_eq</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">flip</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">rotation</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">elastic</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">g_blur</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">gamma_contrast</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">val</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">prob_map</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">extra_data_factor</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/generators/data_3D_generators.html#VoxelDataGenerator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#generators.data_3D_generators.VoxelDataGenerator" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">generators.data_3D_generators.</code><code class="sig-name descname">VoxelDataGenerator</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span></em>, <em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">random_subvolumes_in_DA</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">subvol_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">seed</span><span class="o">=</span><span class="default_value">42</span></em>, <em class="sig-param"><span class="n">shuffle_each_epoch</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">batch_size</span><span class="o">=</span><span class="default_value">32</span></em>, <em class="sig-param"><span class="n">da</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">shift_range</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">flip</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">rotation</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">elastic</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">g_blur</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">gamma_contrast</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">out_number</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">val</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">prob_map</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">extra_data_factor</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/generators/data_3D_generators.html#VoxelDataGenerator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#generators.data_3D_generators.VoxelDataGenerator" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.utils.data_utils.Sequence</span></code></p>
 <p>Custom ImageDataGenerator for 3D images.</p>
 <p class="rubric">Methods</p>
@@ -227,35 +227,40 @@
 <code class="sig-name descname">apply_transform</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image</span></em>, <em class="sig-param"><span class="n">mask</span></em>, <em class="sig-param"><span class="n">grid</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/generators/data_3D_generators.html#VoxelDataGenerator.apply_transform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#generators.data_3D_generators.VoxelDataGenerator.apply_transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Transform the input image and its mask at the same time with one of
 the selected choices based on a probability.</p>
-<dl>
-<dt>Args:</dt><dd><p>image (4D Numpy array): image to transform.
-E.g. (x, y, z, channels).</p>
-<p>mask (4D Numpy array): mask to transform.
-E.g. (x, y, z, channels).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Image to transform. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Mask to transform. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>trans_image (4D Numpy array): transformed image.
-E.g. (x, y, z, channels).</p>
-<p>trans_mask (4D Numpy array): transformed image mask.
-E.g. (x, y, z, channels).</p>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>trans_image</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Transformed image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>trans_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Transformed image mask. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
+</ul>
+</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
 <dt id="generators.data_3D_generators.VoxelDataGenerator.get_transformed_samples">
-<code class="sig-name descname">get_transformed_samples</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_examples</span></em>, <em class="sig-param"><span class="n">random_images</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">save_to_dir</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">out_dir</span><span class="o">=</span><span class="default_value">'aug_3d'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/generators/data_3D_generators.html#VoxelDataGenerator.get_transformed_samples"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#generators.data_3D_generators.VoxelDataGenerator.get_transformed_samples" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">get_transformed_samples</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_examples</span></em>, <em class="sig-param"><span class="n">random_images</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">save_to_dir</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">out_dir</span><span class="o">=</span><span class="default_value">'aug_3d'</span></em>, <em class="sig-param"><span class="n">train</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/generators/data_3D_generators.html#VoxelDataGenerator.get_transformed_samples"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#generators.data_3D_generators.VoxelDataGenerator.get_transformed_samples" title="Permalink to this definition">¶</a></dt>
 <dd><p>Apply selected transformations to a defined number of images from
 the dataset.</p>
-<dl>
-<dt>Args:</dt><dd><p>num_examples (int): number of examples to generate.</p>
-<p>random_images (bool, optional): randomly select images from the
-dataset. If False the examples will be generated from the start
-of the dataset.</p>
-<p>save_to_dir (bool, optional): save the images generated. The
-purpose of this variable is to check the images generated by
-data augmentation.</p>
-<p>out_dir (str, optional): name of the folder where the
-examples will be stored.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>num_examples</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Number of examples to generate.</p></li>
+<li><p><strong>random_images</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Randomly select images from the dataset. If False the examples
+will be generated from the start of the dataset.</p></li>
+<li><p><strong>save_to_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Save the images generated. The purpose of this variable is to
+check the images generated by data augmentation.</p></li>
+<li><p><strong>out_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Name of the folder where the examples will be stored.</p></li>
+<li><p><strong>train</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To avoid drawing a grid on the generated images. This should be
+set when the samples will be used for training.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>

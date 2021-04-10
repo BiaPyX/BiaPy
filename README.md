@@ -143,7 +143,7 @@ for connectomics", arXiv preprint arXiv:1812.06024 (2018).
 
 ### Citation
 
-This repository is the base of the following works:
+This repository is the base of the following work:
 
 ```
 @misc{francobarranco2021stable,
