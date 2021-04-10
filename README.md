@@ -140,3 +140,18 @@ Vincent Casser, Kai Kang, Hanspeter Pfister, and Daniel Haehn, "Fast mitochondri
 for connectomics", arXiv preprint arXiv:1812.06024 (2018).
 ```
 
+
+### Citation
+
+This repository is the base of the following works:
+
+```
+@misc{francobarranco2021stable,
+      title={Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes}, 
+      author={Daniel Franco-Barranco and Arrate Muñoz-Barrutia and Ignacio Arganda-Carreras},
+      year={2021},
+      eprint={2104.03577},
+      archivePrefix={arXiv},
+      primaryClass={eess.IV}
+}
+```
