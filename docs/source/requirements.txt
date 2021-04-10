@@ -58,7 +58,7 @@ pytz==2020.1
 PyWavelets==1.1.1
 requests==2.23.0
 requests-oauthlib==1.3.0
-rsa==4.1
+rsa==4.0
 ruamel-yaml==0.15.80
 scikit-image==0.16.2
 scikit-learn==0.22.1
