@@ -205,7 +205,7 @@ cout_apply_to_mask = False
 # To apply cutblur operation
 cutblur = False
 # Size of the region to apply cutblur
-cblur_size = 0.4
+cblur_size = (0.2, 0.4)
 # Range of the downsampling to be made in cutblur
 cblur_down_range = (2, 8)
 # Wheter to apply cut-and-paste just LR into HR image. If False, HR to LR will
@@ -214,7 +214,21 @@ cblur_inside = True
 # Apply cutmix operation
 cutmix = False
 # Size of the region to apply cutmix
-cmix_size = 0.4
+cmix_size = (0.2, 0.4)
+# Apply noise to a region of the image                                          
+cutnoise = False
+# Scale of the random noise                                                     
+cnoise_scale = (0.1, 0.2)                                                       
+# Number of areas to fill with noise                                            
+cnoise_nb_iterations = (1, 3)                                                   
+# Size of the regions                                                           
+cnoise_size = (0.2, 0.4) 
+# Add miss-aligment augmentation                                                
+misalignment = False
+# Maximum pixel displacement in `xy`-plane for misalignment                     
+ms_displacement = 16                                                            
+# Ratio of rotation-based mis-alignment                                         
+ms_rotate_ratio = 0.5                                                           
 # Flag to extract random subvolumnes during the DA
 random_subvolumes_in_DA = False
 # Calculate probability map to make random subvolumes to be extracted with high
@@ -428,7 +442,11 @@ train_generator = VoxelDataGenerator(
     cout_size=cout_size, cout_cval=cout_cval, cout_apply_to_mask=cout_apply_to_mask,
     cutblur=cutblur, cblur_size=cblur_size, cblur_down_range=cblur_down_range,
     cblur_inside=cblur_inside, cutmix=cutmix, cmix_size=cmix_size,
-    n_classes=n_classes, prob_map=train_prob, extra_data_factor=replicate_train)
+    cutnoise=cutnoise, cnoise_size=cnoise_size, 
+    cnoise_nb_iterations=cnoise_nb_iterations, cnoise_scale=cnoise_scale,
+    misalignment=misalignment, ms_displacement=ms_displacement, 
+    ms_rotate_ratio=ms_rotate_ratio, n_classes=n_classes, prob_map=train_prob, 
+    extra_data_factor=replicate_train)
 del X_train, Y_train
 
 # Create the test data generator without DA

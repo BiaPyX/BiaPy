@@ -14,7 +14,7 @@ from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 import imgaug as ia
 from imgaug import parameters as iap
 from skimage.io import imsave                                                   
-from .augmentors import cutout, cutblur, cutmix
+from .augmentors import cutout, cutblur, cutmix, cutnoise, misalignment
 
 class VoxelDataGenerator(tf.keras.utils.Sequence):
     """Custom ImageDataGenerator for 3D images.
@@ -29,12 +29,15 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                  e_alpha=(240,250), e_sigma=25, e_mode='constant', g_blur=False,
                  g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7),
                  motion_blur=False, motb_k_range=(3,8), gamma_contrast=False,
-                 gc_gamma=(1.25,1.75), dropout=False, drop_range=(0, 0.2),
-                 cutout=False, cout_nb_iterations=(1,3), cout_size=0.2,
+                 gc_gamma=(1.25,1.75), dropout=False, drop_range=(0,0.2),
+                 cutout=False, cout_nb_iterations=(1,3), cout_size=(0.2,0.4),
                  cout_cval=0, cout_apply_to_mask=False, cutblur=False, 
-                 cblur_size=0.4, cblur_down_range=(2,8), cblur_inside=True, 
-                 cutmix=False, cmix_size=0.4, n_classes=1, out_number=1, 
-                 val=False, prob_map=None, extra_data_factor=1):
+                 cblur_size=(0.2,0.4), cblur_down_range=(2,8), cblur_inside=True, 
+                 cutmix=False, cmix_size=(0.2,0.4), cutnoise=False,                   
+                 cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3),            
+                 cnoise_size=(0.2,0.4), misalignment=False, ms_displacement=16,
+                 ms_rotate_ratio=0.0, n_classes=1, out_number=1, val=False, 
+                 prob_map=None, extra_data_factor=1):
         """ImageDataGenerator constructor. Based on transformations from 
            `imgaug <https://github.com/aleju/imgaug>`_ library. Here a brief
            description of each transformation parameter is made. Find a complete
@@ -157,9 +160,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            cout_nb_iterations : tuple of ints, optional
                Range of number of areas to fill the image with. E. g. ``(1, 3)``. 
 
-           cout_size : float, optional                         
-               Size of the areas in % of the corresponding image size. Value 
-               between ``0`` and ``1``.
+           cout_size : tuple of floats, optional                         
+               Range to select the size of the areas in % of the corresponding 
+               image size. Values between ``0`` and ``1``. E. g. ``(0.2, 0.4)``.
 
            cout_cval : int, optional                                      
                Value to fill the area of cutout with.
@@ -171,8 +174,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                Blur a rectangular area of the image by downsampling and upsampling
                it again. 
 
-           cblur_size : float, optional
-               Size of the area to apply cutblur on.
+           cblur_size : tuple of floats, optional
+               Range to select the size of the area to apply cutblur on. 
+               E. g. ``(0.2, 0.4)``.
         
            cblur_inside : boolean, optional
                If ``True`` only the region inside will be modified (cut LR into HR
@@ -184,8 +188,31 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            cutmix : boolean, optional
                Combine two images pasting a region of one image to another.
 
-           cmix_size : float, optional
-               Size of the area to paste one image into another. 
+           cmix_size : tuple of floats, optional
+               Range to select the size of the area to paste one image into 
+               another. E. g. ``(0.2, 0.4)``.
+                                                                                
+           cnoise : boolean, optional                                               
+               Randomly add noise to a cuboid region in the image.                  
+                                                                                
+           cnoise_scale : tuple of floats, optional                                 
+               Scale of the random noise. E.g. ``(0.1, 0.2)``.                      
+                                                                                
+           cnoise_nb_iterations : tuple of ints, optional                           
+               Number of areas with noise to create. E.g. ``(1, 3)``.               
+                                                                                
+           cnoise_size : tuple of floats, optional                                  
+               Range to choose the size of the areas to transform. 
+               E.g. ``(0.2, 0.4)``.
+
+           misalignment : boolean, optional
+               To add miss-aligment augmentation.
+            
+           ms_displacement : int, optional
+               Maximum pixel displacement in `xy`-plane for misalignment.
+
+           ms_rotate_ratio : float, optional
+               Ratio of rotation-based mis-alignment
 
            n_classes : int, optional
                Number of classes. If ``> 1`` one-hot encoding will be done on 
@@ -247,13 +274,20 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.cout_nb_iterations = cout_nb_iterations
         self.cout_size = cout_size
         self.cout_cval = cout_cval
+        self.cout_apply_to_mask = cout_apply_to_mask
         self.cutblur = cutblur
         self.cblur_size = cblur_size
         self.cblur_down_range = cblur_down_range
         self.cblur_inside = cblur_inside
-        self.cout_apply_to_mask = cout_apply_to_mask
         self.cutmix = cutmix
         self.cmix_size = cmix_size
+        self.cutnoise = cutnoise                                                
+        self.cnoise_scale = cnoise_scale                                        
+        self.cnoise_nb_iterations = cnoise_nb_iterations                        
+        self.cnoise_size = cnoise_size
+        self.misalignment = misalignment
+        self.ms_displacement = ms_displacement
+        self.ms_rotate_ratio = ms_rotate_ratio
         self.val = val
         self.batch_size = batch_size
         self.o_indexes = np.arange(len(self.X))
@@ -311,6 +345,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if cutout: self.trans_made += '_cout'+str(cout_nb_iterations)+'+'+str(cout_size)+'+'+str(cout_cval)+'+'+str(cout_apply_to_mask)
         if cutblur: self.trans_made += '_cblur'+str(cblur_size)+'+'+str(cblur_down_range)+'+'+str(cblur_inside)
         if cutmix: self.trans_made += '_cmix'+str(cmix_size)
+        if cutnoise: self.trans_made += '_cnoi'+str(cnoise_scale)+'+'+str(cnoise_nb_iterations)+'+'+str(cnoise_size)
+        if misalignment: self.trans_made += '_msalg'+str(ms_displacement)+'+'+str(ms_rotate_ratio)
             
         self.trans_made = self.trans_made.replace(" ", "")
         self.seq = iaa.Sequential(self.da_options)
@@ -477,6 +513,18 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if self.cutmix and prob < self.da_prob:
             image, mask = cutmix(image, e_im, mask, e_mask, self.cmix_size)
 
+        # Apply cutnoise                                                        
+        prob = random.uniform(0, 1)                                             
+        if self.cutnoise and prob < self.da_prob:                               
+            image = cutnoise(image, self.cnoise_scale, self.cnoise_nb_iterations,
+                             self.cnoise_size)
+
+        # Apply misalignment
+        prob = random.uniform(0, 1)                                             
+        if self.misalignment and prob < self.da_prob:                                 
+            image, mask = misalignment(image, mask, self.ms_displacement, 
+                                       self.ms_rotate_ratio)
+         
         # Apply transformations to the volume and its mask
         segmap = SegmentationMapsOnImage(mask, shape=mask.shape)            
         image, vol_mask = self.seq(image=image, segmentation_maps=segmap)   
