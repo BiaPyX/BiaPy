@@ -1,5 +1,58 @@
 import numpy as np
 from skimage.transform import resize
+import random                                                                   
+
+
+def cutout(img, mask, cout_nb_iterations = (1, 3), cout_size = (0.1, 0.5), cval=0): 
+    """Cutout data augmentation.
+       Original `paper <https://arxiv.org/pdf/1708.04552.pdf>`_.
+    
+       Parameters
+       ----------
+       img : 3D Numpy array
+           Image to transform. E.g. ``(x, y, channels)``.
+
+       mask1 : 3D Numpy array                                                   
+           Mask to transform. E.g. ``(x, y, channels)``.   
+        
+       cout_nb_iterations : tuple of ints, optional
+           Number of areas to fill the image with. E.g. ``(1, 3)``.
+    
+       cout_size : tuple of floats, optional
+           Range to choose the size of the areas to create.
+
+       cval : int, optional
+           Value to fill the area with.
+            
+       Returns
+       -------
+       out : 3D Numpy array
+           Transformed image. E.g. ``(x, y, channels)``.
+
+       mask : 3D Numpy array
+           Transformed mask. E.g. ``(x, y, channels)``.
+    """
+
+    it = np.random.randint(cout_nb_iterations[0], cout_nb_iterations[1])
+
+    out = img.copy()
+    m_out = mask.copy()
+    for i in range(it):
+        size = random.uniform(cout_size[0], cout_size[1])
+        y_size = int(img.shape[0]*size)
+        x_size = int(img.shape[1]*size)
+
+        # Choose a random point
+        cy = np.random.randint(0, img.shape[0]-(y_size))
+        cx = np.random.randint(0, img.shape[1]-(x_size))
+
+        # Apply cutblur to all channels
+        for i in range(img.shape[-1]):
+            out[cy:cy+y_size, cx:cx+x_size, i] = cval
+        for i in range(mask.shape[-1]):
+            m_out[cy:cy+y_size, cx:cx+x_size, i] = 0
+        
+    return out, m_out
 
 
 def cutblur(img, size=0.4, down_ratio_range=(2,8), only_inside=True):

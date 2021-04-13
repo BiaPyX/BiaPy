@@ -14,7 +14,7 @@ from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 import imgaug as ia
 from imgaug import parameters as iap
 from skimage.io import imsave                                                   
-from .augmentors import cutblur, cutmix
+from .augmentors import cutout, cutblur, cutmix
 
 class VoxelDataGenerator(tf.keras.utils.Sequence):
     """Custom ImageDataGenerator for 3D images.
@@ -31,7 +31,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                  motion_blur=False, motb_k_range=(3,8), gamma_contrast=False,
                  gc_gamma=(1.25,1.75), dropout=False, drop_range=(0, 0.2),
                  cutout=False, cout_nb_iterations=(1,3), cout_size=0.2,
-                 cout_fill_mode='constant', cutblur=False, cblur_size=0.4,
+                 cout_cval=0, cutblur=False, cblur_size=0.4,
                  cblur_down_range=(2,8), cblur_inside=True, cutmix=False,
                  cmix_size=0.4, n_classes=1, out_number=1, val=False,
                  prob_map=None, extra_data_factor=1):
@@ -161,9 +161,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                Size of the areas in % of the corresponding image size. Value 
                between ``0`` and ``1``.
 
-           cout_fill_mode : str, optional                                      
-               Parameter that defines the handling of newly created pixels with
-               cutout.
+           cout_cval : int, optional                                      
+               Value to fill the area of cutout with.
 
            cutblur : boolean, optional
                Blur a rectangular area of the image by downsampling and upsampling
@@ -241,6 +240,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.da = da
         self.da_prob = da_prob
         self.flip = flip
+        self.cutout = cutout
+        self.cout_nb_iterations = cout_nb_iterations
+        self.cout_size = cout_size
+        self.cout_cval = cout_cval
         self.cutblur = cutblur
         self.cblur_size = cblur_size
         self.cblur_down_range = cblur_down_range
@@ -301,9 +304,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += '_drop'+str(drop_range)
-        if cutout:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Cutout(nb_iterations=cout_nb_iterations, size=cout_size, fill_mode=cout_fill_mode, squared=False)))
-            self.trans_made += '_cout'+str(cout_nb_iterations)+'+'+str(cout_size)+'+'+str(cout_fill_mode)
+        if cutout: self.trans_made += '_cout'+str(cout_nb_iterations)+'+'+str(cout_size)+'+'+str(cout_cval)
         if cutblur: self.trans_made += '_cblur'+str(cblur_size)+'+'+str(cblur_down_range)+'+'+str(cblur_inside)
         if cutmix: self.trans_made += '_cmix'+str(cmix_size)
             
@@ -404,7 +405,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if self.shuffle_each_epoch:
             random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
 
-    def apply_transform(self, image, mask, grid=False, e_im=None, e_mask=None):
+    def apply_transform(self, image, mask, e_im=None, e_mask=None):
         """Transform the input image and its mask at the same time with one of
            the selected choices based on a probability.
     
@@ -415,6 +416,14 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
            mask : 4D Numpy array
                Mask to transform. E.g. ``(x, y, z, channels)``.
+
+           e_img : 4D Numpy array                                               
+               Extra image to help transforming ``image``. 
+               E.g. ``(x, y, z, channels)``.                
+                                                                                
+           e_mask : 4D Numpy array                                                
+               Extra mask to help transforming ``mask``. 
+               E.g. ``(x, y, z, channels)``.
     
            Returns
            -------
@@ -445,6 +454,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         mask = mask.reshape(mask.shape[:2]+(self.Y_z*self.Y_c, ))
         if e_im is not None: e_im = e_im.reshape(e_im.shape[:2]+(self.X_z*self.X_c, )) 
         if e_mask is not None: e_mask = e_mask.reshape(e_mask.shape[:2]+(self.Y_z*self.Y_c, )) 
+
+        # Apply cutout
+        prob = random.uniform(0, 1)                                             
+        if self.cutout and prob < self.da_prob:                                
+            image, mask = cutout(image, mask, self.cout_nb_iterations, 
+                                 self.cout_size, self.cout_cval)
 
         # Apply cblur 
         prob = random.uniform(0, 1)

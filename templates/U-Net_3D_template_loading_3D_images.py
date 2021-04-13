@@ -197,9 +197,9 @@ cutout = False
 # Range of number of areas to fill the image with
 cout_nb_iterations = (1, 3)
 # Size of the areas in % of the corresponding image size
-cout_size = 0.2
-# Parameter that defines the handling of newly created pixels with cutout
-cout_fill_mode = 'constant'
+cout_size = (0.05, 0.4)
+# Value to fill the area of cutout
+cout_cval = 0
 # To apply cutblur operation
 cutblur = False
 # Size of the region to apply cutblur
@@ -423,7 +423,7 @@ train_generator = VoxelDataGenerator(
     motion_blur=motion_blur, motb_k_range=motb_k_range,
     gamma_contrast=gamma_contrast, gc_gamma=gc_gamma, dropout=dropout,
     drop_range=drop_range, cutout=cutout, cout_nb_iterations=cout_nb_iterations,
-    cout_size=cout_size, cout_fill_mode=cout_fill_mode, cutblur=cutblur,
+    cout_size=cout_size, cout_cval=cout_cval, cutblur=cutblur,
     cblur_size=cblur_size, cblur_down_range=cblur_down_range,
     cblur_inside=cblur_inside, cutmix=cutmix, cmix_size=cmix_size,
     n_classes=n_classes, prob_map=train_prob, extra_data_factor=replicate_train)
