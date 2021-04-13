@@ -3,7 +3,8 @@ from skimage.transform import resize
 import random                                                                   
 
 
-def cutout(img, mask, cout_nb_iterations = (1, 3), cout_size = (0.1, 0.5), cval=0): 
+def cutout(img, mask, cout_nb_iterations = (1, 3), cout_size = (0.1, 0.5), 
+           cval=0, apply_to_mask=False): 
     """Cutout data augmentation.
        Original `paper <https://arxiv.org/pdf/1708.04552.pdf>`_.
     
@@ -23,7 +24,10 @@ def cutout(img, mask, cout_nb_iterations = (1, 3), cout_size = (0.1, 0.5), cval=
 
        cval : int, optional
            Value to fill the area with.
-            
+    
+       apply_to_mask : boolean, optional
+           To apply cutout to the mask.
+        
        Returns
        -------
        out : 3D Numpy array
@@ -49,8 +53,9 @@ def cutout(img, mask, cout_nb_iterations = (1, 3), cout_size = (0.1, 0.5), cval=
         # Apply cutblur to all channels
         for i in range(img.shape[-1]):
             out[cy:cy+y_size, cx:cx+x_size, i] = cval
-        for i in range(mask.shape[-1]):
-            m_out[cy:cy+y_size, cx:cx+x_size, i] = 0
+        if apply_to_mask:
+            for i in range(mask.shape[-1]):
+                m_out[cy:cy+y_size, cx:cx+x_size, i] = 0
         
     return out, m_out
 
