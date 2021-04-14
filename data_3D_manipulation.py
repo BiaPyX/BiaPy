@@ -304,8 +304,9 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
            be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.      
            E. g. ``(x, y, z)``.  
            
-       padding : 4D Numpy array, optional
-           Size of padding to be added on each side  
+       padding : tuple of ints, optional                                        
+           Size of padding to be added on each axis ``(x, y, z)``. 
+           E.g. ``(24, 24, 24)``.
            
        median_padding : bool, optional
            If ``True`` the padding value is the median value. If ``False``, the 
@@ -398,7 +399,8 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
         return_filenames=True, padding=padding, median_padding=median_padding)
     print("3) Loading test masks . . .")
     Y_test, _, _ = load_3d_images_from_dir(test_mask_path, None, crop=True,            
-        subvol_shape=test_subvol_shape, overlap=ov, padding=padding, median_padding=median_padding)
+        subvol_shape=test_subvol_shape, overlap=ov, padding=padding,
+        median_padding=median_padding)
 
     # Save train and test filenames
     filenames = []
@@ -438,7 +440,7 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
 
 
 def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
-                              verbose=True, padding=(0,0,0), median_padding=False):
+                              padding=(0,0,0), verbose=True, median_padding=False):
     """Crop 3D data into smaller volumes with a defined overlap.
        The opposite function is :func:`~merge_3D_data_with_overlap`.
 
@@ -456,14 +458,15 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
        overlap : Tuple of 3 floats, optional
             Amount of minimum overlap on x, y and z dimensions. The values must
             be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. 
-            E. g. ``(x, y, z)``.
-            
+            E.g. ``(x, y, z)``.
+                                                                                
+       padding : tuple of ints, optional                                        
+           Size of padding to be added on each axis ``(x, y, z)``.                
+           E.g. ``(24, 24, 24)``.
+
        verbose : bool, optional
             To print information about the crop to be made.
             
-       padding : 4D Numpy array, optional
-            Size of padding to be added on each side
-    
        median_padding : bool, optional
            If ``True`` the padding value is the median value. If ``False``, the
            added values are zeroes.   
@@ -523,8 +526,21 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
         print("Minimum overlap selected: {}".format(overlap))
 
                          
-    padded_data = np.zeros((data.shape[0]+2*padding[2],data.shape[1]+2*padding[0], data.shape[2]+2*padding[1], data.shape[3]))
-    padded_data[padding[2]:padding[2]+data.shape[0], padding[0]:padding[0]+data.shape[1], padding[1]:padding[1]+data.shape[2], 0:data.shape[3]] = data 
+    padded_data = np.zeros((data.shape[0]+2*padding[2], 
+                            data.shape[1]+2*padding[0], 
+                            data.shape[2]+2*padding[1], 
+                            data.shape[3]))
+    padded_data[padding[2]:padding[2]+data.shape[0], 
+                padding[0]:padding[0]+data.shape[1],
+                padding[1]:padding[1]+data.shape[2],:] = data 
+    if data_mask is not None:
+        padded_data_mask = np.zeros((data_mask.shape[0]+2*padding[2],
+                                     data_mask.shape[1]+2*padding[0],
+                                     data_mask.shape[2]+2*padding[1],
+                                     data_mask.shape[3]))
+        padded_data_mask[padding[2]:padding[2]+data_mask.shape[0],
+                         padding[0]:padding[0]+data_mask.shape[1],
+                         padding[1]:padding[1]+data_mask.shape[2],:] = data_mask
     
     if median_padding:
     	padded_data[0:padding[2], :, :, :] = np.median(data[0, :, :, :])
@@ -533,7 +549,6 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
     	padded_data[:, padding[0]+data.shape[1]:2*padding[0]+data.shape[0], :, :] = np.median(data[:, -1, :, :])
     	padded_data[:, :, 0:padding[1], :] = np.median(data[:, :, 0, :])
     	padded_data[ :, :, padding[1]+data.shape[2]:2*padding[1]+data.shape[2], :] = np.median(data[:, :, -1, :])
-
 
     #Original vol shape (no padding)
     vol_shape = tuple(vol_shape[i] for i in [2, 0, 1, 3])
@@ -607,13 +622,13 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
 
                 cropped_data[c] = \
                     padded_data[z*step_z-d_z:(z*step_z)+vol_shape[0]-d_z+2*padding[2],
-                         x*step_x-d_x:x*step_x+vol_shape[1]-d_x+2*padding[0],
-                         y*step_y-d_y:y*step_y+vol_shape[2]-d_y+2*padding[1]]
+                                x*step_x-d_x:x*step_x+vol_shape[1]-d_x+2*padding[0],
+                                y*step_y-d_y:y*step_y+vol_shape[2]-d_y+2*padding[1]]
                 if data_mask is not None:
                     cropped_data_mask[c] = \
-                        data_mask[z*step_z-d_z:(z*step_z)+vol_shape[0]-d_z,
-                                  x*step_x-d_x:x*step_x+vol_shape[1]-d_x,   
-                                  y*step_y-d_y:y*step_y+vol_shape[2]-d_y]
+                        padded_data_mask[z*step_z-d_z:(z*step_z)+vol_shape[0]-d_z+2*padding[2],
+                                         x*step_x-d_x:x*step_x+vol_shape[1]-d_x+2*padding[0],   
+                                         y*step_y-d_y:y*step_y+vol_shape[2]-d_y+2*padding[1]]
                 c += 1
 
     cropped_data = cropped_data.transpose(0,2,3,1,4)
@@ -816,14 +831,13 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False, verbose=True):
 
 
 def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
-                               overlap=(0,0,0), verbose=True, padding=(0,0,0)):
+                               overlap=(0,0,0), padding=(0,0,0), verbose=True):
     """Merge 3D subvolumes in a 3D volume with a defined overlap.
 
        The opposite function is :func:`~crop_3D_data_with_overlap`.
 
        Parameters
        ----------
-
        data : 5D Numpy array
            Data to crop. E.g. ``(volume_number, x, y, z, channels)``.
 
@@ -837,14 +851,15 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
             Amount of minimum overlap on x, y and z dimensions. Should be the 
             same as used in :func:`~crop_3D_data_with_overlap`. The values must 
             be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.      
-            E. g. ``(x, y, z)``. 
+            E.g. ``(x, y, z)``. 
+
+       padding : tuple of ints, optional                                        
+           Size of padding to be added on each axis ``(x, y, z)``.                
+           E.g. ``(24, 24, 24)``.
 
        verbose : bool, optional
             To print information about the crop to be made.
             
-       padding : 4D Numpy array, optional
-            Size of padding to be added on each side
-
        Returns
        -------
        merged_data : 4D Numpy array
@@ -898,7 +913,10 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
         print("Merging {} images into {} with overlapping . . ."               
               .format(data.shape, orig_vol_shape)) 
 
-    data = data[:, padding[0]:data.shape[1]-padding[0], padding[1]:data.shape[2]-padding[1], padding[2]:data.shape[3]-padding[2], :]
+    # Remove the padding
+    data = data[:, padding[0]:data.shape[1]-padding[0],
+                padding[1]:data.shape[2]-padding[1],
+                padding[2]:data.shape[3]-padding[2], :]
     
     if (overlap[0] >= 1 or overlap[0] < 0)\
        and (overlap[1] >= 1 or overlap[1] < 0)\
@@ -907,7 +925,9 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
 
     merged_data = np.zeros((orig_vol_shape))
     if data_mask is not None:
-        data_mask = data_mask[:, padding[0]:data_mask.shape[1]-padding[0], padding[1]:data_mask.shape[2]-padding[1], padding[2]:data_mask.shape[3]-padding[2], :]
+        data_mask = data_mask[:, padding[0]:data_mask.shape[1]-padding[0],
+                              padding[1]:data_mask.shape[2]-padding[1],
+                              padding[2]:data_mask.shape[3]-padding[2], :]
         merged_data_mask = np.zeros(orig_vol_shape[:3]+(data_mask.shape[-1],) )
 
     ov_map_counter = np.zeros((orig_vol_shape))
@@ -964,13 +984,12 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
    
                 if data_mask is not None: 
                     merged_data_mask[z*step_z-d_z:(z*step_z)+data.shape[3]-d_z,
-                            x*step_x-d_x:x*step_x+data.shape[1]-d_x,
-                            y*step_y-d_y:y*step_y+data.shape[2]-d_y] += \
-                                          data_mask[c].transpose(2,0,1,3)
+                                     x*step_x-d_x:x*step_x+data.shape[1]-d_x,
+                                     y*step_y-d_y:y*step_y+data.shape[2]-d_y] += data_mask[c].transpose(2,0,1,3)
 
                 ov_map_counter[z*step_z-d_z:(z*step_z)+data.shape[3]-d_z,
-                            x*step_x-d_x:x*step_x+data.shape[1]-d_x,
-                            y*step_y-d_y:y*step_y+data.shape[2]-d_y] += 1
+                               x*step_x-d_x:x*step_x+data.shape[1]-d_x,
+                               y*step_y-d_y:y*step_y+data.shape[2]-d_y] += 1
                 c += 1
                     
     merged_data = np.true_divide(merged_data, ov_map_counter)
