@@ -247,7 +247,8 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
 def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path, 
     test_mask_path, image_train_shape, image_test_shape, test_subvol_shape,
     train_subvol_shape, create_val=True, shuffle_val=True, val_split=0.1, 
-    seedValue=42, random_subvolumes_in_DA=False, ov=(0,0,0), padding=(0,0,0), median_padding=False):
+    seedValue=42, random_subvolumes_in_DA=False, ov=(0,0,0), padding=(0,0,0),
+    median_padding=False):
     """Load train, validation and test images from the given paths to create a 
        3D data representation. All the test data will be used to create a 3D
        volume of ``test_subvol_shape`` shape (considering ``ov``).
@@ -306,8 +307,9 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
        padding : 4D Numpy array, optional
            Size of padding to be added on each side  
            
-       median_padding: bool
-           If True the padding value is the median value. If False, the added values are zeroes.   
+       median_padding : bool, optional
+           If ``True`` the padding value is the median value. If ``False``, the 
+           added values are zeroes.   
   
        Returns
        -------                                                         
@@ -439,10 +441,12 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
                               verbose=True, padding=(0,0,0), median_padding=False):
     """Crop 3D data into smaller volumes with a defined overlap.
        The opposite function is :func:`~merge_3D_data_with_overlap`.
+
        Parameters
        ----------
        data : 4D Numpy array
            Data to crop. E.g. ``(num_of_images, x, y, channels)``.
+
        vol_shape : 4D int tuple
            Shape of the volumes to create. E.g. ``(x, y, z, channels)``.
         
@@ -460,13 +464,15 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
        padding : 4D Numpy array, optional
             Size of padding to be added on each side
     
-       median_padding: bool
-           If True the padding value is the median value. If False, the added values are zeroes.   
+       median_padding : bool, optional
+           If ``True`` the padding value is the median value. If ``False``, the
+           added values are zeroes.   
   
        Returns
        -------
        cropped_data : 5D Numpy array
            Cropped image data. E.g. ``(vol_number, x, y, z, channels)``.
+
        cropped_data_mask : 5D Numpy array, optional
            Cropped image data masks. E.g. ``(vol_number, x, y, z, channels)``.
         
