@@ -295,9 +295,9 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 raise ValueError("The shape of X and Y must be the same. {} != {}"
                                  .format(X.shape[:3], Y.shape[:3]))
 
-        if in_memory and X is not None and Y is not None:
-            raise ValueError("Do not provide 'X' and 'Y' as 'in_memory' is"
-                             " selected")
+        if in_memory and (X is None or Y is None):
+            raise ValueError("'X' and 'Y' need to be provided together with "
+                             "'in_memory'")
 
         if in_memory and len(data_paths) != 2:                               
             raise ValueError("'data_paths' must contain the following paths: 1) "
