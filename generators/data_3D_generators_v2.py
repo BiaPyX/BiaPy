@@ -25,9 +25,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                  da_prob=0.5, rotation90=False, rand_rot=False,
                  rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20),
                  zoom=False, zoom_range=(0.8,1.2), shift=False,
-                 shift_range=(0.1,0.2), flip=False, elastic=False, 
-                 e_alpha=(240,250), e_sigma=25, e_mode='constant', g_blur=False,
-                 g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7),
+                 shift_range=(0.1,0.2), vflip=False, hflip=False, zflip=False,
+                 elastic=False, e_alpha=(240,250), e_sigma=25, e_mode='constant', 
+                 g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7),
                  motion_blur=False, motb_k_range=(3,8), gamma_contrast=False,
                  gc_gamma=(1.25,1.75), dropout=False, drop_range=(0,0.2),
                  cutout=False, cout_nb_iterations=(1,3), cout_size=(0.2,0.4),
@@ -102,8 +102,14 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            shift_range : tuple of float, optional
                Range to make a shift. E. g. ``(0.1, 0.2)``.
 
-           flip : bool, optional
-               To activate flips (both horizontal and vertical).
+           vflip : bool, optional
+               To activate vertical flips.
+
+           hflip : bool, optional
+               To activate horizontal flips.
+
+           zflip : bool, optional
+               To activate flips in z dimension.
         
            elastic : bool, optional
                To make elastic deformations.
@@ -269,7 +275,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.shuffle_each_epoch = shuffle_each_epoch
         self.da = da
         self.da_prob = da_prob
-        self.flip = flip
+        self.vflip = vflip
+        self.hflip = hflip
+        self.zflip = zflip
         self.cutout = cutout
         self.cout_nb_iterations = cout_nb_iterations
         self.cout_size = cout_size
@@ -320,10 +328,13 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if shift:                                                               
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(translate_percent=shift_range)))
             self.trans_made += '_shift'+str(shift_range)                        
-        if flip:
+        if vflip:
             self.da_options.append(iaa.Flipud(0.5))
+            self.trans_made += '_vflip'
+        if hflip:
             self.da_options.append(iaa.Fliplr(0.5))                                  
-            self.trans_made += '_flip'
+            self.trans_made += '_hflip'
+        if zflip: self.trans_made += '_zflip'
         if elastic:
             self.da_options.append(iaa.Sometimes(da_prob,iaa.ElasticTransformation(alpha=e_alpha, sigma=e_sigma, mode=e_mode)))
             self.trans_made += '_elastic'+str(e_alpha)+'+'+str(e_sigma)+'+'+str(e_mode)
@@ -476,7 +487,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
         # Apply flips in z as imgaug can not do it 
         prob = random.uniform(0, 1)
-        if self.flip and prob < self.da_prob:
+        if self.zflip and prob < self.da_prob:
             l_image = []
             l_mask = []
             for i in range(image.shape[-1]):                                

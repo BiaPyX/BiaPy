@@ -160,8 +160,12 @@ zoom_range = (0.8, 1.2)
 shift = False   
 # Shift range             
 shift_range = (0.1, 0.2)
-# Flag to make flips on the subvolumes (horizontal and vertical)                
-flip = False
+# Flag to make vertical flips
+vflip = False
+# Flag to make horizontal flips
+hflip = False
+# Flag to make flips in z
+zflip = False
 # Elastic transformations                                                       
 elastic = False
 # Strength of the distortion field
@@ -433,9 +437,9 @@ train_generator = VoxelDataGenerator(
     batch_size=batch_size_value, da=da, da_prob=da_prob,
     rotation90=rotation90, rand_rot=rand_rot, rnd_rot_range=rnd_rot_range,
     shear=shear,shear_range=shear_range, zoom=zoom, zoom_range=zoom_range,
-    shift=shift, shift_range=shift_range, flip=flip, elastic=elastic,
-    e_alpha=e_alpha, e_sigma=e_sigma, e_mode=e_mode, g_blur=g_blur,
-    g_sigma=g_sigma, median_blur=median_blur, mb_kernel=mb_kernel,
+    shift=shift, shift_range=shift_range, vflip=vflip, hflip=hflip, zflip=zflip,
+    elastic=elastic, e_alpha=e_alpha, e_sigma=e_sigma, e_mode=e_mode, 
+    g_blur=g_blur, g_sigma=g_sigma, median_blur=median_blur, mb_kernel=mb_kernel,
     motion_blur=motion_blur, motb_k_range=motb_k_range,
     gamma_contrast=gamma_contrast, gc_gamma=gc_gamma, dropout=dropout,
     drop_range=drop_range, cutout=cutout, cout_nb_iterations=cout_nb_iterations,
