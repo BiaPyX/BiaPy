@@ -235,7 +235,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
     def __len__(self):
         """Defines the number of batches per epoch."""
-    
         return int(np.ceil(self.X.shape[0]*self.extra_data_factor/self.batch_size))
 
 
