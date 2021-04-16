@@ -1225,58 +1225,50 @@ def onehot_encoding_to_img(encoded_image):
     return img
 
 
-def load_data_from_dir2(data_dir, shape):
-    """Load data with unknown shape from a directory.    """
-    from data_2D_manipulation import crop_data_with_overlap
-
-    print("Loading data from {}".format(data_dir))
-
-    ids = sorted(next(os.walk(data_dir))[2])
-
-    hr_data = []
-    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
-        img = imread(os.path.join(data_dir, id_))
-
-        if len(img.shape) == 2:
-            img = np.expand_dims(img, axis=-1)
-        img = np.expand_dims(img, axis=0)
-
-        img_cropped = crop_data_with_overlap(img, shape)
-        
-        hr_data.append(img_cropped)
-
-    hr_data = np.concatenate(hr_data)
-    hr_data = (hr_data).astype(img.dtype)
-
-    lr_data = []
-    lr_shape = (shape[0]/2, shape[0]/2, 3)
-    for i in tqdm(range(hr_data.shape[0])):
-        lr_img = resize(hr_data[i], lr_shape, order=3, preserve_range=True) # bicubic 
-        lr_data.append(np.expand_dims(lr_img, axis=0))
-    lr_data = np.concatenate(lr_data)
-    lr_data = (lr_data).astype(img.dtype)
-
-    print("*** HR created data shape is {}".format(hr_data.shape))
-    print("*** LR created data shape is {}".format(lr_data.shape))
-
-    return hr_data, lr_data
-
-
-def load_data_from_dir(data_dir, shape):
-    """Load data from a directory.
+def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0),
+                       padding=(0,0), return_filenames=False):
+    """Load data from a directory. If ``crop=False`` all the data is suposed to 
+       have the same shape.
 
        Parameters
        ----------
        data_dir : str 
            Path to read the data from.
    
-       shape : 3D int tuple
-           Shape of the data. E.g. ``(x, y, channels)``.
-       
+       crop : bool, optional                                                    
+           Crop each image into desired shape pointed by ``crop_shape``. 
+
+       crop_shape : Tuple of 3 ints, optional                                           
+           Shape of the crop to be made. E.g. ``(x, y, channels)``.
+                                                                                
+       overlap : Tuple of 2 floats, optional                                    
+           Amount of minimum overlap on x and y dimensions. The values must  
+           be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.       
+           E. g. ``(x, y)``.                                                 
+                                                                                
+       padding : Tuple of 2 ints, optional                                        
+           Size of padding to be added on each axis ``(x, y)``.              
+           E.g. ``(24, 24)``.       
+
+       return_filenames : bool, optional                                        
+           Return a list with the loaded filenames. Useful when you need to save
+           them afterwards with the same names as the original ones. 
+
        Returns
        -------        
        data : 4D Numpy array
            Data loaded. E.g. ``(num_of_images, y, x, channels)``.
+                                                                                
+       data_shape : List of tuples, optional                                    
+           Shapes of all 3D images readed. Useful to reconstruct the original   
+           images together with ``crop_shape``.                                 
+                                                                                
+       crop_shape : List of tuples, optional                                    
+           Shape of the loaded 3D images after cropping. Useful to reconstruct  
+           the original images together with ``data_shape``.                    
+                                                                                
+       filenames : List of str, optional                                        
+           Loaded filenames.  
 
        Examples
        --------
@@ -1284,28 +1276,51 @@ def load_data_from_dir(data_dir, shape):
            # EXAMPLE 1
            # Case where we need to load 165 images of shape (1024, 768)
            data_path = "data/train/x"
-           data_shape = (1024, 768, 1)
            
-           load_data_from_dir(data_path, data_shape) 
+           load_data_from_dir(data_path)
            # The function will print the shape of the created array. In this example:
            #     *** Loaded data shape is (165, 768, 1024, 1)
            # Notice height and width swap because of Numpy ndarray terminology
+
+            
+           # EXAMPLE 2                                                          
+           # Case where we need to load 165 images of shape (1024, 768) but 
+           # cropping them into (256, 256, 1) patches
+           data_path = "data/train/x"                                           
+           crop_shape = (256, 256, 1)
+                                                                                
+           load_data_from_dir(data_path, crop=True, crop_shape=crop_shape)                                        
+           # The function will print the shape of the created array. In this example:
+           #     *** Loaded data shape is (1980, 256, 256, 1)                   
     """
+    if crop:
+        from data_2D_manipulation import crop_data_with_overlap
 
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
-    data = np.zeros((len(ids), ) + shape, dtype=np.uint8)
+    data = []
+    data_shape = []                                                         
+    c_shape = []
+    if return_filenames: filenames = []
 
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         img = imread(os.path.join(data_dir, id_))
 
-        if len(img.shape) == 2:
-            img = np.expand_dims(img, axis=-1)
+        if return_filenames: filenames.append(id_)
+        
+        if len(img.shape) == 2: img = np.expand_dims(img, axis=-1)
+        data_shape.append(img.shape)
+        img = np.expand_dims(img, axis=0)
+        if crop and img[0].shape != crop_shape[:2]+(img.shape[-1],):
+            img = crop_data_with_overlap(img, crop_shape, overlap=overlap,
+                                         padding=padding, verbose=False)
+        c_shape.append(img)
+        data.append(img)
 
-        data[n,0:img.shape[0],0:img.shape[1],0:img.shape[2]] = img
-
+    data = np.concatenate(data)
     print("*** Loaded data shape is {}".format(data.shape))
-    return data
+
+    return data, data_shape, c_shape, filenames
 
 
 def load_ct_data_from_dir(data_dir, shape=None):
@@ -1316,8 +1331,11 @@ def load_ct_data_from_dir(data_dir, shape=None):
        data_dir : str
            Path to read the data from.
 
-       shape : optional, 3D int tuple
-           Shape of the data. E.g. ``(x, y, channels)``.
+       shape : 3D int tuple, optional
+           Shape of the data to load. If is not provided the shape is         
+           calculated automatically looping over all data files and it will be  
+           the maximum value found per axis. So, given the value the process 
+           should be faster. E.g. ``(x, y, channels)``.
 
        Returns
        -------
@@ -1381,8 +1399,11 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
        data_dir : str
            Path to read the data from.
 
-       shape : 4D int tuple
-           Shape of the images to load. E.g. ``(x, y, z, channels)``.
+       shape : 4D int tuple, optional
+           Shape of the images to load. If is not provided the shape is 
+           calculated automatically looping over all data files and it will be 
+           the maximum value found per axis. So, given the value the process    
+           should be faster. E.g. ``(x, y, z, channels)``.
 
        crop : bool, optional
            Crop each 3D image when readed.
@@ -1396,7 +1417,7 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
            be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.  
            E. g. ``(x, y, z)``.
            
-       padding : tuple of ints, optional
+       padding : Tuple of 3 ints, optional
            Size of padding to be added on each axis ``(x, y, z)``.
            E.g. ``(24, 24, 24)``.
 
