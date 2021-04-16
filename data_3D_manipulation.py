@@ -245,10 +245,9 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
         return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value
 
 def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path, 
-    test_mask_path, image_train_shape, image_test_shape, test_subvol_shape,
-    train_subvol_shape, create_val=True, shuffle_val=True, val_split=0.1, 
-    seedValue=42, random_subvolumes_in_DA=False, ov=(0,0,0), padding=(0,0,0),
-    median_padding=False):
+    test_mask_path, test_subvol_shape, train_subvol_shape, create_val=True, 
+    shuffle_val=True, val_split=0.1, seedValue=42, random_subvolumes_in_DA=False, 
+    ov=(0,0,0), padding=(0,0,0), median_padding=False):
     """Load train, validation and test images from the given paths to create a 
        3D data representation. All the test data will be used to create a 3D
        volume of ``test_subvol_shape`` shape (considering ``ov``).
@@ -270,12 +269,6 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
        test_mask_path : str                                                     
            Path to the test data masks.                                         
                                                                                 
-       image_train_shape : 4D tuple
-           Dimensions of the images to load. E.g. ``(x, y, z, channels)``.
-                                                                                
-       image_test_shape : 4D tuple
-           Dimensions of the images to load. E.g. ``(x, y, z, channels)``.
-
        train_subvol_shape : 4D tuple
             Shape of the train subvolumes to create. E.g. ``(x, y, z, channels)``.
 
