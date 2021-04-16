@@ -327,12 +327,17 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
        Y_test : 5D Numpy array      
            Test images' mask. E.g. ``(num_of_images, y, x, z, channels)``.  
 
-       orig_test_shape : 4D int tuple
-           Test data original shape. E.g. ``(num_of_images, x, y, channels)``.
+       orig_test_img_shapes : List of tuples 
+           List that contains the shapes of each test sample. This      
+           variable and ``crop_test_img_shapes`` should be used to reconstruct
+           the test original images from patches with :func:`~merge_3D_data_with_overlap`.
+
+       crop_test_img_shapes : List of tuples
+           List that contains the shapes of each test sample cropped. 
 
        filenames : List of str
-           Loaded train and test filenames. filenames[0] are train filenames and 
-           filenames[1] are test filenames.
+           Loaded train and test filenames. ``filenames[0]`` are train filenames 
+           and ``filenames[1]`` are test filenames.
 
        Examples
        --------
