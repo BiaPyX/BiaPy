@@ -10,11 +10,12 @@ from PIL import Image
 from util import load_data_from_dir, foreground_percentage
 
 
-def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_path, 
-    image_train_shape, image_test_shape, create_val=True, val_split=0.1,
-    shuffle_val=True, seedValue=42, e_d_data=[], e_d_mask=[], e_d_data_dim=[],
-    num_crops_per_dataset=0, make_crops=True, crop_shape=None, ov=(0, 0), 
-    overlap_train=False, check_crop=True, check_crop_path="check_crop"):
+def load_and_prepare_2D_data(train_path, train_mask_path, test_path, 
+    test_mask_path, create_val=True, val_split=0.1, shuffle_val=True, 
+    seedValue=42, e_d_data=[], e_d_mask=[], e_d_data_dim=[], 
+    num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None,
+    ov=(0,0), overlap_train=False, padding=(0,0), check_crop=True, 
+    check_crop_path="check_crop"):
     """Load train, validation and test images from the given paths to create 2D
        data. 
 
@@ -31,12 +32,6 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
 
        test_mask_path : str
            Path to the test data masks.          
-
-       image_train_shape : 3D tuple
-           Dimensions of the images to load. E.g. ``(x, y, channels)``.
-
-       image_test_shape : 3D tuple
-           Dimensions of the images to load. E.g. ``(x, y, channels)``.
 
        create_val : bool, optional
            If true validation data is created (from the train data).                                                    
@@ -68,20 +63,27 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
            Number of crops per extra dataset to take into account. Useful to 
            ensure that all the datasets have the same weight during network 
            trainning. 
-
-       make_crops : bool, optional
-           To make crops on data.
+                                                                                
+       random_crops_in_DA : bool, optional                                 
+           To advice the method that not preparation of the data must be done,  
+           as random subvolumes will be created on DA, and the whole volume will 
+           be used for that.  
 
        crop_shape : 3D int tuple, optional
            Shape of the crops. E.g. ``(x, y, channels)``.
 
        ov : 2 floats tuple, optional                                         
            Amount of minimum overlap on x and y dimensions. The values must be on
-           range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. E. g. ``(x, y)``.   
+           range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. 
+           E.g. ``(x, y)``.   
 
        overlap_train : bool, optional
            If ``True`` ``ov`` will be used to crop training data. ``False`` to 
-           force minimum overap instead: ``ov=(0,0)``. 
+           force minimum overap instead: ``ov=(0, 0)``. 
+
+       padding : tuple of ints, optional                                        
+           Size of padding to be added on each axis ``(x, y)``.              
+           E.g. ``(24, 24)``
 
        check_crop : bool, optional
            To save the crops made to ensure they are generating as one wish.
@@ -111,14 +113,17 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
        Y_test : 4D Numpy array
            Test images' mask. E.g. ``(num_of_images, y, x, channels)``.
 
-       orig_test_shape : 4D int tuple
-           Test data original shape. E.g. ``(num_of_images, x, y, channels)``
-
-       norm_value : int
-           mean of the train data in case we need to make a normalization.
-
-       crop_made : bool
-           True if crops have been made.
+       orig_test_img_shapes : List of tuples                                    
+           List that contains the shapes of each test sample. This              
+           variable and ``crop_test_img_shapes`` should be used to reconstruct  
+           the test original images from patches with :func:`~merge_data_with_overlap`.
+                                                                                
+       crop_test_img_shapes : List of tuples                                    
+           List that contains the shapes of each test sample cropped.           
+                                                                                
+       filenames : List of str                                                  
+           Loaded train and test filenames. ``filenames[0]`` are train filenames
+           and ``filenames[1]`` are test filenames.   
 
        Examples
        --------
@@ -166,7 +171,7 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
 
 
            # EXAMPLE 3
-           # Same as the first example but definig extra datasets to be loaded and stacked together 
+           # Same as the first example but defining extra datasets to be loaded and stacked together 
            # with the main dataset. Extra variables to be defined: 
            extra_datasets_data_list.append('/data2/train/x')
            extra_datasets_mask_list.append('/data2/train/y')
@@ -185,21 +190,39 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
    
     print("### LOAD ###")
                                                                         
-    tr_shape = (image_train_shape[1], image_train_shape[0], image_train_shape[2])
+    # Disable crops when random_crops_in_DA is selected                    
+    crop = False if random_crops_in_DA else True
+
+    t_ov = ov if overlap_train else (0,0)
     print("0) Loading train images . . .")
-    X_train = load_data_from_dir(train_path, tr_shape)
+    X_train, orig_train_shape,\
+    _, t_filenames = load_data_from_dir(
+        train_path, crop=crop, crop_shape=crop_shape, overlap=t_ov,
+        return_filenames=True)
     print("1) Loading train masks . . .")
-    Y_train = load_data_from_dir(train_mask_path, tr_shape)
+    Y_train, _, _, t_filenames = load_data_from_dir(
+        train_mask_path, crop=crop, crop_shape=crop_shape, overlap=t_ov,
+        return_filenames=True)
 
     if num_crops_per_dataset != 0:
         X_train = X_train[:num_crops_per_dataset]
         Y_train = Y_train[:num_crops_per_dataset]
 
-    te_shape = (image_test_shape[1], image_test_shape[0], image_test_shape[2])
     print("2) Loading test images . . .")
-    X_test = load_data_from_dir(test_path, te_shape)
+    X_test, orig_test_img_shapes, \
+    crop_test_img_shapes, te_filenames = load_data_from_dir(
+        test_path, crop=crop, crop_shape=crop_shape, overlap=ov,
+        padding=padding, return_filenames=True)
     print("3) Loading test masks . . .")
-    Y_test = load_data_from_dir(test_mask_path, te_shape)
+    Y_test, orig_test_img_shapes, \
+    crop_test_img_shapes, te_filenames = load_data_from_dir(
+        test_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
+        padding=padding, return_filenames=True)
+
+    # Save train and test filenames                                             
+    filenames = []                                                              
+    filenames.append(t_filenames)                                               
+    filenames.append(te_filenames)
 
     # Create validation data splitting the train
     if create_val:
@@ -212,34 +235,13 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
     orig_train_shape = Y_train.shape
     orig_test_shape = Y_test.shape
 
-    # Crop the data
-    if make_crops:
-        print("4) Crop data activated . . .")
-        print("4.1) Cropping train data . . .")
-        t_ov = ov if overlap_train else (0,0)
-        X_train, Y_train = crop_data_with_overlap(
-            X_train, crop_shape, data_mask=Y_train, overlap=t_ov)
+    if check_crop:
+        print("Checking the crops . . .")
+        check_crops(X_train, orig_train_shape[0], t_ov, num_examples=1,
+                    out_dir=check_crop_path, prefix="X_train_")
 
-        print("4.2) Cropping test data . . .")
-        X_test, Y_test = crop_data_with_overlap(
-            X_test, crop_shape, data_mask=Y_test, overlap=ov)
-        
-        if create_val:
-            print("4.3) Cropping validation data . . .")
-            X_val, Y_val = crop_data_with_overlap(
-                X_val, crop_shape, data_mask=Y_val, overlap=(0,0))
-
-        if check_crop:
-            print("4.4) Checking the crops . . .")
-            check_crops(X_train, orig_train_shape, t_ov, num_examples=3,
-                        out_dir=check_crop_path, prefix="X_train_")
-
-            check_crops(Y_train, orig_train_shape, t_ov, num_examples=3,
-                        out_dir=check_crop_path, prefix="Y_train_")
-        
-        crop_made = True
-    else:
-        crop_made = False
+        check_crops(Y_train, orig_train_shape[0], t_ov, num_examples=1,
+                    out_dir=check_crop_path, prefix="Y_train_")
 
     # Load the extra datasets
     if e_d_data:
@@ -295,11 +297,8 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
         print("*** Loaded test data shape is: {}".format(X_test.shape))
         print("### END LOAD ###")
 
-        # Calculate normalization value
-        norm_value = np.mean(X_train)
-
-        return X_train, Y_train, X_val, Y_val, X_test, Y_test, orig_test_shape, \
-               norm_value, crop_made
+        return X_train, Y_train, X_val, Y_val, X_test, Y_test, orig_test_shape,\
+               orig_test_img_shapes, crop_test_img_shapes, filenames
     else:
         print("*** Loaded train data shape is: {}".format(X_train.shape))
         print("*** Loaded test data shape is: {}".format(X_test.shape))
@@ -309,7 +308,7 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path, test_mask_p
         norm_value = np.mean(X_train)
 
         return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value, \
-               crop_made
+               orig_test_img_shapes, crop_test_img_shapes, filenames
 
 
 def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0),
