@@ -381,23 +381,21 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
     crop = False if random_subvolumes_in_DA else True
 
     print("0) Loading train images . . .")
-    X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, None, 
-        crop=crop, subvol_shape=train_subvol_shape, overlap=ov, 
-        return_filenames=True)
+    X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, crop=crop,
+        crop_shape=train_subvol_shape, overlap=ov, return_filenames=True)
 
     print("1) Loading train masks . . .")
     Y_train, _, _ = load_3d_images_from_dir(
-        train_mask_path, None, crop=crop, subvol_shape=train_subvol_shape, 
-        overlap=ov)
+        train_mask_path, crop=crop, crop_shape=train_subvol_shape, overlap=ov)
 
     print("2) Loading test images . . .")
     X_test, orig_test_img_shapes, \
     crop_test_img_shapes, te_filenames = load_3d_images_from_dir(
-        test_path, None, crop=True, subvol_shape=test_subvol_shape, overlap=ov,
+        test_path, crop=True, crop_shape=test_subvol_shape, overlap=ov,
         return_filenames=True, padding=padding, median_padding=median_padding)
     print("3) Loading test masks . . .")
-    Y_test, _, _ = load_3d_images_from_dir(test_mask_path, None, crop=True,            
-        subvol_shape=test_subvol_shape, overlap=ov, padding=padding,
+    Y_test, _, _ = load_3d_images_from_dir(test_mask_path, crop=True,            
+        crop_shape=test_subvol_shape, overlap=ov, padding=padding,
         median_padding=median_padding)
 
     # Save train and test filenames
