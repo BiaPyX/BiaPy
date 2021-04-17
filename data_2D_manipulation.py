@@ -231,11 +231,7 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
             X_train, Y_train, test_size=val_split, shuffle=shuffle_val,
             random_state=seedValue)
 
-    # Save original data shape 
-    orig_train_shape = Y_train.shape
-    orig_test_shape = Y_test.shape
-
-    if check_crop:
+    if check_crop and (orig_train_shape[0] != X_train.shape[1:]):
         print("Checking the crops . . .")
         check_crops(X_train, orig_train_shape[0], t_ov, num_examples=1,
                     out_dir=check_crop_path, prefix="X_train_")
@@ -245,9 +241,9 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
 
     # Load the extra datasets
     if e_d_data:
-        print("5) Loading extra datasets . . .")
+        print("Loading extra datasets . . .")
         for i in range(len(e_d_data)):
-            print("5.{}) extra dataset in {} . . .".format(i, e_d_data[i])) 
+            print("{} extra dataset in {} . . .".format(i, e_d_data[i])) 
             train_ids = sorted(next(os.walk(e_d_data[i]))[2])
             train_mask_ids = sorted(next(os.walk(e_d_mask[i]))[2])
 
@@ -257,35 +253,29 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
             e_Y_train = np.zeros((len(train_mask_ids), d_dim[1], d_dim[0], 
                                  d_dim[2]), dtype=np.float32)
 
-            print("5.{}) Loading data of the extra dataset . . .".format(i))
+            print("{} Loading data of the extra dataset . . .".format(i))
             for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
                 im = imread(os.path.join(e_d_data[i], id_))
                 if len(im.shape) == 2:
                     im = np.expand_dims(im, axis=-1)
                 e_X_train[n] = im
 
-            print("5.{}) Loading masks of the extra dataset . . .".format(i))
+            print("{} Loading masks of the extra dataset . . .".format(i))
             for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids)):
                 mask = imread(os.path.join(e_d_mask[i], id_))
                 if len(mask.shape) == 2:
                     mask = np.expand_dims(mask, axis=-1)
                 e_Y_train[n] = mask
 
-            if make_crops == False:
-                if d_dim[1] != image_test_shape[1] and \
-                   d_dim[0] != image_test_shape[0]:
-                    raise ValueError(
-                        "extra dataset shape {} is not equal the original "
-                        "dataset shape ({}, {})".format(d_dim, \
-                        image_test_shape[1], image_test_shape[0]))
-            else:
-                print("5.{}) Cropping the extra dataset . . .".format(i))
-                e_X_train, e_Y_train, _ = crop_data(
-                    e_X_train, crop_shape, data_mask=e_Y_train)
+            print("{} Cropping the extra dataset . . .".format(i))
+            if crop_shape != e_X_train.shape[1:]:
+                e_X_train, e_Y_train = crop_data_with_overlap(
+                    e_X_train, crop_shape, data_mask=e_Y_train, overlap=overlap, 
+                    padding=padding, verbose=False) 
                     
-                if num_crops_per_dataset != 0:
-                    e_X_train = e_X_train[:num_crops_per_dataset]
-                    e_Y_train = e_Y_train[:num_crops_per_dataset]
+            if num_crops_per_dataset != 0:
+                e_X_train = e_X_train[:num_crops_per_dataset]
+                e_Y_train = e_Y_train[:num_crops_per_dataset]
 
             # Concatenate datasets
             X_train = np.vstack((X_train, e_X_train))
@@ -297,7 +287,7 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
         print("*** Loaded test data shape is: {}".format(X_test.shape))
         print("### END LOAD ###")
 
-        return X_train, Y_train, X_val, Y_val, X_test, Y_test, orig_test_shape,\
+        return X_train, Y_train, X_val, Y_val, X_test, Y_test,\
                orig_test_img_shapes, crop_test_img_shapes, filenames
     else:
         print("*** Loaded train data shape is: {}".format(X_train.shape))
