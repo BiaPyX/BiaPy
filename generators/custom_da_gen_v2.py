@@ -35,6 +35,15 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        shuffle : bool, optional
            To decide if the indexes will be shuffled after every epoch.
 
+       in_memory : bool, optional
+           If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will
+           be loaded directly from disk using ``data_paths``.
+
+       data_paths : List of str, optional
+          If ``in_memory`` is ``True`` this list should contain the paths to 
+          load data and masks. ``data_paths[0]`` should be data path and 
+          ``data_paths[1]`` masks path.
+    
        da : bool, optional
            To activate the data augmentation.
 
@@ -299,13 +308,18 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             raise ValueError("'X' and 'Y' need to be provided together with "
                              "'in_memory'")
 
-        if in_memory and len(data_paths) != 2:                               
+        if not in_memory and len(data_paths) != 2:                               
             raise ValueError("'data_paths' must contain the following paths: 1) "
                              "data path ; 2) data masks path")
 
         if random_crops_in_DA and (shape[0] != shape[1]):
             raise ValuError("When 'random_crops_in_DA' is selected the shape "
                             "given must be square, e.g. (256, 256, 1)")
+
+        if not in_memory and not random_subvolumes_in_DA:                       
+            print("WARNING: you are going to load samples from disk (as "       
+                  "'in_memory=False') and 'random_subvolumes_in_DA=False' so is"
+                  " assumed to have same shape samples")
 
         if rotation90 and rand_rot:
             print("Warning: you selected double rotation type. Maybe you should"
@@ -316,29 +330,30 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         if not in_memory:
             # Save paths where the data is stored                                                                                 
             self.paths = data_paths
-            self.data_path = sorted(next(os.walk(data_paths[0]))[2])
+            self.data_paths = sorted(next(os.walk(data_paths[0]))[2])
             self.data_mask_path = sorted(next(os.walk(data_paths[1]))[2])
-            self.len = len(self.data_path)
-            self.o_indexes = np.arange(self.len)
+            self.len = len(self.data_paths)
             
             # Check if a division is required 
-            img = imread(os.path.join(data_paths[0], self.data_path[0]))
+            img = imread(os.path.join(data_paths[0], self.data_paths[0]))
             if img.ndim == 2: img = np.expand_dims(img, -1)
             self.div_X_on_load = True if np.max(img) > 100 else False
             self.shape = shape if random_crops_in_DA else img.shape 
             # Loop over a few masks to ensure foreground class is present 
             self.div_Y_on_load = False
-            for i in range(10):
+            for i in range(min(10,len(self.data_mask_path))):
                 img = imread(os.path.join(data_paths[1], self.data_mask_path[i]))   
                 if np.max(img) > 100: self.div_Y_on_load = True 
+            self.channels = img.shape[-1]
             del img
         else:
             self.X = (X/255).astype(np.float32) if np.max(X) > 100 else (X).astype(np.float32)
             self.Y = (Y/255).astype(np.uint8) if np.max(Y) > 100 else (Y).astype(np.uint8)
+            self.channels = Y.shape[-1]
             self.len = len(self.X)
-            self.o_indexes = np.arange(self.len)
             self.shape = shape if random_crops_in_DA else X.shape[1:]
             
+        self.o_indexes = np.arange(self.len)
         self.shuffle = shuffle
         self.n_classes = n_classes
         self.out_number = out_number
@@ -370,7 +385,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             self.o_indexes = np.concatenate([self.o_indexes]*extra_data_factor)
         else:
             self.extra_data_factor = 1
-        self.on_epoch_end()
+        self.total_batches_seen = 0
         
         self.da_options = []
         self.trans_made = ''
@@ -421,6 +436,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
         self.trans_made = self.trans_made.replace(" ", "")
         self.seq = iaa.Sequential(self.da_options)
+        self.seed = seed
         ia.seed(seed)
         self.on_epoch_end()
 
@@ -453,16 +469,17 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
 
         batch_x = np.zeros((len(indexes), *self.shape), dtype=np.float32)
-        batch_y = np.zeros((len(indexes), *self.shape[:2]+(1,)), dtype=np.uint8)
+        batch_y = np.zeros((len(indexes), *self.shape[:2])+(self.channels,),    
+                           dtype=np.uint8)
 
         for i, j in zip(range(len(indexes)), indexes):
 
-            # Take the data samples
+            # Choose the data source
             if self.in_memory:
                 img = self.X[j]
                 mask = self.Y[j]
             else:
-                img = imread(os.path.join(self.paths[0], self.data_path[j])) 
+                img = imread(os.path.join(self.paths[0], self.data_paths[j])) 
                 mask = imread(os.path.join(self.paths[1], self.data_mask_path[j])) 
                 if img.ndim == 2: img = np.expand_dims(img, -1)
                 if mask.ndim == 2: mask = np.expand_dims(mask, -1)
@@ -479,13 +496,15 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 
             # Transform samples 
             if self.da:                                                         
-                extra_img = np.random.randint(0, self.shape[0])
+                extra_img = np.random.randint(0, self.len-1)
                 if self.in_memory:                                          
                     e_img = self.X[extra_img]                                   
                     e_mask = self.Y[extra_img]
                 else:
-                    e_img = imread(os.path.join(self.paths[0], self.data_path[extra_img]))
+                    e_img = imread(os.path.join(self.paths[0], self.data_paths[extra_img]))
                     e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
+                    if e_img.ndim == 2: e_img = np.expand_dims(e_img, -1)                 
+                    if e_mask.ndim == 2: e_mask = np.expand_dims(e_mask, -1)
                     if self.div_X_on_load: e_img = e_img/255                               
                     if self.div_Y_on_load: e_mask = e_mask/255
 
@@ -493,11 +512,13 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     batch_x[i], batch_y[i], e_im=e_img, e_mask=e_mask)
 
         # One-hot enconde
-        if self.n_classes > 1:  
+        if self.n_classes > 1 and (self.n_classes != self.channels):  
             batch_y_ = np.zeros((len(indexes),) + self.shape[:2] + (self.n_classes,), dtype=np.uint8)
             for i in range(len(indexes)):
                 batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[i], self.n_classes))
             batch_y = batch_y_
+        
+        self.total_batches_seen += 1
 
         if self.out_number == 1:
             return batch_x, batch_y
@@ -507,10 +528,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
-
+        ia.seed(self.seed + self.total_batches_seen)
         self.indexes = self.o_indexes
         if self.shuffle:
-            np.random.shuffle(self.indexes)
+            random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
 
 
     def apply_transform(self, image, mask, e_im=None, e_mask=None): 
@@ -720,8 +741,14 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            +---------------------------------------------+--------------------------------------------------+
         """
         
-        batch_x = np.zeros((num_examples,) + self.shape, dtype=np.float32)
-        batch_y = np.zeros((num_examples,) + self.shape[:2]+(1,), dtype=np.uint8)
+        if random_images == False and num_examples > self.len:           
+            num_examples = self.len
+            print("WARNING: More samples requested than the ones available. "   
+                  "'num_examples' fixed to {}".format(num_examples))
+        
+        batch_x = np.zeros((num_examples, *self.shape), dtype=np.float32)
+        batch_y = np.zeros((num_examples, *self.shape[:2])+(self.channels,),
+                           dtype=np.uint8)
 
         if save_to_dir:
             p = '_' if save_prefix is None else str(save_prefix)
@@ -730,14 +757,14 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         # Generate the examples 
         print("0) Creating the examples of data augmentation . . .")
         for i in tqdm(range(num_examples)):
-            pos = np.random.randint(0, self.shape[0]) if random_images else i
+            pos = np.random.randint(0, self.len-1) if random_images else i
 
             # Take the data samples                                             
             if self.in_memory:                                                  
                 img = self.X[pos]                                               
                 mask = self.Y[pos]
             else:
-                img = imread(os.path.join(self.paths[0], self.data_path[pos]))    
+                img = imread(os.path.join(self.paths[0], self.data_paths[pos]))    
                 mask = imread(os.path.join(self.paths[1], self.data_mask_path[pos]))
                 if img.ndim == 2: img = np.expand_dims(img, -1)                 
                 if mask.ndim == 2: mask = np.expand_dims(mask, -1)
@@ -762,12 +789,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     self.__draw_grid(batch_x[i])                                    
                     self.__draw_grid(batch_y[i])
 
-                extra_img = np.random.randint(0, self.shape[0])                 
+                extra_img = np.random.randint(0, self.len-1)
                 if self.in_memory:                                              
                     e_img = self.X[extra_img]                                   
                     e_mask = self.Y[extra_img]
                 else:
-                    e_img = imread(os.path.join(self.paths[0], self.data_path[extra_img]))
+                    e_img = imread(os.path.join(self.paths[0], self.data_paths[extra_img]))
                     e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
                     if e_img.ndim == 2: e_img = np.expand_dims(e_img, -1)                 
                     if e_mask.ndim == 2: e_mask = np.expand_dims(e_mask, -1)
@@ -816,7 +843,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     if self.in_memory:                                                  
                         img = self.X[pos]*255
                     else:
-                        img = imread(os.path.join(self.paths[0], self.data_path[pos]))  
+                        img = imread(os.path.join(self.paths[0], self.data_paths[pos]))  
                         if img.ndim == 2: img = np.expand_dims(img, -1)                 
                         if np.max(img) < 2: img = img*255 
                     
