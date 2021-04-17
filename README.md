@@ -4,10 +4,41 @@ This repository contains a complete workflow to perform semantic segmentation of
 
 ![.](https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/img/seg.gif)
 
+## Citation
+
+This repository is the base of the following work:
+
+```
+@misc{francobarranco2021stable,
+      title={Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes},
+      author={Daniel Franco-Barranco and Arrate Muñoz-Barrutia and Ignacio Arganda-Carreras},
+      year={2021},
+      eprint={2104.03577},
+      archivePrefix={arXiv},
+      primaryClass={eess.IV}
+}
+```
+
 ## Getting started 
 These instructions will get you a copy of the project up and running on your machine.
 
 Alternatively, you can run a fast-version of our 2D U-Net template for mitochondria segmentation in Colab: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/danifranco/EM_Image_Segmentation/blob/master/templates/U-Net_2D_workflow.ipynb) 
+
+### Download the repository 
+
+Refer to the code version [V1.0](https://github.com/danifranco/EM_Image_Segmentation/releases/tag/v1.0) in case you want to reproduce exact results of our paper:
+
+```
+wget https://github.com/danifranco/EM_Image_Segmentation/archive/refs/tags/v1.0.tar.gz
+tar -xzvf v1.0.tar.gz
+cd EM_Image_Segmentation-1.0
+```
+
+Otherwise, if you want the most recent changes just clone it:
+
+```
+git clone https://github.com/danifranco/EM_Image_Segmentation.git
+```
 
 ### Prerequisites
 The fastest way to set-up a development environment with all necessary dependencies is to use [Conda](https://docs.conda.io/projects/conda/en/latest/index.html) and the file located in [env/DL_EM_base_env.yml](env/DL_EM_base_env.yml) as follows:
@@ -140,18 +171,3 @@ Vincent Casser, Kai Kang, Hanspeter Pfister, and Daniel Haehn, "Fast mitochondri
 for connectomics", arXiv preprint arXiv:1812.06024 (2018).
 ```
 
-
-### Citation
-
-This repository is the base of the following work:
-
-```
-@misc{francobarranco2021stable,
-      title={Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes}, 
-      author={Daniel Franco-Barranco and Arrate Muñoz-Barrutia and Ignacio Arganda-Carreras},
-      year={2021},
-      eprint={2104.03577},
-      archivePrefix={arXiv},
-      primaryClass={eess.IV}
-}
-```
