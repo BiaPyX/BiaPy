@@ -520,7 +520,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
         print("Cropping {} images into {} with overlapping . . ."
               .format(data.shape, vol_shape))
         print("Minimum overlap selected: {}".format(overlap))
-
+        print("Padding: {}".format(padding))
                          
     padded_data = np.zeros((data.shape[0]+2*padding[2], 
                             data.shape[1]+2*padding[0], 
@@ -606,7 +606,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
     total_vol = vols_per_z*vols_per_x*vols_per_y
     cropped_data = np.zeros((total_vol,) + padded_vol_shape)
     if data_mask is not None:
-        cropped_data_mask = np.zeros((total_vol,) + vol_shape[:3]+(data_mask.shape[-1],))
+        cropped_data_mask = np.zeros((total_vol,) + padded_vol_shape[:3]+(data_mask.shape[-1],))
 
     c = 0
     for z in range(vols_per_z):
@@ -908,6 +908,8 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
         print("### MERGE-3D-OV-CROP ###")
         print("Merging {} images into {} with overlapping . . ."               
               .format(data.shape, orig_vol_shape)) 
+        print("Minimum overlap selected: {}".format(overlap))
+        print("Padding: {}".format(padding))
 
     # Remove the padding
     data = data[:, padding[0]:data.shape[1]-padding[0],

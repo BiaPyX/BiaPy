@@ -400,6 +400,7 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0),
         print("Cropping {} images into {} with overlapping. . ."\
               .format(data.shape, crop_shape))
         print("Minimum overlap selected: {}".format(overlap))
+        print("Padding: {}".format(padding))
     
     if (overlap[0] >= 1 or overlap[0] < 0) and (overlap[1] >= 1 or overlap[1] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
@@ -613,6 +614,7 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
         print("Merging {} images into {} with overlapping . . ."
               .format(data.shape, original_shape))
         print("Minimum overlap selected: {}".format(overlap))
+        print("Padding: {}".format(padding))
     
     if (overlap[0] >= 1 or overlap[0] < 0) and (overlap[1] >= 1 or overlap[1] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
