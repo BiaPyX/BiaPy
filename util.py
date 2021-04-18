@@ -1015,8 +1015,8 @@ def calculate_2D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
     return prob_map
 
 
-def calculate_3D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
-                                 save_file=None):
+def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, 
+                                 w_background=0.06, save_dir=None):
     """Calculate the probability map of the given 3D data.
        
        Parameters
@@ -1024,6 +1024,9 @@ def calculate_3D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
        Y : 5D Numpy array
            Data to calculate the probability map from. E. g. ``(num_subvolumes,
            x, y, z, channel)``
+
+       Y_path : str, optional
+           Path to load the data from is case ``Y=None``. 
 
        w_foreground : float, optional
            Weight of the foreground. This value plus ``w_background`` must be 
@@ -1033,13 +1036,16 @@ def calculate_3D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
            Weight of the background. This value plus ``w_foreground`` must be 
            equal ``1``.
 
-       save_file : str, optional
-           Path to the file where the probability map will be stored.
+       save_dir : str, optional
+           Path to the directory where the probability map will be stored.
 
        Returns
        -------
-       Array : 5D Numpy array
-           Probability map of the given data.
+       Array : Str or 5D Numpy array
+           Path where the probability map/s is/are stored if ``Y_path`` was 
+           given and there are images of different shapes. Otherwise, an array
+           that represents the probability map of ``Y`` or all loaded data files 
+           from ``Y_path`` will be returned.
 
        Raises
        ------
@@ -1049,34 +1055,89 @@ def calculate_3D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
            if ``w_foreground + w_background > 1``.
     """
 
-    if Y.ndim != 5:
-        raise ValueError("'Y' must be a 5D Numpy array")
+    if Y is not None:
+        if Y.ndim != 5:
+            raise ValueError("'Y' must be a 5D Numpy array")
+
+    if Y is None and Y_path is None:
+        raise ValueError("'Y' or 'Y_path' need to be provided")
 
     if w_foreground + w_background > 1:
         raise ValueError("'w_foreground' plus 'w_background' can not be greater "
                          "than one")
 
-    prob_map = np.copy(Y[..., 0])
+    os.makedirs(save_dir, exist_ok=True)
+
+    if Y is not None: 
+        prob_map = np.copy(Y).astype(np.float32)
+        l = prob_map.shape[0]   
+        channels = prob_map.shape[-1]
+        v = np.max(prob_map)
+        first_shape = prob_map[0].shape
+    else:
+        prob_map, _, _ = load_3d_images_from_dir(Y_path)
+        l = len(prob_map)   
+        channels = prob_map[0].shape[-1]
+        v = np.max(prob_map[0])
+        first_shape = prob_map[0][0].shape
     
     print("Constructing the probability map . . .")
-    for i in range(prob_map.shape[0]):
-        for j in tqdm(range(prob_map[i].shape[2])):
-            # Remove artifacts connected to image border
-            prob_map[i,:,:,j] = clear_border(prob_map[i,:,:,j])
+    maps = []
+    diff_shape = False
+    for i in range(l):
+        if Y is not None:
+            _map = prob_map[i].copy()
+        else:
+            _map = prob_map[i][0].copy().astype(np.float32)
 
-        foreground_pixels = (prob_map[i] == 255).sum()
-        background_pixels = (prob_map[i] == 0).sum()
+        for k in range(channels):
+            for j in range(_map.shape[2]):
+                # Remove artifacts connected to image border
+                _map[:,:,j,k] = clear_border(_map[:,:,j,k])
+            foreground_pixels = (_map[:,:,:,k] == v).sum()
+            background_pixels = (_map[:,:,:,k] == 0).sum()
 
-        prob_map[i][np.where(prob_map[i] == 255)] = w_foreground/foreground_pixels
-        prob_map[i][np.where(prob_map[i] == 0)] = w_background/background_pixels
-        prob_map[i] /= prob_map[i].sum() # Necessary to get all probs sum 1
+            if foreground_pixels == 0:
+                _map[:,:,:,k][np.where(_map[:,:,:,k] == v)] = 0
+            else:
+                _map[:,:,:,k][np.where(_map[:,:,:,k] == v)] = w_foreground/foreground_pixels
+            if background_pixels == 0:
+                _map[:,:,:,k][np.where(_map[:,:,:,k] == 0)] = 0             
+            else:
+                _map[:,:,:,k][np.where(_map[:,:,:,k] == 0)] = w_background/background_pixels
+    
+            # Necessary to get all probs sum 1
+            s = _map[:,:,:,k].sum()
+            if s == 0: 
+                t = 1
+                for x in _map[:,:,:,k].shape: t *=x
+                _map[:,:,:,k].fill(1/t)
+            else:
+                _map[:,:,:,k] = _map[:,:,:,k]/_map[:,:,:,k].sum()
 
-    if save_file is not None:
-        os.makedirs(os.path.dirname(save_file), exist_ok=True)
-        print("Saving the probability map in {}".format(save_file))
-        np.save(save_file, prob_map)
+        if first_shape != _map.shape: diff_shape = True
+        maps.append(_map)
 
-    return np.expand_dims(prob_map, -1)
+    if save_dir is not None:
+        os.makedirs(os.path.dirname(save_dir), exist_ok=True)
+        if not diff_shape:
+            for i in range(len(maps)):
+                maps[i] = np.expand_dims(maps[i], 0)
+            maps = np.concatenate(maps)
+            print("Saving the probability map in {}".format(save_dir))
+            np.save(os.path.join(save_dir, 'prob_map.npy'), prob_map)
+        else:
+            print("As the files loaded have different shapes, the probability "
+                  "map for each one will be stored separately in {}".format(save_dir))
+            d = len(str(l))
+            for i in range(l):
+                f = os.path.join(save_dir, 'prob_map'+str(i).zfill(d)+'.npy')
+                np.save(f, maps[i])
+        
+    if not isinstance(prob_map, list): 
+        return prob_map
+    else:
+        return save_dir
 
 
 def grayscale_2D_image_to_3D(X, Y, th=127):
@@ -1256,8 +1317,10 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0),
 
        Returns
        -------        
-       data : 4D Numpy array
-           Data loaded. E.g. ``(num_of_images, y, x, channels)``.
+       data : 4D Numpy array or list of 3D Numpy arrays
+           Data loaded. E.g. ``(num_of_images, y, x, channels)`` if all files
+           have same shape, otherwise a list of ``(y, x, channels)`` arrays
+           will be returned.
                                                                                 
        data_shape : List of tuples, optional                                    
            Shapes of all 3D images readed. Useful to reconstruct the original   
@@ -1317,10 +1380,23 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0),
         c_shape.append(img)
         data.append(img)
 
-    data = np.concatenate(data)
-    print("*** Loaded data shape is {}".format(data.shape))
+    same_shape = True
+    s = data[0].shape
+    for i in range(1,len(data)):
+        if s != data[i].shape: 
+            same_shape = False
+            break
+            
+    if crop or same_shape: 
+        data = np.concatenate(data)
+        print("*** Loaded data shape is {}".format(data.shape))
+    else:
+        print("*** Loaded data[0] shape is {}".format(data[0].shape))
 
-    return data, data_shape, c_shape, filenames
+    if return_filenames:
+        return data, data_shape, c_shape, filenames
+    else:
+        return data, data_shape, c_shape
 
 
 def load_ct_data_from_dir(data_dir, shape=None):
@@ -1353,8 +1429,8 @@ def load_ct_data_from_dir(data_dir, shape=None):
 
            load_data_from_dir(data_path, data_shape)
 
-           # The function will print the shape of the created array. In this example:
-           #     *** Loaded data shape is (165, 768, 1024, 1)
+           # The function will print list's first position array's shape. In this example:
+           #     *** Loaded data[0] shape is (165, 768, 1024, 1)
            # Notice height and width swap because of Numpy ndarray terminology
     """
     import nibabel as nib
@@ -1389,9 +1465,9 @@ def load_ct_data_from_dir(data_dir, shape=None):
     return data
 
 
-def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
-                            overlap=(0,0,0), padding=(0,0,0), median_padding=False,
-                            return_filenames=False):
+def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, 
+                            overlap=(0,0,0), padding=(0,0,0), 
+                            median_padding=False, return_filenames=False):
     """Load data from a directory.
 
        Parameters
@@ -1399,16 +1475,10 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
        data_dir : str
            Path to read the data from.
 
-       shape : 4D int tuple, optional
-           Shape of the images to load. If is not provided the shape is 
-           calculated automatically looping over all data files and it will be 
-           the maximum value found per axis. So, given the value the process    
-           should be faster. E.g. ``(x, y, z, channels)``.
-
        crop : bool, optional
            Crop each 3D image when readed.
 
-       subvol_shape : Tuple of 4 ints, optional
+       crop_shape : Tuple of 4 ints, optional
            Shape of the subvolumes to create when cropping. 
            E.g. ``(x, y, z, channels)``.
 
@@ -1431,9 +1501,10 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
         
        Returns
        -------
-       data : 5D Numpy array
-           Data loaded. E.g. ``(num_of_images, x, y, z, channels)`` if ``crop``
-           enabled, ``(num_of_images, z, y, x, channels)`` otherwise.
+       data : 5D Numpy array or list of 4D Numpy arrays
+           Data loaded. E.g. ``(num_of_images, x, y, z, channels)`` if all files
+           have same shape, otherwise a list of ``(x, y, z, channels)`` arrays 
+           will be returned.
 
        data_shape : List of tuples, optional 
            Shapes of all 3D images readed. Useful to reconstruct the original 
@@ -1452,11 +1523,10 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
            # EXAMPLE 1
            # Case where we need to load 20 images of shape (1024, 1024, 91, 1)
            data_path = "data/train/x"
-           data_shape = (1024, 1024, 91, 1)
 
-           data = load_data_from_dir(data_path, data_shape)
-           # The function will print the shape of the created array. In this example:
-           #     *** Loaded data shape is (20, 91, 1024, 1024, 1)
+           data = load_data_from_dir(data_path)
+           # The function will print list's first position array's shape. In this example:
+           #     *** Loaded data[0] shape is (20, 91, 1024, 1024, 1)
            # Notice height, width and depth swap as skimage.io imread function 
            # is used to load images 
     
@@ -1467,8 +1537,8 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
 
            X_test, orig_test_img_shapes, \
            crop_test_img_shapes, te_filenames = load_3d_images_from_dir(
-               test_path, None, crop=True, subvol_shape=(256, 256, 40, 1),
-               overlap=(0,0,0), return_filenames=True)
+               test_path, crop=True, crop_shape=(256, 256, 40, 1), overlap=(0,0,0),
+               return_filenames=True)
            # The function will print the shape of the created array which its size is 
            # the concatenation in 0 axis of all subvolumes created for each 3D image in the
            # given path. For example:
@@ -1476,81 +1546,55 @@ def load_3d_images_from_dir(data_dir, shape=None, crop=False, subvol_shape=None,
            # Notice height, width and depth swap as skimage.io imread function
            # is used to load images.
     """
-    if shape is not None:
-        if len(shape) != 4:
-            raise ValueError("'shape' must be 4 length tuple")
-    if crop and subvol_shape is None:
-        raise ValueError("'subvol_shape' must be provided when 'crop' is True")
-
-    if return_filenames:
-        filenames = []
+    if crop and crop_shape is None:
+        raise ValueError("'crop_shape' must be provided when 'crop' is True")
 
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
 
-    # Determine shape if it is not given 
-    if shape is None and not crop:
-        print("Determine max in each dimension first")
-        max_x = 0
-        max_y = 0
-        max_z = 0
-        for n, id_ in tqdm(enumerate(ids), total=len(ids)):
-            img = imread(os.path.join(data_dir, id_))
-
-            max_x = img.shape[1] if max_x < img.shape[1] else max_x
-            max_y = img.shape[2] if max_y < img.shape[2] else max_y
-            max_z = img.shape[0] if max_z < img.shape[0] else max_z
-        c = 1 if img.ndim == 3 else img.shape[-1] 
-        _shape = (max_z, max_y, max_x, c)
-    else:
-        if crop:
-            _shape = subvol_shape
-        else:
-            _shape = (shape[2], shape[1], shape[0], shape[3])
-
     if crop:
         from data_3D_manipulation import crop_3D_data_with_overlap
-        data = []
-        data_shape = []
-        crop_shape = []
-    else:
-        data = np.zeros((len(ids), ) + _shape)
+
+    data = []
+    data_shape = []
+    c_shape = []
+    if return_filenames: filenames = []
 
     # Read images 
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         img = imread(os.path.join(data_dir, id_))
 
-        if return_filenames:
-            filenames.append(id_)
+        if return_filenames: filenames.append(id_)
 
         if len(img.shape) == 3:                                                 
             img = np.expand_dims(img, axis=-1)                                  
             
-        if crop:
-            data_shape.append(img.shape)
-            if img.shape != subvol_shape[:3]+(img.shape[-1],):
-                img_cropped = crop_3D_data_with_overlap(
-                    img, subvol_shape[:3]+(img.shape[-1],), overlap=overlap,
-                    padding=padding, median_padding=median_padding, verbose=True)
-            else:
-                img_cropped = np.expand_dims(img, 0)
-            crop_shape.append(img_cropped.shape)
-        
-            data.append(img_cropped)
+        data_shape.append(img.shape)
+        if crop and img.shape != crop_shape[:3]+(img.shape[-1],):
+            img = crop_3D_data_with_overlap(
+                img, crop_shape[:3]+(img.shape[-1],), overlap=overlap,
+                padding=padding, median_padding=median_padding, verbose=True)
         else:
             img = np.transpose(img, (1,2,0,3))
-            data[n,0:img.shape[0],0:img.shape[1],0:img.shape[2]] = img
+            img = np.expand_dims(img, axis=0)
 
-    if crop: data = np.concatenate(data)
+        c_shape.append(img.shape)
+        data.append(img)
 
-    print("*** Loaded data shape is {}".format(data.shape))
-    if crop:
-        if return_filenames:
-            return data, data_shape, crop_shape, filenames
-        else:
-            return data, data_shape, crop_shape
+    same_shape = True
+    s = data[0].shape
+    for i in range(1,len(data)):
+        if s != data[i].shape:
+            same_shape = False
+            break
+
+    if crop or same_shape:
+        data = np.concatenate(data)
+        print("*** Loaded data shape is {}".format(data.shape))
     else:
-        if return_filenames:
-            return data, filenames
-        else:
-            return data
+        print("*** Loaded data[0] shape is {}".format(data[0].shape))    
+    
+    if return_filenames:
+        return data, data_shape, c_shape, filenames
+    else:
+        return data, data_shape, c_shape
