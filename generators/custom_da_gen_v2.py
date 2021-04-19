@@ -43,7 +43,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
           If ``in_memory`` is ``True`` this list should contain the paths to 
           load data and masks. ``data_paths[0]`` should be data path and 
           ``data_paths[1]`` masks path.
-    
+
        da : bool, optional
            To activate the data augmentation.
 
@@ -197,12 +197,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        shape : 3D int tuple, optional                                           
            Shape of the desired images when using 'random_crops_in_DA'.
        
-       prob_map : bool, optional
-           Take the crop center based on a given probability ditribution.
-
-       train_prob : 4D Numpy array, optional
-           Probabilities of each pixels to use with ``prob_map=True``.
-           E.g. ``(num_of_images, x, y, channels)``.
+       prob_map : 4D Numpy array or str, optional
+           If it is an array, it should represent the probability map used
+           to make random crops when ``random_crops_in_DA`` is set. If str given
+           should be the path to read these maps from.
 
        val : bool, optional
            Advise the generator that the images will be to validate the
@@ -261,13 +259,13 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            # probability much higher than the background simulating a class inbalance 
            # With this, the probability of take the center pixel of the random crop 
            # that corresponds to the foreground class will be so high
-           train_prob = calculate_2D_volume_prob_map(
+           prob_map = calculate_2D_volume_prob_map(
                 Y_train, 0.94, 0.06, save_file='prob_map.npy')
           
            data_gen_args = dict(
                X=X_train, Y=Y_train, batch_size=6, shuffle=True, rand_rot=True,
                vflip=True, hflip=True, random_crops_in_DA=True, shape=(256, 256, 1),
-               prob_map=True, train_prob=train_prob)
+               prob_map=prob_map)
 
            data_gen_val_args = dict(
                X=X_val, Y=Y_val, batch_size=6, random_crops_in_DA=True, 
@@ -278,24 +276,23 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
     """
 
     def __init__(self, X, Y, batch_size=32, seed=0, shuffle=False,
-                 in_memory=True, data_paths=None, 
-                 da=True, da_prob=0.5, rotation90=False, rand_rot=False,
-                 rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20),
-                 zoom=False, zoom_range=(0.8,1.2), shift=False,
-                 shift_range=(0.1,0.2), vflip=False, hflip=False, elastic=False,
-                 e_alpha=(240,250), e_sigma=25, e_mode='constant', g_blur=False,
-                 g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7),
-                 motion_blur=False, motb_k_range=(3,8), gamma_contrast=False,
-                 gc_gamma=(1.25,1.75), dropout=False, drop_range=(0, 0.2),
-                 cutout=False, cout_nb_iterations=(1,3), cout_size=(0.2,0.4),
-                 cout_cval=0, cout_apply_to_mask=False, cutblur=False,
-                 cblur_size=(0.1,0.5), cblur_down_range=(2,8), cblur_inside=True, 
-                 cutmix=False, cmix_size=(0.2,0.4), cutnoise=False, 
-                 cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3),
-                 cnoise_size=(0.2,0.4), misalignment=False, ms_displacement=16,
-                 ms_rotate_ratio=0.0, random_crops_in_DA=False, shape=(256,256,1),
-                 prob_map=False, train_prob=None, val=False, n_classes=1, 
-                 out_number=1, extra_data_factor=1):
+                 in_memory=True, data_paths=None, da=True, da_prob=0.5,
+                 rotation90=False, rand_rot=False, rnd_rot_range=(-180,180),
+                 shear=False, shear_range=(-20,20), zoom=False,
+                 zoom_range=(0.8,1.2), shift=False, shift_range=(0.1,0.2),
+                 vflip=False, hflip=False, elastic=False, e_alpha=(240,250),
+                 e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0),
+                 median_blur=False, mb_kernel=(3,7), motion_blur=False,
+                 motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75),
+                 dropout=False, drop_range=(0, 0.2), cutout=False,
+                 cout_nb_iterations=(1,3), cout_size=(0.2,0.4), cout_cval=0,
+                 cout_apply_to_mask=False, cutblur=False, cblur_size=(0.1,0.5),
+                 cblur_down_range=(2,8), cblur_inside=True, cutmix=False,
+                 cmix_size=(0.2,0.4), cutnoise=False, cnoise_scale=(0.1,0.2),
+                 cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4),
+                 misalignment=False, ms_displacement=16, ms_rotate_ratio=0.0,
+                 random_crops_in_DA=False, shape=(256,256,1), prob_map=None,
+                 val=False, n_classes=1, out_number=1, extra_data_factor=1):
 
         if in_memory:
             if X.ndim != 4 or Y.ndim != 4:
@@ -316,10 +313,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             raise ValuError("When 'random_crops_in_DA' is selected the shape "
                             "given must be square, e.g. (256, 256, 1)")
 
-        if not in_memory and not random_subvolumes_in_DA:                       
+        if not in_memory and not random_crops_in_DA:                       
             print("WARNING: you are going to load samples from disk (as "       
-                  "'in_memory=False') and 'random_subvolumes_in_DA=False' so is"
-                  " assumed to have same shape samples")
+                  "'in_memory=False') and 'random_crops_in_DA=False' so all"
+                  " samples are expected to have the same shape. If it is not "
+                  "the case set batch_size to 1 or the generator will throw an "
+                  "error")   
 
         if rotation90 and rand_rot:
             print("Warning: you selected double rotation type. Maybe you should"
@@ -344,6 +343,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             for i in range(min(10,len(self.data_mask_path))):
                 img = imread(os.path.join(data_paths[1], self.data_mask_path[i]))   
                 if np.max(img) > 100: self.div_Y_on_load = True 
+            if img.ndim == 2: img = np.expand_dims(img, -1)
             self.channels = img.shape[-1]
             del img
         else:
@@ -378,7 +378,17 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         self.misalignment = misalignment                                        
         self.ms_displacement = ms_displacement                                  
         self.ms_rotate_ratio = ms_rotate_ratio 
-        self.train_prob = train_prob
+
+        self.prob_map = None
+        if random_crops_in_DA and prob_map is not None:
+            if isinstance(prob_map, str):
+                f = sorted(next(os.walk(prob_map))[2])
+                self.prob_map = []
+                for i in range(len(f)):
+                    self.prob_map.append(os.path.join(prob_map, f[i]))
+            else:
+                self.prob_map = prob_map
+
         self.val = val
         if extra_data_factor > 1:
             self.extra_data_factor = extra_data_factor
@@ -488,13 +498,21 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
             # Apply ramdom crops if it is selected 
             if self.random_crops_in_DA:
-                img_prob = self.train_prob[j] if self.train_prob is not None else None
+                # Capture probability map
+                if self.prob_map is not None:
+                    if isinstance(self.prob_map, list):
+                        img_prob = np.load(self.prob_map[j])
+                    else:
+                        img_prob = self.prob_map[j]
+                else:
+                    img_prob = None
+
                 batch_x[i], batch_y[i] = random_crop(img, mask, self.shape[:2],
                     self.val, img_prob=img_prob)
             else:
                 batch_x[i], batch_y[i] = img, mask
                 
-            # Transform samples 
+            # Apply transformations
             if self.da:                                                         
                 extra_img = np.random.randint(0, self.len-1)
                 if self.in_memory:                                          
@@ -514,8 +532,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         # One-hot enconde
         if self.n_classes > 1 and (self.n_classes != self.channels):  
             batch_y_ = np.zeros((len(indexes),) + self.shape[:2] + (self.n_classes,), dtype=np.uint8)
-            for i in range(len(indexes)):
-                batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[i], self.n_classes))
+            for k in range(len(indexes)):
+                batch_y_[k] = np.asarray(img_to_onehot_encoding(batch_y[k], self.n_classes))
             batch_y = batch_y_
         
         self.total_batches_seen += 1
@@ -681,13 +699,13 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                # the pixel choosen to be the center of the random crop and a blue square which
                # delimits crop boundaries
 
-               train_prob = calculate_2D_volume_prob_map(                           
-                   Y_train, 0.94, 0.06, save_file=''prob_map.npy')                 
+               prob_map = calculate_2D_volume_prob_map(                           
+                   Y_train, 0.94, 0.06, save_file='prob_map.npy')                 
                                                                                 
                data_gen_args = dict(                                                
                    X=X_train, Y=Y_train, batch_size=6, shape=(256, 256, 1), shuffle=True,
                    rotation_range=True, vflip=True, hflip=True, random_crops_in_DA=True,
-                   prob_map=True, train_prob=train_prob)                            
+                   prob_map=True, prob_map=prob_map)                            
                train_generator = ImageDataGenerator(**data_gen_args)
             
                 train_generator.get_transformed_samples(                                
@@ -773,8 +791,17 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                                                                                 
             # Apply ramdom crops if it is selected                              
             if self.random_crops_in_DA:                                         
-                img_prob = self.train_prob[pos] if self.train_prob is not None else None
-                batch_x[i], batch_y[i] = random_crop(img, mask, self.shape[:2], 
+                # Capture probability map
+                if self.prob_map is not None:
+                    if isinstance(self.prob_map, list):
+                        img_prob = np.load(self.prob_map[pos])
+                    else:
+                        img_prob = self.prob_map[pos]
+                else:
+                    img_prob = None
+
+                batch_x[i], batch_y[i], ox, oy,\
+                s_x, s_y = random_crop(img, mask, self.shape[:2], 
                     self.val, img_prob=img_prob, draw_prob_map_points=True)
             else:                                                               
                 batch_x[i], batch_y[i] = img, mask
@@ -839,17 +866,16 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
                 # Save the original images with a point that represents the 
                 # selected coordinates to be the center of the crop
-                if self.random_crops_in_DA and self.train_prob is not None:
+                if self.random_crops_in_DA and self.prob_map is not None:
                     if self.in_memory:                                                  
                         img = self.X[pos]*255
                     else:
                         img = imread(os.path.join(self.paths[0], self.data_paths[pos]))  
                         if img.ndim == 2: img = np.expand_dims(img, -1)                 
-                        if np.max(img) < 2: img = img*255 
+                        if np.max(img) < 100: img = img*255 
                     
                     if self.shape[-1] == 1:
-                        im = Image.fromarray(img[...,0])
-                        im = im.convert('L')
+                        im = Image.fromarray(np.repeat(img, 3, axis=2), 'RGB')
                     else:
                         im = Image.fromarray(img, 'RGB') 
                     px = im.load()                                                          
@@ -877,15 +903,18 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     else:
                         mask = imread(os.path.join(self.paths[1], self.data_mask_path[pos]))
                         if mask.ndim == 2: mask = np.expand_dims(mask, -1) 
-                        if np.max(mask) < 2: mask = mask*255
-                    mask = Image.fromarray(mask, 'RGB')
-                    px = mask.load()                                              
+                        if np.max(mask) < 100: mask = mask*255
+                    if mask.shape[-1] == 1:
+                        m = Image.fromarray(np.repeat(mask, 3, axis=2), 'RGB')
+                    else:
+                        m = Image.fromarray(mask, 'RGB')
+                    px = m.load()                                              
                         
                     # Paint the selected point in red
                     for col in range(oy-p_size, oy+p_size):                       
                         for row in range(ox-p_size, ox+p_size):                   
-                            if col >= 0 and col < self.Y.shape[1] and \
-                               row >= 0 and row < self.Y.shape[2]:                
+                            if col >= 0 and col < mask.shape[0] and \
+                               row >= 0 and row < mask.shape[1]:                
                                px[row, col] = (255, 0, 0)
 
                     # Paint a blue square that represents the crop made
@@ -896,7 +925,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                         px[s_x, col] = (0, 0, 255)                          
                         px[s_x+self.shape[0]-1, col] = (0, 0, 255)
 
-                    mask.save(os.path.join(out_dir, str(pos)+p+'mark_y'+self.trans_made+'.png'))          
+                    m.save(os.path.join(out_dir, str(pos)+p+'mark_y'+self.trans_made+'.png'))          
                 
         print("### END TR-SAMPLES ###")
         return batch_x, batch_y
