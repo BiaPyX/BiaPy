@@ -855,7 +855,7 @@ def random_crop(image, mask, random_crop_size, val=False,
            To return the pixel choosen to be the center of the crop. 
 
        img_prob : Numpy 3D array, optional
-           Probability of each pixel to be choosen as the center of the crop. 
+           Probability of each pixel to be chosen as the center of the crop. 
            E. .g. ``(x, y, channels)``.
 
        weight_map : bool, optional
@@ -870,11 +870,11 @@ def random_crop(image, mask, random_crop_size, val=False,
            Crop of the given image's weigth map. E. g. ``(height, width)``.
        
        ox : int, optional
-           X coordinate in the complete image of the choosed central pixel to 
+           X coordinate in the complete image of the chose central pixel to 
            make the crop.
 
        oy : int, optional
-           Y coordinate in the complete image of the choosed central pixel to    
+           Y coordinate in the complete image of the chose central pixel to    
            make the crop.
 
        x : int, optional
