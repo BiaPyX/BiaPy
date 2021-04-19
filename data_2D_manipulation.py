@@ -851,8 +851,8 @@ def random_crop(image, mask, random_crop_size, val=False,
            If the image provided is going to be used in the validation data. 
            This forces to crop from the origin, e. g. ``(0, 0)`` point.
     
-       draw_prob_map_points : bool
-           To return the pixel choosen to be the center of the crop. 
+       draw_prob_map_points : bool, optional
+           To return the pixel chosen to be the center of the crop. 
 
        img_prob : Numpy 3D array, optional
            Probability of each pixel to be chosen as the center of the crop. 
@@ -864,10 +864,10 @@ def random_crop(image, mask, random_crop_size, val=False,
        Returns
        -------
        img : 2D Numpy array
-           Crop of the given image. E. g. ``(height, width)``.
+           Crop of the given image. E.g. ``(x, y)``.
 
        weight_map : 2D Numpy array, optional
-           Crop of the given image's weigth map. E. g. ``(height, width)``.
+           Crop of the given image's weigth map. E.g. ``(x, y)``.
        
        ox : int, optional
            X coordinate in the complete image of the chose central pixel to 

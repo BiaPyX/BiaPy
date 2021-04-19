@@ -216,7 +216,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
             random_state=seedValue)
 
     # Convert the original volumes as they were a unique subvolume
-    if random_subvolumes_in_DA:                                                 
+    if random_subvolumes_in_DA and X_train.ndim == 4:
         X_train = np.expand_dims(np.transpose(X_train, (1,2,0,3)), axis=0)      
         Y_train = np.expand_dims(np.transpose(Y_train, (1,2,0,3)), axis=0)    
         if create_val:
@@ -411,7 +411,7 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
             random_state=seedValue)
 
     # Convert the original volumes as they were a unique subvolume
-    if random_subvolumes_in_DA:                                                 
+    if random_subvolumes_in_DA and X_train.ndim == 4:                                                 
         X_train = np.expand_dims(np.transpose(X_train, (1,2,0,3)), axis=0)      
         Y_train = np.expand_dims(np.transpose(Y_train, (1,2,0,3)), axis=0)    
         if create_val:
@@ -1002,3 +1002,122 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
     else:
         return merged_data
         
+
+def random_3D_crop(vol, vol_mask, random_crop_size, val=False, vol_prob=None,
+                   weight_map=None, draw_prob_map_points=False):
+    """Extracts a random 3D patch from the given image and mask.
+
+       Parameters
+       ----------
+       vol : 4D Numpy array
+           Data to extract the patch from. E.g. ``(x, y, z, channels)``.
+
+       vol_mask : 4D Numpy array
+           Data mask to extract the patch from. E.g. ``(x, y, z, channels)``.
+
+       random_crop_size : 3D int tuple
+           Shape of the patches to create. E.g. ``(x, y, z)``.
+
+       val : bool, optional
+           If the image provided is going to be used in the validation data.
+           This forces to crop from the origin, e.g. ``(0, 0)`` point.
+
+       vol_prob : Numpy 3D array, optional
+           Probability of each pixel to be chosen as the center of the crop.
+           E. .g. ``(x, y, channels)``.
+
+       weight_map : bool, optional
+           Weight map of the given image. E.g. ``(x, y, channels)``.
+    
+       draw_prob_map_points : bool, optional
+           To return the voxel chosen to be the center of the crop.
+
+       Returns
+       -------
+       img : 4D Numpy array
+           Crop of the given image. E.g. ``(x, y, z, channels)``.
+
+       weight_map : 4D Numpy array, optional
+           Crop of the given image's weigth map. E.g. ``(x, y, z, channels)``.
+
+       ox : int, optional
+           X coordinate in the complete image of the chose central pixel to
+           make the crop.
+
+       oy : int, optional
+           Y coordinate in the complete image of the chose central pixel to
+           make the crop.
+
+       x : int, optional
+           X coordinate in the complete image where the crop starts.
+
+       y : int, optional
+           Y coordinate in the complete image where the crop starts.
+    """
+
+    rows, cols, deep = vol.shape[0], vol.shape[1], vol.shape[2]
+    dx, dy, dz = random_crop_size
+    if val:
+        x = 0
+        y = 0
+        z = 0
+        ox = 0
+        oy = 0
+        oz = 0
+    else:
+        if vol_prob is not None:
+            prob = vol_prob.ravel()
+
+            # Generate the random coordinates based on the distribution
+            choices = np.prod(vol_prob.shape)
+            index = np.random.choice(choices, size=1, p=prob)
+            coordinates = np.unravel_index(index, shape=vol_prob.shape)
+            x = int(coordinates[0])
+            y = int(coordinates[1])
+            z = int(coordinates[2])
+            ox = int(coordinates[0])
+            oy = int(coordinates[1])
+            oz = int(coordinates[2])
+
+            # Adjust the coordinates to be the origin of the crop and control to
+            # not be out of the volume
+            if x < int(random_crop_size[0]/2):
+                x = 0
+            elif x > vol.shape[0] - int(random_crop_size[0]/2):
+                x = vol.shape[0] - random_crop_size[0]
+            else:
+                x -= int(random_crop_size[0]/2)
+
+            if y < int(random_crop_size[1]/2):
+                y = 0
+            elif y > vol.shape[1] - int(random_crop_size[1]/2):
+                y = vol.shape[1] - random_crop_size[1]
+            else:
+                y -= int(random_crop_size[1]/2)
+
+            if z < int(random_crop_size[2]/2):
+                z = 0
+            elif z > vol.shape[2] - int(random_crop_size[2]/2):
+                z = vol.shape[2] - random_crop_size[2]
+            else:
+                z -= int(random_crop_size[2]/2)
+        else:
+            ox = 0
+            oy = 0
+            oz = 0
+            x = np.random.randint(0, rows - dx + 1)
+            y = np.random.randint(0, cols - dy + 1)
+            z = np.random.randint(0, deep - dz + 1)
+
+    if draw_prob_map_points:
+        return vol[x:(x+dx), y:(y+dy), z:(z+dz), :], \
+               vol_mask[x:(x+dx), y:(y+dy), z:(z+dz), :], ox, oy, oz, x, y, z
+    else:
+        if weight_map is not None:
+            return vol[x:(x+dx), y:(y+dy), z:(z+dz), :], \
+                   vol_mask[x:(x+dx), y:(y+dy), z:(z+dz), :],\
+                   weight_map[x:(x+dx), y:(y+dy), z:(z+dz), :]
+        else:
+            return vol[x:(x+dx), y:(y+dy), z:(z+dz), :], \
+                   vol_mask[x:(x+dx), y:(y+dy), z:(z+dz), :]
+
