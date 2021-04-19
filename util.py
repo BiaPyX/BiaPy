@@ -948,8 +948,8 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="",
     plt.clf()
 
 
-def calculate_2D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
-                                 save_file=None):
+def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, 
+                                 w_background=0.06, save_dir=None):
     """Calculate the probability map of the given 2D data.
 
        Parameters
@@ -957,6 +957,9 @@ def calculate_2D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
        Y : 4D Numpy array
            Data to calculate the probability map from. E. g. ``(num_of_images, x, 
            y, channel)``
+
+       Y_path : str, optional
+           Path to load the data from in case ``Y=None``. 
 
        w_foreground : float, optional
            Weight of the foreground. This value plus ``w_background`` must be 
@@ -966,7 +969,7 @@ def calculate_2D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
            Weight of the background. This value plus ``w_foreground`` must be 
            equal ``1``.
 
-       save_file : str, optional
+       save_dir : str, optional
            Path to the file where the probability map will be stored.
 
        Raises
@@ -979,40 +982,95 @@ def calculate_2D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
 
        Returns
        -------
-       Array : 4D Numpy array
-           Probability map of the given data.
+       Array : Str or 4D Numpy array
+           Path where the probability map/s is/are stored if ``Y_path`` was     
+           given and there are images of different shapes. Otherwise, an array  
+           that represents the probability map of ``Y`` or all loaded data files 
+           from ``Y_path`` will be returned.  
     """
 
-    if Y.ndim != 4:
-        raise ValueError("'Y' must be a 4D Numpy array")
+    if Y is not None:
+        if Y.ndim != 4:
+            raise ValueError("'Y' must be a 4D Numpy array")
+
+    if Y is None and Y_path is None:
+        raise ValueError("'Y' or 'Y_path' need to be provided")
 
     if w_foreground + w_background > 1:
         raise ValueError("'w_foreground' plus 'w_background' can not be greater "
                          "than one")
 
-    prob_map = np.copy(Y[...,0])
+    if Y is not None: 
+        prob_map = np.copy(Y).astype(np.float32)
+        l = prob_map.shape[0]   
+        channels = prob_map.shape[-1]
+        v = np.max(prob_map)
+    else:
+        prob_map, _, _ = load_data_from_dir(Y_path)
+        l = len(prob_map)   
+        channels = prob_map[0].shape[-1]
+        v = np.max(prob_map[0])
 
-    print("Constructing the probability map . . .")
-    for i in tqdm(range(prob_map.shape[0])):
-        pdf = prob_map[i]
+    if isinstance(prob_map, list):
+        first_shape = prob_map[0][0].shape
+    else:
+        first_shape = prob_map[0].shape
+
+    print("Connstructing the probability map . . .")
+    maps = []
+    diff_shape = False
+    for i in tqdm(range(l)):
+        if isinstance(prob_map, list):
+            _map = prob_map[i][0].copy().astype(np.float32)
+        else:
+            _map = prob_map[i].copy().astype(np.float32)
+        
+        for k in range(channels):
+            # Remove artifacts connected to image border
+            _map[:,:,k] = clear_border(_map[:,:,k])
+
+            foreground_pixels = (_map[:,:,k] == v).sum()
+            background_pixels = (_map[:,:,k] == 0).sum()
+
+            if foreground_pixels == 0:
+                _map[:,:,k][np.where(_map[:,:,k] == v)] = 0
+            else:
+                _map[:,:,k][np.where(_map[:,:,k] == v)] = w_foreground/foreground_pixels
+            if background_pixels == 0:
+                _map[:,:,k][np.where(_map[:,:,k] == 0)] = 0             
+            else:
+                _map[:,:,k][np.where(_map[:,:,k] == 0)] = w_background/background_pixels
     
-        # Remove artifacts connected to image border
-        pdf = clear_border(pdf)
+            # Necessary to get all probs sum 1
+            s = _map[:,:,k].sum()
+            if s == 0: 
+                t = 1
+                for x in _map[:,:,k].shape: t *=x
+                _map[:,:,k].fill(1/t)
+            else:
+                _map[:,:,k] = _map[:,:,k]/_map[:,:,k].sum()
 
-        foreground_pixels = (pdf == 255).sum()
-        background_pixels = (pdf == 0).sum()
+        if first_shape != _map.shape: diff_shape = True
+        maps.append(_map)
 
-        pdf[np.where(pdf == 255)] = w_foreground/foreground_pixels
-        pdf[np.where(pdf == 0)] = w_background/background_pixels
-        pdf /= pdf.sum() # Necessary to get all probs sum 1
-        prob_map[i] = pdf
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)                                        
 
-    if save_file is not None:
-        os.makedirs(os.path.dirname(save_file), exist_ok=True)
-        print("Saving the probability map in {}".format(save_file))
-        np.save(save_file, prob_map)
-
-    return prob_map
+        if not diff_shape:
+            for i in range(len(maps)):
+                maps[i] = np.expand_dims(maps[i], 0)
+            maps = np.concatenate(maps)
+            print("Saving the probability map in {}".format(save_dir))
+            np.save(os.path.join(save_dir, 'prob_map.npy'), maps)
+            return maps
+        else:
+            print("As the files loaded have different shapes, the probability "
+                  "map for each one will be stored separately in {}".format(save_dir))
+            d = len(str(l))
+            for i in range(l):
+                f = os.path.join(save_dir, 'prob_map'+str(i).zfill(d)+'.npy')
+                np.save(f, maps[i])
+            return save_dir
 
 
 def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, 
@@ -1026,7 +1084,7 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94,
            x, y, z, channel)``
 
        Y_path : str, optional
-           Path to load the data from is case ``Y=None``. 
+           Path to load the data from in case ``Y=None``. 
 
        w_foreground : float, optional
            Weight of the foreground. This value plus ``w_background`` must be 
@@ -1066,29 +1124,30 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94,
         raise ValueError("'w_foreground' plus 'w_background' can not be greater "
                          "than one")
 
-    os.makedirs(save_dir, exist_ok=True)
-
     if Y is not None: 
         prob_map = np.copy(Y).astype(np.float32)
         l = prob_map.shape[0]   
         channels = prob_map.shape[-1]
         v = np.max(prob_map)
-        first_shape = prob_map[0].shape
     else:
         prob_map, _, _ = load_3d_images_from_dir(Y_path)
         l = len(prob_map)   
         channels = prob_map[0].shape[-1]
         v = np.max(prob_map[0])
-        first_shape = prob_map[0][0].shape
+                                                                                
+    if isinstance(prob_map, list):                                              
+        first_shape = prob_map[0][0].shape                                      
+    else:                                                                       
+        first_shape = prob_map[0].shape
     
     print("Constructing the probability map . . .")
     maps = []
     diff_shape = False
     for i in range(l):
-        if Y is not None:
-            _map = prob_map[i].copy()
-        else:
-            _map = prob_map[i][0].copy().astype(np.float32)
+        if isinstance(prob_map, list):                                          
+            _map = prob_map[i][0].copy().astype(np.float32)                     
+        else:                                                                   
+            _map = prob_map[i].copy().astype(np.float32)
 
         for k in range(channels):
             for j in range(_map.shape[2]):
@@ -1119,13 +1178,14 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94,
         maps.append(_map)
 
     if save_dir is not None:
-        os.makedirs(os.path.dirname(save_dir), exist_ok=True)
+        os.makedirs(save_dir, exist_ok=True)                                        
         if not diff_shape:
             for i in range(len(maps)):
                 maps[i] = np.expand_dims(maps[i], 0)
             maps = np.concatenate(maps)
             print("Saving the probability map in {}".format(save_dir))
-            np.save(os.path.join(save_dir, 'prob_map.npy'), prob_map)
+            np.save(os.path.join(save_dir, 'prob_map.npy'), maps)
+            return maps 
         else:
             print("As the files loaded have different shapes, the probability "
                   "map for each one will be stored separately in {}".format(save_dir))
@@ -1133,12 +1193,8 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94,
             for i in range(l):
                 f = os.path.join(save_dir, 'prob_map'+str(i).zfill(d)+'.npy')
                 np.save(f, maps[i])
+            return save_dir
         
-    if not isinstance(prob_map, list): 
-        return prob_map
-    else:
-        return save_dir
-
 
 def grayscale_2D_image_to_3D(X, Y, th=127):
     """Creates 3D surface from each image in X based on the grayscale of each
@@ -1322,11 +1378,11 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0),
            have same shape, otherwise a list of ``(y, x, channels)`` arrays
            will be returned.
                                                                                 
-       data_shape : List of tuples, optional                                    
+       data_shape : List of tuples
            Shapes of all 3D images readed. Useful to reconstruct the original   
            images together with ``crop_shape``.                                 
                                                                                 
-       crop_shape : List of tuples, optional                                    
+       crop_shape : List of tuples
            Shape of the loaded 3D images after cropping. Useful to reconstruct  
            the original images together with ``data_shape``.                    
                                                                                 
@@ -1506,11 +1562,11 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None,
            have same shape, otherwise a list of ``(x, y, z, channels)`` arrays 
            will be returned.
 
-       data_shape : List of tuples, optional 
+       data_shape : List of tuples
            Shapes of all 3D images readed. Useful to reconstruct the original 
            images together with ``crop_shape``. 
 
-       crop_shape : List of tuples, optional
+       crop_shape : List of tuples
            Shape of the loaded 3D images after cropping. Useful to reconstruct 
            the original images together with ``data_shape``.
     
