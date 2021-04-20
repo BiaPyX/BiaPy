@@ -508,7 +508,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 batch_x[i], batch_y[i] = random_3D_crop(
                     img, mask, self.shape[:3], self.val, vol_prob=img_prob)
             else:
-                batch_x, batch_y = img, mask
+                batch_x[i], batch_y[i] = img, mask
 
             # Apply transformations
             if self.da:
@@ -578,6 +578,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            trans_mask : 4D Numpy array
                Transformed image mask. E.g. ``(x, y, z, channels)``.
         """
+
         # Change dtype to supported one by imgaug
         image = image.astype(np.float32)
         mask = mask.astype(np.uint8)
@@ -598,7 +599,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         # through imgaug lib
         o_img_shape = image.shape 
         o_mask_shape = mask.shape 
-        image = image.reshape(image.shape[:2]+(image.shape[2]*image.shape[3],))
+        image = image.reshape(image.shape[:2]+(image.shape[2]*image.shape[3],))     
         mask = mask.reshape(mask.shape[:2]+(mask.shape[2]*mask.shape[3],))
         if e_im is not None: e_im = e_im.reshape(e_im.shape[:2]+(e_im.shape[2]*e_im.shape[3],))
         if e_mask is not None: e_mask = e_mask.reshape(e_mask.shape[:2]+(e_mask.shape[2]*e_mask.shape[3],))
