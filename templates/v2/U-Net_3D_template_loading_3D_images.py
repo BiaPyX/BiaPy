@@ -152,8 +152,8 @@ random_subvolumes_in_DA = False
 # probability of having a mitochondria on the middle of it. Useful to avoid     
 # extracting a subvolume which less mitochondria information.                   
 probability_map = False # Only active with random_subvolumes_in_DA              
-w_foreground = 0.94 # Weight to apply to foreground classes (probability_map=True)
-w_background = 0.06 # Weight to apply to background class (probability_map=True)
+w_foreground = 0.98 # Weight to apply to foreground classes (probability_map=True)
+w_background = 0.02 # Weight to apply to background class (probability_map=True)
 ## ~~~ When option (1) is chosen ~~~~
 # Percentage of overlap in (x, y, z). Set to 0 to calculate the minimun overlap 
 overlap = (0,0,0)
