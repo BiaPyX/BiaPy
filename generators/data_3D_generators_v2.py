@@ -792,23 +792,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     if aux.shape[-1] == 1: aux = np.repeat(aux, 3, axis=3)
                     auxm = (o_y2*255).astype(np.uint8)
                     if auxm.shape[-1] == 1: auxm = np.repeat(auxm, 3, axis=3)
-                    im = Image.fromarray(aux[:,:,oz,0])
-                    im = im.convert('RGB')                                                  
-                    px = im.load()                                                          
-                    m = Image.fromarray(auxm[:,:,oz,0])
-                    m = m.convert('RGB')
-                    py = m.load()
-                   
-                    # Paint the selected point in red
-                    p_size=6
-                    for row in range(oy-p_size,oy+p_size):
-                        for col in range(ox-p_size,ox+p_size): 
-                            if col >= 0 and col < img.shape[0] and \
-                               row >= 0 and row < img.shape[1]:
-                               px[row, col] = (255, 0, 0) 
-                               py[row, col] = (255, 0, 0) 
-                    aux[:,:,oz,:] = im
-                    auxm[:,:,oz,:] = m
+
                     for s in range(aux.shape[2]):
                         if s >= s_z and s < s_z+self.shape[2]: 
                             im = Image.fromarray(aux[:,:,s,0])
@@ -828,6 +812,17 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                                 px[row, s_x+self.shape[1]-1] = (0, 0, 255)
                                 py[row, s_x] = (0, 0, 255)
                                 py[row, s_x+self.shape[1]-1] = (0, 0, 255)
+                            
+                            # Paint the selected point in red 
+                            if s == oz:
+                                p_size=6                                                    
+                                for row in range(oy-p_size,oy+p_size):                      
+                                    for col in range(ox-p_size,ox+p_size):                  
+                                        if col >= 0 and col < img.shape[0] and \
+                                            row >= 0 and row < img.shape[1]:                 
+                                            px[row, col] = (255, 0, 0)                       
+                                            py[row, col] = (255, 0, 0)
+
                             aux[:,:,s,:] = im
                             auxm[:,:,s,:] = m
 
