@@ -121,7 +121,21 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        gc_gamma : tuple of floats, optional
            Exponent for the contrast adjustment. Higher values darken the
            image. E. g. ``(1.25, 1.75)``.
-
+                                                                            
+       brightness : bool, optional                                              
+           To aply brightness to the images.                                    
+                                                                            
+       bright_severity : tuple of 2 ints, optional                                          
+           Strength of the brightness range, with valid values being                  
+           ``1 <= bright_severity <= 5``. E.g. ``(1, 3)``.                  
+                                                                            
+       contrast : boolen, optional                                              
+           To apply contrast changes to the images.                             
+                                                                            
+       contrast_severity : tuple of 2 ints, optional                                          
+           Strength of the contrast change range, with valid values being                  
+           ``1 <= contrast_severity <= 5``. E.g. ``(1, 3)``.    
+    
        dropout : bool, optional
            To set a certain fraction of pixels in images to zero.
 
@@ -284,15 +298,17 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                  e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0),
                  median_blur=False, mb_kernel=(3,7), motion_blur=False,
                  motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75),
-                 dropout=False, drop_range=(0, 0.2), cutout=False,
-                 cout_nb_iterations=(1,3), cout_size=(0.2,0.4), cout_cval=0,
-                 cout_apply_to_mask=False, cutblur=False, cblur_size=(0.1,0.5),
-                 cblur_down_range=(2,8), cblur_inside=True, cutmix=False,
-                 cmix_size=(0.2,0.4), cutnoise=False, cnoise_scale=(0.1,0.2),
-                 cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4),
-                 misalignment=False, ms_displacement=16, ms_rotate_ratio=0.0,
-                 random_crops_in_DA=False, shape=(256,256,1), prob_map=None,
-                 val=False, n_classes=1, out_number=1, extra_data_factor=1):
+                 brightness=False, bright_severity=(1,3), contrast=False, 
+                 contrast_severity=(1,3), dropout=False, drop_range=(0, 0.2), 
+                 cutout=False, cout_nb_iterations=(1,3), cout_size=(0.2,0.4), 
+                 cout_cval=0, cout_apply_to_mask=False, cutblur=False, 
+                 cblur_size=(0.1,0.5), cblur_down_range=(2,8), cblur_inside=True, 
+                 cutmix=False, cmix_size=(0.2,0.4), cutnoise=False, 
+                 cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), 
+                 cnoise_size=(0.2,0.4), misalignment=False, ms_displacement=16, 
+                 ms_rotate_ratio=0.0, random_crops_in_DA=False, shape=(256,256,1), 
+                 prob_map=None, val=False, n_classes=1, out_number=1, 
+                 extra_data_factor=1):
 
         if in_memory:
             if X.ndim != 4 or Y.ndim != 4:
@@ -347,8 +363,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             self.channels = img.shape[-1]
             del img
         else:
-            self.X = (X/255).astype(np.float32) if np.max(X) > 100 else (X).astype(np.float32)
-            self.Y = (Y/255).astype(np.uint8) if np.max(Y) > 100 else (Y).astype(np.uint8)
+            self.X = X.astype(np.uint8) 
+            self.Y = Y.astype(np.uint8)
+            self.div_X_on_load = True if np.max(X) > 100 else False
+            self.div_Y_on_load = True if np.max(Y) > 100 else False
             self.channels = Y.shape[-1]
             self.len = len(self.X)
             self.shape = shape if random_crops_in_DA else X.shape[1:]
@@ -435,6 +453,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         if gamma_contrast:
             self.da_options.append(iaa.Sometimes(da_prob,iaa.GammaContrast(gc_gamma)))
             self.trans_made += '_gcontrast'+str(gc_gamma)
+        if brightness: 
+            self.da_options.append(iaa.Sometimes(da_prob,iaa.imgcorruptlike.Brightness(bright_severity)))
+            self.trans_made += '_brightness'+str(bright_severity)
+        if contrast:
+            self.da_options.append(iaa.Sometimes(da_prob,iaa.imgcorruptlike.Contrast(contrast_severity)))
+            self.trans_made += '_contrast'+str(contrast_severity)
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += '_drop'+str(drop_range)
@@ -478,7 +502,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
 
-        batch_x = np.zeros((len(indexes), *self.shape), dtype=np.float32)
+        batch_x = np.zeros((len(indexes), *self.shape), dtype=np.uint8)
         batch_y = np.zeros((len(indexes), *self.shape[:2])+(self.channels,),    
                            dtype=np.uint8)
 
@@ -493,8 +517,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 mask = imread(os.path.join(self.paths[1], self.data_mask_path[j])) 
                 if img.ndim == 2: img = np.expand_dims(img, -1)
                 if mask.ndim == 2: mask = np.expand_dims(mask, -1)
-                if self.div_X_on_load: img = img/255
-                if self.div_Y_on_load: mask = mask/255
 
             # Apply ramdom crops if it is selected 
             if self.random_crops_in_DA:
@@ -523,11 +545,13 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
                     if e_img.ndim == 2: e_img = np.expand_dims(e_img, -1)                 
                     if e_mask.ndim == 2: e_mask = np.expand_dims(e_mask, -1)
-                    if self.div_X_on_load: e_img = e_img/255                               
-                    if self.div_Y_on_load: e_mask = e_mask/255
 
                 batch_x[i], batch_y[i] = self.apply_transform(                  
                     batch_x[i], batch_y[i], e_im=e_img, e_mask=e_mask)
+                
+        # Divide the values 
+        if self.div_X_on_load: batch_x = batch_x/255
+        if self.div_Y_on_load: batch_y = batch_y/255
 
         # One-hot enconde
         if self.n_classes > 1 and (self.n_classes != self.channels):  
@@ -764,7 +788,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             print("WARNING: More samples requested than the ones available. "   
                   "'num_examples' fixed to {}".format(num_examples))
         
-        batch_x = np.zeros((num_examples, *self.shape), dtype=np.float32)
+        batch_x = np.zeros((num_examples, *self.shape), dtype=np.uint8)
         batch_y = np.zeros((num_examples, *self.shape[:2])+(self.channels,),
                            dtype=np.uint8)
 
@@ -786,8 +810,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 mask = imread(os.path.join(self.paths[1], self.data_mask_path[pos]))
                 if img.ndim == 2: img = np.expand_dims(img, -1)                 
                 if mask.ndim == 2: mask = np.expand_dims(mask, -1)
-                if self.div_X_on_load: img = img/255                               
-                if self.div_Y_on_load: mask = mask/255
                                                                                 
             # Apply ramdom crops if it is selected                              
             if self.random_crops_in_DA:                                         
@@ -825,8 +847,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
                     if e_img.ndim == 2: e_img = np.expand_dims(e_img, -1)                 
                     if e_mask.ndim == 2: e_mask = np.expand_dims(e_mask, -1)
-                    if self.div_X_on_load: e_img = e_img/255                               
-                    if self.div_Y_on_load: e_mask = e_mask/255
 
                 batch_x[i], batch_y[i] = self.apply_transform(                
                     batch_x[i], batch_y[i], e_im=e_img, e_mask=e_mask)
@@ -835,8 +855,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 # Save original images
                 self.__draw_grid(o_x)                                           
                 self.__draw_grid(o_y)
-                o_x = o_x*255
-                o_y = o_y*255
+                o_x = o_x
+                o_y = o_y
                 if self.shape[-1] == 1: 
                     im = Image.fromarray(o_x[...,0])
                     im = im.convert('L')
@@ -848,12 +868,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
                 # Save transformed images
                 if self.shape[-1] == 1:
-                    im = Image.fromarray(batch_x[i,...,0]*255)
+                    im = Image.fromarray(batch_x[i,...,0])
                     im = im.convert('L')
                 else:
-                    im = Image.fromarray(batch_x[i]*255, 'RGB')
+                    im = Image.fromarray(batch_x[i], 'RGB')
                 im.save(os.path.join(out_dir, str(pos)+p+'x'+self.trans_made+".png"))
-                mask = Image.fromarray(batch_y[i,:,:,0]*255, 'L')
+                mask = Image.fromarray(batch_y[i,:,:,0], 'L')
                 mask.save(os.path.join(out_dir, str(pos)+p+'y'+self.trans_made+".png"))
 
                 if self.n_classes > 1:
@@ -868,11 +888,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 # selected coordinates to be the center of the crop
                 if self.random_crops_in_DA and self.prob_map is not None:
                     if self.in_memory:                                                  
-                        img = self.X[pos]*255
+                        img = self.X[pos]
                     else:
                         img = imread(os.path.join(self.paths[0], self.data_paths[pos]))  
                         if img.ndim == 2: img = np.expand_dims(img, -1)                 
-                        if np.max(img) < 100: img = img*255 
+                        if np.max(img) < 100: img = img
                     
                     if self.shape[-1] == 1:
                         im = Image.fromarray(np.repeat(img, 3, axis=2), 'RGB')
@@ -899,11 +919,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     im.save(os.path.join(out_dir, str(pos)+p+'mark_x'+self.trans_made+'.png'))
                    
                     if self.in_memory:
-                        mask = self.Y[pos]*255
+                        mask = self.Y[pos]
                     else:
                         mask = imread(os.path.join(self.paths[1], self.data_mask_path[pos]))
                         if mask.ndim == 2: mask = np.expand_dims(mask, -1) 
-                        if np.max(mask) < 100: mask = mask*255
+                        if np.max(mask) < 100: mask = mask
                     if mask.shape[-1] == 1:
                         m = Image.fromarray(np.repeat(mask, 3, axis=2), 'RGB')
                     else:
