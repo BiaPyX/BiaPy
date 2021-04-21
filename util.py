@@ -103,6 +103,7 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
        |   Loss values on each epoch             |   Jaccard index values on each epoch    |
        +-----------------------------------------+-----------------------------------------+
     """
+    print("Creating training plots . . .")
 
     os.makedirs(chartOutDir, exist_ok=True)
 
