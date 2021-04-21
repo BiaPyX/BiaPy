@@ -1,4 +1,4 @@
-name: DL_EM_base_env
+name: EM_seg_env
 channels:
   - defaults
 dependencies:
@@ -10,7 +10,7 @@ dependencies:
   - blinker=1.4=py36_0
   - brotlipy=0.7.0=py36h7b6447c_1000
   - c-ares=1.15.0=h7b6447c_1001
-  - ca-certificates=2020.6.24=0
+  - ca-certificates=2020.7.22=0
   - cachetools=4.1.1=py_0
   - certifi=2020.6.20=py36_0
   - cffi=1.14.1=py36he30daa8_0
@@ -76,7 +76,7 @@ dependencies:
   - numpy-base=1.18.1=py36hde5b4d6_1
   - oauthlib=3.1.0=py_0
   - olefile=0.46=py36_0
-  - openssl=1.1.1g=h7b6447c_0
+  - openssl=1.1.1h=h7b6447c_0
   - opt_einsum=3.1.0=py_0
   - pcre=8.44=he6710b0_0
   - pillow=7.2.0=py36hb39fc2d_0
@@ -129,7 +129,12 @@ dependencies:
   - zlib=1.2.11=h7b6447c_3
   - zstd=1.4.5=h9ceee32_0
   - pip:
+    - imagecorruptions==1.1.2
     - imgaug==0.4.0
+    - keras-swa==0.1.5
     - opencv-python==4.4.0.42
     - shapely==1.7.1
     - texttable==1.6.2
+    - tifffile==2020.9.3
+prefix: /home/dfranco/anaconda3/envs/EM_seg_env
+
