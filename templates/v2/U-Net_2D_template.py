@@ -228,14 +228,14 @@ motb_k_range = (8, 12)
 gamma_contrast = False
 # Exponent for the contrast adjustment. Higher values darken the image
 gc_gamma = (1.25, 1.75)
-# To apply brightness changes to images 
-brightness = True
-# Strength of the brightness range, with valid values being 1 <= bright_severity <= 5
-bright_severity = (1, 3)
-# To apply contrast changes to images 
-contrast = False
-# Strength of the contrast change range, with valid values being 1 <= contrast_severity <= 5
-contrast_severity = (1, 2)
+# To apply brightness changes to images
+brightness = False
+# Strength of the brightness range, with valid values being 0 <= brightness_factor <= 1
+brightness_factor = (0.1, 0.3)
+# To apply contrast changes to images
+contrast = True
+# Strength of the contrast change range, with valid values being 0 <= contrast_factor <= 1
+contrast_factor = (0.1, 0.3)
 # Set a certain fraction of pixels in images to zero. Not get confuse with the
 # dropout concept of neural networks, this is just for DA
 dropout = False
@@ -462,8 +462,8 @@ train_generator = ImageDataGenerator(X=X_train, Y=Y_train,
     g_blur=g_blur, g_sigma=g_sigma, median_blur=median_blur, mb_kernel=mb_kernel,
     motion_blur=motion_blur, motb_k_range=motb_k_range,
     gamma_contrast=gamma_contrast, gc_gamma=gc_gamma, brightness=brightness, 
-    bright_severity=bright_severity, contrast=contrast, 
-    contrast_severity=contrast_severity, dropout=dropout, drop_range=drop_range,
+    brightness_factor=brightness_factor, contrast=contrast, 
+    contrast_factor=contrast_factor, dropout=dropout, drop_range=drop_range,
     cutout=cutout, cout_nb_iterations=cout_nb_iterations, cout_size=cout_size,
     cout_cval=cout_cval, cout_apply_to_mask=cout_apply_to_mask, cutblur=cutblur,
     cblur_size=cblur_size, cblur_down_range=cblur_down_range,

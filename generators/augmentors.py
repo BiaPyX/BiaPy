@@ -103,8 +103,7 @@ def cutblur(img, size=(0.2,0.4), down_ratio_range=(2,8), only_inside=True):
     out_shape = np.array(img.shape[:2])//down_ratio
 
     if not only_inside:
-        prob = random.uniform(0, 1)
-        inside = True if prob < 0.5 else False
+        inside = True if random.uniform(0, 1) < 0.5 else False
     else:   
         inside = True
 
@@ -222,8 +221,7 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0):
     if img.shape[-1] < 5:
         oy = np.random.randint(1, img.shape[0]-1)                           
         d = np.random.randint(0, displacement)                              
-        prob = random.uniform(0, 1)                                             
-        if prob < rotate_ratio:
+        if random.uniform(0, 1) < rotate_ratio:
             # Apply misalignment to all channels                                             
             for i in range(img.shape[-1]):                                      
                 out[:oy,:,i] = img[:oy,:,i]                                     
@@ -246,12 +244,10 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0):
     else:
         out_shape = (img.shape[0]-displacement, img.shape[1]-displacement,  
                      img.shape[2])
-        prob = random.uniform(0, 1)                                         
-        mode = 'slip' if prob < 0.5 else 'translation'
+        mode = 'slip' if random.uniform(0, 1) < 0.5 else 'translation'
         idx = np.random.randint(1, img.shape[-1]-1)
 
-        prob = random.uniform(0, 1)                                                 
-        if prob < rotate_ratio:
+        if random.uniform(0, 1) < rotate_ratio:
             H, W = img.shape[:2]
             M = random_rotate_matrix(H, displacement)
             if mode == 'slip':
@@ -340,3 +336,108 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
         out = np.clip(out, 0, 1)
 
     return out
+
+
+def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False,
+               invert_p=0):
+    """Grayscale intensity augmentation. Randomly adjust contrast/brightness, 
+       randomly invert the color space and apply gamma correction. The input 
+       image will be divided by 255.
+
+       Implementation based on https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/misalign.py .
+ 
+       Parameters
+       ----------
+       img : 3D Numpy array
+           Image to transform. E.g. ``(x, y, channels)``.
+
+       brightness_factor : tuple of 2 floats, optional
+           Intensity of brightness change. E.g. ``(0.1, 0.3)``.
+
+       mode : str, optional 
+           One of ``2D``, ``3D`` or ``mix``. 
+
+       invert : bool, optional 
+           Whether to invert the images. 
+
+       invert_p : float, optional
+           Probability of inverting the images.
+    """
+    image = img/255 
+
+    if brightness_factor[0] == 0 and brightness_factor[1] == 0: return image
+
+    if mode == 'mix':
+        mode = '3D' if random.uniform(0, 1) > 0.5 and image.shape[-1] > 3 else '2D'
+
+    b_factor = random.uniform(brightness_factor[0], brightness_factor[1])
+    if mode == '2D':
+        ran = np.random.rand(image.shape[-1]*3)
+        for z in range(image.shape[-1]):
+            img = image[:, :, z]
+            image[:, :, z] += (ran[z*3+1] - 0.5)*b_factor
+            image[:, :, z] = np.clip(image[:, :, z], 0, 1)
+            image[:, :, z] **= 2.0**(ran[z*3+2]*2 - 1)
+    else:
+        ran = np.random.rand(3)
+        image += (ran[1] - 0.5)*b_factor
+        image = np.clip(image, 0, 1)
+        image **= 2.0**(ran[2]*2 - 1)
+
+    if invert and random.uniform(0, 1) < invert_p:
+        image = 1.0-image
+        image = np.clip(image, 0, 1)
+
+    return image*255
+
+
+def contrast(img, contrast_factor=(0,0), mode='mix', invert=False, invert_p=0):
+    """Contrast augmentation. Randomly invert the color space and apply gamma 
+       correction. The input image will be divided by 255.
+
+       Implementation based on https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/misalign.py .
+
+       Parameters
+       ----------
+       img : 3D Numpy array
+           Image to transform. E.g. ``(x, y, channels)``.
+
+       contrast_factor : tuple of 2 floats, optional
+           Intensity of contrast change. E.g. ``(0.1, 0.3)``.
+
+       mode : str, optional
+           One of ``2D``, ``3D`` or ``mix``.
+
+       invert : bool, optional
+           Whether to invert the images.
+
+       invert_p : float, optional
+           Probability of inverting the images.
+    """
+    image = img/255
+
+    if contrast_factor[0] == 0 and contrast_factor[1] == 0: return image
+
+    if mode == 'mix':
+        mode = '3D' if random.uniform(0, 1) > 0.5 and image.shape[-1] > 3 else '2D'
+
+    c_factor = random.uniform(contrast_factor[0], contrast_factor[1])
+    if mode == '2D':
+        ran = np.random.rand(image.shape[-1]*3)
+        for z in range(image.shape[-1]):
+            img = image[:, :, z]
+            image[:, :, z] *= 1 + (ran[z*3] - 0.5)*c_factor
+            image[:, :, z] = np.clip(image[:, :, z], 0, 1)
+            image[:, :, z] **= 2.0**(ran[z*3+2]*2 - 1)
+    else:
+        ran = np.random.rand(3)
+        image *= 1 + (ran[0] - 0.5)*c_factor
+        image = np.clip(image, 0, 1)
+        image **= 2.0**(ran[2]*2 - 1)
+
+    if invert and random.uniform(0, 1) < invert_p:
+        image = 1.0-image
+        image = np.clip(image, 0, 1)
+
+    return image*255
+

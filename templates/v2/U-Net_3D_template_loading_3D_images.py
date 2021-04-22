@@ -234,6 +234,14 @@ motb_k_range = (3, 8)
 gamma_contrast = False
 # Exponent for the contrast adjustment. Higher values darken the image
 gc_gamma = (1.25, 1.75)
+# To apply brightness changes to images
+brightness = False
+# Strength of the brightness range, with valid values being 0 <= brightness_factor <= 1
+brightness_factor = (0.1, 0.3)
+# To apply contrast changes to images
+contrast = True
+# Strength of the contrast change range, with valid values being 0 <= contrast_factor <= 1
+contrast_factor = (0.1, 0.3)
 # Set a certain fraction of pixels in images to zero. Not get confuse with the
 # dropout concept of neural networks, this is just for DA
 dropout = False
@@ -498,25 +506,28 @@ if probability_map and random_subvolumes_in_DA:
 
 
 print("Preparing train data generator . . .")
-train_generator = VoxelDataGenerator(                                           
+train_generator = VoxelDataGenerator(
     X_train, Y_train, in_memory=in_memory, data_paths=data_paths[0:2],
-    random_subvolumes_in_DA=random_subvolumes_in_DA, prob_map=prob_map,subvol_shape=crop_shape, 
+    random_subvolumes_in_DA=random_subvolumes_in_DA,
+    prob_map=prob_map,subvol_shape=crop_shape,
     shuffle_each_epoch=shuffle_train_data_each_epoch, batch_size=batch_size_value,
-    da=da, da_prob=da_prob, rotation90=rotation90, rand_rot=rand_rot, 
-    rnd_rot_range=rnd_rot_range, shear=shear,shear_range=shear_range, zoom=zoom, 
-    zoom_range=zoom_range, shift=shift, shift_range=shift_range, vflip=vflip, 
-    hflip=hflip, zflip=zflip, elastic=elastic, e_alpha=e_alpha, e_sigma=e_sigma, 
-    e_mode=e_mode, g_blur=g_blur, g_sigma=g_sigma, median_blur=median_blur, 
+    da=da, da_prob=da_prob, rotation90=rotation90, rand_rot=rand_rot,
+    rnd_rot_range=rnd_rot_range, shear=shear,shear_range=shear_range, zoom=zoom,
+    zoom_range=zoom_range, shift=shift, shift_range=shift_range, vflip=vflip,
+    hflip=hflip, zflip=zflip, elastic=elastic, e_alpha=e_alpha, e_sigma=e_sigma,
+    e_mode=e_mode, g_blur=g_blur, g_sigma=g_sigma, median_blur=median_blur,
     mb_kernel=mb_kernel, motion_blur=motion_blur, motb_k_range=motb_k_range,
-    gamma_contrast=gamma_contrast, gc_gamma=gc_gamma, dropout=dropout,
-    drop_range=drop_range, cutout=cutout, cout_nb_iterations=cout_nb_iterations,
-    cout_size=cout_size, cout_cval=cout_cval, cout_apply_to_mask=cout_apply_to_mask,
-    cutblur=cutblur, cblur_size=cblur_size, cblur_down_range=cblur_down_range,
+    gamma_contrast=gamma_contrast, gc_gamma=gc_gamma, brightness=brightness,
+    brightness_factor=brightness_factor, contrast=contrast,
+    contrast_factor=contrast_factor, dropout=dropout, drop_range=drop_range,
+    cutout=cutout, cout_nb_iterations=cout_nb_iterations, cout_size=cout_size,
+    cout_cval=cout_cval, cout_apply_to_mask=cout_apply_to_mask, cutblur=cutblur,
+    cblur_size=cblur_size, cblur_down_range=cblur_down_range,
     cblur_inside=cblur_inside, cutmix=cutmix, cmix_size=cmix_size,
-    cutnoise=cutnoise, cnoise_size=cnoise_size, 
+    cutnoise=cutnoise, cnoise_size=cnoise_size,
     cnoise_nb_iterations=cnoise_nb_iterations, cnoise_scale=cnoise_scale,
-    misalignment=misalignment, ms_displacement=ms_displacement, 
-    ms_rotate_ratio=ms_rotate_ratio, n_classes=n_classes, 
+    misalignment=misalignment, ms_displacement=ms_displacement,
+    ms_rotate_ratio=ms_rotate_ratio, n_classes=n_classes,
     extra_data_factor=replicate_train)
 del X_train, Y_train
 

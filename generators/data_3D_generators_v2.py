@@ -14,7 +14,8 @@ from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 import imgaug as ia
 from imgaug import parameters as iap
 from skimage.io import imsave                                                   
-from .augmentors import cutout, cutblur, cutmix, cutnoise, misalignment
+from .augmentors import cutout, cutblur, cutmix, cutnoise, misalignment, \
+                        brightness, contrast
 from data_3D_manipulation import random_3D_crop
 
 class VoxelDataGenerator(tf.keras.utils.Sequence):
@@ -31,12 +32,13 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                  elastic=False, e_alpha=(240,250), e_sigma=25, e_mode='constant', 
                  g_blur=False, g_sigma=(1.0,2.0), median_blur=False, 
                  mb_kernel=(3,7), motion_blur=False, motb_k_range=(3,8), 
-                 gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, 
-                 drop_range=(0,0.2), cutout=False, cout_nb_iterations=(1,3), 
-                 cout_size=(0.2,0.4), cout_cval=0, cout_apply_to_mask=False, 
-                 cutblur=False, cblur_size=(0.2,0.4), cblur_down_range=(2,8), 
-                 cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), 
-                 cutnoise=False, cnoise_scale=(0.1,0.2), 
+                 gamma_contrast=False, gc_gamma=(1.25,1.75), brightness=False, 
+                 brightness_factor=(1,3), contrast=False, contrast_factor=(1,3),
+                 dropout=False, drop_range=(0,0.2), cutout=False,
+                 cout_nb_iterations=(1,3), cout_size=(0.2,0.4), cout_cval=0, 
+                 cout_apply_to_mask=False, cutblur=False, cblur_size=(0.2,0.4), 
+                 cblur_down_range=(2,8), cblur_inside=True, cutmix=False, 
+                 cmix_size=(0.2,0.4), cutnoise=False, cnoise_scale=(0.1,0.2), 
                  cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4),
                  misalignment=False, ms_displacement=16, ms_rotate_ratio=0.0, 
                  n_classes=1, out_number=1, val=False, extra_data_factor=1):
@@ -164,6 +166,20 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            gc_gamma : tuple of floats, optional                                  
                Exponent for the contrast adjustment. Higher values darken the 
                image. E. g. ``(1.25, 1.75)``. 
+
+           brightness : bool, optional                                              
+               To aply brightness to the images.                                    
+                                                                                
+           brightness_factor : tuple of 2 floats, optional                                          
+               Strength of the brightness range, with valid values being                  
+               ``0 <= brightness_factor <= 1``. E.g. ``(0.1, 0.3)``.
+                                                                                
+           contrast : boolen, optional                                              
+               To apply contrast changes to the images.                             
+                                                                                
+           contrast_factor : tuple of 2 floats, optional                                          
+               Strength of the contrast change range, with valid values being                  
+               ``0 <= contrast_factor <= 1``. E.g. ``(0.1, 0.3)``.
 
            dropout : bool, optional
                To set a certain fraction of pixels in images to zero.
@@ -312,8 +328,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.channels = img.shape[-1]
             del img
         else:
-            self.X = (X/255).astype(np.float32) if np.max(X) > 100 else X.astype(np.float32)
-            self.Y = (Y/255).astype(np.uint8) if np.max(Y) > 100 else Y.astype(np.uint8)
+            self.X = X.astype(np.uint8) 
+            self.Y = Y.astype(np.uint8)
+            self.div_X_on_load = True if np.max(X) > 100 else False
+            self.div_Y_on_load = True if np.max(Y) > 100 else False
             self.channels = Y.shape[-1]
             self.len = len(self.X)
             self.shape = subvol_shape if random_subvolumes_in_DA else X.shape[1:]
@@ -406,6 +424,14 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if gamma_contrast:
             self.da_options.append(iaa.Sometimes(da_prob,iaa.GammaContrast(gc_gamma)))
             self.trans_made += '_gcontrast'+str(gc_gamma)
+        self.brightness = brightness
+        if brightness: 
+            self.brightness_factor = brightness_factor
+            self.trans_made += '_brightness'+str(brightness_factor)
+        self.contrast = contrast
+        if contrast: 
+            self.contrast_factor = contrast_factor
+            self.trans_made += '_contrast'+str(contrast_factor)
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += '_drop'+str(drop_range)
@@ -474,7 +500,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         """
 
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        batch_x = np.zeros((len(indexes), *self.shape), dtype=np.float32)
+        batch_x = np.zeros((len(indexes), *self.shape), dtype=np.uint8)
         batch_y = np.zeros((len(indexes), *self.shape[:3])+(self.channels,), 
                            dtype=np.uint8)
                    
@@ -491,8 +517,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 if mask.ndim == 3: mask = np.expand_dims(mask, -1)
                 img = img.transpose((1,2,0,3))
                 mask = mask.transpose((1,2,0,3))
-                if self.div_X_on_load: img = img/255
-                if self.div_Y_on_load: mask = mask/255
             
             # Apply ramdom crops if it is selected 
             if self.random_subvolumes_in_DA:
@@ -523,11 +547,13 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     if e_mask.ndim == 3: e_mask = np.expand_dims(e_mask, -1)
                     e_img = e_img.transpose((1,2,0,3))
                     e_mask = e_mask.transpose((1,2,0,3))
-                    if self.div_X_on_load: e_img = e_img/255                               
-                    if self.div_Y_on_load: e_mask = e_mask/255
 
                 batch_x[i], batch_y[i] = self.apply_transform(
                     batch_x[i], batch_y[i], e_im=e_img, e_mask=e_mask)
+
+        # Divide the values 
+        if self.div_X_on_load: batch_x = batch_x/255
+        if self.div_Y_on_load: batch_y = batch_y/255
 
         if self.n_classes > 1 and (self.n_classes != self.channels):
             batch_y_ = np.zeros((len(indexes), ) + self.shape[:3] + (self.n_classes,))
@@ -580,12 +606,11 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         """
 
         # Change dtype to supported one by imgaug
-        image = image.astype(np.float32)
+        image = image.astype(np.uint8)
         mask = mask.astype(np.uint8)
 
         # Apply flips in z as imgaug can not do it 
-        prob = random.uniform(0, 1)
-        if self.zflip and prob < self.da_prob:
+        if self.zflip and random.uniform(0, 1) < self.da_prob:
             l_image = []
             l_mask = []
             for i in range(image.shape[-1]):                                
@@ -605,8 +630,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if e_mask is not None: e_mask = e_mask.reshape(e_mask.shape[:2]+(e_mask.shape[2]*e_mask.shape[3],))
 
         # Apply cutout
-        prob = random.uniform(0, 1)                                             
-        if self.cutout and prob < self.da_prob:                                
+        if self.cutout and random.uniform(0, 1) < self.da_prob:                                
             image, mask = cutout(image, mask, self.cout_nb_iterations, 
                                  self.cout_size, self.cout_cval, 
                                  self.cout_apply_to_mask)
@@ -618,21 +642,26 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                             self.cblur_inside)
 
         # Apply cutmix
-        prob = random.uniform(0, 1)
-        if self.cutmix and prob < self.da_prob:
+        if self.cutmix and random.uniform(0, 1) < self.da_prob:
             image, mask = cutmix(image, e_im, mask, e_mask, self.cmix_size)
 
         # Apply cutnoise                                                        
-        prob = random.uniform(0, 1)                                             
-        if self.cutnoise and prob < self.da_prob:                               
+        if self.cutnoise and random.uniform(0, 1) < self.da_prob:                               
             image = cutnoise(image, self.cnoise_scale, self.cnoise_nb_iterations,
                              self.cnoise_size)
 
         # Apply misalignment
-        prob = random.uniform(0, 1)                                             
-        if self.misalignment and prob < self.da_prob:                                 
+        if self.misalignment and random.uniform(0, 1) < self.da_prob:                                 
             image, mask = misalignment(image, mask, self.ms_displacement, 
                                        self.ms_rotate_ratio)
+        
+        # Apply brightness
+        if self.brightness and random.uniform(0, 1) < self.da_prob:
+            image = brightness(image, brightness_factor=self.brightness_factor)
+
+        # Apply contrast 
+        if self.contrast and random.uniform(0, 1) < self.da_prob:
+            image = contrast(image, contrast_factor=self.contrast_factor)
          
         # Apply transformations to the volume and its mask
         segmap = SegmentationMapsOnImage(mask, shape=mask.shape)            
@@ -703,8 +732,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 if mask.ndim == 3: mask = np.expand_dims(mask, -1)
                 img = img.transpose((1,2,0,3))
                 mask = mask.transpose((1,2,0,3))
-                if self.div_X_on_load: img = img/255
-                if self.div_Y_on_load: mask = mask/255
 
             # Apply ramdom crops if it is selected 
             if self.random_subvolumes_in_DA:
@@ -750,8 +777,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     if e_mask.ndim == 3: e_mask = np.expand_dims(e_mask, -1)
                     e_img = e_img.transpose((1,2,0,3))
                     e_mask = e_mask.transpose((1,2,0,3))
-                    if self.div_X_on_load: e_img = e_img/255                               
-                    if self.div_Y_on_load: e_mask = e_mask/255
 
                 vol, vol_mask = self.apply_transform(
                     sample_x[i], sample_y[i], e_im=e_img, e_mask=e_mask)
@@ -765,19 +790,19 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 # Original image/mask
                 f = os.path.join(out_dir, "orig_x_"+str(pos)+self.trans_made+'.tiff')
                 self.__draw_grid(o_x)
-                aux = np.expand_dims((np.transpose(o_x, (2,0,1,3))*255).astype(np.uint8), 1)
+                aux = np.expand_dims((np.transpose(o_x, (2,0,1,3))).astype(np.uint8), 1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
                 f = os.path.join(out_dir, "orig_y_"+str(pos)+self.trans_made+'.tiff')
                 self.__draw_grid(o_y)
-                aux = np.expand_dims((np.transpose(o_y, (2,0,1,3))*255).astype(np.uint8), 1)
+                aux = np.expand_dims((np.transpose(o_y, (2,0,1,3))).astype(np.uint8), 1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
                 # Transformed
                 f = os.path.join(out_dir, "x_aug_"+str(pos)+self.trans_made+'.tiff')
-                aux = np.expand_dims((np.transpose(sample_x[i], (2,0,1,3))*255).astype(np.uint8), 1)
+                aux = np.expand_dims((np.transpose(sample_x[i], (2,0,1,3))).astype(np.uint8), 1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
                 # Mask
                 f = os.path.join(out_dir, "y_aug_"+str(pos)+self.trans_made+'.tiff')
-                aux = np.expand_dims((np.transpose(sample_y[i], (2,0,1,3))*255).astype(np.uint8), 1)
+                aux = np.expand_dims((np.transpose(sample_y[i], (2,0,1,3))).astype(np.uint8), 1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
 
                 # Save the original images with a red point and a blue square 
@@ -789,9 +814,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     print("The selected point of the random crop was [{},{},{}]"
                           .format(ox,oy,oz))
 
-                    aux = (o_x2*255).astype(np.uint8)
+                    aux = (o_x2).astype(np.uint8)
                     if aux.shape[-1] == 1: aux = np.repeat(aux, 3, axis=3)
-                    auxm = (o_y2*255).astype(np.uint8)
+                    auxm = (o_y2).astype(np.uint8)
                     if auxm.shape[-1] == 1: auxm = np.repeat(auxm, 3, axis=3)
 
                     for s in range(aux.shape[2]):

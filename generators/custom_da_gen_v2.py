@@ -11,7 +11,8 @@ import imgaug as ia
 from skimage.io import imread                                                   
 from imgaug import augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
-from .augmentors import cutout, cutblur, cutmix, cutnoise, misalignment
+from .augmentors import cutout, cutblur, cutmix, cutnoise, misalignment,\
+                        brightness, contrast
 
 
 class ImageDataGenerator(tf.keras.utils.Sequence):
@@ -122,19 +123,19 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            Exponent for the contrast adjustment. Higher values darken the
            image. E. g. ``(1.25, 1.75)``.
                                                                             
-       brightness : bool, optional                                              
-           To aply brightness to the images.                                    
-                                                                            
-       bright_severity : tuple of 2 ints, optional                                          
-           Strength of the brightness range, with valid values being                  
-           ``1 <= bright_severity <= 5``. E.g. ``(1, 3)``.                  
-                                                                            
-       contrast : boolen, optional                                              
-           To apply contrast changes to the images.                             
-                                                                            
-       contrast_severity : tuple of 2 ints, optional                                          
-           Strength of the contrast change range, with valid values being                  
-           ``1 <= contrast_severity <= 5``. E.g. ``(1, 3)``.    
+       brightness : bool, optional
+           To aply brightness to the images.
+
+       brightness_factor : tuple of 2 floats, optional
+           Strength of the brightness range, with valid values being
+           ``0 <= brightness_factor <= 1``. E.g. ``(0.1, 0.3)``.
+
+       contrast : boolen, optional
+           To apply contrast changes to the images.
+
+       contrast_factor : tuple of 2 floats, optional
+           Strength of the contrast change range, with valid values being
+           ``0 <= contrast_factor <= 1``. E.g. ``(0.1, 0.3)``.
     
        dropout : bool, optional
            To set a certain fraction of pixels in images to zero.
@@ -298,8 +299,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                  e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0),
                  median_blur=False, mb_kernel=(3,7), motion_blur=False,
                  motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75),
-                 brightness=False, bright_severity=(1,3), contrast=False, 
-                 contrast_severity=(1,3), dropout=False, drop_range=(0, 0.2), 
+                 brightness=False, brightness_factor=(1,3), contrast=False, 
+                 contrast_factor=(1,3), dropout=False, drop_range=(0, 0.2), 
                  cutout=False, cout_nb_iterations=(1,3), cout_size=(0.2,0.4), 
                  cout_cval=0, cout_apply_to_mask=False, cutblur=False, 
                  cblur_size=(0.1,0.5), cblur_down_range=(2,8), cblur_inside=True, 
@@ -453,12 +454,14 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         if gamma_contrast:
             self.da_options.append(iaa.Sometimes(da_prob,iaa.GammaContrast(gc_gamma)))
             self.trans_made += '_gcontrast'+str(gc_gamma)
-        if brightness: 
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.imgcorruptlike.Brightness(bright_severity)))
-            self.trans_made += '_brightness'+str(bright_severity)
+        self.brightness = brightness
+        if brightness:
+            self.brightness_factor = brightness_factor
+            self.trans_made += '_brightness'+str(brightness_factor)
+        self.contrast = contrast
         if contrast:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.imgcorruptlike.Contrast(contrast_severity)))
-            self.trans_made += '_contrast'+str(contrast_severity)
+            self.contrast_factor = contrast_factor
+            self.trans_made += '_contrast'+str(contrast_factor)
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += '_drop'+str(drop_range)
@@ -603,34 +606,37 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                Transformed image mask. E.g. ``(x, y, channels)``.            
         """                                                                     
         # Apply cutout 
-        prob = random.uniform(0, 1)                                             
-        if self.cutout and prob < self.da_prob:                                 
+        if self.cutout and random.uniform(0, 1) < self.da_prob:                                 
             image, mask = cutout(image, mask, self.cout_nb_iterations,
                                  self.cout_size, self.cout_cval,
                                  self.cout_apply_to_mask)                                      
                                                                                 
         # Apply cblur                                                           
-        prob = random.uniform(0, 1)                                             
-        if self.cutblur and prob < self.da_prob:                                
+        if self.cutblur and random.uniform(0, 1) < self.da_prob:                                
             image = cutblur(image, self.cblur_size, self.cblur_down_range,      
                             self.cblur_inside)                                  
                                                                                 
         # Apply cutmix                                                          
-        prob = random.uniform(0, 1)                                             
-        if self.cutmix and prob < self.da_prob:                                 
+        if self.cutmix and random.uniform(0, 1) < self.da_prob:                                 
             image, mask = cutmix(image, e_im, mask, e_mask, self.cmix_size)     
                                                                                 
         # Apply cutnoise
-        prob = random.uniform(0, 1)                                             
-        if self.cutnoise and prob < self.da_prob:                                 
+        if self.cutnoise and random.uniform(0, 1) < self.da_prob:                                 
             image = cutnoise(image, self.cnoise_scale, self.cnoise_nb_iterations,          
                              self.cnoise_size)
 
         # Apply misalignment                                                   
-        prob = random.uniform(0, 1)                                             
-        if self.misalignment and prob < self.da_prob:                           
+        if self.misalignment and random.uniform(0, 1) < self.da_prob:                           
             image, mask = misalignment(image, mask, self.ms_displacement,        
                                         self.ms_rotate_ratio)   
+
+        # Apply brightness
+        if self.brightness and random.uniform(0, 1) < self.da_prob:
+            image = brightness(image, brightness_factor=self.brightness_factor)
+
+        # Apply contrast
+        if self.contrast and random.uniform(0, 1) < self.da_prob:
+            image = contrast(image, contrast_factor=self.contrast_factor)
 
         # Apply transformations to the volume and its mask                      
         segmap = SegmentationMapsOnImage(mask, shape=mask.shape)                
