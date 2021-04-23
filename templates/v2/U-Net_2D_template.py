@@ -278,6 +278,11 @@ misalignment = False
 ms_displacement = 16
 # Ratio of rotation-based mis-alignment
 ms_rotate_ratio = 0.5
+# Augment the image by creating a black line in a random position
+missing_parts = True
+# Iterations to dilate the missing line with
+missp_iterations = (30, 40)
+
 
 ### Extra train data generation
 # Number of times to duplicate the train data. Useful when "random_crops_in_DA"
@@ -471,7 +476,8 @@ train_generator = ImageDataGenerator(X=X_train, Y=Y_train,
     cutnoise=cutnoise, cnoise_size=cnoise_size,
     cnoise_nb_iterations=cnoise_nb_iterations, cnoise_scale=cnoise_scale,
     misalignment=misalignment, ms_displacement=ms_displacement,
-    ms_rotate_ratio=ms_rotate_ratio, shape=crop_shape,
+    ms_rotate_ratio=ms_rotate_ratio, missing_parts=missing_parts,
+    missp_iterations=missp_iterations, shape=crop_shape,
     random_crops_in_DA=random_crops_in_DA, prob_map=prob_map,
     n_classes=n_classes, extra_data_factor=replicate_train)
 

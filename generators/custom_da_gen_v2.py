@@ -12,7 +12,7 @@ from skimage.io import imread
 from imgaug import augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from .augmentors import cutout, cutblur, cutmix, cutnoise, misalignment,\
-                        brightness, contrast
+                        brightness, contrast, missing_parts
 
 
 class ImageDataGenerator(tf.keras.utils.Sequence):
@@ -206,6 +206,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        ms_rotate_ratio : float, optional                                    
            Ratio of rotation-based mis-alignment                            
 
+       missing_parts : boolean, optional
+           Augment the image by creating a black line in a random position.
+    
+       missp_iterations : tuple of 2 ints, optional
+           Iterations to dilate the missing line with. E.g. ``(30, 40)``.
+
        random_crops_in_DA : bool, optional
            Decide to make random crops in DA (before transformations).
                                                                                 
@@ -307,9 +313,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                  cutmix=False, cmix_size=(0.2,0.4), cutnoise=False, 
                  cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), 
                  cnoise_size=(0.2,0.4), misalignment=False, ms_displacement=16, 
-                 ms_rotate_ratio=0.0, random_crops_in_DA=False, shape=(256,256,1), 
-                 prob_map=None, val=False, n_classes=1, out_number=1, 
-                 extra_data_factor=1):
+                 ms_rotate_ratio=0.0, missing_parts=False, 
+                 missp_iterations=(30, 40), random_crops_in_DA=False, 
+                 shape=(256,256,1), prob_map=None, val=False, n_classes=1, 
+                 out_number=1, extra_data_factor=1):
 
         if in_memory:
             if X.ndim != 4 or Y.ndim != 4:
@@ -397,6 +404,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         self.misalignment = misalignment                                        
         self.ms_displacement = ms_displacement                                  
         self.ms_rotate_ratio = ms_rotate_ratio 
+        self.brightness = brightness
+        self.contrast = contrast
+        self.missing_parts = missing_parts
+        self.missp_iterations = missp_iterations
 
         self.prob_map = None
         if random_crops_in_DA and prob_map is not None:
@@ -454,11 +465,9 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         if gamma_contrast:
             self.da_options.append(iaa.Sometimes(da_prob,iaa.GammaContrast(gc_gamma)))
             self.trans_made += '_gcontrast'+str(gc_gamma)
-        self.brightness = brightness
         if brightness:
             self.brightness_factor = brightness_factor
             self.trans_made += '_brightness'+str(brightness_factor)
-        self.contrast = contrast
         if contrast:
             self.contrast_factor = contrast_factor
             self.trans_made += '_contrast'+str(contrast_factor)
@@ -470,6 +479,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         if cutmix: self.trans_made += '_cmix'+str(cmix_size)
         if cutnoise: self.trans_made += '_cnoi'+str(cnoise_scale)+'+'+str(cnoise_nb_iterations)+'+'+str(cnoise_size)
         if misalignment: self.trans_made += '_msalg'+str(ms_displacement)+'+'+str(ms_rotate_ratio)
+        if missing_parts: self.trans_made += '_missp'+'+'+str(missp_iterations)
 
         self.trans_made = self.trans_made.replace(" ", "")
         self.seq = iaa.Sequential(self.da_options)
@@ -638,6 +648,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         if self.contrast and random.uniform(0, 1) < self.da_prob:
             image = contrast(image, contrast_factor=self.contrast_factor)
 
+        # Apply missing parts
+        if self.missing_parts and random.uniform(0, 1) < self.da_prob:
+            image = missing_parts(image, self.missp_iterations)
+        
         # Apply transformations to the volume and its mask                      
         segmap = SegmentationMapsOnImage(mask, shape=mask.shape)                
         image, vol_mask = self.seq(image=image, segmentation_maps=segmap)       

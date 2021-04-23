@@ -15,7 +15,7 @@ import imgaug as ia
 from imgaug import parameters as iap
 from skimage.io import imsave                                                   
 from .augmentors import cutout, cutblur, cutmix, cutnoise, misalignment, \
-                        brightness, contrast
+                        brightness, contrast, missing_parts
 from data_3D_manipulation import random_3D_crop
 
 class VoxelDataGenerator(tf.keras.utils.Sequence):
@@ -41,7 +41,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                  cmix_size=(0.2,0.4), cutnoise=False, cnoise_scale=(0.1,0.2), 
                  cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4),
                  misalignment=False, ms_displacement=16, ms_rotate_ratio=0.0, 
-                 n_classes=1, out_number=1, val=False, extra_data_factor=1):
+                 missing_parts=False, missp_iterations=(30, 40), n_classes=1,
+                 out_number=1, val=False, extra_data_factor=1):
         """ImageDataGenerator constructor. Based on transformations from 
            `imgaug <https://github.com/aleju/imgaug>`_ library. Here a brief
            description of each transformation parameter is made. Find a complete
@@ -251,6 +252,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            ms_rotate_ratio : float, optional
                Ratio of rotation-based mis-alignment
 
+           missing_parts : boolean, optional
+               Augment the image by creating a black line in a random position.
+
+           missp_iterations : tuple of 2 ints, optional
+               Iterations to dilate the missing line with. E.g. ``(30, 40)``.
+
            n_classes : int, optional
                Number of classes. If ``> 1`` one-hot encoding will be done on 
                the ground truth.
@@ -375,6 +382,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.misalignment = misalignment
         self.ms_displacement = ms_displacement
         self.ms_rotate_ratio = ms_rotate_ratio
+        self.missing_parts = missing_parts
+        self.missp_iterations = missp_iterations
         self.val = val
         self.batch_size = batch_size
         self.o_indexes = np.arange(self.len)
@@ -440,6 +449,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if cutmix: self.trans_made += '_cmix'+str(cmix_size)
         if cutnoise: self.trans_made += '_cnoi'+str(cnoise_scale)+'+'+str(cnoise_nb_iterations)+'+'+str(cnoise_size)
         if misalignment: self.trans_made += '_msalg'+str(ms_displacement)+'+'+str(ms_rotate_ratio)
+        if missing_parts: self.trans_made += '_missp'+'+'+str(missp_iterations)
             
         self.trans_made = self.trans_made.replace(" ", "")
         if not self.da: self.trans_made = ''
@@ -662,6 +672,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         # Apply contrast 
         if self.contrast and random.uniform(0, 1) < self.da_prob:
             image = contrast(image, contrast_factor=self.contrast_factor)
+
+        # Apply missing parts
+        if self.missing_parts and random.uniform(0, 1) < self.da_prob:
+            image = missing_parts(image, self.missp_iterations)
          
         # Apply transformations to the volume and its mask
         segmap = SegmentationMapsOnImage(mask, shape=mask.shape)            

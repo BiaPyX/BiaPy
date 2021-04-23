@@ -1,8 +1,12 @@
-import numpy as np
-from skimage.transform import resize
 import cv2
 import random                                                                   
 import math
+import numpy as np
+from skimage.transform import resize
+from scipy.ndimage.interpolation import map_coordinates
+from skimage.draw import line
+from scipy.ndimage.measurements import label
+from scipy.ndimage.morphology import binary_dilation
 
 
 def cutout(img, mask, nb_iterations=(1,3), size=(0.2,0.4), cval=0,
@@ -342,9 +346,9 @@ def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False,
                invert_p=0):
     """Grayscale intensity augmentation. Randomly adjust contrast/brightness, 
        randomly invert the color space and apply gamma correction. The input 
-       image will be divided by 255.
+       image will be divided by ``255``.
 
-       Implementation based on https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/misalign.py .
+       Implementation based on https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py .
  
        Parameters
        ----------
@@ -352,7 +356,7 @@ def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False,
            Image to transform. E.g. ``(x, y, channels)``.
 
        brightness_factor : tuple of 2 floats, optional
-           Intensity of brightness change. E.g. ``(0.1, 0.3)``.
+           Range of brightness' intensity. E.g. ``(0.1, 0.3)``.
 
        mode : str, optional 
            One of ``2D``, ``3D`` or ``mix``. 
@@ -362,6 +366,11 @@ def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False,
 
        invert_p : float, optional
            Probability of inverting the images.
+
+       Returns
+       -------
+       image : 3D Numpy array
+           Transformed image. E.g. ``(x, y, channels)``.
     """
     image = img/255 
 
@@ -393,9 +402,9 @@ def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False,
 
 def contrast(img, contrast_factor=(0,0), mode='mix', invert=False, invert_p=0):
     """Contrast augmentation. Randomly invert the color space and apply gamma 
-       correction. The input image will be divided by 255.
+       correction. The input image will be divided by ``255``.
 
-       Implementation based on https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/misalign.py .
+       Implementation based on https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py .
 
        Parameters
        ----------
@@ -403,7 +412,7 @@ def contrast(img, contrast_factor=(0,0), mode='mix', invert=False, invert_p=0):
            Image to transform. E.g. ``(x, y, channels)``.
 
        contrast_factor : tuple of 2 floats, optional
-           Intensity of contrast change. E.g. ``(0.1, 0.3)``.
+           Range of contrast's intensity. E.g. ``(0.1, 0.3)``.
 
        mode : str, optional
            One of ``2D``, ``3D`` or ``mix``.
@@ -413,6 +422,11 @@ def contrast(img, contrast_factor=(0,0), mode='mix', invert=False, invert_p=0):
 
        invert_p : float, optional
            Probability of inverting the images.
+
+       Returns
+       -------
+       image : 3D Numpy array
+           Transformed image. E.g. ``(x, y, channels)``.
     """
     image = img/255
 
@@ -440,4 +454,88 @@ def contrast(img, contrast_factor=(0,0), mode='mix', invert=False, invert_p=0):
         image = np.clip(image, 0, 1)
 
     return image*255
+
+
+def missing_parts(img, iterations=(30,40)):
+    """Augment the image by creating a black line in a random position.
+
+       Implementation based on https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/missing_parts.py .
+
+       Parameters
+       ----------
+       img : 3D Numpy array
+           Image to transform. E.g. ``(x, y, channels)``.
+
+       iterations : tuple of 2 ints, optional
+           Iterations to dilate the missing line with. E.g. ``(30, 40)``.
+
+       Returns
+       -------
+       out : 3D Numpy array
+           Transformed image. E.g. ``(x, y, channels)``.
+    """
+    it = np.random.randint(iterations[0], iterations[1])
+
+    num_section = img.shape[-1]
+    slice_shape = img.shape[:2]
+    transforms = {}
+
+    out = img.copy()
+
+    i=0
+    while i < num_section:
+        if np.random.rand() < 0.5:
+            transforms[i] = _prepare_deform_slice(slice_shape, it)
+            i += 2 # at most one deformed image in any consecutive 3 images
+        i += 1
+
+    num_section = img.shape[-1]
+    for i in range(num_section):
+        if i in transforms.keys():
+            line_mask = transforms[i]
+            mean = img[...,i].mean()
+            out[:,:,i][line_mask] = mean
+
+    return out
+
+
+def _prepare_deform_slice(slice_shape, iterations):
+        shape = (slice_shape[0], slice_shape[1])
+        # randomly choose fixed x or fixed y with p = 1/2
+        fixed_x = np.random.rand() < 0.5
+        if fixed_x:
+            x0, y0 = 0, np.random.randint(1, shape[1] - 2)
+            x1, y1 = shape[0] - 1, np.random.randint(1, shape[1] - 2)
+        else:
+            x0, y0 = np.random.randint(1, shape[0] - 2), 0
+            x1, y1 = np.random.randint(1, shape[0] - 2), shape[1] - 1
+
+        # generate the mask of the line that should be blacked out
+        line_mask = np.zeros(shape, dtype='bool')
+        rr, cc = line(x0, y0, x1, y1)
+        line_mask[rr, cc] = 1
+
+        # generate vectorfield pointing towards the line to compress the image
+        # first we get the unit vector representing the line
+        line_vector = np.array([x1 - x0, y1 - y0], dtype='float32')
+        line_vector /= np.linalg.norm(line_vector)
+        # next, we generate the normal to the line
+        normal_vector = np.zeros_like(line_vector)
+        normal_vector[0] = - line_vector[1]
+        normal_vector[1] = line_vector[0]
+
+        # make meshgrid
+        x, y = np.meshgrid(np.arange(shape[1]), np.arange(shape[0]))
+
+        # find the 2 components where coordinates are bigger / smaller than the line
+        # to apply normal vector in the correct direction
+        components, n_components = label(np.logical_not(line_mask).view('uint8'))
+        assert n_components == 2, "%i" % n_components
+        neg_val = components[0, 0] if fixed_x else components[-1, -1]
+        pos_val = components[-1, -1] if fixed_x else components[0, 0]
+
+        # dilate the line mask
+        line_mask = binary_dilation(line_mask, iterations=iterations) 
+        
+        return line_mask
 

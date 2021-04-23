@@ -239,7 +239,7 @@ brightness = False
 # Strength of the brightness range, with valid values being 0 <= brightness_factor <= 1
 brightness_factor = (0.1, 0.3)
 # To apply contrast changes to images
-contrast = True
+contrast = False
 # Strength of the contrast change range, with valid values being 0 <= contrast_factor <= 1
 contrast_factor = (0.1, 0.3)
 # Set a certain fraction of pixels in images to zero. Not get confuse with the
@@ -284,6 +284,10 @@ misalignment = False
 ms_displacement = 16                                                            
 # Ratio of rotation-based mis-alignment                                         
 ms_rotate_ratio = 0.5                                                           
+# Augment the image by creating a black line in a random position
+missing_parts = False
+# Iterations to dilate the missing line with
+missp_iterations = (30, 40)
 
 
 ### Extra train data generation
@@ -506,28 +510,29 @@ if probability_map and random_subvolumes_in_DA:
 
 
 print("Preparing train data generator . . .")
-train_generator = VoxelDataGenerator(
+train_generator = VoxelDataGenerator(                                           
     X_train, Y_train, in_memory=in_memory, data_paths=data_paths[0:2],
-    random_subvolumes_in_DA=random_subvolumes_in_DA,
-    prob_map=prob_map,subvol_shape=crop_shape,
+    random_subvolumes_in_DA=random_subvolumes_in_DA, 
+    prob_map=prob_map,subvol_shape=crop_shape, 
     shuffle_each_epoch=shuffle_train_data_each_epoch, batch_size=batch_size_value,
-    da=da, da_prob=da_prob, rotation90=rotation90, rand_rot=rand_rot,
-    rnd_rot_range=rnd_rot_range, shear=shear,shear_range=shear_range, zoom=zoom,
-    zoom_range=zoom_range, shift=shift, shift_range=shift_range, vflip=vflip,
-    hflip=hflip, zflip=zflip, elastic=elastic, e_alpha=e_alpha, e_sigma=e_sigma,
-    e_mode=e_mode, g_blur=g_blur, g_sigma=g_sigma, median_blur=median_blur,
+    da=da, da_prob=da_prob, rotation90=rotation90, rand_rot=rand_rot, 
+    rnd_rot_range=rnd_rot_range, shear=shear,shear_range=shear_range, zoom=zoom, 
+    zoom_range=zoom_range, shift=shift, shift_range=shift_range, vflip=vflip, 
+    hflip=hflip, zflip=zflip, elastic=elastic, e_alpha=e_alpha, e_sigma=e_sigma, 
+    e_mode=e_mode, g_blur=g_blur, g_sigma=g_sigma, median_blur=median_blur, 
     mb_kernel=mb_kernel, motion_blur=motion_blur, motb_k_range=motb_k_range,
-    gamma_contrast=gamma_contrast, gc_gamma=gc_gamma, brightness=brightness,
+    gamma_contrast=gamma_contrast, gc_gamma=gc_gamma, brightness=brightness, 
     brightness_factor=brightness_factor, contrast=contrast,
     contrast_factor=contrast_factor, dropout=dropout, drop_range=drop_range,
     cutout=cutout, cout_nb_iterations=cout_nb_iterations, cout_size=cout_size,
-    cout_cval=cout_cval, cout_apply_to_mask=cout_apply_to_mask, cutblur=cutblur,
-    cblur_size=cblur_size, cblur_down_range=cblur_down_range,
+    cout_cval=cout_cval, cout_apply_to_mask=cout_apply_to_mask, cutblur=cutblur, 
+    cblur_size=cblur_size, cblur_down_range=cblur_down_range, 
     cblur_inside=cblur_inside, cutmix=cutmix, cmix_size=cmix_size,
     cutnoise=cutnoise, cnoise_size=cnoise_size,
     cnoise_nb_iterations=cnoise_nb_iterations, cnoise_scale=cnoise_scale,
-    misalignment=misalignment, ms_displacement=ms_displacement,
-    ms_rotate_ratio=ms_rotate_ratio, n_classes=n_classes,
+    misalignment=misalignment, ms_displacement=ms_displacement, 
+    ms_rotate_ratio=ms_rotate_ratio, missing_parts=missing_parts,
+    missp_iterations=missp_iterations, n_classes=n_classes, 
     extra_data_factor=replicate_train)
 del X_train, Y_train
 
@@ -576,6 +581,8 @@ if load_previous_weights == False:
     results = model.fit(x=train_generator, validation_data=val_generator,
         epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback, 
         OnEpochEnd([train_generator.on_epoch_end])])
+
+    create_plots(results, job_identifier, char_dir, metric=metric)
 
 print("Loading model weights from h5_file: {}".format(h5_file))
 model.load_weights(h5_file)
@@ -948,14 +955,5 @@ print("Test Overall IoU (merge into complete image): {}".format(ov_iou_per_image
 #print("Post-process: Ensemble - Test Overall IoU (merge with 50% overlap): {}".format(ens_ov_iou_50ov))
 #print("Post-process: Ensemble + Z-Filtering - Test Foreground IoU (merge with 50% overlap): {}".format(ens_zfil_iou_50ov))
 #print("Post-process: Ensemble + Z-Filtering - Test Overall IoU (merge with 50% overlap): {}".format(ens_zfil_ov_iou_50ov))
-
-if not load_previous_weights:
-    scores = {}
-    for name in dir():
-        if not name.startswith('__') and ("_per_crop" in name or "_50ov" in name\
-        or "_per_image" in name or "_full" in name):
-            scores[name] = eval(name)
-
-    create_plots(results, job_identifier, char_dir, metric=metric)
 
 print("FINISHED JOB {} !!".format(job_identifier))
