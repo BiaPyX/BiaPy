@@ -182,7 +182,7 @@ shuffle_train_data_each_epoch = True
 # Flag to shuffle the validation data on every epoch
 shuffle_val_data_each_epoch = False
 # Rotation of 90º to the subvolumes
-rotation90 = True
+rotation90 = False
 # Random rotation between a defined range 
 rand_rot = False
 # Range of random rotations
@@ -200,9 +200,9 @@ shift = False
 # Shift range             
 shift_range = (0.1, 0.2)
 # Make vertical flips 
-vflip = True
+vflip = False
 # Make horizontal flips                                                           
-hflip = True
+hflip = False
 # Elastic transformations                                                       
 elastic = False
 # Strength of the distortion field
@@ -233,7 +233,7 @@ brightness = False
 # Strength of the brightness range, with valid values being 0 <= brightness_factor <= 1
 brightness_factor = (0.1, 0.3)
 # To apply contrast changes to images
-contrast = True
+contrast = False
 # Strength of the contrast change range, with valid values being 0 <= contrast_factor <= 1
 contrast_factor = (0.1, 0.3)
 # Set a certain fraction of pixels in images to zero. Not get confuse with the
@@ -279,7 +279,7 @@ ms_displacement = 16
 # Ratio of rotation-based mis-alignment
 ms_rotate_ratio = 0.5
 # Augment the image by creating a black line in a random position
-missing_parts = True
+missing_parts = False
 # Iterations to dilate the missing line with
 missp_iterations = (30, 40)
 
