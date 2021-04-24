@@ -1,5 +1,5 @@
-Data manipulation 2D
-====================
+2D Data manipulation
+--------------------
 
 .. automodule:: data_2D_manipulation
     :members:

@@ -19,7 +19,240 @@ from .augmentors import cutout, cutblur, cutmix, cutnoise, misalignment, \
 from data_3D_manipulation import random_3D_crop
 
 class VoxelDataGenerator(tf.keras.utils.Sequence):
-    """Custom ImageDataGenerator for 3D images.
+    """Custom 3D ImageDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
+       and our own `augmentors.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/generators/augmentors.py>`_
+       transformations.
+
+       Based on `microDL <https://github.com/czbiohub/microDL>`_ and
+       `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
+
+       Parameters
+       ----------
+       X : Numpy 5D array
+           Data. E.g. ``(num_of_images, x, y, z, channels)``.
+
+       Y : Numpy 5D array
+           Mask data. E.g. ``(num_of_images, x, y, z, channels)``.
+
+       in_memory : bool, optional
+           If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will
+           be loaded directly from disk using ``data_paths``.
+
+       data_paths : List of str, optional
+           If ``in_memory`` is ``True`` this list should contain the paths to 
+           load data and masks. ``data_paths[0]`` should be data path and 
+           ``data_paths[1]`` masks path.
+
+       random_subvolumes_in_DA : bool, optional
+           To extract random subvolumes from the given data. If not, the data
+           must be 5D and is assumed that the subvolumes are prepared. 
+
+       subvol_shape : 4D tuple of ints, optional
+           Shape of the subvolume to be extracted randomly from the data. 
+           E. g. ``(x, y, z, channels)``.
+
+       prob_map : 5D Numpy array or str, optional
+           If it is an array, it should represent the probability map used
+           to make random crops when ``random_subvolumes_in_DA`` is set. If 
+           ``str`` is given it should be the path to read these maps from.
+        
+       seed : int, optional
+           Seed for random functions.
+            
+       shuffle_each_epoch : bool, optional
+           To shuffle data after each epoch.
+
+       batch_size : int, optional
+           Size of the batches.
+        
+       da : bool, optional
+           To activate the data augmentation.
+        
+       da_prob : float, optional
+           Probability of doing each transformation.
+        
+       rotation90 : bool, optional                                          
+           To make square (90, 180,270) degree rotations.
+    
+       rand_rot : bool, optional                                            
+           To make random degree range rotations.                  
+       
+       rnd_rot_range : tuple of float, optional
+           Range of random rotations. E. g. ``(-180, 180)``.
+
+       shear : bool, optional
+           To make shear transformations. 
+
+       shear_range : tuple of int, optional
+           Degree range to make shear. E. g. ``(-20, 20)``. 
+
+       zoom : bool, optional
+           To make zoom on images.
+    
+       zoom_range : tuple of floats, optional
+           Zoom range to apply. E. g. ``(0.8, 1.2)``. 
+        
+       shift : float, optional 
+           To make shifts.
+     
+       shift_range : tuple of float, optional
+           Range to make a shift. E. g. ``(0.1, 0.2)``.
+
+       vflip : bool, optional
+           To activate vertical flips.
+
+       hflip : bool, optional
+           To activate horizontal flips.
+
+       zflip : bool, optional
+           To activate flips in z dimension.
+    
+       elastic : bool, optional
+           To make elastic deformations.
+
+       e_alpha : tuple of ints, optional
+            Strength of the distortion field. E. g. ``(240, 250)``.
+           
+       e_sigma : int, optional
+           Standard deviation of the gaussian kernel used to smooth the 
+           distortion fields. 
+
+       e_mode : str, optional
+           Parameter that defines the handling of newly created pixels with the
+           elastic transformation. 
+        
+       g_blur : bool, optional
+           To insert gaussian blur on the images.
+    
+       g_sigma : tuple of floats, optional
+           Standard deviation of the gaussian kernel. E. g. ``(1.0, 2.0)``.
+
+       median_blur : bool, optional                                      
+           To blur an image by computing median values over neighbourhoods.
+                                                                            
+       mb_kernel : tuple of ints, optional                                  
+           Median blur kernel size. E. g. ``(3, 7)``.                                   
+
+       motion_blur : bool, optional
+           Blur images in a way that fakes camera or object movements.
+
+       motb_k_range : int, optional
+           Kernel size to use in motion blur. 
+       
+       gamma_contrast : bool, optional
+           To insert gamma constrast changes on images. 
+
+       gc_gamma : tuple of floats, optional                                  
+           Exponent for the contrast adjustment. Higher values darken the image.
+           E. g. ``(1.25, 1.75)``. 
+
+       brightness : bool, optional                                              
+           To aply brightness to the images.                                    
+                                                                            
+       brightness_factor : tuple of 2 floats, optional                                          
+           Strength of the brightness range, with valid values being                  
+           ``0 <= brightness_factor <= 1``. E.g. ``(0.1, 0.3)``.
+                                                                            
+       contrast : boolen, optional                                              
+           To apply contrast changes to the images.                             
+                                                                            
+       contrast_factor : tuple of 2 floats, optional                                          
+           Strength of the contrast change range, with valid values being                  
+           ``0 <= contrast_factor <= 1``. E.g. ``(0.1, 0.3)``.
+
+       dropout : bool, optional
+           To set a certain fraction of pixels in images to zero.
+
+       drop_range : tuple of floats, optional
+           Range to take a probability ``p`` to drop pixels. E.g. ``(0, 0.2)``
+           will take a ``p`` folowing ``0<=p<=0.2`` and then drop ``p``
+           percent of all pixels in the image (i.e. convert them to black
+           pixels).
+
+       cutout : bool, optional                                      
+           To fill one or more rectangular areas in an image using a fill 
+           mode.
+
+       cout_nb_iterations : tuple of ints, optional
+           Range of number of areas to fill the image with. E. g. ``(1, 3)``. 
+
+       cout_size : tuple of floats, optional                         
+           Range to select the size of the areas in % of the corresponding 
+           image size. Values between ``0`` and ``1``. E. g. ``(0.2, 0.4)``.
+
+       cout_cval : int, optional                                      
+           Value to fill the area of cutout with.
+
+       cout_apply_to_mask : boolen, optional                                    
+           Wheter to apply cutout to the mask.
+
+       cutblur : boolean, optional
+           Blur a rectangular area of the image by downsampling and upsampling
+           it again. 
+
+       cblur_size : tuple of floats, optional
+           Range to select the size of the area to apply cutblur on. 
+           E. g. ``(0.2, 0.4)``.
+    
+       cblur_inside : boolean, optional
+           If ``True`` only the region inside will be modified (cut LR into HR
+           image). If ``False`` the ``50%`` of the times the region inside will
+           be modified (cut LR into HR image) and the other ``50%`` the inverse
+           will be done (cut HR into LR image). See Figure 1 of the official
+           `paper <https://arxiv.org/pdf/2004.00448.pdf>`_.
+
+       cutmix : boolean, optional
+           Combine two images pasting a region of one image to another.
+
+       cmix_size : tuple of floats, optional
+           Range to select the size of the area to paste one image into 
+           another. E. g. ``(0.2, 0.4)``.
+                                                                            
+       cnoise : boolean, optional                                               
+           Randomly add noise to a cuboid region in the image.                  
+                                                                            
+       cnoise_scale : tuple of floats, optional                                 
+           Scale of the random noise. E.g. ``(0.1, 0.2)``.                      
+                                                                            
+       cnoise_nb_iterations : tuple of ints, optional                           
+           Number of areas with noise to create. E.g. ``(1, 3)``.               
+                                                                            
+       cnoise_size : tuple of floats, optional                                  
+           Range to choose the size of the areas to transform. 
+           E.g. ``(0.2, 0.4)``.
+
+       misalignment : boolean, optional
+           To add miss-aligment augmentation.
+        
+       ms_displacement : int, optional
+           Maximum pixel displacement in `xy`-plane for misalignment.
+
+       ms_rotate_ratio : float, optional
+           Ratio of rotation-based mis-alignment
+
+       missing_parts : boolean, optional
+           Augment the image by creating a black line in a random position.
+
+       missp_iterations : tuple of 2 ints, optional
+           Iterations to dilate the missing line with. E.g. ``(30, 40)``.
+
+       n_classes : int, optional
+           Number of classes. If ``> 1`` one-hot encoding will be done on 
+           the ground truth.
+
+       out_number : int, optional                                               
+           Number of output returned by the network. Used to produce same 
+           number of ground truth data on each batch. 
+
+       val : bool, optional
+           Advice the generator that the volumes will be used to validate
+           the model to not make random crops (as the validation data must
+           be the same on each epoch). Valid when ``random_subvolumes_in_DA`` 
+           is set.
+
+       extra_data_factor : int, optional
+           Factor to multiply the batches yielded in a epoch. It acts as if
+           ``X`` and ``Y``` where concatenated ``extra_data_factor`` times.
     """
 
     def __init__(self, X, Y, in_memory=True, data_paths=None, 
@@ -43,239 +276,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                  misalignment=False, ms_displacement=16, ms_rotate_ratio=0.0, 
                  missing_parts=False, missp_iterations=(30, 40), n_classes=1,
                  out_number=1, val=False, extra_data_factor=1):
-        """ImageDataGenerator constructor. Based on transformations from 
-           `imgaug <https://github.com/aleju/imgaug>`_ library. Here a brief
-           description of each transformation parameter is made. Find a complete
-           explanation of the library `documentation <https://imgaug.readthedocs.io/en/latest/index.html>`_. 
-                                                                                
-           Parameters
-           ----------
-           X : Numpy 5D array
-               Data. E.g. ``(num_of_images, x, y, z, channels)``.
-
-           Y : Numpy 5D array
-               Mask data. E.g. ``(num_of_images, x, y, z, channels)``.
-
-           in_memory : bool, optional
-               If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will
-               be loaded directly from disk using ``data_paths``.
-
-           data_paths : List of str, optional
-               If ``in_memory`` is ``True`` this list should contain the paths to 
-               load data and masks. ``data_paths[0]`` should be data path and 
-               ``data_paths[1]`` masks path.
-
-           random_subvolumes_in_DA : bool, optional
-               To extract random subvolumes from the given data. If not, the 
-               data must be 5D and is assumed that the subvolumes are prepared. 
-    
-           subvol_shape : 4D tuple of ints, optional
-               Shape of the subvolume to be extracted randomly from the data. 
-               E. g. ``(x, y, z, channels)``.
-
-           prob_map : 5D Numpy array or str, optional
-               If it is an array, it should represent the probability map used
-               to make random crops when ``random_subvolumes_in_DA`` is set. If
-               str given should be the path to read these maps from.
-            
-           seed : int, optional
-               Seed for random functions.
-                
-           shuffle_each_epoch : bool, optional
-               To shuffle data after each epoch.
-
-           batch_size : int, optional
-               Size of the batches.
-            
-           da : bool, optional
-               To activate the data augmentation.
-            
-           da_prob : float, optional
-               Probability of doing each transformation.
-            
-           rotation90 : bool, optional                                          
-               To make square (90, 180,270) degree rotations.
-        
-           rand_rot : bool, optional                                            
-               To make random degree range rotations.                  
-           
-           rnd_rot_range : tuple of float, optional
-               Range of random rotations. E. g. ``(-180, 180)``.
-
-           shear : bool, optional
-               To make shear transformations. 
-
-           shear_range : tuple of int, optional
-               Degree range to make shear. E. g. ``(-20, 20)``. 
-
-           zoom : bool, optional
-               To make zoom on images.
-        
-           zoom_range : tuple of floats, optional
-               Zoom range to apply. E. g. ``(0.8, 1.2)``. 
-            
-           shift : float, optional 
-               To make shifts.
-         
-           shift_range : tuple of float, optional
-               Range to make a shift. E. g. ``(0.1, 0.2)``.
-
-           vflip : bool, optional
-               To activate vertical flips.
-
-           hflip : bool, optional
-               To activate horizontal flips.
-
-           zflip : bool, optional
-               To activate flips in z dimension.
-        
-           elastic : bool, optional
-               To make elastic deformations.
-
-           e_alpha : tuple of ints, optional
-                Strength of the distortion field. E. g. ``(240, 250)``.
-               
-           e_sigma : int, optional
-               Standard deviation of the gaussian kernel used to smooth the 
-               distortion fields. 
-
-           e_mode : str, optional
-               Parameter that defines the handling of newly created pixels with 
-               the elastic transformation. 
-            
-           g_blur : bool, optional
-               To insert gaussian blur on the images.
-        
-           g_sigma : tuple of floats, optional
-               Standard deviation of the gaussian kernel. E. g. ``(1.0, 2.0)``.
-
-           median_blur : bool, optional                                      
-               To blur an image by computing median values over neighbourhoods.
-                                                                                
-           mb_kernel : tuple of ints, optional                                  
-               Median blur kernel size. E. g. ``(3, 7)``.                                   
-
-           motion_blur : bool, optional
-               Blur images in a way that fakes camera or object movements.
-
-           motb_k_range : int, optional
-               Kernel size to use in motion blur. 
-           
-           gamma_contrast : bool, optional
-               To insert gamma constrast changes on images. 
-
-           gc_gamma : tuple of floats, optional                                  
-               Exponent for the contrast adjustment. Higher values darken the 
-               image. E. g. ``(1.25, 1.75)``. 
-
-           brightness : bool, optional                                              
-               To aply brightness to the images.                                    
-                                                                                
-           brightness_factor : tuple of 2 floats, optional                                          
-               Strength of the brightness range, with valid values being                  
-               ``0 <= brightness_factor <= 1``. E.g. ``(0.1, 0.3)``.
-                                                                                
-           contrast : boolen, optional                                              
-               To apply contrast changes to the images.                             
-                                                                                
-           contrast_factor : tuple of 2 floats, optional                                          
-               Strength of the contrast change range, with valid values being                  
-               ``0 <= contrast_factor <= 1``. E.g. ``(0.1, 0.3)``.
-
-           dropout : bool, optional
-               To set a certain fraction of pixels in images to zero.
-
-           drop_range : tuple of floats, optional
-               Range to take a probability ``p`` to drop pixels. E.g. ``(0, 0.2)``
-               will take a ``p`` folowing ``0<=p<=0.2`` and then drop ``p``
-               percent of all pixels in the image (i.e. convert them to black
-               pixels).
-
-           cutout : bool, optional                                      
-               To fill one or more rectangular areas in an image using a fill 
-               mode.
-
-           cout_nb_iterations : tuple of ints, optional
-               Range of number of areas to fill the image with. E. g. ``(1, 3)``. 
-
-           cout_size : tuple of floats, optional                         
-               Range to select the size of the areas in % of the corresponding 
-               image size. Values between ``0`` and ``1``. E. g. ``(0.2, 0.4)``.
-
-           cout_cval : int, optional                                      
-               Value to fill the area of cutout with.
-
-           cout_apply_to_mask : boolen, optional                                    
-               Wheter to apply cutout to the mask.
-
-           cutblur : boolean, optional
-               Blur a rectangular area of the image by downsampling and upsampling
-               it again. 
-
-           cblur_size : tuple of floats, optional
-               Range to select the size of the area to apply cutblur on. 
-               E. g. ``(0.2, 0.4)``.
-        
-           cblur_inside : boolean, optional
-               If ``True`` only the region inside will be modified (cut LR into HR
-               image). If ``False`` the ``50%`` of the times the region inside will
-               be modified (cut LR into HR image) and the other ``50%`` the inverse
-               will be done (cut HR into LR image). See Figure 1 of the official
-               `paper <https://arxiv.org/pdf/2004.00448.pdf>`_.
-
-           cutmix : boolean, optional
-               Combine two images pasting a region of one image to another.
-
-           cmix_size : tuple of floats, optional
-               Range to select the size of the area to paste one image into 
-               another. E. g. ``(0.2, 0.4)``.
-                                                                                
-           cnoise : boolean, optional                                               
-               Randomly add noise to a cuboid region in the image.                  
-                                                                                
-           cnoise_scale : tuple of floats, optional                                 
-               Scale of the random noise. E.g. ``(0.1, 0.2)``.                      
-                                                                                
-           cnoise_nb_iterations : tuple of ints, optional                           
-               Number of areas with noise to create. E.g. ``(1, 3)``.               
-                                                                                
-           cnoise_size : tuple of floats, optional                                  
-               Range to choose the size of the areas to transform. 
-               E.g. ``(0.2, 0.4)``.
-
-           misalignment : boolean, optional
-               To add miss-aligment augmentation.
-            
-           ms_displacement : int, optional
-               Maximum pixel displacement in `xy`-plane for misalignment.
-
-           ms_rotate_ratio : float, optional
-               Ratio of rotation-based mis-alignment
-
-           missing_parts : boolean, optional
-               Augment the image by creating a black line in a random position.
-
-           missp_iterations : tuple of 2 ints, optional
-               Iterations to dilate the missing line with. E.g. ``(30, 40)``.
-
-           n_classes : int, optional
-               Number of classes. If ``> 1`` one-hot encoding will be done on 
-               the ground truth.
-
-           out_number : int, optional                                               
-               Number of output returned by the network. Used to produce same 
-               number of ground truth data on each batch. 
-
-           val : bool, optional
-               Advice the generator that the volumes will be used to validate
-               the model to not make random crops (as the validation data must
-               be the same on each epoch). Valid when ``random_subvolumes_in_DA`` 
-               is set.
-
-           extra_data_factor : int, optional
-               Factor to multiply the batches yielded in a epoch. It acts as if
-               ``X`` and ``Y``` where concatenated ``extra_data_factor`` times.
-        """
 
         if in_memory:
             if X.ndim != 5 or Y.ndim != 5:
@@ -608,10 +608,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
     
            Returns
            -------
-           trans_image : 4D Numpy array
+           image : 4D Numpy array
                Transformed image. E.g. ``(x, y, z, channels)``.
 
-           trans_mask : 4D Numpy array
+           mask : 4D Numpy array
                Transformed image mask. E.g. ``(x, y, z, channels)``.
         """
 
@@ -715,11 +715,11 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
            Returns                                                              
            -------                                                              
-           trans_image : List of 4D Numpy array
-               Transformed images.  E.g. ``(x, y, z, channels)``.
+           sample_x : List of 4D Numpy array
+               Transformed images. E.g. list of ``(x, y, z, channels)``.
                                                                                 
-           trans_mask : List of 4D Numpy array                                          
-               Transformed image mask. E.g. ``(x, y, z, channels)``. 
+           sample_y : List of 4D Numpy array                                          
+               Transformed image mask. E.g. list of ``(x, y, z, channels)``. 
         """    
 
         if random_images == False and num_examples > self.len:

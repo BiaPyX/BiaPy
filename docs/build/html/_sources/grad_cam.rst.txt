@@ -1,5 +1,5 @@
 Grad-CAM
-========
+--------
 
 .. automodule:: aux.Grad_CAM.grad_cam
     :members:

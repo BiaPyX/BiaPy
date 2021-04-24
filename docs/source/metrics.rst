@@ -1,6 +1,6 @@
 Metrics
-=======
-                                                                                
+-------
+
 .. automodule:: metrics
     :members:                                                                   
     :undoc-members:                                                             

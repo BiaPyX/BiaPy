@@ -29,66 +29,20 @@ This repository is the base of the following work: ::
 
 
 .. toctree::
-   :maxdepth: 2
-   :caption: How to run
+   :maxdepth: 3
+   :caption: Quick start
 
-   how_to_run  
-
-.. toctree::                                                                    
-   :maxdepth: 2                                                                 
-   :caption: 2D Data
-
-   data_2d_manipulation
-   2d_generator_keras
-   2d_generator
-
-
-.. toctree::                                                                    
-   :maxdepth: 2                                                                 
-   :caption: 3D Data
-
-   data_3d_manipulation
-   3d_generator
-
+   quick_start
 
 .. toctree::
    :maxdepth: 3
-   :caption: Networks
+   :caption: Manuscripts
 
-   networks_unet2d
-   networks_unet3d
-   networks_nnunet
-   networks_fcn
-   networks_fc_densetnet103
-   networks_multiresunet
-   networks_mnet
+   manuscripts
 
 .. toctree::                                                                    
-   :maxdepth: 3                                                                 
-   :caption: Utilities 
+   :maxdepth: 3
+   :caption: API
 
-   metrics                                                                      
-   util                                                                         
-   post_processing     
-
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Reproduced methods
-
-   casser
-   xiao
-   cheng
-   oztel   
-
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Auxiliary code
-
-   grad_cam
-   adabound
-   callbacks   
-   
-
+   API
 

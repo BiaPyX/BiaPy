@@ -1,5 +1,5 @@
 2D Residual U-Net
-=================
+~~~~~~~~~~~~~~~~~
                                                                                 
 .. automodule:: networks.resunet
     :members:                                                                   

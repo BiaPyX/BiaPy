@@ -1,5 +1,5 @@
 2D U-Net 
-========
+~~~~~~~~
                                                                                 
 .. automodule:: networks.unet
     :members:                                                                   

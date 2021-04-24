@@ -80,52 +80,28 @@
               
             
             
-              <p class="caption"><span class="caption-text">How to run</span></p>
+              <p class="caption"><span class="caption-text">Quick start</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../how_to_run.html">Step 0: Prepare environment</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../how_to_run.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../how_to_run.html#step-2-data-structure">Step 2: Data structure</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../how_to_run.html#step-3-run-the-code">Step 3: Run the code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quick_start.html">Step 0: Prepare environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quick_start.html#step-1-data-preparation">Step 1: Data preparation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quick_start.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quick_start.html#step-3-run-the-code">Step 3: Run the code</a></li>
 </ul>
-<p class="caption"><span class="caption-text">2D Data</span></p>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../data_2d_manipulation.html">Data manipulation 2D</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../2d_generator_keras.html">2D generator (Keras)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../2d_generator.html">2D generator (Custom)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../mitochondria.html">Mitochondria segmentation</a></li>
 </ul>
-<p class="caption"><span class="caption-text">3D Data</span></p>
+<p class="caption"><span class="caption-text">API</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../data_3d_manipulation.html">Data manipulation 3D</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../3d_generator.html">3D generator</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Networks</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../networks_unet2d.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_unet3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_nnunet.html">nnU-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_fcn.html">FCN</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_multiresunet.html">MultiResUNet</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks_mnet.html">MNet</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Utilities</span></p>
-<ul>
+<li class="toctree-l1"><a class="reference internal" href="../data_2d_manipulation.html">2D Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../data_3d_manipulation.html">3D Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../generators.html">Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../post_processing.html">Post processing</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Reproduced methods</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../casser.html">Casser et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../xiao.html">Xiao et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../cheng.html">Cheng et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../oztel.html">Oztel et al.</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Auxiliary code</span></p>
-<ul>
 <li class="toctree-l1"><a class="reference internal" href="../grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../adabound.html">Adabound</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../callbacks.html">Callbacks</a></li>
 </ul>
 
             
@@ -202,11 +178,12 @@
 <span class="kn">from</span> <span class="nn">util</span> <span class="kn">import</span> <span class="n">load_data_from_dir</span><span class="p">,</span> <span class="n">foreground_percentage</span>
 
 
-<div class="viewcode-block" id="load_and_prepare_2D_data"><a class="viewcode-back" href="../data_2d_manipulation.html#data_2D_manipulation.load_and_prepare_2D_data">[docs]</a><span class="k">def</span> <span class="nf">load_and_prepare_2D_data</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">test_path</span><span class="p">,</span> <span class="n">test_mask_path</span><span class="p">,</span> 
-    <span class="n">image_train_shape</span><span class="p">,</span> <span class="n">image_test_shape</span><span class="p">,</span> <span class="n">create_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
-    <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">e_d_data</span><span class="o">=</span><span class="p">[],</span> <span class="n">e_d_mask</span><span class="o">=</span><span class="p">[],</span> <span class="n">e_d_data_dim</span><span class="o">=</span><span class="p">[],</span>
-    <span class="n">num_crops_per_dataset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">make_crops</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ov</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> 
-    <span class="n">overlap_train</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">check_crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">check_crop_path</span><span class="o">=</span><span class="s2">&quot;check_crop&quot;</span><span class="p">):</span>
+<div class="viewcode-block" id="load_and_prepare_2D_data"><a class="viewcode-back" href="../data_2d_manipulation.html#data_2D_manipulation.load_and_prepare_2D_data">[docs]</a><span class="k">def</span> <span class="nf">load_and_prepare_2D_data</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">test_path</span><span class="p">,</span> 
+    <span class="n">test_mask_path</span><span class="p">,</span> <span class="n">create_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> 
+    <span class="n">seedValue</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">e_d_data</span><span class="o">=</span><span class="p">[],</span> <span class="n">e_d_mask</span><span class="o">=</span><span class="p">[],</span> <span class="n">e_d_data_dim</span><span class="o">=</span><span class="p">[],</span> 
+    <span class="n">num_crops_per_dataset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">random_crops_in_DA</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">ov</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">overlap_train</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">check_crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> 
+    <span class="n">check_crop_path</span><span class="o">=</span><span class="s2">&quot;check_crop&quot;</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Load train, validation and test images from the given paths to create 2D</span>
 <span class="sd">       data. </span>
 
@@ -223,12 +200,6 @@
 
 <span class="sd">       test_mask_path : str</span>
 <span class="sd">           Path to the test data masks.          </span>
-
-<span class="sd">       image_train_shape : 3D tuple</span>
-<span class="sd">           Dimensions of the images to load. E.g. ``(x, y, channels)``.</span>
-
-<span class="sd">       image_test_shape : 3D tuple</span>
-<span class="sd">           Dimensions of the images to load. E.g. ``(x, y, channels)``.</span>
 
 <span class="sd">       create_val : bool, optional</span>
 <span class="sd">           If true validation data is created (from the train data).                                                    </span>
@@ -260,20 +231,27 @@
 <span class="sd">           Number of crops per extra dataset to take into account. Useful to </span>
 <span class="sd">           ensure that all the datasets have the same weight during network </span>
 <span class="sd">           trainning. </span>
-
-<span class="sd">       make_crops : bool, optional</span>
-<span class="sd">           To make crops on data.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">       random_crops_in_DA : bool, optional                                 </span>
+<span class="sd">           To advice the method that not preparation of the data must be done,  </span>
+<span class="sd">           as random subvolumes will be created on DA, and the whole volume will </span>
+<span class="sd">           be used for that.  </span>
 
 <span class="sd">       crop_shape : 3D int tuple, optional</span>
 <span class="sd">           Shape of the crops. E.g. ``(x, y, channels)``.</span>
 
 <span class="sd">       ov : 2 floats tuple, optional                                         </span>
 <span class="sd">           Amount of minimum overlap on x and y dimensions. The values must be on</span>
-<span class="sd">           range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. E. g. ``(x, y)``.   </span>
+<span class="sd">           range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. </span>
+<span class="sd">           E.g. ``(x, y)``.   </span>
 
 <span class="sd">       overlap_train : bool, optional</span>
 <span class="sd">           If ``True`` ``ov`` will be used to crop training data. ``False`` to </span>
-<span class="sd">           force minimum overap instead: ``ov=(0,0)``. </span>
+<span class="sd">           force minimum overap instead: ``ov=(0, 0)``. </span>
+
+<span class="sd">       padding : tuple of ints, optional                                        </span>
+<span class="sd">           Size of padding to be added on each axis ``(x, y)``.              </span>
+<span class="sd">           E.g. ``(24, 24)``</span>
 
 <span class="sd">       check_crop : bool, optional</span>
 <span class="sd">           To save the crops made to ensure they are generating as one wish.</span>
@@ -303,14 +281,17 @@
 <span class="sd">       Y_test : 4D Numpy array</span>
 <span class="sd">           Test images&#39; mask. E.g. ``(num_of_images, y, x, channels)``.</span>
 
-<span class="sd">       orig_test_shape : 4D int tuple</span>
-<span class="sd">           Test data original shape. E.g. ``(num_of_images, x, y, channels)``</span>
-
-<span class="sd">       norm_value : int</span>
-<span class="sd">           mean of the train data in case we need to make a normalization.</span>
-
-<span class="sd">       crop_made : bool</span>
-<span class="sd">           True if crops have been made.</span>
+<span class="sd">       orig_test_img_shapes : List of tuples                                    </span>
+<span class="sd">           List that contains the shapes of each test sample. This              </span>
+<span class="sd">           variable and ``crop_test_img_shapes`` should be used to reconstruct  </span>
+<span class="sd">           the test original images from patches with :func:`~merge_data_with_overlap`.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">       crop_test_img_shapes : List of tuples                                    </span>
+<span class="sd">           List that contains the shapes of each test sample cropped.           </span>
+<span class="sd">                                                                                </span>
+<span class="sd">       filenames : List of str                                                  </span>
+<span class="sd">           Loaded train and test filenames. ``filenames[0]`` are train filenames</span>
+<span class="sd">           and ``filenames[1]`` are test filenames.   </span>
 
 <span class="sd">       Examples</span>
 <span class="sd">       --------</span>
@@ -358,7 +339,7 @@
 
 
 <span class="sd">           # EXAMPLE 3</span>
-<span class="sd">           # Same as the first example but definig extra datasets to be loaded and stacked together </span>
+<span class="sd">           # Same as the first example but defining extra datasets to be loaded and stacked together </span>
 <span class="sd">           # with the main dataset. Extra variables to be defined: </span>
 <span class="sd">           extra_datasets_data_list.append(&#39;/data2/train/x&#39;)</span>
 <span class="sd">           extra_datasets_mask_list.append(&#39;/data2/train/y&#39;)</span>
@@ -377,21 +358,39 @@
    
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### LOAD ###&quot;</span><span class="p">)</span>
                                                                         
-    <span class="n">tr_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">image_train_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">image_train_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">image_train_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="c1"># Disable crops when random_crops_in_DA is selected                    </span>
+    <span class="n">crop</span> <span class="o">=</span> <span class="kc">False</span> <span class="k">if</span> <span class="n">random_crops_in_DA</span> <span class="k">else</span> <span class="kc">True</span>
+
+    <span class="n">t_ov</span> <span class="o">=</span> <span class="n">ov</span> <span class="k">if</span> <span class="n">overlap_train</span> <span class="k">else</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;0) Loading train images . . .&quot;</span><span class="p">)</span>
-    <span class="n">X_train</span> <span class="o">=</span> <span class="n">load_data_from_dir</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="n">tr_shape</span><span class="p">)</span>
+    <span class="n">X_train</span><span class="p">,</span> <span class="n">orig_train_shape</span><span class="p">,</span>\
+    <span class="n">_</span><span class="p">,</span> <span class="n">t_filenames</span> <span class="o">=</span> <span class="n">load_data_from_dir</span><span class="p">(</span>
+        <span class="n">train_path</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="n">crop</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="n">crop_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">t_ov</span><span class="p">,</span>
+        <span class="n">return_filenames</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;1) Loading train masks . . .&quot;</span><span class="p">)</span>
-    <span class="n">Y_train</span> <span class="o">=</span> <span class="n">load_data_from_dir</span><span class="p">(</span><span class="n">train_mask_path</span><span class="p">,</span> <span class="n">tr_shape</span><span class="p">)</span>
+    <span class="n">Y_train</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">t_filenames</span> <span class="o">=</span> <span class="n">load_data_from_dir</span><span class="p">(</span>
+        <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="n">crop</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="n">crop_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">t_ov</span><span class="p">,</span>
+        <span class="n">return_filenames</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">num_crops_per_dataset</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">X_train</span> <span class="o">=</span> <span class="n">X_train</span><span class="p">[:</span><span class="n">num_crops_per_dataset</span><span class="p">]</span>
         <span class="n">Y_train</span> <span class="o">=</span> <span class="n">Y_train</span><span class="p">[:</span><span class="n">num_crops_per_dataset</span><span class="p">]</span>
 
-    <span class="n">te_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">image_test_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">image_test_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">image_test_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;2) Loading test images . . .&quot;</span><span class="p">)</span>
-    <span class="n">X_test</span> <span class="o">=</span> <span class="n">load_data_from_dir</span><span class="p">(</span><span class="n">test_path</span><span class="p">,</span> <span class="n">te_shape</span><span class="p">)</span>
+    <span class="n">X_test</span><span class="p">,</span> <span class="n">orig_test_img_shapes</span><span class="p">,</span> \
+    <span class="n">crop_test_img_shapes</span><span class="p">,</span> <span class="n">te_filenames</span> <span class="o">=</span> <span class="n">load_data_from_dir</span><span class="p">(</span>
+        <span class="n">test_path</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="n">crop</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="n">crop_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">ov</span><span class="p">,</span>
+        <span class="n">padding</span><span class="o">=</span><span class="n">padding</span><span class="p">,</span> <span class="n">return_filenames</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;3) Loading test masks . . .&quot;</span><span class="p">)</span>
-    <span class="n">Y_test</span> <span class="o">=</span> <span class="n">load_data_from_dir</span><span class="p">(</span><span class="n">test_mask_path</span><span class="p">,</span> <span class="n">te_shape</span><span class="p">)</span>
+    <span class="n">Y_test</span><span class="p">,</span> <span class="n">orig_test_img_shapes</span><span class="p">,</span> \
+    <span class="n">crop_test_img_shapes</span><span class="p">,</span> <span class="n">te_filenames</span> <span class="o">=</span> <span class="n">load_data_from_dir</span><span class="p">(</span>
+        <span class="n">test_mask_path</span><span class="p">,</span> <span class="n">crop</span><span class="o">=</span><span class="n">crop</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="n">crop_shape</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">ov</span><span class="p">,</span>
+        <span class="n">padding</span><span class="o">=</span><span class="n">padding</span><span class="p">,</span> <span class="n">return_filenames</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Save train and test filenames                                             </span>
+    <span class="n">filenames</span> <span class="o">=</span> <span class="p">[]</span>                                                              
+    <span class="n">filenames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t_filenames</span><span class="p">)</span>                                               
+    <span class="n">filenames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">te_filenames</span><span class="p">)</span>
 
     <span class="c1"># Create validation data splitting the train</span>
     <span class="k">if</span> <span class="n">create_val</span><span class="p">:</span>
@@ -400,44 +399,19 @@
             <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">test_size</span><span class="o">=</span><span class="n">val_split</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="n">shuffle_val</span><span class="p">,</span>
             <span class="n">random_state</span><span class="o">=</span><span class="n">seedValue</span><span class="p">)</span>
 
-    <span class="c1"># Save original data shape </span>
-    <span class="n">orig_train_shape</span> <span class="o">=</span> <span class="n">Y_train</span><span class="o">.</span><span class="n">shape</span>
-    <span class="n">orig_test_shape</span> <span class="o">=</span> <span class="n">Y_test</span><span class="o">.</span><span class="n">shape</span>
+    <span class="k">if</span> <span class="n">check_crop</span> <span class="ow">and</span> <span class="p">(</span><span class="n">orig_train_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">X_train</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:]):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Checking the crops . . .&quot;</span><span class="p">)</span>
+        <span class="n">check_crops</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">orig_train_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">t_ov</span><span class="p">,</span> <span class="n">num_examples</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                    <span class="n">out_dir</span><span class="o">=</span><span class="n">check_crop_path</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;X_train_&quot;</span><span class="p">)</span>
 
-    <span class="c1"># Crop the data</span>
-    <span class="k">if</span> <span class="n">make_crops</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;4) Crop data activated . . .&quot;</span><span class="p">)</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;4.1) Cropping train data . . .&quot;</span><span class="p">)</span>
-        <span class="n">t_ov</span> <span class="o">=</span> <span class="n">ov</span> <span class="k">if</span> <span class="n">overlap_train</span> <span class="k">else</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
-        <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">crop_data_with_overlap</span><span class="p">(</span>
-            <span class="n">X_train</span><span class="p">,</span> <span class="n">crop_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">t_ov</span><span class="p">)</span>
-
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;4.2) Cropping test data . . .&quot;</span><span class="p">)</span>
-        <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span> <span class="o">=</span> <span class="n">crop_data_with_overlap</span><span class="p">(</span>
-            <span class="n">X_test</span><span class="p">,</span> <span class="n">crop_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_test</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">ov</span><span class="p">)</span>
-        
-        <span class="k">if</span> <span class="n">create_val</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;4.3) Cropping validation data . . .&quot;</span><span class="p">)</span>
-            <span class="n">X_val</span><span class="p">,</span> <span class="n">Y_val</span> <span class="o">=</span> <span class="n">crop_data_with_overlap</span><span class="p">(</span>
-                <span class="n">X_val</span><span class="p">,</span> <span class="n">crop_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_val</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">))</span>
-
-        <span class="k">if</span> <span class="n">check_crop</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;4.4) Checking the crops . . .&quot;</span><span class="p">)</span>
-            <span class="n">check_crops</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">orig_train_shape</span><span class="p">,</span> <span class="n">t_ov</span><span class="p">,</span> <span class="n">num_examples</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
-                        <span class="n">out_dir</span><span class="o">=</span><span class="n">check_crop_path</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;X_train_&quot;</span><span class="p">)</span>
-
-            <span class="n">check_crops</span><span class="p">(</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">orig_train_shape</span><span class="p">,</span> <span class="n">t_ov</span><span class="p">,</span> <span class="n">num_examples</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
-                        <span class="n">out_dir</span><span class="o">=</span><span class="n">check_crop_path</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;Y_train_&quot;</span><span class="p">)</span>
-        
-        <span class="n">crop_made</span> <span class="o">=</span> <span class="kc">True</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">crop_made</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">check_crops</span><span class="p">(</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">orig_train_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">t_ov</span><span class="p">,</span> <span class="n">num_examples</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                    <span class="n">out_dir</span><span class="o">=</span><span class="n">check_crop_path</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;Y_train_&quot;</span><span class="p">)</span>
 
     <span class="c1"># Load the extra datasets</span>
     <span class="k">if</span> <span class="n">e_d_data</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;5) Loading extra datasets . . .&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Loading extra datasets . . .&quot;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">e_d_data</span><span class="p">)):</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;5.</span><span class="si">{}</span><span class="s2">) extra dataset in </span><span class="si">{}</span><span class="s2"> . . .&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">e_d_data</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span> 
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> extra dataset in </span><span class="si">{}</span><span class="s2"> . . .&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">e_d_data</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span> 
             <span class="n">train_ids</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">e_d_data</span><span class="p">[</span><span class="n">i</span><span class="p">]))[</span><span class="mi">2</span><span class="p">])</span>
             <span class="n">train_mask_ids</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">e_d_mask</span><span class="p">[</span><span class="n">i</span><span class="p">]))[</span><span class="mi">2</span><span class="p">])</span>
 
@@ -447,35 +421,29 @@
             <span class="n">e_Y_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">train_mask_ids</span><span class="p">),</span> <span class="n">d_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">d_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> 
                                  <span class="n">d_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
 
-            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;5.</span><span class="si">{}</span><span class="s2">) Loading data of the extra dataset . . .&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> Loading data of the extra dataset . . .&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
             <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">id_</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">train_ids</span><span class="p">),</span> <span class="n">total</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">train_ids</span><span class="p">)):</span>
                 <span class="n">im</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">e_d_data</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">id_</span><span class="p">))</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
                     <span class="n">im</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
                 <span class="n">e_X_train</span><span class="p">[</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">im</span>
 
-            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;5.</span><span class="si">{}</span><span class="s2">) Loading masks of the extra dataset . . .&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> Loading masks of the extra dataset . . .&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
             <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">id_</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">train_mask_ids</span><span class="p">),</span> <span class="n">total</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">train_mask_ids</span><span class="p">)):</span>
                 <span class="n">mask</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">e_d_mask</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">id_</span><span class="p">))</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">mask</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
                     <span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
                 <span class="n">e_Y_train</span><span class="p">[</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">mask</span>
 
-            <span class="k">if</span> <span class="n">make_crops</span> <span class="o">==</span> <span class="kc">False</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">d_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="n">image_test_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">and</span> \
-                   <span class="n">d_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">image_test_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
-                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                        <span class="s2">&quot;extra dataset shape </span><span class="si">{}</span><span class="s2"> is not equal the original &quot;</span>
-                        <span class="s2">&quot;dataset shape (</span><span class="si">{}</span><span class="s2">, </span><span class="si">{}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">d_dim</span><span class="p">,</span> \
-                        <span class="n">image_test_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">image_test_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;5.</span><span class="si">{}</span><span class="s2">) Cropping the extra dataset . . .&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
-                <span class="n">e_X_train</span><span class="p">,</span> <span class="n">e_Y_train</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">crop_data</span><span class="p">(</span>
-                    <span class="n">e_X_train</span><span class="p">,</span> <span class="n">crop_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">e_Y_train</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> Cropping the extra dataset . . .&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">crop_shape</span> <span class="o">!=</span> <span class="n">e_X_train</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+                <span class="n">e_X_train</span><span class="p">,</span> <span class="n">e_Y_train</span> <span class="o">=</span> <span class="n">crop_data_with_overlap</span><span class="p">(</span>
+                    <span class="n">e_X_train</span><span class="p">,</span> <span class="n">crop_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">e_Y_train</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">overlap</span><span class="p">,</span> 
+                    <span class="n">padding</span><span class="o">=</span><span class="n">padding</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> 
                     
-                <span class="k">if</span> <span class="n">num_crops_per_dataset</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
-                    <span class="n">e_X_train</span> <span class="o">=</span> <span class="n">e_X_train</span><span class="p">[:</span><span class="n">num_crops_per_dataset</span><span class="p">]</span>
-                    <span class="n">e_Y_train</span> <span class="o">=</span> <span class="n">e_Y_train</span><span class="p">[:</span><span class="n">num_crops_per_dataset</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">num_crops_per_dataset</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">e_X_train</span> <span class="o">=</span> <span class="n">e_X_train</span><span class="p">[:</span><span class="n">num_crops_per_dataset</span><span class="p">]</span>
+                <span class="n">e_Y_train</span> <span class="o">=</span> <span class="n">e_Y_train</span><span class="p">[:</span><span class="n">num_crops_per_dataset</span><span class="p">]</span>
 
             <span class="c1"># Concatenate datasets</span>
             <span class="n">X_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">X_train</span><span class="p">,</span> <span class="n">e_X_train</span><span class="p">))</span>
@@ -487,11 +455,8 @@
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;*** Loaded test data shape is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### END LOAD ###&quot;</span><span class="p">)</span>
 
-        <span class="c1"># Calculate normalization value</span>
-        <span class="n">norm_value</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">X_train</span><span class="p">)</span>
-
-        <span class="k">return</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span> <span class="n">Y_val</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span> <span class="n">orig_test_shape</span><span class="p">,</span> \
-               <span class="n">norm_value</span><span class="p">,</span> <span class="n">crop_made</span>
+        <span class="k">return</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span> <span class="n">Y_val</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span>\
+               <span class="n">orig_test_img_shapes</span><span class="p">,</span> <span class="n">crop_test_img_shapes</span><span class="p">,</span> <span class="n">filenames</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;*** Loaded train data shape is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">X_train</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;*** Loaded test data shape is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
@@ -501,10 +466,11 @@
         <span class="n">norm_value</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">X_train</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">,</span> <span class="n">orig_test_shape</span><span class="p">,</span> <span class="n">norm_value</span><span class="p">,</span> \
-               <span class="n">crop_made</span></div>
+               <span class="n">orig_test_img_shapes</span><span class="p">,</span> <span class="n">crop_test_img_shapes</span><span class="p">,</span> <span class="n">filenames</span></div>
 
 
-<div class="viewcode-block" id="crop_data_with_overlap"><a class="viewcode-back" href="../data_2d_manipulation.html#data_2D_manipulation.crop_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">crop_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">crop_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)):</span>
+<div class="viewcode-block" id="crop_data_with_overlap"><a class="viewcode-back" href="../data_2d_manipulation.html#data_2D_manipulation.crop_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">crop_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">crop_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span>
+                           <span class="n">padding</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Crop data into small square pieces with overlap. The difference with</span>
 <span class="sd">       :func:`~crop_data` is that this function allows you to create patches with </span>
 <span class="sd">       overlap. </span>
@@ -525,7 +491,13 @@
 <span class="sd">       overlap : Tuple of 2 floats, optional</span>
 <span class="sd">           Amount of minimum overlap on x and y dimensions. The values must be on</span>
 <span class="sd">           range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. E. g. ``(x, y)``.</span>
-
+<span class="sd">        </span>
+<span class="sd">       padding : tuple of ints, optional                                       </span>
+<span class="sd">           Size of padding to be added on each axis ``(x, y)``. E.g. ``(24, 24)``.</span>
+<span class="sd">             </span>
+<span class="sd">       verbose : bool, optional</span>
+<span class="sd">            To print information about the crop to be made.</span>
+<span class="sd">            </span>
 <span class="sd">       Returns</span>
 <span class="sd">       -------</span>
 <span class="sd">       cropped_data : 4D Numpy array</span>
@@ -591,14 +563,34 @@
 <span class="sd">           #     **** New data shape is: (3960, 256, 256, 1)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### OV-CROP ###&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cropping </span><span class="si">{}</span><span class="s2"> images into </span><span class="si">{}</span><span class="s2"> with overlapping. . .&quot;</span>\
-          <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">crop_shape</span><span class="p">))</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Minimum overlap selected: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">overlap</span><span class="p">))</span>
-
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### OV-CROP ###&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cropping </span><span class="si">{}</span><span class="s2"> images into </span><span class="si">{}</span><span class="s2"> with overlapping. . .&quot;</span>\
+              <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">crop_shape</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Minimum overlap selected: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">overlap</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Padding: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">padding</span><span class="p">))</span>
+    
     <span class="k">if</span> <span class="p">(</span><span class="n">overlap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">overlap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;overlap&#39; values must be floats between range [0, 1)&quot;</span><span class="p">)</span>
 
+    <span class="n">padded_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                            <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                            <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> 
+                            <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]))</span>
+    <span class="n">padded_data</span><span class="p">[:,</span> <span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                <span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">data</span>                                                
+
+    <span class="k">if</span> <span class="n">data_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>    
+        <span class="n">padded_data_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                                     <span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                                     <span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                                     <span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]))</span>
+        <span class="n">padded_data_mask</span><span class="p">[:,</span> <span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                         <span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">data_mask</span>                                                
+
+    <span class="n">padded_crop_shape</span> <span class="o">=</span> <span class="n">crop_shape</span>
+    <span class="n">crop_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">crop_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">crop_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+        
     <span class="c1"># Calculate overlapping variables</span>
     <span class="n">overlap_x</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">1</span><span class="o">-</span><span class="n">overlap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>                       
     <span class="n">overlap_y</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">1</span><span class="o">-</span><span class="n">overlap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>                       
@@ -620,16 +612,16 @@
     <span class="c1"># Real overlap calculation for printing </span>
     <span class="n">real_ov_x</span> <span class="o">=</span> <span class="p">(</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">step_x</span><span class="p">)</span><span class="o">/</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
     <span class="n">real_ov_y</span> <span class="o">=</span> <span class="p">(</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">step_y</span><span class="p">)</span><span class="o">/</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Real overlapping (%): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">real_ov_x</span><span class="p">,</span><span class="n">real_ov_y</span><span class="p">)))</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Real overlapping (pixels): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">real_ov_x</span><span class="p">,</span>
-          <span class="n">crop_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">real_ov_y</span><span class="p">)))</span>
-
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> patches per (x,y) axis&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">crops_per_x</span><span class="p">,</span><span class="n">crops_per_y</span><span class="p">)))</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Real overlapping (%): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">real_ov_x</span><span class="p">,</span><span class="n">real_ov_y</span><span class="p">)))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Real overlapping (pixels): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">real_ov_x</span><span class="p">,</span>
+              <span class="n">crop_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">real_ov_y</span><span class="p">)))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> patches per (x,y) axis&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">crops_per_x</span><span class="p">,</span><span class="n">crops_per_y</span><span class="p">)))</span>
 
     <span class="n">total_vol</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">crops_per_x</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">crops_per_y</span><span class="p">)</span>
-    <span class="n">cropped_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">total_vol</span><span class="p">,)</span> <span class="o">+</span> <span class="n">crop_shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="n">cropped_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">total_vol</span><span class="p">,)</span> <span class="o">+</span> <span class="n">padded_crop_shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">data_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">cropped_data_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">total_vol</span><span class="p">,)</span><span class="o">+</span><span class="n">crop_shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">data_mask</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">cropped_data_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">total_vol</span><span class="p">,)</span><span class="o">+</span><span class="n">padded_crop_shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">data_mask</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
 
     <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
@@ -639,19 +631,20 @@
                 <span class="n">d_y</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="p">(</span><span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">+</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">else</span> <span class="n">last_y</span>
 
                 <span class="n">cropped_data</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> \
-                    <span class="n">data</span><span class="p">[</span><span class="n">z</span><span class="p">,</span>
-                         <span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">-</span><span class="n">d_x</span><span class="p">:</span><span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">+</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">d_x</span><span class="p">,</span>
-                         <span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">-</span><span class="n">d_y</span><span class="p">:</span><span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">+</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">d_y</span><span class="p">]</span>
+                    <span class="n">padded_data</span><span class="p">[</span><span class="n">z</span><span class="p">,</span>
+                                <span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">-</span><span class="n">d_x</span><span class="p">:</span><span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">+</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">d_x</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                                <span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">-</span><span class="n">d_y</span><span class="p">:</span><span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">+</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">d_y</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
 
                 <span class="k">if</span> <span class="n">data_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="n">cropped_data_mask</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> \
-                        <span class="n">data_mask</span><span class="p">[</span><span class="n">z</span><span class="p">,</span>
-                                  <span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">-</span><span class="n">d_x</span><span class="p">:</span><span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">+</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">d_x</span><span class="p">,</span>   
-                                  <span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">-</span><span class="n">d_y</span><span class="p">:</span><span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">+</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">d_y</span><span class="p">]</span>
+                        <span class="n">padded_data_mask</span><span class="p">[</span><span class="n">z</span><span class="p">,</span>
+                                         <span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">-</span><span class="n">d_x</span><span class="p">:</span><span class="n">x</span><span class="o">*</span><span class="n">step_x</span><span class="o">+</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">d_x</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>   
+                                         <span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">-</span><span class="n">d_y</span><span class="p">:</span><span class="n">y</span><span class="o">*</span><span class="n">step_y</span><span class="o">+</span><span class="n">crop_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">d_y</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
                 <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
 
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;**** New data shape is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cropped_data</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### END OV-CROP ###&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;**** New data shape is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cropped_data</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### END OV-CROP ###&quot;</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">data_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">cropped_data</span><span class="p">,</span> <span class="n">cropped_data_mask</span>
@@ -660,7 +653,7 @@
 
 
 <div class="viewcode-block" id="merge_data_with_overlap"><a class="viewcode-back" href="../data_2d_manipulation.html#data_2D_manipulation.merge_data_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">merge_data_with_overlap</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span>
-                            <span class="n">out_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+                            <span class="n">padding</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">out_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Merge data with an amount of overlap.</span>
 <span class="sd">    </span>
 <span class="sd">       The opposite function is :func:`~crop_data_with_overlap`.</span>
@@ -680,7 +673,13 @@
 <span class="sd">           Amount of minimum overlap on x, y and z dimensions. Should be the same</span>
 <span class="sd">           as used in :func:`~crop_data_with_overlap`. The values must be on range</span>
 <span class="sd">           ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. E. g. ``(x, y)``. </span>
-
+<span class="sd">                                                                                       </span>
+<span class="sd">       padding : tuple of ints, optional                                        </span>
+<span class="sd">           Size of padding to be added on each axis ``(x, y)``. E.g. ``(24, 24)``.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">       verbose : bool, optional                                                 </span>
+<span class="sd">            To print information about the crop to be made.                     </span>
+<span class="sd">           </span>
 <span class="sd">       out_dir : str, optional</span>
 <span class="sd">           If provided an image that represents the overlap made will be saved. </span>
 <span class="sd">           The image will be colored as follows: green region when ``==2`` crops </span>
@@ -778,17 +777,26 @@
 <span class="sd">       +---------------------------------------+-------------------------------------------+</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### MERGE-OV-CROP ###&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Merging </span><span class="si">{}</span><span class="s2"> images into </span><span class="si">{}</span><span class="s2"> with overlapping . . .&quot;</span>
-          <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">))</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Minimum overlap selected: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">overlap</span><span class="p">))</span>
-
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### MERGE-OV-CROP ###&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Merging </span><span class="si">{}</span><span class="s2"> images into </span><span class="si">{}</span><span class="s2"> with overlapping . . .&quot;</span>
+              <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Minimum overlap selected: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">overlap</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Padding: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">padding</span><span class="p">))</span>
+    
     <span class="k">if</span> <span class="p">(</span><span class="n">overlap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">overlap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">overlap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;overlap&#39; values must be floats between range [0, 1)&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Remove the padding</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[:,</span> <span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                <span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">:]</span>
 
     <span class="n">merged_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">original_shape</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">data_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">merged_data_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">original_shape</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">data_mask</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">data_mask</span> <span class="o">=</span> <span class="n">data_mask</span><span class="p">[:,</span> <span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                              <span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span><span class="n">data_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">:]</span>
+
     <span class="n">ov_map_counter</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">original_shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">out_dir</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">crop_grid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">original_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
@@ -814,11 +822,11 @@
     <span class="c1"># Real overlap calculation for printing                                     </span>
     <span class="n">real_ov_x</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">step_x</span><span class="p">)</span><span class="o">/</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>                              
     <span class="n">real_ov_y</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="n">step_y</span><span class="p">)</span><span class="o">/</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>                              
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Real overlapping (%): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">real_ov_x</span><span class="p">,</span><span class="n">real_ov_y</span><span class="p">)))</span> 
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Real overlapping (pixels): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">real_ov_x</span><span class="p">,</span>
-          <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">real_ov_y</span><span class="p">)))</span>
-
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> patches per (x,y) axis&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">crops_per_x</span><span class="p">,</span><span class="n">crops_per_y</span><span class="p">)))</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Real overlapping (%): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">real_ov_x</span><span class="p">,</span><span class="n">real_ov_y</span><span class="p">)))</span> 
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Real overlapping (pixels): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">real_ov_x</span><span class="p">,</span>
+              <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">real_ov_y</span><span class="p">)))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> patches per (x,y) axis&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">((</span><span class="n">crops_per_x</span><span class="p">,</span><span class="n">crops_per_y</span><span class="p">)))</span>
 
     <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">original_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
@@ -892,8 +900,9 @@
 
         <span class="n">im</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">prefix</span> <span class="o">+</span> <span class="s2">&quot;merged_ov_map.png&quot;</span><span class="p">))</span>
   
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;**** New data shape is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">merged_data</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### END MERGE-OV-CROP ###&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;**** New data shape is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">merged_data</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;### END MERGE-OV-CROP ###&quot;</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">data_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span> 
         <span class="k">return</span> <span class="n">merged_data</span><span class="p">,</span> <span class="n">merged_data_mask</span>
@@ -1010,11 +1019,11 @@
 <span class="sd">           If the image provided is going to be used in the validation data. </span>
 <span class="sd">           This forces to crop from the origin, e. g. ``(0, 0)`` point.</span>
 <span class="sd">    </span>
-<span class="sd">       draw_prob_map_points : bool</span>
-<span class="sd">           To return the pixel choosen to be the center of the crop. </span>
+<span class="sd">       draw_prob_map_points : bool, optional</span>
+<span class="sd">           To return the pixel chosen to be the center of the crop. </span>
 
 <span class="sd">       img_prob : Numpy 3D array, optional</span>
-<span class="sd">           Probability of each pixel to be choosen as the center of the crop. </span>
+<span class="sd">           Probability of each pixel to be chosen as the center of the crop. </span>
 <span class="sd">           E. .g. ``(x, y, channels)``.</span>
 
 <span class="sd">       weight_map : bool, optional</span>
@@ -1023,17 +1032,17 @@
 <span class="sd">       Returns</span>
 <span class="sd">       -------</span>
 <span class="sd">       img : 2D Numpy array</span>
-<span class="sd">           Crop of the given image. E. g. ``(height, width)``.</span>
+<span class="sd">           Crop of the given image. E.g. ``(x, y)``.</span>
 
 <span class="sd">       weight_map : 2D Numpy array, optional</span>
-<span class="sd">           Crop of the given image&#39;s weigth map. E. g. ``(height, width)``.</span>
+<span class="sd">           Crop of the given image&#39;s weigth map. E.g. ``(x, y)``.</span>
 <span class="sd">       </span>
 <span class="sd">       ox : int, optional</span>
-<span class="sd">           X coordinate in the complete image of the choosed central pixel to </span>
+<span class="sd">           X coordinate in the complete image of the chose central pixel to </span>
 <span class="sd">           make the crop.</span>
 
 <span class="sd">       oy : int, optional</span>
-<span class="sd">           Y coordinate in the complete image of the choosed central pixel to    </span>
+<span class="sd">           Y coordinate in the complete image of the chose central pixel to    </span>
 <span class="sd">           make the crop.</span>
 
 <span class="sd">       x : int, optional</span>

@@ -80,52 +80,28 @@
               
             
             
-              <p class="caption"><span class="caption-text">How to run</span></p>
+              <p class="caption"><span class="caption-text">Quick start</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">Step 0: Prepare environment</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-2-data-structure">Step 2: Data structure</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-3-run-the-code">Step 3: Run the code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Step 0: Prepare environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-1-data-preparation">Step 1: Data preparation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-3-run-the-code">Step 3: Run the code</a></li>
 </ul>
-<p class="caption"><span class="caption-text">2D Data</span></p>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">Data manipulation 2D</a></li>
-<li class="toctree-l1"><a class="reference internal" href="2d_generator_keras.html">2D generator (Keras)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="2d_generator.html">2D generator (Custom)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mitochondria.html">Mitochondria segmentation</a></li>
 </ul>
-<p class="caption"><span class="caption-text">3D Data</span></p>
+<p class="caption"><span class="caption-text">API</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">Data manipulation 3D</a></li>
-<li class="toctree-l1"><a class="reference internal" href="3d_generator.html">3D generator</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Networks</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_nnunet.html">nnU-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Utilities</span></p>
-<ul>
+<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">2D Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">3D Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="generators.html">Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Reproduced methods</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Auxiliary code</span></p>
-<ul>
 <li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
-<li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
 
             
@@ -202,7 +178,6 @@
  | <a href="#G"><strong>G</strong></a>
  | <a href="#I"><strong>I</strong></a>
  | <a href="#J"><strong>J</strong></a>
- | <a href="#K"><strong>K</strong></a>
  | <a href="#L"><strong>L</strong></a>
  | <a href="#M"><strong>M</strong></a>
  | <a href="#N"><strong>N</strong></a>
@@ -221,8 +196,14 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="adabound.html#aux.adabound.AdaBound">AdaBound (class in aux.adabound)</a>
 </li>
-      <li><a href="3d_generator.html#generators.data_3D_generators.VoxelDataGenerator.apply_transform">apply_transform() (generators.data_3D_generators.VoxelDataGenerator method)</a>
+      <li><a href="2d_generator_v2.html#generators.custom_da_gen_v2.ImageDataGenerator.apply_transform">apply_transform() (generators.custom_da_gen_v2.ImageDataGenerator method)</a>
+
+      <ul>
+        <li><a href="3d_generator.html#generators.data_3D_generators.VoxelDataGenerator.apply_transform">(generators.data_3D_generators.VoxelDataGenerator method)</a>
 </li>
+        <li><a href="3d_generator_v2.html#generators.data_3D_generators_v2.VoxelDataGenerator.apply_transform">(generators.data_3D_generators_v2.VoxelDataGenerator method)</a>
+</li>
+      </ul></li>
       <li><a href="util.html#util.array_to_img">array_to_img() (in module util)</a>
 </li>
       <li><a href="cheng_3d_network.html#sota_implementations.cheng_2017.cheng_3D_network.asymmetric_3D_network">asymmetric_3D_network() (in module sota_implementations.cheng_2017.cheng_3D_network)</a>
@@ -231,10 +212,10 @@
 </li>
       <li><a href="networks_att_unet_2d.html#networks.attention_unet_2d.Attention_U_Net_2D">Attention_U_Net_2D() (in module networks.attention_unet_2d)</a>
 </li>
-      <li><a href="networks_att_unet_3d.html#networks.attention_unet_3d.Attention_U_Net_3D">Attention_U_Net_3D() (in module networks.attention_unet_3d)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="networks_att_unet_3d.html#networks.attention_unet_3d.Attention_U_Net_3D">Attention_U_Net_3D() (in module networks.attention_unet_3d)</a>
+</li>
       <li><a href="networks_att_unet_2d.html#networks.attention_unet_2d.AttentionBlock">AttentionBlock() (in module networks.attention_unet_2d)</a>
 
       <ul>
@@ -272,13 +253,15 @@
 </li>
       <li><a href="metrics.html#metrics.binary_crossentropy_weighted">binary_crossentropy_weighted() (in module metrics)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="networks_fc_densetnet103.html#networks.fc_densenet103.BN_ReLU_Conv">BN_ReLU_Conv() (in module networks.fc_densenet103)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="post_processing.html#post_processing.boundary_refinement_watershed">boundary_refinement_watershed() (in module post_processing)</a>
 </li>
       <li><a href="post_processing.html#post_processing.boundary_refinement_watershed2">boundary_refinement_watershed2() (in module post_processing)</a>
+</li>
+      <li><a href="augmentors.html#generators.augmentors.brightness">brightness() (in module generators.augmentors)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -302,20 +285,20 @@
 </li>
       <li><a href="util.html#util.check_masks">check_masks() (in module util)</a>
 </li>
-      <li><a href="2d_generator_keras.html#generators.keras_da_gen.combine_generators">combine_generators() (in module generators.keras_da_gen)</a>
-</li>
       <li><a href="cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D.compute_output_shape">compute_output_shape() (sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D method)</a>
 
       <ul>
         <li><a href="cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D.compute_output_shape">(sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="augmentors.html#generators.augmentors.contrast">contrast() (in module generators.augmentors)</a>
+</li>
       <li><a href="networks_multiresunet.html#networks.MultiResUNet.conv2d_bn">conv2d_bn() (in module networks.MultiResUNet)</a>
 </li>
       <li><a href="networks_nnunet.html#sota_implementations.nnUNet_2018.nnUNet_2d.ConvDropoutNormNonlin">ConvDropoutNormNonlin() (in module sota_implementations.nnUNet_2018.nnUNet_2d)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model">create_oztel_model() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
 </li>
       <li><a href="oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model_V1">create_oztel_model_V1() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
@@ -332,7 +315,13 @@
 </li>
       <li><a href="data_2d_manipulation.html#data_2D_manipulation.crop_data_with_overlap">crop_data_with_overlap() (in module data_2D_manipulation)</a>
 </li>
-      <li><a href="2d_generator_keras.html#generators.keras_da_gen.crop_generator">crop_generator() (in module generators.keras_da_gen)</a>
+      <li><a href="augmentors.html#generators.augmentors.cutblur">cutblur() (in module generators.augmentors)</a>
+</li>
+      <li><a href="augmentors.html#generators.augmentors.cutmix">cutmix() (in module generators.augmentors)</a>
+</li>
+      <li><a href="augmentors.html#generators.augmentors.cutnoise">cutnoise() (in module generators.augmentors)</a>
+</li>
+      <li><a href="augmentors.html#generators.augmentors.cutout">cutout() (in module generators.augmentors)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -423,10 +412,24 @@
 </li>
       </ul></li>
       <li>
+    generators.augmentors
+
+      <ul>
+        <li><a href="augmentors.html#module-generators.augmentors">module</a>
+</li>
+      </ul></li>
+      <li>
     generators.custom_da_gen
 
       <ul>
         <li><a href="2d_generator.html#module-generators.custom_da_gen">module</a>
+</li>
+      </ul></li>
+      <li>
+    generators.custom_da_gen_v2
+
+      <ul>
+        <li><a href="2d_generator_v2.html#module-generators.custom_da_gen_v2">module</a>
 </li>
       </ul></li>
       <li>
@@ -436,21 +439,25 @@
         <li><a href="3d_generator.html#module-generators.data_3D_generators">module</a>
 </li>
       </ul></li>
-      <li>
-    generators.keras_da_gen
-
-      <ul>
-        <li><a href="2d_generator_keras.html#module-generators.keras_da_gen">module</a>
-</li>
-      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li>
+    generators.data_3D_generators_v2
+
+      <ul>
+        <li><a href="3d_generator_v2.html#module-generators.data_3D_generators_v2">module</a>
+</li>
+      </ul></li>
       <li><a href="adabound.html#aux.adabound.AdaBound.get_config">get_config() (aux.adabound.AdaBound method)</a>
 </li>
       <li><a href="2d_generator.html#generators.custom_da_gen.ImageDataGenerator.get_transformed_samples">get_transformed_samples() (generators.custom_da_gen.ImageDataGenerator method)</a>
 
       <ul>
+        <li><a href="2d_generator_v2.html#generators.custom_da_gen_v2.ImageDataGenerator.get_transformed_samples">(generators.custom_da_gen_v2.ImageDataGenerator method)</a>
+</li>
         <li><a href="3d_generator.html#generators.data_3D_generators.VoxelDataGenerator.get_transformed_samples">(generators.data_3D_generators.VoxelDataGenerator method)</a>
+</li>
+        <li><a href="3d_generator_v2.html#generators.data_3D_generators_v2.VoxelDataGenerator.get_transformed_samples">(generators.data_3D_generators_v2.VoxelDataGenerator method)</a>
 </li>
       </ul></li>
       <li><a href="adabound.html#aux.adabound.AdaBound.get_updates">get_updates() (aux.adabound.AdaBound method)</a>
@@ -466,11 +473,15 @@
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="2d_generator.html#generators.custom_da_gen.ImageDataGenerator">ImageDataGenerator (class in generators.custom_da_gen)</a>
+
+      <ul>
+        <li><a href="2d_generator_v2.html#generators.custom_da_gen_v2.ImageDataGenerator">(class in generators.custom_da_gen_v2)</a>
 </li>
-      <li><a href="util.html#util.img_to_array">img_to_array() (in module util)</a>
-</li>
+      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="util.html#util.img_to_array">img_to_array() (in module util)</a>
+</li>
       <li><a href="util.html#util.img_to_onehot_encoding">img_to_onehot_encoding() (in module util)</a>
 </li>
       <li><a href="oztel_utils.html#sota_implementations.oztel_2017.utils.improve_components">improve_components() (in module sota_implementations.oztel_2017.utils)</a>
@@ -500,18 +511,6 @@
   </ul></td>
 </tr></table>
 
-<h2 id="K">K</h2>
-<table style="width: 100%" class="indextable genindextable"><tr>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="2d_generator_keras.html#generators.keras_da_gen.keras_da_generator">keras_da_generator() (in module generators.keras_da_gen)</a>
-</li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="2d_generator_keras.html#generators.keras_da_gen.keras_gen_samples">keras_gen_samples() (in module generators.keras_da_gen)</a>
-</li>
-  </ul></td>
-</tr></table>
-
 <h2 id="L">L</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
@@ -525,10 +524,10 @@
 </li>
       <li><a href="util.html#util.load_3d_images_from_dir">load_3d_images_from_dir() (in module util)</a>
 </li>
-      <li><a href="data_2d_manipulation.html#data_2D_manipulation.load_and_prepare_2D_data">load_and_prepare_2D_data() (in module data_2D_manipulation)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="data_2d_manipulation.html#data_2D_manipulation.load_and_prepare_2D_data">load_and_prepare_2D_data() (in module data_2D_manipulation)</a>
+</li>
       <li><a href="data_3d_manipulation.html#data_3D_manipulation.load_and_prepare_3D_data">load_and_prepare_3D_data() (in module data_3D_manipulation)</a>
 </li>
       <li><a href="data_3d_manipulation.html#data_3D_manipulation.load_and_prepare_3D_data_v2">load_and_prepare_3D_data_v2() (in module data_3D_manipulation)</a>
@@ -536,8 +535,6 @@
       <li><a href="util.html#util.load_ct_data_from_dir">load_ct_data_from_dir() (in module util)</a>
 </li>
       <li><a href="util.html#util.load_data_from_dir">load_data_from_dir() (in module util)</a>
-</li>
-      <li><a href="util.html#util.load_data_from_dir2">load_data_from_dir2() (in module util)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -560,6 +557,10 @@
         <li><a href="metrics.html#module-metrics">module</a>
 </li>
       </ul></li>
+      <li><a href="augmentors.html#generators.augmentors.misalignment">misalignment() (in module generators.augmentors)</a>
+</li>
+      <li><a href="augmentors.html#generators.augmentors.missing_parts">missing_parts() (in module generators.augmentors)</a>
+</li>
       <li><a href="networks_mnet.html#sota_implementations.MNet_Fu_2018.MNet.MNet">MNet() (in module sota_implementations.MNet_Fu_2018.MNet)</a>
 </li>
       <li><a href="callbacks.html#aux.callbacks.ModelCheckpoint">ModelCheckpoint (class in aux.callbacks)</a>
@@ -578,11 +579,15 @@
 </li>
         <li><a href="data_3d_manipulation.html#module-data_3D_manipulation">data_3D_manipulation</a>
 </li>
+        <li><a href="augmentors.html#module-generators.augmentors">generators.augmentors</a>
+</li>
         <li><a href="2d_generator.html#module-generators.custom_da_gen">generators.custom_da_gen</a>
+</li>
+        <li><a href="2d_generator_v2.html#module-generators.custom_da_gen_v2">generators.custom_da_gen_v2</a>
 </li>
         <li><a href="3d_generator.html#module-generators.data_3D_generators">generators.data_3D_generators</a>
 </li>
-        <li><a href="2d_generator_keras.html#module-generators.keras_da_gen">generators.keras_da_gen</a>
+        <li><a href="3d_generator_v2.html#module-generators.data_3D_generators_v2">generators.data_3D_generators_v2</a>
 </li>
         <li><a href="metrics.html#module-metrics">metrics</a>
 </li>
@@ -752,7 +757,11 @@
       <ul>
         <li><a href="2d_generator.html#generators.custom_da_gen.ImageDataGenerator.on_epoch_end">(generators.custom_da_gen.ImageDataGenerator method)</a>
 </li>
+        <li><a href="2d_generator_v2.html#generators.custom_da_gen_v2.ImageDataGenerator.on_epoch_end">(generators.custom_da_gen_v2.ImageDataGenerator method)</a>
+</li>
         <li><a href="3d_generator.html#generators.data_3D_generators.VoxelDataGenerator.on_epoch_end">(generators.data_3D_generators.VoxelDataGenerator method)</a>
+</li>
+        <li><a href="3d_generator_v2.html#generators.data_3D_generators_v2.VoxelDataGenerator.on_epoch_end">(generators.data_3D_generators_v2.VoxelDataGenerator method)</a>
 </li>
         <li><a href="util.html#util.TimeHistory.on_epoch_end">(util.TimeHistory method)</a>
 </li>
@@ -784,17 +793,21 @@
         <li><a href="post_processing.html#module-post_processing">module</a>
 </li>
       </ul></li>
-      <li><a href="2d_generator_keras.html#generators.keras_da_gen.prepare_weight_maps">prepare_weight_maps() (in module generators.keras_da_gen)</a>
-</li>
   </ul></td>
 </tr></table>
 
 <h2 id="R">R</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="3d_generator.html#generators.data_3D_generators.random_3D_crop">random_3D_crop() (in module generators.data_3D_generators)</a>
+      <li><a href="data_3d_manipulation.html#data_3D_manipulation.random_3D_crop">random_3D_crop() (in module data_3D_manipulation)</a>
+
+      <ul>
+        <li><a href="3d_generator.html#generators.data_3D_generators.random_3D_crop">(in module generators.data_3D_generators)</a>
 </li>
+      </ul></li>
       <li><a href="data_2d_manipulation.html#data_2D_manipulation.random_crop">random_crop() (in module data_2D_manipulation)</a>
+</li>
+      <li><a href="augmentors.html#generators.augmentors.random_rotate_matrix">random_rotate_matrix() (in module generators.augmentors)</a>
 </li>
       <li><a href="networks_resunet.html#networks.resunet.residual_block">residual_block() (in module networks.resunet)</a>
 
@@ -984,12 +997,16 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="networks_vanilla_unet_3d.html#networks.vanilla_unet_3d.Vanilla_U_Net_3D">Vanilla_U_Net_3D() (in module networks.vanilla_unet_3d)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="metrics.html#metrics.voc_calculation">voc_calculation() (in module metrics)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="3d_generator.html#generators.data_3D_generators.VoxelDataGenerator">VoxelDataGenerator (class in generators.data_3D_generators)</a>
+
+      <ul>
+        <li><a href="3d_generator_v2.html#generators.data_3D_generators_v2.VoxelDataGenerator">(class in generators.data_3D_generators_v2)</a>
 </li>
+      </ul></li>
   </ul></td>
 </tr></table>
 

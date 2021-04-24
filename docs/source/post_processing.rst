@@ -1,5 +1,5 @@
 Post processing
-===============
+---------------
                                                                                 
 .. automodule:: post_processing
     :members:                                                                   

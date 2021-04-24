@@ -1,5 +1,5 @@
 Util
-====
+----
 
 .. automodule:: util
     :members:

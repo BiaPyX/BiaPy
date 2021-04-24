@@ -82,52 +82,28 @@
               
             
             
-              <p class="caption"><span class="caption-text">How to run</span></p>
+              <p class="caption"><span class="caption-text">Quick start</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">Step 0: Prepare environment</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-2-data-structure">Step 2: Data structure</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-3-run-the-code">Step 3: Run the code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Step 0: Prepare environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-1-data-preparation">Step 1: Data preparation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-3-run-the-code">Step 3: Run the code</a></li>
 </ul>
-<p class="caption"><span class="caption-text">2D Data</span></p>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">Data manipulation 2D</a></li>
-<li class="toctree-l1"><a class="reference internal" href="2d_generator_keras.html">2D generator (Keras)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="2d_generator.html">2D generator (Custom)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mitochondria.html">Mitochondria segmentation</a></li>
 </ul>
-<p class="caption"><span class="caption-text">3D Data</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">Data manipulation 3D</a></li>
-<li class="toctree-l1"><a class="reference internal" href="3d_generator.html">3D generator</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Networks</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_nnunet.html">nnU-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Utilities</span></p>
+<p class="caption"><span class="caption-text">API</span></p>
 <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">2D Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">3D Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="generators.html">Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Reproduced methods</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Auxiliary code</span></p>
-<ul>
 <li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
-<li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
 
             
@@ -173,6 +149,8 @@
   <ul class="wy-breadcrumbs">
     
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="API.html">&lt;no title&gt;</a> &raquo;</li>
         
       <li>Util</li>
     
@@ -223,7 +201,7 @@ reproducible as possible.</p>
 <dt id="util.TimeHistory">
 <em class="property">class </em><code class="sig-prename descclassname">util.</code><code class="sig-name descname">TimeHistory</code><a class="reference internal" href="_modules/util.html#TimeHistory"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.TimeHistory" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.callbacks.Callback</span></code></p>
-<p>Class to record each epoch time.</p>
+<p>Class to record each epoch time</p>
 <p class="rubric">Methods</p>
 <table class="longtable docutils align-default">
 <colgroup>
@@ -366,14 +344,14 @@ epochs. History object is returned by Keras <a class="reference external" href="
 <col style="width: 50%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><div class="figure align-center" id="id8">
+<tr class="row-odd"><td><div class="figure align-center" id="id10">
 <a class="reference internal image-reference" href="_images/chart_loss.png"><img alt="_images/chart_loss.png" src="_images/chart_loss.png" style="width: 80%;" /></a>
-<p class="caption"><span class="caption-text">Loss values on each epoch</span><a class="headerlink" href="#id8" title="Permalink to this image">¶</a></p>
+<p class="caption"><span class="caption-text">Loss values on each epoch</span><a class="headerlink" href="#id10" title="Permalink to this image">¶</a></p>
 </div>
 </td>
-<td><div class="figure align-center" id="id9">
+<td><div class="figure align-center" id="id11">
 <a class="reference internal image-reference" href="_images/chart_jaccard_index.png"><img alt="_images/chart_jaccard_index.png" src="_images/chart_jaccard_index.png" style="width: 80%;" /></a>
-<p class="caption"><span class="caption-text">Jaccard index values on each epoch</span><a class="headerlink" href="#id9" title="Permalink to this image">¶</a></p>
+<p class="caption"><span class="caption-text">Jaccard index values on each epoch</span><a class="headerlink" href="#id11" title="Permalink to this image">¶</a></p>
 </div>
 </td>
 </tr>
@@ -606,18 +584,19 @@ the function as follows</p>
 
 <dl class="py function">
 <dt id="util.calculate_2D_volume_prob_map">
-<code class="sig-prename descclassname">util.</code><code class="sig-name descname">calculate_2D_volume_prob_map</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">w_foreground</span><span class="o">=</span><span class="default_value">0.94</span></em>, <em class="sig-param"><span class="n">w_background</span><span class="o">=</span><span class="default_value">0.06</span></em>, <em class="sig-param"><span class="n">save_file</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#calculate_2D_volume_prob_map"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.calculate_2D_volume_prob_map" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">calculate_2D_volume_prob_map</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">Y_path</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">w_foreground</span><span class="o">=</span><span class="default_value">0.94</span></em>, <em class="sig-param"><span class="n">w_background</span><span class="o">=</span><span class="default_value">0.06</span></em>, <em class="sig-param"><span class="n">save_dir</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#calculate_2D_volume_prob_map"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.calculate_2D_volume_prob_map" title="Permalink to this definition">¶</a></dt>
 <dd><p>Calculate the probability map of the given 2D data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>Y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to calculate the probability map from. E. g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span>
 <span class="pre">y,</span> <span class="pre">channel)</span></code></p></li>
+<li><p><strong>Y_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to load the data from in case <code class="docutils literal notranslate"><span class="pre">Y=None</span></code>.</p></li>
 <li><p><strong>w_foreground</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Weight of the foreground. This value plus <code class="docutils literal notranslate"><span class="pre">w_background</span></code> must be
 equal <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
 <li><p><strong>w_background</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Weight of the background. This value plus <code class="docutils literal notranslate"><span class="pre">w_foreground</span></code> must be
 equal <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-<li><p><strong>save_file</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to the file where the probability map will be stored.</p></li>
+<li><p><strong>save_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to the file where the probability map will be stored.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises</dt>
@@ -627,35 +606,42 @@ equal <code class="docutils literal notranslate"><span class="pre">1</span></cod
 </ul>
 </dd>
 <dt class="field-odd">Returns</dt>
-<dd class="field-odd"><p><strong>Array</strong> – Probability map of the given data.</p>
+<dd class="field-odd"><p><strong>Array</strong> – Path where the probability map/s is/are stored if <code class="docutils literal notranslate"><span class="pre">Y_path</span></code> was
+given and there are images of different shapes. Otherwise, an array
+that represents the probability map of <code class="docutils literal notranslate"><span class="pre">Y</span></code> or all loaded data files
+from <code class="docutils literal notranslate"><span class="pre">Y_path</span></code> will be returned.</p>
 </dd>
 <dt class="field-even">Return type</dt>
-<dd class="field-even"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
+<dd class="field-even"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Str</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py function">
 <dt id="util.calculate_3D_volume_prob_map">
-<code class="sig-prename descclassname">util.</code><code class="sig-name descname">calculate_3D_volume_prob_map</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">w_foreground</span><span class="o">=</span><span class="default_value">0.94</span></em>, <em class="sig-param"><span class="n">w_background</span><span class="o">=</span><span class="default_value">0.06</span></em>, <em class="sig-param"><span class="n">save_file</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#calculate_3D_volume_prob_map"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.calculate_3D_volume_prob_map" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">calculate_3D_volume_prob_map</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">Y_path</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">w_foreground</span><span class="o">=</span><span class="default_value">0.94</span></em>, <em class="sig-param"><span class="n">w_background</span><span class="o">=</span><span class="default_value">0.06</span></em>, <em class="sig-param"><span class="n">save_dir</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#calculate_3D_volume_prob_map"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.calculate_3D_volume_prob_map" title="Permalink to this definition">¶</a></dt>
 <dd><p>Calculate the probability map of the given 3D data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>Y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to calculate the probability map from. E. g. <code class="docutils literal notranslate"><span class="pre">(num_subvolumes,</span>
 <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channel)</span></code></p></li>
+<li><p><strong>Y_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to load the data from in case <code class="docutils literal notranslate"><span class="pre">Y=None</span></code>.</p></li>
 <li><p><strong>w_foreground</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Weight of the foreground. This value plus <code class="docutils literal notranslate"><span class="pre">w_background</span></code> must be
 equal <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
 <li><p><strong>w_background</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Weight of the background. This value plus <code class="docutils literal notranslate"><span class="pre">w_foreground</span></code> must be
 equal <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-<li><p><strong>save_file</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to the file where the probability map will be stored.</p></li>
+<li><p><strong>save_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to the directory where the probability map will be stored.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p><strong>Array</strong> – Probability map of the given data.</p>
+<dd class="field-even"><p><strong>Array</strong> – Path where the probability map/s is/are stored if <code class="docutils literal notranslate"><span class="pre">Y_path</span></code> was
+given and there are images of different shapes. Otherwise, an array
+that represents the probability map of <code class="docutils literal notranslate"><span class="pre">Y</span></code> or all loaded data files
+from <code class="docutils literal notranslate"><span class="pre">Y_path</span></code> will be returned.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Str</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
 </dd>
 <dt class="field-even">Raises</dt>
 <dd class="field-even"><ul class="simple">
@@ -753,39 +739,56 @@ the classes represented by an integer.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="util.load_data_from_dir2">
-<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_data_from_dir2</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_data_from_dir2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_data_from_dir2" title="Permalink to this definition">¶</a></dt>
-<dd><p>Load data with unknown shape from a directory.</p>
-</dd></dl>
-
-<dl class="py function">
 <dt id="util.load_data_from_dir">
-<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_data_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_data_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_data_from_dir" title="Permalink to this definition">¶</a></dt>
-<dd><p>Load data from a directory.</p>
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_data_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">crop</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">crop_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">return_filenames</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_data_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_data_from_dir" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load data from a directory. If <code class="docutils literal notranslate"><span class="pre">crop=False</span></code> all the data is suposed to
+have the same shape.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to read the data from.</p></li>
-<li><p><strong>shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Shape of the data. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>crop</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Crop each image into desired shape pointed by <code class="docutils literal notranslate"><span class="pre">crop_shape</span></code>.</p></li>
+<li><p><strong>crop_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">ints</span></code>, <em>optional</em>) – Shape of the crop to be made. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>overlap</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x and y dimensions. The values must
+be on range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap.
+E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">ints</span></code>, <em>optional</em>) – Size of padding to be added on each axis <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.
+E.g. <code class="docutils literal notranslate"><span class="pre">(24,</span> <span class="pre">24)</span></code>.</p></li>
+<li><p><strong>return_filenames</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Return a list with the loaded filenames. Useful when you need to save
+them afterwards with the same names as the original ones.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p><strong>data</strong> – Data loaded. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code>.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">Numpy</span> <span class="pre">arrays</span></code>) – Data loaded. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code> if all files
+have same shape, otherwise a list of <code class="docutils literal notranslate"><span class="pre">(y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code> arrays
+will be returned.</p></li>
+<li><p><strong>data_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">tuples</span></code>) – Shapes of all 3D images readed. Useful to reconstruct the original
+images together with <code class="docutils literal notranslate"><span class="pre">crop_shape</span></code>.</p></li>
+<li><p><strong>crop_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">tuples</span></code>) – Shape of the loaded 3D images after cropping. Useful to reconstruct
+the original images together with <code class="docutils literal notranslate"><span class="pre">data_shape</span></code>.</p></li>
+<li><p><strong>filenames</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Loaded filenames.</p></li>
+</ul>
+</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
 <dl>
 <dt>::</dt><dd><p># EXAMPLE 1
 # Case where we need to load 165 images of shape (1024, 768)
-data_path = “data/train/x”
-data_shape = (1024, 768, 1)</p>
-<p>load_data_from_dir(data_path, data_shape)
+data_path = “data/train/x”</p>
+<p>load_data_from_dir(data_path)
 # The function will print the shape of the created array. In this example:
 #     <a href="#id2"><span class="problematic" id="id3">**</span></a>* Loaded data shape is (165, 768, 1024, 1)
 # Notice height and width swap because of Numpy ndarray terminology</p>
+<p># EXAMPLE 2
+# Case where we need to load 165 images of shape (1024, 768) but
+# cropping them into (256, 256, 1) patches
+data_path = “data/train/x”
+crop_shape = (256, 256, 1)</p>
+<p>load_data_from_dir(data_path, crop=True, crop_shape=crop_shape)
+# The function will print the shape of the created array. In this example:
+#     <a href="#id4"><span class="problematic" id="id5">**</span></a>* Loaded data shape is (1980, 256, 256, 1)</p>
 </dd>
 </dl>
 </dd></dl>
@@ -798,7 +801,10 @@ data_shape = (1024, 768, 1)</p>
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to read the data from.</p></li>
-<li><p><strong>shape</strong> (<em>optional</em>, <code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Shape of the data. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>, <em>optional</em>) – Shape of the data to load. If is not provided the shape is
+calculated automatically looping over all data files and it will be
+the maximum value found per axis. So, given the value the process
+should be faster. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -816,8 +822,8 @@ data_shape = (1024, 768, 1)</p>
 
 <span class="n">load_data_from_dir</span><span class="p">(</span><span class="n">data_path</span><span class="p">,</span> <span class="n">data_shape</span><span class="p">)</span>
 
-<span class="c1"># The function will print the shape of the created array. In this example:</span>
-<span class="c1">#     *** Loaded data shape is (165, 768, 1024, 1)</span>
+<span class="c1"># The function will print list&#39;s first position array&#39;s shape. In this example:</span>
+<span class="c1">#     *** Loaded data[0] shape is (165, 768, 1024, 1)</span>
 <span class="c1"># Notice height and width swap because of Numpy ndarray terminology</span>
 </pre></div>
 </div>
@@ -825,32 +831,34 @@ data_shape = (1024, 768, 1)</p>
 
 <dl class="py function">
 <dt id="util.load_3d_images_from_dir">
-<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_3d_images_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">crop</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">subvol_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">median_padding</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">return_filenames</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_3d_images_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_3d_images_from_dir" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">util.</code><code class="sig-name descname">load_3d_images_from_dir</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_dir</span></em>, <em class="sig-param"><span class="n">crop</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">crop_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0, 0</span></em>, <em class="sig-param"><span class="n">median_padding</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">return_filenames</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/util.html#load_3d_images_from_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#util.load_3d_images_from_dir" title="Permalink to this definition">¶</a></dt>
 <dd><p>Load data from a directory.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to read the data from.</p></li>
-<li><p><strong>shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Shape of the images to load. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>crop</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Crop each 3D image when readed.</p></li>
-<li><p><strong>subvol_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">4</span> <span class="pre">ints</span></code>, <em>optional</em>) – Shape of the subvolumes to create when cropping.
+<li><p><strong>crop_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">4</span> <span class="pre">ints</span></code>, <em>optional</em>) – Shape of the subvolumes to create when cropping.
 E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>overlap</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x, y and z dimensions. The values must
 be on range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap.
 E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z)</span></code>.</p></li>
-<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Size of padding to be added on each side</p></li>
-<li><p><strong>median_padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True the padding value is the median value. If False, the added values are zeroes.</p></li>
+<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">ints</span></code>, <em>optional</em>) – Size of padding to be added on each axis <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z)</span></code>.
+E.g. <code class="docutils literal notranslate"><span class="pre">(24,</span> <span class="pre">24,</span> <span class="pre">24)</span></code>.</p></li>
+<li><p><strong>median_padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> the padding value is the median value. If <code class="docutils literal notranslate"><span class="pre">False</span></code>, the`
+added values are zeroes.</p></li>
 <li><p><strong>return_filenames</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Return a list with the loaded filenames. Useful when you need to save
 them afterwards with the same names as the original ones.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p><ul class="simple">
-<li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data loaded. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code> if <code class="docutils literal notranslate"><span class="pre">crop</span></code>
-enabled, <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">z,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code> otherwise.</p></li>
-<li><p><strong>data_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">tuples</span></code>, <em>optional</em>) – Shapes of all 3D images readed. Useful to reconstruct the original
+<li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">5D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">arrays</span></code>) – Data loaded. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code> if all files
+have same shape, otherwise a list of <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code> arrays
+will be returned.</p></li>
+<li><p><strong>data_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">tuples</span></code>) – Shapes of all 3D images readed. Useful to reconstruct the original
 images together with <code class="docutils literal notranslate"><span class="pre">crop_shape</span></code>.</p></li>
-<li><p><strong>crop_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">tuples</span></code>, <em>optional</em>) – Shape of the loaded 3D images after cropping. Useful to reconstruct
+<li><p><strong>crop_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">tuples</span></code>) – Shape of the loaded 3D images after cropping. Useful to reconstruct
 the original images together with <code class="docutils literal notranslate"><span class="pre">data_shape</span></code>.</p></li>
 <li><p><strong>filenames</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Loaded filenames.</p></li>
 </ul>
@@ -861,11 +869,10 @@ the original images together with <code class="docutils literal notranslate"><sp
 <dl>
 <dt>::</dt><dd><p># EXAMPLE 1
 # Case where we need to load 20 images of shape (1024, 1024, 91, 1)
-data_path = “data/train/x”
-data_shape = (1024, 1024, 91, 1)</p>
-<p>data = load_data_from_dir(data_path, data_shape)
-# The function will print the shape of the created array. In this example:
-#     <a href="#id4"><span class="problematic" id="id5">**</span></a>* Loaded data shape is (20, 91, 1024, 1024, 1)
+data_path = “data/train/x”</p>
+<p>data = load_data_from_dir(data_path)
+# The function will print list’s first position array’s shape. In this example:
+#     <a href="#id6"><span class="problematic" id="id7">**</span></a>* Loaded data[0] shape is (20, 91, 1024, 1024, 1)
 # Notice height, width and depth swap as skimage.io imread function
 # is used to load images</p>
 <p># EXAMPLE 2
@@ -873,14 +880,14 @@ data_shape = (1024, 1024, 91, 1)</p>
 # with minimum overlap and storing filenames.
 data_path = “data/train/x”</p>
 <dl class="simple">
-<dt>X_test, orig_test_img_shapes,            crop_test_img_shapes, te_filenames = load_3d_images_from_dir(</dt><dd><p>test_path, None, crop=True, subvol_shape=(256, 256, 40, 1),
-overlap=(0,0,0), return_filenames=True)</p>
+<dt>X_test, orig_test_img_shapes,            crop_test_img_shapes, te_filenames = load_3d_images_from_dir(</dt><dd><p>test_path, crop=True, crop_shape=(256, 256, 40, 1), overlap=(0,0,0),
+return_filenames=True)</p>
 </dd>
 </dl>
 <p># The function will print the shape of the created array which its size is
 # the concatenation in 0 axis of all subvolumes created for each 3D image in the
 # given path. For example:
-#     <a href="#id6"><span class="problematic" id="id7">**</span></a>* Loaded data shape is (350, 256, 256, 40, 1)
+#     <a href="#id8"><span class="problematic" id="id9">**</span></a>* Loaded data shape is (350, 256, 256, 40, 1)
 # Notice height, width and depth swap as skimage.io imread function
 # is used to load images.</p>
 </dd>

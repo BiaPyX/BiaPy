@@ -1,5 +1,5 @@
 Adabound
-========
+--------
 
 .. automodule:: aux.adabound
     :members:

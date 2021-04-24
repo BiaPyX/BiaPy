@@ -60,8 +60,7 @@ def set_seed(seedValue=42, determinism=False):
     
 
 class TimeHistory(tf.keras.callbacks.Callback):
-    """Class to record each epoch time.
-    """
+    """Class to record each epoch time.  """
 
     def on_train_begin(self, logs={}):
         self.times = []

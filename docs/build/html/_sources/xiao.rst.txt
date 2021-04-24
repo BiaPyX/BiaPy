@@ -1,5 +1,5 @@
 Xiao et al.
-===========
+...........
 
 As part of our paper we try to reproduce other state-of-the-art approaches for EM semantic segmentation 
 that do not provide code. In this case the following paper has been reproduced:

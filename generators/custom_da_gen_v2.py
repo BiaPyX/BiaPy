@@ -16,11 +16,12 @@ from .augmentors import cutout, cutblur, cutmix, cutnoise, misalignment,\
 
 
 class ImageDataGenerator(tf.keras.utils.Sequence):
-    """Custom ImageDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
+    """Custom 2D ImageDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
+       and our own `augmentors.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/generators/augmentors.py>`_
        transformations. 
 
-       Based on https://github.com/czbiohub/microDL and 
-       https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly
+       Based on `microDL <https://github.com/czbiohub/microDL>`_ and
+       `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
 
        Parameters
        ----------

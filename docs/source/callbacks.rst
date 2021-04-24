@@ -1,5 +1,5 @@
 Callbacks
-=========
+---------
 
 .. automodule:: aux.callbacks
     :members:

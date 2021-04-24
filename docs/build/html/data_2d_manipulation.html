@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Data manipulation 2D &mdash; EM Image Segmentation  documentation</title>
+  <title>2D Data manipulation &mdash; EM Image Segmentation  documentation</title>
   
 
   
@@ -36,8 +36,8 @@
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="2D generator (Keras)" href="2d_generator_keras.html" />
-    <link rel="prev" title="Step 0: Prepare environment" href="how_to_run.html" /> 
+    <link rel="next" title="3D Data manipulation" href="data_3d_manipulation.html" />
+    <link rel="prev" title="&lt;no title&gt;" href="API.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -82,52 +82,28 @@
               
             
             
-              <p class="caption"><span class="caption-text">How to run</span></p>
+              <p class="caption"><span class="caption-text">Quick start</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html">Step 0: Prepare environment</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-2-data-structure">Step 2: Data structure</a></li>
-<li class="toctree-l1"><a class="reference internal" href="how_to_run.html#step-3-run-the-code">Step 3: Run the code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Step 0: Prepare environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-1-data-preparation">Step 1: Data preparation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-3-run-the-code">Step 3: Run the code</a></li>
 </ul>
-<p class="caption"><span class="caption-text">2D Data</span></p>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="mitochondria.html">Mitochondria segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Data manipulation 2D</a></li>
-<li class="toctree-l1"><a class="reference internal" href="2d_generator_keras.html">2D generator (Keras)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="2d_generator.html">2D generator (Custom)</a></li>
-</ul>
-<p class="caption"><span class="caption-text">3D Data</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">Data manipulation 3D</a></li>
-<li class="toctree-l1"><a class="reference internal" href="3d_generator.html">3D generator</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Networks</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet2d.html">2D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_unet3d.html">3D U-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_nnunet.html">nnU-Net</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Utilities</span></p>
-<ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">2D Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">3D Data manipulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="generators.html">Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
 <li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Reproduced methods</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="casser.html">Casser et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="xiao.html">Xiao et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="cheng.html">Cheng et al.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="oztel.html">Oztel et al.</a></li>
-</ul>
-<p class="caption"><span class="caption-text">Auxiliary code</span></p>
-<ul>
 <li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
 <li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
-<li class="toctree-l1"><a class="reference internal" href="callbacks.html">Callbacks</a></li>
 </ul>
 
             
@@ -174,7 +150,9 @@
     
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
         
-      <li>Data manipulation 2D</li>
+          <li><a href="API.html">&lt;no title&gt;</a> &raquo;</li>
+        
+      <li>2D Data manipulation</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -192,10 +170,10 @@
            <div itemprop="articleBody">
             
   <div class="section" id="module-data_2D_manipulation">
-<span id="data-manipulation-2d"></span><h1>Data manipulation 2D<a class="headerlink" href="#module-data_2D_manipulation" title="Permalink to this headline">¶</a></h1>
+<span id="d-data-manipulation"></span><h1>2D Data manipulation<a class="headerlink" href="#module-data_2D_manipulation" title="Permalink to this headline">¶</a></h1>
 <dl class="py function">
 <dt id="data_2D_manipulation.load_and_prepare_2D_data">
-<code class="sig-prename descclassname">data_2D_manipulation.</code><code class="sig-name descname">load_and_prepare_2D_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">train_path</span></em>, <em class="sig-param"><span class="n">train_mask_path</span></em>, <em class="sig-param"><span class="n">test_path</span></em>, <em class="sig-param"><span class="n">test_mask_path</span></em>, <em class="sig-param"><span class="n">image_train_shape</span></em>, <em class="sig-param"><span class="n">image_test_shape</span></em>, <em class="sig-param"><span class="n">create_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">val_split</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">shuffle_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">seedValue</span><span class="o">=</span><span class="default_value">42</span></em>, <em class="sig-param"><span class="n">e_d_data</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_mask</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_data_dim</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">num_crops_per_dataset</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">make_crops</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">crop_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">ov</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">overlap_train</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">check_crop</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">check_crop_path</span><span class="o">=</span><span class="default_value">'check_crop'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_2D_manipulation.html#load_and_prepare_2D_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_2D_manipulation.load_and_prepare_2D_data" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">data_2D_manipulation.</code><code class="sig-name descname">load_and_prepare_2D_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">train_path</span></em>, <em class="sig-param"><span class="n">train_mask_path</span></em>, <em class="sig-param"><span class="n">test_path</span></em>, <em class="sig-param"><span class="n">test_mask_path</span></em>, <em class="sig-param"><span class="n">create_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">val_split</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">shuffle_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">seedValue</span><span class="o">=</span><span class="default_value">42</span></em>, <em class="sig-param"><span class="n">e_d_data</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_mask</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_data_dim</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">num_crops_per_dataset</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">random_crops_in_DA</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">crop_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">ov</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">overlap_train</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">check_crop</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">check_crop_path</span><span class="o">=</span><span class="default_value">'check_crop'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_2D_manipulation.html#load_and_prepare_2D_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_2D_manipulation.load_and_prepare_2D_data" title="Permalink to this definition">¶</a></dt>
 <dd><p>Load train, validation and test images from the given paths to create 2D
 data.</p>
 <dl class="field-list simple">
@@ -205,8 +183,6 @@ data.</p>
 <li><p><strong>train_mask_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the training data masks.</p></li>
 <li><p><strong>test_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the test data.</p></li>
 <li><p><strong>test_mask_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the test data masks.</p></li>
-<li><p><strong>image_train_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">tuple</span></code>) – Dimensions of the images to load. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>image_test_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">tuple</span></code>) – Dimensions of the images to load. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>create_val</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – If true validation data is created (from the train data).</p></li>
 <li><p><strong>val_split</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – % of the train data used as validation (value between <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">1</span></code>).</p></li>
 <li><p><strong>seedValue</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Seed value.</p></li>
@@ -222,12 +198,17 @@ Same constraints as <code class="docutils literal notranslate"><span class="pre"
 <li><p><strong>num_crops_per_dataset</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of crops per extra dataset to take into account. Useful to
 ensure that all the datasets have the same weight during network
 trainning.</p></li>
-<li><p><strong>make_crops</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To make crops on data.</p></li>
+<li><p><strong>random_crops_in_DA</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To advice the method that not preparation of the data must be done,
+as random subvolumes will be created on DA, and the whole volume will
+be used for that.</p></li>
 <li><p><strong>crop_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>, <em>optional</em>) – Shape of the crops. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>ov</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">floats</span> <span class="pre">tuple</span></code>, <em>optional</em>) – Amount of minimum overlap on x and y dimensions. The values must be on
-range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap. E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap.
+E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
 <li><p><strong>overlap_train</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> <code class="docutils literal notranslate"><span class="pre">ov</span></code> will be used to crop training data. <code class="docutils literal notranslate"><span class="pre">False</span></code> to
-force minimum overap instead: <code class="docutils literal notranslate"><span class="pre">ov=(0,0)</span></code>.</p></li>
+force minimum overap instead: <code class="docutils literal notranslate"><span class="pre">ov=(0,</span> <span class="pre">0)</span></code>.</p></li>
+<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Size of padding to be added on each axis <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.
+E.g. <code class="docutils literal notranslate"><span class="pre">(24,</span> <span class="pre">24)</span></code></p></li>
 <li><p><strong>check_crop</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To save the crops made to ensure they are generating as one wish.</p></li>
 <li><p><strong>check_crop_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to save the crop samples.</p></li>
 </ul>
@@ -242,9 +223,12 @@ force minimum overap instead: <code class="docutils literal notranslate"><span c
 <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>X_test</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Test images. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>Y_test</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Test images’ mask. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code>.</p></li>
-<li><p><strong>orig_test_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Test data original shape. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code></p></li>
-<li><p><strong>norm_value</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – mean of the train data in case we need to make a normalization.</p></li>
-<li><p><strong>crop_made</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – True if crops have been made.</p></li>
+<li><p><strong>orig_test_img_shapes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">tuples</span></code>) – List that contains the shapes of each test sample. This
+variable and <code class="docutils literal notranslate"><span class="pre">crop_test_img_shapes</span></code> should be used to reconstruct
+the test original images from patches with <a class="reference internal" href="#data_2D_manipulation.merge_data_with_overlap" title="data_2D_manipulation.merge_data_with_overlap"><code class="xref py py-func docutils literal notranslate"><span class="pre">merge_data_with_overlap()</span></code></a>.</p></li>
+<li><p><strong>crop_test_img_shapes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">tuples</span></code>) – List that contains the shapes of each test sample cropped.</p></li>
+<li><p><strong>filenames</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Loaded train and test filenames. <code class="docutils literal notranslate"><span class="pre">filenames[0]</span></code> are train filenames
+and <code class="docutils literal notranslate"><span class="pre">filenames[1]</span></code> are test filenames.</p></li>
 </ul>
 </p>
 </dd>
@@ -289,7 +273,7 @@ force minimum overap instead: <code class="docutils literal notranslate"><span c
 <span class="c1">#    *** Loaded test data shape is: (1980, 256, 256, 1)</span>
 
 <span class="c1"># EXAMPLE 3</span>
-<span class="c1"># Same as the first example but definig extra datasets to be loaded and stacked together</span>
+<span class="c1"># Same as the first example but defining extra datasets to be loaded and stacked together</span>
 <span class="c1"># with the main dataset. Extra variables to be defined:</span>
 <span class="n">extra_datasets_data_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;/data2/train/x&#39;</span><span class="p">)</span>
 <span class="n">extra_datasets_mask_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;/data2/train/y&#39;</span><span class="p">)</span>
@@ -309,7 +293,7 @@ force minimum overap instead: <code class="docutils literal notranslate"><span c
 
 <dl class="py function">
 <dt id="data_2D_manipulation.crop_data_with_overlap">
-<code class="sig-prename descclassname">data_2D_manipulation.</code><code class="sig-name descname">crop_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">crop_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_2D_manipulation.html#crop_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_2D_manipulation.crop_data_with_overlap" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">data_2D_manipulation.</code><code class="sig-name descname">crop_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">crop_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_2D_manipulation.html#crop_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_2D_manipulation.crop_data_with_overlap" title="Permalink to this definition">¶</a></dt>
 <dd><p>Crop data into small square pieces with overlap. The difference with
 <a class="reference internal" href="#data_2D_manipulation.crop_data" title="data_2D_manipulation.crop_data"><code class="xref py py-func docutils literal notranslate"><span class="pre">crop_data()</span></code></a> is that this function allows you to create patches with
 overlap.</p>
@@ -322,6 +306,8 @@ overlap.</p>
 <li><p><strong>data_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Data mask to crop. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>overlap</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x and y dimensions. The values must be on
 range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap. E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Size of padding to be added on each axis <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>. E.g. <code class="docutils literal notranslate"><span class="pre">(24,</span> <span class="pre">24)</span></code>.</p></li>
+<li><p><strong>verbose</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To print information about the crop to be made.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -387,7 +373,7 @@ range <code class="docutils literal notranslate"><span class="pre">[0,</span> <s
 
 <dl class="py function">
 <dt id="data_2D_manipulation.merge_data_with_overlap">
-<code class="sig-prename descclassname">data_2D_manipulation.</code><code class="sig-name descname">merge_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">original_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">out_dir</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_2D_manipulation.html#merge_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_2D_manipulation.merge_data_with_overlap" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">data_2D_manipulation.</code><code class="sig-name descname">merge_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">original_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">out_dir</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/data_2D_manipulation.html#merge_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data_2D_manipulation.merge_data_with_overlap" title="Permalink to this definition">¶</a></dt>
 <dd><p>Merge data with an amount of overlap.</p>
 <p>The opposite function is <a class="reference internal" href="#data_2D_manipulation.crop_data_with_overlap" title="data_2D_manipulation.crop_data_with_overlap"><code class="xref py py-func docutils literal notranslate"><span class="pre">crop_data_with_overlap()</span></code></a>.</p>
 <dl class="field-list simple">
@@ -399,6 +385,8 @@ range <code class="docutils literal notranslate"><span class="pre">[0,</span> <s
 <li><p><strong>overlap</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x, y and z dimensions. Should be the same
 as used in <a class="reference internal" href="#data_2D_manipulation.crop_data_with_overlap" title="data_2D_manipulation.crop_data_with_overlap"><code class="xref py py-func docutils literal notranslate"><span class="pre">crop_data_with_overlap()</span></code></a>. The values must be on range
 <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap. E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Size of padding to be added on each axis <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>. E.g. <code class="docutils literal notranslate"><span class="pre">(24,</span> <span class="pre">24)</span></code>.</p></li>
+<li><p><strong>verbose</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To print information about the crop to be made.</p></li>
 <li><p><strong>out_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – If provided an image that represents the overlap made will be saved.
 The image will be colored as follows: green region when <code class="docutils literal notranslate"><span class="pre">==2</span></code> crops
 overlap, yellow when <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">&lt;</span> <span class="pre">x</span> <span class="pre">&lt;</span> <span class="pre">6</span></code> and red when <code class="docutils literal notranslate"><span class="pre">=&lt;6</span></code> or more crops
@@ -570,19 +558,19 @@ two images of the original shape: data image and its mask. For instance:</p>
 <li><p><strong>random_crop_size</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Size of the crop. E.g. <code class="docutils literal notranslate"><span class="pre">(height,</span> <span class="pre">width)</span></code>.</p></li>
 <li><p><strong>val</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – If the image provided is going to be used in the validation data.
 This forces to crop from the origin, e. g. <code class="docutils literal notranslate"><span class="pre">(0,</span> <span class="pre">0)</span></code> point.</p></li>
-<li><p><strong>draw_prob_map_points</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – To return the pixel choosen to be the center of the crop.</p></li>
-<li><p><strong>img_prob</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">3D</span> <span class="pre">array</span></code>, <em>optional</em>) – Probability of each pixel to be choosen as the center of the crop.
+<li><p><strong>draw_prob_map_points</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To return the pixel chosen to be the center of the crop.</p></li>
+<li><p><strong>img_prob</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">3D</span> <span class="pre">array</span></code>, <em>optional</em>) – Probability of each pixel to be chosen as the center of the crop.
 E. .g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 <li><p><strong>weight_map</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Weight map of the given image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p><ul class="simple">
-<li><p><strong>img</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Crop of the given image. E. g. <code class="docutils literal notranslate"><span class="pre">(height,</span> <span class="pre">width)</span></code>.</p></li>
-<li><p><strong>weight_map</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Crop of the given image’s weigth map. E. g. <code class="docutils literal notranslate"><span class="pre">(height,</span> <span class="pre">width)</span></code>.</p></li>
-<li><p><strong>ox</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – X coordinate in the complete image of the choosed central pixel to
+<li><p><strong>img</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Crop of the given image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>weight_map</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Crop of the given image’s weigth map. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>ox</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – X coordinate in the complete image of the chose central pixel to
 make the crop.</p></li>
-<li><p><strong>oy</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Y coordinate in the complete image of the choosed central pixel to
+<li><p><strong>oy</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Y coordinate in the complete image of the chose central pixel to
 make the crop.</p></li>
 <li><p><strong>x</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – X coordinate in the complete image where the crop starts.</p></li>
 <li><p><strong>y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Y coordinate in the complete image where the crop starts.</p></li>
@@ -706,10 +694,10 @@ The opposite function of <a class="reference internal" href="#data_2D_manipulati
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="2d_generator_keras.html" class="btn btn-neutral float-right" title="2D generator (Keras)" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="data_3d_manipulation.html" class="btn btn-neutral float-right" title="3D Data manipulation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="how_to_run.html" class="btn btn-neutral float-left" title="Step 0: Prepare environment" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="API.html" class="btn btn-neutral float-left" title="&lt;no title&gt;" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

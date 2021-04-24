@@ -1,5 +1,5 @@
 MultiResUNet
-============
+~~~~~~~~~~~~
                                                                                 
 .. automodule:: networks.MultiResUNet
     :members:                                                                   
