@@ -46,7 +46,7 @@ There are differents datasets used on the above work:
 - `Lucchi++ <https://sites.google.com/view/connectomics/>`_.
 - `Kasthuri++ <https://sites.google.com/view/connectomics/>`_.
 
-Prepare the data as described in `here <quick_start.html#step-1-data-preparation>`_.
+Prepare the data as described `here <quick_start.html#step-1-data-preparation>`_.
 
 
 Choose a template
