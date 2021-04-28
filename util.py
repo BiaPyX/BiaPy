@@ -1433,7 +1433,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0),
         if crop and img[0].shape != crop_shape[:2]+(img.shape[-1],):
             img = crop_data_with_overlap(img, crop_shape, overlap=overlap,
                                          padding=padding, verbose=False)
-        c_shape.append(img)
+        c_shape.append(img.shape)
         data.append(img)
 
     same_shape = True
