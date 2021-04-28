@@ -14,8 +14,8 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
     test_mask_path, create_val=True, val_split=0.1, shuffle_val=True, 
     seedValue=42, e_d_data=[], e_d_mask=[], e_d_data_dim=[], 
     num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None,
-    ov=(0,0), overlap_train=False, padding=(0,0), check_crop=True, 
-    check_crop_path="check_crop"):
+    crop_test=True, ov=(0,0), overlap_train=False, padding=(0,0), 
+    check_crop=True, check_crop_path="check_crop"):
     """Load train, validation and test images from the given paths to create 2D
        data. 
 
@@ -71,6 +71,9 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
 
        crop_shape : 3D int tuple, optional
            Shape of the crops. E.g. ``(x, y, channels)``.
+
+       crop_test : bool, optional
+           Wheter to crop test data.
 
        ov : 2 floats tuple, optional                                         
            Amount of minimum overlap on x and y dimensions. The values must be on
@@ -211,12 +214,12 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
     print("2) Loading test images . . .")
     X_test, orig_test_img_shapes, \
     crop_test_img_shapes, te_filenames = load_data_from_dir(
-        test_path, crop=crop, crop_shape=crop_shape, overlap=ov,
+        test_path, crop=crop_test, crop_shape=crop_shape, overlap=ov,
         padding=padding, return_filenames=True)
     print("3) Loading test masks . . .")
     Y_test, orig_test_img_shapes, \
     crop_test_img_shapes, te_filenames = load_data_from_dir(
-        test_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
+        test_mask_path, crop=crop_test, crop_shape=crop_shape, overlap=ov,
         padding=padding, return_filenames=True)
 
     # Save train and test filenames                                             
@@ -224,20 +227,20 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
     filenames.append(t_filenames)                                               
     filenames.append(te_filenames)
 
+    if check_crop and (orig_train_shape[0] != X_train.shape[1:]):
+        print("Checking the crops . . .")
+        s = (len(orig_train_shape), *orig_train_shape[0])
+        check_crops(X_train, s, t_ov, out_dir=check_crop_path,
+                    prefix="X_train_")
+        check_crops(Y_train, s, t_ov, out_dir=check_crop_path,
+                    prefix="Y_train_")
+
     # Create validation data splitting the train
     if create_val:
         X_train, X_val, \
         Y_train, Y_val = train_test_split(
             X_train, Y_train, test_size=val_split, shuffle=shuffle_val,
             random_state=seedValue)
-
-    if check_crop and (orig_train_shape[0] != X_train.shape[1:]):
-        print("Checking the crops . . .")
-        check_crops(X_train, orig_train_shape[0], t_ov, num_examples=1,
-                    out_dir=check_crop_path, prefix="X_train_")
-
-        check_crops(Y_train, orig_train_shape[0], t_ov, num_examples=1,
-                    out_dir=check_crop_path, prefix="Y_train_")
 
     # Load the extra datasets
     if e_d_data:
