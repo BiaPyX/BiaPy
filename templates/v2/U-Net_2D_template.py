@@ -108,14 +108,14 @@ os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_selected;
 # "When option (1) is chosen" refers to variables that only are supported when 
 # option 1 is chosen. "Any option" means that those variables are supported in 
 # bot options.
-in_memory = True
+in_memory = False
 
 
 ### Main dataset data/mask paths
 train_path = os.path.join(args.data_dir, 'train', 'x')                          
 train_mask_path = os.path.join(args.data_dir, 'train', 'y')       
-test_path = os.path.join(args.data_dir, 'test', 'x')             
-test_mask_path = os.path.join(args.data_dir, 'test', 'y')  
+test_path = os.path.join(args.data_dir, '..', 'test', 'x')             
+test_mask_path = os.path.join(args.data_dir, '..', 'test', 'y')  
 
 
 ### Validation data
@@ -281,7 +281,7 @@ ms_rotate_ratio = 0.5
 # Augment the image by creating a black line in a random position
 missing_parts = False
 # Iterations to dilate the missing line with
-missp_iterations = (30, 40)
+missp_iterations = (10, 30)
 
 
 ### Extra train data generation
@@ -307,7 +307,7 @@ weight_files_prefix = 'model.fibsem_'
 # this template type: please use big_data_template.py instead.
 loss_type = "bce"
 # Batch size value
-batch_size_value = 1
+batch_size_value = 6
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "sgd"
 # Learning rate used by the optimization method
@@ -315,7 +315,7 @@ learning_rate_value = 0.002
 # Number of epochs to train the network
 epochs_value = 200
 # Number of epochs to stop the training process after no improvement
-patience = 30
+patience = 50
 # If weights on data are going to be applied. To true when loss_type is 'w_bce' 
 weights_on_data = True if loss_type == "w_bce" else False
 
@@ -416,8 +416,8 @@ print("###################\n"
       "#  SANITY CHECKS  #\n"
       "###################\n")
 
-check_masks(train_mask_path)
-check_masks(test_mask_path)
+#check_masks(train_mask_path)
+#check_masks(test_mask_path)
 
 
 if in_memory:
@@ -516,11 +516,13 @@ plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights     
                      + '_' + str(args.run_id) + '.h5')  
 
-if load_previous_weights == False:
+if not load_previous_weights:
     results = model.fit(train_generator, validation_data=val_generator,
         validation_steps=len(val_generator), steps_per_epoch=len(train_generator),
         epochs=epochs_value, callbacks=[earlystopper, checkpointer, time_callback,
         OnEpochEnd([train_generator.on_epoch_end])])
+
+    create_plots(results, job_identifier, char_dir, metric=metric)
 
 print("Loading model weights from h5_file: {}".format(h5_file))
 model.load_weights(h5_file)
@@ -545,14 +547,15 @@ for i in tqdm(range(len(test_generator))):
 
     X, Y = batch  
     for j in tqdm(range(X.shape[0]), leave=False):
+        
         X_test, Y_test = crop_data_with_overlap(
-            X[j], crop_shape, data_mask=Y[j], padding=(50, 50), verbose=False)
+            np.expand_dims(X[j],0), crop_shape, data_mask=np.expand_dims(Y[j],0), padding=(50, 50), verbose=False)
        
         # Make the prediction of each patch
         pred = []
         l = int(math.ceil(X_test.shape[0]/batch_size_value))
         for k in tqdm(range(l), leave=False):
-            top = (k+1)*batch_size_value if (k+1)*batch_size_value < X_test.shape[0] else X_test.shape[0]-1
+            top = (k+1)*batch_size_value if (k+1)*batch_size_value < X_test.shape[0] else X_test.shape[0]
             score_per_crop = model.evaluate(
                 X_test[k*batch_size_value:top], Y_test[k*batch_size_value:top], verbose=0)
             loss_per_crop += score_per_crop[0]
@@ -573,8 +576,8 @@ for i in tqdm(range(len(test_generator))):
         f = os.path.join(result_no_bin_dir_per_image, str(c).zfill(d)+'.png')
         imsave(f, (pred[0]*255).astype(np.uint8))
 
-        iou_per_image = jaccard_index_numpy(Y, (pred > 0.5).astype(np.uint8))
-        ov_iou_per_image = voc_calculation(Y, (pred > 0.5).astype(np.uint8), 
+        iou_per_image = jaccard_index_numpy((Y>0.5).astype(np.uint8), (pred > 0.5).astype(np.uint8))
+        ov_iou_per_image = voc_calculation((Y>0.5).astype(np.uint8), (pred > 0.5).astype(np.uint8), 
                                            iou_per_image)
         iou += iou_per_image
         ov_iou += ov_iou_per_image
@@ -605,15 +608,6 @@ print("Test loss: {}".format(loss_per_crop))
 print("Test Foreground IoU (per crop): {}".format(iou_per_crop))
 print("Test Foreground IoU (merge into complete image): {}".format(iou))
 print("Test Overall IoU (merge into complete image): {}".format(ov_iou))
-
-if not load_previous_weights:
-    scores = {}
-    for name in dir():
-        if not name.startswith('__') and ("_per_crop" in name or "_50ov" in name\
-        or "_per_image" in name or "_full" in name):
-            scores[name] = eval(name)
-
-    create_plots(results, job_identifier, char_dir, metric=metric)
 
 print("FINISHED JOB {} !!".format(job_identifier))
 
