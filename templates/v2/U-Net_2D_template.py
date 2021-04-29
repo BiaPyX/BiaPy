@@ -108,14 +108,14 @@ os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_selected;
 # "When option (1) is chosen" refers to variables that only are supported when 
 # option 1 is chosen. "Any option" means that those variables are supported in 
 # bot options.
-in_memory = False
+in_memory = True
 
 
 ### Main dataset data/mask paths
 train_path = os.path.join(args.data_dir, 'train', 'x')                          
 train_mask_path = os.path.join(args.data_dir, 'train', 'y')       
-test_path = os.path.join(args.data_dir, '..', 'test', 'x')             
-test_mask_path = os.path.join(args.data_dir, '..', 'test', 'y')  
+test_path = os.path.join(args.data_dir, 'test', 'x')             
+test_mask_path = os.path.join(args.data_dir, 'test', 'y')  
 
 
 ### Validation data
@@ -163,7 +163,7 @@ overlap = (0,0)
 ov_train = False
 # Padding to be done in (x, y) when reconstructing test data. Useful to avoid
 # patch 'border effect'.                                                        
-padding = (0, 0)
+padding = (0,0)
 
 
 ###############################################################
@@ -313,7 +313,7 @@ optimizer = "sgd"
 # Learning rate used by the optimization method
 learning_rate_value = 0.002
 # Number of epochs to train the network
-epochs_value = 200
+epochs_value = 360
 # Number of epochs to stop the training process after no improvement
 patience = 50
 # If weights on data are going to be applied. To true when loss_type is 'w_bce' 
@@ -433,7 +433,8 @@ if in_memory:
         val_split=perc_used_as_val, shuffle_val=random_val_data,
         random_crops_in_DA=random_crops_in_DA, crop_shape=crop_shape,
         ov=overlap, padding=padding, overlap_train=ov_train, 
-        check_crop=check_crop, check_crop_path=check_crop_path)
+        check_crop=check_crop, check_crop_path=check_crop_path,
+        crop_test=False)
 else:
     X_train = Y_train = X_val = Y_val = X_test = Y_test = None
 
@@ -486,7 +487,7 @@ val_generator = ImageDataGenerator(X=X_val, Y=Y_val, batch_size=batch_size_value
     data_paths=data_paths[2:4], da=False, shape=crop_shape,
     random_crops_in_DA=random_crops_in_DA, val=True, n_classes=n_classes)
 
-test_generator = ImageDataGenerator(X=X_val, Y=Y_val, batch_size=batch_size_value,
+test_generator = ImageDataGenerator(X=X_test, Y=Y_test, batch_size=batch_size_value,
     shuffle=shuffle_val_data_each_epoch, in_memory=in_memory,            
     data_paths=data_paths[4:6], da=False, shape=crop_shape,
     random_crops_in_DA=random_crops_in_DA, val=True, n_classes=n_classes)       
@@ -547,12 +548,11 @@ for i in tqdm(range(len(test_generator))):
 
     X, Y = batch  
     for j in tqdm(range(X.shape[0]), leave=False):
-        
         X_test, Y_test = crop_data_with_overlap(
-            np.expand_dims(X[j],0), crop_shape, data_mask=np.expand_dims(Y[j],0), padding=(50, 50), verbose=False)
+            np.expand_dims(X[j],0), crop_shape, data_mask=np.expand_dims(Y[j],0), 
+                           overlap=overlap, padding=padding, verbose=False)
        
-        # Make the prediction of each patch
-        pred = []
+        # Evaluate each patch
         l = int(math.ceil(X_test.shape[0]/batch_size_value))
         for k in tqdm(range(l), leave=False):
             top = (k+1)*batch_size_value if (k+1)*batch_size_value < X_test.shape[0] else X_test.shape[0]
@@ -561,23 +561,28 @@ for i in tqdm(range(len(test_generator))):
             loss_per_crop += score_per_crop[0]
             iou_per_crop += score_per_crop[1]
     
-            p = model.predict(X_test[k*batch_size_value:top])
-            pred.append(p)
+        # Predict each patch with ensembling
+        pred = []
+        for k in tqdm(range(X_test.shape[0]), leave=False):
+            p = ensemble8_2d_predictions(X_test[k],
+                pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
+                n_classes=n_classes)
+            pred.append(np.expand_dims(p, 0))
             
         # Reconstruct the original shape 
         pred = np.concatenate(pred)
         if n_classes > 1:
             pred = np.expand_dims(np.argmax(pred,-1), -1)
             Y = np.expand_dims(np.argmax(Y,-1), -1)
-        pred = merge_data_with_overlap(pred, (1,)+Y.shape[1:], padding=(50, 50),
-                                       verbose=False)
+        pred = merge_data_with_overlap(pred, (1,)+Y.shape[1:], padding=padding,
+                                       overlap=overlap, verbose=False)
     
         c = (i*batch_size_value)+j
         f = os.path.join(result_no_bin_dir_per_image, str(c).zfill(d)+'.png')
         imsave(f, (pred[0]*255).astype(np.uint8))
 
-        iou_per_image = jaccard_index_numpy((Y>0.5).astype(np.uint8), (pred > 0.5).astype(np.uint8))
-        ov_iou_per_image = voc_calculation((Y>0.5).astype(np.uint8), (pred > 0.5).astype(np.uint8), 
+        iou_per_image = jaccard_index_numpy((Y[j]>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8))
+        ov_iou_per_image = voc_calculation((Y[j]>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8), 
                                            iou_per_image)
         iou += iou_per_image
         ov_iou += ov_iou_per_image
