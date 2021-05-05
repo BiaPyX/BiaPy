@@ -525,7 +525,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
     padded_data = np.zeros((data.shape[0]+2*padding[2], 
                             data.shape[1]+2*padding[0], 
                             data.shape[2]+2*padding[1], 
-                            data.shape[3]))
+                            data.shape[3]), dtype=data.dtype)
     padded_data[padding[2]:padding[2]+data.shape[0], 
                 padding[0]:padding[0]+data.shape[1],
                 padding[1]:padding[1]+data.shape[2],:] = data 
@@ -533,7 +533,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
         padded_data_mask = np.zeros((data_mask.shape[0]+2*padding[2],
                                      data_mask.shape[1]+2*padding[0],
                                      data_mask.shape[2]+2*padding[1],
-                                     data_mask.shape[3]))
+                                     data_mask.shape[3]), dtype=data_mask.dtype)
         padded_data_mask[padding[2]:padding[2]+data_mask.shape[0],
                          padding[0]:padding[0]+data_mask.shape[1],
                          padding[1]:padding[1]+data_mask.shape[2],:] = data_mask
@@ -604,9 +604,10 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),
         print("{} patches per (x,y,z) axis".format((vols_per_x,vols_per_y,vols_per_z)))
 
     total_vol = vols_per_z*vols_per_x*vols_per_y
-    cropped_data = np.zeros((total_vol,) + padded_vol_shape)
+    cropped_data = np.zeros((total_vol,) + padded_vol_shape, dtype=data.dtype)
     if data_mask is not None:
-        cropped_data_mask = np.zeros((total_vol,) + padded_vol_shape[:3]+(data_mask.shape[-1],))
+        cropped_data_mask = np.zeros((total_vol,) + padded_vol_shape[:3]+(data_mask.shape[-1],),
+                                     dtype=data_mask.dtype)
 
     c = 0
     for z in range(vols_per_z):
@@ -780,9 +781,10 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False, verbose=True):
             print("Pixels dropped per dimension: ({},{},{})"
                   .format(drop_x,drop_y,drop_z))
                                                                                 
-    cropped_data = np.zeros((num_sub_volum, ) + vol_shape)
+    cropped_data = np.zeros((num_sub_volum, ) + vol_shape, dtype=data.dtype)
     if data_mask is not None:
-        cropped_data_mask = np.zeros((num_sub_volum, ) + vol_shape[:3]+(data_mask.shape[-1],))
+        cropped_data_mask = np.zeros((num_sub_volum, ) + vol_shape[:3]+(data_mask.shape[-1],),
+                                     dtype=data_mask.dtype)
                                                                                 
     if verbose:
         print("{},{},{} patches per x,y,z axis"
@@ -921,12 +923,13 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None,
        and (overlap[2] >= 1 or overlap[2] < 0):                                 
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 
-    merged_data = np.zeros((orig_vol_shape))
+    merged_data = np.zeros((orig_vol_shape), dtype=data.dtype)
     if data_mask is not None:
         data_mask = data_mask[:, padding[0]:data_mask.shape[1]-padding[0],
                               padding[1]:data_mask.shape[2]-padding[1],
                               padding[2]:data_mask.shape[3]-padding[2], :]
-        merged_data_mask = np.zeros(orig_vol_shape[:3]+(data_mask.shape[-1],) )
+        merged_data_mask = np.zeros(orig_vol_shape[:3]+(data_mask.shape[-1],),
+                                    dtype=data_mask.dtype)
 
     ov_map_counter = np.zeros((orig_vol_shape))
 
