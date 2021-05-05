@@ -403,7 +403,7 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2):
     # Merge channels
     total_vol = np.concatenate(total_vol, -1)
 
-    decoded_aug_vols = np.zeros(total_vol.shape)
+    _decoded_aug_vols = []
     for i in range(total_vol.shape[0]):
         r_aux = pred_func(np.expand_dims(total_vol[i], 0))
 
@@ -414,37 +414,41 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2):
         if n_classes > 1:
             r_aux = np.expand_dims(np.argmax(r_aux, -1), -1)
 
-        decoded_aug_vols[i] = r_aux
+        _decoded_aug_vols.append(r_aux)
     
+    _decoded_aug_vols = np.concatenate(_decoded_aug_vols)
     volume = np.expand_dims(volume, -1)
 
-    # Remove the last channel to make the transformations correctly
-    decoded_aug_vols = decoded_aug_vols[...,0]
-
-    # Undo the combinations of the volume
-    out_vols = []
-    out_vols.append(np.array(decoded_aug_vols[0]))
-    out_vols.append(rotate(np.array(decoded_aug_vols[1]), mode='reflect', axes=(0, 1), angle=-90, reshape=False))
-    out_vols.append(rotate(np.array(decoded_aug_vols[2]), mode='reflect', axes=(0, 1), angle=-180, reshape=False))
-    out_vols.append(rotate(np.array(decoded_aug_vols[3]), mode='reflect', axes=(0, 1), angle=-270, reshape=False))
-    out_vols.append(np.flip(np.array(decoded_aug_vols[4]), 0))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[5]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 0))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[6]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 0))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[7]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 0))
-    out_vols.append(np.flip(np.array(decoded_aug_vols[8]), 1))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[9]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 1))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[10]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 1))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[11]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 1))
-    out_vols.append(np.flip(np.array(decoded_aug_vols[12]), 2))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[13]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 2))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[14]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 2))
-    out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[15]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 2))
-    out_vols = np.array(out_vols)
-
-    # Add the last channel again
-    decoded_aug_vols = np.expand_dims(decoded_aug_vols, -1)
-    out_vols = np.expand_dims(out_vols, -1)
+    arr = []
+    for c in range(_decoded_aug_vols.shape[-1]):
+        # Remove the last channel to make the transformations correctly
+        decoded_aug_vols = _decoded_aug_vols[...,c]
     
+        # Undo the combinations of the volume
+        out_vols = []
+        out_vols.append(np.array(decoded_aug_vols[0]))
+        out_vols.append(rotate(np.array(decoded_aug_vols[1]), mode='reflect', axes=(0, 1), angle=-90, reshape=False))
+        out_vols.append(rotate(np.array(decoded_aug_vols[2]), mode='reflect', axes=(0, 1), angle=-180, reshape=False))
+        out_vols.append(rotate(np.array(decoded_aug_vols[3]), mode='reflect', axes=(0, 1), angle=-270, reshape=False))
+        out_vols.append(np.flip(np.array(decoded_aug_vols[4]), 0))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[5]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 0))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[6]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 0))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[7]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 0))
+        out_vols.append(np.flip(np.array(decoded_aug_vols[8]), 1))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[9]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 1))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[10]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 1))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[11]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 1))
+        out_vols.append(np.flip(np.array(decoded_aug_vols[12]), 2))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[13]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 2))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[14]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 2))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[15]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 2))
+        out_vols = np.array(out_vols)
+        out_vols = np.expand_dims(out_vols, -1)
+        arr.append(out_vols)
+    
+    out_vols = np.concatenate(arr, -1)
+    del decoded_aug_vols, _decoded_aug_vols, arr
+
     # Create the output data
     if pad_to_square != 0:
         if pad_to_square < 0:
