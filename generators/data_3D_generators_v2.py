@@ -11,12 +11,14 @@ from PIL import Image
 import imageio
 from imgaug import augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
+from imgaug.augmentables.heatmaps import HeatmapsOnImage
 import imgaug as ia
 from imgaug import parameters as iap
 from skimage.io import imsave                                                   
 from .augmentors import cutout, cutblur, cutmix, cutnoise, misalignment, \
                         brightness, contrast, missing_parts
 from data_3D_manipulation import random_3D_crop
+
 
 class VoxelDataGenerator(tf.keras.utils.Sequence):
     """Custom 3D ImageDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
@@ -328,21 +330,38 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.shape = subvol_shape if random_subvolumes_in_DA else img.shape 
             # Loop over a few masks to ensure foreground class is present 
             self.div_Y_on_load = False
+            self.first_no_bin_channel = -1
             for i in range(min(10,len(self.data_mask_path))):
                 img = imread(os.path.join(data_paths[1], self.data_mask_path[i]))   
                 if np.max(img) > 100: self.div_Y_on_load = True 
-            if img.ndim == 3: img = np.expand_dims(img, -1)
+                if img.ndim == 3: img = np.expand_dims(img, -1)
+                # Store wheter all channels of the gt are binary or not             
+                # (e.g. distance transform channel)                                 
+                if img.dtype is np.dtype(np.float32) or \
+                   img.dtype is np.dtype(np.float64):
+                    for j in range(img.shape[-1]):                                  
+                        if len(np.unique(img[...,j])) != 2:                         
+                            self.first_no_bin_channel = i
+                            break
             self.channels = img.shape[-1]
             del img
         else:
             self.X = X.astype(np.uint8) 
-            self.Y = Y.astype(np.uint8)
+            self.Y = Y
+            # Store wheter all channels of the gt are binary or not 
+            # (e.g. distance transform channel)
+            self.first_no_bin_channel = -1
+            if Y.dtype is np.dtype(np.float32) or Y.dtype is np.dtype(np.float64):
+                for i in range(Y.shape[-1]):
+                    if len(np.unique(Y[...,i])) != 2: 
+                        self.first_no_bin_channel = i
+                        break
             self.div_X_on_load = True if np.max(X) > 100 else False
             self.div_Y_on_load = True if np.max(Y) > 100 else False
             self.channels = Y.shape[-1]
             self.len = len(self.X)
             self.shape = subvol_shape if random_subvolumes_in_DA else X.shape[1:]
-    
+        
         self.prob_map = None
         if random_subvolumes_in_DA and prob_map is not None:
             if isinstance(prob_map, str):
@@ -512,7 +531,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         batch_x = np.zeros((len(indexes), *self.shape), dtype=np.uint8)
         batch_y = np.zeros((len(indexes), *self.shape[:3])+(self.channels,), 
-                           dtype=np.uint8)
+                           dtype=self.Y.dtype)
                    
         for i, j in zip(range(len(indexes)), indexes):
             
@@ -527,7 +546,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 if mask.ndim == 3: mask = np.expand_dims(mask, -1)
                 img = img.transpose((1,2,0,3))
                 mask = mask.transpose((1,2,0,3))
-            
+
             # Apply ramdom crops if it is selected 
             if self.random_subvolumes_in_DA:
                 # Capture probability map
@@ -617,7 +636,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
         # Change dtype to supported one by imgaug
         image = image.astype(np.uint8)
-        mask = mask.astype(np.uint8)
+        mask = mask.astype(self.Y.dtype)
 
         # Apply flips in z as imgaug can not do it 
         if self.zflip and random.uniform(0, 1) < self.da_prob:
@@ -629,15 +648,30 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 l_mask.append(np.expand_dims(np.flip(mask[...,i], 2), -1))
             image = np.concatenate(l_image, axis=-1)
             mask = np.concatenate(l_mask, axis=-1)
+                                                                                
+        # Split heatmaps from masks                                             
+        if self.first_no_bin_channel != -1:                                     
+            heat = mask[...,self.first_no_bin_channel:]         
+            mask = mask[...,:self.first_no_bin_channel].astype(np.uint8)
+            o_heat_shape = heat.shape
+            o_mask_shape = mask.shape
+            heat = heat.reshape(heat.shape[:2]+(heat.shape[2]*heat.shape[3],))
+            heat = HeatmapsOnImage(
+                heat, shape=heat.shape, min_value=0.0, max_value=np.max(heat))
+        else:                                                                   
+            heat = None     
+        
+        # Save shapes
+        o_img_shape = image.shape
+        o_mask_shape = mask.shape
 
         # Reshape 3D volumes to 2D image type with multiple channels to pass 
         # through imgaug lib
-        o_img_shape = image.shape 
-        o_mask_shape = mask.shape 
         image = image.reshape(image.shape[:2]+(image.shape[2]*image.shape[3],))     
         mask = mask.reshape(mask.shape[:2]+(mask.shape[2]*mask.shape[3],))
         if e_im is not None: e_im = e_im.reshape(e_im.shape[:2]+(e_im.shape[2]*e_im.shape[3],))
         if e_mask is not None: e_mask = e_mask.reshape(e_mask.shape[:2]+(e_mask.shape[2]*e_mask.shape[3],))
+        #if e_heat is not None: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))
 
         # Apply cutout
         if self.cutout and random.uniform(0, 1) < self.da_prob:                                
@@ -676,15 +710,22 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         # Apply missing parts
         if self.missing_parts and random.uniform(0, 1) < self.da_prob:
             image = missing_parts(image, self.missp_iterations)
-         
-        # Apply transformations to the volume and its mask
+
+        # Apply transformations to the volume and its mask                  
         segmap = SegmentationMapsOnImage(mask, shape=mask.shape)            
-        image, vol_mask = self.seq(image=image, segmentation_maps=segmap)   
+        image, vol_mask, heat_out = self.seq(
+            image=image, segmentation_maps=segmap, heatmaps=heat)   
         mask = vol_mask.get_arr()
 
         # Recover the original shape 
         image = image.reshape(o_img_shape)
         mask = mask.reshape(o_mask_shape)
+
+        # Merge heatmaps and masks again
+        if self.first_no_bin_channel != -1:
+            heat = heat_out.get_arr()
+            heat = heat.reshape(o_heat_shape)
+            mask = np.concatenate((mask,heat),axis=-1)
 
         return image, mask
 
@@ -792,31 +833,28 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     e_img = e_img.transpose((1,2,0,3))
                     e_mask = e_mask.transpose((1,2,0,3))
 
-                vol, vol_mask = self.apply_transform(
+                sample_x[i], sample_y[i] = self.apply_transform(
                     sample_x[i], sample_y[i], e_im=e_img, e_mask=e_mask)
-                sample_x.append(vol)                                            
-                sample_y.append(vol_mask)
-                del vol, vol_mask 
-
+            
             # Save transformed 3D volumes 
             if save_to_dir:
                 os.makedirs(out_dir, exist_ok=True)
                 # Original image/mask
                 f = os.path.join(out_dir, "orig_x_"+str(pos)+self.trans_made+'.tiff')
                 self.__draw_grid(o_x)
-                aux = np.expand_dims((np.transpose(o_x, (2,0,1,3))).astype(np.uint8), 1)
+                aux = np.expand_dims((np.transpose(o_x, (2,3,0,1))).astype(np.uint8), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
                 f = os.path.join(out_dir, "orig_y_"+str(pos)+self.trans_made+'.tiff')
                 self.__draw_grid(o_y)
-                aux = np.expand_dims((np.transpose(o_y, (2,0,1,3))).astype(np.uint8), 1)
+                aux = np.expand_dims((np.transpose(o_y, (2,3,0,1))).astype(np.uint8), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
                 # Transformed
                 f = os.path.join(out_dir, "x_aug_"+str(pos)+self.trans_made+'.tiff')
-                aux = np.expand_dims((np.transpose(sample_x[i], (2,0,1,3))).astype(np.uint8), 1)
+                aux = np.expand_dims((np.transpose(sample_x[i], (2,3,0,1))).astype(np.uint8), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
                 # Mask
                 f = os.path.join(out_dir, "y_aug_"+str(pos)+self.trans_made+'.tiff')
-                aux = np.expand_dims((np.transpose(sample_y[i], (2,0,1,3))).astype(np.uint8), 1)
+                aux = np.expand_dims((np.transpose(sample_y[i], (2,3,0,1))).astype(np.uint8), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
 
                 # Save the original images with a red point and a blue square 
@@ -866,10 +904,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                             aux[:,:,s,:] = im
                             auxm[:,:,s,:] = m
 
-                    aux = np.expand_dims((np.transpose(aux, (2,0,1,3))).astype(np.uint8), 1)
+                    aux = np.expand_dims((np.transpose(aux, (2,3,0,1))).astype(np.uint8), -1)
                     f = os.path.join(out_dir, str(pos)+"_mark_x_"+self.trans_made+'.tiff')
                     imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
-                    auxm = np.expand_dims((np.transpose(auxm, (2,0,1,3))).astype(np.uint8), 1)
+                    auxm = np.expand_dims((np.transpose(auxm, (2,3,0,1))).astype(np.uint8), -1)
                     f = os.path.join(out_dir, str(pos)+"_mark_y_"+self.trans_made+'.tiff')
                     imsave(f, auxm, imagej=True, metadata={'axes': 'ZCYXS'})
                     del o_x2, o_y2
