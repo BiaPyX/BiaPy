@@ -1,19 +1,19 @@
 import os
 import math
-#import mkl
 import numpy as np
 import time
 import random
 import matplotlib.pyplot as plt
+import scipy.ndimage
+import tensorflow as tf                                                         
+import copy                                                                     
 from skimage.io import imread                                                   
 from PIL import ImageEnhance, Image
 from tqdm import tqdm
-import copy
+from skimage.io import imsave
 from skimage import measure
 from skimage.transform import resize
-import scipy.ndimage
-from skimage.segmentation import clear_border
-import tensorflow as tf 
+from skimage.segmentation import clear_border, find_boundaries
 from metrics import jaccard_index, jaccard_index_numpy, voc_calculation, \
                     DET_calculation
 
@@ -35,7 +35,6 @@ def limit_threads(threads_number='1'):
     os.environ["NUMEXPR_NUM_THREADS"]='1';
     os.environ["VECLIB_MAXIMUM_THREADS"]='1';
     os.environ["OMP_NUM_THREADS"] = '1';
-    #mkl.set_num_threads(1)
 
 
 def set_seed(seedValue=42, determinism=False):
@@ -1654,3 +1653,64 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None,
         return data, data_shape, c_shape, filenames
     else:
         return data, data_shape, c_shape
+
+
+def labels_into_bcd(data_mask, save_dir=None):
+    """Create an array with 3 channels given semantic or instance segmentation 
+       data masks. These 3 channels are: semantic mask, contours and distance map.
+    
+       Parameters                                                               
+       ----------                                                               
+       data_mask : 5D Numpy array 
+           Data mask to create the new array from. It is expected to have just one
+           channel. E.g. ``(10, 1000, 1000, 200, 1)``
+                                                                                
+       save_dir : str, optional 
+           Path to store samples of the created array just to debug it is correct.
+                                                                                
+       Returns                                                                  
+       -------                                                                  
+       new_mask : 5D Numpy array 
+           5D array with 3 channels instead of one. 
+           E.g. ``(10, 1000, 1000, 200, 3)``
+    """
+
+    new_mask = np.zeros(data_mask.shape[:4] + (3,), dtype=np.float32)         
+                                                                            
+    for img in tqdm(range(data_mask.shape[0])):                               
+        vol = data_mask[img,...,0]                                            
+        l = np.unique(vol)                                                  
+                                    
+        # If only have background -> skip                                        
+        if len(l) != 1: 
+            vol_dist = np.zeros(vol.shape)                                  
+
+            # For each nucleus                                              
+            for i in range(1,len(l)):                                       
+                obj = l[i]                                                  
+                distance = scipy.ndimage.distance_transform_edt(vol==obj)         
+                vol_dist += distance                                        
+                                                                            
+            # Semantic mask                                                 
+            new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)           
+                                                                            
+            # Contour                                                       
+            new_mask[img,...,1] = find_boundaries((vol>0).astype(np.uint8), mode='outer').astype(np.uint8)
+            # Remove contours from segmentation maps                        
+            new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0     
+                                                                            
+            # Distance                                                      
+            new_mask[img,...,2] = vol_dist.copy()                           
+
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+        for i in range(3):                                                      
+            imsave(os.path.join(save_dir,'vol'+str(i)+'_semantic.tif'), 
+                   np.transpose(new_mask[i,...,0],(2,0,1)).astype(np.uint8))
+            imsave(os.path.join(save_dir,'vol'+str(i)+'_contour.tif'), 
+                   np.transpose(new_mask[i,...,1],(2,0,1)).astype(np.uint8))
+            imsave(os.path.join(save_dir,'vol'+str(i)+'_distance.tif'),
+                   np.transpose(new_mask[i,...,2],(2,0,1)).astype(np.float32))
+    
+    return new_mask
+                                                                            
