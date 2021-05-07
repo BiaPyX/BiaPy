@@ -1422,7 +1422,8 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0),
     if return_filenames: filenames = []
 
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
-        img = imread(os.path.join(data_dir, id_))
+        #img = imread(os.path.join(data_dir, id_))
+        img = np.asarray(Image.open(os.path.join(data_dir, id_)))
 
         if return_filenames: filenames.append(id_)
         
@@ -1430,8 +1431,10 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0),
         data_shape.append(img.shape)
         img = np.expand_dims(img, axis=0)
         if crop and img[0].shape != crop_shape[:2]+(img.shape[-1],):
-            img = crop_data_with_overlap(img, crop_shape, overlap=overlap,
-                                         padding=padding, verbose=False)
+            img = crop_data_with_overlap(
+                img, crop_shape[:2]+(img.shape[-1],), overlap=overlap,
+                padding=padding, verbose=False)
+
         c_shape.append(img.shape)
         data.append(img)
 

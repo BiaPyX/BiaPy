@@ -337,8 +337,7 @@ batch_normalization = False
 kernel_init = 'he_normal'
 # Activation function to use                                                    
 activation = "elu" 
-# Number of classes. To generate data with more than 1 channel custom DA need to
-# be selected. It can be 1 or 2.                                                                   
+# Number of classes
 n_classes = 1
 # Adjust the metric used accordingly to the number of clases. This code is planned 
 # to be used in a binary classification problem, so the function 'jaccard_index_softmax' 

@@ -207,6 +207,10 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
         train_mask_path, crop=crop, crop_shape=crop_shape, overlap=t_ov,
         return_filenames=True)
 
+    if Y_train.shape[-1] != 1:
+        raise ValueError("Labels are supposed to be 1 channel and not {}"
+                         .format(Y_train.shape))
+
     if num_crops_per_dataset != 0:
         X_train = X_train[:num_crops_per_dataset]
         Y_train = Y_train[:num_crops_per_dataset]
@@ -721,16 +725,16 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
         for im_i in range(width): 
             for im_j in range(height):
                 # White borders
-                if ov_map[im_j, im_i] == -4: 
+                if ov_map[im_j, im_i, 0] == -4: 
                     px[im_i, im_j] = (255, 255, 255, 255)
                 # Overlap zone
-                elif ov_map[im_j, im_i] == -3: 
+                elif ov_map[im_j, im_i, 0] == -3: 
                     px[im_i, im_j] = tuple(map(sum, zip((0, 74, 0, 125), px[im_i, im_j])))
                 # 2 < x < 6 overlaps
-                elif ov_map[im_j, im_i] == -2:
+                elif ov_map[im_j, im_i, 0] == -2:
                     px[im_i, im_j] = tuple(map(sum, zip((74, 74, 0, 125), px[im_i, im_j])))
                 # 6 >= overlaps
-                elif ov_map[im_j, im_i] == -1:
+                elif ov_map[im_j, im_i, 0] == -1:
                     px[im_i, im_j] = tuple(map(sum, zip((74, 0, 0, 125), px[im_i, im_j])))
 
         im.save(os.path.join(out_dir, prefix + "merged_ov_map.png"))
