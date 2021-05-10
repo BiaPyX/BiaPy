@@ -2,12 +2,15 @@ import numpy as np
 from skimage import measure
 import cv2
 import os
+import math
 from tqdm import tqdm
 from scipy import ndimage as ndi
-from skimage.morphology import disk
+from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import watershed
 from skimage.filters import rank
 from scipy.ndimage import rotate
+from skimage.measure import label
+from skimage.io import imsave                                                   
 
 
 def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
@@ -171,6 +174,61 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
     
     return np.expand_dims(watershed_predictions, -1)
 
+
+def bc_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres_small=128, 
+                 save_dir=None):
+    """Convert binary foreground probability maps and instance contours to 
+       instance masks via watershed segmentation algorithm.
+    
+       Implementation based on `PyTorch Connectomics' process.py 
+       <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py>`_.
+
+       Parameters
+       ----------
+       data : 4D Numpy array
+           Binary foreground labels and contours data to apply watershed into. 
+           E.g. ``(397, 1450, 2000, 2)``.
+        
+       thres1 : float, optional
+           Threshold used in the semantic mask to create watershed seeds.
+
+       thres2 : float, optional                                                 
+           Threshold used in the contours to create watershed seeds.       
+        
+       thres3 : float, optional                                                 
+           Threshold used in the semantic mask to create the foreground mask. 
+        
+       thres_small : int, optional
+           Theshold to remove small objects created by the watershed. 
+
+       save_dir :  str, optional
+           Directory to save watershed output into.
+    """
+    v = 255 if np.max(data) == 1 else 1 
+    semantic = data[...,0]*v
+    seed_map = (data[...,0]*v > int(255*thres1)) * (data[...,1]*v < int(255*thres2))
+    foreground = (semantic > int(255*thres3))
+    seed_map = label(seed_map)
+    
+    segm = watershed(-semantic, seed_map, mask=foreground)
+    segm = remove_small_objects(segm, thres_small)
+    
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+
+        f = os.path.join(save_dir, "seed_map.tif")
+        aux = np.expand_dims(np.expand_dims((seed_map).astype(np.float32), -1),1)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+
+        f = os.path.join(save_dir, "foreground.tif")
+        aux = np.expand_dims(np.expand_dims((foreground).astype(np.float32), -1),1)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+
+        f = os.path.join(save_dir, "watershed.tif")
+        aux = np.expand_dims(np.expand_dims((segm).astype(np.float32), -1),1)      
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)   
+    
+    return segm
 
 def calculate_z_filtering(data, mf_size=5):
     """Applies a median filtering in the z dimension of the provided data.
@@ -393,19 +451,22 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=2):
         aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
         aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
         aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
-        del volume_aux
         aug_vols = np.array(aug_vols)
         
         # Add the last channel again
         aug_vols = np.expand_dims(aug_vols, -1)
         total_vol.append(aug_vols)
 
+    del aug_vols, volume_aux
     # Merge channels
     total_vol = np.concatenate(total_vol, -1)
 
     _decoded_aug_vols = []
-    for i in range(total_vol.shape[0]):
-        r_aux = pred_func(np.expand_dims(total_vol[i], 0))
+
+    l = int(math.ceil(total_vol.shape[0]/batch_size_value))                       
+    for i in range(l):
+        top = (i+1)*batch_size_value if (i+1)*batch_size_value < total_vol.shape[0] else total_vol.shape[0]
+        r_aux = pred_func(total_vol[i*batch_size_value:top])
 
         # Take just the last output of the network in case it returns more than one output
         if isinstance(r_aux, list):                                         
