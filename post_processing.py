@@ -208,7 +208,7 @@ def bc_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres_small=128,
     semantic = data[...,0]*v
     seed_map = (data[...,0]*v > int(255*thres1)) * (data[...,1]*v < int(255*thres2))
     foreground = (semantic > int(255*thres3))
-    seed_map = label(seed_map)
+    seed_map = label(seed_map, connectivity=1)
     
     segm = watershed(-semantic, seed_map, mask=foreground)
     segm = remove_small_objects(segm, thres_small)
