@@ -230,6 +230,69 @@ def bc_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres_small=128,
     
     return segm
 
+
+def bcd_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres4=0.5, 
+                  thres5=0.0, thres_small=128, save_dir=None):
+    """Convert binary foreground probability maps, instance contours to 
+       instance masks via watershed segmentation algorithm.
+    
+       Implementation based on `PyTorch Connectomics' process.py 
+       <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py>`_.
+
+       Parameters
+       ----------
+       data : 4D Numpy array
+           Binary foreground labels and contours data to apply watershed into. 
+           E.g. ``(397, 1450, 2000, 2)``.
+        
+       thres1 : float, optional
+           Threshold used in the semantic mask to create watershed seeds.
+
+       thres2 : float, optional                                                 
+           Threshold used in the contours to create watershed seeds.       
+        
+       thres3 : float, optional                                                 
+           Threshold used in the semantic mask to create the foreground mask. 
+        
+       thres4 : float, optional                                                 
+           Threshold used in the distances to create watershed seeds.            
+                                                                                
+       thres5 : float, optional                                                 
+           Threshold used in the distances to create the foreground mask.
+
+       thres_small : int, optional
+           Theshold to remove small objects created by the watershed. 
+
+       save_dir :  str, optional
+           Directory to save watershed output into.
+    """
+    v = 255 if np.max(data) == 1 else 1 
+    semantic = data[...,0]*v
+    seed_map = (data[...,0]*v > int(255*thres1)) * (data[...,1]*v < int(255*thres2)) * (data[...,2] > thres4)
+    foreground = (semantic > int(255*thres3)) * (data[...,2] > thres5)
+    seed_map = label(seed_map, connectivity=1)
+    
+    segm = watershed(-semantic, seed_map, mask=foreground)
+    segm = remove_small_objects(segm, thres_small)
+    
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+
+        f = os.path.join(save_dir, "seed_map.tif")
+        aux = np.expand_dims(np.expand_dims((seed_map).astype(np.float32), -1),1)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+
+        f = os.path.join(save_dir, "foreground.tif")
+        aux = np.expand_dims(np.expand_dims((foreground).astype(np.float32), -1),1)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+
+        f = os.path.join(save_dir, "watershed.tif")
+        aux = np.expand_dims(np.expand_dims((segm).astype(np.float32), -1),1)      
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)   
+    
+    return segm
+
+
 def calculate_z_filtering(data, mf_size=5):
     """Applies a median filtering in the z dimension of the provided data.
 
