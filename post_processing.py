@@ -204,7 +204,7 @@ def bc_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres_small=128,
        save_dir :  str, optional
            Directory to save watershed output into.
     """
-    v = 255 if np.max(data) == 1 else 1 
+    v = 255 if np.max(data) <= 1 else 1 
     semantic = data[...,0]*v
     seed_map = (data[...,0]*v > int(255*thres1)) * (data[...,1]*v < int(255*thres2))
     foreground = (semantic > int(255*thres3))
@@ -266,7 +266,7 @@ def bcd_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres4=0.5,
        save_dir :  str, optional
            Directory to save watershed output into.
     """
-    v = 255 if np.max(data) == 1 else 1 
+    v = 255 if np.max(data[...,:2]) <= 1 else 1 
     semantic = data[...,0]*v
     seed_map = (data[...,0]*v > int(255*thres1)) * (data[...,1]*v < int(255*thres2)) * (data[...,2] > thres4)
     foreground = (semantic > int(255*thres3)) * (data[...,2] > thres5)
@@ -277,6 +277,10 @@ def bcd_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres4=0.5,
     
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
+
+        f = os.path.join(save_dir, "semantic.tif")
+        aux = np.expand_dims(np.expand_dims((semantic).astype(np.float32), -1),1)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
         f = os.path.join(save_dir, "seed_map.tif")
         aux = np.expand_dims(np.expand_dims((seed_map).astype(np.float32), -1),1)
