@@ -173,6 +173,39 @@ def jaccard_index_softmax(y_true, y_pred, t=0.5):
     return jac
 
 
+def jaccard_index_instances(y_true, y_pred, t=0.5):
+    """Define Jaccard index. It only applies for the first two segmentation
+       channels.
+
+       Parameters
+       ----------
+       y_true : Tensor
+           Ground truth masks.
+
+       y_pred : Tensor
+           Predicted masks.
+
+       t : float, optional
+           Threshold to be applied.
+
+       Returns
+       -------
+       jac : Tensor
+           Jaccard index value
+    """
+
+    y_pred_ = tf.cast(y_pred[...,:2] > t, dtype=tf.int32)
+    y_true_ = tf.cast(y_true[...,:2] > t, dtype=tf.int32)
+
+    TP = tf.math.count_nonzero(y_pred_ * y_true_)
+    FP = tf.math.count_nonzero(y_pred_ * (y_true_ - 1))
+    FN = tf.math.count_nonzero((y_pred_ - 1) * y_true_)
+
+    jac = tf.cond(tf.greater((TP + FP + FN), 0), lambda: TP / (TP + FP + FN),
+                  lambda: K.cast(0.000, dtype='float64'))
+
+    return jac
+
 
 def jaccard_loss(y_true, y_pred):
     """Define Jaccard index.
@@ -440,9 +473,57 @@ def binary_crossentropy_weighted(weights):
        loss : Tensor
            Loss value.
     """
-    
     def loss(y_true, y_pred): 
         return K.mean(weights * K.binary_crossentropy(y_true, y_pred), axis=-1)
     
     return loss
+
+
+def instance_segmentation_loss(weights=(1,0.2), out_channels="BC"):
+    """Custom loss that mixed BCE and MSE depending on the ``out_channels``
+       variable.
+
+       Parameters
+       ----------
+       weights : 2 float tuple, optional
+           Weights to be applied to segmentation (binary and contours) and to
+           distances respectively. E.g. ``(1, 0.2)``, ``1`` should be multipled
+           by ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the
+           last channel.
+
+       out_channels : str, optional
+           Channels to operate with. Possible values: ``BC`` and ``BCD``.  ``BC``
+           corresponds to use binary segmentation+contour. ``BCD`` stands for
+           binary segmentation+contour+distances.
+    """
+    def loss(y_true, y_pred):
+        if out_channels == "BC":
+            return weights[0]*losses.binary_crossentropy(tf.cast(y_true[...,:2], dtype=tf.float32), y_pred[...,:2])
+        else:
+            return weights[0]*losses.binary_crossentropy(tf.cast(y_true[...,:2], dtype=tf.float32), y_pred[...,:2])+\
+                   weights[1]*masked_mse(tf.cast(y_true[...,2], dtype=tf.float32), y_pred[...,2], tf.cast(y_true[...,0], dtype=tf.float32))
+    return loss
+
+
+def masked_mse(y_true, y_pred, mask):
+    """Apply MSE just in the pixels denoted by ``mask`` variable. 
+
+       Parameters
+       ----------
+       y_true : 4D Tensor
+           Ground truth masks. E.g. ``(num_of_images, x, y, channels)``.
+
+       y_pred : 4D Tensor
+           Predicted masks. E.g. ``(num_of_images, x, y, channels)``.
+
+       mask : 4F Tensor
+           Mask with True values on the pixels that will be involved in MSE 
+           calculation.
+
+       Returns
+       -------
+       value : Tensor
+           MSE value. 
+    """
+    return K.mean(tf.expand_dims(mask*K.square(y_true - y_pred), -1), axis=-1)
 
