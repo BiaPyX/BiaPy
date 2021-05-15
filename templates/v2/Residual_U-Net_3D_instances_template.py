@@ -300,7 +300,7 @@ replicate_train = 0
 ### Load previously generated model weigths
 # Flag to activate the load of a previous training weigths instead of train 
 # the network again
-load_previous_weights = True
+load_previous_weights = False
 # ID of the previous experiment to load the weigths from 
 previous_job_weights = args.job_id
 # Prefix of the files where the weights are stored/loaded from
@@ -325,7 +325,6 @@ patience = 50
 
 ### Network architecture specific parameters
 # Number of feature maps on each level of the network
-#feature_maps = [28, 36, 48, 64]
 feature_maps = [36, 48, 64]
 # Depth of the network
 depth = 2
