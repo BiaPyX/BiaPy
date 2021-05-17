@@ -368,7 +368,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             for i in range(min(10,len(self.data_mask_path))):
                 img = imread(os.path.join(data_paths[1], self.data_mask_path[i]))   
                 if np.max(img) > 100: self.div_Y_on_load = True 
-            if img.ndim == 2: img = np.expand_dims(img, -1)
+            if img.ndim == 2:
+                img = np.expand_dims(img, -1)
+            else:
+                img = img.transpose((1,2,0))
             self.channels = img.shape[-1]
             del img
         else:
@@ -529,8 +532,14 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             else:
                 img = imread(os.path.join(self.paths[0], self.data_paths[j])) 
                 mask = imread(os.path.join(self.paths[1], self.data_mask_path[j])) 
-                if img.ndim == 2: img = np.expand_dims(img, -1)
-                if mask.ndim == 2: mask = np.expand_dims(mask, -1)
+                if img.ndim == 2:
+                    img = np.expand_dims(img, -1)
+                else:
+                    img = img.transpose((1,2,0))
+                if mask.ndim == 2:
+                    mask = np.expand_dims(mask, -1)
+                else:
+                    mask = mask.transpose((1,2,0))
 
             # Apply ramdom crops if it is selected 
             if self.random_crops_in_DA:
@@ -829,8 +838,14 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             else:
                 img = imread(os.path.join(self.paths[0], self.data_paths[pos]))    
                 mask = imread(os.path.join(self.paths[1], self.data_mask_path[pos]))
-                if img.ndim == 2: img = np.expand_dims(img, -1)                 
-                if mask.ndim == 2: mask = np.expand_dims(mask, -1)
+                if img.ndim == 2: 
+                    img = np.expand_dims(img, -1)                 
+                else:
+                    img = img.transpose((1,2,0))
+                if mask.ndim == 2: 
+                    mask = np.expand_dims(mask, -1)
+                else:
+                    mask = mask.transpose((1,2,0))
                                                                                 
             # Apply ramdom crops if it is selected                              
             if self.random_crops_in_DA:                                         
