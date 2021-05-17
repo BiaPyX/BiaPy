@@ -455,7 +455,7 @@ if in_memory:
     ## TRAIN
     aux_dir = os.path.join(args.result_dir, 'aux_train')
     if not os.path.isfile(os.path.join(args.result_dir, 'Y_train.npy')):
-        Y_train = labels_into_bcd(Y_train, save_dir=aux_dir)                                    
+        Y_train = labels_into_bcd(Y_train, mode=output_channels, save_dir=aux_dir)                                    
         np.save(os.path.join(args.result_dir, 'Y_train.npy'), Y_train)
     else:
         Y_train = np.load(os.path.join(aux_dir, '../Y_train.npy'))
@@ -463,7 +463,7 @@ if in_memory:
     ## VAL
     aux_dir = os.path.join(args.result_dir, 'aux_val')                        
     if not os.path.isfile(os.path.join(args.result_dir, 'Y_val.npy')):        
-        Y_val = labels_into_bcd(Y_val, save_dir=aux_dir)                   
+        Y_val = labels_into_bcd(Y_val, mode=output_channels, save_dir=aux_dir)                   
         np.save(os.path.join(args.result_dir, 'Y_val.npy'), Y_val)          
     else:                                                                       
         Y_val = np.load(os.path.join(aux_dir, '../Y_val.npy'))
