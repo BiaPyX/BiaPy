@@ -1658,7 +1658,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None,
         return data, data_shape, c_shape
 
 
-def labels_into_bcd(data_mask, save_dir=None):
+def labels_into_bcd(data_mask, mode="BCD", save_dir=None):
     """Create an array with 3 channels given semantic or instance segmentation 
        data masks. These 3 channels are: semantic mask, contours and distance map.
     
@@ -1667,6 +1667,11 @@ def labels_into_bcd(data_mask, save_dir=None):
        data_mask : 5D Numpy array 
            Data mask to create the new array from. It is expected to have just one
            channel. E.g. ``(10, 1000, 1000, 200, 1)``
+
+       mode : str, optional
+           Operation mode. Possible values: ``BC`` and ``BCD``.  ``BC``
+           corresponds to use binary segmentation+contour. ``BCD`` stands for
+           binary segmentation+contour+distances.
                                                                                 
        save_dir : str, optional 
            Path to store samples of the created array just to debug it is correct.
@@ -1678,7 +1683,12 @@ def labels_into_bcd(data_mask, save_dir=None):
            E.g. ``(10, 1000, 1000, 200, 3)``
     """
 
-    new_mask = np.zeros(data_mask.shape[:4] + (3,), dtype=np.float32)         
+    assert mode in ['BC', 'BCD']
+
+    if mode == "BCD":
+        new_mask = np.zeros(data_mask.shape[:4] + (3,), dtype=np.float32)         
+    else:
+        new_mask = np.zeros(data_mask.shape[:4] + (2,), dtype=np.float32)
                                                                             
     for img in tqdm(range(data_mask.shape[0])):                               
         vol = data_mask[img,...,0]                                            
@@ -1688,11 +1698,14 @@ def labels_into_bcd(data_mask, save_dir=None):
         if len(l) != 1: 
             vol_dist = np.zeros(vol.shape)                                  
 
-            # For each nucleus                                              
-            for i in range(1,len(l)):                                       
-                obj = l[i]                                                  
-                distance = scipy.ndimage.distance_transform_edt(vol==obj)         
-                vol_dist += distance                                        
+            if mode == "BCD":
+                # For each nucleus                                              
+                for i in range(1,len(l)):                                       
+                    obj = l[i]                                                  
+                    distance = scipy.ndimage.distance_transform_edt(vol==obj)         
+                    vol_dist += distance                                        
+                # Distance
+                new_mask[img,...,2] = vol_dist.copy()
                                                                             
             # Semantic mask                                                 
             new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)           
@@ -1702,18 +1715,88 @@ def labels_into_bcd(data_mask, save_dir=None):
             # Remove contours from segmentation maps                        
             new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0     
                                                                             
-            # Distance                                                      
-            new_mask[img,...,2] = vol_dist.copy()                           
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+        for i in range(min(3,len(new_mask))): 
+            imsave(os.path.join(save_dir,'vol'+str(i)+'_semantic.tif'),
+                   np.transpose(new_mask[i,...,0],(2,0,1)).astype(np.uint8))
+            imsave(os.path.join(save_dir,'vol'+str(i)+'_contour.tif'),
+                   np.transpose(new_mask[i,...,1],(2,0,1)).astype(np.uint8))
+            if mode == "BCD":
+                imsave(os.path.join(save_dir,'vol'+str(i)+'_distance.tif'),
+                       np.transpose(new_mask[i,...,2],(2,0,1)).astype(np.float32))
+    
+    return new_mask
+                                                                            
+
+def labels_into_bcd_2D(data_mask, mode="BC", save_dir=None):
+    """Create an array with 3 channels given semantic or instance segmentation 
+       data masks. These 3 channels are: semantic mask, contours and distance map.
+    
+       Parameters                                                               
+       ----------                                                               
+       data_mask : 4D Numpy array 
+           Data mask to create the new array from. It is expected to have just one
+           channel. E.g. ``(10, 1000, 1000, 1)``
+                                                                                
+       mode : str, optional
+           Operation mode. Possible values: ``BC`` and ``BCD``.  ``BC``
+           corresponds to use binary segmentation+contour. ``BCD`` stands for
+           binary segmentation+contour+distances.
+    
+       save_dir : str, optional 
+           Path to store samples of the created array just to debug it is correct.
+                                                                                
+       Returns                                                                  
+       -------                                                                  
+       new_mask : 4D Numpy array 
+           4D array with 3 channels instead of one. 
+           E.g. ``(10, 1000, 1000, 3)``
+    """
+
+    assert mode in ['BC', 'BCD']
+
+    if mode == "BCD":
+        new_mask = np.zeros(data_mask.shape[:3] + (3,), dtype=np.float32)         
+    else:
+        new_mask = np.zeros(data_mask.shape[:3] + (2,), dtype=np.float32)         
+                                                                            
+    for img in tqdm(range(data_mask.shape[0])):                               
+        vol = data_mask[img,...,0]                                            
+        l = np.unique(vol)                                                  
+                                    
+        # If only have background -> skip                                        
+        if len(l) != 1: 
+            vol_dist = np.zeros(vol.shape)                                  
+
+            if mode == "BCD":
+                # For each nucleus                                              
+                for i in tqdm(range(1,len(l)), leave=False):                                       
+                    obj = l[i]                                                  
+                    distance = scipy.ndimage.distance_transform_edt(vol==obj)         
+                    vol_dist += distance                                        
+                                                                            
+                # Distance                                                          
+                new_mask[img,...,2] = vol_dist.copy()                               
+             
+            # Semantic mask                                                 
+            new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)           
+                                                                            
+            # Contour                                                       
+            new_mask[img,...,1] = find_boundaries((vol>0).astype(np.uint8), mode='outer').astype(np.uint8)
+            # Remove contours from segmentation maps                        
+            new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0     
 
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
-        for i in range(3):                                                      
+        for i in range(min(3,len(new_mask))):                                                      
             imsave(os.path.join(save_dir,'vol'+str(i)+'_semantic.tif'), 
-                   np.transpose(new_mask[i,...,0],(2,0,1)).astype(np.uint8))
+                   new_mask[i,...,0].astype(np.uint8))
             imsave(os.path.join(save_dir,'vol'+str(i)+'_contour.tif'), 
-                   np.transpose(new_mask[i,...,1],(2,0,1)).astype(np.uint8))
-            imsave(os.path.join(save_dir,'vol'+str(i)+'_distance.tif'),
-                   np.transpose(new_mask[i,...,2],(2,0,1)).astype(np.float32))
+                   new_mask[i,...,1].astype(np.uint8))
+            if mode == "BCD":
+                imsave(os.path.join(save_dir,'vol'+str(i)+'_distance.tif'),
+                       new_mask[i,...,2].astype(np.float32))
     
     return new_mask
                                                                             
