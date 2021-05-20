@@ -145,7 +145,7 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
 
            X_train, Y_train, X_val,
            Y_val, X_test, Y_test,
-           orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(
+           crops_made = load_and_prepare_2D_data(
                train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
                img_test_shape, val_split=0.1, shuffle_val=True, make_crops=False)
                
@@ -162,7 +162,7 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
            # Same as the first example but creating patches of (256x256)
            X_train, Y_train, X_val,
            Y_val, X_test, Y_test,
-           orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(
+           crops_made = load_and_prepare_2D_data(
                train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
                img_test_shape, val_split=0.1, shuffle_val=True, make_crops=True,
                crop_shape=(256, 256, 1), check_crop=True, check_crop_path="check_folder")
@@ -182,7 +182,7 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
 
            X_train, Y_train, X_val,                                             
            Y_val, X_test, Y_test,                                               
-           orig_test_shape, norm_value, crops_made = load_and_prepare_2D_data(  
+           orig_test_shape, crops_made = load_and_prepare_2D_data(  
                train_path, train_mask_path, test_path, test_mask_path, img_train_shape, 
                mg_test_shape, val_split=0.1, shuffle_val=True, make_crops=True,
                crop_shape=(256, 256, 1), check_crop=True, check_crop_path="check_folder"
@@ -301,11 +301,8 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
         print("*** Loaded test data shape is: {}".format(X_test.shape))
         print("### END LOAD ###")
 
-        # Calculate normalization value
-        norm_value = np.mean(X_train)
-
-        return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value, \
-               orig_test_img_shapes, crop_test_img_shapes, filenames
+        return X_train, Y_train, X_test, Y_test, orig_test_img_shapes, \
+               crop_test_img_shapes, filenames
 
 
 def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0),
