@@ -576,10 +576,11 @@ for i in tqdm(range(len(test_generator))):
         pred = merge_data_with_overlap(pred, (1,)+Y.shape[1:], padding=padding,
                                        overlap=overlap, verbose=False)
     
-        c = (i*batch_size_value)+j
-        f = os.path.join(result_no_bin_dir_per_image, str(c).zfill(d)+'.png')
-        imsave(f, (pred[0]*255).astype(np.uint8))
-
+        c = (i*batch_size_value)+j                                              
+        f = os.path.join(result_no_bin_dir_per_image, str(c).zfill(d)+'.tif')   
+        aux = np.expand_dims(pred.transpose((0,3,1,2)), -1).astype(np.float32)  
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+          
         iou_per_image = jaccard_index_numpy((Y[j]>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8))
         ov_iou_per_image = voc_calculation((Y[j]>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8), 
                                            iou_per_image)
