@@ -1422,12 +1422,16 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0),
     if return_filenames: filenames = []
 
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
-        #img = imread(os.path.join(data_dir, id_))
-        img = np.asarray(Image.open(os.path.join(data_dir, id_)))
+        img = imread(os.path.join(data_dir, id_))
+        #img = np.asarray(Image.open(os.path.join(data_dir, id_)))
 
         if return_filenames: filenames.append(id_)
         
-        if len(img.shape) == 2: img = np.expand_dims(img, axis=-1)
+        if len(img.shape) == 2: 
+            img = np.expand_dims(img, axis=-1)
+        else:
+           img = img.transpose((1,2,0)) 
+
         data_shape.append(img.shape)
         img = np.expand_dims(img, axis=0)
         if crop and img[0].shape != crop_shape[:2]+(img.shape[-1],):

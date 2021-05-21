@@ -8,7 +8,7 @@ from PIL import ImageEnhance
 from data_2D_manipulation import random_crop
 from util import img_to_onehot_encoding
 import imgaug as ia                                                             
-from skimage.io import imread                                                   
+from skimage.io import imsave, imread
 from imgaug import augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from .augmentors import cutout, cutblur, cutmix, cutnoise, misalignment,\
@@ -360,7 +360,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             
             # Check if a division is required 
             img = imread(os.path.join(data_paths[0], self.data_paths[0]))
-            if img.ndim == 2: img = np.expand_dims(img, -1)
+            if img.ndim == 2:
+                img = np.expand_dims(img, -1)
+            else:                                                               
+                img = img.transpose((1,2,0))
             self.div_X_on_load = True if np.max(img) > 100 else False
             self.shape = shape if random_crops_in_DA else img.shape 
             # Loop over a few masks to ensure foreground class is present 
@@ -566,8 +569,14 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 else:
                     e_img = imread(os.path.join(self.paths[0], self.data_paths[extra_img]))
                     e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
-                    if e_img.ndim == 2: e_img = np.expand_dims(e_img, -1)                 
-                    if e_mask.ndim == 2: e_mask = np.expand_dims(e_mask, -1)
+                    if e_img.ndim == 2:
+                        e_img = np.expand_dims(e_img, -1)                 
+                    else:
+                        e_img = e_img.transpose((1,2,0))
+                    if e_mask.ndim == 2:
+                        e_mask = np.expand_dims(e_mask, -1)
+                    else:
+                        e_mask = e_mask.transpose((1,2,0))
 
                 batch_x[i], batch_y[i] = self.apply_transform(                  
                     batch_x[i], batch_y[i], e_im=e_img, e_mask=e_mask)
@@ -866,7 +875,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
             if save_to_dir:
                 o_x = np.copy(batch_x[i])                                 
-                o_y = np.copy(batch_y[i,...,0])
+                o_y = np.copy(batch_y[i])
 
             # Apply transformations
             if self.da:                                                         
@@ -881,8 +890,14 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 else:
                     e_img = imread(os.path.join(self.paths[0], self.data_paths[extra_img]))
                     e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
-                    if e_img.ndim == 2: e_img = np.expand_dims(e_img, -1)                 
-                    if e_mask.ndim == 2: e_mask = np.expand_dims(e_mask, -1)
+                    if e_img.ndim == 2:
+                        e_img = np.expand_dims(e_img, -1)                 
+                    else:
+                        e_img = e_img.transpose((1,2,0))
+                    if e_mask.ndim == 2:
+                        e_mask = np.expand_dims(e_mask, -1)
+                    else:
+                        e_mask = e_mask.transpose((1,2,0))
 
                 batch_x[i], batch_y[i] = self.apply_transform(                
                     batch_x[i], batch_y[i], e_im=e_img, e_mask=e_mask)
@@ -891,34 +906,21 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 # Save original images
                 self.__draw_grid(o_x)                                           
                 self.__draw_grid(o_y)
-                o_x = o_x
-                o_y = o_y
-                if self.shape[-1] == 1: 
-                    im = Image.fromarray(o_x[...,0])
-                    im = im.convert('L')
-                else:   
-                    im = Image.fromarray(o_x, 'RGB')
-                im.save(os.path.join(out_dir,str(pos)+'_orig_x'+self.trans_made+".png"))
-                mask = Image.fromarray(o_y, 'L')
-                mask.save(os.path.join(out_dir,str(pos)+'_orig_y'+self.trans_made+".png"))
+
+                f = os.path.join(out_dir,str(pos)+'_orig_x'+self.trans_made+".tif")
+                aux = np.expand_dims(np.expand_dims(o_x.transpose((2,0,1)), -1), 0).astype(np.float32)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+                f = os.path.join(out_dir,str(pos)+'_orig_y'+self.trans_made+".tif")
+                aux = np.expand_dims(np.expand_dims(o_y.transpose((2,0,1)), -1), 0).astype(np.float32)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
                 # Save transformed images
-                if self.shape[-1] == 1:
-                    im = Image.fromarray(batch_x[i,...,0])
-                    im = im.convert('L')
-                else:
-                    im = Image.fromarray(batch_x[i], 'RGB')
-                im.save(os.path.join(out_dir, str(pos)+p+'x'+self.trans_made+".png"))
-                mask = Image.fromarray(batch_y[i,:,:,0], 'L')
-                mask.save(os.path.join(out_dir, str(pos)+p+'y'+self.trans_made+".png"))
-
-                if self.n_classes > 1:
-                    h_maks = np.zeros(self.shape[:2] + (self.n_classes,))
-                    h_maks = np.asarray(img_to_onehot_encoding(
-                                          batch_y[i], self.n_classes))
-                    for i in range(self.n_classes):
-                        a = Image.fromarray(h_maks[...,i], 'L')
-                        a.save(os.path.join(out_dir, str(pos)+"h_mask_"+str(i)+".png"))
+                f = os.path.join(out_dir, str(pos)+p+'x'+self.trans_made+".tif")
+                aux = np.expand_dims(np.expand_dims(batch_x[i].transpose((2,0,1)), -1), 0).astype(np.float32)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+                f = os.path.join(out_dir, str(pos)+p+'y'+self.trans_made+".tif")
+                aux = np.expand_dims(np.expand_dims(batch_y[i].transpose((2,0,1)), -1), 0).astype(np.float32)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
                 # Save the original images with a point that represents the 
                 # selected coordinates to be the center of the crop
@@ -927,7 +929,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                         img = self.X[pos]
                     else:
                         img = imread(os.path.join(self.paths[0], self.data_paths[pos]))  
-                        if img.ndim == 2: img = np.expand_dims(img, -1)                 
+                        if img.ndim == 2:
+                            img = np.expand_dims(img, -1)                 
+                        else:
+                            img = img.transpose((1,2,0))
                         if np.max(img) < 100: img = img
                     
                     if self.shape[-1] == 1:
@@ -958,7 +963,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                         mask = self.Y[pos]
                     else:
                         mask = imread(os.path.join(self.paths[1], self.data_mask_path[pos]))
-                        if mask.ndim == 2: mask = np.expand_dims(mask, -1) 
+                        if mask.ndim == 2:
+                            mask = np.expand_dims(mask, -1) 
+                        else:
+                            mask = mask.transpose((1,2,0))
                         if np.max(mask) < 100: mask = mask
                     if mask.shape[-1] == 1:
                         m = Image.fromarray(np.repeat(mask, 3, axis=2), 'RGB')

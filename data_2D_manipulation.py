@@ -207,10 +207,6 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
         train_mask_path, crop=crop, crop_shape=crop_shape, overlap=t_ov,
         return_filenames=True)
 
-    if Y_train.shape[-1] != 1:
-        raise ValueError("Labels are supposed to be 1 channel and not {}"
-                         .format(Y_train.shape))
-
     if num_crops_per_dataset != 0:
         X_train = X_train[:num_crops_per_dataset]
         Y_train = Y_train[:num_crops_per_dataset]
