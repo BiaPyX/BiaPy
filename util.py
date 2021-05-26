@@ -1527,9 +1527,9 @@ def load_ct_data_from_dir(data_dir, shape=None):
     return data
 
 
-def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, 
-                            overlap=(0,0,0), padding=(0,0,0), 
-                            median_padding=False, return_filenames=False):
+def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, crop_verb=False,
+                            overlap=(0,0,0), padding=(0,0,0), median_padding=False,
+                            return_filenames=False):
     """Load data from a directory.
 
        Parameters
@@ -1543,6 +1543,9 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None,
        crop_shape : Tuple of 4 ints, optional
            Shape of the subvolumes to create when cropping. 
            E.g. ``(x, y, z, channels)``.
+
+       crop_verb : bool, optional
+           Wheter to use verbose mode on crop. 
 
        overlap : Tuple of 3 floats, optional
            Amount of minimum overlap on x, y and z dimensions. The values must
@@ -1635,7 +1638,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None,
         if crop and img.shape != crop_shape[:3]+(img.shape[-1],):
             img = crop_3D_data_with_overlap(
                 img, crop_shape[:3]+(img.shape[-1],), overlap=overlap,
-                padding=padding, median_padding=median_padding, verbose=True)
+                padding=padding, median_padding=median_padding, verbose=crop_verb)
         else:
             img = np.transpose(img, (1,2,0,3))
             img = np.expand_dims(img, axis=0)
@@ -1694,6 +1697,7 @@ def labels_into_bcd(data_mask, mode="BCD", save_dir=None):
     else:
         new_mask = np.zeros(data_mask.shape[:4] + (2,), dtype=np.float32)
                                                                             
+    print("Creating {} labels from semantic masks . . .".format(mode))
     for img in tqdm(range(data_mask.shape[0])):                               
         vol = data_mask[img,...,0]                                            
         l = np.unique(vol)                                                  

@@ -62,8 +62,7 @@ import math
 import time
 import h5py
 import tensorflow as tf
-from data_3D_manipulation import load_and_prepare_3D_data_v2,\
-                                 merge_3D_data_with_overlap, \
+from data_3D_manipulation import merge_3D_data_with_overlap, \
                                  crop_3D_data_with_overlap,\
                                  load_3d_images_from_dir
 from generators.data_3D_generators_v2 import VoxelDataGenerator
@@ -76,6 +75,7 @@ from tqdm import tqdm
 from tensorflow.keras.utils import plot_model
 from post_processing import ensemble16_3d_predictions, bc_watershed, bcd_watershed
 from skimage.io import imsave, imread
+from sklearn.model_selection import train_test_split                            
 
 
 ############
@@ -312,7 +312,7 @@ use_LRFinder = False
 
 ### Experiment main parameters
 # Batch size value
-batch_size_value = 2
+batch_size_value = 1
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "adam"
 # Learning rate used by the optimization method
@@ -365,9 +365,11 @@ channel_weights = (1, 0.2)
 # take much time
 ensemble = False
 # Path were the test stacks are placed. It can be the same as test_path
-test_full_path = os.path.join(args.data_dir, 'test_full', 'x')
+#test_full_path = os.path.join(args.data_dir, 'test_full', 'x')
+test_full_path = test_path
 # Path were the test mask stacks are placed. It can be the same as test_mask_path
-test_full_mask_path = os.path.join(args.data_dir, 'test_full', 'y')
+#test_full_mask_path = os.path.join(args.data_dir, 'test_full', 'y')
+test_full_mask_path = test_mask_path
 
 
 ### mAP calculation options
@@ -450,8 +452,13 @@ if in_memory:
     # Create validation data splitting the train                                
     X_train, X_val, \
     Y_train, Y_val = train_test_split(                                      
-        X_train, Y_train, test_size=val_split, shuffle=shuffle_val,         
-        random_state=seedValue)                                             
+        X_train, Y_train, test_size=perc_used_as_val, shuffle=random_val_data,
+        random_state=42)                                             
+
+    print("*** Loaded train data shape is: {}".format(X_train.shape))
+    print("*** Loaded train mask shape is: {}".format(Y_train.shape))
+    print("*** Loaded validation data shape is: {}".format(X_val.shape))
+    print("*** Loaded validation mask shape is: {}".format(Y_val.shape))
                                         
     ## TRAIN
     aux_dir = os.path.join(args.result_dir, 'aux_train')
@@ -460,6 +467,7 @@ if in_memory:
         np.save(os.path.join(args.result_dir, 'Y_train.npy'), Y_train)
     else:
         Y_train = np.load(os.path.join(aux_dir, '../Y_train.npy'))
+        print("*** Reloaded train mask shape is: {}".format(Y_train.shape))
 
     ## VAL
     aux_dir = os.path.join(args.result_dir, 'aux_val')                        
@@ -468,6 +476,7 @@ if in_memory:
         np.save(os.path.join(args.result_dir, 'Y_val.npy'), Y_val)          
     else:                                                                       
         Y_val = np.load(os.path.join(aux_dir, '../Y_val.npy'))
+        print("*** Reloaded validation mask shape is: {}".format(Y_val.shape))
 else:
     X_train = Y_train = X_val = Y_val = None 
 
@@ -563,12 +572,13 @@ print("##########################\n"
       "#  INFERENCE (per crop)  #\n"
       "##########################\n")
 
-## Overlap and padding prediction
-X_test, _, _, t_filenames = load_3d_images_from_dir(test_full_path, return_filenames=True)
-d = len(str(len(X_test)))
-for im in range(len(X_test)):
+## Load filenames of the test data
+X, _, _, t_filenames = load_3d_images_from_dir(test_full_path, return_filenames=True)
+d = len(str(len(X)))                              
+for im in tqdm(range(len(X))):
+    X_test = X[im][0].transpose((2,0,1,3))
+
     # Read and crop 
-    X_test = (X_test[im]/255).transpose((2,0,1,3)) # Convert to (z, x, y, c)
     original_data_shape = X_test.shape
     X_test = crop_3D_data_with_overlap(
         X_test, crop_shape, overlap=overlap, padding=padding, verbose=True, 

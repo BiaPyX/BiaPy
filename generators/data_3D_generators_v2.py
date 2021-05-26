@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import tensorflow as tf
 import random
@@ -344,10 +345,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                             self.first_no_bin_channel = i
                             break
             self.channels = img.shape[-1]
+            self.Y_dtype = img.dtype
             del img
         else:
             self.X = X.astype(np.uint8) 
             self.Y = Y
+            self.Y_dtype = Y.dtype
             # Store wheter all channels of the gt are binary or not 
             # (e.g. distance transform channel)
             self.first_no_bin_channel = -1
@@ -531,7 +534,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         batch_x = np.zeros((len(indexes), *self.shape), dtype=np.uint8)
         batch_y = np.zeros((len(indexes), *self.shape[:3])+(self.channels,), 
-                           dtype=self.Y.dtype)
+                           dtype=self.Y_dtype)
                    
         for i, j in zip(range(len(indexes)), indexes):
             
@@ -656,8 +659,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             o_heat_shape = heat.shape
             o_mask_shape = mask.shape
             heat = heat.reshape(heat.shape[:2]+(heat.shape[2]*heat.shape[3],))
-            heat = HeatmapsOnImage(
-                heat, shape=heat.shape, min_value=0.0, max_value=np.max(heat))
+            heat = HeatmapsOnImage(heat, shape=heat.shape, min_value=0.0,
+                                   max_value=np.max(heat)+sys.float_info.epsilon)
         else:                                                                   
             heat = None     
         
