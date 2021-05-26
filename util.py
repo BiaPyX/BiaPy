@@ -1662,7 +1662,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None,
         return data, data_shape, c_shape
 
 
-def labels_into_bcd(data_mask, mode="BCD", save_dir=None):
+def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
     """Create an array with 3 channels given semantic or instance segmentation 
        data masks. These 3 channels are: semantic mask, contours and distance map.
     
@@ -1715,7 +1715,7 @@ def labels_into_bcd(data_mask, mode="BCD", save_dir=None):
             new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)           
                                                                             
             # Contour                                                       
-            new_mask[img,...,1] = find_boundaries((vol>0).astype(np.uint8), mode='outer').astype(np.uint8)
+            new_mask[img,...,1] = find_boundaries((vol>0).astype(np.uint8), mode=fb_mode).astype(np.uint8)
             # Remove contours from segmentation maps                        
             new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0     
                                                                             
@@ -1733,7 +1733,7 @@ def labels_into_bcd(data_mask, mode="BCD", save_dir=None):
     return new_mask
                                                                             
 
-def labels_into_bcd_2D(data_mask, mode="BC", save_dir=None):
+def labels_into_bcd_2D(data_mask, mode="BC", fb_mode="outer", save_dir=None):
     """Create an array with 3 channels given semantic or instance segmentation 
        data masks. These 3 channels are: semantic mask, contours and distance map.
     
@@ -1747,6 +1747,10 @@ def labels_into_bcd_2D(data_mask, mode="BC", save_dir=None):
            Operation mode. Possible values: ``BC`` and ``BCD``.  ``BC``
            corresponds to use binary segmentation+contour. ``BCD`` stands for
            binary segmentation+contour+distances.
+
+       fb_mode : str, optional
+          Mode of the find_boundaries function from ``scikit-image``. More info in:
+          `find_boundaries() <https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries>`_.
     
        save_dir : str, optional 
            Path to store samples of the created array just to debug it is correct.
@@ -1787,7 +1791,7 @@ def labels_into_bcd_2D(data_mask, mode="BC", save_dir=None):
             new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)           
                                                                             
             # Contour                                                       
-            new_mask[img,...,1] = find_boundaries((vol>0).astype(np.uint8), mode='outer').astype(np.uint8)
+            new_mask[img,...,1] = find_boundaries(vol, mode=fb_mode).astype(np.uint8)
             # Remove contours from segmentation maps                        
             new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0     
 
