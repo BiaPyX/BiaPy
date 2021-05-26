@@ -439,19 +439,20 @@ if in_memory:
           "#  LOAD DATA  #\n"
           "###############\n")
 
-    X_train, Y_train,\
-    X_test, Y_test,\
-    orig_test_shape, crop_test_shapes,\
-    filenames = load_and_prepare_3D_data_v2(
-        train_path, train_mask_path, test_path, test_mask_path, 
-        val_split=perc_used_as_val, create_val=False, shuffle_val=random_val_data,
-        random_subvolumes_in_DA=random_subvolumes_in_DA,
-        test_subvol_shape=crop_shape, train_subvol_shape=crop_shape, ov=overlap,
-        padding=padding, median_padding=median_padding)
-      
-    X_val, _, _ = load_3d_images_from_dir(val_path)
-    Y_val, _, _ = load_3d_images_from_dir(val_mask_path)
-
+    print("0) Loading train images . . .")                                      
+    X_train, _, _ = load_3d_images_from_dir(train_path, crop=True,
+        crop_shape=crop_shape, overlap=overlap)
+                                                                                
+    print("1) Loading train masks . . .")                                       
+    Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=True,
+        crop_shape=crop_shape, overlap=overlap)  
+                                                                                
+    # Create validation data splitting the train                                
+    X_train, X_val, \
+    Y_train, Y_val = train_test_split(                                      
+        X_train, Y_train, test_size=val_split, shuffle=shuffle_val,         
+        random_state=seedValue)                                             
+                                        
     ## TRAIN
     aux_dir = os.path.join(args.result_dir, 'aux_train')
     if not os.path.isfile(os.path.join(args.result_dir, 'Y_train.npy')):
@@ -467,15 +468,8 @@ if in_memory:
         np.save(os.path.join(args.result_dir, 'Y_val.npy'), Y_val)          
     else:                                                                       
         Y_val = np.load(os.path.join(aux_dir, '../Y_val.npy'))
-
-    ## TEST
-    aux_dir = os.path.join(args.result_dir, 'aux_test')
-    if not os.path.isfile(os.path.join(args.result_dir, 'Y_test.npy')):
-        np.save(os.path.join(args.result_dir, 'Y_test.npy'), (Y_test>0).astype(np.uint8))
-    else:
-        Y_test = np.load(os.path.join(args.result_dir, 'Y_test.npy'))
 else:
-    X_train = Y_train = X_val = Y_val = X_test = Y_test = None 
+    X_train = Y_train = X_val = Y_val = None 
 
 
 print("#######################\n"
@@ -527,14 +521,6 @@ val_generator = VoxelDataGenerator(
     subvol_shape=crop_shape, shuffle_each_epoch=shuffle_val_data_each_epoch,    
     batch_size=batch_size_value, da=False, val=True)       
 del X_val, Y_val 
-
-# Create the test data generator without DA
-print("Preparing test data generator . . .")
-test_generator = VoxelDataGenerator(
-    X_test, Y_test, in_memory=in_memory, data_paths=data_paths[4:6],
-    random_subvolumes_in_DA=False, shuffle_each_epoch=False,
-    batch_size=batch_size_value, da=False)
-del X_test, Y_test
 
 # Generate examples of data augmentation
 if aug_examples:
