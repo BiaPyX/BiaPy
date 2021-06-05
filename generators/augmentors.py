@@ -541,7 +541,7 @@ def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False,
         image = 1.0-image
         image = np.clip(image, 0, 1)
 
-    return image*255
+    return (image*255).astype(np.uint8)
 
 
 def contrast(img, contrast_factor=(0,0), mode='mix', invert=False, invert_p=0):
@@ -621,7 +621,7 @@ def contrast(img, contrast_factor=(0,0), mode='mix', invert=False, invert_p=0):
         image = 1.0-image
         image = np.clip(image, 0, 1)
 
-    return image*255
+    return (image*255).astype(np.uint8)
 
 
 def missing_parts(img, iterations=(30,40)):
