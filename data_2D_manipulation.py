@@ -11,7 +11,7 @@ from util import load_data_from_dir, foreground_percentage
 
 
 def load_and_prepare_2D_data(train_path, train_mask_path, test_path, 
-    test_mask_path, create_val=True, val_split=0.1, shuffle_val=True, 
+    test_mask_path, val_split=0.1, shuffle_val=True, 
     seedValue=42, e_d_data=[], e_d_mask=[], e_d_data_dim=[], 
     num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None,
     crop_test=True, ov=(0,0), overlap_train=False, padding=(0,0), 
@@ -32,9 +32,6 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
 
        test_mask_path : str
            Path to the test data masks.          
-
-       create_val : bool, optional
-           If true validation data is created (from the train data).                                                    
 
        val_split : float, optional
             % of the train data used as validation (value between ``0`` and ``1``).
@@ -103,11 +100,11 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
            Train images' mask. E.g. ``(num_of_images, y, x, channels)``.
 
        X_val : 4D Numpy array, optional
-           Validation images (``create_val==True``). E.g. ``(num_of_images, 
+           Validation images (``val_split > 0``). E.g. ``(num_of_images, 
            y, x, channels)``.
 
        Y_val : 4D Numpy array, optional
-           Validation images' mask (``create_val==True``). E.g. 
+           Validation images' mask (``val_split > 0``). E.g. 
            ``(num_of_images, y, x, channels)``.
 
        X_test : 4D Numpy array
@@ -195,6 +192,9 @@ def load_and_prepare_2D_data(train_path, train_mask_path, test_path,
                                                                         
     # Disable crops when random_crops_in_DA is selected                    
     crop = False if random_crops_in_DA else True
+
+    # Check validation 
+    create_val = True if val_split > 0 else False
 
     t_ov = ov if overlap_train else (0,0)
     print("0) Loading train images . . .")

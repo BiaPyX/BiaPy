@@ -434,7 +434,7 @@ if in_memory:
     orig_test_shape, crop_test_shapes,\
     filenames = load_and_prepare_3D_data_v2(
         train_path, train_mask_path, test_path, test_mask_path, 
-        val_split=perc_used_as_val, create_val=True, shuffle_val=random_val_data,
+        val_split=perc_used_as_val, shuffle_val=random_val_data,
         random_subvolumes_in_DA=random_subvolumes_in_DA,
         test_subvol_shape=crop_shape, train_subvol_shape=crop_shape, ov=overlap,
         padding=padding, median_padding=median_padding)
