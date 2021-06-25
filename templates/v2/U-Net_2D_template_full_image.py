@@ -65,7 +65,7 @@ from skimage.io import imsave
 from data_2D_manipulation import load_and_prepare_2D_data, crop_data_with_overlap,\
                                  merge_data_with_overlap
 from generators.custom_da_gen_v2 import ImageDataGenerator
-from networks.unet import U_Net_2D
+from networks.attention_unet_2d import Attention_U_Net_2D
 from metrics import jaccard_index_numpy, voc_calculation
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import load_model
@@ -163,7 +163,7 @@ overlap = (0,0)
 ov_train = False
 # Padding to be done in (x, y) when reconstructing test data. Useful to avoid
 # patch 'border effect'.                                                        
-padding = (0,0)
+padding = (32,32)
 
 
 ###############################################################
@@ -184,7 +184,7 @@ shuffle_val_data_each_epoch = False
 # Rotation of 90º to the subvolumes
 rotation90 = False
 # Random rotation between a defined range 
-rand_rot = False
+rand_rot = True
 # Range of random rotations
 rnd_rot_range = (-180, 180)
 # Apply shear to images
@@ -200,9 +200,9 @@ shift = False
 # Shift range             
 shift_range = (0.1, 0.2)
 # Make vertical flips 
-vflip = False
+vflip = True
 # Make horizontal flips                                                           
-hflip = False
+hflip = True
 # Elastic transformations                                                       
 elastic = False
 # Strength of the distortion field
@@ -503,11 +503,11 @@ print("#################################\n"
       "#################################\n")
 
 print("Creating the network . . .")
-model = U_Net_2D(crop_shape, activation=activation, feature_maps=feature_maps, 
-                 depth=depth, drop_values=dropout_values, 
-                 spatial_dropout=spatial_dropout, batch_norm=batch_normalization, 
-                 k_init=kernel_init, loss_type=loss_type, optimizer=optimizer, 
-                 lr=learning_rate_value, n_classes=n_classes)
+model = Attention_U_Net_2D(crop_shape, activation=activation,
+    feature_maps=feature_maps, depth=depth, drop_values=dropout_values,
+    spatial_dropout=spatial_dropout, batch_norm=batch_normalization,
+    k_init=kernel_init, loss_type=loss_type, optimizer=optimizer,
+    lr=learning_rate_value, n_classes=n_classes)
 
 # Check the network created
 model.summary(line_length=150)
@@ -516,7 +516,7 @@ model_name = os.path.join(char_dir, "model_plot_" + job_identifier + ".png")
 plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
 h5_file=os.path.join(h5_dir, weight_files_prefix + previous_job_weights     
-                     + '_' + str(args.run_id) + '.h5')  
+                     + '_' + str(args.run_id) + '.h5') 
 
 if not load_previous_weights:
     results = model.fit(train_generator, validation_data=val_generator,
@@ -535,66 +535,45 @@ print("##########################\n"
       "##########################\n")
 
 print("Making the predictions on test data . . .")
-loss_per_crop = 0
-iou_per_crop = 0
-iou = 0
-ov_iou = 0
+loss_per_img = 0
+iou_per_img = 0
+ov_iou_per_img = 0
+c1 = 0                                                                          
+
 os.makedirs(result_no_bin_dir_per_image, exist_ok=True)
+
 it = iter(test_generator)
-c1 = 0
-c2 = 0
 d = len(str(len(test_generator)*batch_size_value))
 for i in tqdm(range(len(test_generator))):
     batch = next(it)
 
-    X, Y = batch  
-    for j in tqdm(range(X.shape[0]), leave=False):
-        X_test, Y_test = crop_data_with_overlap(
-            np.expand_dims(X[j],0), crop_shape, data_mask=np.expand_dims(Y[j],0), 
-                           overlap=overlap, padding=padding, verbose=False)
+    X_test, Y_test = batch  
+    for j in tqdm(range(X_test.shape[0]), leave=False):
        
-        # Evaluate each patch
-        l = int(math.ceil(X_test.shape[0]/batch_size_value))
-        for k in tqdm(range(l), leave=False):
-            top = (k+1)*batch_size_value if (k+1)*batch_size_value < X_test.shape[0] else X_test.shape[0]
-            score_per_crop = model.evaluate(
-                X_test[k*batch_size_value:top], Y_test[k*batch_size_value:top], verbose=0)
-            loss_per_crop += score_per_crop[0]
-            iou_per_crop += score_per_crop[1]
+        # Evaluate each img
+        score = model.evaluate(np.expand_dims(X_test[j],0), np.expand_dims(Y_test[j],0), verbose=0)
+        loss_per_img += score[0]
+        iou_per_img += score[1]
     
-        # Predict each patch with ensembling
-        pred = []
-        for k in tqdm(range(X_test.shape[0]), leave=False):
-            p = ensemble8_2d_predictions(X_test[k],
-                pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)),
-                n_classes=n_classes)
-            pred.append(np.expand_dims(p, 0))
-            
-        # Reconstruct the original shape 
-        pred = np.concatenate(pred)
-        if n_classes > 1:
-            pred = np.expand_dims(np.argmax(pred,-1), -1)
-            Y = np.expand_dims(np.argmax(Y,-1), -1)
-        pred = merge_data_with_overlap(pred, (1,)+Y.shape[1:], padding=padding,
-                                       overlap=overlap, verbose=False)
+        # Make the prediction
+        pred = model.predict(np.expand_dims(X_test[j],0), verbose=0)
     
-        c = (i*batch_size_value)+j                                              
-        f = os.path.join(result_no_bin_dir_per_image, str(c).zfill(d)+'.tif')   
+        # Recover original shape if padded
+        pred = pred[:,:o_test_shape[1],:o_test_shape[2]]
+        Y = Y_test[j,:o_test_shape[1],:o_test_shape[2]]
+
+        # Save image
+        f = os.path.join(result_no_bin_dir_per_image, str(c1).zfill(d)+'.tif')   
         aux = np.expand_dims(pred.transpose((0,3,1,2)), -1).astype(np.float32)  
         imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-          
-        iou_per_image = jaccard_index_numpy((Y[j]>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8))
-        ov_iou_per_image = voc_calculation((Y[j]>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8), 
-                                           iou_per_image)
-        iou += iou_per_image
-        ov_iou += ov_iou_per_image
-        c1 += X_test.shape[0]                                                    
-    c2 += X.shape[0]
 
-loss_per_crop = loss_per_crop / c1
-iou_per_crop = iou_per_crop / c1
-iou = iou / c2
-ov_iou = ov_iou / c2
+        ov_iou_per_img += voc_calculation((Y>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8),
+                                           score[1])
+        c1 += 1
+
+loss = loss_per_img / c1
+iou = iou_per_img / c1
+ov_iou = ov_iou_per_img / c1
 
 
 print("####################################\n"
@@ -606,15 +585,14 @@ if load_previous_weights == False:
     print("Epoch number: {}".format(len(results.history['val_loss'])))
     print("Train time (s): {}".format(np.sum(time_callback.times)))
     print("Train loss: {}".format(np.min(results.history['loss'])))
-    print("Train IoU: {}".format(np.max(results.history[metric])))
+    print("Train Foreground IoU: {}".format(np.max(results.history[metric])))
     print("Validation loss: {}".format(np.min(results.history['val_loss'])))
-    print("Validation IoU: {}"
+    print("Validation Foreground IoU: {}"
           .format(np.max(results.history['val_'+metric])))
 
-print("Test loss: {}".format(loss_per_crop))
-print("Test Foreground IoU (per crop): {}".format(iou_per_crop))
-print("Test Foreground IoU (merge into complete image): {}".format(iou))
-print("Test Overall IoU (merge into complete image): {}".format(ov_iou))
+print("Test loss: {}".format(loss))
+print("Test Foreground IoU (per image): {}".format(iou))
+print("Test Overall IoU (per image): {}".format(ov_iou))
 
 print("FINISHED JOB {} !!".format(job_identifier))
 

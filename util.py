@@ -1812,3 +1812,36 @@ def labels_into_bcd_2D(data_mask, mode="BC", fb_mode="outer", save_dir=None):
     
     return new_mask
                                                                             
+
+def check_downsample_division(X, d_levels):
+    """Ensures X and Y shape is divisible by 2 ``d_levels`` times adding padding 
+       if necessary. 
+                                                                                
+       Parameters                                                               
+       ----------                                                               
+       X : 4D Numpy array                                               
+           Data to check if its shape.  E.g. ``(10, 1000, 1000, 1)``.
+                                                                                
+       d_levels : int
+           Levels of downsampling by ``2``. 
+                                                                                
+       Returns                                                                  
+       -------                                                                  
+       X : 4D Numpy array                                                
+           Data divisible by 2 ``d_levels`` times. 
+        
+       o_shape : 4 int tuple
+           Original shape of ``X``. E.g. ``(10, 1000, 1000, 1)``.
+    """             
+                                  
+    dy = math.ceil(X.shape[1]/pow(2,d_levels))
+    dx = math.ceil(X.shape[2]/pow(2,d_levels))
+    o_shape = X.shape
+    if dy != X.shape[1] or dx != X.shape[2]:
+        X = np.pad(X, ((0,0), (0,(dy*pow(2,d_levels))-X.shape[1]), 
+                              (0,(dx*pow(2,d_levels))-X.shape[2]), (0,0)))                      
+        print("Data has been padded to be downsampled {} times. "
+              "Its shape now is: {}".format(d_levels, X.shape))
+    return X, o_shape
+
+
