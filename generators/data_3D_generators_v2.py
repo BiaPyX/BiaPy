@@ -637,10 +637,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                Transformed image mask. E.g. ``(x, y, z, channels)``.
         """
 
-        # Change dtype to supported one by imgaug
-        image = image.astype(np.uint8)
-        mask = mask.astype(self.Y.dtype)
-
         # Apply flips in z as imgaug can not do it 
         if self.zflip and random.uniform(0, 1) < self.da_prob:
             l_image = []
@@ -654,8 +650,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                                                                                 
         # Split heatmaps from masks                                             
         if self.first_no_bin_channel != -1:                                     
-            heat = mask[...,self.first_no_bin_channel:]         
-            mask = mask[...,:self.first_no_bin_channel].astype(np.uint8)
+            heat = mask[...,self.first_no_bin_channel:]
+            mask = mask[...,:self.first_no_bin_channel]
             o_heat_shape = heat.shape
             o_mask_shape = mask.shape
             heat = heat.reshape(heat.shape[:2]+(heat.shape[2]*heat.shape[3],))
@@ -663,6 +659,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                                    max_value=np.max(heat)+sys.float_info.epsilon)
         else:                                                                   
             heat = None     
+
+        # Change dtype to supported one by imgaug
+        image = image.astype(np.uint8)
+        mask = mask.astype(np.uint8)
         
         # Save shapes
         o_img_shape = image.shape
