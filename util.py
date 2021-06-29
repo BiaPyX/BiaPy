@@ -1719,7 +1719,7 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
             new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)           
                                                                             
             # Contour                                                       
-            new_mask[img,...,1] = find_boundaries((vol>0).astype(np.uint8), mode=fb_mode).astype(np.uint8)
+            new_mask[img,...,1] = find_boundaries(vol, mode=fb_mode).astype(np.uint8)
             # Remove contours from segmentation maps                        
             new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0     
                                                                             
