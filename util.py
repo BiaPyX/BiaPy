@@ -1727,12 +1727,15 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
         os.makedirs(save_dir, exist_ok=True)
         for i in range(min(3,len(new_mask))): 
             imsave(os.path.join(save_dir,'vol'+str(i)+'_semantic.tif'),
-                   np.transpose(new_mask[i,...,0],(2,0,1)).astype(np.uint8))
+                   np.transpose(new_mask[i,...,0],(2,0,1)).astype(np.uint8),
+                   check_contrast=False)
             imsave(os.path.join(save_dir,'vol'+str(i)+'_contour.tif'),
-                   np.transpose(new_mask[i,...,1],(2,0,1)).astype(np.uint8))
+                   np.transpose(new_mask[i,...,1],(2,0,1)).astype(np.uint8),
+                   check_contrast=False)
             if mode == "BCD":
                 imsave(os.path.join(save_dir,'vol'+str(i)+'_distance.tif'),
-                       np.transpose(new_mask[i,...,2],(2,0,1)).astype(np.float32))
+                       np.transpose(new_mask[i,...,2],(2,0,1)).astype(np.float32),
+                       check_contrast=False)
     
     return new_mask
                                                                             
@@ -1803,12 +1806,12 @@ def labels_into_bcd_2D(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         os.makedirs(save_dir, exist_ok=True)
         for i in range(min(3,len(new_mask))):                                                      
             imsave(os.path.join(save_dir,'vol'+str(i)+'_semantic.tif'), 
-                   new_mask[i,...,0].astype(np.uint8))
+                   new_mask[i,...,0].astype(np.uint8), check_contrast=False)
             imsave(os.path.join(save_dir,'vol'+str(i)+'_contour.tif'), 
-                   new_mask[i,...,1].astype(np.uint8))
+                   new_mask[i,...,1].astype(np.uint8), check_contrast=False)
             if mode == "BCD":
                 imsave(os.path.join(save_dir,'vol'+str(i)+'_distance.tif'),
-                       new_mask[i,...,2].astype(np.float32))
+                       new_mask[i,...,2].astype(np.float32), check_contrast=False)
     
     return new_mask
                                                                             

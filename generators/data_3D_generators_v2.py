@@ -845,20 +845,20 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 # Original image/mask
                 f = os.path.join(out_dir, "orig_x_"+str(pos)+self.trans_made+'.tiff')
                 self.__draw_grid(o_x)
-                aux = np.expand_dims((np.transpose(o_x, (2,3,0,1))).astype(np.uint8), -1)
-                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
+                aux = np.expand_dims((np.transpose(o_x, (2,3,0,1))).astype(np.float32), -1)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                 f = os.path.join(out_dir, "orig_y_"+str(pos)+self.trans_made+'.tiff')
                 self.__draw_grid(o_y)
-                aux = np.expand_dims((np.transpose(o_y, (2,3,0,1))).astype(np.uint8), -1)
-                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
+                aux = np.expand_dims((np.transpose(o_y, (2,3,0,1))).astype(np.float32), -1)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                 # Transformed
                 f = os.path.join(out_dir, "x_aug_"+str(pos)+self.trans_made+'.tiff')
-                aux = np.expand_dims((np.transpose(sample_x[i], (2,3,0,1))).astype(np.uint8), -1)
-                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
+                aux = np.expand_dims((np.transpose(sample_x[i], (2,3,0,1))).astype(np.float32), -1)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                 # Mask
                 f = os.path.join(out_dir, "y_aug_"+str(pos)+self.trans_made+'.tiff')
-                aux = np.expand_dims((np.transpose(sample_y[i], (2,3,0,1))).astype(np.uint8), -1)
-                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
+                aux = np.expand_dims((np.transpose(sample_y[i], (2,3,0,1))).astype(np.float32), -1)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
                 # Save the original images with a red point and a blue square 
                 # that represents the point selected with the probability map 
@@ -907,12 +907,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                             aux[:,:,s,:] = im
                             auxm[:,:,s,:] = m
 
-                    aux = np.expand_dims((np.transpose(aux, (2,3,0,1))).astype(np.uint8), -1)
+                    aux = np.expand_dims((np.transpose(aux, (2,3,0,1))).astype(np.float32), -1)
                     f = os.path.join(out_dir, str(pos)+"_mark_x_"+self.trans_made+'.tiff')
-                    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'})
-                    auxm = np.expand_dims((np.transpose(auxm, (2,3,0,1))).astype(np.uint8), -1)
+                    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+                    auxm = np.expand_dims((np.transpose(auxm, (2,3,0,1))).astype(np.float32), -1)
                     f = os.path.join(out_dir, str(pos)+"_mark_y_"+self.trans_made+'.tiff')
-                    imsave(f, auxm, imagej=True, metadata={'axes': 'ZCYXS'})
+                    imsave(f, auxm, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                     del o_x2, o_y2
 
         return sample_x, sample_y
