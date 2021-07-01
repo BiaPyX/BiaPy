@@ -160,7 +160,7 @@ w_background = 0.02 # Weight to apply to background class (probability_map=True)
 overlap = (0,0,0)
 # Padding to be done in (x, y, z) when reconstructing test data. Useful to avoid
 # patch 'border effect'.
-padding = (16, 16, 0)
+padding = (16, 16, 16)
 # Wheter to use median values to fill padded pixels or zeros
 median_padding = False
 # Make overlap on train data
@@ -318,9 +318,9 @@ optimizer = "adam"
 # Learning rate used by the optimization method
 learning_rate_value = 0.0001
 # Number of epochs to train the network
-epochs_value = 200
+epochs_value = 100
 # Number of epochs to stop the training process after no improvement
-patience = 50
+patience = 30
 
 
 ### Network architecture specific parameters
@@ -584,6 +584,9 @@ for im in tqdm(range(len(X))):
         X_test, crop_shape, overlap=overlap, padding=padding, verbose=True, 
         median_padding=median_padding)
     
+    # Normalization
+    X_test = X_test/255
+
     # Make prediction over each patch
     pred = []
     if ensemble:
