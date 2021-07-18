@@ -518,7 +518,7 @@ def save_tif(X=None, data_dir=None, filenames=None):
        filenames : list, optional
            Filenames that should be used when saving each image.
     """
-    
+    print("Saving data as .tif in folder: {}".format(data_dir))
     os.makedirs(data_dir, exist_ok=True)
     if filenames is not None:
         if len(filenames) != len(X):
