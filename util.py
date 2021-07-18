@@ -502,6 +502,41 @@ def img_to_array(img, data_format='channels_last', dtype='float32'):
         raise ValueError('Unsupported image shape: %s' % (x.shape,))
     return x
 
+def save_tif(X=None, data_dir=None, filenames=None):
+    """Save images in the given directory.
+
+       Parameters
+       ----------
+       X : 4D/5D numpy array, optional
+           Data to save as images. The first dimension must be the number of
+           images. E.g. ``(num_of_images, x, y, channels)`` or 
+           ``(num_of_images, x, y, z, channels)``.
+
+       data_dir : str, optional
+           Path to store X images.
+
+       filenames : list, optional
+           Filenames that should be used when saving each image.
+    """
+    
+    os.makedirs(data_dir, exist_ok=True)
+    if filenames is not None:
+        if len(filenames) != len(X):
+            raise ValueError("Filenames array and length of X have different "
+                             "shapes: {} vs {}".format(len(filenames),len(X)))
+
+    d = len(str(len(X)))
+    for i in range(X.shape[0]):
+        if filenames is None:
+            f = os.path.join(data_dir, str(i).zfill(d)+'.tif')
+        else:
+            f = os.path.join(data_dir, filenames[i])
+        if X.ndim == 4:
+            aux = np.expand_dims(np.expand_dims(X[i],0).transpose((0,3,1,2)), -1).astype(np.float32)
+        else:
+            aux = np.expand_dims(X[i].transpose((0,3,1,2)), -1).astype(np.float32)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+
 
 def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True, 
              prefix="", extension=".png", filenames=None):
