@@ -245,9 +245,9 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
         return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value
 
 def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path, 
-    test_mask_path, test_subvol_shape, train_subvol_shape, create_val=True, 
-    shuffle_val=True, val_split=0.1, seedValue=42, random_subvolumes_in_DA=False, 
-    ov=(0,0,0), padding=(0,0,0), median_padding=False):
+    test_mask_path, test_subvol_shape, train_subvol_shape, shuffle_val=True,
+    val_split=0.1, seedValue=42, random_subvolumes_in_DA=False, ov=(0,0,0),
+    padding=(0,0,0), median_padding=False):
     """Load train, validation and test images from the given paths to create a 
        3D data representation. All the test data will be used to create a 3D
        volume of ``test_subvol_shape`` shape (considering ``ov``).
@@ -274,9 +274,6 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
 
        test_subvol_shape : 4D tuple
             Shape of the test subvolumes to create. E.g. ``(x, y, z, channels)``.
-
-       create_val : bool, optional                                              
-           If true validation data is created (from the train data).                                                    
 
        shuffle_val : bool, optional                                             
             Take random training examples to create validation data.
@@ -314,11 +311,11 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
            Train images' mask. E.g. ``(num_of_images, y, x, z, channels)``.         
                                                                                 
        X_val : 5D Numpy array, optional                                         
-           Validation images (``create_val==True``). E.g. ``(num_of_images,      
+           Validation images (``val_split > 0``). E.g. ``(num_of_images,      
            y, x, z, channels)``.                                                   
                                                                                 
        Y_val : 5D Numpy array, optional                                         
-           Validation images' mask (``create_val==True``). E.g. ``(num_of_images,
+           Validation images' mask (``val_split > 0``). E.g. ``(num_of_images,
            y, x, z, channels)``.                                  
                                                                                 
        X_test : 5D Numpy array                                                  
@@ -364,7 +361,7 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
            orig_test_shape, crop_test_shapes,\
            filenames = load_and_prepare_3D_data_v2(
                train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
-               img_test_shape, val_split=0.1, create_val=True, shuffle_val=True,
+               img_test_shape, val_split=0.1, shuffle_val=True,
                test_subvol_shape=test_3d_shape, train_subvol_shape=train_3d_shape, 
                ov=(0,0,0))
 
@@ -379,6 +376,9 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
                                                                         
     # Disable crops when random_subvolumes_in_DA is selected 
     crop = False if random_subvolumes_in_DA else True
+
+    # Check validation 
+    create_val = True if val_split > 0 else False
 
     print("0) Loading train images . . .")
     X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, crop=crop,
