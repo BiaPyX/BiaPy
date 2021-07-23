@@ -502,6 +502,7 @@ def img_to_array(img, data_format='channels_last', dtype='float32'):
         raise ValueError('Unsupported image shape: %s' % (x.shape,))
     return x
 
+
 def save_tif(X=None, data_dir=None, filenames=None):
     """Save images in the given directory.
 
@@ -530,7 +531,7 @@ def save_tif(X=None, data_dir=None, filenames=None):
         if filenames is None:
             f = os.path.join(data_dir, str(i).zfill(d)+'.tif')
         else:
-            f = os.path.join(data_dir, filenames[i])
+            f = os.path.join(data_dir, os.path.splitext(filenames[i])[0]+'.tif')
         if X.ndim == 4:
             aux = np.expand_dims(np.expand_dims(X[i],0).transpose((0,3,1,2)), -1).astype(np.float32)
         else:
@@ -1603,7 +1604,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, crop_verb=Fal
        -------
        data : 5D Numpy array or list of 4D Numpy arrays
            Data loaded. E.g. ``(num_of_images, x, y, z, channels)`` if all files
-           have same shape, otherwise a list of ``(x, y, z, channels)`` arrays 
+           have same shape, otherwise a list of ``(1, x, y, z, channels)`` arrays 
            will be returned.
 
        data_shape : List of tuples
@@ -1872,12 +1873,13 @@ def check_downsample_division(X, d_levels):
            Original shape of ``X``. E.g. ``(10, 1000, 1000, 1)``.
     """             
                                   
-    dy = math.ceil(X.shape[1]/pow(2,d_levels))
-    dx = math.ceil(X.shape[2]/pow(2,d_levels))
+    d_val = pow(2,d_levels)
+    dy = math.ceil(X.shape[1]/d_val)
+    dx = math.ceil(X.shape[2]/d_val)
     o_shape = X.shape
-    if dy != X.shape[1] or dx != X.shape[2]:
-        X = np.pad(X, ((0,0), (0,(dy*pow(2,d_levels))-X.shape[1]), 
-                              (0,(dx*pow(2,d_levels))-X.shape[2]), (0,0)))                      
+    if dy*d_val != X.shape[1] or dx*d_val != X.shape[2]:
+        X = np.pad(X, ((0,0), (0,(dy*d_val)-X.shape[1]), 
+                              (0,(dx*d_val)-X.shape[2]), (0,0)))                      
         print("Data has been padded to be downsampled {} times. "
               "Its shape now is: {}".format(d_levels, X.shape))
     return X, o_shape
