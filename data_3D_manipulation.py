@@ -5,11 +5,10 @@ from sklearn.model_selection import train_test_split
 from util import load_data_from_dir, load_3d_images_from_dir
 
 
-def load_and_prepare_3D_data(train_path, train_mask_path, test_path, 
-    test_mask_path, image_train_shape, image_test_shape, test_subvol_shape,
-    train_subvol_shape, create_val=True, shuffle_val=True, val_split=0.1, 
-    seedValue=42, random_subvolumes_in_DA=False, ov=(0,0,0), overlap_train=False,
-    use_rest_train=True):         
+def load_and_prepare_3D_data(train_path, train_mask_path, train_subvol_shape,
+    test_path=None, test_mask_path=None, test_subvol_shape=None, shuffle_val=True,
+    val_split=0.1, seedValue=42, random_subvolumes_in_DA=False, ov=(0,0,0),
+    padding=(0,0,0), median_padding=False):
     """Load train, validation and test images from the given paths to create a 
        3D data representation. All the test data will be used to create a 3D
        volume of ``test_subvol_shape`` shape (considering ``ov``).
@@ -21,27 +20,18 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
 
        train_mask_path : str
            Path to the training data masks.     
-
-       test_path : str                                                          
+     
+       train_subvol_shape : 4D tuple                                            
+            Shape of the train subvolumes to create. E.g. ``(x, y, z, channels)``.
+         
+       test_path : str, optional
            Path to the test data.                                               
                                                                                 
-       test_mask_path : str                                                     
+       test_mask_path : str, optional                                                     
            Path to the test data masks.                                         
                                                                                 
-       image_train_shape : 3D tuple
-           Dimensions of the images to load. E.g. ``(x, y, channels)``.
-                                                                                
-       image_test_shape : 3D tuple
-           Dimensions of the images to load. E.g. ``(x, y, channels)``.
-
-       train_subvol_shape : 4D tuple
-            Shape of the train subvolumes to create. E.g. ``(x, y, z, channels)``.
-
-       test_subvol_shape : 4D tuple
+       test_subvol_shape : 4D tuple, optional
             Shape of the test subvolumes to create. E.g. ``(x, y, z, channels)``.
-
-       create_val : bool, optional                                              
-           If true validation data is created (from the train data).                                                    
 
        shuffle_val : bool, optional                                             
             Take random training examples to create validation data.
@@ -61,14 +51,15 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
            Amount of minimum overlap on x, y and z dimensions. The values must 
            be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.      
            E. g. ``(x, y, z)``.   
-  
-       overlap_train : bool, optional
-           To make training subvolumes as overlapping patches using ``ov``.
 
-       use_rest_train : bool, optional
-           Wheter to use the train data remainder when the subvolume shape
-           selected has no exact division with it. More info at :func:`~crop_data`
-           function.
+       padding : tuple of ints, optional                                        
+           Size of padding to be added on each axis ``(x, y, z)``.              
+           E.g. ``(24, 24, 24)``.                                               
+                                                                                
+       median_padding : bool, optional                                          
+           If ``True`` the padding value is the median value. If ``False``, the 
+           added values are zeroes.   
+  
 
        Returns
        -------                                                         
@@ -79,24 +70,33 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
            Train images' mask. E.g. ``(num_of_images, y, x, z, channels)``.         
                                                                                 
        X_val : 5D Numpy array, optional                                         
-           Validation images (``create_val==True``). E.g. ``(num_of_images,      
+           Validation images (``val_split > 0``). E.g. ``(num_of_images,      
            y, x, z, channels)``.                                                   
                                                                                 
        Y_val : 5D Numpy array, optional                                         
-           Validation images' mask (``create_val==True``). E.g. ``(num_of_images,
+           Validation images' mask (``val_split > 0``). E.g. ``(num_of_images,
            y, x, z, channels)``.                                  
                                                                                 
-       X_test : 5D Numpy array                                                  
+       X_test : 5D Numpy array, optional
            Test images. E.g. ``(num_of_images, y, x, z, channels)``.                
 
-       Y_test : 5D Numpy array      
+       Y_test : 5D Numpy array, optional
            Test images' mask. E.g. ``(num_of_images, y, x, z, channels)``.  
 
-       orig_test_shape : 4D int tuple
-           Test data original shape. E.g. ``(num_of_images, x, y, channels)``.
-
-       norm_value : int
-           Normalization value calculated.
+       orig_test_shape : List of tuples, optional                          
+           List that contains the shapes of each test sample. This              
+           variable and ``crop_test_shape`` should be used to reconstruct  
+           the test original images from patches with :func:`~merge_3D_data_with_overlap`.
+           Returned when ``test_path`` is provided.                             
+                                                                                
+       crop_test_shape : List of tuples, optional                          
+           List that contains the shapes of each test sample cropped. Returned   
+           when ``test_path`` is provided.                                      
+                                                                                
+       filenames : List of str, optional                                        
+           Loaded train and test filenames. ``filenames[0]`` are train filenames 
+           and ``filenames[1]`` are test filenames. Returned when ``test_path`` 
+           is provided.                                                   
 
        Examples
        --------
@@ -109,10 +109,6 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
            test_path = "data/test/y"
            test_mask_path = "data/test/y"
 
-           # Data shape is (1024, 768, 165), so each image shape should be this:
-           img_train_shape = (1024, 768, 1)
-           img_test_shape = (1024, 768, 1)
-
            # 3D subvolume shape needed
            train_3d_shape = (80, 80, 80, 1)
            test_3d_shape = (80, 80, 80, 1)
@@ -120,10 +116,8 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
            X_train, Y_train, X_val,
            Y_val, X_test, Y_test,
            orig_test_shape, norm_value = load_and_prepare_3D_data(
-               train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
-               img_test_shape, val_split=0.1, create_val=True, shuffle_val=True,
-               ov_=(0,0,0), train_subvol_shape=train_3d_shape,
-               test_subvol_shape=test_3d_shape)
+               train_path, train_mask_path, train_3d_shape, test_path, test_mask_path,
+               test_3d_shape, val_split=0.1, shuffle_val=True, ov_=(0,0,0))
 
            # The function will print the shapes of the generated arrays. In this example:
            #     *** Loaded train data shape is: (194, 80, 80, 80, 1)
@@ -141,15 +135,16 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
            X_train, Y_train, X_val,                                             
            Y_val, X_test, Y_test,                                               
            orig_test_shape, norm_value = load_and_prepare_3D_data(              
-               train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
-               img_test_shape, val_split=0.1, create_val=True, shuffle_val=True,
-               overlap_train=True, ov=(0.5,0.5,0.5), train_subvol_shape=train_3d_shape,              
-               test_subvol_shape=test_3d_shape)                                 
+               train_path, train_mask_path, train_3d_shape, test_path, test_mask_path,
+               test_3d_shape, val_split=0.1, shuffle_val=True, ov=(0.5,0.5,0.5))
                                                                                 
            # The function will print the shapes of the generated arrays. In this example:
            #     *** Loaded train data shape is: (1710, 80, 80, 80, 1)
+           #     *** Loaded train mask shape is: (1710, 80, 80, 80, 1)
            #     *** Loaded validation data shape is: (190, 80, 80, 80, 1)       
+           #     *** Loaded validation mask shape is: (190, 80, 80, 80, 1)       
            #     *** Loaded test data shape is: (1900, 80, 80, 80, 1)            
+           #     *** Loaded test mask shape is: (1900, 80, 80, 80, 1)            
            #
 
            # EXAMPLE 3
@@ -162,51 +157,58 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
            X_train, Y_train, X_val,
            Y_val, X_test, Y_test,
            orig_test_shape, norm_value = load_and_prepare_3D_data(
-               train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
-               img_test_shape, create_val=False, random_subvolumes_in_DA=True, ov=(0,0,0),
-               train_subvol_shape=train_3d_shape, test_subvol_shape=test_3d_shape)
+               train_path, train_mask_path, train_3d_shape, test_path, test_mask_path,
+               test_3d_shape, val_split=0, random_subvolumes_in_DA=True, ov=(0,0,0))
 
            # The function will print the shapes of the generated arrays. In this example:
            #     *** Loaded train data shape is: (1, 768, 1024, 165, 1)
+           #     *** Loaded train mask shape is: (1, 768, 1024, 165, 1)
            #     *** Loaded test data shape is: (390, 80, 80, 80, 1)
+           #     *** Loaded test mask shape is: (390, 80, 80, 80, 1)
            # Notice height and width swap because of Numpy ndarray terminology
     """      
    
     print("### LOAD ###")
                                                                         
-    tr_shape = (image_train_shape[1], image_train_shape[0], image_train_shape[2])
-    print("0) Loading train images . . .")
-    X_train = load_data_from_dir(train_path, tr_shape)
-    print("1) Loading train masks . . .")
-    Y_train = load_data_from_dir(train_mask_path, tr_shape)
+    # Check validation                                                          
+    create_val = True if val_split > 0 else False 
 
-    te_shape = (image_test_shape[1], image_test_shape[0], image_test_shape[2])
-    print("2) Loading test images . . .")
-    X_test = load_data_from_dir(test_path, te_shape)
-    print("3) Loading test masks . . .")
-    Y_test = load_data_from_dir(test_mask_path, te_shape)
+    print("0) Loading train images . . .")
+    X_train, _, _, t_filenames = load_data_from_dir(
+        train_path, return_filenames=True)
+    print("1) Loading train masks . . .")
+    Y_train, _, _ = load_data_from_dir(train_mask_path)
+
+    if test_path is not None:
+        print("2) Loading test images . . .")
+        X_test, orig_test_shape, \
+        crop_test_shape, te_filenames = load_data_from_dir(
+            test_path, return_filenames=True)
+    if test_mask_path is not None:
+        print("3) Loading test masks . . .")
+        Y_test, _, _ = load_data_from_dir(test_mask_path)
+
+    # Save train and test filenames                                             
+    filenames = []                                                              
+    filenames.append(t_filenames)                                               
+    if test_path is not None:                                                   
+        filenames.append(te_filenames)
 
     if not random_subvolumes_in_DA:
         print("Cropping train data into 3D subvolumes . . .")
-        if overlap_train:
-            X_train, Y_train = crop_3D_data_with_overlap(
-                X_train, train_subvol_shape, data_mask=Y_train, overlap=ov) 
-        else:
-            X_train, Y_train = crop_3D_data(
-                X_train, train_subvol_shape, use_rest=use_rest_train,
-                data_mask=Y_train)
+        X_train, Y_train = crop_3D_data_with_overlap(
+            X_train, train_subvol_shape, data_mask=Y_train, overlap=ov,
+            padding=padding, median_padding=median_padding) 
 
-    # Add zeros in test to match needed shape 
-    if test_subvol_shape[2] > X_test.shape[0]:
-        r = test_subvol_shape[2]-X_test.shape[0]
-        s = (r, )+X_test.shape[1:]
-        X_test = np.concatenate((X_test,np.zeros((s))), axis=0)
-        Y_test = np.concatenate((Y_test,np.zeros((s))), axis=0)
-    orig_test_shape = tuple(Y_test.shape[i] for i in [0, 1, 2, 3])
-    
-    print("Cropping test data into 3D subvolumes . . .")
-    X_test, Y_test = crop_3D_data_with_overlap(
-        X_test, test_subvol_shape, data_mask=Y_test, overlap=ov)
+    if test_path is not None:
+        orig_test_shape = tuple(Y_test.shape[i] for i in [0, 1, 2, 3])
+        print("Cropping test data into 3D subvolumes . . .")
+        X_test = crop_3D_data_with_overlap(X_test, test_subvol_shape, overlap=ov,
+            padding=padding, median_padding=median_padding)
+    if test_mask_path is not None:                                                   
+        print("Cropping test mask into 3D subvolumes . . .")                    
+        Y_test = crop_3D_data_with_overlap(Y_test, test_subvol_shape, overlap=ov,
+            padding=padding, median_padding=median_padding)
         
     # Create validation data splitting the train
     if create_val:
@@ -223,29 +225,40 @@ def load_and_prepare_3D_data(train_path, train_mask_path, test_path,
             X_val = np.expand_dims(np.transpose(X_val, (1,2,0,3)), axis=0)
             Y_val = np.expand_dims(np.transpose(Y_val, (1,2,0,3)), axis=0)
 
-    if create_val:
-        print("*** Loaded train data shape is: {}".format(X_train.shape))
-        print("*** Loaded validation data shape is: {}".format(X_val.shape))
-        print("*** Loaded test data shape is: {}".format(X_test.shape))
-        print("### END LOAD ###")
+    if create_val:                                                              
+        print("*** Loaded train data shape is: {}".format(X_train.shape))       
+        print("*** Loaded train mask shape is: {}".format(Y_train.shape))       
+        print("*** Loaded validation data shape is: {}".format(X_val.shape))    
+        print("*** Loaded validation mask shape is: {}".format(Y_val.shape))    
+        if test_path is not None:                                               
+            print("*** Loaded test data shape is: {}".format(X_test.shape))     
+            if test_mask_path is not None:                                      
+                print("*** Loaded test mask shape is: {}".format(Y_test.shape)) 
+                return X_train, Y_train, X_val, Y_val, X_test, Y_test, \
+                       orig_test_shape, crop_test_shape, filenames    
+            else:                                                               
+                return X_train, Y_train, X_val, Y_val, X_test,\
+                       orig_test_shape, crop_test_shape, filenames    
+        else:                                                                   
+            return X_train, Y_train, X_val, Y_val                               
+    else:                                                                       
+        print("*** Loaded train data shape is: {}".format(X_train.shape))       
+        print("*** Loaded train mask shape is: {}".format(Y_train.shape))       
+        if test_path is not None:                                               
+            print("*** Loaded test data shape is: {}".format(X_test.shape))     
+            if test_mask_path is not None:                                      
+                print("*** Loaded test mask shape is: {}".format(Y_test.shape)) 
+                return X_train, Y_train, X_test, Y_test, orig_test_shape,\
+                       crop_test_shape, filenames                          
+            else:                                                               
+                return X_train, Y_train, X_test, orig_test_shape,\
+                       crop_test_shape, filenames                          
+        else:                                                                   
+            return X_train, Y_train
 
-        # Calculate normalization value
-        norm_value = np.mean(X_train)
 
-        return X_train, Y_train, X_val, Y_val, X_test, Y_test, orig_test_shape, \
-               norm_value
-    else:                                                               
-        print("*** Loaded train data shape is: {}".format(X_train.shape))
-        print("*** Loaded test data shape is: {}".format(X_test.shape))
-        print("### END LOAD ###")
-
-        # Calculate normalization value
-        norm_value = np.mean(X_train)
-
-        return X_train, Y_train, X_test, Y_test, orig_test_shape, norm_value
-
-def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path, 
-    test_mask_path, test_subvol_shape, train_subvol_shape, shuffle_val=True,
+def load_and_prepare_3D_data_v2(train_path, train_mask_path, train_subvol_shape,
+    test_path=None, test_mask_path=None, test_subvol_shape=None, shuffle_val=True,
     val_split=0.1, seedValue=42, random_subvolumes_in_DA=False, ov=(0,0,0),
     padding=(0,0,0), median_padding=False):
     """Load train, validation and test images from the given paths to create a 
@@ -263,16 +276,16 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
        train_mask_path : str
            Path to the training data masks.     
 
-       test_path : str                                                          
-           Path to the test data.                                               
-                                                                                
-       test_mask_path : str                                                     
-           Path to the test data masks.                                         
-                                                                                
        train_subvol_shape : 4D tuple
             Shape of the train subvolumes to create. E.g. ``(x, y, z, channels)``.
 
-       test_subvol_shape : 4D tuple
+       test_path : str, optional                                                          
+           Path to the test data.                                               
+                                                                                
+       test_mask_path : str, optional                                                     
+           Path to the test data masks.
+
+       test_subvol_shape : 4D tuple, optional
             Shape of the test subvolumes to create. E.g. ``(x, y, z, channels)``.
 
        shuffle_val : bool, optional                                             
@@ -294,7 +307,7 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
            be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap.      
            E. g. ``(x, y, z)``.  
            
-       padding : tuple of ints, optional                                        
+       padding : Tuple of ints, optional                                        
            Size of padding to be added on each axis ``(x, y, z)``. 
            E.g. ``(24, 24, 24)``.
            
@@ -318,23 +331,28 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
            Validation images' mask (``val_split > 0``). E.g. ``(num_of_images,
            y, x, z, channels)``.                                  
                                                                                 
-       X_test : 5D Numpy array                                                  
-           Test images. E.g. ``(num_of_images, y, x, z, channels)``.                
+       X_test : 5D Numpy array, optional
+           Test images. E.g. ``(num_of_images, y, x, z, channels)``. Returned 
+           when ``test_path`` is provided.                 
 
-       Y_test : 5D Numpy array      
-           Test images' mask. E.g. ``(num_of_images, y, x, z, channels)``.  
+       Y_test : 5D Numpy array, optional      
+           Test images' mask. E.g. ``(num_of_images, y, x, z, channels)``. 
+           Returned when ``test_mask_path`` is provided.
 
-       orig_test_img_shapes : List of tuples 
+       orig_test_shape : List of tuples, optional 
            List that contains the shapes of each test sample. This      
-           variable and ``crop_test_img_shapes`` should be used to reconstruct
+           variable and ``crop_test_shape`` should be used to reconstruct
            the test original images from patches with :func:`~merge_3D_data_with_overlap`.
+           Returned when ``test_path`` is provided.
 
-       crop_test_img_shapes : List of tuples
-           List that contains the shapes of each test sample cropped. 
+       crop_test_shape : List of tuples, optional
+           List that contains the shapes of each test sample cropped. Returned   
+           when ``test_path`` is provided.
 
-       filenames : List of str
+       filenames : List of str, optional
            Loaded train and test filenames. ``filenames[0]`` are train filenames 
-           and ``filenames[1]`` are test filenames.
+           and ``filenames[1]`` are test filenames. Returned when ``test_path``
+           is provided.
 
        Examples
        --------
@@ -360,15 +378,16 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
            Y_val, X_test, Y_test,\
            orig_test_shape, crop_test_shapes,\
            filenames = load_and_prepare_3D_data_v2(
-               train_path, train_mask_path, test_path, test_mask_path, img_train_shape,
-               img_test_shape, val_split=0.1, shuffle_val=True,
-               test_subvol_shape=test_3d_shape, train_subvol_shape=train_3d_shape, 
-               ov=(0,0,0))
+               train_path, train_mask_path, train_3d_shape, test_path, test_mask_path,
+               test_3d_shape, val_split=0.1, shuffle_val=True, ov=(0,0,0))
 
            # The function will print the shapes of the generated arrays. In this example:
            #     *** Loaded train data shape is: (315, 256, 256, 40, 1)
+           #     *** Loaded train mask shape is: (315, 256, 256, 40, 1)
            #     *** Loaded validation data shape is: (35, 256, 256, 40, 1)
+           #     *** Loaded validation mask shape is: (35, 256, 256, 40, 1)
            #     *** Loaded test data shape is: (178, 256, 256, 40, 1)
+           #     *** Loaded test mask shape is: (178, 256, 256, 40, 1)
            #
     """      
    
@@ -388,20 +407,23 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
     Y_train, _, _ = load_3d_images_from_dir(
         train_mask_path, crop=crop, crop_shape=train_subvol_shape, overlap=ov)
 
-    print("2) Loading test images . . .")
-    X_test, orig_test_img_shapes, \
-    crop_test_img_shapes, te_filenames = load_3d_images_from_dir(
-        test_path, crop=True, crop_shape=test_subvol_shape, overlap=ov,
-        return_filenames=True, padding=padding, median_padding=median_padding)
-    print("3) Loading test masks . . .")
-    Y_test, _, _ = load_3d_images_from_dir(test_mask_path, crop=True,            
-        crop_shape=test_subvol_shape, overlap=ov, padding=padding,
-        median_padding=median_padding)
+    if test_path is not None:
+        print("2) Loading test images . . .")
+        X_test, orig_test_shape, \
+        crop_test_shape, te_filenames = load_3d_images_from_dir(
+            test_path, crop=True, crop_shape=test_subvol_shape, overlap=ov,
+            return_filenames=True, padding=padding, median_padding=median_padding)
+    if test_mask_path is not None:
+        print("3) Loading test masks . . .")
+        Y_test, _, _ = load_3d_images_from_dir(test_mask_path, crop=True,            
+            crop_shape=test_subvol_shape, overlap=ov, padding=padding,
+            median_padding=median_padding)
 
     # Save train and test filenames
     filenames = []
     filenames.append(t_filenames)
-    filenames.append(te_filenames)
+    if test_path is not None:
+        filenames.append(te_filenames)
 
     # Create validation data splitting the train
     if create_val:
@@ -420,19 +442,34 @@ def load_and_prepare_3D_data_v2(train_path, train_mask_path, test_path,
 
     if create_val:
         print("*** Loaded train data shape is: {}".format(X_train.shape))
+        print("*** Loaded train mask shape is: {}".format(Y_train.shape))
         print("*** Loaded validation data shape is: {}".format(X_val.shape))
-        print("*** Loaded test data shape is: {}".format(X_test.shape))
-        print("### END LOAD ###")
-
-        return X_train, Y_train, X_val, Y_val, X_test, Y_test, \
-               orig_test_img_shapes, crop_test_img_shapes, filenames
+        print("*** Loaded validation mask shape is: {}".format(Y_val.shape))
+        if test_path is not None:
+            print("*** Loaded test data shape is: {}".format(X_test.shape))
+            if test_mask_path is not None:                                          
+                print("*** Loaded test mask shape is: {}".format(Y_test.shape))
+                return X_train, Y_train, X_val, Y_val, X_test, Y_test, \
+                       orig_test_shape, crop_test_shape, filenames
+            else:   
+                return X_train, Y_train, X_val, Y_val, X_test,\
+                       orig_test_shape, crop_test_shape, filenames
+        else:   
+            return X_train, Y_train, X_val, Y_val
     else:                                                               
         print("*** Loaded train data shape is: {}".format(X_train.shape))
-        print("*** Loaded test data shape is: {}".format(X_test.shape))
-        print("### END LOAD ###")
-
-        return X_train, Y_train, X_test, Y_test, orig_test_img_shapes, \
-               crop_test_img_shapes, filenames
+        print("*** Loaded train mask shape is: {}".format(Y_train.shape))    
+        if test_path is not None:                                               
+            print("*** Loaded test data shape is: {}".format(X_test.shape))     
+            if test_mask_path is not None:                                      
+                print("*** Loaded test mask shape is: {}".format(Y_test.shape)) 
+                return X_train, Y_train, X_test, Y_test, orig_test_shape,\
+                       crop_test_shape, filenames    
+            else:                                                               
+                return X_train, Y_train, X_test, orig_test_shape,\
+                       crop_test_shape, filenames    
+        else:                                                                   
+            return X_train, Y_train 
 
 
 def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0),

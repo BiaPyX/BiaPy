@@ -40,8 +40,10 @@ os.makedirs(args.result_dir, exist_ok=True)
 
 # Limit the number of threads
 from util import limit_threads, set_seed, create_plots, store_history,\
-                 TimeHistory, threshold_plots, save_img, \
-                 calculate_3D_volume_prob_map, check_masks, labels_into_bcd
+                 TimeHistory, threshold_plots, save_img, load_3d_images_from_dir,\
+                 calculate_3D_volume_prob_map, check_masks, labels_into_bcd, \
+                 save_tif
+
 limit_threads()
 
 # Try to generate the results as reproducible as possible
@@ -64,7 +66,7 @@ import h5py
 import tensorflow as tf
 from data_3D_manipulation import merge_3D_data_with_overlap, \
                                  crop_3D_data_with_overlap,\
-                                 load_3d_images_from_dir
+                                 load_and_prepare_3D_data_v2
 from generators.data_3D_generators_v2 import VoxelDataGenerator
 from networks.resunet_3d_instances import ResUNet_3D_instances
 from metrics import jaccard_index_numpy, voc_calculation
@@ -122,7 +124,7 @@ test_mask_path = os.path.join(args.data_dir, 'test', 'y')
 ### Validation data                                                             
 ## ~~~ When option (1) is chosen ~~~~                                           
 # Percentage of the training data used as validation                            
-perc_used_as_val = 0.1
+perc_used_as_val = 0
 # Create the validation data with random images of the training data. If False  
 # the validation data will be the last portion of training images.              
 random_val_data = True                                                          
@@ -163,12 +165,6 @@ overlap = (0,0,0)
 padding = (16, 16, 16)
 # Wheter to use median values to fill padded pixels or zeros
 median_padding = False
-# Make overlap on train data
-ov_train = False
-# Wheter to use the rest of the train data when there is no exact division between
-# it and the subvolume shape needed (crop_shape). Only has sense when
-# ov_train is False
-use_rest_train = False
 
 
 ###############################################################                 
@@ -312,15 +308,15 @@ use_LRFinder = False
 
 ### Experiment main parameters
 # Batch size value
-batch_size_value = 1
+batch_size_value = 2
 # Optimizer to use. Possible values: "sgd" or "adam"
 optimizer = "adam"
 # Learning rate used by the optimization method
 learning_rate_value = 0.0001
 # Number of epochs to train the network
-epochs_value = 100
+epochs_value = 1000
 # Number of epochs to stop the training process after no improvement
-patience = 30
+patience = 50
 
 
 ### Network architecture specific parameters
@@ -365,11 +361,11 @@ channel_weights = (1, 0.2)
 # take much time
 ensemble = False
 # Path were the test stacks are placed. It can be the same as test_path
-#test_full_path = os.path.join(args.data_dir, 'test_full', 'x')
-test_full_path = test_path
+test_full_path = os.path.join(args.data_dir, 'test_full', 'x')
+#test_full_path = test_path
 # Path were the test mask stacks are placed. It can be the same as test_mask_path
-#test_full_mask_path = os.path.join(args.data_dir, 'test_full', 'y')
-test_full_mask_path = test_mask_path
+test_full_mask_path = os.path.join(args.data_dir, 'test_full', 'y')
+#test_full_mask_path = test_mask_path
 
 
 ### mAP calculation options
@@ -441,25 +437,15 @@ if in_memory:
           "#  LOAD DATA  #\n"
           "###############\n")
 
-    print("0) Loading train images . . .")                                      
-    X_train, _, _ = load_3d_images_from_dir(train_path, crop=True,
-        crop_shape=crop_shape, overlap=overlap)
-                                                                                
-    print("1) Loading train masks . . .")                                       
-    Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=True,
-        crop_shape=crop_shape, overlap=overlap)  
-                                                                                
-    # Create validation data splitting the train                                
-    X_train, X_val, \
-    Y_train, Y_val = train_test_split(                                      
-        X_train, Y_train, test_size=perc_used_as_val, shuffle=random_val_data,
-        random_state=42)                                             
+    X_train, Y_train = load_and_prepare_3D_data_v2(
+        train_path, train_mask_path, val_split=perc_used_as_val,
+        shuffle_val=random_val_data, random_subvolumes_in_DA=random_subvolumes_in_DA,
+        test_subvol_shape=crop_shape, train_subvol_shape=crop_shape, ov=overlap,
+        padding=padding, median_padding=median_padding)
+      
+    X_val, _, _ = load_3d_images_from_dir(val_path)
+    Y_val, _, _ = load_3d_images_from_dir(val_mask_path)
 
-    print("*** Loaded train data shape is: {}".format(X_train.shape))
-    print("*** Loaded train mask shape is: {}".format(Y_train.shape))
-    print("*** Loaded validation data shape is: {}".format(X_val.shape))
-    print("*** Loaded validation mask shape is: {}".format(Y_val.shape))
-                                        
     ## TRAIN
     aux_dir = os.path.join(args.result_dir, 'aux_train')
     if not os.path.isfile(os.path.join(args.result_dir, 'Y_train.npy')):
@@ -574,15 +560,22 @@ print("##########################\n"
 
 ## Load filenames of the test data
 X, _, _, t_filenames = load_3d_images_from_dir(test_full_path, return_filenames=True)
+
+out_dir = ens_bin_dir_per_image if ensemble else result_no_bin_dir_per_image
+
 d = len(str(len(X)))                              
 for im in tqdm(range(len(X))):
-    X_test = X[im][0].transpose((2,0,1,3))
+    if isinstance(X, list):
+        X_test = X[im][0].transpose((2,0,1,3)) # Convert to (z, x, y, c)
+    elif X.ndim == 5:
+        X_test = X[im].transpose((2,0,1,3)) # Convert to (z, x, y, c)
 
     # Read and crop 
     original_data_shape = X_test.shape
-    X_test = crop_3D_data_with_overlap(
-        X_test, crop_shape, overlap=overlap, padding=padding, verbose=True, 
-        median_padding=median_padding)
+    if X_test.shape != crop_shape:
+        X_test = crop_3D_data_with_overlap(
+            X_test, crop_shape, overlap=overlap, padding=padding, verbose=True, 
+            median_padding=median_padding)
     
     # Normalization
     X_test = X_test/255
@@ -604,17 +597,16 @@ for im in tqdm(range(len(X))):
     del X_test                                                                      
     pred = np.concatenate(pred)
     
-    # Merge and save prediction                                                     
-    pred = merge_3D_data_with_overlap(pred, original_data_shape[:3]+(pred.shape[-1],),
-                                      overlap=overlap, padding=padding, verbose=True)            
-    if ensemble:
-        os.makedirs(ens_bin_dir_per_image, exist_ok=True)
-        f = os.path.join(ens_bin_dir_per_image, os.path.splitext(t_filenames[im])[0]+'.tif')                 
+    # Merge
+    if original_data_shape != crop_shape:
+        pred = merge_3D_data_with_overlap(pred, original_data_shape[:3]+(pred.shape[-1],),
+                                          overlap=overlap, padding=padding, verbose=True)            
+
+    # Save prediction
+    if pred.ndim == 4:
+        save_tif(np.expand_dims(pred, 0), out_dir, t_filenames)
     else:
-        os.makedirs(result_no_bin_dir_per_image, exist_ok=True)
-        f = os.path.join(result_no_bin_dir_per_image, os.path.splitext(t_filenames[im])[0]+'.tif')
-    aux = np.expand_dims(pred.astype(np.float32).transpose((0,3,1,2)), -1)      
-    imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)   
+        save_tif(pred, out_dir, t_filenames)
                                                                                   
     # Create instances 
     print("Creating instances with watershed . . .")
