@@ -527,7 +527,7 @@ def save_tif(X=None, data_dir=None, filenames=None):
                              "shapes: {} vs {}".format(len(filenames),len(X)))
 
     d = len(str(len(X)))
-    for i in range(X.shape[0]):
+    for i in tqdm(range(X.shape[0]), leave=False):
         if filenames is None:
             f = os.path.join(data_dir, str(i).zfill(d)+'.tif')
         else:
