@@ -371,33 +371,47 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=2):
            # of Keras 
     """
 
-    aug_img = []
-        
-    # Convert into square image to make the rotations properly
-    pad_to_square = o_img.shape[0] - o_img.shape[1]
-   
-    if pad_to_square < 0:
-        img = np.pad(o_img, [(abs(pad_to_square), 0), (0, 0), (0, 0)], 'reflect') 
-    else:
-        img = np.pad(o_img, [(0, 0), (pad_to_square, 0), (0, 0)], 'reflect')
-    
-    # Make 8 different combinations of the img 
-    aug_img.append(img) 
-    aug_img.append(np.rot90(img, axes=(0, 1), k=1))
-    aug_img.append(np.rot90(img, axes=(0, 1), k=2))
-    aug_img.append(np.rot90(img, axes=(0, 1), k=3))
-    aug_img.append(img[:, ::-1])
-    img_aux = img[:, ::-1]
-    aug_img.append(np.rot90(img_aux, axes=(0, 1), k=1))
-    aug_img.append(np.rot90(img_aux, axes=(0, 1), k=2))
-    aug_img.append(np.rot90(img_aux, axes=(0, 1), k=3))
+    # Prepare all the image transformations per channel 
+    total_img = []
+    for channel in range(o_img.shape[-1]):
+        aug_img = []
+            
+        # Transformations per channel
+        _img = np.expand_dims(o_img[...,channel], -1)
 
-    aug_img = np.array(aug_img)
-    decoded_aug_img = np.zeros(aug_img.shape)
+        # Convert into square image to make the rotations properly
+        pad_to_square = _img.shape[0] - _img.shape[1]
+        if pad_to_square < 0:
+            img = np.pad(_img, [(abs(pad_to_square), 0), (0, 0), (0, 0)], 'reflect') 
+        else:
+            img = np.pad(_img, [(0, 0), (pad_to_square, 0), (0, 0)], 'reflect')
+        
+        # Make 8 different combinations of the img 
+        aug_img.append(img) 
+        aug_img.append(np.rot90(img, axes=(0, 1), k=1))
+        aug_img.append(np.rot90(img, axes=(0, 1), k=2))
+        aug_img.append(np.rot90(img, axes=(0, 1), k=3))
+        aug_img.append(img[:, ::-1])
+        img_aux = img[:, ::-1]
+        aug_img.append(np.rot90(img_aux, axes=(0, 1), k=1))
+        aug_img.append(np.rot90(img_aux, axes=(0, 1), k=2))
+        aug_img.append(np.rot90(img_aux, axes=(0, 1), k=3))
+        aug_img = np.array(aug_img)
+        
+        total_img.append(aug_img)
+
+    del aug_img, img_aux
+
+    # Merge channels
+    total_img = np.concatenate(total_img, -1)
     
-    for i in range(aug_img.shape[0]):
-        r_aux = pred_func(np.expand_dims(aug_img[i], 0))                      
-                                                                                
+    # Make the prediction
+    _decoded_aug_img = []
+    l = int(math.ceil(total_img.shape[0]/batch_size_value))  
+    for i in range(l):
+        top = (i+1)*batch_size_value if (i+1)*batch_size_value < total_img.shape[0] else total_img.shape[0]
+        r_aux = pred_func(total_img[i*batch_size_value:top])
+
         # Take just the last output of the network in case it returns more than one output
         if isinstance(r_aux, list):                                             
             r_aux = np.array(r_aux[-1])                                         
@@ -405,21 +419,32 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=2):
         if n_classes > 1:                                                       
             r_aux = np.expand_dims(np.argmax(r_aux, -1), -1)                    
                                                                                 
-        decoded_aug_img[i] = r_aux   
+        _decoded_aug_img.append(r_aux)
+    _decoded_aug_img = np.concatenate(_decoded_aug_img)
 
     # Undo the combinations of the img
-    out_img = []
-    out_img.append(decoded_aug_img[0])
-    out_img.append(np.rot90(decoded_aug_img[1], axes=(0, 1), k=3))
-    out_img.append(np.rot90(decoded_aug_img[2], axes=(0, 1), k=2))
-    out_img.append(np.rot90(decoded_aug_img[3], axes=(0, 1), k=1))
-    out_img.append(decoded_aug_img[4][:, ::-1])
-    out_img.append(np.rot90(decoded_aug_img[5], axes=(0, 1), k=3)[:, ::-1])
-    out_img.append(np.rot90(decoded_aug_img[6], axes=(0, 1), k=2)[:, ::-1])
-    out_img.append(np.rot90(decoded_aug_img[7], axes=(0, 1), k=1)[:, ::-1])
+    arr = []
+    for c in range(_decoded_aug_img.shape[-1]):
+        # Remove the last channel to make the transformations correctly
+        decoded_aug_img = _decoded_aug_img[...,c]
 
-    # Create the output data
-    out_img = np.array(out_img) 
+        # Undo the combinations of the image
+        out_img = []
+        out_img.append(decoded_aug_img[0])
+        out_img.append(np.rot90(decoded_aug_img[1], axes=(0, 1), k=3))
+        out_img.append(np.rot90(decoded_aug_img[2], axes=(0, 1), k=2))
+        out_img.append(np.rot90(decoded_aug_img[3], axes=(0, 1), k=1))
+        out_img.append(decoded_aug_img[4][:, ::-1])
+        out_img.append(np.rot90(decoded_aug_img[5], axes=(0, 1), k=3)[:, ::-1])
+        out_img.append(np.rot90(decoded_aug_img[6], axes=(0, 1), k=2)[:, ::-1])
+        out_img.append(np.rot90(decoded_aug_img[7], axes=(0, 1), k=1)[:, ::-1])
+        out_img = np.array(out_img)
+        out_img = np.expand_dims(out_img, -1)
+        arr.append(out_img)
+    
+    out_img = np.concatenate(arr, -1)
+    del decoded_aug_img, _decoded_aug_img, arr
+
     if pad_to_square != 0:
         if pad_to_square < 0:
             out = np.zeros((out_img.shape[0], img.shape[0]+pad_to_square, 
