@@ -3,6 +3,8 @@ import math
 import numpy as np
 import time
 import random
+import matplotlib
+matplotlib.use('pdf')
 import matplotlib.pyplot as plt
 import scipy.ndimage
 import tensorflow as tf                                                         
