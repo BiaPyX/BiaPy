@@ -513,7 +513,7 @@ def save_tif(X=None, data_dir=None, filenames=None):
        X : 4D/5D numpy array, optional
            Data to save as images. The first dimension must be the number of
            images. E.g. ``(num_of_images, x, y, channels)`` or 
-           ``(num_of_images, x, y, z, channels)``.
+           ``(num_of_images, z, x, y, channels)``.
 
        data_dir : str, optional
            Path to store X images.
