@@ -1,0 +1,57 @@
+SYSTEM:
+    NUM_GPUS: 1
+    NUM_CPUS: 1
+
+PROBLEM:
+    TYPE: SEMANTIC_SEG
+    NDIM: 3D
+
+DATA: 
+    PATCH_SIZE: (64, 64, 64, 1)
+    CHECK_GENERATORS: False
+    TRAIN:
+        IN_MEMORY: True
+        PADDING: (0,0,0)
+        OVERLAP: (0,0,0)
+    VAL:
+        FROM_TRAIN: False
+        IN_MEMORY: True
+        PADDING: (0,0,0)
+        OVERLAP: (0,0,0)
+    TEST:
+        IN_MEMORY: False
+        LOAD_GT: False
+        PADDING: (0,0,0)
+        OVERLAP: (0,0,0)
+        
+AUGMENTOR:
+    ENABLE: True
+    RANDOM_ROT: True
+    VFLIP: True
+    HFLIP: True
+
+MODEL:
+    ARCHITECTURE: unet
+    FEATURE_MAPS: [36, 48, 64]
+    DROPOUT_VALUES: [0, 0, 0]
+    Z_DOWN: 1
+    LOAD_CHECKPOINT: False
+
+LOSS:
+  TYPE: CE
+  
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAM
+    LR: 1.E-3
+    BATCH_SIZE: 2
+    EPOCHS: 1000
+    PATIENCE: 50
+  
+TEST:
+    ENABLE: True
+    AUGMENTATION: False
+    STATS:
+        PER_PATCH: True
+        MERGE_PATCHES: True
+        FULL_IMG: False
