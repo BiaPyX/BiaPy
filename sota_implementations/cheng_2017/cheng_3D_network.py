@@ -3,18 +3,15 @@ import numpy as np
 import math
 from tensorflow.keras import backend as K
 from tensorflow.keras import Model, Input
-from tensorflow.keras.layers import BatchNormalization, Dropout, Lambda,\
-                                    SpatialDropout3D, Conv3D, Conv3DTranspose, \
-                                    MaxPooling3D, concatenate, Add
+from tensorflow.keras.layers import (BatchNormalization, Dropout, Lambda, SpatialDropout3D, Conv3D, Conv3DTranspose,
+                                     MaxPooling3D, concatenate, Add)
 from tensorflow.keras.layers import PReLU
 from tensorflow.keras.regularizers import l2
-from metrics import jaccard_index_softmax
 from loss import jaccard_loss_cheng2017
 from StochasticDownsampling3D import StochasticDownsampling3D
 
 
-def asymmetric_3D_network(image_shape, numInitChannels=16, fixed_dropout=0.0, 
-                          optimizer="sgd", lr=0.001, t_downsmp_layer=4):
+def asymmetric_3D_network(image_shape, numInitChannels=16, fixed_dropout=0.0, t_downsmp_layer=4):
     """Create the assymetric network proposed in Cheng et al.                   
                                                                                 
        Parameters                                                               
@@ -32,13 +29,6 @@ def asymmetric_3D_network(image_shape, numInitChannels=16, fixed_dropout=0.0,
            behaviour will be to select a piramidal value stating from 0.1 and   
            reaching 0.3 value.                                                  
                                                                                 
-       optimizer : str, optional                                                
-           Optimizer used to minimize the loss function. Posible options: ``sgd``
-           or ``adam``.                                                         
-                                                                                
-       lr : float, optional                                                     
-           Learning rate value.                                                 
-                                                                                
        t_downsmp_layer : int, optional                                          
            Degree of randomness in the sampling pattern which corresponds to the
            ``t`` value defined in the paper for the proposed stochastic         
@@ -52,7 +42,7 @@ def asymmetric_3D_network(image_shape, numInitChannels=16, fixed_dropout=0.0,
                                                                                 
        Here is a picture of the network extracted from the original paper:      
                                                                                 
-       .. image:: img/cheng_network.png                                         
+       .. image:: ../../img/cheng_network.png                                         
            :width: 90%                                                          
            :align: center                                                       
     """ 
@@ -118,18 +108,6 @@ def asymmetric_3D_network(image_shape, numInitChannels=16, fixed_dropout=0.0,
 
     model = Model(inputs=[inputs], outputs=[outputs])
     
-    if optimizer == "sgd":
-        opt = tf.keras.optimizers.SGD(lr=lr, momentum=0.90, decay=0.0, 
-                                      nesterov=False)
-    elif optimizer == "adam":
-        opt = tf.keras.optimizers.Adam(lr=lr, beta_1=0.9, beta_2=0.999, 
-                                       epsilon=None, decay=0.0, amsgrad=False)
-    else:
-        raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
-
-    model.compile(optimizer=opt, loss=jaccard_loss_cheng2017,
-                  metrics=[jaccard_index_softmax])
-
     return model
 
 

@@ -719,49 +719,49 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
            Example 2 will store two additional images as the following:
 
-           +--------------------------------------+-------------------------------------------+
-           | .. figure:: img/rd_crop_2d.png       | .. figure:: img/rd_crop_mask_2d.png       |
-           |   :width: 80%                        |   :width: 70%                             |
-           |   :align: center                     |   :align: center                          |
-           |                                      |                                           |
-           |   Original crop                      |   Original crop mask                      |
-           +--------------------------------------+-------------------------------------------+
+           +-------------------------------------------+-------------------------------------------+
+           | .. figure:: ../../img/rd_crop_2d.png      | .. figure:: ../../img/rd_crop_mask_2d.png |
+           |   :width: 80%                             |   :width: 80%                             |
+           |   :align: center                          |   :align: center                          |
+           |                                           |                                           |
+           |   Original crop                           |   Original crop mask                      |
+           +-------------------------------------------+-------------------------------------------+
 
            Together with these images another pair of images will be stored: the crop made and a transformed version of
            it, which is really the generator output. 
     
            For instance, setting ``elastic=True`` the above extracted crop should be transformed as follows:
         
-           +--------------------------------------+-------------------------------------------+
-           | .. figure:: img/original_crop_2d.png | .. figure:: img/original_crop_mask_2d.png |
-           |   :width: 80%                        |   :width: 70%                             |
-           |   :align: center                     |   :align: center                          |
-           |                                      |                                           |
-           |   Original crop                      |   Original crop mask                      |
-           +--------------------------------------+-------------------------------------------+
-           | .. figure:: img/elastic_crop_2d.png  | .. figure:: img/elastic_crop_mask_2d.png  |
-           |   :width: 80%                        |   :width: 70%                             |
-           |   :align: center                     |   :align: center                          |
-           |                                      |                                           |
-           |   Elastic transformation of the crop |   Elastic transformation of them crop mask|
-           +--------------------------------------+-------------------------------------------+
+           +-------------------------------------------------+-------------------------------------------------+
+           | .. figure:: ../../img/original_crop_2d.png      | .. figure:: ../../img/original_crop_mask_2d.png |
+           |   :width: 80%                                   |   :width: 80%                                   |
+           |   :align: center                                |   :align: center                                |
+           |                                                 |                                                 |
+           |   Original crop                                 |   Original crop mask                            |
+           +-------------------------------------------------+-------------------------------------------------+
+           | .. figure:: ../../img/elastic_crop_2d.png       | .. figure:: ../../img/elastic_crop_mask_2d.png  |
+           |   :width: 80%                                   |   :width: 80%                                   |
+           |   :align: center                                |   :align: center                                |
+           |                                                 |                                                 |
+           |   Elastic transformation applied                |   Elastic transformation applied                |
+           +-------------------------------------------------+-------------------------------------------------+
 
            The grid is only painted if ``train=False`` which should be used just to display transformations made.
            Selecting random rotations between 0 and 180 degrees should generate the following:
             
-           +---------------------------------------------+--------------------------------------------------+
-           | .. figure:: img/original_rd_rot_crop_2d.png | .. figure:: img/original_rd_rot_crop_mask_2d.png |
-           |   :width: 80%                               |   :width: 70%                                    |
-           |   :align: center                            |   :align: center                                 |
-           |                                             |                                                  |
-           |   Original crop                             |   Original crop mask                             |
-           +---------------------------------------------+--------------------------------------------------+
-           | .. figure:: img/rd_rot_crop_2d.png          | .. figure:: img/rd_rot_crop_mask_2d.png          |
-           |   :width: 80%                               |   :width: 70%                                    |
-           |   :align: center                            |   :align: center                                 |
-           |                                             |                                                  |
-           |   Random rotation [0, 180] of the crop      |   Random rotation [0, 180] of the crop mask      |
-           +---------------------------------------------+--------------------------------------------------+
+           +--------------------------------------------------------+--------------------------------------------------------+
+           | .. figure:: ../../img/original_rd_rot_crop_2d.png      | .. figure:: ../../img/original_rd_rot_crop_mask_2d.png |
+           |   :width: 80%                                          |   :width: 80%                                          |
+           |   :align: center                                       |   :align: center                                       |
+           |                                                        |                                                        |
+           |   Original crop                                        |   Original crop mask                                   |
+           +--------------------------------------------------------+--------------------------------------------------------+
+           | .. figure:: ../../img/rd_rot_crop_2d.png               | .. figure:: ../../img/rd_rot_crop_mask_2d.png          |
+           |   :width: 80%                                          |   :width: 80%                                          |
+           |   :align: center                                       |   :align: center                                       |
+           |                                                        |                                                        |
+           |   Random rotation [0, 180] applied                     |   Random rotation [0, 180] applied                     |
+           +--------------------------------------------------------+--------------------------------------------------------+
         """
         
         if random_images == False and num_examples > self.len:           

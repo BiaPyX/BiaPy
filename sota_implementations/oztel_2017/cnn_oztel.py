@@ -1,8 +1,7 @@
 from tensorflow import keras
 from tensorflow.keras import layers
 
-def create_oztel_model(num_classes=2, input_shape=(None, None, 1),
-                       optimizer='adam', loss='categorical_crossentropy'):
+def create_oztel_model(num_classes=2, input_shape=(None, None, 1)):
     """Create the CNN proposed by Oztel et. al.
 
        Parameters
@@ -13,12 +12,6 @@ def create_oztel_model(num_classes=2, input_shape=(None, None, 1),
        input_shape : 3D tuple, optional
            Dimensions of the input image.
 
-       optimizer : str, optional
-           Optimizer used to minimize the loss function. 
-        
-       loss : str, optional
-           Loss function to use according to Keras options.
-        
        Returns
        -------
        model : Keras model
@@ -27,7 +20,7 @@ def create_oztel_model(num_classes=2, input_shape=(None, None, 1),
 
        Here is a picture of the network extracted from the original paper:
                                                                                 
-       .. image:: img/oztel_network.png
+       .. image:: ../../img/oztel_network.png
            :width: 100%                                                         
            :align: center
     """
@@ -53,13 +46,10 @@ def create_oztel_model(num_classes=2, input_shape=(None, None, 1),
         ]
     )
 
-    model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
-
     return model
 
 
-def create_oztel_model_V1(num_classes=2, input_shape=(None, None, 1),              
-                       optimizer='adam', loss='categorical_crossentropy'):      
+def create_oztel_model_V1(num_classes=2, input_shape=(None, None, 1)):
     """Create the CNN proposed by Oztel et. al.                                 
                                                                                 
        Parameters                                                               
@@ -70,12 +60,6 @@ def create_oztel_model_V1(num_classes=2, input_shape=(None, None, 1),
        input_shape : 3D tuple, optional                                         
            Dimensions of the input image.                                       
                                                                                 
-       optimizer : str, optional                                                
-           Optimizer used to minimize the loss function.                        
-                                                                                
-       loss : str, optional                                                     
-           Loss function to use according to Keras options.                     
-                                                                                
        Returns                                                                  
        -------                                                                  
        model : Keras model                                                      
@@ -84,7 +68,7 @@ def create_oztel_model_V1(num_classes=2, input_shape=(None, None, 1),
                                                                                 
        Here is a picture of the network extracted from the original paper:      
                                                                                 
-       .. image:: img/oztel_network.png                                         
+       .. image:: ../../img/oztel_network.png                                         
            :width: 100%                                                         
            :align: center                                                       
     """ 
@@ -132,7 +116,5 @@ def create_oztel_model_V1(num_classes=2, input_shape=(None, None, 1),
             layers.Conv2D(num_classes, (1, 1), activation='softmax'),
         ]
     )
-
-    model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
 
     return model

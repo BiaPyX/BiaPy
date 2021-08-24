@@ -19,7 +19,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
            Path to the training data masks.     
     
        val_split : float, optional                                                                                      
-            % of the train data used as validation (value between ``0`` and ``1``).                                     
+            ``%`` of the train data used as validation (value between ``0`` and ``1``).                                     
                                                                                                                         
        seed : int, optional                                                                                             
             Seed value.
@@ -177,23 +177,26 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
        Examples
        --------
        ::
+
            # EXAMPLE 1   
            # Following the example introduced in load_and_prepare_3D_data function, the cropping of a volume with shape
            # (165, 1024, 765) should be done by the following call: 
            X_train = np.ones((165, 768, 1024, 1))
            Y_train = np.ones((165, 768, 1024, 1))
            X_train, Y_train = crop_3D_data_with_overlap(X_train, (80, 80, 80, 1), data_mask=Y_train,
-               overlap=(0.5,0.5,0.5))
+                                                        overlap=(0.5,0.5,0.5))
            # The function will print the shape of the generated arrays. In this example:
            #     **** New data shape is: (2600, 80, 80, 80, 1)
+
        A visual explanation of the process:                                     
                                                                                 
-       .. image:: img/crop_3D_ov.png                                               
+       .. image:: ../img/crop_3D_ov.png                                               
            :width: 80%                                                          
            :align: center
     
        Note: this image do not respect the proportions.
        ::  
+
            # EXAMPLE 2 
            # Same data crop but without overlap
           
@@ -395,7 +398,7 @@ def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False, verbose=True):
 
        A visual explanation of example 2:
                                                                                 
-       .. image:: img/crop_3D.png                                               
+       .. image:: ../img/crop_3D.png                                               
            :width: 80%                                                          
            :align: center                                                       
 

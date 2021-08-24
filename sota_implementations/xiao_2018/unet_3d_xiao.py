@@ -1,11 +1,10 @@
 import tensorflow as tf
 from tensorflow.keras import Model, Input
-from tensorflow.keras.layers import ELU, UpSampling3D, Add, Dense, Activation, \
-                                    Reshape, Flatten, Permute, Dropout, Lambda,\
-                                    SpatialDropout3D, Conv3D, Conv3DTranspose, \
-                                    MaxPooling3D, concatenate, BatchNormalization
+from tensorflow.keras.layers import (ELU, UpSampling3D, Add, Dense, Activation, Reshape, Flatten, Permute, Dropout, 
+                                     Lambda, SpatialDropout3D, Conv3D, Conv3DTranspose, MaxPooling3D, concatenate, 
+                                     BatchNormalization)
 from tensorflow.keras.regularizers import l2
-from metrics import binary_crossentropy_weighted, jaccard_index, jaccard_index_softmax
+from engine.metrics import binary_crossentropy_weighted, jaccard_index, jaccard_index_softmax
 
 
 def U_Net_3D_Xiao(image_shape, lr=0.0001, n_classes=2):
@@ -33,7 +32,7 @@ def U_Net_3D_Xiao(image_shape, lr=0.0001, n_classes=2):
 
        Here is a picture of the network extracted from the original paper:
 
-       .. image:: img/xiao_network.jpg                                               
+       .. image:: ../../img/xiao_network.jpg                                               
            :width: 100%                                                         
            :align: center  
     """

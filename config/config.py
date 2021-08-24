@@ -43,7 +43,7 @@ class Config:
         # the model. 
         # 'B' stands for 'Binary segmentation', which is the default setting and means that only binary 
         # segmentation mask are going to be used. This setting id the default and should be used when 
-        # _C.PROBLEM.TYPE == 'SEMANTIC_SEG'. 
+        # _C.PROBLEM.TYPE = 'SEMANTIC_SEG'. 
         # 'BC' stands for 'Binary segmentation' + 'Contour'. Here the library expects mask to be instance segmenation mask
         # so the binary and contour channel are created from that data automatically. This setting should be used when
         # _C.PROBLEM.TYPE = 'INSTANCE_SEG'
@@ -51,12 +51,32 @@ class Config:
         # that represents the distance of the pixels to the border. This setting should be used when  
         # _C.PROBLEM.TYPE = 'INSTANCE_SEG'
         _C.DATA.CHANNELS = 'B'
-        # Weights to be applied to segmentation (binary and contours) and to distances # respectively. E.g. (1, 0.2), 1
+        # Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. (1, 0.2), 1
         # should be multipled by BCE for the first two channels and 0.2 to MSE for the last channel. 
         _C.DATA.CHANNEL_WEIGHTS = (1, 0.2)
         # Contour creation mode. Corresponds to 'fb_mode' arg of find_boundaries function from ``scikit-image``. More 
         # info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries
         _C.DATA.CONTOUR_MODE = "thick"
+        
+        # To convert the model predictions, which are between 0 and 1 range, into instances with marked controlled 
+        # watershed (MW) a few thresholds need to be set. There can be up to three channels, as explained above and
+        # based on 'DATA.CHANNELS' value. Each threshold is related to one of these channels. See the details in 
+        # bcd_watershed() and bc_watershed() functions:
+        # https://github.com/danifranco/EM_Image_Segmentation/blob/a1c46e6b8afaf577794aff9c30b52748490f147d/data/post_processing/post_processing.py#L172
+        # 
+        # This variables are only used when _C.PROBLEM.TYPE = 'INSTANCE_SEG
+        # TH1 controls channel 'B' in the creation of the MW seeds
+        _C.DATA.MW_TH1 = 0.2
+        # TH2 controls channel 'C' in the creation of the MW seeds
+        _C.DATA.MW_TH2 = 0.1
+        # TH3 acts over the channel 'B' and is used to limit how much the seeds can be grow
+        _C.DATA.MW_TH3 = 0.3
+        # TH4 controls channel 'D' in the creation of the MW seeds
+        _C.DATA.MW_TH4 = 1.2
+        # TH5 acts over the channel 'D' and is used to limit how much the seeds can be grow
+        _C.DATA.MW_TH5 = 1.5
+        # Size of small objects to be removed after doing watershed 
+        _C.DATA.REMOVE_SMALL_OBJ = 30
 
         # Train
         _C.DATA.TRAIN = CN()
@@ -64,7 +84,7 @@ class Config:
         _C.DATA.TRAIN.PATH = os.path.join(_C.DATA.ROOT_DIR, 'train', 'x')   
         _C.DATA.TRAIN.MASK_PATH = os.path.join(_C.DATA.ROOT_DIR, 'train', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem. 
-        # E.g. _C.PROBLEM.TYPE =='INSTANCE_SEG' and _C.DATA.CHANNELS != 'B'
+        # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.DATA.CHANNELS != 'B'
         _C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'train', 'x_'+_C.DATA.CHANNELS)
         _C.DATA.TRAIN.INSTANCE_CHANNELS_FILE = os.path.join(_C.DATA.TRAIN.INSTANCE_CHANNELS_DIR, 'X_train.npy')
         _C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'train', 'y_'+_C.DATA.CHANNELS)
@@ -86,7 +106,7 @@ class Config:
         _C.DATA.TEST.PATH = os.path.join(_C.DATA.ROOT_DIR, 'test', 'x')
         _C.DATA.TEST.MASK_PATH = os.path.join(_C.DATA.ROOT_DIR, 'test', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.              
-        # E.g. _C.PROBLEM.TYPE =='INSTANCE_SEG' and _C.DATA.CHANNELS != 'B'                                             
+        # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.DATA.CHANNELS != 'B'                                             
         _C.DATA.TEST.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'x_'+_C.DATA.CHANNELS)            
         _C.DATA.TEST.INSTANCE_CHANNELS_FILE = os.path.join(_C.DATA.TEST.INSTANCE_CHANNELS_DIR, 'X_test.npy')         
         _C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'y_'+_C.DATA.CHANNELS)       
@@ -104,18 +124,18 @@ class Config:
         # Wheter to create validation data from training set or read it from a directory
         _C.DATA.VAL.FROM_TRAIN = True
         # Percentage of the training data used as validation
-        _C.DATA.VAL.SPLIT_TRAIN = 0.0 # Used when _C.DATA.VAL.FROM_TRAIN == True
+        _C.DATA.VAL.SPLIT_TRAIN = 0.0 # Used when _C.DATA.VAL.FROM_TRAIN = True
         # Create the validation data with random images of the training data. If False the validation data will be the last
-        # portion of training images. Used when _C.DATA.VAL.FROM_TRAIN == True
+        # portion of training images. Used when _C.DATA.VAL.FROM_TRAIN = True
         _C.DATA.VAL.RANDOM = True 
-        # Used when _C.DATA.VAL.FROM_TRAIN == False, as DATA.VAL.FROM_TRAIN = True always implies DATA.VAL.IN_MEMORY = True
+        # Used when _C.DATA.VAL.FROM_TRAIN = False, as DATA.VAL.FROM_TRAIN = True always implies DATA.VAL.IN_MEMORY = True
         _C.DATA.VAL.IN_MEMORY = True 
-        # Path to the validation data. Used when _C.DATA.VAL.FROM_TRAIN == False
+        # Path to the validation data. Used when _C.DATA.VAL.FROM_TRAIN = False
         _C.DATA.VAL.PATH = os.path.join(_C.DATA.ROOT_DIR, 'val', 'x') 
-        # Path to the validation data mask. Used when _C.DATA.VAL.FROM_TRAIN == False
+        # Path to the validation data mask. Used when _C.DATA.VAL.FROM_TRAIN = False
         _C.DATA.VAL.MASK_PATH = os.path.join(_C.DATA.ROOT_DIR, 'val', 'y')  
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.              
-        # E.g. _C.PROBLEM.TYPE =='INSTANCE_SEG' and _C.DATA.CHANNELS != 'B'                                             
+        # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.DATA.CHANNELS != 'B'                                             
         _C.DATA.VAL.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'x_'+_C.DATA.CHANNELS)            
         _C.DATA.VAL.INSTANCE_CHANNELS_FILE = os.path.join(_C.DATA.VAL.INSTANCE_CHANNELS_DIR, 'X_val.npy')         
         _C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'y_'+_C.DATA.CHANNELS)       
@@ -324,15 +344,15 @@ class Config:
         # Make test-time augmentation. Infer over 8 possible rotations for 2D img and 16 when 3D
         _C.TEST.AUGMENTATION = False  
         # Wheter to calculate mAP
-        _C.TEST.MAP = False # Only applies when _C.TEST.STATS.MERGE_PATCHES == True
+        _C.TEST.MAP = False # Only applies when _C.TEST.STATS.MERGE_PATCHES = True
 
         _C.TEST.STATS = CN()
         _C.TEST.STATS.PER_PATCH = False
-        _C.TEST.STATS.MERGE_PATCHES = False # Only used when _C.TEST.STATS.PER_PATCH == True
-        _C.TEST.STATS.FULL_IMG = True # Only when if PROBLEM.NDIM == '2D' as 3D images are huge for the GPU
+        _C.TEST.STATS.MERGE_PATCHES = False # Only used when _C.TEST.STATS.PER_PATCH = True
+        _C.TEST.STATS.FULL_IMG = True # Only when if PROBLEM.NDIM = '2D' as 3D images are huge for the GPU
 
-        # When PROBLEM.NDIM == '2D' only applies when _C.TEST.STATS.FULL_IMG == True, if PROBLEM.NDIM == '3D' is applied 
-        # when _C.TEST.STATS.MERGE_PATCHES == True
+        # When PROBLEM.NDIM = '2D' only applies when _C.TEST.STATS.FULL_IMG = True, if PROBLEM.NDIM = '3D' is applied 
+        # when _C.TEST.STATS.MERGE_PATCHES = True
         _C.TEST.POST_PROCESSING = CN()
         _C.TEST.POST_PROCESSING.BLENDING = False
         _C.TEST.POST_PROCESSING.YZ_FILTERING = False 

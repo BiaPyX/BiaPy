@@ -1,0 +1,578 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>2D generator &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="3D generator" href="3d_generator.html" />
+    <link rel="prev" title="Init" href="init.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../config/main_config.html">config</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../data.html">data</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../init.html">Init</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../data_2d_manipulation.html">2D Data manipulation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../data_3d_manipulation.html">3D Data manipulation</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="generators.html">generators</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="init.html">Init</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">2D generator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="3d_generator.html">3D generator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="augmentors.html">Augmentors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="simple_generator.html">Simple generator</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../post_processing/main_post_proc.html">post_processing</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../bibliography.html">Bibliography</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../../API.html">&lt;no title&gt;</a> &raquo;</li>
+        
+          <li><a href="../data.html">data</a> &raquo;</li>
+        
+          <li><a href="generators.html">generators</a> &raquo;</li>
+        
+      <li>2D generator</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-data.generators.data_2D_generator">
+<span id="d-generator"></span><h1>2D generator<a class="headerlink" href="#module-data.generators.data_2D_generator" title="Permalink to this headline">¶</a></h1>
+<dl class="py class">
+<dt id="data.generators.data_2D_generator.ImageDataGenerator">
+<em class="property">class </em><code class="sig-prename descclassname">data.generators.data_2D_generator.</code><code class="sig-name descname">ImageDataGenerator</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span></em>, <em class="sig-param"><span class="n">Y</span></em>, <em class="sig-param"><span class="n">batch_size</span><span class="o">=</span><span class="default_value">32</span></em>, <em class="sig-param"><span class="n">seed</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">shuffle_each_epoch</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">in_memory</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">data_paths</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">da</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">da_prob</span><span class="o">=</span><span class="default_value">0.5</span></em>, <em class="sig-param"><span class="n">rotation90</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">rand_rot</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">rnd_rot_range</span><span class="o">=</span><span class="default_value">- 180, 180</span></em>, <em class="sig-param"><span class="n">shear</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">shear_range</span><span class="o">=</span><span class="default_value">- 20, 20</span></em>, <em class="sig-param"><span class="n">zoom</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">zoom_range</span><span class="o">=</span><span class="default_value">0.8, 1.2</span></em>, <em class="sig-param"><span class="n">shift</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">shift_range</span><span class="o">=</span><span class="default_value">0.1, 0.2</span></em>, <em class="sig-param"><span class="n">vflip</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">hflip</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">elastic</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">e_alpha</span><span class="o">=</span><span class="default_value">240, 250</span></em>, <em class="sig-param"><span class="n">e_sigma</span><span class="o">=</span><span class="default_value">25</span></em>, <em class="sig-param"><span class="n">e_mode</span><span class="o">=</span><span class="default_value">'constant'</span></em>, <em class="sig-param"><span class="n">g_blur</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">g_sigma</span><span class="o">=</span><span class="default_value">1.0, 2.0</span></em>, <em class="sig-param"><span class="n">median_blur</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">mb_kernel</span><span class="o">=</span><span class="default_value">3, 7</span></em>, <em class="sig-param"><span class="n">motion_blur</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">motb_k_range</span><span class="o">=</span><span class="default_value">3, 8</span></em>, <em class="sig-param"><span class="n">gamma_contrast</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">gc_gamma</span><span class="o">=</span><span class="default_value">1.25, 1.75</span></em>, <em class="sig-param"><span class="n">brightness</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">brightness_factor</span><span class="o">=</span><span class="default_value">1, 3</span></em>, <em class="sig-param"><span class="n">contrast</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">contrast_factor</span><span class="o">=</span><span class="default_value">1, 3</span></em>, <em class="sig-param"><span class="n">dropout</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">drop_range</span><span class="o">=</span><span class="default_value">0, 0.2</span></em>, <em class="sig-param"><span class="n">cutout</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">cout_nb_iterations</span><span class="o">=</span><span class="default_value">1, 3</span></em>, <em class="sig-param"><span class="n">cout_size</span><span class="o">=</span><span class="default_value">0.2, 0.4</span></em>, <em class="sig-param"><span class="n">cout_cval</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">cout_apply_to_mask</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">cutblur</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">cblur_size</span><span class="o">=</span><span class="default_value">0.1, 0.5</span></em>, <em class="sig-param"><span class="n">cblur_down_range</span><span class="o">=</span><span class="default_value">2, 8</span></em>, <em class="sig-param"><span class="n">cblur_inside</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">cutmix</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">cmix_size</span><span class="o">=</span><span class="default_value">0.2, 0.4</span></em>, <em class="sig-param"><span class="n">cutnoise</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">cnoise_scale</span><span class="o">=</span><span class="default_value">0.1, 0.2</span></em>, <em class="sig-param"><span class="n">cnoise_nb_iterations</span><span class="o">=</span><span class="default_value">1, 3</span></em>, <em class="sig-param"><span class="n">cnoise_size</span><span class="o">=</span><span class="default_value">0.2, 0.4</span></em>, <em class="sig-param"><span class="n">misalignment</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">ms_displacement</span><span class="o">=</span><span class="default_value">16</span></em>, <em class="sig-param"><span class="n">ms_rotate_ratio</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">missing_parts</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">missp_iterations</span><span class="o">=</span><span class="default_value">30, 40</span></em>, <em class="sig-param"><span class="n">random_crops_in_DA</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">shape</span><span class="o">=</span><span class="default_value">256, 256, 1</span></em>, <em class="sig-param"><span class="n">prob_map</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">val</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">out_number</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">extra_data_factor</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/data/generators/data_2D_generator.html#ImageDataGenerator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.generators.data_2D_generator.ImageDataGenerator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.utils.data_utils.Sequence</span></code></p>
+<p>Custom 2D ImageDataGenerator based on <a class="reference external" href="https://github.com/aleju/imgaug-doc">imgaug</a>
+and our own <a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/blob/master/generators/augmentors.py">augmentors.py</a>
+transformations.</p>
+<p>Based on <a class="reference external" href="https://github.com/czbiohub/microDL">microDL</a> and
+<a class="reference external" href="https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly">Shervine’s blog</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Mask data. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">1)</span></code>.</p></li>
+<li><p><strong>batch_size</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Size of the batches.</p></li>
+<li><p><strong>shuffle_each_epoch</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To decide if the indexes will be shuffled after every epoch.</p></li>
+<li><p><strong>in_memory</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> data used will be <code class="docutils literal notranslate"><span class="pre">X</span></code> and <code class="docutils literal notranslate"><span class="pre">Y</span></code>. If <code class="docutils literal notranslate"><span class="pre">False</span></code> it will be loaded directly from disk using
+<code class="docutils literal notranslate"><span class="pre">data_paths</span></code>.</p></li>
+<li><p><strong>data_paths</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – If <code class="docutils literal notranslate"><span class="pre">in_memory</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code> this list should contain the paths to load data and masks. <code class="docutils literal notranslate"><span class="pre">data_paths[0]</span></code>
+should be data path and <code class="docutils literal notranslate"><span class="pre">data_paths[1]</span></code> masks path.</p></li>
+<li><p><strong>da</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To activate the data augmentation.</p></li>
+<li><p><strong>da_prob</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Probability of doing each transformation.</p></li>
+<li><p><strong>rotation90</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To make square (90, 180,270) degree rotations.</p></li>
+<li><p><strong>rand_rot</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To make random degree range rotations.</p></li>
+<li><p><strong>rnd_rot_range</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Range of random rotations. E. g. <code class="docutils literal notranslate"><span class="pre">(-180,</span> <span class="pre">180)</span></code>.</p></li>
+<li><p><strong>shear</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To make shear transformations.</p></li>
+<li><p><strong>shear_range</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Degree range to make shear. E. g. <code class="docutils literal notranslate"><span class="pre">(-20,</span> <span class="pre">20)</span></code>.</p></li>
+<li><p><strong>zoom</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To make zoom on images.</p></li>
+<li><p><strong>zoom_range</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">floats</span></code>, <em>optional</em>) – Zoom range to apply. E. g. <code class="docutils literal notranslate"><span class="pre">(0.8,</span> <span class="pre">1.2)</span></code>.</p></li>
+<li><p><strong>shift</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – To make shifts.</p></li>
+<li><p><strong>shift_range</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Range to make a shift. E. g. <code class="docutils literal notranslate"><span class="pre">(0.1,</span> <span class="pre">0.2)</span></code>.</p></li>
+<li><p><strong>vflip</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To activate vertical flips.</p></li>
+<li><p><strong>hflip</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To activate horizontal flips.</p></li>
+<li><p><strong>elastic</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To make elastic deformations.</p></li>
+<li><p><strong>e_alpha</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Strength of the distortion field. E. g. <code class="docutils literal notranslate"><span class="pre">(240,</span> <span class="pre">250)</span></code>.</p></li>
+<li><p><strong>e_sigma</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Standard deviation of the gaussian kernel used to smooth the distortion fields.</p></li>
+<li><p><strong>e_mode</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Parameter that defines the handling of newly created pixels with the elastic transformation.</p></li>
+<li><p><strong>g_blur</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To insert gaussian blur on the images.</p></li>
+<li><p><strong>g_sigma</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">floats</span></code>, <em>optional</em>) – Standard deviation of the gaussian kernel. E. g. <code class="docutils literal notranslate"><span class="pre">(1.0,</span> <span class="pre">2.0)</span></code>.</p></li>
+<li><p><strong>median_blur</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To blur an image by computing median values over neighbourhoods.</p></li>
+<li><p><strong>mb_kernel</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Median blur kernel size. E. g. <code class="docutils literal notranslate"><span class="pre">(3,</span> <span class="pre">7)</span></code>.</p></li>
+<li><p><strong>motion_blur</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Blur images in a way that fakes camera or object movements.</p></li>
+<li><p><strong>motb_k_range</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Kernel size to use in motion blur.</p></li>
+<li><p><strong>gamma_contrast</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To insert gamma constrast changes on images.</p></li>
+<li><p><strong>gc_gamma</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">floats</span></code>, <em>optional</em>) – Exponent for the contrast adjustment. Higher values darken the image. E. g. <code class="docutils literal notranslate"><span class="pre">(1.25,</span> <span class="pre">1.75)</span></code>.</p></li>
+<li><p><strong>brightness</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To aply brightness to the images.</p></li>
+<li><p><strong>brightness_factor</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">floats</span></code>, <em>optional</em>) – Strength of the brightness range, with valid values being <code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">&lt;=</span> <span class="pre">brightness_factor</span> <span class="pre">&lt;=</span> <span class="pre">1</span></code>. E.g. <code class="docutils literal notranslate"><span class="pre">(0.1,</span> <span class="pre">0.3)</span></code>.</p></li>
+<li><p><strong>contrast</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">boolen</span></code>, <em>optional</em>) – To apply contrast changes to the images.</p></li>
+<li><p><strong>contrast_factor</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">floats</span></code>, <em>optional</em>) – Strength of the contrast change range, with valid values being <code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">&lt;=</span> <span class="pre">contrast_factor</span> <span class="pre">&lt;=</span> <span class="pre">1</span></code>. E.g. <code class="docutils literal notranslate"><span class="pre">(0.1,</span> <span class="pre">0.3)</span></code>.</p></li>
+<li><p><strong>dropout</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To set a certain fraction of pixels in images to zero.</p></li>
+<li><p><strong>drop_range</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">floats</span></code>, <em>optional</em>) – Range to take a probability <code class="docutils literal notranslate"><span class="pre">p</span></code> to drop pixels. E.g. <code class="docutils literal notranslate"><span class="pre">(0,</span> <span class="pre">0.2)</span></code> will take a <code class="docutils literal notranslate"><span class="pre">p</span></code> folowing <code class="docutils literal notranslate"><span class="pre">0&lt;=p&lt;=0.2</span></code>
+and then drop <code class="docutils literal notranslate"><span class="pre">p</span></code> percent of all pixels in the image (i.e. convert them to black pixels).</p></li>
+<li><p><strong>cutout</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To fill one or more rectangular areas in an image using a fill mode.</p></li>
+<li><p><strong>cout_nb_iterations</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Range of number of areas to fill the image with. E. g. <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">3)</span></code>.</p></li>
+<li><p><strong>cout_size</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">floats</span></code>, <em>optional</em>) – Range to select the size of the areas in % of the corresponding image size. Values between <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">1</span></code>.
+E. g. <code class="docutils literal notranslate"><span class="pre">(0.2,</span> <span class="pre">0.4)</span></code>.</p></li>
+<li><p><strong>cout_cval</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Value to fill the area of cutout with.</p></li>
+<li><p><strong>cout_apply_to_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">boolen</span></code>, <em>optional</em>) – Wheter to apply cutout to the mask.</p></li>
+<li><p><strong>cutblur</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">boolean</span></code>, <em>optional</em>) – Blur a rectangular area of the image by downsampling and upsampling it again.</p></li>
+<li><p><strong>cblur_size</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">floats</span></code>, <em>optional</em>) – Range to select the size of the area to apply cutblur on. E. g. <code class="docutils literal notranslate"><span class="pre">(0.2,</span> <span class="pre">0.4)</span></code>.</p></li>
+<li><p><strong>cblur_inside</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">boolean</span></code>, <em>optional</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> only the region inside will be modified (cut LR into HR image). If <code class="docutils literal notranslate"><span class="pre">False</span></code> the <code class="docutils literal notranslate"><span class="pre">50%</span></code> of the
+times the region inside will be modified (cut LR into HR image) and the other <code class="docutils literal notranslate"><span class="pre">50%</span></code> the inverse will be
+done (cut HR into LR image). See Figure 1 of the official <a class="reference external" href="https://arxiv.org/pdf/2004.00448.pdf">paper</a>.</p></li>
+<li><p><strong>cutmix</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">boolean</span></code>, <em>optional</em>) – Combine two images pasting a region of one image to another.</p></li>
+<li><p><strong>cmix_size</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">floats</span></code>, <em>optional</em>) – Range to select the size of the area to paste one image into another. E. g. <code class="docutils literal notranslate"><span class="pre">(0.2,</span> <span class="pre">0.4)</span></code>.</p></li>
+<li><p><strong>cnoise</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">boolean</span></code>, <em>optional</em>) – Randomly add noise to a cuboid region in the image.</p></li>
+<li><p><strong>cnoise_scale</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">floats</span></code>, <em>optional</em>) – Scale of the random noise. E.g. <code class="docutils literal notranslate"><span class="pre">(0.1,</span> <span class="pre">0.2)</span></code>.</p></li>
+<li><p><strong>cnoise_nb_iterations</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Number of areas with noise to create. E.g. <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">3)</span></code>.</p></li>
+<li><p><strong>cnoise_size</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">floats</span></code>, <em>optional</em>) – Range to choose the size of the areas to transform. E.g. <code class="docutils literal notranslate"><span class="pre">(0.2,</span> <span class="pre">0.4)</span></code>.</p></li>
+<li><p><strong>misalignment</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">boolean</span></code>, <em>optional</em>) – To add miss-aligment augmentation.</p></li>
+<li><p><strong>ms_displacement</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Maximum pixel displacement in <cite>xy</cite>-plane for misalignment.</p></li>
+<li><p><strong>ms_rotate_ratio</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Ratio of rotation-based mis-alignment</p></li>
+<li><p><strong>missing_parts</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">boolean</span></code>, <em>optional</em>) – Augment the image by creating a black line in a random position.</p></li>
+<li><p><strong>missp_iterations</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">ints</span></code>, <em>optional</em>) – Iterations to dilate the missing line with. E.g. <code class="docutils literal notranslate"><span class="pre">(30,</span> <span class="pre">40)</span></code>.</p></li>
+<li><p><strong>random_crops_in_DA</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Decide to make random crops in DA (before transformations).</p></li>
+<li><p><strong>shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>, <em>optional</em>) – Shape of the desired images when using ‘random_crops_in_DA’.</p></li>
+<li><p><strong>prob_map</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – If it is an array, it should represent the probability map used to make random crops when
+<code class="docutils literal notranslate"><span class="pre">random_crops_in_DA</span></code> is set. If str given should be the path to read these maps from.</p></li>
+<li><p><strong>val</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Advise the generator that the images will be to validate the model to not make random crops (as the val.
+data must be the same on each epoch). Valid when <code class="docutils literal notranslate"><span class="pre">random_crops_in_DA</span></code> is set.</p></li>
+<li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes. If <code class="docutils literal notranslate"><span class="pre">&gt;</span> <span class="pre">1</span></code> one-hot encoding will be done on the ground truth.</p></li>
+<li><p><strong>out_number</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of output returned by the network. Used to produce same number of ground truth data on each batch.</p></li>
+<li><p><strong>extra_data_factor</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Factor to multiply the batches yielded in a epoch. It acts as if <code class="docutils literal notranslate"><span class="pre">X</span></code> and <code class="docutils literal notranslate"><span class="pre">Y`</span></code> where concatenated
+<code class="docutils literal notranslate"><span class="pre">extra_data_factor</span></code> times.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
+<span class="c1"># Define train and val generators to make random rotations between 0 and</span>
+<span class="c1"># 180 degrees. Notice that DA is disabled in val data</span>
+
+<span class="n">X_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">1776</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">Y_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">1776</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">X_val</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">204</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">Y_val</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">204</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+
+<span class="n">data_gen_args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">X_train</span><span class="p">,</span> <span class="n">Y</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">shuffle_each_epoch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">rand_rot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">vflip</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                     <span class="n">hflip</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">data_gen_val_args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">X_val</span><span class="p">,</span> <span class="n">Y</span><span class="o">=</span><span class="n">Y_val</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">shuffle_each_epoch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">da</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">val</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">train_generator</span> <span class="o">=</span> <span class="n">ImageDataGenerator</span><span class="p">(</span><span class="o">**</span><span class="n">data_gen_args</span><span class="p">)</span>
+<span class="n">val_generator</span> <span class="o">=</span> <span class="n">ImageDataGenerator</span><span class="p">(</span><span class="o">**</span><span class="n">data_gen_val_args</span><span class="p">)</span>
+
+<span class="c1"># EXAMPLE 2</span>
+<span class="c1"># Generate random crops on DA-time. To allow that notice that the</span>
+<span class="c1"># data in this case is bigger in width and height than example 1, to</span>
+<span class="c1"># allow a (256, 256) random crop extraction</span>
+
+<span class="n">X_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">148</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">Y_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">148</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">X_val</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">17</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">Y_val</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">17</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+
+<span class="c1"># Create a prbobability map for each image. Here we define foreground</span>
+<span class="c1"># probability much higher than the background simulating a class inbalance</span>
+<span class="c1"># With this, the probability of take the center pixel of the random crop</span>
+<span class="c1"># that corresponds to the foreground class will be so high</span>
+<span class="n">prob_map</span> <span class="o">=</span> <span class="n">calculate_2D_volume_prob_map</span><span class="p">(</span>
+     <span class="n">Y_train</span><span class="p">,</span> <span class="mf">0.94</span><span class="p">,</span> <span class="mf">0.06</span><span class="p">,</span> <span class="n">save_file</span><span class="o">=</span><span class="s1">&#39;prob_map.npy&#39;</span><span class="p">)</span>
+
+<span class="n">data_gen_args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">X_train</span><span class="p">,</span> <span class="n">Y</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">shuffle_each_epoch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">rand_rot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">vflip</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                     <span class="n">hflip</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">random_crops_in_DA</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">prob_map</span><span class="o">=</span><span class="n">prob_map</span><span class="p">)</span>
+
+<span class="n">data_gen_val_args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">X_val</span><span class="p">,</span> <span class="n">Y</span><span class="o">=</span><span class="n">Y_val</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">random_crops_in_DA</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+                         <span class="n">shuffle_each_epoch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">da</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">val</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">train_generator</span> <span class="o">=</span> <span class="n">ImageDataGenerator</span><span class="p">(</span><span class="o">**</span><span class="n">data_gen_args</span><span class="p">)</span>
+<span class="n">val_generator</span> <span class="o">=</span> <span class="n">ImageDataGenerator</span><span class="p">(</span><span class="o">**</span><span class="n">data_gen_val_args</span><span class="p">)</span>
+</pre></div>
+</div>
+<p class="rubric">Methods</p>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#data.generators.data_2D_generator.ImageDataGenerator.apply_transform" title="data.generators.data_2D_generator.ImageDataGenerator.apply_transform"><code class="xref py py-obj docutils literal notranslate"><span class="pre">apply_transform</span></code></a>(image, mask[, e_im, e_mask])</p></td>
+<td><p>Transform the input image and its mask at the same time with one of the selected choices based on a probability.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#data.generators.data_2D_generator.ImageDataGenerator.get_transformed_samples" title="data.generators.data_2D_generator.ImageDataGenerator.get_transformed_samples"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_transformed_samples</span></code></a>(num_examples[, …])</p></td>
+<td><p>Apply selected transformations to a defined number of images from the dataset.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#data.generators.data_2D_generator.ImageDataGenerator.on_epoch_end" title="data.generators.data_2D_generator.ImageDataGenerator.on_epoch_end"><code class="xref py py-obj docutils literal notranslate"><span class="pre">on_epoch_end</span></code></a>()</p></td>
+<td><p>Updates indexes after each epoch.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt id="data.generators.data_2D_generator.ImageDataGenerator.on_epoch_end">
+<code class="sig-name descname">on_epoch_end</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/data/generators/data_2D_generator.html#ImageDataGenerator.on_epoch_end"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.generators.data_2D_generator.ImageDataGenerator.on_epoch_end" title="Permalink to this definition">¶</a></dt>
+<dd><p>Updates indexes after each epoch.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="data.generators.data_2D_generator.ImageDataGenerator.apply_transform">
+<code class="sig-name descname">apply_transform</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image</span></em>, <em class="sig-param"><span class="n">mask</span></em>, <em class="sig-param"><span class="n">e_im</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">e_mask</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/data/generators/data_2D_generator.html#ImageDataGenerator.apply_transform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.generators.data_2D_generator.ImageDataGenerator.apply_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Transform the input image and its mask at the same time with one of the selected choices based on a
+probability.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Image to transform. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Mask to transform. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>e_img</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Extra image to help transforming <code class="docutils literal notranslate"><span class="pre">image</span></code>. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>e_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Extra mask to help transforming <code class="docutils literal notranslate"><span class="pre">mask</span></code>. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>trans_image</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Transformed image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>trans_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Transformed image mask. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="data.generators.data_2D_generator.ImageDataGenerator.get_transformed_samples">
+<code class="sig-name descname">get_transformed_samples</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_examples</span></em>, <em class="sig-param"><span class="n">save_to_dir</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">out_dir</span><span class="o">=</span><span class="default_value">'aug'</span></em>, <em class="sig-param"><span class="n">save_prefix</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">train</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">random_images</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/data/generators/data_2D_generator.html#ImageDataGenerator.get_transformed_samples"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.generators.data_2D_generator.ImageDataGenerator.get_transformed_samples" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply selected transformations to a defined number of images from the dataset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>num_examples</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Number of examples to generate.</p></li>
+<li><p><strong>save_to_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Save the images generated. The purpose of this variable is to check the images generated by data
+augmentation.</p></li>
+<li><p><strong>out_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Name of the folder where the examples will be stored. If any provided the examples will be generated
+under a folder <code class="docutils literal notranslate"><span class="pre">aug</span></code>.</p></li>
+<li><p><strong>save_prefix</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Prefix to add to the generated examples’ name.</p></li>
+<li><p><strong>train</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To avoid drawing a grid on the generated images. This should be set when the samples will be used for
+training.</p></li>
+<li><p><strong>random_images</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Randomly select images from the dataset. If <code class="docutils literal notranslate"><span class="pre">False</span></code> the examples will be generated from the start of
+the dataset.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>batch_x</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Batch of data. E.g. <code class="docutils literal notranslate"><span class="pre">(num_examples,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>batch_y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Batch of data mask. E.g. <code class="docutils literal notranslate"><span class="pre">(num_examples,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
+<span class="c1"># Generate 10 samples following with the example 1 of the class definition</span>
+<span class="n">X_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">1776</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">Y_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">1776</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+
+<span class="n">data_gen_args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">X_train</span><span class="p">,</span> <span class="n">Y</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">shuffle_each_epoch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                     <span class="n">rotation_range</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">vflip</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">hflip</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="n">train_generator</span> <span class="o">=</span> <span class="n">ImageDataGenerator</span><span class="p">(</span><span class="o">**</span><span class="n">data_gen_args</span><span class="p">)</span>
+
+<span class="n">train_generator</span><span class="o">.</span><span class="n">get_transformed_samples</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="n">save_to_dir</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">train</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">out_dir</span><span class="o">=</span><span class="s1">&#39;da_dir&#39;</span><span class="p">)</span>
+
+<span class="c1"># EXAMPLE 2</span>
+<span class="c1"># If random crop in DA-time is choosen, as the example 2 of the class definition, the call should be the</span>
+<span class="c1"># same but two more images will be stored: img and mask representing the random crop extracted. There a</span>
+<span class="c1"># red point is painted representing the pixel choosen to be the center of the random crop and a blue</span>
+<span class="c1"># square which delimits crop boundaries</span>
+
+<span class="n">prob_map</span> <span class="o">=</span> <span class="n">calculate_2D_volume_prob_map</span><span class="p">(</span><span class="n">Y_train</span><span class="p">,</span> <span class="mf">0.94</span><span class="p">,</span> <span class="mf">0.06</span><span class="p">,</span> <span class="n">save_file</span><span class="o">=</span><span class="s1">&#39;prob_map.npy&#39;</span><span class="p">)</span>
+
+<span class="n">data_gen_args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">X_train</span><span class="p">,</span> <span class="n">Y</span><span class="o">=</span><span class="n">Y_train</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">shuffle_each_epoch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                     <span class="n">rotation_range</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">vflip</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">hflip</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">random_crops_in_DA</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">prob_map</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                     <span class="n">prob_map</span><span class="o">=</span><span class="n">prob_map</span><span class="p">)</span>
+<span class="n">train_generator</span> <span class="o">=</span> <span class="n">ImageDataGenerator</span><span class="p">(</span><span class="o">**</span><span class="n">data_gen_args</span><span class="p">)</span>
+
+<span class="n">train_generator</span><span class="o">.</span><span class="n">get_transformed_samples</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="n">save_to_dir</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">train</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">out_dir</span><span class="o">=</span><span class="s1">&#39;da_dir&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Example 2 will store two additional images as the following:</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><div class="figure align-center" id="id1">
+<a class="reference internal image-reference" href="../../_images/rd_crop_2d.png"><img alt="../../_images/rd_crop_2d.png" src="../../_images/rd_crop_2d.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Original crop</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+<td><div class="figure align-center" id="id2">
+<a class="reference internal image-reference" href="../../_images/rd_crop_mask_2d.png"><img alt="../../_images/rd_crop_mask_2d.png" src="../../_images/rd_crop_mask_2d.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Original crop mask</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<p>Together with these images another pair of images will be stored: the crop made and a transformed version of
+it, which is really the generator output.</p>
+<p>For instance, setting <code class="docutils literal notranslate"><span class="pre">elastic=True</span></code> the above extracted crop should be transformed as follows:</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><div class="figure align-center" id="id3">
+<a class="reference internal image-reference" href="../../_images/original_crop_2d.png"><img alt="../../_images/original_crop_2d.png" src="../../_images/original_crop_2d.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Original crop</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+<td><div class="figure align-center" id="id4">
+<a class="reference internal image-reference" href="../../_images/original_crop_mask_2d.png"><img alt="../../_images/original_crop_mask_2d.png" src="../../_images/original_crop_mask_2d.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Original crop mask</span><a class="headerlink" href="#id4" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="figure align-center" id="id5">
+<a class="reference internal image-reference" href="../../_images/elastic_crop_2d.png"><img alt="../../_images/elastic_crop_2d.png" src="../../_images/elastic_crop_2d.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Elastic transformation applied</span><a class="headerlink" href="#id5" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+<td><div class="figure align-center" id="id6">
+<a class="reference internal image-reference" href="../../_images/elastic_crop_mask_2d.png"><img alt="../../_images/elastic_crop_mask_2d.png" src="../../_images/elastic_crop_mask_2d.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Elastic transformation applied</span><a class="headerlink" href="#id6" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<p>The grid is only painted if <code class="docutils literal notranslate"><span class="pre">train=False</span></code> which should be used just to display transformations made.
+Selecting random rotations between 0 and 180 degrees should generate the following:</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><div class="figure align-center" id="id7">
+<a class="reference internal image-reference" href="../../_images/original_rd_rot_crop_2d.png"><img alt="../../_images/original_rd_rot_crop_2d.png" src="../../_images/original_rd_rot_crop_2d.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Original crop</span><a class="headerlink" href="#id7" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+<td><div class="figure align-center" id="id8">
+<a class="reference internal image-reference" href="../../_images/original_rd_rot_crop_mask_2d.png"><img alt="../../_images/original_rd_rot_crop_mask_2d.png" src="../../_images/original_rd_rot_crop_mask_2d.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Original crop mask</span><a class="headerlink" href="#id8" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="figure align-center" id="id9">
+<a class="reference internal image-reference" href="../../_images/rd_rot_crop_2d.png"><img alt="../../_images/rd_rot_crop_2d.png" src="../../_images/rd_rot_crop_2d.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Random rotation [0, 180] applied</span><a class="headerlink" href="#id9" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+<td><div class="figure align-center" id="id10">
+<a class="reference internal image-reference" href="../../_images/rd_rot_crop_mask_2d.png"><img alt="../../_images/rd_rot_crop_mask_2d.png" src="../../_images/rd_rot_crop_mask_2d.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Random rotation [0, 180] applied</span><a class="headerlink" href="#id10" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="3d_generator.html" class="btn btn-neutral float-right" title="3D generator" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="init.html" class="btn btn-neutral float-left" title="Init" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2021, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

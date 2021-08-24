@@ -1,15 +1,12 @@
 import tensorflow as tf
 import numpy as np
-from tensorflow.keras.layers import Conv2D,Conv2DTranspose, concatenate,\
-                                    BatchNormalization, LeakyReLU, ZeroPadding2D
+from tensorflow.keras.layers import Conv2D,Conv2DTranspose, concatenate, BatchNormalization, LeakyReLU, ZeroPadding2D
 from tensorflow.keras import Model, Input
-from metrics import jaccard_index_softmax
 
 
-def nnUNet_2D(image_shape, feature_maps=32, max_fa=480, num_pool=8, 
-              k_init='he_normal', optimizer="sgd", lr=0.002, n_classes=1):
-    """Create nnU-Net 2D. This implementations tries to be a Keras version of the
-       original nnU-Net 2D presented in `nnU-Net Github <https://github.com/MIC-DKFZ/nnUNet>`_.
+def nnUNet_2D(image_shape, feature_maps=32, max_fa=480, num_pool=8, k_init='he_normal', n_classes=1):
+    """Create nnU-Net 2D. This implementations tries to be a Keras version of the original nnU-Net 2D presented in
+       `nnU-Net Github <https://github.com/MIC-DKFZ/nnUNet>`_.
                                                                                 
        Parameters
        ----------
@@ -17,8 +14,7 @@ def nnUNet_2D(image_shape, feature_maps=32, max_fa=480, num_pool=8,
            Dimensions of the input image.              
                                                                                 
        feature_map : ints, optional
-           Feature maps to start with in the first level of the U-Net (will be 
-           duplicated on each level). 
+           Feature maps to start with in the first level of the U-Net (will be duplicated on each level). 
 
        max_fa : int, optional
            Number of maximum feature maps allowed to used in conv layers.
@@ -29,13 +25,6 @@ def nnUNet_2D(image_shape, feature_maps=32, max_fa=480, num_pool=8,
        k_init : string, optional
            Kernel initialization for convolutional layers.                                                         
                                                                            
-       optimizer : str, optional
-           Optimizer used to minimize the loss function. Posible options: 
-           ``sgd`` or ``adam``.                 
-                                                                           
-       lr : float, optional
-           Learning rate value.                          
-        
        n_classes: int, optional
            Number of classes.
                                                                            
@@ -90,18 +79,6 @@ def nnUNet_2D(image_shape, feature_maps=32, max_fa=480, num_pool=8,
     
     model = Model(inputs=[inputs], outputs=[outputs])
 
-    # Select the optimizer
-    if optimizer == "sgd":
-        opt = tf.keras.optimizers.SGD(
-            lr=lr, momentum=0.99, decay=0.0, nesterov=False)
-    elif optimizer == "adam":
-        opt = tf.keras.optimizers.Adam(
-            lr=lr, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0,
-            amsgrad=False)
-    else:
-        raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
-
-
     # Calculate the weigts as nnUNet does
     ################# Here we wrap the loss for deep supervision ############
     # we need to know the number of outputs of the network
@@ -117,10 +94,6 @@ def nnUNet_2D(image_shape, feature_maps=32, max_fa=480, num_pool=8,
     weights = weights / weights.sum()
     weights = weights[::-1] 
     ################# END ###################
-
-    # Compile the model
-    model.compile(optimizer=opt, loss='binary_crossentropy',
-                  metrics=[jaccard_index_softmax], loss_weights=list(weights))
 
     return model
 

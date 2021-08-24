@@ -78,14 +78,13 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
 
        Examples
        --------
-       
-       +-----------------------------------------+-----------------------------------------+
-       | .. figure:: img/chart_loss.png          | .. figure:: img/chart_jaccard_index.png |
-       |   :width: 80%                           |   :width: 80%                           |
-       |   :align: center                        |   :align: center                        |
-       |                                         |                                         |
-       |   Loss values on each epoch             |   Jaccard index values on each epoch    |
-       +-----------------------------------------+-----------------------------------------+
+       +--------------------------------------------+--------------------------------------------+
+       | .. figure:: ../img/chart_loss.png          | .. figure:: ../img/chart_jaccard_index.png |
+       |   :width: 80%                              |   :width: 80%                              |
+       |   :align: center                           |   :align: center                           |
+       |                                            |                                            |
+       |   Loss values on each epoch                |   Jaccard index values on each epoch       |
+       +--------------------------------------------+--------------------------------------------+
     """
 
     print("Creating training plots . . .")
@@ -176,7 +175,7 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin
        thresholds applied, that is: ``0.1, 0.2, 0.3, ..., 0.9``. The y axis is the value of the metric in each chart. For 
        instance, the Jaccard/IoU chart will look like this:
 
-       .. image:: img/278_3_threshold_Jaccard.png
+       .. image:: ../img/278_3_threshold_Jaccard.png
            :width: 60%
            :align: center
 
@@ -497,7 +496,7 @@ def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
        Notice that weight has been defined where the objects are almost touching 
        each other.
    
-       .. image:: img/weight_map.png
+       .. image:: ../img/weight_map.png
            :width: 650
            :align: center
     """
@@ -738,7 +737,7 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="", 
 
        That will save in ``out_dir`` an image like this:
 
-       .. image:: img/save_filters.png 
+       .. image:: ../img/save_filters.png 
            :width: 60%
            :align: center 
     """
@@ -1196,6 +1195,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
        Examples
        --------
        ::
+
            # EXAMPLE 1
            # Case where we need to load 165 images of shape (1024, 768)
            data_path = "data/train/x"
@@ -1381,6 +1381,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, crop_verb=Fal
        Examples
        --------
        ::
+
            # EXAMPLE 1
            # Case where we need to load 20 images of shape (1024, 1024, 91, 1)
            data_path = "data/train/x"
@@ -1553,7 +1554,7 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
                                                                             
 
 def check_downsample_division(X, d_levels):
-    """Ensures X and Y shape is divisible by 2 ``d_levels`` times adding padding if necessary. 
+    """Ensures ``X`` shape is divisible by ``2`` times ``d_levels`` adding padding if necessary. 
                                                                                 
        Parameters                                                               
        ----------                                                               

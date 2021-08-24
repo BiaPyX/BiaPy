@@ -2,15 +2,14 @@ import importlib
 import os
 from tensorflow.keras.utils import plot_model
 
-from sota_implementations.MNet_Fu_2018.MNet import MNet
 
 def build_model(cfg, job_identifier):   
     """Build selected model 
 
        Parameters                                                                                                       
        ----------                                                                                                       
-       cfg : config.config (Config class)
-           Configuration class.
+       cfg : YACS CN object
+           Configuration.
                                                                                                                         
        job_identifier: str
            Job name.

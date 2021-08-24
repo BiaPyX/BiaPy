@@ -13,8 +13,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
 
        Parameters                                                                                                       
        ----------                                                                                                       
-       cfg : config.config (Config class)                                                                               
-           Configuration class.                                                                                         
+       cfg : YACS CN object
+           Configuration.                                                                                         
                                                                                                                         
        X_train : 4D Numpy array                                                                                               
            Training data. E.g. ``(num_of_images, x, y, channels)``.                                                              
@@ -101,8 +101,8 @@ def create_test_augmentor(cfg, X_test, Y_test):
                                                                                                                         
        Parameters                                                                                                       
        ----------                                                                                                       
-       cfg : config.config (Config class)                                                                               
-           Configuration class.                                                                                         
+       cfg : YACS CN object
+           Configuration.                                                                                         
                                                                                                                         
        X_test : 4D Numpy array                                                                                               
            Test data. E.g. ``(num_of_images, x, y, channels)``.                                                              

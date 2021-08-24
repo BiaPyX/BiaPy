@@ -1,0 +1,1094 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>data.generators.data_3D_generator &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../bibliography.html">Bibliography</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+          <li><a href="../../data.html">data</a> &raquo;</li>
+        
+          <li><a href="../generators.html">data.generators</a> &raquo;</li>
+        
+      <li>data.generators.data_3D_generator</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for data.generators.data_3D_generator</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">imageio</span>                                                                                                          
+<span class="kn">import</span> <span class="nn">imgaug</span> <span class="k">as</span> <span class="nn">ia</span>
+<span class="kn">from</span> <span class="nn">tqdm</span> <span class="kn">import</span> <span class="n">tqdm</span>
+<span class="kn">from</span> <span class="nn">skimage.io</span> <span class="kn">import</span> <span class="n">imread</span>
+<span class="kn">from</span> <span class="nn">scipy.ndimage</span> <span class="kn">import</span> <span class="n">rotate</span>
+<span class="kn">from</span> <span class="nn">scipy.ndimage.interpolation</span> <span class="kn">import</span> <span class="n">shift</span>
+<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span>
+<span class="kn">from</span> <span class="nn">imgaug</span> <span class="kn">import</span> <span class="n">augmenters</span> <span class="k">as</span> <span class="n">iaa</span>
+<span class="kn">from</span> <span class="nn">imgaug.augmentables.segmaps</span> <span class="kn">import</span> <span class="n">SegmentationMapsOnImage</span>
+<span class="kn">from</span> <span class="nn">imgaug.augmentables.heatmaps</span> <span class="kn">import</span> <span class="n">HeatmapsOnImage</span>
+<span class="kn">from</span> <span class="nn">imgaug</span> <span class="kn">import</span> <span class="n">parameters</span> <span class="k">as</span> <span class="n">iap</span>
+<span class="kn">from</span> <span class="nn">skimage.io</span> <span class="kn">import</span> <span class="n">imsave</span>                                                   
+<span class="kn">from</span> <span class="nn">utils.util</span> <span class="kn">import</span> <span class="n">img_to_onehot_encoding</span>
+<span class="kn">from</span> <span class="nn">data.generators.augmentors</span> <span class="kn">import</span> <span class="p">(</span><span class="n">cutout</span><span class="p">,</span> <span class="n">cutblur</span><span class="p">,</span> <span class="n">cutmix</span><span class="p">,</span> <span class="n">cutnoise</span><span class="p">,</span> <span class="n">misalignment</span><span class="p">,</span> <span class="n">brightness</span><span class="p">,</span> <span class="n">contrast</span><span class="p">,</span> 
+                                        <span class="n">missing_parts</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">data.data_3D_manipulation</span> <span class="kn">import</span> <span class="n">random_3D_crop</span>
+
+
+<div class="viewcode-block" id="VoxelDataGenerator"><a class="viewcode-back" href="../../../data/generators/3d_generator.html#data.generators.data_3D_generator.VoxelDataGenerator">[docs]</a><span class="k">class</span> <span class="nc">VoxelDataGenerator</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">Sequence</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Custom 3D ImageDataGenerator based on `imgaug &lt;https://github.com/aleju/imgaug-doc&gt;`_ and our own</span>
+<span class="sd">       `augmentors.py &lt;https://github.com/danifranco/EM_Image_Segmentation/blob/master/generators/augmentors.py&gt;`_</span>
+<span class="sd">       transformations.</span>
+
+<span class="sd">       Based on `microDL &lt;https://github.com/czbiohub/microDL&gt;`_ and</span>
+<span class="sd">       `Shervine&#39;s blog &lt;https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly&gt;`_.</span>
+
+<span class="sd">       Parameters</span>
+<span class="sd">       ----------</span>
+<span class="sd">       X : Numpy 5D array</span>
+<span class="sd">           Data. E.g. ``(num_of_images, x, y, z, channels)``.</span>
+
+<span class="sd">       Y : Numpy 5D array</span>
+<span class="sd">           Mask data. E.g. ``(num_of_images, x, y, z, channels)``.</span>
+
+<span class="sd">       in_memory : bool, optional</span>
+<span class="sd">           If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will be loaded directly from disk using</span>
+<span class="sd">           ``data_paths``.</span>
+
+<span class="sd">       data_paths : List of str, optional</span>
+<span class="sd">           If ``in_memory`` is ``True`` this list should contain the paths to load data and masks. ``data_paths[0]``</span>
+<span class="sd">           should be data path and ``data_paths[1]`` masks path.</span>
+
+<span class="sd">       random_crops_in_DA : bool, optional</span>
+<span class="sd">           To extract random subvolumes from the given data. If not, the data must be 5D and is assumed that the</span>
+<span class="sd">           subvolumes are prepared. </span>
+
+<span class="sd">       shape : 4D tuple of ints, optional</span>
+<span class="sd">           Shape of the subvolume to be extracted randomly from the data. E. g. ``(x, y, z, channels)``.</span>
+
+<span class="sd">       prob_map : 5D Numpy array or str, optional</span>
+<span class="sd">           If it is an array, it should represent the probability map used to make random crops when</span>
+<span class="sd">           ``random_crops_in_DA`` is set. If ``str`` is given it should be the path to read these maps from.</span>
+<span class="sd">        </span>
+<span class="sd">       seed : int, optional</span>
+<span class="sd">           Seed for random functions.</span>
+<span class="sd">            </span>
+<span class="sd">       shuffle_each_epoch : bool, optional</span>
+<span class="sd">           To shuffle data after each epoch.</span>
+
+<span class="sd">       batch_size : int, optional</span>
+<span class="sd">           Size of the batches.</span>
+<span class="sd">        </span>
+<span class="sd">       da : bool, optional</span>
+<span class="sd">           To activate the data augmentation.</span>
+<span class="sd">        </span>
+<span class="sd">       da_prob : float, optional</span>
+<span class="sd">           Probability of doing each transformation.</span>
+<span class="sd">        </span>
+<span class="sd">       rotation90 : bool, optional                                          </span>
+<span class="sd">           To make square (90, 180,270) degree rotations.</span>
+<span class="sd">    </span>
+<span class="sd">       rand_rot : bool, optional                                            </span>
+<span class="sd">           To make random degree range rotations.                  </span>
+<span class="sd">       </span>
+<span class="sd">       rnd_rot_range : tuple of float, optional</span>
+<span class="sd">           Range of random rotations. E. g. ``(-180, 180)``.</span>
+
+<span class="sd">       shear : bool, optional</span>
+<span class="sd">           To make shear transformations. </span>
+
+<span class="sd">       shear_range : tuple of int, optional</span>
+<span class="sd">           Degree range to make shear. E. g. ``(-20, 20)``. </span>
+
+<span class="sd">       zoom : bool, optional</span>
+<span class="sd">           To make zoom on images.</span>
+<span class="sd">    </span>
+<span class="sd">       zoom_range : tuple of floats, optional</span>
+<span class="sd">           Zoom range to apply. E. g. ``(0.8, 1.2)``. </span>
+<span class="sd">        </span>
+<span class="sd">       shift : float, optional </span>
+<span class="sd">           To make shifts.</span>
+<span class="sd">     </span>
+<span class="sd">       shift_range : tuple of float, optional</span>
+<span class="sd">           Range to make a shift. E. g. ``(0.1, 0.2)``.</span>
+
+<span class="sd">       vflip : bool, optional</span>
+<span class="sd">           To activate vertical flips.</span>
+
+<span class="sd">       hflip : bool, optional</span>
+<span class="sd">           To activate horizontal flips.</span>
+
+<span class="sd">       zflip : bool, optional</span>
+<span class="sd">           To activate flips in z dimension.</span>
+<span class="sd">    </span>
+<span class="sd">       elastic : bool, optional</span>
+<span class="sd">           To make elastic deformations.</span>
+
+<span class="sd">       e_alpha : tuple of ints, optional</span>
+<span class="sd">            Strength of the distortion field. E. g. ``(240, 250)``.</span>
+<span class="sd">           </span>
+<span class="sd">       e_sigma : int, optional</span>
+<span class="sd">           Standard deviation of the gaussian kernel used to smooth the distortion fields. </span>
+
+<span class="sd">       e_mode : str, optional</span>
+<span class="sd">           Parameter that defines the handling of newly created pixels with the elastic transformation. </span>
+<span class="sd">        </span>
+<span class="sd">       g_blur : bool, optional</span>
+<span class="sd">           To insert gaussian blur on the images.</span>
+<span class="sd">    </span>
+<span class="sd">       g_sigma : tuple of floats, optional</span>
+<span class="sd">           Standard deviation of the gaussian kernel. E. g. ``(1.0, 2.0)``.</span>
+
+<span class="sd">       median_blur : bool, optional                                      </span>
+<span class="sd">           To blur an image by computing median values over neighbourhoods.</span>
+<span class="sd">                                                                            </span>
+<span class="sd">       mb_kernel : tuple of ints, optional                                  </span>
+<span class="sd">           Median blur kernel size. E. g. ``(3, 7)``.                                   </span>
+
+<span class="sd">       motion_blur : bool, optional</span>
+<span class="sd">           Blur images in a way that fakes camera or object movements.</span>
+
+<span class="sd">       motb_k_range : int, optional</span>
+<span class="sd">           Kernel size to use in motion blur. </span>
+<span class="sd">       </span>
+<span class="sd">       gamma_contrast : bool, optional</span>
+<span class="sd">           To insert gamma constrast changes on images. </span>
+
+<span class="sd">       gc_gamma : tuple of floats, optional                                  </span>
+<span class="sd">           Exponent for the contrast adjustment. Higher values darken the image. E. g. ``(1.25, 1.75)``. </span>
+
+<span class="sd">       brightness : bool, optional                                              </span>
+<span class="sd">           To aply brightness to the images.                                    </span>
+<span class="sd">                                                                            </span>
+<span class="sd">       brightness_factor : tuple of 2 floats, optional                                          </span>
+<span class="sd">           Strength of the brightness range, with valid values being ``0 &lt;= brightness_factor &lt;= 1``. E.g. ``(0.1, 0.3)``.</span>
+<span class="sd">                                                                            </span>
+<span class="sd">       contrast : boolen, optional                                              </span>
+<span class="sd">           To apply contrast changes to the images.                             </span>
+<span class="sd">                                                                            </span>
+<span class="sd">       contrast_factor : tuple of 2 floats, optional                                          </span>
+<span class="sd">           Strength of the contrast change range, with valid values being ``0 &lt;= contrast_factor &lt;= 1``.</span>
+<span class="sd">           E.g. ``(0.1, 0.3)``.</span>
+
+<span class="sd">       dropout : bool, optional</span>
+<span class="sd">           To set a certain fraction of pixels in images to zero.</span>
+
+<span class="sd">       drop_range : tuple of floats, optional</span>
+<span class="sd">           Range to take a probability ``p`` to drop pixels. E.g. ``(0, 0.2)`` will take a ``p`` folowing ``0&lt;=p&lt;=0.2``</span>
+<span class="sd">           and then drop ``p`` percent of all pixels in the image (i.e. convert them to black pixels).</span>
+
+<span class="sd">       cutout : bool, optional                                      </span>
+<span class="sd">           To fill one or more rectangular areas in an image using a fill mode.</span>
+
+<span class="sd">       cout_nb_iterations : tuple of ints, optional</span>
+<span class="sd">           Range of number of areas to fill the image with. E. g. ``(1, 3)``. </span>
+
+<span class="sd">       cout_size : tuple of floats, optional                         </span>
+<span class="sd">           Range to select the size of the areas in % of the corresponding </span>
+<span class="sd">           image size. Values between ``0`` and ``1``. E. g. ``(0.2, 0.4)``.</span>
+
+<span class="sd">       cout_cval : int, optional                                      </span>
+<span class="sd">           Value to fill the area of cutout with.</span>
+
+<span class="sd">       cout_apply_to_mask : boolen, optional                                    </span>
+<span class="sd">           Wheter to apply cutout to the mask.</span>
+
+<span class="sd">       cutblur : boolean, optional</span>
+<span class="sd">           Blur a rectangular area of the image by downsampling and upsampling it again. </span>
+
+<span class="sd">       cblur_size : tuple of floats, optional</span>
+<span class="sd">           Range to select the size of the area to apply cutblur on. E. g. ``(0.2, 0.4)``.</span>
+<span class="sd">    </span>
+<span class="sd">       cblur_inside : boolean, optional</span>
+<span class="sd">           If ``True`` only the region inside will be modified (cut LR into HR image). If ``False`` the ``50%`` of the</span>
+<span class="sd">           times the region inside will be modified (cut LR into HR image) and the other ``50%`` the inverse will be    </span>
+<span class="sd">           done (cut HR into LR image). See Figure 1 of the official `paper &lt;https://arxiv.org/pdf/2004.00448.pdf&gt;`_.</span>
+
+<span class="sd">       cutmix : boolean, optional</span>
+<span class="sd">           Combine two images pasting a region of one image to another.</span>
+
+<span class="sd">       cmix_size : tuple of floats, optional</span>
+<span class="sd">           Range to select the size of the area to paste one image into another. E. g. ``(0.2, 0.4)``.</span>
+<span class="sd">                                                                            </span>
+<span class="sd">       cnoise : boolean, optional                                               </span>
+<span class="sd">           Randomly add noise to a cuboid region in the image.                  </span>
+<span class="sd">                                                                            </span>
+<span class="sd">       cnoise_scale : tuple of floats, optional                                 </span>
+<span class="sd">           Scale of the random noise. E.g. ``(0.1, 0.2)``.                      </span>
+<span class="sd">                                                                            </span>
+<span class="sd">       cnoise_nb_iterations : tuple of ints, optional                           </span>
+<span class="sd">           Number of areas with noise to create. E.g. ``(1, 3)``.               </span>
+<span class="sd">                                                                            </span>
+<span class="sd">       cnoise_size : tuple of floats, optional                                  </span>
+<span class="sd">           Range to choose the size of the areas to transform. E.g. ``(0.2, 0.4)``.</span>
+
+<span class="sd">       misalignment : boolean, optional</span>
+<span class="sd">           To add miss-aligment augmentation.</span>
+<span class="sd">        </span>
+<span class="sd">       ms_displacement : int, optional</span>
+<span class="sd">           Maximum pixel displacement in `xy`-plane for misalignment.</span>
+
+<span class="sd">       ms_rotate_ratio : float, optional</span>
+<span class="sd">           Ratio of rotation-based mis-alignment</span>
+
+<span class="sd">       missing_parts : boolean, optional</span>
+<span class="sd">           Augment the image by creating a black line in a random position.</span>
+
+<span class="sd">       missp_iterations : tuple of 2 ints, optional</span>
+<span class="sd">           Iterations to dilate the missing line with. E.g. ``(30, 40)``.</span>
+
+<span class="sd">       n_classes : int, optional</span>
+<span class="sd">           Number of classes. If ``&gt; 1`` one-hot encoding will be done on the ground truth.</span>
+
+<span class="sd">       out_number : int, optional                                               </span>
+<span class="sd">           Number of output returned by the network. Used to produce same number of ground truth data on each batch. </span>
+
+<span class="sd">       val : bool, optional</span>
+<span class="sd">           Advice the generator that the volumes will be used to validate the model to not make random crops (as the</span>
+<span class="sd">           validation data must be the same on each epoch). Valid when ``random_crops_in_DA`` </span>
+<span class="sd">           is set.</span>
+
+<span class="sd">       extra_data_factor : int, optional</span>
+<span class="sd">           Factor to multiply the batches yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated</span>
+<span class="sd">           ``extra_data_factor`` times.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">in_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">data_paths</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">random_crops_in_DA</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prob_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                 <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">shuffle_each_epoch</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">da</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">da_prob</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">rotation90</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                 <span class="n">rand_rot</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">rnd_rot_range</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">180</span><span class="p">,</span><span class="mi">180</span><span class="p">),</span> <span class="n">shear</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">shear_range</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">20</span><span class="p">,</span><span class="mi">20</span><span class="p">),</span> <span class="n">zoom</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                 <span class="n">zoom_range</span><span class="o">=</span><span class="p">(</span><span class="mf">0.8</span><span class="p">,</span><span class="mf">1.2</span><span class="p">),</span> <span class="n">shift</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">shift_range</span><span class="o">=</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.2</span><span class="p">),</span> <span class="n">vflip</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">hflip</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">zflip</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
+                 <span class="n">elastic</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">e_alpha</span><span class="o">=</span><span class="p">(</span><span class="mi">240</span><span class="p">,</span><span class="mi">250</span><span class="p">),</span> <span class="n">e_sigma</span><span class="o">=</span><span class="mi">25</span><span class="p">,</span> <span class="n">e_mode</span><span class="o">=</span><span class="s1">&#39;constant&#39;</span><span class="p">,</span> <span class="n">g_blur</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">g_sigma</span><span class="o">=</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">),</span>
+                 <span class="n">median_blur</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">mb_kernel</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">7</span><span class="p">),</span> <span class="n">motion_blur</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">motb_k_range</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">8</span><span class="p">),</span> <span class="n">gamma_contrast</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                 <span class="n">gc_gamma</span><span class="o">=</span><span class="p">(</span><span class="mf">1.25</span><span class="p">,</span><span class="mf">1.75</span><span class="p">),</span> <span class="n">brightness</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">brightness_factor</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">),</span> <span class="n">contrast</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">contrast_factor</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">),</span>
+                 <span class="n">dropout</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">drop_range</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mf">0.2</span><span class="p">),</span> <span class="n">cutout</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cout_nb_iterations</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">),</span> <span class="n">cout_size</span><span class="o">=</span><span class="p">(</span><span class="mf">0.2</span><span class="p">,</span><span class="mf">0.4</span><span class="p">),</span>
+                 <span class="n">cout_cval</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cout_apply_to_mask</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cutblur</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cblur_size</span><span class="o">=</span><span class="p">(</span><span class="mf">0.2</span><span class="p">,</span><span class="mf">0.4</span><span class="p">),</span> <span class="n">cblur_down_range</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">8</span><span class="p">),</span>
+                 <span class="n">cblur_inside</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cutmix</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cmix_size</span><span class="o">=</span><span class="p">(</span><span class="mf">0.2</span><span class="p">,</span><span class="mf">0.4</span><span class="p">),</span> <span class="n">cutnoise</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cnoise_scale</span><span class="o">=</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span><span class="mf">0.2</span><span class="p">),</span> 
+                 <span class="n">cnoise_nb_iterations</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">),</span> <span class="n">cnoise_size</span><span class="o">=</span><span class="p">(</span><span class="mf">0.2</span><span class="p">,</span><span class="mf">0.4</span><span class="p">),</span> <span class="n">misalignment</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ms_displacement</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+                 <span class="n">ms_rotate_ratio</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">missing_parts</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">missp_iterations</span><span class="o">=</span><span class="p">(</span><span class="mi">30</span><span class="p">,</span> <span class="mi">40</span><span class="p">),</span> <span class="n">n_classes</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">out_number</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                 <span class="n">val</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">extra_data_factor</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="n">in_memory</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">X</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">5</span> <span class="ow">or</span> <span class="n">Y</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">5</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;X and Y must be a 5D Numpy array&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span> <span class="o">!=</span> <span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">4</span><span class="p">]:</span>                                          
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The shape of X and Y must be the same. </span><span class="si">{}</span><span class="s2"> != </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">4</span><span class="p">],</span> <span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">4</span><span class="p">]))</span>
+
+        <span class="k">if</span> <span class="n">in_memory</span> <span class="ow">and</span> <span class="p">(</span><span class="n">X</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">Y</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;X&#39; and &#39;Y&#39; need to be provided together with &#39;in_memory&#39;&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">in_memory</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_paths</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>                               
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;data_paths&#39; must contain the following paths: 1) data path ; 2) data masks path&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">random_crops_in_DA</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;shape&#39; must be provided when &#39;random_crops_in_DA is enabled&quot;</span><span class="p">)</span>         
+            <span class="k">if</span> <span class="n">in_memory</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">or</span> <span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="ow">or</span> <span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Given &#39;shape&#39; is bigger than the data provided&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">in_memory</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">random_crops_in_DA</span><span class="p">:</span>                       
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;WARNING: you are going to load samples from disk (as &#39;in_memory=False&#39;) and &quot;</span>
+                  <span class="s2">&quot;&#39;random_crops_in_DA=False&#39; so all samples are expected to have the same shape. If it is not the &quot;</span> 
+                  <span class="s2">&quot;case set batch_size to 1 or the generator will throw an error&quot;</span><span class="p">)</span>   
+
+        <span class="k">if</span> <span class="n">rotation90</span> <span class="ow">and</span> <span class="n">rand_rot</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Warning: you selected double rotation type. Maybe you should set only &#39;rand_rot&#39;?&quot;</span><span class="p">)</span>
+    
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">in_memory</span><span class="p">:</span>
+            <span class="c1"># Save paths where the data is stored                                                                                 </span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">paths</span> <span class="o">=</span> <span class="n">data_paths</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data_paths</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">data_paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]))[</span><span class="mi">2</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data_mask_path</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">data_paths</span><span class="p">[</span><span class="mi">1</span><span class="p">]))[</span><span class="mi">2</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data_paths</span><span class="p">)</span>
+            
+            <span class="c1"># Check if a division is required </span>
+            <span class="n">img</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">data_paths</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="k">if</span> <span class="n">img</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span> <span class="n">img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">img</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">div_X_on_load</span> <span class="o">=</span> <span class="kc">True</span> <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">img</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">100</span> <span class="k">else</span> <span class="kc">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">=</span> <span class="n">shape</span> <span class="k">if</span> <span class="n">random_crops_in_DA</span> <span class="k">else</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span> 
+            <span class="c1"># Loop over a few masks to ensure foreground class is present </span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">div_Y_on_load</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">first_no_bin_channel</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data_mask_path</span><span class="p">))):</span>
+                <span class="n">img</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">data_paths</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_mask_path</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>   
+                <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">img</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">100</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">div_Y_on_load</span> <span class="o">=</span> <span class="kc">True</span> 
+                <span class="k">if</span> <span class="n">img</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span> <span class="n">img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="c1"># Store wheter all channels of the gt are binary or not             </span>
+                <span class="c1"># (e.g. distance transform channel)                                 </span>
+                <span class="k">if</span> <span class="n">img</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="ow">or</span> \
+                   <span class="n">img</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">):</span>
+                    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>                                  
+                        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">img</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">j</span><span class="p">]))</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>                         
+                            <span class="bp">self</span><span class="o">.</span><span class="n">first_no_bin_channel</span> <span class="o">=</span> <span class="n">i</span>
+                            <span class="k">break</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">channels</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">Y_dtype</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">dtype</span>
+                <span class="k">del</span> <span class="n">img</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span> 
+            <span class="bp">self</span><span class="o">.</span><span class="n">Y</span> <span class="o">=</span> <span class="n">Y</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Y_dtype</span> <span class="o">=</span> <span class="n">Y</span><span class="o">.</span><span class="n">dtype</span>
+            <span class="c1"># Store wheter all channels of the gt are binary or not </span>
+            <span class="c1"># (e.g. distance transform channel)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">first_no_bin_channel</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+            <span class="k">if</span> <span class="n">Y</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="ow">or</span> <span class="n">Y</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+                    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">Y</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">]))</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span> 
+                        <span class="bp">self</span><span class="o">.</span><span class="n">first_no_bin_channel</span> <span class="o">=</span> <span class="n">i</span>
+                        <span class="k">break</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">div_X_on_load</span> <span class="o">=</span> <span class="kc">True</span> <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">100</span> <span class="k">else</span> <span class="kc">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">div_Y_on_load</span> <span class="o">=</span> <span class="kc">True</span> <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">Y</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">100</span> <span class="k">else</span> <span class="kc">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">channels</span> <span class="o">=</span> <span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">=</span> <span class="n">shape</span> <span class="k">if</span> <span class="n">random_crops_in_DA</span> <span class="k">else</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">random_crops_in_DA</span> <span class="ow">and</span> <span class="n">prob_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">prob_map</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">f</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">prob_map</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span> 
+                <span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">f</span><span class="p">)):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">prob_map</span><span class="p">,</span> <span class="n">f</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span> <span class="o">=</span> <span class="n">prob_map</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span> <span class="o">=</span> <span class="n">n_classes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">out_number</span> <span class="o">=</span> <span class="n">out_number</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">random_crops_in_DA</span> <span class="o">=</span> <span class="n">random_crops_in_DA</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">in_memory</span> <span class="o">=</span> <span class="n">in_memory</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">seed</span> <span class="o">=</span> <span class="n">seed</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">shuffle_each_epoch</span> <span class="o">=</span> <span class="n">shuffle_each_epoch</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">da</span> <span class="o">=</span> <span class="n">da</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">da_prob</span> <span class="o">=</span> <span class="n">da_prob</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vflip</span> <span class="o">=</span> <span class="n">vflip</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hflip</span> <span class="o">=</span> <span class="n">hflip</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">zflip</span> <span class="o">=</span> <span class="n">zflip</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cutout</span> <span class="o">=</span> <span class="n">cutout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cout_nb_iterations</span> <span class="o">=</span> <span class="n">cout_nb_iterations</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cout_size</span> <span class="o">=</span> <span class="n">cout_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cout_cval</span> <span class="o">=</span> <span class="n">cout_cval</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cout_apply_to_mask</span> <span class="o">=</span> <span class="n">cout_apply_to_mask</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cutblur</span> <span class="o">=</span> <span class="n">cutblur</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cblur_size</span> <span class="o">=</span> <span class="n">cblur_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cblur_down_range</span> <span class="o">=</span> <span class="n">cblur_down_range</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cblur_inside</span> <span class="o">=</span> <span class="n">cblur_inside</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cutmix</span> <span class="o">=</span> <span class="n">cutmix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cmix_size</span> <span class="o">=</span> <span class="n">cmix_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cutnoise</span> <span class="o">=</span> <span class="n">cutnoise</span>                                                
+        <span class="bp">self</span><span class="o">.</span><span class="n">cnoise_scale</span> <span class="o">=</span> <span class="n">cnoise_scale</span>                                        
+        <span class="bp">self</span><span class="o">.</span><span class="n">cnoise_nb_iterations</span> <span class="o">=</span> <span class="n">cnoise_nb_iterations</span>                        
+        <span class="bp">self</span><span class="o">.</span><span class="n">cnoise_size</span> <span class="o">=</span> <span class="n">cnoise_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">misalignment</span> <span class="o">=</span> <span class="n">misalignment</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ms_displacement</span> <span class="o">=</span> <span class="n">ms_displacement</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ms_rotate_ratio</span> <span class="o">=</span> <span class="n">ms_rotate_ratio</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">missing_parts</span> <span class="o">=</span> <span class="n">missing_parts</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">missp_iterations</span> <span class="o">=</span> <span class="n">missp_iterations</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">val</span> <span class="o">=</span> <span class="n">val</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="n">batch_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">o_indexes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">len</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">extra_data_factor</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">extra_data_factor</span> <span class="o">=</span> <span class="n">extra_data_factor</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">o_indexes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">o_indexes</span><span class="p">]</span><span class="o">*</span><span class="n">extra_data_factor</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">extra_data_factor</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">total_batches_seen</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">rotation90</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="n">da_prob</span><span class="p">,</span> <span class="n">iaa</span><span class="o">.</span><span class="n">Rot90</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_rot[90,180,270]&#39;</span>
+        <span class="k">if</span> <span class="n">rand_rot</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="n">da_prob</span><span class="p">,</span> <span class="n">iaa</span><span class="o">.</span><span class="n">Affine</span><span class="p">(</span><span class="n">rotate</span><span class="o">=</span><span class="n">rnd_rot_range</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_rrot&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">rnd_rot_range</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">shear</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="n">da_prob</span><span class="p">,</span> <span class="n">iaa</span><span class="o">.</span><span class="n">Affine</span><span class="p">(</span><span class="n">rotate</span><span class="o">=</span><span class="n">shear_range</span><span class="p">)))</span>                                
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_shear&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">shear_range</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">zoom</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="n">da_prob</span><span class="p">,</span> <span class="n">iaa</span><span class="o">.</span><span class="n">Affine</span><span class="p">(</span><span class="n">scale</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;x&quot;</span><span class="p">:</span> <span class="n">zoom_range</span><span class="p">,</span> <span class="s2">&quot;y&quot;</span><span class="p">:</span> <span class="n">zoom_range</span><span class="p">})))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_zoom&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">zoom_range</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">shift</span><span class="p">:</span>                                                               
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="n">da_prob</span><span class="p">,</span> <span class="n">iaa</span><span class="o">.</span><span class="n">Affine</span><span class="p">(</span><span class="n">translate_percent</span><span class="o">=</span><span class="n">shift_range</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_shift&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">shift_range</span><span class="p">)</span>                        
+        <span class="k">if</span> <span class="n">vflip</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Flipud</span><span class="p">(</span><span class="mf">0.5</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_vflip&#39;</span>
+        <span class="k">if</span> <span class="n">hflip</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Fliplr</span><span class="p">(</span><span class="mf">0.5</span><span class="p">))</span>                                  
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_hflip&#39;</span>
+        <span class="k">if</span> <span class="n">zflip</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_zflip&#39;</span>
+        <span class="k">if</span> <span class="n">elastic</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="n">da_prob</span><span class="p">,</span><span class="n">iaa</span><span class="o">.</span><span class="n">ElasticTransformation</span><span class="p">(</span><span class="n">alpha</span><span class="o">=</span><span class="n">e_alpha</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="n">e_sigma</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">e_mode</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_elastic&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">e_alpha</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;+&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">e_sigma</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;+&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">e_mode</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">g_blur</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="n">da_prob</span><span class="p">,</span><span class="n">iaa</span><span class="o">.</span><span class="n">GaussianBlur</span><span class="p">(</span><span class="n">g_sigma</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_gblur&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">g_sigma</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">median_blur</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="n">da_prob</span><span class="p">,</span><span class="n">iaa</span><span class="o">.</span><span class="n">MedianBlur</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="n">mb_kernel</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_mblur&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">mb_kernel</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">motion_blur</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="n">da_prob</span><span class="p">,</span><span class="n">iaa</span><span class="o">.</span><span class="n">MotionBlur</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="n">motb_k_range</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_motb&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">motb_k_range</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">gamma_contrast</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="n">da_prob</span><span class="p">,</span><span class="n">iaa</span><span class="o">.</span><span class="n">GammaContrast</span><span class="p">(</span><span class="n">gc_gamma</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_gcontrast&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">gc_gamma</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">brightness</span> <span class="o">=</span> <span class="n">brightness</span>
+        <span class="k">if</span> <span class="n">brightness</span><span class="p">:</span> 
+            <span class="bp">self</span><span class="o">.</span><span class="n">brightness_factor</span> <span class="o">=</span> <span class="n">brightness_factor</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_brightness&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">brightness_factor</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">contrast</span> <span class="o">=</span> <span class="n">contrast</span>
+        <span class="k">if</span> <span class="n">contrast</span><span class="p">:</span> 
+            <span class="bp">self</span><span class="o">.</span><span class="n">contrast_factor</span> <span class="o">=</span> <span class="n">contrast_factor</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_contrast&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">contrast_factor</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dropout</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iaa</span><span class="o">.</span><span class="n">Sometimes</span><span class="p">(</span><span class="n">da_prob</span><span class="p">,</span> <span class="n">iaa</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">p</span><span class="o">=</span><span class="n">drop_range</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_drop&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">drop_range</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cutout</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_cout&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cout_nb_iterations</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;+&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cout_size</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;+&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cout_cval</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;+&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cout_apply_to_mask</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cutblur</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_cblur&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cblur_size</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;+&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cblur_down_range</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;+&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cblur_inside</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cutmix</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_cmix&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cmix_size</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cutnoise</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_cnoi&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cnoise_scale</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;+&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cnoise_nb_iterations</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;+&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">cnoise_size</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">misalignment</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_msalg&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">ms_displacement</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;+&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">ms_rotate_ratio</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">missing_parts</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">+=</span> <span class="s1">&#39;_missp&#39;</span><span class="o">+</span><span class="s1">&#39;+&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">missp_iterations</span><span class="p">)</span>
+            
+        <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">da</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">seq</span> <span class="o">=</span> <span class="n">iaa</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">da_options</span><span class="p">)</span>
+        <span class="n">ia</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">on_epoch_end</span><span class="p">()</span>
+
+
+    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Defines the length of the generator&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">len</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">extra_data_factor</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">))</span>
+
+
+    <span class="k">def</span> <span class="nf">__draw_grid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">im</span><span class="p">,</span> <span class="n">grid_width</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Draw grid of the specified size on an image. </span>
+<span class="sd">           </span>
+<span class="sd">           Parameters</span>
+<span class="sd">           ----------                                                                </span>
+<span class="sd">           im : 4D Numpy array</span>
+<span class="sd">               Image to be modified. E. g. ``(x, y, z, channels)``</span>
+<span class="sd">                </span>
+<span class="sd">           grid_width : int, optional</span>
+<span class="sd">               Grid&#39;s width. </span>
+
+<span class="sd">           v : int, optional</span>
+<span class="sd">               Value to create the grid with.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]):</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">grid_width</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">im</span><span class="p">[</span><span class="n">i</span><span class="p">,:,</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">im</span><span class="p">[</span><span class="n">i</span><span class="p">,:,</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span><span class="p">]</span><span class="o">*</span><span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">grid_width</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">im</span><span class="p">[:,</span><span class="n">j</span><span class="p">,</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">im</span><span class="p">[:,</span><span class="n">j</span><span class="p">,</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span><span class="p">]</span><span class="o">*</span><span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Generation of one batch of data. </span>
+<span class="sd">           </span>
+<span class="sd">           Parameters</span>
+<span class="sd">           ----------</span>
+<span class="sd">           index : int</span>
+<span class="sd">               Batch index counter.</span>
+<span class="sd">            </span>
+<span class="sd">           Returns</span>
+<span class="sd">           -------  </span>
+<span class="sd">           batch_x : 5D Numpy array</span>
+<span class="sd">               Corresponding X elements of the batch. E.g. ``(batch_size_value, x, y, z, channels)``.</span>
+
+<span class="sd">           batch_y : 5D Numpy array</span>
+<span class="sd">               Corresponding Y elements of the batch. E.g. ``(batch_size_value, x, y, z, channels)``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">indexes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="n">index</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">:(</span><span class="n">index</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">]</span>
+        <span class="n">batch_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">indexes</span><span class="p">),</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+        <span class="n">batch_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">indexes</span><span class="p">),</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">3</span><span class="p">])</span><span class="o">+</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">channels</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">Y_dtype</span><span class="p">)</span>
+                   
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">indexes</span><span class="p">)),</span> <span class="n">indexes</span><span class="p">):</span>
+            
+            <span class="c1"># Choose the data source</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_memory</span><span class="p">:</span>
+                <span class="n">img</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+                <span class="n">mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">img</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_paths</span><span class="p">[</span><span class="n">j</span><span class="p">]))</span> 
+                <span class="n">mask</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_mask_path</span><span class="p">[</span><span class="n">j</span><span class="p">]))</span> 
+                <span class="k">if</span> <span class="n">img</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span> <span class="n">img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">mask</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span> <span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">img</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+                <span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+
+            <span class="c1"># Apply ramdom crops if it is selected </span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">random_crops_in_DA</span><span class="p">:</span>
+                <span class="c1"># Capture probability map</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                        <span class="n">img_prob</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">img_prob</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">img_prob</span> <span class="o">=</span> <span class="kc">None</span>
+
+                <span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">random_3D_crop</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">3</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">val</span><span class="p">,</span> <span class="n">vol_prob</span><span class="o">=</span><span class="n">img_prob</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">img</span><span class="p">,</span> <span class="n">mask</span>
+
+            <span class="c1"># Apply transformations</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">da</span><span class="p">:</span>
+                <span class="n">extra_img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">len</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_memory</span><span class="p">:</span>                                          
+                    <span class="n">e_img</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">extra_img</span><span class="p">]</span>                                   
+                    <span class="n">e_mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="p">[</span><span class="n">extra_img</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">e_img</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_paths</span><span class="p">[</span><span class="n">extra_img</span><span class="p">]))</span>
+                    <span class="n">e_mask</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_mask_path</span><span class="p">[</span><span class="n">extra_img</span><span class="p">]))</span>
+                    <span class="k">if</span> <span class="n">e_img</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span> <span class="n">e_img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">e_img</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>                 
+                    <span class="k">if</span> <span class="n">e_mask</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span> <span class="n">e_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">e_mask</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="n">e_img</span> <span class="o">=</span> <span class="n">e_img</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+                    <span class="n">e_mask</span> <span class="o">=</span> <span class="n">e_mask</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+
+                <span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_transform</span><span class="p">(</span><span class="n">batch_x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">batch_y</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">e_im</span><span class="o">=</span><span class="n">e_img</span><span class="p">,</span> <span class="n">e_mask</span><span class="o">=</span><span class="n">e_mask</span><span class="p">)</span>
+
+        <span class="c1"># Divide the values </span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">div_X_on_load</span><span class="p">:</span> <span class="n">batch_x</span> <span class="o">=</span> <span class="n">batch_x</span><span class="o">/</span><span class="mi">255</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">div_Y_on_load</span><span class="p">:</span> <span class="n">batch_y</span> <span class="o">=</span> <span class="n">batch_y</span><span class="o">/</span><span class="mi">255</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">channels</span><span class="p">):</span>
+            <span class="n">batch_y_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">indexes</span><span class="p">),</span> <span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_classes</span><span class="p">,))</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">indexes</span><span class="p">)):</span>
+                <span class="n">batch_y_</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">img_to_onehot_encoding</span><span class="p">(</span><span class="n">batch_y</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+
+            <span class="n">batch_y</span> <span class="o">=</span> <span class="n">batch_y_</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">total_batches_seen</span> <span class="o">+=</span> <span class="mi">1</span>
+                                                                                                
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">out_number</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>                                                
+            <span class="k">return</span> <span class="n">batch_x</span><span class="p">,</span> <span class="n">batch_y</span>                                             
+        <span class="k">else</span><span class="p">:</span>                                                                   
+            <span class="k">return</span> <span class="p">([</span><span class="n">batch_x</span><span class="p">],</span> <span class="p">[</span><span class="n">batch_y</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">out_number</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="VoxelDataGenerator.on_epoch_end"><a class="viewcode-back" href="../../../data/generators/3d_generator.html#data.generators.data_3D_generator.VoxelDataGenerator.on_epoch_end">[docs]</a>    <span class="k">def</span> <span class="nf">on_epoch_end</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Updates indexes after each epoch.&quot;&quot;&quot;</span>
+        <span class="n">ia</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">seed</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">total_batches_seen</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indexes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">o_indexes</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shuffle_each_epoch</span><span class="p">:</span>
+            <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">seed</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">total_batches_seen</span><span class="p">)</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">indexes</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="VoxelDataGenerator.apply_transform"><a class="viewcode-back" href="../../../data/generators/3d_generator.html#data.generators.data_3D_generator.VoxelDataGenerator.apply_transform">[docs]</a>    <span class="k">def</span> <span class="nf">apply_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">e_im</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">e_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Transform the input image and its mask at the same time with one of the selected choices based on a</span>
+<span class="sd">           probability.</span>
+<span class="sd">    </span>
+<span class="sd">           Parameters</span>
+<span class="sd">           ----------</span>
+<span class="sd">           image : 4D Numpy array</span>
+<span class="sd">               Image to transform. E.g. ``(x, y, z, channels)``.</span>
+
+<span class="sd">           mask : 4D Numpy array</span>
+<span class="sd">               Mask to transform. E.g. ``(x, y, z, channels)``.</span>
+
+<span class="sd">           e_img : 4D Numpy array                                               </span>
+<span class="sd">               Extra image to help transforming ``image``. E.g. ``(x, y, z, channels)``.                </span>
+<span class="sd">                                                                                </span>
+<span class="sd">           e_mask : 4D Numpy array                                                </span>
+<span class="sd">               Extra mask to help transforming ``mask``. E.g. ``(x, y, z, channels)``.</span>
+<span class="sd">    </span>
+<span class="sd">           Returns</span>
+<span class="sd">           -------</span>
+<span class="sd">           image : 4D Numpy array</span>
+<span class="sd">               Transformed image. E.g. ``(x, y, z, channels)``.</span>
+
+<span class="sd">           mask : 4D Numpy array</span>
+<span class="sd">               Transformed image mask. E.g. ``(x, y, z, channels)``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Apply flips in z as imgaug can not do it </span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">zflip</span> <span class="ow">and</span> <span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">da_prob</span><span class="p">:</span>
+            <span class="n">l_image</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">l_mask</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>                                
+                <span class="n">l_image</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="n">image</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">],</span> <span class="mi">2</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+                <span class="n">l_mask</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="n">mask</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="n">i</span><span class="p">],</span> <span class="mi">2</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">l_image</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">l_mask</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+                                                                                
+        <span class="c1"># Split heatmaps from masks                                             </span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">first_no_bin_channel</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>                                     
+            <span class="n">heat</span> <span class="o">=</span> <span class="n">mask</span><span class="p">[</span><span class="o">...</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">first_no_bin_channel</span><span class="p">:]</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span><span class="p">[</span><span class="o">...</span><span class="p">,:</span><span class="bp">self</span><span class="o">.</span><span class="n">first_no_bin_channel</span><span class="p">]</span>
+            <span class="n">o_heat_shape</span> <span class="o">=</span> <span class="n">heat</span><span class="o">.</span><span class="n">shape</span>
+            <span class="n">o_mask_shape</span> <span class="o">=</span> <span class="n">mask</span><span class="o">.</span><span class="n">shape</span>
+            <span class="n">heat</span> <span class="o">=</span> <span class="n">heat</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">heat</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">heat</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">heat</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">],))</span>
+            <span class="n">heat</span> <span class="o">=</span> <span class="n">HeatmapsOnImage</span><span class="p">(</span><span class="n">heat</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">heat</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">min_value</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">max_value</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">heat</span><span class="p">)</span><span class="o">+</span><span class="n">sys</span><span class="o">.</span><span class="n">float_info</span><span class="o">.</span><span class="n">epsilon</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>                                                                   
+            <span class="n">heat</span> <span class="o">=</span> <span class="kc">None</span>     
+
+        <span class="c1"># Change dtype to supported one by imgaug</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+        
+        <span class="c1"># Save shapes</span>
+        <span class="n">o_img_shape</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span>
+        <span class="n">o_mask_shape</span> <span class="o">=</span> <span class="n">mask</span><span class="o">.</span><span class="n">shape</span>
+
+        <span class="c1"># Reshape 3D volumes to 2D image type with multiple channels to pass </span>
+        <span class="c1"># through imgaug lib</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">],))</span>     
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">],))</span>
+        <span class="k">if</span> <span class="n">e_im</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span> <span class="n">e_im</span> <span class="o">=</span> <span class="n">e_im</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">e_im</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">e_im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">e_im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">],))</span>
+        <span class="k">if</span> <span class="n">e_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span> <span class="n">e_mask</span> <span class="o">=</span> <span class="n">e_mask</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">e_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">e_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">e_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">],))</span>
+        <span class="c1">#if e_heat is not None: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))</span>
+
+        <span class="c1"># Apply cutout</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cutout</span> <span class="ow">and</span> <span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">da_prob</span><span class="p">:</span>                                
+            <span class="n">image</span><span class="p">,</span> <span class="n">mask</span> <span class="o">=</span> <span class="n">cutout</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cout_nb_iterations</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cout_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cout_cval</span><span class="p">,</span>
+                                 <span class="bp">self</span><span class="o">.</span><span class="n">cout_apply_to_mask</span><span class="p">)</span>
+
+        <span class="c1"># Apply cblur </span>
+        <span class="n">prob</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cutblur</span> <span class="ow">and</span> <span class="n">prob</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">da_prob</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">cutblur</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cblur_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cblur_down_range</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cblur_inside</span><span class="p">)</span>
+
+        <span class="c1"># Apply cutmix</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cutmix</span> <span class="ow">and</span> <span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">da_prob</span><span class="p">:</span>
+            <span class="n">image</span><span class="p">,</span> <span class="n">mask</span> <span class="o">=</span> <span class="n">cutmix</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">e_im</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">e_mask</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cmix_size</span><span class="p">)</span>
+
+        <span class="c1"># Apply cutnoise                                                        </span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cutnoise</span> <span class="ow">and</span> <span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">da_prob</span><span class="p">:</span>                               
+            <span class="n">image</span> <span class="o">=</span> <span class="n">cutnoise</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cnoise_scale</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cnoise_nb_iterations</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cnoise_size</span><span class="p">)</span>
+
+        <span class="c1"># Apply misalignment</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">misalignment</span> <span class="ow">and</span> <span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">da_prob</span><span class="p">:</span>                                 
+            <span class="n">image</span><span class="p">,</span> <span class="n">mask</span> <span class="o">=</span> <span class="n">misalignment</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ms_displacement</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ms_rotate_ratio</span><span class="p">)</span>
+        
+        <span class="c1"># Apply brightness</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">brightness</span> <span class="ow">and</span> <span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">da_prob</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">brightness</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">brightness_factor</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">brightness_factor</span><span class="p">)</span>
+
+        <span class="c1"># Apply contrast </span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">contrast</span> <span class="ow">and</span> <span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">da_prob</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">contrast</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">contrast_factor</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">contrast_factor</span><span class="p">)</span>
+
+        <span class="c1"># Apply missing parts</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing_parts</span> <span class="ow">and</span> <span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">da_prob</span><span class="p">:</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">missing_parts</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">missp_iterations</span><span class="p">)</span>
+
+        <span class="c1"># Apply transformations to the volume and its mask                  </span>
+        <span class="n">segmap</span> <span class="o">=</span> <span class="n">SegmentationMapsOnImage</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">mask</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>            
+        <span class="n">image</span><span class="p">,</span> <span class="n">vol_mask</span><span class="p">,</span> <span class="n">heat_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="n">image</span><span class="o">=</span><span class="n">image</span><span class="p">,</span> <span class="n">segmentation_maps</span><span class="o">=</span><span class="n">segmap</span><span class="p">,</span> <span class="n">heatmaps</span><span class="o">=</span><span class="n">heat</span><span class="p">)</span>   
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">vol_mask</span><span class="o">.</span><span class="n">get_arr</span><span class="p">()</span>
+
+        <span class="c1"># Recover the original shape </span>
+        <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">o_img_shape</span><span class="p">)</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">o_mask_shape</span><span class="p">)</span>
+
+        <span class="c1"># Merge heatmaps and masks again</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">first_no_bin_channel</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+            <span class="n">heat</span> <span class="o">=</span> <span class="n">heat_out</span><span class="o">.</span><span class="n">get_arr</span><span class="p">()</span>
+            <span class="n">heat</span> <span class="o">=</span> <span class="n">heat</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">o_heat_shape</span><span class="p">)</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">mask</span><span class="p">,</span><span class="n">heat</span><span class="p">),</span><span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">image</span><span class="p">,</span> <span class="n">mask</span></div>
+
+
+<div class="viewcode-block" id="VoxelDataGenerator.get_transformed_samples"><a class="viewcode-back" href="../../../data/generators/3d_generator.html#data.generators.data_3D_generator.VoxelDataGenerator.get_transformed_samples">[docs]</a>    <span class="k">def</span> <span class="nf">get_transformed_samples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_examples</span><span class="p">,</span> <span class="n">random_images</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">save_to_dir</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">out_dir</span><span class="o">=</span><span class="s1">&#39;aug_3d&#39;</span><span class="p">,</span> <span class="n">train</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Apply selected transformations to a defined number of images from the dataset. </span>
+<span class="sd">            </span>
+<span class="sd">           Parameters</span>
+<span class="sd">           ----------</span>
+<span class="sd">           num_examples : int</span>
+<span class="sd">               Number of examples to generate.</span>
+<span class="sd">            </span>
+<span class="sd">           random_images : bool, optional</span>
+<span class="sd">               Randomly select images from the dataset. If ``False`` the examples will be generated from the start of</span>
+<span class="sd">               the dataset. </span>
+
+<span class="sd">           save_to_dir : bool, optional</span>
+<span class="sd">               Save the images generated. The purpose of this variable is to check the images generated by data</span>
+<span class="sd">               augmentation.</span>
+
+<span class="sd">           out_dir : str, optional</span>
+<span class="sd">               Name of the folder where the examples will be stored. </span>
+
+<span class="sd">           train : bool, optional</span>
+<span class="sd">               To avoid drawing a grid on the generated images. This should be set when the samples will be used for</span>
+<span class="sd">               training.</span>
+
+<span class="sd">           Returns                                                              </span>
+<span class="sd">           -------                                                              </span>
+<span class="sd">           sample_x : List of 4D Numpy array</span>
+<span class="sd">               Transformed images. E.g. list of ``(x, y, z, channels)``.</span>
+<span class="sd">                                                                                </span>
+<span class="sd">           sample_y : List of 4D Numpy array                                          </span>
+<span class="sd">               Transformed image mask. E.g. list of ``(x, y, z, channels)``. </span>
+<span class="sd">        &quot;&quot;&quot;</span>    
+
+        <span class="k">if</span> <span class="n">random_images</span> <span class="o">==</span> <span class="kc">False</span> <span class="ow">and</span> <span class="n">num_examples</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">len</span><span class="p">:</span>
+            <span class="n">num_examples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">len</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;WARNING: More samples requested than the ones available. &#39;num_examples&#39; fixed to </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">num_examples</span><span class="p">))</span>
+            
+        <span class="n">sample_x</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">sample_y</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c1"># Generate the examples </span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;0) Creating samples of data augmentation . . .&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">num_examples</span><span class="p">)):</span>
+            <span class="n">pos</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">len</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="k">if</span> <span class="n">random_images</span> <span class="k">else</span> <span class="n">i</span> 
+
+            <span class="c1"># Choose the data source</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_memory</span><span class="p">:</span>
+                <span class="n">img</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">pos</span><span class="p">]</span>
+                <span class="n">mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="p">[</span><span class="n">pos</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">img</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_paths</span><span class="p">[</span><span class="n">pos</span><span class="p">]))</span>
+                <span class="n">mask</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_mask_path</span><span class="p">[</span><span class="n">pos</span><span class="p">]))</span>
+                <span class="k">if</span> <span class="n">img</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span> <span class="n">img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">mask</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span> <span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">img</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+                <span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+
+            <span class="c1"># Apply ramdom crops if it is selected </span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">random_crops_in_DA</span><span class="p">:</span>
+                <span class="c1"># Capture probability map</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                        <span class="n">img_prob</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span><span class="p">[</span><span class="n">pos</span><span class="p">])</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">img_prob</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span><span class="p">[</span><span class="n">pos</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">img_prob</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="n">vol</span><span class="p">,</span> <span class="n">vol_mask</span><span class="p">,</span> <span class="n">ox</span><span class="p">,</span> <span class="n">oy</span><span class="p">,</span> <span class="n">oz</span><span class="p">,</span>\
+                <span class="n">s_x</span><span class="p">,</span> <span class="n">s_y</span><span class="p">,</span> <span class="n">s_z</span> <span class="o">=</span> <span class="n">random_3D_crop</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">3</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">val</span><span class="p">,</span> <span class="n">vol_prob</span><span class="o">=</span><span class="n">img_prob</span><span class="p">,</span> 
+                                               <span class="n">draw_prob_map_points</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">sample_x</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vol</span><span class="p">)</span>                                            
+                <span class="n">sample_y</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vol_mask</span><span class="p">)</span>   
+                <span class="k">del</span> <span class="n">vol</span><span class="p">,</span> <span class="n">vol_mask</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">sample_x</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
+                <span class="n">sample_y</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">save_to_dir</span><span class="p">:</span>
+                <span class="n">o_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
+                <span class="n">o_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+                <span class="n">o_x2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
+                <span class="n">o_y2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+
+            <span class="c1"># Apply transformations</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">da</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">train</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">__draw_grid</span><span class="p">(</span><span class="n">sample_x</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">__draw_grid</span><span class="p">(</span><span class="n">sample_y</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+                <span class="n">extra_img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">len</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_memory</span><span class="p">:</span>                                          
+                    <span class="n">e_img</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="n">extra_img</span><span class="p">]</span>                                   
+                    <span class="n">e_mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="p">[</span><span class="n">extra_img</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">e_img</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_paths</span><span class="p">[</span><span class="n">extra_img</span><span class="p">]))</span>
+                    <span class="n">e_mask</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_mask_path</span><span class="p">[</span><span class="n">extra_img</span><span class="p">]))</span>
+                    <span class="k">if</span> <span class="n">e_img</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span> <span class="n">e_img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">e_img</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>                 
+                    <span class="k">if</span> <span class="n">e_mask</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span> <span class="n">e_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">e_mask</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="n">e_img</span> <span class="o">=</span> <span class="n">e_img</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+                    <span class="n">e_mask</span> <span class="o">=</span> <span class="n">e_mask</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+
+                <span class="n">sample_x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">sample_y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_transform</span><span class="p">(</span>
+                    <span class="n">sample_x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">sample_y</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">e_im</span><span class="o">=</span><span class="n">e_img</span><span class="p">,</span> <span class="n">e_mask</span><span class="o">=</span><span class="n">e_mask</span><span class="p">)</span>
+            
+            <span class="c1"># Save transformed 3D volumes </span>
+            <span class="k">if</span> <span class="n">save_to_dir</span><span class="p">:</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="c1"># Original image/mask</span>
+                <span class="n">f</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="s2">&quot;orig_x_&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span><span class="o">+</span><span class="s1">&#39;.tiff&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__draw_grid</span><span class="p">(</span><span class="n">o_x</span><span class="p">)</span>
+                <span class="n">aux</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">o_x</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">)))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">imsave</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">aux</span><span class="p">,</span> <span class="n">imagej</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;axes&#39;</span><span class="p">:</span> <span class="s1">&#39;ZCYXS&#39;</span><span class="p">},</span> <span class="n">check_contrast</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="n">f</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="s2">&quot;orig_y_&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span><span class="o">+</span><span class="s1">&#39;.tiff&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__draw_grid</span><span class="p">(</span><span class="n">o_y</span><span class="p">)</span>
+                <span class="n">aux</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">o_y</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">)))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">imsave</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">aux</span><span class="p">,</span> <span class="n">imagej</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;axes&#39;</span><span class="p">:</span> <span class="s1">&#39;ZCYXS&#39;</span><span class="p">},</span> <span class="n">check_contrast</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="c1"># Transformed</span>
+                <span class="n">f</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="s2">&quot;x_aug_&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span><span class="o">+</span><span class="s1">&#39;.tiff&#39;</span><span class="p">)</span>
+                <span class="n">aux</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">sample_x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">)))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">imsave</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">aux</span><span class="p">,</span> <span class="n">imagej</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;axes&#39;</span><span class="p">:</span> <span class="s1">&#39;ZCYXS&#39;</span><span class="p">},</span> <span class="n">check_contrast</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="c1"># Mask</span>
+                <span class="n">f</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="s2">&quot;y_aug_&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span><span class="o">+</span><span class="s1">&#39;.tiff&#39;</span><span class="p">)</span>
+                <span class="n">aux</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">sample_y</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">)))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">imsave</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">aux</span><span class="p">,</span> <span class="n">imagej</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;axes&#39;</span><span class="p">:</span> <span class="s1">&#39;ZCYXS&#39;</span><span class="p">},</span> <span class="n">check_contrast</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+                <span class="c1"># Save the original images with a red point and a blue square that represents the point selected with</span>
+                <span class="c1"># the probability map and the random volume extracted from the original data</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">random_crops_in_DA</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">prob_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;The selected point of the random crop was [</span><span class="si">{}</span><span class="s2">,</span><span class="si">{}</span><span class="s2">,</span><span class="si">{}</span><span class="s2">]&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ox</span><span class="p">,</span><span class="n">oy</span><span class="p">,</span><span class="n">oz</span><span class="p">))</span>
+
+                    <span class="n">aux</span> <span class="o">=</span> <span class="p">(</span><span class="n">o_x2</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">aux</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span> <span class="n">aux</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">aux</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+                    <span class="n">auxm</span> <span class="o">=</span> <span class="p">(</span><span class="n">o_y2</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">auxm</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span> <span class="n">auxm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">auxm</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+                    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">aux</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]):</span>
+                        <span class="k">if</span> <span class="n">s</span> <span class="o">&gt;=</span> <span class="n">s_z</span> <span class="ow">and</span> <span class="n">s</span> <span class="o">&lt;</span> <span class="n">s_z</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span> 
+                            <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">aux</span><span class="p">[:,:,</span><span class="n">s</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+                            <span class="n">im</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;RGB&#39;</span><span class="p">)</span>
+                            <span class="n">px</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+                            <span class="n">m</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">auxm</span><span class="p">[:,:,</span><span class="n">s</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+                            <span class="n">m</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;RGB&#39;</span><span class="p">)</span>
+                            <span class="n">py</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+                            <span class="c1"># Paint a blue square that represents the crop made </span>
+                            <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">s_x</span><span class="p">,</span> <span class="n">s_x</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+                                <span class="n">px</span><span class="p">[</span><span class="n">s_y</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">)</span>
+                                <span class="n">px</span><span class="p">[</span><span class="n">s_y</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">)</span>
+                                <span class="n">py</span><span class="p">[</span><span class="n">s_y</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">)</span>
+                                <span class="n">py</span><span class="p">[</span><span class="n">s_y</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">)</span>
+                            <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">s_y</span><span class="p">,</span> <span class="n">s_y</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>                    
+                                <span class="n">px</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="n">s_x</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">)</span>
+                                <span class="n">px</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="n">s_x</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">)</span>
+                                <span class="n">py</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="n">s_x</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">)</span>
+                                <span class="n">py</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="n">s_x</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">)</span>
+                            
+                            <span class="c1"># Paint the selected point in red </span>
+                            <span class="k">if</span> <span class="n">s</span> <span class="o">==</span> <span class="n">oz</span><span class="p">:</span>
+                                <span class="n">p_size</span><span class="o">=</span><span class="mi">6</span>                                                    
+                                <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">oy</span><span class="o">-</span><span class="n">p_size</span><span class="p">,</span><span class="n">oy</span><span class="o">+</span><span class="n">p_size</span><span class="p">):</span>                      
+                                    <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ox</span><span class="o">-</span><span class="n">p_size</span><span class="p">,</span><span class="n">ox</span><span class="o">+</span><span class="n">p_size</span><span class="p">):</span>                  
+                                        <span class="k">if</span> <span class="n">col</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">col</span> <span class="o">&lt;</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">and</span> <span class="n">row</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">row</span> <span class="o">&lt;</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>                 
+                                            <span class="n">px</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">255</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>                       
+                                            <span class="n">py</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">255</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+                            <span class="n">aux</span><span class="p">[:,:,</span><span class="n">s</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">im</span>
+                            <span class="n">auxm</span><span class="p">[:,:,</span><span class="n">s</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">m</span>
+
+                    <span class="n">aux</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">aux</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">)))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="n">f</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span><span class="o">+</span><span class="s2">&quot;_mark_x_&quot;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span><span class="o">+</span><span class="s1">&#39;.tiff&#39;</span><span class="p">)</span>
+                    <span class="n">imsave</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">aux</span><span class="p">,</span> <span class="n">imagej</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;axes&#39;</span><span class="p">:</span> <span class="s1">&#39;ZCYXS&#39;</span><span class="p">},</span> <span class="n">check_contrast</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                    <span class="n">auxm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">auxm</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">)))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="n">f</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span><span class="o">+</span><span class="s2">&quot;_mark_y_&quot;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">trans_made</span><span class="o">+</span><span class="s1">&#39;.tiff&#39;</span><span class="p">)</span>
+                    <span class="n">imsave</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">auxm</span><span class="p">,</span> <span class="n">imagej</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;axes&#39;</span><span class="p">:</span> <span class="s1">&#39;ZCYXS&#39;</span><span class="p">},</span> <span class="n">check_contrast</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                    <span class="k">del</span> <span class="n">o_x2</span><span class="p">,</span> <span class="n">o_y2</span>
+
+        <span class="k">return</span> <span class="n">sample_x</span><span class="p">,</span> <span class="n">sample_y</span></div></div>
+
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2021, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

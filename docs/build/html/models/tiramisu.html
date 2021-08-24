@@ -1,0 +1,296 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Tiramisu (FC-DenseNet103) &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="sota_implementations" href="../sota_implementations/sota_implementations.html" />
+    <link rel="prev" title="MultiResUNet" href="multiresunet.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../engine/engine.html">engine</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="models.html">models</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="init.html">Init</a></li>
+<li class="toctree-l2"><a class="reference internal" href="unet2d.html">2D U-Net</a></li>
+<li class="toctree-l2"><a class="reference internal" href="unet3d.html">3D U-Net</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fcn.html">FCN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nnunet.html">nnU-Net</a></li>
+<li class="toctree-l2"><a class="reference internal" href="multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Tiramisu (FC-DenseNet103)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../API.html">&lt;no title&gt;</a> &raquo;</li>
+        
+          <li><a href="models.html">models</a> &raquo;</li>
+        
+      <li>Tiramisu (FC-DenseNet103)</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-models.tiramisu">
+<span id="tiramisu-fc-densenet103"></span><h1>Tiramisu (FC-DenseNet103)<a class="headerlink" href="#module-models.tiramisu" title="Permalink to this headline">¶</a></h1>
+<dl class="py function">
+<dt id="models.tiramisu.FC_DenseNet103">
+<code class="sig-prename descclassname">models.tiramisu.</code><code class="sig-name descname">FC_DenseNet103</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">n_filters_first_conv</span><span class="o">=</span><span class="default_value">48</span></em>, <em class="sig-param"><span class="n">n_pool</span><span class="o">=</span><span class="default_value">4</span></em>, <em class="sig-param"><span class="n">growth_rate</span><span class="o">=</span><span class="default_value">12</span></em>, <em class="sig-param"><span class="n">n_layers_per_block</span><span class="o">=</span><span class="default_value">5</span></em>, <em class="sig-param"><span class="n">dropout_p</span><span class="o">=</span><span class="default_value">0.2</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/tiramisu.html#FC_DenseNet103"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#models.tiramisu.FC_DenseNet103" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create FC-DenseNet103 (Tiramisu network) proposed in <a class="reference external" href="https://arxiv.org/pdf/1611.09326.pdf">The One Hundred Layers Tiramisu: Fully Convolutional
+DenseNets for Semantic Segmentation</a> . Code copied from <a class="reference external" href="https://github.com/SimJeg/FC-DenseNet/blob/master/FC-DenseNet.py">FC-DenseNet103</a> and just adapted from Lasagne to Keras.</p>
+<p>The network consist of a downsampling path, where dense blocks and transition down are applied, followed by an
+upsampling path where transition up and dense blocks are applied. Skip connections are used between the
+downsampling path and the upsampling path Each layer is a composite function of BN - ReLU - Conv and the last
+layer is a softmax layer.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">int</span></code>) – Dimensions of the input image.</p></li>
+<li><p><strong>n_filters_first_conv</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of filters for the first convolution applied.</p></li>
+<li><p><strong>n_pool</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of pooling layers = number of transition down = number of transition up.</p></li>
+<li><p><strong>growth_rate</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of new feature maps created by each layer in a dense block.</p></li>
+<li><p><strong>n_layers_per_block</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Number of layers per block. Can be an int or a list of size <code class="docutils literal notranslate"><span class="pre">(2*n_pool)+1</span></code>.</p></li>
+<li><p><strong>dropout_p</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Dropout rate applied after each convolution (<code class="docutils literal notranslate"><span class="pre">0.0</span></code> for not using).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – Model containing the FC_DenseNet103.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="models.tiramisu.BN_ReLU_Conv">
+<code class="sig-prename descclassname">models.tiramisu.</code><code class="sig-name descname">BN_ReLU_Conv</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">inputs</span></em>, <em class="sig-param"><span class="n">n_filters</span></em>, <em class="sig-param"><span class="n">filter_size</span><span class="o">=</span><span class="default_value">3</span></em>, <em class="sig-param"><span class="n">dropout_p</span><span class="o">=</span><span class="default_value">0.2</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/tiramisu.html#BN_ReLU_Conv"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#models.tiramisu.BN_ReLU_Conv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply successivly BatchNormalization, ReLu nonlinearity, Convolution and Dropout (if dropout_p &gt; 0) on the inputs.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="models.tiramisu.TransitionDown">
+<code class="sig-prename descclassname">models.tiramisu.</code><code class="sig-name descname">TransitionDown</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">inputs</span></em>, <em class="sig-param"><span class="n">n_filters</span></em>, <em class="sig-param"><span class="n">dropout_p</span><span class="o">=</span><span class="default_value">0.2</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/tiramisu.html#TransitionDown"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#models.tiramisu.TransitionDown" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply first a BN_ReLu_conv layer with filter size = 1, and a max pooling with a factor 2.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="models.tiramisu.TransitionUp">
+<code class="sig-prename descclassname">models.tiramisu.</code><code class="sig-name descname">TransitionUp</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">skip_connection</span></em>, <em class="sig-param"><span class="n">block_to_upsample</span></em>, <em class="sig-param"><span class="n">n_filters_keep</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/tiramisu.html#TransitionUp"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#models.tiramisu.TransitionUp" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs upsampling on block_to_upsample by a factor 2 and concatenates it with the skip_connection.</p>
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../sota_implementations/sota_implementations.html" class="btn btn-neutral float-right" title="sota_implementations" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="multiresunet.html" class="btn btn-neutral float-left" title="MultiResUNet" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2021, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

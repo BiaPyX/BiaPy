@@ -1,0 +1,304 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>engine &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="index.html">Module code</a> &raquo;</li>
+        
+      <li>engine</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for engine</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras.callbacks</span> <span class="kn">import</span> <span class="n">EarlyStopping</span>
+
+<span class="kn">from</span> <span class="nn">utils.callbacks</span> <span class="kn">import</span> <span class="n">ModelCheckpoint</span><span class="p">,</span> <span class="n">TimeHistory</span>
+<span class="kn">from</span> <span class="nn">engine.metrics</span> <span class="kn">import</span> <span class="p">(</span><span class="n">jaccard_index</span><span class="p">,</span> <span class="n">jaccard_index_softmax</span><span class="p">,</span> <span class="n">jaccard_index_instances</span><span class="p">,</span> 
+                            <span class="n">instance_segmentation_loss</span><span class="p">,</span> <span class="n">weighted_bce_dice_loss</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="prepare_optimizer"><a class="viewcode-back" href="../engine/init.html#engine.prepare_optimizer">[docs]</a><span class="k">def</span> <span class="nf">prepare_optimizer</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">model</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Select the optimizer, loss and metrics for the given model.</span>
+<span class="sd">                                                                                                                        </span>
+<span class="sd">       Parameters                                                                                                       </span>
+<span class="sd">       ----------                                                                                                       </span>
+<span class="sd">       cfg : YACS CN object                                                                               </span>
+<span class="sd">           Configuration.                                                                                         </span>
+<span class="sd">                                                                                                                        </span>
+<span class="sd">       model : Keras model</span>
+<span class="sd">           Model to be compiled with the selected options. </span>
+<span class="sd">    &quot;&quot;&quot;</span>      
+
+    <span class="k">assert</span> <span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">OPTIMIZER</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;SGD&#39;</span><span class="p">,</span> <span class="s1">&#39;ADAM&#39;</span><span class="p">]</span>
+    <span class="k">assert</span> <span class="n">cfg</span><span class="o">.</span><span class="n">LOSS</span><span class="o">.</span><span class="n">TYPE</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;CE&#39;</span><span class="p">,</span> <span class="s1">&#39;W_CE_DICE&#39;</span><span class="p">]</span>
+
+    <span class="c1"># Select the optimizer</span>
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">OPTIMIZER</span> <span class="o">==</span> <span class="s2">&quot;SGD&quot;</span><span class="p">:</span>
+        <span class="n">opt</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">lr</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">LR</span><span class="p">,</span> <span class="n">momentum</span><span class="o">=</span><span class="mf">0.99</span><span class="p">,</span> <span class="n">decay</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">nesterov</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">OPTIMIZER</span> <span class="o">==</span> <span class="s2">&quot;ADAM&quot;</span><span class="p">:</span>
+        <span class="n">opt</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">lr</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">LR</span><span class="p">,</span> <span class="n">beta_1</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">beta_2</span><span class="o">=</span><span class="mf">0.999</span><span class="p">,</span> <span class="n">epsilon</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">decay</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">amsgrad</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># Compile the model</span>
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">LOSS</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s2">&quot;CE&quot;</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s2">&quot;SEMANTIC_SEG&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">N_CLASSES</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;categorical_crossentropy&#39;</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index_softmax</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;binary_crossentropy&#39;</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">LOSS</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s2">&quot;CE&quot;</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s2">&quot;INSTANCE_SEG&quot;</span><span class="p">:</span> 
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">N_CLASSES</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span> 
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not implemented pipeline option: N_CLASSES &gt; 1 and INSTANCE_SEG&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">CHANNELS</span> <span class="o">==</span> <span class="s2">&quot;B&quot;</span> <span class="ow">or</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">CHANNELS</span> <span class="o">==</span> <span class="s2">&quot;BC&quot;</span><span class="p">:</span>
+                <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;binary_crossentropy&#39;</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="n">instance_segmentation_loss</span><span class="p">(</span><span class="n">channel_weights</span><span class="p">,</span> <span class="n">output_channels</span><span class="p">),</span>
+                              <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index_instances</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">LOSS</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s2">&quot;W_CE_DICE&quot;</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s2">&quot;SEMANTIC_SEG&quot;</span><span class="p">:</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">opt</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="n">weighted_bce_dice_loss</span><span class="p">(</span><span class="n">w_dice</span><span class="o">=</span><span class="mf">0.66</span><span class="p">,</span> <span class="n">w_bce</span><span class="o">=</span><span class="mf">0.33</span><span class="p">),</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">jaccard_index</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">LOSS</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s2">&quot;W_CE_DICE&quot;</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s2">&quot;INSTANCE_SEG&quot;</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not implemented pipeline option: LOSS.TYPE == W_CE_DICE and INSTANCE_SEG&quot;</span><span class="p">)</span></div>
+                                                                                                                        
+
+<div class="viewcode-block" id="build_callbacks"><a class="viewcode-back" href="../engine/init.html#engine.build_callbacks">[docs]</a><span class="k">def</span> <span class="nf">build_callbacks</span><span class="p">(</span><span class="n">cfg</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create training and validation generators.                                                                       </span>
+<span class="sd">                                                                                                                        </span>
+<span class="sd">       Parameters                                                                                                       </span>
+<span class="sd">       ----------                                                                                                       </span>
+<span class="sd">       cfg : YACS CN object                                                                               </span>
+<span class="sd">           Configuration.                                                                                         </span>
+
+<span class="sd">       Returns                                                                                                          </span>
+<span class="sd">       -------                                                                                                          </span>
+<span class="sd">       callbacks : List of callbacks</span>
+<span class="sd">           All callbacks to be applied to a model.</span>
+<span class="sd">    &quot;&quot;&quot;</span>      
+
+    <span class="n">callbacks</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># To measure the time</span>
+    <span class="n">time_callback</span> <span class="o">=</span> <span class="n">TimeHistory</span><span class="p">()</span>
+    <span class="n">callbacks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">time_callback</span><span class="p">)</span>
+
+    <span class="c1"># Stop early and restore the best model weights when finished the training</span>
+    <span class="n">earlystopper</span> <span class="o">=</span> <span class="n">EarlyStopping</span><span class="p">(</span><span class="n">patience</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">PATIENCE</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">restore_best_weights</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">callbacks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">earlystopper</span><span class="p">)</span>
+
+    <span class="c1"># Save the best model into a h5 file in case one need again the weights learned</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">CHECKPOINT</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">checkpointer</span> <span class="o">=</span> <span class="n">ModelCheckpoint</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">CHECKPOINT_FILE</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">save_best_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">callbacks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">checkpointer</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">callbacks</span></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2021, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

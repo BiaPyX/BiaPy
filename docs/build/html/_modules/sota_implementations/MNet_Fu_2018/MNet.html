@@ -80,28 +80,34 @@
               
             
             
-              <p class="caption"><span class="caption-text">Quick start</span></p>
+              <p class="caption"><span class="caption-text">How to run</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../quick_start.html">Step 0: Prepare environment</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../quick_start.html#step-1-data-preparation">Step 1: Data preparation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../quick_start.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../quick_start.html#step-3-run-the-code">Step 3: Run the code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Manuscripts</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../mitochondria.html">Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../data_2d_manipulation.html">2D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../data_3d_manipulation.html">3D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../generators.html">Generators</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../networks.html">Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../grad_cam.html">Grad-CAM</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../bibliography.html">Bibliography</a></li>
 </ul>
 
             
@@ -176,12 +182,12 @@
 <span class="c1"># This code works if v2 is disabled, but fails if v2 is enabled.</span>
 <span class="n">tf</span><span class="o">.</span><span class="n">compat</span><span class="o">.</span><span class="n">v1</span><span class="o">.</span><span class="n">enable_v2_behavior</span>
 
-<div class="viewcode-block" id="MNet"><a class="viewcode-back" href="../../../networks_mnet.html#sota_implementations.MNet_Fu_2018.MNet.MNet">[docs]</a><span class="k">def</span> <span class="nf">MNet</span><span class="p">(</span><span class="n">input_shape</span><span class="p">):</span>
+<div class="viewcode-block" id="MNet"><a class="viewcode-back" href="../../../sota_implementations/MNet_Fu_2018/MNet.html#sota_implementations.MNet_Fu_2018.MNet.MNet">[docs]</a><span class="k">def</span> <span class="nf">MNet</span><span class="p">(</span><span class="n">input_shape</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Code copied from `Model_MNet &lt;https://github.com/HzFu/MNet_DeepCDR/blob/master/mnet_deep_cdr/Model_MNet.py&gt;`_.</span>
 <span class="sd">       Made some minor changes to adapt the network to our specific case.</span>
 <span class="sd"> </span>
-<span class="sd">       Based on `Joint Optic Disc and Cup Segmentation Based on Multi-label Deep</span>
-<span class="sd">       Network and Polar Transformation &lt;https://arxiv.org/abs/1801.00926&gt;`_.</span>
+<span class="sd">       Based on `Joint Optic Disc and Cup Segmentation Based on Multi-label Deep Network and Polar Transformation</span>
+<span class="sd">       &lt;https://arxiv.org/abs/1801.00926&gt;`_.</span>
 
 <span class="sd">       Parameters</span>
 <span class="sd">       ----------</span>
@@ -198,7 +204,7 @@
 
 <span class="sd">       Here is a picture of the network extracted from the original paper:</span>
 
-<span class="sd">       .. image:: img/MNet.jpg</span>
+<span class="sd">       .. image:: ../../img/MNet.jpg</span>
 <span class="sd">           :width: 100%</span>
 <span class="sd">           :align: center</span>
 <span class="sd">    &quot;&quot;&quot;</span>

@@ -51,7 +51,7 @@ def Attention_U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 
 
        Calling this function with its default parameters returns the following network:                                                                 
                                                                                 
-       .. image:: img/unet.png                                                  
+       .. image:: ../img/unet.png                                                  
            :width: 100%                                                         
            :align: center                                                       
                                                                                 
@@ -60,7 +60,7 @@ def Attention_U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 
        That networks incorporates in skip connecions Attention Gates (AG), which
        can be seen as follows:
 
-       .. image:: img/attention_gate.png
+       .. image:: ../img/attention_gate.png
            :width: 100%
            :align: center
        

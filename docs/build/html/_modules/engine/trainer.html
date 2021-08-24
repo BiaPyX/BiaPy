@@ -1,0 +1,760 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>engine.trainer &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../bibliography.html">Bibliography</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+        
+          <li><a href="../engine.html">engine</a> &raquo;</li>
+        
+      <li>engine.trainer</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for engine.trainer</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">h5py</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">tqdm</span> <span class="kn">import</span> <span class="n">tqdm</span>
+<span class="kn">from</span> <span class="nn">skimage.io</span> <span class="kn">import</span> <span class="n">imread</span>
+
+<span class="kn">from</span> <span class="nn">utils.util</span> <span class="kn">import</span> <span class="p">(</span><span class="n">check_masks</span><span class="p">,</span> <span class="n">check_downsample_division</span><span class="p">,</span> <span class="n">create_plots</span><span class="p">,</span> <span class="n">save_tif</span><span class="p">,</span> <span class="n">load_data_from_dir</span><span class="p">,</span> 
+                        <span class="n">load_3d_images_from_dir</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">data</span> <span class="kn">import</span> <span class="n">create_train_val_instance_channels</span><span class="p">,</span> <span class="n">create_test_instance_channels</span>
+<span class="kn">from</span> <span class="nn">data.data_2D_manipulation</span> <span class="kn">import</span> <span class="n">load_and_prepare_2D_train_data</span><span class="p">,</span> <span class="n">crop_data_with_overlap</span><span class="p">,</span> <span class="n">merge_data_with_overlap</span>
+<span class="kn">from</span> <span class="nn">data.data_3D_manipulation</span> <span class="kn">import</span> <span class="n">load_and_prepare_3D_data</span><span class="p">,</span> <span class="n">crop_3D_data_with_overlap</span><span class="p">,</span> <span class="n">merge_3D_data_with_overlap</span>
+<span class="kn">from</span> <span class="nn">data.generators</span> <span class="kn">import</span> <span class="n">create_train_val_augmentors</span><span class="p">,</span> <span class="n">create_test_augmentor</span><span class="p">,</span> <span class="n">check_generator_consistence</span>             
+<span class="kn">from</span> <span class="nn">data.post_processing</span> <span class="kn">import</span> <span class="n">apply_post_processing</span>                                                                  
+<span class="kn">from</span> <span class="nn">data.post_processing.post_processing</span> <span class="kn">import</span> <span class="n">ensemble8_2d_predictions</span><span class="p">,</span> <span class="n">ensemble16_3d_predictions</span><span class="p">,</span> <span class="n">bc_watershed</span>      
+<span class="kn">from</span> <span class="nn">models</span> <span class="kn">import</span> <span class="n">build_model</span>
+<span class="kn">from</span> <span class="nn">engine</span> <span class="kn">import</span> <span class="n">build_callbacks</span><span class="p">,</span> <span class="n">prepare_optimizer</span>
+<span class="kn">from</span> <span class="nn">engine.metrics</span> <span class="kn">import</span> <span class="n">jaccard_index_numpy</span><span class="p">,</span> <span class="n">voc_calculation</span>
+
+
+<div class="viewcode-block" id="Trainer"><a class="viewcode-back" href="../../engine/trainer.html#engine.trainer.Trainer">[docs]</a><span class="k">class</span> <span class="nc">Trainer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">,</span> <span class="n">job_identifier</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span> <span class="o">=</span> <span class="n">cfg</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">job_identifier</span> <span class="o">=</span> <span class="n">job_identifier</span>
+        <span class="n">original_test_path</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_mask_filenames</span> <span class="o">=</span> <span class="kc">None</span>
+    
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s1">&#39;SEMANTIC_SEG&#39;</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;###################</span><span class="se">\n</span><span class="s2">&quot;</span>
+                  <span class="s2">&quot;#  SANITY CHECKS  #</span><span class="se">\n</span><span class="s2">&quot;</span>
+                  <span class="s2">&quot;###################</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">check_masks</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">)</span>
+            <span class="n">check_masks</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">)</span>
+
+            <span class="c1"># Adjust the metric used accordingly to the number of classes. This code is planned to be used in a binary</span>
+            <span class="c1"># classification problem, so the function &#39;jaccard_index_softmax&#39; will only calculate the IoU for the</span>
+            <span class="c1"># foreground class (channel 1)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">metric</span> <span class="o">=</span> <span class="s2">&quot;jaccard_index_softmax&quot;</span> <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">N_CLASSES</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="s2">&quot;jaccard_index&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">metric</span> <span class="o">=</span> <span class="s2">&quot;jaccard_index_instances&quot;</span> <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">CHANNELS</span> <span class="o">==</span> <span class="s2">&quot;BCD&quot;</span> <span class="k">else</span> <span class="s2">&quot;jaccard_index&quot;</span>
+    
+    
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s1">&#39;INSTANCE_SEG&#39;</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">CHANNELS</span> <span class="o">!=</span> <span class="s1">&#39;B&#39;</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;###########################</span><span class="se">\n</span><span class="s2">&quot;</span>                                                                                    
+                  <span class="s2">&quot;#  PREPARE INSTANCE DATA  #</span><span class="se">\n</span><span class="s2">&quot;</span>                                                                                    
+                  <span class="s2">&quot;###########################</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="c1"># Create selected channels for train/val data </span>
+            <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">ENABLE</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_FILE</span><span class="p">):</span>                                                    
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;You select to create </span><span class="si">{}</span><span class="s2"> channels from given instance labels and no file is detected in </span><span class="si">{}</span><span class="s2">. &quot;</span>     
+                      <span class="s2">&quot;So let&#39;s prepare the data. Notice that, if you do not modify &#39;DATA.TRAIN.INSTANCE_CHANNELS_FILE&#39; &quot;</span>    
+                      <span class="s2">&quot;path, this process will be done just once!&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">CHANNELS</span><span class="p">,</span>                            
+                      <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_FILE</span><span class="p">))</span>                                                                
+                <span class="bp">self</span><span class="o">.</span><span class="n">train_filenames</span> <span class="o">=</span> <span class="n">create_train_val_instance_channels</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+                                                                                                                        
+            <span class="c1"># Create selected channels for test data once</span>
+            <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">ENABLE</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_FILE</span><span class="p">):</span>                                                   
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;You select to create </span><span class="si">{}</span><span class="s2"> channels from given instance labels and no file is detected in </span><span class="si">{}</span><span class="s2">. &quot;</span>         
+                      <span class="s2">&quot;So let&#39;s prepare the data. Notice that, if you do not modify &#39;DATA.TEST.INSTANCE_CHANNELS_FILE&#39; &quot;</span>   
+                      <span class="s2">&quot;path, this process will be done just once!&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">CHANNELS</span><span class="p">,</span>                                
+                      <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_FILE</span><span class="p">))</span>    
+                <span class="n">create_test_instance_channels</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;DATA.TRAIN.PATH changed from </span><span class="si">{}</span><span class="s2"> to </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">PATH</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_FILE</span><span class="p">))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;DATA.TRAIN.MASK_PATH changed from </span><span class="si">{}</span><span class="s2"> to </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_MASK_FILE</span><span class="p">))</span>
+            <span class="n">opts</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;DATA.TRAIN.PATH&#39;</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_FILE</span><span class="p">,</span>
+                    <span class="s1">&#39;DATA.TRAIN.MASK_PATH&#39;</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_MASK_FILE</span><span class="p">]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">FROM_TRAIN</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;DATA.VAL.PATH changed from </span><span class="si">{}</span><span class="s2"> to </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">PATH</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_FILE</span><span class="p">))</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;DATA.VAL.MASK_PATH changed from </span><span class="si">{}</span><span class="s2"> to </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_MASK_FILE</span><span class="p">))</span>
+                <span class="n">opts</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="s1">&#39;DATA.VAL.PATH&#39;</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_FILE</span><span class="p">,</span>
+                             <span class="s1">&#39;DATA.VAL.MASK_PATH&#39;</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_MASK_FILE</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">ENABLE</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">IN_MEMORY</span><span class="p">:</span>
+                <span class="n">original_test_path</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">PATH</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;DATA.TEST.PATH changed from </span><span class="si">{}</span><span class="s2"> to </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">PATH</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_FILE</span><span class="p">))</span>
+                <span class="n">opts</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="s1">&#39;DATA.TEST.PATH&#39;</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_FILE</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">LOAD_GT</span><span class="p">:</span>
+                    <span class="n">original_test_mask_path</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">MASK_PATH</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;DATA.TEST.MASK_PATH changed from </span><span class="si">{}</span><span class="s2"> to </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_MASK_FILE</span><span class="p">))</span>
+                    <span class="n">opts</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="s1">&#39;DATA.TEST.MASK_PATH&#39;</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">INSTANCE_CHANNELS_MASK_FILE</span><span class="p">])</span>
+            <span class="n">cfg</span><span class="o">.</span><span class="n">merge_from_list</span><span class="p">(</span><span class="n">opts</span><span class="p">)</span>
+
+        <span class="c1"># From now on, no modification of the cfg will be allowed</span>
+        <span class="n">cfg</span><span class="o">.</span><span class="n">freeze</span><span class="p">()</span>
+
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">ENABLE</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">IN_MEMORY</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">ENABLE</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">IN_MEMORY</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;#################</span><span class="se">\n</span><span class="s2">&quot;</span>                                                                                    
+                  <span class="s2">&quot;### LOAD DATA ###</span><span class="se">\n</span><span class="s2">&quot;</span>                                                                                    
+                  <span class="s2">&quot;#################</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1">#############</span>
+        <span class="c1">### TRAIN ###</span>
+        <span class="c1">#############</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">ENABLE</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">IN_MEMORY</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span><span class="p">:</span>
+                    <span class="n">objs</span> <span class="o">=</span> <span class="n">load_and_prepare_2D_train_data</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">PATH</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">,</span> 
+                        <span class="n">val_split</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">SPLIT_TRAIN</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">SYSTEM</span><span class="o">.</span><span class="n">SEED</span><span class="p">,</span> <span class="n">shuffle_val</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">RANDOM</span><span class="p">,</span>
+                        <span class="n">random_crops_in_DA</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">EXTRACT_RANDOM_PATCH</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">,</span>
+                        <span class="n">ov</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">OVERLAP</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">PADDING</span><span class="p">,</span> <span class="n">check_crop</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">CHECK_CROP</span><span class="p">,</span>
+                        <span class="n">check_crop_path</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">CROP_CHECKS</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">objs</span> <span class="o">=</span> <span class="n">load_and_prepare_3D_data</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">PATH</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">,</span>                    
+                        <span class="n">val_split</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">SPLIT_TRAIN</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">SYSTEM</span><span class="o">.</span><span class="n">SEED</span><span class="p">,</span> <span class="n">shuffle_val</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">RANDOM</span><span class="p">,</span>          
+                        <span class="n">random_crops_in_DA</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">EXTRACT_RANDOM_PATCH</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">,</span>                   
+                        <span class="n">ov</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">OVERLAP</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">PADDING</span><span class="p">)</span>
+    
+                <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">FROM_TRAIN</span><span class="p">:</span>
+                    <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span> <span class="n">Y_val</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_filenames</span> <span class="o">=</span> <span class="n">objs</span>                                         
+                <span class="k">else</span><span class="p">:</span>                                                                                                   
+                    <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_filenames</span> <span class="o">=</span> <span class="n">objs</span>                                                       
+                <span class="k">del</span> <span class="n">objs</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">PATH</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Train data dir not found: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">PATH</span><span class="p">))</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Train mask data dir not found: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">))</span>
+                <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
+
+            <span class="c1">##################                                                                                       </span>
+            <span class="c1">### VALIDATION ###                                                                                      </span>
+            <span class="c1">##################</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">FROM_TRAIN</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">IN_MEMORY</span><span class="p">:</span>
+                    <span class="n">f_name</span> <span class="o">=</span> <span class="n">load_data_from_dir</span> <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span> <span class="k">else</span> <span class="n">load_3d_images_from_dir</span>    
+                    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">PATH</span><span class="p">):</span>
+                        <span class="n">X_val</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">f_name</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">PATH</span><span class="p">)</span>                                           
+                        <span class="n">Y_val</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">f_name</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">)</span>                                           
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">X_val</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">PATH</span><span class="p">)</span>
+                        <span class="n">Y_val</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">)</span>
+
+                    <span class="n">f_name</span> <span class="o">=</span> <span class="n">crop_data_with_overlap</span> <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span> <span class="k">else</span> <span class="n">crop_3D_data_with_overlap</span>
+                    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span> <span class="o">!=</span> <span class="n">X_val</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+                        <span class="n">X_val</span><span class="p">,</span> <span class="n">Y_val</span> <span class="o">=</span> <span class="n">f_name</span><span class="p">(</span><span class="n">X_val</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">Y_val</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">OVERLAP</span><span class="p">,</span>
+                                              <span class="n">padding</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">PADDING</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">PATH</span><span class="p">):</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Validation data dir not found: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">PATH</span><span class="p">))</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">):</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Validation mask data dir not found: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">VAL</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">))</span>
+                    <span class="n">X_val</span><span class="p">,</span> <span class="n">Y_val</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
+
+        <span class="c1">############                                                                                       </span>
+        <span class="c1">### TEST ###</span>
+        <span class="c1">############</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">ENABLE</span><span class="p">:</span>
+            <span class="c1"># Path comprobations</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">PATH</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Test data not found: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">PATH</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">LOAD_GT</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">):</span>                                
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Test data mask not found: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">))</span>
+
+            <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">IN_MEMORY</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;2) Loading test images . . .&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">PATH</span><span class="p">):</span>
+                    <span class="n">f_name</span> <span class="o">=</span> <span class="n">load_data_from_dir</span> <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span> <span class="k">else</span> <span class="n">load_3d_images_from_dir</span>
+                    <span class="n">X_test</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">f_name</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">PATH</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">LOAD_GT</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;3) Loading test masks . . .&quot;</span><span class="p">)</span>        
+                        <span class="n">Y_test</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">f_name</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not implemented pipeline option: no test data labels when PROBLEM.NDIM == &#39;2D&#39;&quot;</span><span class="p">)</span> 
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">Y_test</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">X_test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">PATH</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">LOAD_GT</span><span class="p">:</span>                                                                           
+                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;3) Loading test masks . . .&quot;</span><span class="p">)</span>
+                        <span class="n">Y_test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">original_test_path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">test_filenames</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">PATH</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">MAP</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">LOAD_GT</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">test_mask_filenames</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">MASK_PATH</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">test_filenames</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">original_test_path</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">MAP</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">LOAD_GT</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">test_mask_filenames</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">original_test_path</span><span class="p">))[</span><span class="mi">2</span><span class="p">])</span>
+        
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;########################</span><span class="se">\n</span><span class="s2">&quot;</span>                                                                              
+              <span class="s2">&quot;#  PREPARE GENERATORS  #</span><span class="se">\n</span><span class="s2">&quot;</span>                                                                              
+              <span class="s2">&quot;########################</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">ENABLE</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">train_generator</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">val_generator</span> <span class="o">=</span> <span class="n">create_train_val_augmentors</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span> <span class="n">Y_val</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">CHECK_GENERATORS</span><span class="p">:</span>
+                <span class="n">check_generator_consistence</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">train_generator</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">GEN_CHECKS</span><span class="o">+</span><span class="s2">&quot;_train&quot;</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">GEN_MASK_CHECKS</span><span class="o">+</span><span class="s2">&quot;_train&quot;</span><span class="p">)</span>
+                <span class="n">check_generator_consistence</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">val_generator</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">GEN_CHECKS</span><span class="o">+</span><span class="s2">&quot;_val&quot;</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">GEN_MASK_CHECKS</span><span class="o">+</span><span class="s2">&quot;_val&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">ENABLE</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">test_generator</span> <span class="o">=</span> <span class="n">create_test_augmentor</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span><span class="p">)</span>
+
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;#################</span><span class="se">\n</span><span class="s2">&quot;</span>
+              <span class="s2">&quot;#  BUILD MODEL  #</span><span class="se">\n</span><span class="s2">&quot;</span>
+              <span class="s2">&quot;#################</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">build_model</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_identifier</span><span class="p">)</span>
+        <span class="n">prepare_optimizer</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">)</span>
+    
+    
+<div class="viewcode-block" id="Trainer.train"><a class="viewcode-back" href="../../engine/trainer.html#engine.trainer.Trainer.train">[docs]</a>    <span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;#####################</span><span class="se">\n</span><span class="s2">&quot;</span>
+              <span class="s2">&quot;#  TRAIN THE MODEL  #</span><span class="se">\n</span><span class="s2">&quot;</span>
+              <span class="s2">&quot;#####################</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">LOAD_CHECKPOINT</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Loading model weights from h5_file: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">CHECKPOINT_FILE</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">load_weights</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">CHECKPOINT_FILE</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">callbacks</span> <span class="o">=</span> <span class="n">build_callbacks</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">train_generator</span><span class="p">,</span> <span class="n">validation_data</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">val_generator</span><span class="p">,</span> 
+            <span class="n">validation_steps</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">val_generator</span><span class="p">),</span> <span class="n">steps_per_epoch</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">train_generator</span><span class="p">),</span>
+            <span class="n">epochs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">EPOCHS</span><span class="p">,</span> <span class="n">callbacks</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">callbacks</span><span class="p">)</span>
+        
+        <span class="n">create_plots</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_identifier</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">CHARTS</span><span class="p">,</span> <span class="n">metric</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Trainer.test"><a class="viewcode-back" href="../../engine/trainer.html#engine.trainer.Trainer.test">[docs]</a>    <span class="k">def</span> <span class="nf">test</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Loading model weights from h5_file: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">CHECKPOINT_FILE</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">load_weights</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">CHECKPOINT_FILE</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;###############</span><span class="se">\n</span><span class="s2">&quot;</span>
+              <span class="s2">&quot;#  INFERENCE  #</span><span class="se">\n</span><span class="s2">&quot;</span>
+              <span class="s2">&quot;###############</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Making predictions on test data . . .&quot;</span><span class="p">)</span>
+        <span class="n">iou</span><span class="p">,</span> <span class="n">ov_iou</span><span class="p">,</span> <span class="n">c1</span><span class="p">,</span> <span class="n">c2</span>  <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span> 
+         
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">PER_PATCH</span><span class="p">:</span>
+           <span class="n">loss_per_crop</span><span class="p">,</span> <span class="n">iou_per_crop</span><span class="p">,</span> <span class="n">patch_counter</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span> 
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">MERGE_PATCHES</span><span class="p">:</span>
+           <span class="n">loss_per_imag</span><span class="p">,</span> <span class="n">iou_per_image</span><span class="p">,</span> <span class="n">ov_iou_per_image</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span> 
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">FULL_IMG</span><span class="p">:</span>
+           <span class="n">loss</span><span class="p">,</span> <span class="n">iou</span><span class="p">,</span> <span class="n">ov_iou</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span> 
+        <span class="n">image_counter</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">POST_PROCESSING</span><span class="o">.</span><span class="n">BLENDING</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">POST_PROCESSING</span><span class="o">.</span><span class="n">YZ_FILTERING</span> <span class="ow">or</span> \
+           <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">POST_PROCESSING</span><span class="o">.</span><span class="n">Z_FILTERING</span><span class="p">:</span>
+            <span class="n">post_processing</span><span class="p">,</span> <span class="n">iou_post</span><span class="p">,</span> <span class="n">ov_iou_post</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">post_processing</span> <span class="o">=</span> <span class="kc">False</span> 
+ 
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">FULL_IMG</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span> <span class="ow">and</span> <span class="n">post_processing</span><span class="p">:</span>
+            <span class="n">all_pred</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">all_gt</span> <span class="o">=</span> <span class="p">[]</span>
+  
+        <span class="n">it</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">test_generator</span><span class="p">)</span>
+        <span class="n">gt</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">test_generator</span><span class="p">))):</span>
+            <span class="n">batch</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">it</span><span class="p">)</span>
+        
+            <span class="n">obj</span> <span class="o">=</span> <span class="n">batch</span>  
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">LOAD_GT</span><span class="p">:</span>
+                <span class="n">X</span><span class="p">,</span> <span class="n">Y</span> <span class="o">=</span> <span class="n">obj</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">X</span> <span class="o">=</span> <span class="n">obj</span>
+                <span class="n">Y</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="n">gt</span> <span class="o">=</span> <span class="kc">False</span>
+
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">leave</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+                <span class="n">_X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">j</span><span class="p">],</span><span class="mi">0</span><span class="p">)</span>
+                <span class="n">_Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">Y</span><span class="p">[</span><span class="n">j</span><span class="p">],</span><span class="mi">0</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">LOAD_GT</span> <span class="k">else</span> <span class="kc">None</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;3D&#39;</span><span class="p">:</span>
+                    <span class="c1"># Convert to (z, x, y, c)</span>
+                    <span class="n">_X</span> <span class="o">=</span> <span class="n">_X</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+                    <span class="k">if</span> <span class="n">gt</span><span class="p">:</span> <span class="n">_Y</span> <span class="o">=</span> <span class="n">_Y</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+
+                <span class="c1">#################</span>
+                <span class="c1">### PER PATCH ###</span>
+                <span class="c1">#################</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">PER_PATCH</span><span class="p">:</span>
+                    <span class="n">original_data_shape</span> <span class="o">=</span> <span class="n">_X</span><span class="o">.</span><span class="n">shape</span>
+                    <span class="k">if</span> <span class="n">_X</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span><span class="p">:</span>
+                            <span class="n">obj</span> <span class="o">=</span> <span class="n">crop_data_with_overlap</span><span class="p">(</span><span class="n">_X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">_Y</span><span class="p">,</span>
+                                <span class="n">overlap</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">OVERLAP</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">PADDING</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">LOAD_GT</span><span class="p">:</span>
+                                <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span> <span class="o">=</span> <span class="n">obj</span>
+                            <span class="k">else</span><span class="p">:</span>   
+                                <span class="n">X_test</span> <span class="o">=</span> <span class="n">obj</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">obj</span> <span class="o">=</span> <span class="n">crop_3D_data_with_overlap</span><span class="p">(</span><span class="n">_X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">,</span> <span class="n">data_mask</span><span class="o">=</span><span class="n">_Y</span><span class="p">,</span> 
+                                <span class="n">overlap</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">OVERLAP</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">PADDING</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                                <span class="n">median_padding</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">MEDIAN_PADDING</span><span class="p">)</span>
+                            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">LOAD_GT</span><span class="p">:</span>
+                                <span class="n">X_test</span><span class="p">,</span> <span class="n">Y_test</span> <span class="o">=</span> <span class="n">obj</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="n">X_test</span> <span class="o">=</span> <span class="n">obj</span>
+                  
+                    <span class="c1"># Evaluate each patch</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">LOAD_GT</span><span class="p">:</span>
+                        <span class="n">l</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">BATCH_SIZE</span><span class="p">))</span>
+                        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">l</span><span class="p">),</span> <span class="n">leave</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+                            <span class="n">top</span> <span class="o">=</span> <span class="p">(</span><span class="n">k</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">BATCH_SIZE</span> <span class="k">if</span> <span class="p">(</span><span class="n">k</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">BATCH_SIZE</span> <span class="o">&lt;</span> <span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">else</span> <span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                            <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span>
+                                <span class="n">X_test</span><span class="p">[</span><span class="n">k</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">BATCH_SIZE</span><span class="p">:</span><span class="n">top</span><span class="p">],</span> <span class="n">Y_test</span><span class="p">[</span><span class="n">k</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">BATCH_SIZE</span><span class="p">:</span><span class="n">top</span><span class="p">],</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+                            <span class="n">loss_per_crop</span> <span class="o">+=</span> <span class="n">score</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>                                                                  
+                            <span class="n">iou_per_crop</span> <span class="o">+=</span> <span class="n">score</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                        <span class="k">del</span> <span class="n">Y_test</span>
+                    <span class="n">patch_counter</span> <span class="o">+=</span> <span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                
+                    <span class="c1"># Predict each patch </span>
+                    <span class="n">pred</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">AUGMENTATION</span><span class="p">:</span>
+                        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">leave</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+                            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span><span class="p">:</span>
+                                <span class="n">p</span> <span class="o">=</span> <span class="n">ensemble8_2d_predictions</span><span class="p">(</span><span class="n">X_test</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="n">n_classes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">N_CLASSES</span><span class="p">,</span>
+                                        <span class="n">pred_func</span><span class="o">=</span><span class="p">(</span><span class="k">lambda</span> <span class="n">img_batch_subdiv</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">img_batch_subdiv</span><span class="p">)))</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="n">p</span> <span class="o">=</span> <span class="n">ensemble16_3d_predictions</span><span class="p">(</span><span class="n">X_test</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="n">batch_size_value</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">BATCH_SIZE</span><span class="p">,</span>
+                                        <span class="n">pred_func</span><span class="o">=</span><span class="p">(</span><span class="k">lambda</span> <span class="n">img_batch_subdiv</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">img_batch_subdiv</span><span class="p">)))</span>
+                            <span class="n">pred</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+                    <span class="k">else</span><span class="p">:</span>   
+                        <span class="n">l</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">BATCH_SIZE</span><span class="p">))</span>                                       
+                        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">l</span><span class="p">),</span> <span class="n">leave</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>                                                               
+                            <span class="n">top</span> <span class="o">=</span> <span class="p">(</span><span class="n">k</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">BATCH_SIZE</span> <span class="k">if</span> <span class="p">(</span><span class="n">k</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">BATCH_SIZE</span> <span class="o">&lt;</span> <span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">else</span> <span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                            <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_test</span><span class="p">[</span><span class="n">k</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TRAIN</span><span class="o">.</span><span class="n">BATCH_SIZE</span><span class="p">:</span><span class="n">top</span><span class="p">],</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+                            <span class="n">pred</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+                    <span class="k">del</span> <span class="n">X_test</span>
+                    
+                    <span class="c1"># Reconstruct the predictions</span>
+                    <span class="n">pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">pred</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">original_data_shape</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span><span class="p">:</span>
+                            <span class="n">f_name</span> <span class="o">=</span> <span class="n">merge_data_with_overlap</span>
+                            <span class="n">verb</span> <span class="o">=</span> <span class="kc">False</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">f_name</span> <span class="o">=</span> <span class="n">merge_3D_data_with_overlap</span>
+                            <span class="n">verb</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="n">pred</span> <span class="o">=</span> <span class="n">f_name</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">original_data_shape</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="p">(</span><span class="n">pred</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],),</span> <span class="n">padding</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">PADDING</span><span class="p">,</span>
+                                      <span class="n">overlap</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">OVERLAP</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verb</span><span class="p">)</span>
+                        
+                    <span class="c1"># Argmax if needed</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">N_CLASSES</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                        <span class="n">pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">gt</span><span class="p">:</span> <span class="n">_Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">_Y</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+                    <span class="c1"># Save image                                                                                        </span>
+                    <span class="n">filenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_filenames</span><span class="p">[(</span><span class="n">i</span><span class="o">*</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">+</span><span class="n">j</span><span class="p">:(</span><span class="n">i</span><span class="o">*</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">+</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> 
+                    <span class="k">if</span> <span class="n">pred</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">4</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;3D&#39;</span><span class="p">:</span>                                                
+                        <span class="n">save_tif</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">RESULT_DIR</span><span class="o">.</span><span class="n">PER_IMAGE</span><span class="p">,</span> <span class="n">filenames</span><span class="p">)</span>               
+                    <span class="k">else</span><span class="p">:</span>                                                                                               
+                        <span class="n">save_tif</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">RESULT_DIR</span><span class="o">.</span><span class="n">PER_IMAGE</span><span class="p">,</span> <span class="n">filenames</span><span class="p">)</span>
+
+                    <span class="c1">#####################</span>
+                    <span class="c1">### MERGE PATCHES ###</span>
+                    <span class="c1">#####################</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">MERGE_PATCHES</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">gt</span><span class="p">:</span>
+                            <span class="n">_iou_per_image</span> <span class="o">=</span> <span class="n">jaccard_index_numpy</span><span class="p">((</span><span class="n">_Y</span><span class="o">&gt;</span><span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">),</span> <span class="p">(</span><span class="n">pred</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">))</span>      
+                            <span class="n">_ov_iou_per_image</span> <span class="o">=</span> <span class="n">voc_calculation</span><span class="p">((</span><span class="n">_Y</span><span class="o">&gt;</span><span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">),</span> <span class="p">(</span><span class="n">pred</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">),</span>       
+                                                                <span class="n">iou_per_image</span><span class="p">)</span>
+                            <span class="n">iou_per_image</span> <span class="o">+=</span> <span class="n">_iou_per_image</span>
+                            <span class="n">ov_iou_per_image</span> <span class="o">+=</span> <span class="n">_ov_iou_per_image</span>
+
+                        <span class="c1">############################                                                                            </span>
+                        <span class="c1">### POST-PROCESSING (3D) ###                                                                            </span>
+                        <span class="c1">############################                                                                            </span>
+                        <span class="k">if</span> <span class="n">post_processing</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;3D&#39;</span><span class="p">:</span>                                                   
+                            <span class="n">_iou_post</span><span class="p">,</span> <span class="n">_ov_iou_post</span> <span class="o">=</span> <span class="n">apply_post_processing</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="p">,</span> <span class="n">pred</span><span class="p">,</span> <span class="n">_Y</span><span class="p">)</span>                                 
+                            <span class="n">iou_post</span> <span class="o">+=</span> <span class="n">_iou_post</span>                                                                               
+                            <span class="n">ov_iou_post</span> <span class="o">+=</span> <span class="n">_ov_iou_post</span>                                                                         
+                            <span class="k">if</span> <span class="n">pred</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">4</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;3D&#39;</span><span class="p">:</span>                                                
+                                <span class="n">save_tif</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">RESULT_DIR</span><span class="o">.</span><span class="n">PER_IMAGE_POST_PROCESSING</span><span class="p">,</span> <span class="n">filenames</span><span class="p">)</span>               
+                            <span class="k">else</span><span class="p">:</span>                                                                                               
+                                <span class="n">save_tif</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">RESULT_DIR</span><span class="o">.</span><span class="n">PER_IMAGE_POST_PROCESSING</span><span class="p">,</span> <span class="n">filenames</span><span class="p">)</span>
+                    
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s1">&#39;INSTANCE_SEG&#39;</span><span class="p">:</span>
+                            <span class="c1"># Create instances </span>
+                            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Creating instances with watershed . . .&quot;</span><span class="p">)</span>
+                            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">CHANNELS</span> <span class="o">==</span> <span class="s2">&quot;BC&quot;</span><span class="p">:</span>
+                                <span class="n">pred</span> <span class="o">=</span> <span class="n">bc_watershed</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">thres1</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">MW_TH1</span><span class="p">,</span> <span class="n">thres2</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">MW_TH2</span><span class="p">,</span>
+                                    <span class="n">thres3</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">MW_TH3</span><span class="p">,</span> <span class="n">thres_small</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">REMOVE_SMALL_OBJ</span><span class="p">,</span>
+                                    <span class="n">save_dir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">WATERSHED_DIR</span><span class="p">)</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="n">pred</span> <span class="o">=</span> <span class="n">bcd_watershed</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">thres1</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">MW_TH1</span><span class="p">,</span> <span class="n">thres2</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">MW_TH2</span><span class="p">,</span>
+                                    <span class="n">thres3</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">MW_TH3</span><span class="p">,</span> <span class="n">thres4</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">MW_TH4</span><span class="p">,</span> <span class="n">thres5</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">MW_TH5</span><span class="p">,</span>
+                                    <span class="n">thres_small</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">REMOVE_SMALL_OBJ</span><span class="p">,</span> <span class="n">save_dir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">WATERSHED_DIR</span><span class="p">)</span>
+
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">MAP</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s1">&#39;INSTANCE_SEG&#39;</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">LOAD_GT</span><span class="p">:</span>
+                            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;####################</span><span class="se">\n</span><span class="s2">&quot;</span>                                            
+                                  <span class="s2">&quot;#  mAP Calculation #</span><span class="se">\n</span><span class="s2">&quot;</span>
+                                  <span class="s2">&quot;####################</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>  
+                            <span class="c1"># Convert the prediction into an .h5 file   </span>
+                            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">MAP_H5_DIR</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                            <span class="n">filenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_mask_filenames</span><span class="p">[(</span><span class="n">i</span><span class="o">*</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">+</span><span class="n">j</span><span class="p">:(</span><span class="n">i</span><span class="o">*</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">+</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+                            <span class="n">h5file_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">MAP_H5_DIR</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filenames</span><span class="p">[</span><span class="mi">0</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="s1">&#39;.h5&#39;</span><span class="p">)</span>
+                            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Creating prediction h5 file to calculate mAP: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">h5file_name</span><span class="p">))</span>
+                            <span class="n">h5f</span> <span class="o">=</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">h5file_name</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span>                                               
+                            <span class="n">h5f</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s1">&#39;dataset&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">pred</span><span class="p">,</span> <span class="n">compression</span><span class="o">=</span><span class="s2">&quot;lzf&quot;</span><span class="p">)</span>             
+                            <span class="n">h5f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>       
+                            
+                            <span class="c1"># Prepare mAP call</span>
+                            <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">MAP_CODE_DIR</span><span class="p">)</span>                                                  
+                            <span class="kn">from</span> <span class="nn">demo_modified</span> <span class="kn">import</span> <span class="n">main</span> <span class="k">as</span> <span class="n">mAP_calculation</span>    
+                            <span class="k">class</span> <span class="nc">Namespace</span><span class="p">:</span>                                                                
+                                <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>                                               
+                                    <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span>                                            
+                                                                   
+                            <span class="c1"># Create GT H5 file if it does not exist </span>
+                            <span class="n">gt_f</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">TEST_FULL_GT_H5</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filenames</span><span class="p">[</span><span class="mi">0</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="s1">&#39;.h5&#39;</span><span class="p">)</span>
+                            <span class="n">test_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">TEST_FULL_GT_H5</span><span class="p">,</span> <span class="n">filenames</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">gt_f</span><span class="p">):</span>
+                                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;GT .h5 file needed for mAP calculation is not found in </span><span class="si">{}</span><span class="s2"> so it will be created &quot;</span>
+                                      <span class="s2">&quot;from its mask: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">gt_f</span><span class="p">,</span> <span class="n">test_file</span><span class="p">))</span>
+                        
+                                <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">test_file</span><span class="p">):</span>
+                                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The mask is supossed to have the same name as the image&quot;</span><span class="p">)</span>
+                        
+                                <span class="n">Y_test</span> <span class="o">=</span> <span class="n">imread</span><span class="p">(</span><span class="n">test_file</span><span class="p">)</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span>
+                                
+                                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Saving .h5 GT data from array shape: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">Y_test</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+                                <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">TEST_FULL_GT_H5</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                                <span class="n">h5f</span> <span class="o">=</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">gt_f</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span>                                           
+                                <span class="n">h5f</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s1">&#39;dataset&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">Y_test</span><span class="p">,</span> <span class="n">compression</span><span class="o">=</span><span class="s2">&quot;lzf&quot;</span><span class="p">)</span>                 
+                                <span class="n">h5f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span> 
+                                <span class="k">del</span> <span class="n">Y_test</span>
+                        
+                            <span class="c1"># Calculate mAP</span>
+                            <span class="n">args</span> <span class="o">=</span> <span class="n">Namespace</span><span class="p">(</span><span class="n">gt_seg</span><span class="o">=</span><span class="n">gt_f</span><span class="p">,</span> <span class="n">predict_seg</span><span class="o">=</span><span class="n">h5file_name</span><span class="p">,</span> <span class="n">predict_score</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="s2">&quot;5e3, 3e4&quot;</span><span class="p">,</span>
+                                             <span class="n">threshold_crumb</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">chunk_size</span><span class="o">=</span><span class="mi">250</span><span class="p">,</span> <span class="n">output_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">RESULT_DIR</span><span class="o">.</span><span class="n">PATH</span><span class="p">,</span>
+                                             <span class="n">do_txt</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">do_eval</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">slices</span><span class="o">=</span><span class="s2">&quot;-1&quot;</span><span class="p">)</span>
+                            <span class="n">mAP_calculation</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+
+                <span class="c1">##################                                                                                       </span>
+                <span class="c1">### FULL IMAGE ###</span>
+                <span class="c1">##################</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">FULL_IMG</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span><span class="p">:</span>
+                    <span class="n">_X</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">check_downsample_division</span><span class="p">(</span><span class="n">_X</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">FEATURE_MAPS</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">gt</span><span class="p">:</span> <span class="n">_Y</span><span class="p">,</span> <span class="n">o_test_shape</span> <span class="o">=</span> <span class="n">check_downsample_division</span><span class="p">(</span><span class="n">_Y</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">FEATURE_MAPS</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+                    <span class="c1"># Evaluate each img</span>
+                    <span class="k">if</span> <span class="n">gt</span><span class="p">:</span>
+                        <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">_X</span><span class="p">,</span> <span class="n">_Y</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+                        <span class="n">loss</span> <span class="o">+=</span> <span class="n">score</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                        <span class="n">iou</span> <span class="o">+=</span> <span class="n">score</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+                    <span class="c1"># Make the prediction</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">AUGMENTATION</span><span class="p">:</span>
+                        <span class="n">pred</span> <span class="o">=</span> <span class="n">ensemble8_2d_predictions</span><span class="p">(</span>
+                            <span class="n">_X</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">pred_func</span><span class="o">=</span><span class="p">(</span><span class="k">lambda</span> <span class="n">img_batch_subdiv</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">img_batch_subdiv</span><span class="p">)),</span> 
+                            <span class="n">n_classes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">N_CLASSES</span><span class="p">)</span>
+                        <span class="n">pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">pred</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">_X</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+                    <span class="c1"># Recover original shape if padded with check_downsample_division</span>
+                    <span class="n">pred</span> <span class="o">=</span> <span class="n">pred</span><span class="p">[:,:</span><span class="n">o_test_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],:</span><span class="n">o_test_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]]</span>
+                    <span class="k">if</span> <span class="n">gt</span><span class="p">:</span> <span class="n">_Y</span> <span class="o">=</span> <span class="n">_Y</span><span class="p">[:,:</span><span class="n">o_test_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],:</span><span class="n">o_test_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]]</span>
+
+                    <span class="c1"># Save image</span>
+                    <span class="n">filenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_filenames</span><span class="p">[(</span><span class="n">i</span><span class="o">*</span><span class="n">_X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">+</span><span class="n">j</span><span class="p">:(</span><span class="n">i</span><span class="o">*</span><span class="n">_X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">+</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="n">pred</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">4</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;3D&#39;</span><span class="p">:</span>
+                        <span class="n">save_tif</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">RESULT_DIR</span><span class="o">.</span><span class="n">FULL_IMAGE</span><span class="p">,</span> <span class="n">filenames</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">save_tif</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">RESULT_DIR</span><span class="o">.</span><span class="n">FULL_IMAGE</span><span class="p">,</span> <span class="n">filenames</span><span class="p">)</span>
+
+                    <span class="c1"># Argmax if needed</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">N_CLASSES</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                        <span class="n">pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">gt</span><span class="p">:</span> <span class="n">_Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">_Y</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+                    <span class="k">if</span> <span class="n">gt</span><span class="p">:</span>
+                        <span class="n">ov_iou</span> <span class="o">+=</span> <span class="n">voc_calculation</span><span class="p">((</span><span class="n">_Y</span><span class="o">&gt;</span><span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">),</span> <span class="p">(</span><span class="n">pred</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">&gt;</span><span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">),</span> <span class="n">score</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">FULL_IMG</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span> <span class="ow">and</span> <span class="n">post_processing</span><span class="p">:</span>
+                        <span class="n">all_pred</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pred</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">gt</span><span class="p">:</span> <span class="n">all_gt</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_Y</span><span class="p">)</span>
+
+                <span class="n">image_counter</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">del</span> <span class="n">pred</span><span class="p">,</span> <span class="n">_X</span><span class="p">,</span> <span class="n">_Y</span> 
+
+        <span class="c1">############################</span>
+        <span class="c1">### POST-PROCESSING (2D) ###</span>
+        <span class="c1">############################</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">FULL_IMG</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span><span class="p">:</span>
+            <span class="n">all_pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">all_pred</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">gt</span><span class="p">:</span>  
+                <span class="n">all_gt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">all_gt</span><span class="p">)</span>
+                <span class="n">iou_post</span><span class="p">,</span> <span class="n">ov_iou_post</span> <span class="o">=</span> <span class="n">apply_post_processing</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="p">,</span> <span class="n">all_pred</span><span class="p">,</span> <span class="n">all_gt</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">iou_post</span><span class="p">,</span> <span class="n">ov_iou_post</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+            <span class="n">save_tif</span><span class="p">(</span><span class="n">all_pred</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">RESULT_DIR</span><span class="o">.</span><span class="n">FULL_POST_PROCESSING</span><span class="p">)</span>
+                  
+        <span class="k">if</span> <span class="n">post_processing</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;3D&#39;</span><span class="p">:</span>
+            <span class="n">iou_post</span> <span class="o">=</span> <span class="n">iou_post</span> <span class="o">/</span> <span class="n">image_counter</span>
+            <span class="n">ov_iou_post</span> <span class="o">=</span> <span class="n">ov_iou_post</span> <span class="o">/</span> <span class="n">image_counter</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">PER_PATCH</span><span class="p">:</span>
+            <span class="n">loss_per_crop</span> <span class="o">=</span> <span class="n">loss_per_crop</span> <span class="o">/</span> <span class="n">patch_counter</span>
+            <span class="n">iou_per_crop</span> <span class="o">=</span> <span class="n">iou_per_crop</span> <span class="o">/</span> <span class="n">patch_counter</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">MERGE_PATCHES</span><span class="p">:</span>
+                <span class="n">iou_per_image</span> <span class="o">=</span> <span class="n">iou_per_image</span> <span class="o">/</span> <span class="n">image_counter</span>
+                <span class="n">ov_iou_per_image</span> <span class="o">=</span> <span class="n">ov_iou_per_image</span> <span class="o">/</span> <span class="n">image_counter</span>
+        <span class="n">iou</span> <span class="o">=</span> <span class="n">iou</span> <span class="o">/</span> <span class="n">image_counter</span>
+        <span class="n">ov_iou</span> <span class="o">=</span> <span class="n">ov_iou</span> <span class="o">/</span> <span class="n">image_counter</span>
+
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;#############</span><span class="se">\n</span><span class="s2">&quot;</span>
+              <span class="s2">&quot;#  RESULTS  #</span><span class="se">\n</span><span class="s2">&quot;</span>
+              <span class="s2">&quot;#############</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">LOAD_CHECKPOINT</span><span class="p">:</span> 
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Epoch average time: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">callbacks</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">times</span><span class="p">)))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Epoch number: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_loss&#39;</span><span class="p">])))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Train time (s): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">callbacks</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">times</span><span class="p">)))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Train loss: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;loss&#39;</span><span class="p">])))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Train Foreground IoU: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">])))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Validation loss: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_loss&#39;</span><span class="p">])))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Validation Foreground IoU: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">history</span><span class="p">[</span><span class="s1">&#39;val_&#39;</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">])))</span>
+
+        <span class="k">if</span> <span class="n">gt</span><span class="p">:</span> 
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">PER_PATCH</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Loss (per patch): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">loss_per_crop</span><span class="p">))</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Test Foreground IoU (per patch): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">iou_per_crop</span><span class="p">))</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">MERGE_PATCHES</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Test Foreground IoU (merge patches): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">iou_per_image</span><span class="p">))</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Test Overall IoU (merge patches): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ov_iou_per_image</span><span class="p">))</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">)</span>
+    
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">TEST</span><span class="o">.</span><span class="n">STATS</span><span class="o">.</span><span class="n">FULL_IMG</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Loss (per image): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">iou</span><span class="p">))</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Test Foreground IoU (per image): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">iou</span><span class="p">))</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Test Overall IoU (per image): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ov_iou</span><span class="p">))</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">)</span>
+    
+            <span class="k">if</span> <span class="n">post_processing</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Test Foreground IoU (post-processing): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">iou_post</span><span class="p">))</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Test Overall IoU (post-processing): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ov_iou_post</span><span class="p">))</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2021, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

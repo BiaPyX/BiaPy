@@ -1,0 +1,304 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>2D Mitochondria segmentation &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="3D Nuclei Instance Segmentation" href="nucleus.html" />
+    <link rel="prev" title="Singularity container" href="../how_to_run/singularity.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">2D Mitochondria segmentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#problem-description">Problem description</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#data-preparation">Data preparation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#problem-resolution">Problem resolution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#choose-a-template">Choose a template</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#run">Run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#results">Results</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="nucleus.html">3D Nuclei Instance Segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>2D Mitochondria segmentation</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="d-mitochondria-segmentation">
+<span id="mito-tutorial"></span><h1>2D Mitochondria segmentation<a class="headerlink" href="#d-mitochondria-segmentation" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="problem-description">
+<h2>Problem description<a class="headerlink" href="#problem-description" title="Permalink to this headline">¶</a></h2>
+<p>The goal is to segment automatically mitochondria in EM images. This is a
+semantic segmentation problem where pairs of EM image and its corresponding
+mitochodria mask are provided. Our purpose is to segment automatically other
+mitochondria in images not used during train labeling each pixel with the
+corresponding class: background or foreground. In this example,
+<a class="reference external" href="https://www.epfl.ch/labs/cvlab/data/data-em/">EPFL Hippocampus</a> dataset is
+used, so the foreground class correspond to mitochondria.</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><div class="figure align-center" id="id1">
+<img alt="../_images/FIBSEM_test_02.png" src="../_images/FIBSEM_test_02.png" />
+<p class="caption"><span class="caption-text">EM tissue image sample.</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+<td><div class="figure align-center" id="id2">
+<img alt="../_images/FIBSEM_test_0_gt2.png" src="../_images/FIBSEM_test_0_gt2.png" />
+<p class="caption"><span class="caption-text">Its corresponding mask.</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="data-preparation">
+<h2>Data preparation<a class="headerlink" href="#data-preparation" title="Permalink to this headline">¶</a></h2>
+<p>The data directory tree should follow the structure described <a class="reference external" href="../how_to_run/bash.html#step-1-data-preparation">Bash Shell -&gt; Step 1: Data preparation</a>.</p>
+</div>
+<div class="section" id="problem-resolution">
+<h2>Problem resolution<a class="headerlink" href="#problem-resolution" title="Permalink to this headline">¶</a></h2>
+<p>All the models are prepared to make semantic segmentation. The model will output the probability of each pixel of beeing
+the foreground class (mitochondria in this case).</p>
+</div>
+<div class="section" id="choose-a-template">
+<h2>Choose a template<a class="headerlink" href="#choose-a-template" title="Permalink to this headline">¶</a></h2>
+<p>Refer to the code version <a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/releases/tag/v1.0">V1.0</a> in case you want to reproduce exact results of our paper. Once the code is cloned you can use any of the templates from <a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/tree/v1.0/templates">here</a>.</p>
+<p>Otherwise, to create the YAML file you can use the template <a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/blob/master/templates/unet_2d.yaml">unet_2d.yaml</a> which is prepared for this tutorial.</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p>Adapt the configuration file to your specific case and see more configurable options available at <a class="reference external" href="https://github.com/danifranco/EM_Image_Segmentation/blob/master/config/config.py">config.py</a>.</p>
+</div>
+</div>
+<div class="section" id="run">
+<h2>Run<a class="headerlink" href="#run" title="Permalink to this headline">¶</a></h2>
+<p>Run the code with any of the options described in <strong>HOW TO RUN</strong> section that best suits you. For instance, you can run
+it through bash shell as described in: <a class="reference external" href="../how_to_run/bash.html#step-3-run-the-code">Bash Shell -&gt; Step 3: Run the code</a>.</p>
+</div>
+<div class="section" id="results">
+<h2>Results<a class="headerlink" href="#results" title="Permalink to this headline">¶</a></h2>
+<div class="figure align-center" id="id3">
+<img alt="../_images/unet2d_prediction.gif" src="../_images/unet2d_prediction.gif" />
+<p class="caption"><span class="caption-text">2D U-Net model predictions. From left to right: original test images, its ground truth (GT) and the overlap between
+GT and the model’s output.</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="nucleus.html" class="btn btn-neutral float-right" title="3D Nuclei Instance Segmentation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../how_to_run/singularity.html" class="btn btn-neutral float-left" title="Singularity container" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2021, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

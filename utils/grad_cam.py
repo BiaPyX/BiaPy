@@ -13,8 +13,7 @@ import cv2
 tf.compat.v1.disable_eager_execution() # to use tf.gradients()
 
 
-def grad_cam_sample(input_model, image, predicted_class, layer_name, out_dir,
-                    n_classes=2):
+def grad_cam_sample(input_model, image, predicted_class, layer_name, out_dir, n_classes=2):
     """Generates an image with the activation maps in charge of the class decision on a specific layer.
     
        For a more detailed information refer to the paper: `Grad-CAM: Visual Explanations from Deep Networks via 
@@ -49,13 +48,13 @@ def grad_cam_sample(input_model, image, predicted_class, layer_name, out_dir,
            # classes is 2, which should correspond to setting n_classes=2 on the provided templates 
            grad_cam_sample(unet_model, img, 1, 'conv2d_16', 'out_dir', 2)
 
-       +-----------------------------------+-------------------------------------------+
-       | .. figure:: img/FIBSEM_test_0.png | .. figure:: img/out_gradcam_conv2d_16.png |
-       |   :width: 80%                     |   :width: 70%                             |
-       |   :align: center                  |   :align: center                          |
-       |                                   |                                           |
-       |   Input image                     |   Output of Grad-CAM                      |
-       +-----------------------------------+-------------------------------------------+
+       +----------------------------------------------+----------------------------------------------+
+       | .. figure:: ../img/FIBSEM_test_0.png         | .. figure:: ../img/out_gradcam_conv2d_16.png |
+       |   :width: 80%                                |   :width: 80%                                |
+       |   :align: center                             |   :align: center                             |
+       |                                              |                                              |
+       |   Input image                                |   Output of Grad-CAM                         |
+       +----------------------------------------------+----------------------------------------------+
 
        ::
   
@@ -64,13 +63,13 @@ def grad_cam_sample(input_model, image, predicted_class, layer_name, out_dir,
            # complete image
            grad_cam_sample(unet_model, img, 1, 'conv2d_18', 'out_dir', 2)
 
-       +----------------------------------+-------------------------------------------+
-       | .. figure:: img/gradcam_pred.png | .. figure:: img/out_gradcam_conv2d_18.png |
-       |   :width: 90%                    |   :width: 70%                             |
-       |   :align: center                 |   :align: center                          |
-       |                                  |                                           |
-       |   Network prediction             |   Output of Grad-CAM                      |
-       +----------------------------------+-------------------------------------------+
+       +----------------------------------------------+----------------------------------------------+
+       | .. figure:: ../img/gradcam_pred.png          | .. figure:: ../img/out_gradcam_conv2d_18.png |
+       |   :width: 80%                                |   :width: 80%                                |
+       |   :align: center                             |   :align: center                             |
+       |                                              |                                              |
+       |   Network prediction                         |   Output of Grad-CAM                         |
+       +----------------------------------------------+----------------------------------------------+
     """
 
     os.makedirs(out_dir, exist_ok=True)

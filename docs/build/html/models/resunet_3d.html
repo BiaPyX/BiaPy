@@ -1,0 +1,344 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>3D Residual U-Net &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="3D Attention U-Net" href="att_unet_3d.html" />
+    <link rel="prev" title="3D U-Net" href="unet_3d.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../engine/engine.html">engine</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="models.html">models</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="init.html">Init</a></li>
+<li class="toctree-l2"><a class="reference internal" href="unet2d.html">2D U-Net</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="unet3d.html">3D U-Net</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="unet_3d.html">3D U-Net</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">3D Residual U-Net</a></li>
+<li class="toctree-l3"><a class="reference internal" href="att_unet_3d.html">3D Attention U-Net</a></li>
+<li class="toctree-l3"><a class="reference internal" href="se_unet_3d.html">3D SE U-Net</a></li>
+<li class="toctree-l3"><a class="reference internal" href="vanilla_unet_3d.html">3D Vanilla U-Net</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fcn.html">FCN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nnunet.html">nnU-Net</a></li>
+<li class="toctree-l2"><a class="reference internal" href="multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tiramisu.html">Tiramisu (FC-DenseNet103)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../API.html">&lt;no title&gt;</a> &raquo;</li>
+        
+          <li><a href="models.html">models</a> &raquo;</li>
+        
+          <li><a href="unet3d.html">3D U-Net</a> &raquo;</li>
+        
+      <li>3D Residual U-Net</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-models.resunet_3d">
+<span id="d-residual-u-net"></span><h1>3D Residual U-Net<a class="headerlink" href="#module-models.resunet_3d" title="Permalink to this headline">¶</a></h1>
+<dl class="py function">
+<dt id="models.resunet_3d.ResUNet_3D">
+<code class="sig-prename descclassname">models.resunet_3d.</code><code class="sig-name descname">ResUNet_3D</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image_shape</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">drop_values</span><span class="o">=</span><span class="default_value">[0.1, 0.1, 0.1, 0.1, 0.1]</span></em>, <em class="sig-param"><span class="n">batch_norm</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">feature_maps</span><span class="o">=</span><span class="default_value">[16, 32, 64, 128, 256]</span></em>, <em class="sig-param"><span class="n">z_down</span><span class="o">=</span><span class="default_value">2</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/resunet_3d.html#ResUNet_3D"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#models.resunet_3d.ResUNet_3D" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create 3D Residual_U-Net.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">tuple</span></code>) – Dimensions of the input image.</p></li>
+<li><p><strong>activation</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Keras available activation type.</p></li>
+<li><p><strong>k_init</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Keras available kernel initializer type.</p></li>
+<li><p><strong>drop_values</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">floats</span></code>, <em>optional</em>) – Dropout value to be fixed.</p></li>
+<li><p><strong>batch_norm</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Use batch normalization.</p></li>
+<li><p><strong>feature_maps</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Feature maps to use on each level.</p></li>
+<li><p><strong>z_down</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Downsampling used in z dimension. Set it to <code class="docutils literal notranslate"><span class="pre">1</span></code> if the dataset is not isotropic.</p></li>
+<li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>Model</strong> – Model containing the U-Net.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code></p>
+</dd>
+</dl>
+<p>Calling this function with its default parameters returns the following network:</p>
+<a class="reference internal image-reference" href="../_images/resunet_3d.png"><img alt="../_images/resunet_3d.png" class="align-center" src="../_images/resunet_3d.png" style="width: 100%;" /></a>
+<p>Where each green layer represents a residual block as the following:</p>
+<a class="reference internal image-reference" href="../_images/res_block.png"><img alt="../_images/res_block.png" class="align-center" src="../_images/res_block.png" style="width: 45%;" /></a>
+<p>Images created with <a class="reference external" href="https://github.com/HarisIqbal88/PlotNeuralNet">PlotNeuralNet</a>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="models.resunet_3d.level_block">
+<code class="sig-prename descclassname">models.resunet_3d.</code><code class="sig-name descname">level_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">depth</span></em>, <em class="sig-param"><span class="n">f_maps</span></em>, <em class="sig-param"><span class="n">filter_size</span></em>, <em class="sig-param"><span class="n">activation</span></em>, <em class="sig-param"><span class="n">k_init</span></em>, <em class="sig-param"><span class="n">drop_values</span></em>, <em class="sig-param"><span class="n">batch_norm</span></em>, <em class="sig-param"><span class="n">first_block</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/resunet_3d.html#level_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#models.resunet_3d.level_block" title="Permalink to this definition">¶</a></dt>
+<dd><p>Produces a level of the network. It calls itself recursively.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">layer</span></code>) – Input layer of the block.</p></li>
+<li><p><strong>depth</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Depth of the network. This value determines how many times the function will be called recursively.</p></li>
+<li><p><strong>f_maps</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>) – Feature maps to use.</p></li>
+<li><p><strong>filter_size</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Height, width and depth of the convolution window.</p></li>
+<li><p><strong>activation</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Keras available activation type.</p></li>
+<li><p><strong>k_init</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Keras available kernel initializer type.</p></li>
+<li><p><strong>drop_values</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">floats</span></code>, <em>optional</em>) – Dropout value to be fixed.</p></li>
+<li><p><strong>batch_norm</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Use batch normalization.</p></li>
+<li><p><strong>first_block</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – To advice the function that it is the first residual block of the network, which avoids Full Pre-Activation
+layers (more info of Full Pre-Activation in <a class="reference external" href="https://arxiv.org/pdf/1603.05027.pdf">Identity Mappings in Deep Residual Networks</a>).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>x</strong> – last layer of the levels.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">layer</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="models.resunet_3d.residual_block">
+<code class="sig-prename descclassname">models.resunet_3d.</code><code class="sig-name descname">residual_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">f_maps</span></em>, <em class="sig-param"><span class="n">filter_size</span></em>, <em class="sig-param"><span class="n">activation</span><span class="o">=</span><span class="default_value">'elu'</span></em>, <em class="sig-param"><span class="n">k_init</span><span class="o">=</span><span class="default_value">'he_normal'</span></em>, <em class="sig-param"><span class="n">drop_value</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">bn</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">first_block</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/resunet_3d.html#residual_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#models.resunet_3d.residual_block" title="Permalink to this definition">¶</a></dt>
+<dd><p>Residual block.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">layer</span></code>) – Input layer of the block.</p></li>
+<li><p><strong>f_maps</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>) – Feature maps to use.</p></li>
+<li><p><strong>filter_size</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Height, width and depth of the convolution window.</p></li>
+<li><p><strong>activation</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Keras available activation type.</p></li>
+<li><p><strong>k_init</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Keras available kernel initializer type.</p></li>
+<li><p><strong>drop_value</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Dropout value to be fixed.</p></li>
+<li><p><strong>bn</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Use batch normalization.</p></li>
+<li><p><strong>first_block</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – To advice the function that it is the first residual block of the network, which avoids Full Pre-Activation
+layers (more info of Full Pre-Activation in <a class="reference external" href="https://arxiv.org/pdf/1603.05027.pdf">Identity Mappings in Deep Residual Networks</a>).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>x</strong> – Last layer of the block.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">layer</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="att_unet_3d.html" class="btn btn-neutral float-right" title="3D Attention U-Net" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="unet_3d.html" class="btn btn-neutral float-left" title="3D U-Net" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2021, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

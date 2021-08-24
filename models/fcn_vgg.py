@@ -22,7 +22,7 @@ def FCN32_VGG16(image_shape, n_classes=2):
 
        Calling this function with its default parameters returns the following network:
 
-       .. image:: img/fcn32.png
+       .. image:: ../img/fcn32.png
            :width: 100%
            :align: center
 
@@ -94,7 +94,7 @@ def FCN8_VGG16(image_shape, n_classes=2):
 
        Calling this function with its default parameters returns the following network:
 
-       .. image:: img/fcn8.png
+       .. image:: ../img/fcn8.png
            :width: 100%
            :align: center
 

@@ -9,6 +9,9 @@ PROBLEM:
 DATA: 
     PATCH_SIZE: (256, 256, 1)
     CHANNELS: BC
+    MW_TH1: 0.2                                                                                                         
+    MW_TH2: 0.1                                                                                                         
+    MW_TH3: 0.3   
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         IN_MEMORY: True

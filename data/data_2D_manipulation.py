@@ -280,8 +280,7 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
            X_train, Y_train = crop_data_with_overlap(X_train, (256, 256, 1), Y_train, (0, 0))
 
            # Notice that as the shape of the data has exact division with the wnanted crops shape so no overlap will be
-           # made. The function will print the following 
-           # information:
+           # made. The function will print the following information:
            #     Minimum overlap selected: (0, 0)
            #     Real overlapping (%): (0.0, 0.0)
            #     Real overlapping (pixels): (0.0, 0.0)
@@ -516,19 +515,19 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
 
        As example of different overlap maps are presented below. 
 
-       +---------------------------------------+-------------------------------------------+
-       | .. figure:: img/merged_ov_map_0.png   | .. figure:: img/merged_ov_map_0.25.png    |
-       |   :width: 80%                         |   :width: 70%                             |
-       |   :align: center                      |   :align: center                          |
-       |                                       |                                           |
-       |   Example 1 overlapping map           |   Example 2 overlapping map               |
-       +---------------------------------------+-------------------------------------------+
-       | .. figure:: img/merged_ov_map_0.5.png | .. figure:: img/merged_ov_map_0.5inx.png  |
-       |   :width: 80%                         |   :width: 70%                             |
-       |   :align: center                      |   :align: center                          |
-       |                                       |                                           |
-       |   Example 3 overlapping map           |   Example 4 overlapping map               |
-       +---------------------------------------+-------------------------------------------+
+       +--------------------------------------------+--------------------------------------------+
+       | .. figure:: ../img/merged_ov_map_0.png     | .. figure:: ../img/merged_ov_map_0.25.png  |
+       |   :width: 80%                              |   :width: 80%                              |
+       |   :align: center                           |   :align: center                           |
+       |                                            |                                            |
+       |   Example 1 overlapping map                |   Example 2 overlapping map                |
+       +--------------------------------------------+--------------------------------------------+
+       | .. figure:: ../img/merged_ov_map_0.5.png   | .. figure:: ../img/merged_ov_map_0.5inx.png|
+       |   :width: 80%                              |   :width: 80%                              |
+       |   :align: center                           |   :align: center                           |
+       |                                            |                                            |
+       |   Example 3 overlapping map                |   Example 4 overlapping map                |
+       +--------------------------------------------+--------------------------------------------+
     """
 
     if verbose:
@@ -694,13 +693,13 @@ def check_crops(data, original_shape, ov, num_examples=1, include_crops=True, ou
        The example above will store 12 individual crops (4x3, height x width), and two images of the original shape:
        data image and its mask. For instance:
 
-       +-----------------------------------------------+----------------------------------------------+
-       | .. figure:: img/check_crop_data.png           | .. figure:: img/check_crop_mask.png          |
-       |   :width: 80%                                 |   :width: 80%                                |
-       |   :align: center                              |   :align: center                             |
-       |                                               |                                              |
-       | Original image (the grid should be each crop) | Original mask (the grid should be each crop) |
-       +-----------------------------------------------+----------------------------------------------+
+       +----------------------------------------------+----------------------------------------------+
+       | .. figure:: ../img/check_crop_data.png       | .. figure:: ../img/check_crop_mask.png       |
+       |   :width: 80%                                |   :width: 80%                                |
+       |   :align: center                             |   :align: center                             |
+       |                                              |                                              |
+       | Original image (the grid should be each crop)| Original mask (the grid should be each crop) |
+       +----------------------------------------------+----------------------------------------------+
     """
   
     print("### CHECK-CROPS ###")

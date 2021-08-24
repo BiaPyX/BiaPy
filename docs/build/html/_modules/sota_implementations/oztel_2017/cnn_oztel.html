@@ -80,28 +80,34 @@
               
             
             
-              <p class="caption"><span class="caption-text">Quick start</span></p>
+              <p class="caption"><span class="caption-text">How to run</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../quick_start.html">Step 0: Prepare environment</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../quick_start.html#step-1-data-preparation">Step 1: Data preparation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../quick_start.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../quick_start.html#step-3-run-the-code">Step 3: Run the code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Manuscripts</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../mitochondria.html">Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../data_2d_manipulation.html">2D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../data_3d_manipulation.html">3D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../generators.html">Generators</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../networks.html">Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../grad_cam.html">Grad-CAM</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../bibliography.html">Bibliography</a></li>
 </ul>
 
             
@@ -169,8 +175,7 @@
 <span></span><span class="kn">from</span> <span class="nn">tensorflow</span> <span class="kn">import</span> <span class="n">keras</span>
 <span class="kn">from</span> <span class="nn">tensorflow.keras</span> <span class="kn">import</span> <span class="n">layers</span>
 
-<div class="viewcode-block" id="create_oztel_model"><a class="viewcode-back" href="../../../oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model">[docs]</a><span class="k">def</span> <span class="nf">create_oztel_model</span><span class="p">(</span><span class="n">num_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
-                       <span class="n">optimizer</span><span class="o">=</span><span class="s1">&#39;adam&#39;</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;categorical_crossentropy&#39;</span><span class="p">):</span>
+<div class="viewcode-block" id="create_oztel_model"><a class="viewcode-back" href="../../../sota_implementations/oztel_2017/oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model">[docs]</a><span class="k">def</span> <span class="nf">create_oztel_model</span><span class="p">(</span><span class="n">num_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="mi">1</span><span class="p">)):</span>
     <span class="sd">&quot;&quot;&quot;Create the CNN proposed by Oztel et. al.</span>
 
 <span class="sd">       Parameters</span>
@@ -181,12 +186,6 @@
 <span class="sd">       input_shape : 3D tuple, optional</span>
 <span class="sd">           Dimensions of the input image.</span>
 
-<span class="sd">       optimizer : str, optional</span>
-<span class="sd">           Optimizer used to minimize the loss function. </span>
-<span class="sd">        </span>
-<span class="sd">       loss : str, optional</span>
-<span class="sd">           Loss function to use according to Keras options.</span>
-<span class="sd">        </span>
 <span class="sd">       Returns</span>
 <span class="sd">       -------</span>
 <span class="sd">       model : Keras model</span>
@@ -195,7 +194,7 @@
 
 <span class="sd">       Here is a picture of the network extracted from the original paper:</span>
 <span class="sd">                                                                                </span>
-<span class="sd">       .. image:: img/oztel_network.png</span>
+<span class="sd">       .. image:: ../../img/oztel_network.png</span>
 <span class="sd">           :width: 100%                                                         </span>
 <span class="sd">           :align: center</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -221,13 +220,10 @@
         <span class="p">]</span>
     <span class="p">)</span>
 
-    <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">optimizer</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="n">loss</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;accuracy&#39;</span><span class="p">])</span>
-
     <span class="k">return</span> <span class="n">model</span></div>
 
 
-<div class="viewcode-block" id="create_oztel_model_V1"><a class="viewcode-back" href="../../../oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model_V1">[docs]</a><span class="k">def</span> <span class="nf">create_oztel_model_V1</span><span class="p">(</span><span class="n">num_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>              
-                       <span class="n">optimizer</span><span class="o">=</span><span class="s1">&#39;adam&#39;</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;categorical_crossentropy&#39;</span><span class="p">):</span>      
+<div class="viewcode-block" id="create_oztel_model_V1"><a class="viewcode-back" href="../../../sota_implementations/oztel_2017/oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model_V1">[docs]</a><span class="k">def</span> <span class="nf">create_oztel_model_V1</span><span class="p">(</span><span class="n">num_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="mi">1</span><span class="p">)):</span>
     <span class="sd">&quot;&quot;&quot;Create the CNN proposed by Oztel et. al.                                 </span>
 <span class="sd">                                                                                </span>
 <span class="sd">       Parameters                                                               </span>
@@ -238,12 +234,6 @@
 <span class="sd">       input_shape : 3D tuple, optional                                         </span>
 <span class="sd">           Dimensions of the input image.                                       </span>
 <span class="sd">                                                                                </span>
-<span class="sd">       optimizer : str, optional                                                </span>
-<span class="sd">           Optimizer used to minimize the loss function.                        </span>
-<span class="sd">                                                                                </span>
-<span class="sd">       loss : str, optional                                                     </span>
-<span class="sd">           Loss function to use according to Keras options.                     </span>
-<span class="sd">                                                                                </span>
 <span class="sd">       Returns                                                                  </span>
 <span class="sd">       -------                                                                  </span>
 <span class="sd">       model : Keras model                                                      </span>
@@ -252,7 +242,7 @@
 <span class="sd">                                                                                </span>
 <span class="sd">       Here is a picture of the network extracted from the original paper:      </span>
 <span class="sd">                                                                                </span>
-<span class="sd">       .. image:: img/oztel_network.png                                         </span>
+<span class="sd">       .. image:: ../../img/oztel_network.png                                         </span>
 <span class="sd">           :width: 100%                                                         </span>
 <span class="sd">           :align: center                                                       </span>
 <span class="sd">    &quot;&quot;&quot;</span> 
@@ -300,8 +290,6 @@
             <span class="n">layers</span><span class="o">.</span><span class="n">Conv2D</span><span class="p">(</span><span class="n">num_classes</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">activation</span><span class="o">=</span><span class="s1">&#39;softmax&#39;</span><span class="p">),</span>
         <span class="p">]</span>
     <span class="p">)</span>
-
-    <span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">optimizer</span><span class="o">=</span><span class="n">optimizer</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="n">loss</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;accuracy&#39;</span><span class="p">])</span>
 
     <span class="k">return</span> <span class="n">model</span></div>
 </pre></div>

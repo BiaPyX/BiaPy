@@ -1,0 +1,327 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>models &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="index.html">Module code</a> &raquo;</li>
+        
+      <li>models</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for models</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">importlib</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras.utils</span> <span class="kn">import</span> <span class="n">plot_model</span>
+
+
+<div class="viewcode-block" id="build_model"><a class="viewcode-back" href="../models/init.html#models.build_model">[docs]</a><span class="k">def</span> <span class="nf">build_model</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">job_identifier</span><span class="p">):</span>   
+    <span class="sd">&quot;&quot;&quot;Build selected model </span>
+
+<span class="sd">       Parameters                                                                                                       </span>
+<span class="sd">       ----------                                                                                                       </span>
+<span class="sd">       cfg : YACS CN object</span>
+<span class="sd">           Configuration.</span>
+<span class="sd">                                                                                                                        </span>
+<span class="sd">       job_identifier: str</span>
+<span class="sd">           Job name.</span>
+<span class="sd">                                                                                                                        </span>
+<span class="sd">       Returns                                                                                                          </span>
+<span class="sd">       -------                  </span>
+<span class="sd">       model : Keras model                                                                                              </span>
+<span class="sd">           Selected model. </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">assert</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;unet&#39;</span><span class="p">,</span> <span class="s1">&#39;resunet&#39;</span><span class="p">,</span> <span class="s1">&#39;attention_unet&#39;</span><span class="p">,</span> <span class="s1">&#39;fcn32&#39;</span><span class="p">,</span> <span class="s1">&#39;fcn8&#39;</span><span class="p">,</span> <span class="s1">&#39;nnunet&#39;</span><span class="p">,</span> <span class="s1">&#39;tiramisu&#39;</span><span class="p">,</span> <span class="s1">&#39;mnet&#39;</span><span class="p">,</span>
+                                      <span class="s1">&#39;multiresunet&#39;</span><span class="p">,</span> <span class="s1">&#39;seunet&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s1">&#39;INSTANCE_SEG&#39;</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">!=</span> <span class="s1">&#39;unet&#39;</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">!=</span> <span class="s1">&#39;resunet&#39;</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not implemented pipeline option: instance segmentation models adapted are &#39;unet&#39; or &#39;resunet&#39;&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Import the model</span>
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;fcn32&#39;</span> <span class="ow">or</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;fcn8&#39;</span><span class="p">:</span>
+        <span class="n">modelname</span> <span class="o">=</span> <span class="s1">&#39;fcn_vgg&#39;</span>
+    <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;tiramisu&#39;</span> <span class="ow">or</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;nnunet&#39;</span> <span class="ow">or</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;mnet&#39;</span>\
+         <span class="ow">or</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;multiresunet&#39;</span><span class="p">:</span>
+        <span class="n">modelname</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">modelname</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span> <span class="k">else</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">+</span> <span class="s1">&#39;_3d&#39;</span> 
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s1">&#39;INSTANCE_SEG&#39;</span><span class="p">:</span> <span class="n">modelname</span> <span class="o">=</span> <span class="n">modelname</span><span class="o">+</span><span class="s2">&quot;_instances&quot;</span>
+    <span class="n">mdl</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">import_module</span><span class="p">(</span><span class="s1">&#39;models.&#39;</span><span class="o">+</span><span class="n">modelname</span><span class="p">)</span>
+    <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">mdl</span><span class="o">.</span><span class="vm">__dict__</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">x</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">)]</span>
+    <span class="nb">globals</span><span class="p">()</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">k</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">mdl</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">names</span><span class="p">})</span>
+
+    <span class="c1"># Model building</span>
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;unet&#39;</span> <span class="ow">or</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;resunet&#39;</span> <span class="ow">or</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;seunet&#39;</span> <span class="ow">or</span> \
+       <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;attention_unet&#39;</span><span class="p">:</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">image_shape</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ACTIVATION</span><span class="p">,</span> <span class="n">feature_maps</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">FEATURE_MAPS</span><span class="p">,</span>
+                <span class="n">drop_values</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">DROPOUT_VALUES</span><span class="p">,</span> <span class="n">spatial_dropout</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">SPATIAL_DROPOUT</span><span class="p">,</span>
+                <span class="n">batch_norm</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">BATCH_NORMALIZATION</span><span class="p">,</span> <span class="n">k_init</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">KERNEL_INIT</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;unet&#39;</span><span class="p">:</span>
+            <span class="n">f_name</span> <span class="o">=</span> <span class="n">U_Net_3D</span> <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;3D&#39;</span> <span class="k">else</span> <span class="n">U_Net_2D</span>
+        <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;resunet&#39;</span><span class="p">:</span>
+            <span class="n">f_name</span> <span class="o">=</span> <span class="n">ResUNet_3D</span> <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;3D&#39;</span> <span class="k">else</span> <span class="n">ResUNet_2D</span>
+        <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;attention_unet&#39;</span><span class="p">:</span>
+            <span class="n">f_name</span> <span class="o">=</span> <span class="n">Attention_U_Net_3D</span> <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;3D&#39;</span> <span class="k">else</span> <span class="n">Attention_U_Net_2D</span>
+        <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;seunet&#39;</span><span class="p">:</span>
+            <span class="n">f_name</span> <span class="o">=</span> <span class="n">SE_U_Net_3D</span> <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;3D&#39;</span> <span class="k">else</span> <span class="n">SE_U_Net_2D</span>
+
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">TYPE</span> <span class="o">==</span> <span class="s1">&#39;INSTANCE_SEG&#39;</span><span class="p">:</span>
+            <span class="n">args</span><span class="p">[</span><span class="s1">&#39;output_channels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">CHANNELS</span>
+            <span class="n">args</span><span class="p">[</span><span class="s1">&#39;channel_weights&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">CHANNEL_WEIGHTS</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">args</span><span class="p">[</span><span class="s1">&#39;n_classes&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">N_CLASSES</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;3D&#39;</span><span class="p">:</span>
+            <span class="n">args</span><span class="p">[</span><span class="s1">&#39;z_down&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">Z_DOWN</span>
+
+        <span class="n">model</span> <span class="o">=</span> <span class="n">f_name</span><span class="p">(</span><span class="o">**</span><span class="n">args</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;fcn32&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span><span class="p">:</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="n">FCN32_VGG16</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">,</span> <span class="n">n_classes</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">N_CLASSES</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not implemented pipeline option&quot;</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;fcn8&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span><span class="p">:</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="n">FCN8_VGG16</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">,</span> <span class="n">n_classes</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">N_CLASSES</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not implemented pipeline option&quot;</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;tiramisu&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span><span class="p">:</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="n">FC_DenseNet103</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">,</span> <span class="n">n_filters_first_conv</span><span class="o">=</span><span class="n">n_filters_first_conv</span><span class="p">,</span> <span class="n">n_pool</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">DEPTH</span><span class="p">,</span> 
+                <span class="n">growth_rate</span><span class="o">=</span><span class="n">growth_rate</span><span class="p">,</span> <span class="n">n_layers_per_block</span><span class="o">=</span><span class="n">n_layers_per_block</span><span class="p">,</span> <span class="n">dropout_p</span><span class="o">=</span><span class="n">dropout_value</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not implemented pipeline option&quot;</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;mnet&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span><span class="p">:</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="n">MNet</span><span class="p">((</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not implemented pipeline option&quot;</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">cfg</span><span class="o">.</span><span class="n">MODEL</span><span class="o">.</span><span class="n">ARCHITECTURE</span> <span class="o">==</span> <span class="s1">&#39;multiresunet&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">PROBLEM</span><span class="o">.</span><span class="n">NDIM</span> <span class="o">==</span> <span class="s1">&#39;2D&#39;</span><span class="p">:</span> 
+            <span class="n">model</span> <span class="o">=</span> <span class="n">MultiResUnet</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">DATA</span><span class="o">.</span><span class="n">PATCH_SIZE</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not implemented pipeline option&quot;</span><span class="p">)</span>
+    
+    <span class="c1"># Check the network created</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">line_length</span><span class="o">=</span><span class="mi">150</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">CHARTS</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">model_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">PATHS</span><span class="o">.</span><span class="n">CHARTS</span><span class="p">,</span> <span class="s2">&quot;model_plot_&quot;</span> <span class="o">+</span> <span class="n">job_identifier</span> <span class="o">+</span> <span class="s2">&quot;.png&quot;</span><span class="p">)</span>
+    <span class="n">plot_model</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">to_file</span><span class="o">=</span><span class="n">model_name</span><span class="p">,</span> <span class="n">show_shapes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">show_layer_names</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">model</span></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2021, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

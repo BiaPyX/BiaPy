@@ -80,28 +80,34 @@
               
             
             
-              <p class="caption"><span class="caption-text">Quick start</span></p>
+              <p class="caption"><span class="caption-text">How to run</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../quick_start.html">Step 0: Prepare environment</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../quick_start.html#step-1-data-preparation">Step 1: Data preparation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../quick_start.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../quick_start.html#step-3-run-the-code">Step 3: Run the code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Manuscripts</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../mitochondria.html">Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../data_2d_manipulation.html">2D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../data_3d_manipulation.html">3D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../generators.html">Generators</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../networks.html">Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../grad_cam.html">Grad-CAM</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../bibliography.html">Bibliography</a></li>
 </ul>
 
             
@@ -180,7 +186,7 @@
 <span class="kn">from</span> <span class="nn">scipy.ndimage.filters</span> <span class="kn">import</span> <span class="n">median_filter</span>
 
 
-<div class="viewcode-block" id="create_oztel_patches"><a class="viewcode-back" href="../../../oztel_utils.html#sota_implementations.oztel_2017.utils.create_oztel_patches">[docs]</a><span class="k">def</span> <span class="nf">create_oztel_patches</span><span class="p">(</span><span class="n">imgs</span><span class="p">,</span> <span class="n">lbls</span><span class="p">):</span>
+<div class="viewcode-block" id="create_oztel_patches"><a class="viewcode-back" href="../../../sota_implementations/oztel_2017/oztel_utils.html#sota_implementations.oztel_2017.utils.create_oztel_patches">[docs]</a><span class="k">def</span> <span class="nf">create_oztel_patches</span><span class="p">(</span><span class="n">imgs</span><span class="p">,</span> <span class="n">lbls</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Create a list of ``32x32`` images patches out of a list of images for each</span>
 <span class="sd">    class (at least ``80%`` of the pixels have to be of each class).</span>
 
@@ -228,7 +234,7 @@
     <span class="k">return</span> <span class="n">class0_patches</span><span class="p">,</span> <span class="n">class1_patches</span></div>
 
 
-<div class="viewcode-block" id="ensemble8_2d_predictions"><a class="viewcode-back" href="../../../oztel_utils.html#sota_implementations.oztel_2017.utils.ensemble8_2d_predictions">[docs]</a><span class="k">def</span> <span class="nf">ensemble8_2d_predictions</span><span class="p">(</span><span class="n">o_img</span><span class="p">,</span> <span class="n">pred_func</span><span class="p">,</span> <span class="n">batch_size_value</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<div class="viewcode-block" id="ensemble8_2d_predictions"><a class="viewcode-back" href="../../../sota_implementations/oztel_2017/oztel_utils.html#sota_implementations.oztel_2017.utils.ensemble8_2d_predictions">[docs]</a><span class="k">def</span> <span class="nf">ensemble8_2d_predictions</span><span class="p">(</span><span class="n">o_img</span><span class="p">,</span> <span class="n">pred_func</span><span class="p">,</span> <span class="n">batch_size_value</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
                              <span class="n">last_class</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Outputs the mean prediction of a given image generating its 8 possible </span>
 <span class="sd">       rotations and flips. This function is adapted to Oztel implementation as</span>
@@ -338,7 +344,7 @@
     <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="spuriuous_detection_filter"><a class="viewcode-back" href="../../../oztel_utils.html#sota_implementations.oztel_2017.utils.spuriuous_detection_filter">[docs]</a><span class="k">def</span> <span class="nf">spuriuous_detection_filter</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">low_score_th</span><span class="o">=</span><span class="mf">0.6</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<div class="viewcode-block" id="spuriuous_detection_filter"><a class="viewcode-back" href="../../../sota_implementations/oztel_2017/oztel_utils.html#sota_implementations.oztel_2017.utils.spuriuous_detection_filter">[docs]</a><span class="k">def</span> <span class="nf">spuriuous_detection_filter</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">low_score_th</span><span class="o">=</span><span class="mf">0.6</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Based on the first post-processing method proposed in `Oztel et al.` where </span>
 <span class="sd">       removes the artifacts with low class score.</span>
 
@@ -391,7 +397,7 @@
     <span class="k">return</span> <span class="n">class_Y</span></div>
 
 
-<div class="viewcode-block" id="watershed_refinement"><a class="viewcode-back" href="../../../oztel_utils.html#sota_implementations.oztel_2017.utils.watershed_refinement">[docs]</a><span class="k">def</span> <span class="nf">watershed_refinement</span><span class="p">(</span><span class="n">binary_input</span><span class="p">,</span> <span class="n">gray_input</span><span class="p">,</span> <span class="n">open_iter</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<div class="viewcode-block" id="watershed_refinement"><a class="viewcode-back" href="../../../sota_implementations/oztel_2017/oztel_utils.html#sota_implementations.oztel_2017.utils.watershed_refinement">[docs]</a><span class="k">def</span> <span class="nf">watershed_refinement</span><span class="p">(</span><span class="n">binary_input</span><span class="p">,</span> <span class="n">gray_input</span><span class="p">,</span> <span class="n">open_iter</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
     <span class="n">dilate_iter</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">erode_iter</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">gauss_sigma</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">canny_sigma</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> 
     <span class="n">save_marks_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 
@@ -467,7 +473,7 @@
 
     <span class="k">return</span> <span class="n">seg</span></div>
 
-<div class="viewcode-block" id="improve_components"><a class="viewcode-back" href="../../../oztel_utils.html#sota_implementations.oztel_2017.utils.improve_components">[docs]</a><span class="k">def</span> <span class="nf">improve_components</span><span class="p">(</span><span class="n">test_pred</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="mi">9</span><span class="p">):</span>
+<div class="viewcode-block" id="improve_components"><a class="viewcode-back" href="../../../sota_implementations/oztel_2017/oztel_utils.html#sota_implementations.oztel_2017.utils.improve_components">[docs]</a><span class="k">def</span> <span class="nf">improve_components</span><span class="p">(</span><span class="n">test_pred</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="mi">9</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot; Apply Z-Filtering to the given data. &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">median_filter</span><span class="p">(</span><span class="n">test_pred</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">depth</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span> <span class="c1">#run z-smoothing (median filter)</span></div>
 </pre></div>

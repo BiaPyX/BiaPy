@@ -10,8 +10,8 @@ def apply_post_processing(cfg, data, Y=None):
                                                                                                                         
        Parameters                                                                                                       
        ----------                                                                                                       
-       cfg : config.config (Config class)                                                                               
-           Configuration class.                                                                                         
+       cfg : YACS CN object                                                                               
+           Configuration.                                                                                         
                                                                                                                         
        data : 4D Numpy array                                                                                               
            Data to apply post_proccessing. E.g. ``(num_of_images, x, y, channels)``.                                                              

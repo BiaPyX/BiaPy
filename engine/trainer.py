@@ -374,11 +374,13 @@ class Trainer(object):
                             # Create instances 
                             print("Creating instances with watershed . . .")
                             if self.cfg.DATA.CHANNELS == "BC":
-                                pred = bc_watershed(pred, thres1=0.2, thres2=0.1, thres3=0.3, thres_small=30,
-                                                    save_dir=self.cfg.PATHS.WATERSHED_DIR)
+                                pred = bc_watershed(pred, thres1=self.cfg.DATA.MW_TH1, thres2=self.cfg.DATA.MW_TH2,
+                                    thres3=self.cfg.DATA.MW_TH3, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
+                                    save_dir=self.cfg.PATHS.WATERSHED_DIR)
                             else:
-                                pred = bcd_watershed(pred, thres1=0.7, thres2=0.05, thres3=0.3, thres4=1.2, 
-                                                     thres5=1, thres_small=10, save_dir=self.cfg.PATHS.WATERSHED_DIR)
+                                pred = bcd_watershed(pred, thres1=self.cfg.DATA.MW_TH1, thres2=self.cfg.DATA.MW_TH2,
+                                    thres3=self.cfg.DATA.MW_TH3, thres4=self.cfg.DATA.MW_TH4, thres5=self.cfg.DATA.MW_TH5,
+                                    thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, save_dir=self.cfg.PATHS.WATERSHED_DIR)
 
                         if self.cfg.TEST.MAP and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
                             print("####################\n"                                            

@@ -1,0 +1,616 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>2D Data manipulation &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="3D Data manipulation" href="data_3d_manipulation.html" />
+    <link rel="prev" title="Init" href="init.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../config/main_config.html">config</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="data.html">data</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="init.html">Init</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">2D Data manipulation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data_3d_manipulation.html">3D Data manipulation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generators/generators.html">generators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="post_processing/main_post_proc.html">post_processing</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../API.html">&lt;no title&gt;</a> &raquo;</li>
+        
+          <li><a href="data.html">data</a> &raquo;</li>
+        
+      <li>2D Data manipulation</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-data.data_2D_manipulation">
+<span id="d-data-manipulation"></span><h1>2D Data manipulation<a class="headerlink" href="#module-data.data_2D_manipulation" title="Permalink to this headline">¶</a></h1>
+<dl class="py function">
+<dt id="data.data_2D_manipulation.load_and_prepare_2D_train_data">
+<code class="sig-prename descclassname">data.data_2D_manipulation.</code><code class="sig-name descname">load_and_prepare_2D_train_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">train_path</span></em>, <em class="sig-param"><span class="n">train_mask_path</span></em>, <em class="sig-param"><span class="n">val_split</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">seed</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">shuffle_val</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">e_d_data</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_mask</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">e_d_data_dim</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">num_crops_per_dataset</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">random_crops_in_DA</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">crop_shape</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">ov</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">check_crop</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">check_crop_path</span><span class="o">=</span><span class="default_value">'check_crop'</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data/data_2D_manipulation.html#load_and_prepare_2D_train_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.data_2D_manipulation.load_and_prepare_2D_train_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load train and validation images from the given paths to create 2D data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>train_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the training data.</p></li>
+<li><p><strong>train_mask_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the training data masks.</p></li>
+<li><p><strong>val_split</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – % of the train data used as validation (value between <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">1</span></code>).</p></li>
+<li><p><strong>seed</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Seed value.</p></li>
+<li><p><strong>shuffle_val</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Take random training examples to create validation data.</p></li>
+<li><p><strong>e_d_data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – List of paths where the extra data of other datasets are stored. If <code class="docutils literal notranslate"><span class="pre">make_crops</span></code> is not enabled, these
+extra datasets must have the same image shape as the main dataset since they are going to be stacked in a
+unique array.</p></li>
+<li><p><strong>e_d_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – List of paths where the extra data mask of other datasets are stored. Same constraints as <code class="docutils literal notranslate"><span class="pre">e_d_data</span></code>.</p></li>
+<li><p><strong>e_d_data_dim</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>, <em>optional</em>) – List of shapes of the extra datasets provided. Same constraints as <code class="docutils literal notranslate"><span class="pre">e_d_data</span></code>.</p></li>
+<li><p><strong>num_crops_per_dataset</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of crops per extra dataset to take into account. Useful to ensure that all the datasets have the same
+weight during network trainning.</p></li>
+<li><p><strong>random_crops_in_DA</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To advice the method that not preparation of the data must be done, as random subvolumes will be created on
+DA, and the whole volume will be used for that.</p></li>
+<li><p><strong>crop_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>, <em>optional</em>) – Shape of the crops. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>ov</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">floats</span> <span class="pre">tuple</span></code>, <em>optional</em>) – Amount of minimum overlap on x and y dimensions. The values must be on range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or
+<code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Size of padding to be added on each axis <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>. E.g. <code class="docutils literal notranslate"><span class="pre">(24,</span> <span class="pre">24)</span></code></p></li>
+<li><p><strong>check_crop</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To save the crops made to ensure they are generating as one wish.</p></li>
+<li><p><strong>check_crop_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Path to save the crop samples.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>X_train</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Train images. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_train</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Train images’ mask. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>X_val</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Validation images (<code class="docutils literal notranslate"><span class="pre">val_split</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>). E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_val</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Validation images’ mask (<code class="docutils literal notranslate"><span class="pre">val_split</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>). E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">y,</span> <span class="pre">x,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>filenames</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Loaded train filenames.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
+<span class="c1"># Case where we need to load the data (creating a validation split)</span>
+<span class="n">train_path</span> <span class="o">=</span> <span class="s2">&quot;data/train/x&quot;</span>
+<span class="n">train_mask_path</span> <span class="o">=</span> <span class="s2">&quot;data/train/y&quot;</span>
+
+<span class="c1"># Original image shape is (1024, 768, 165), so each image shape should be this:</span>
+<span class="n">img_train_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span>
+<span class="n">Y_val</span><span class="p">,</span> <span class="n">crops_made</span> <span class="o">=</span> <span class="n">load_and_prepare_2D_data</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">img_train_shape</span><span class="p">,</span> <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+    <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">make_crops</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="c1"># The function will print the shapes of the generated arrays. In this example:</span>
+<span class="c1">#     *** Loaded train data shape is: (148, 768, 1024, 1)</span>
+<span class="c1">#     *** Loaded validation data shape is: (17, 768, 1024, 1)</span>
+<span class="c1">#</span>
+<span class="c1"># Notice height and width swap because of Numpy ndarray terminology</span>
+
+<span class="c1"># EXAMPLE 2</span>
+<span class="c1"># Same as the first example but creating patches of (256x256)</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span>
+<span class="n">Y_val</span><span class="p">,</span> <span class="n">crops_made</span> <span class="o">=</span> <span class="n">load_and_prepare_2D_data</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">img_train_shape</span><span class="p">,</span> <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+    <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">make_crops</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">check_crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">check_crop_path</span><span class="o">=</span><span class="s2">&quot;check_folder&quot;</span><span class="p">)</span>
+
+<span class="c1"># The function will print the shapes of the generated arrays. In this example:</span>
+<span class="c1">#    *** Loaded train data shape is: (1776, 256, 256, 1)</span>
+<span class="c1">#    *** Loaded validation data shape is: (204, 256, 256, 1)</span>
+
+<span class="c1"># EXAMPLE 3</span>
+<span class="c1"># Same as the first example but defining extra datasets to be loaded and stacked together</span>
+<span class="c1"># with the main dataset. Extra variables to be defined:</span>
+<span class="n">extra_datasets_data_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;/data2/train/x&#39;</span><span class="p">)</span>
+<span class="n">extra_datasets_mask_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;/data2/train/y&#39;</span><span class="p">)</span>
+<span class="n">extra_datasets_data_dim_list</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="mi">877</span><span class="p">,</span> <span class="mi">967</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span>
+<span class="n">Y_val</span><span class="p">,</span> <span class="n">crops_made</span> <span class="o">=</span> <span class="n">load_and_prepare_2D_data</span><span class="p">(</span><span class="n">train_path</span><span class="p">,</span> <span class="n">train_mask_path</span><span class="p">,</span> <span class="n">img_train_shape</span><span class="p">,</span> <span class="n">val_split</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+    <span class="n">shuffle_val</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">make_crops</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">crop_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">check_crop</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">check_crop_path</span><span class="o">=</span><span class="s2">&quot;check_folder&quot;</span> <span class="n">e_d_data</span><span class="o">=</span><span class="n">extra_datasets_data_list</span><span class="p">,</span> <span class="n">e_d_mask</span><span class="o">=</span><span class="n">extra_datasets_mask_list</span><span class="p">,</span>
+    <span class="n">e_d_data_dim</span><span class="o">=</span><span class="n">extra_datasets_data_dim_list</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data.data_2D_manipulation.crop_data_with_overlap">
+<code class="sig-prename descclassname">data.data_2D_manipulation.</code><code class="sig-name descname">crop_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">crop_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data/data_2D_manipulation.html#crop_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.data_2D_manipulation.crop_data_with_overlap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Crop data into small square pieces with overlap. The difference with <code class="xref py py-func docutils literal notranslate"><span class="pre">crop_data()</span></code> is that this function
+allows you to create patches with overlap.</p>
+<p>The opposite function is <a class="reference internal" href="#data.data_2D_manipulation.merge_data_with_overlap" title="data.data_2D_manipulation.merge_data_with_overlap"><code class="xref py py-func docutils literal notranslate"><span class="pre">merge_data_with_overlap()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to crop. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>crop_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Shape of the crops to create. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>data_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Data mask to crop. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>overlap</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x and y dimensions. The values must be on range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or
+<code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap. E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Size of padding to be added on each axis <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>. E.g. <code class="docutils literal notranslate"><span class="pre">(24,</span> <span class="pre">24)</span></code>.</p></li>
+<li><p><strong>verbose</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To print information about the crop to be made.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>cropped_data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Cropped image data. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>cropped_data_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Cropped image data masks. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
+<span class="c1"># Divide in crops of (256, 256) a given data with the minimum overlap</span>
+<span class="n">X_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">Y_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">crop_data_with_overlap</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Y_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+
+<span class="c1"># Notice that as the shape of the data has exact division with the wnanted crops shape so no overlap will be</span>
+<span class="c1"># made. The function will print the following information:</span>
+<span class="c1">#     Minimum overlap selected: (0, 0)</span>
+<span class="c1">#     Real overlapping (%): (0.0, 0.0)</span>
+<span class="c1">#     Real overlapping (pixels): (0.0, 0.0)</span>
+<span class="c1">#     (3, 4) patches per (x,y) axis</span>
+<span class="c1">#     **** New data shape is: (1980, 256, 256, 1)</span>
+
+<span class="c1"># EXAMPLE 2</span>
+<span class="c1"># Same as example 1 but with 25% of overlap between crops</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">crop_data_with_overlap</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Y_train</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">))</span>
+
+<span class="c1"># The function will print the following information:</span>
+<span class="c1">#     Minimum overlap selected: (0.25, 0.25)</span>
+<span class="c1">#     Real overlapping (%): (0.33203125, 0.3984375)</span>
+<span class="c1">#     Real overlapping (pixels): (85.0, 102.0)</span>
+<span class="c1">#     (4, 6) patches per (x,y) axis</span>
+<span class="c1">#     **** New data shape is: (3960, 256, 256, 1)</span>
+
+<span class="c1"># EXAMPLE 3</span>
+<span class="c1"># Same as example 1 but with 50% of overlap between crops</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">crop_data_with_overlap</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Y_train</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">))</span>
+
+<span class="c1"># The function will print the shape of the created array. In this example:</span>
+<span class="c1">#     Minimum overlap selected: (0.5, 0.5)</span>
+<span class="c1">#     Real overlapping (%): (0.59765625, 0.5703125)</span>
+<span class="c1">#     Real overlapping (pixels): (153.0, 146.0)</span>
+<span class="c1">#     (6, 8) patches per (x,y) axis</span>
+<span class="c1">#     **** New data shape is: (7920, 256, 256, 1)</span>
+
+<span class="c1"># EXAMPLE 4</span>
+<span class="c1"># Same as example 2 but with 50% of overlap only in x axis</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">crop_data_with_overlap</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Y_train</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+
+<span class="c1"># The function will print the shape of the created array. In this example:</span>
+<span class="c1">#     Minimum overlap selected: (0.5, 0)</span>
+<span class="c1">#     Real overlapping (%): (0.59765625, 0.0)</span>
+<span class="c1">#     Real overlapping (pixels): (153.0, 0.0)</span>
+<span class="c1">#     (6, 4) patches per (x,y) axis</span>
+<span class="c1">#     **** New data shape is: (3960, 256, 256, 1)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data.data_2D_manipulation.merge_data_with_overlap">
+<code class="sig-prename descclassname">data.data_2D_manipulation.</code><code class="sig-name descname">merge_data_with_overlap</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">original_shape</span></em>, <em class="sig-param"><span class="n">data_mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">overlap</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">padding</span><span class="o">=</span><span class="default_value">0, 0</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">out_dir</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data/data_2D_manipulation.html#merge_data_with_overlap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.data_2D_manipulation.merge_data_with_overlap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Merge data with an amount of overlap.</p>
+<p>The opposite function is <a class="reference internal" href="#data.data_2D_manipulation.crop_data_with_overlap" title="data.data_2D_manipulation.crop_data_with_overlap"><code class="xref py py-func docutils literal notranslate"><span class="pre">crop_data_with_overlap()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to merge. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>original_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Shape of the original data. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code></p></li>
+<li><p><strong>data_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Data mask to merge. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>overlap</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x, y and z dimensions. Should be the same as used in
+<a class="reference internal" href="#data.data_2D_manipulation.crop_data_with_overlap" title="data.data_2D_manipulation.crop_data_with_overlap"><code class="xref py py-func docutils literal notranslate"><span class="pre">crop_data_with_overlap()</span></code></a>. The values must be on range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or <code class="docutils literal notranslate"><span class="pre">99%</span></code> of
+overlap. E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>padding</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">ints</span></code>, <em>optional</em>) – Size of padding to be added on each axis <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>. E.g. <code class="docutils literal notranslate"><span class="pre">(24,</span> <span class="pre">24)</span></code>.</p></li>
+<li><p><strong>verbose</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To print information about the crop to be made.</p></li>
+<li><p><strong>out_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – If provided an image that represents the overlap made will be saved. The image will be colored as follows:
+green region when <code class="docutils literal notranslate"><span class="pre">==2</span></code> crops overlap, yellow when <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">&lt;</span> <span class="pre">x</span> <span class="pre">&lt;</span> <span class="pre">6</span></code> and red when <code class="docutils literal notranslate"><span class="pre">=&lt;6</span></code> or more crops are
+merged.</p></li>
+<li><p><strong>prefix</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Prefix to save overlap map with.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>merged_data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Merged image data. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>merged_data_mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Merged image data mask. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
+<span class="c1"># Merge the data of example 1 of &#39;crop_data_with_overlap&#39; function</span>
+
+<span class="c1"># 1) CROP</span>
+<span class="n">X_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">Y_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">crop_data_with_overlap</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Y_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+
+<span class="c1"># 2) MERGE</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">merge_data_with_overlap</span><span class="p">(</span>
+    <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Y_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">out_dir</span><span class="o">=</span><span class="s1">&#39;out_dir&#39;</span><span class="p">)</span>
+
+<span class="c1"># The function will print the following information:</span>
+<span class="c1">#     Minimum overlap selected: (0, 0)</span>
+<span class="c1">#     Real overlapping (%): (0.0, 0.0)</span>
+<span class="c1">#     Real overlapping (pixels): (0.0, 0.0)</span>
+<span class="c1">#     (3, 4) patches per (x,y) axis</span>
+<span class="c1">#     **** New data shape is: (165, 768, 1024, 1)</span>
+
+<span class="c1"># EXAMPLE 2</span>
+<span class="c1"># Merge the data of example 2 of &#39;crop_data_with_overlap&#39; function</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">merge_data_with_overlap</span><span class="p">(</span>
+     <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Y_train</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">),</span> <span class="n">out_dir</span><span class="o">=</span><span class="s1">&#39;out_dir&#39;</span><span class="p">)</span>
+
+<span class="c1"># The function will print the following information:</span>
+<span class="c1">#     Minimum overlap selected: (0.25, 0.25)</span>
+<span class="c1">#     Real overlapping (%): (0.33203125, 0.3984375)</span>
+<span class="c1">#     Real overlapping (pixels): (85.0, 102.0)</span>
+<span class="c1">#     (3, 5) patches per (x,y) axis</span>
+<span class="c1">#     **** New data shape is: (165, 768, 1024, 1)</span>
+
+<span class="c1"># EXAMPLE 3</span>
+<span class="c1"># Merge the data of example 3 of &#39;crop_data_with_overlap&#39; function</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">merge_data_with_overlap</span><span class="p">(</span>
+    <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Y_train</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">),</span> <span class="n">out_dir</span><span class="o">=</span><span class="s1">&#39;out_dir&#39;</span><span class="p">)</span>
+
+<span class="c1"># The function will print the shape of the created array. In this example:</span>
+<span class="c1">#     Minimum overlap selected: (0.5, 0.5)</span>
+<span class="c1">#     Real overlapping (%): (0.59765625, 0.5703125)</span>
+<span class="c1">#     Real overlapping (pixels): (153.0, 146.0)</span>
+<span class="c1">#     (6, 8) patches per (x,y) axis</span>
+<span class="c1">#     **** New data shape is: (165, 768, 1024, 1)</span>
+
+<span class="c1"># EXAMPLE 4</span>
+<span class="c1"># Merge the data of example 1 of &#39;crop_data_with_overlap&#39; function</span>
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">merge_data_with_overlap</span><span class="p">(</span>
+    <span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Y_train</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">out_dir</span><span class="o">=</span><span class="s1">&#39;out_dir&#39;</span><span class="p">)</span>
+
+<span class="c1"># The function will print the shape of the created array. In this example:</span>
+<span class="c1">#     Minimum overlap selected: (0.5, 0)</span>
+<span class="c1">#     Real overlapping (%): (0.59765625, 0.0)</span>
+<span class="c1">#     Real overlapping (pixels): (153.0, 0.0)</span>
+<span class="c1">#     (6, 4) patches per (x,y) axis</span>
+<span class="c1">#     **** New data shape is: (165, 768, 1024, 1)</span>
+</pre></div>
+</div>
+<p>As example of different overlap maps are presented below.</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><div class="figure align-center" id="id1">
+<a class="reference internal image-reference" href="../_images/merged_ov_map_0.png"><img alt="../_images/merged_ov_map_0.png" src="../_images/merged_ov_map_0.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Example 1 overlapping map</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+<td><div class="figure align-center" id="id2">
+<a class="reference internal image-reference" href="../_images/merged_ov_map_0.25.png"><img alt="../_images/merged_ov_map_0.25.png" src="../_images/merged_ov_map_0.25.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Example 2 overlapping map</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="figure align-center" id="id3">
+<a class="reference internal image-reference" href="../_images/merged_ov_map_0.5.png"><img alt="../_images/merged_ov_map_0.5.png" src="../_images/merged_ov_map_0.5.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Example 3 overlapping map</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+<td><div class="figure align-center" id="id4">
+<a class="reference internal image-reference" href="../_images/merged_ov_map_0.5inx.png"><img alt="../_images/merged_ov_map_0.5inx.png" src="../_images/merged_ov_map_0.5inx.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Example 4 overlapping map</span><a class="headerlink" href="#id4" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data.data_2D_manipulation.check_crops">
+<code class="sig-prename descclassname">data.data_2D_manipulation.</code><code class="sig-name descname">check_crops</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">original_shape</span></em>, <em class="sig-param"><span class="n">ov</span></em>, <em class="sig-param"><span class="n">num_examples</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">include_crops</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">out_dir</span><span class="o">=</span><span class="default_value">'check_crops'</span></em>, <em class="sig-param"><span class="n">prefix</span><span class="o">=</span><span class="default_value">''</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data/data_2D_manipulation.html#check_crops"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.data_2D_manipulation.check_crops" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check cropped images by the function <code class="xref py py-func docutils literal notranslate"><span class="pre">crop_data()</span></code> and
+<a class="reference internal" href="#data.data_2D_manipulation.crop_data_with_overlap" title="data.data_2D_manipulation.crop_data_with_overlap"><code class="xref py py-func docutils literal notranslate"><span class="pre">crop_data_with_overlap()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to crop. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>original_shape</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">4</span> <span class="pre">ints</span></code>) – Shape of the original data. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>ov</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Tuple</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">floats</span></code>, <em>optional</em>) – Amount of minimum overlap on x and y dimensions. The values must be on range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1)</span></code>, that is, <code class="docutils literal notranslate"><span class="pre">0%</span></code> or
+<code class="docutils literal notranslate"><span class="pre">99%</span></code> of overlap. E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>num_examples</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of examples to create.</p></li>
+<li><p><strong>include_crops</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To save cropped images or only the image to contruct.</p></li>
+<li><p><strong>out_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Directory where the images will be save.</p></li>
+<li><p><strong>prefix</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Prefix to save overlap map with.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
+<span class="c1"># Check crops made in the first example of &#39;crop_data&#39; function</span>
+<span class="n">original_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">)</span>
+<span class="n">X_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">original_shape</span><span class="p">)</span>
+<span class="n">Y_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">original_shape</span><span class="p">)</span>
+
+<span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">crop_data_with_overlap</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Y_train</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+
+<span class="n">check_crops</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">,</span> <span class="n">num_examples</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">out_dir</span><span class="o">=</span><span class="s1">&#39;out&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The example above will store 12 individual crops (4x3, height x width), and two images of the original shape:
+data image and its mask. For instance:</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><div class="figure align-center">
+<a class="reference internal image-reference" href="../_images/check_crop_data.png"><img alt="../_images/check_crop_data.png" src="../_images/check_crop_data.png" style="width: 80%;" /></a>
+</div>
+<p>Original image (the grid should be each crop)</p>
+</td>
+<td><div class="figure align-center">
+<a class="reference internal image-reference" href="../_images/check_crop_mask.png"><img alt="../_images/check_crop_mask.png" src="../_images/check_crop_mask.png" style="width: 80%;" /></a>
+</div>
+<p>Original mask (the grid should be each crop)</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data.data_2D_manipulation.random_crop">
+<code class="sig-prename descclassname">data.data_2D_manipulation.</code><code class="sig-name descname">random_crop</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image</span></em>, <em class="sig-param"><span class="n">mask</span></em>, <em class="sig-param"><span class="n">random_crop_size</span></em>, <em class="sig-param"><span class="n">val</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">draw_prob_map_points</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">img_prob</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">weight_map</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data/data_2D_manipulation.html#random_crop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.data_2D_manipulation.random_crop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Random crop.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">3D</span> <span class="pre">array</span></code>) – Image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">3D</span> <span class="pre">array</span></code>) – Image mask. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>random_crop_size</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2</span> <span class="pre">int</span> <span class="pre">tuple</span></code>) – Size of the crop. E.g. <code class="docutils literal notranslate"><span class="pre">(height,</span> <span class="pre">width)</span></code>.</p></li>
+<li><p><strong>val</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – If the image provided is going to be used in the validation data. This forces to crop from the origin,
+e. g. <code class="docutils literal notranslate"><span class="pre">(0,</span> <span class="pre">0)</span></code> point.</p></li>
+<li><p><strong>draw_prob_map_points</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To return the pixel chosen to be the center of the crop.</p></li>
+<li><p><strong>img_prob</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Numpy</span> <span class="pre">3D</span> <span class="pre">array</span></code>, <em>optional</em>) – Probability of each pixel to be chosen as the center of the crop. E. .g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>weight_map</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – Weight map of the given image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>img</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Crop of the given image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>weight_map</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>, <em>optional</em>) – Crop of the given image’s weigth map. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>ox</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – X coordinate in the complete image of the chose central pixel to make the crop.</p></li>
+<li><p><strong>oy</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Y coordinate in the complete image of the chose central pixel to make the crop.</p></li>
+<li><p><strong>x</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – X coordinate in the complete image where the crop starts.</p></li>
+<li><p><strong>y</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Y coordinate in the complete image where the crop starts.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="data_3d_manipulation.html" class="btn btn-neutral float-right" title="3D Data manipulation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="init.html" class="btn btn-neutral float-left" title="Init" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2021, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

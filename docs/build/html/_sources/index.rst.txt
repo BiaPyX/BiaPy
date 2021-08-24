@@ -1,8 +1,3 @@
-.. EM Image Segmentation documentation master file, created by
-   sphinx-quickstart on Thu Aug  6 09:28:07 2020.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 Welcome to EM Image Segmentation's documentation!
 =================================================
 
@@ -29,20 +24,35 @@ This repository is the base of the following work: ::
 
 
 .. toctree::
-   :maxdepth: 3
-   :caption: Quick start
+   :maxdepth: 1
+   :caption: How to run
+   :glob:
 
-   quick_start
+   how_to_run/*
 
 .. toctree::
-   :maxdepth: 3
-   :caption: Manuscripts
+   :maxdepth: 1
+   :caption: Tutorials
+   :hidden:
+   :glob:
 
-   manuscripts
+   tutorials/*
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Manuscripts 
+   :glob:
+
+   manuscripts/*
 
 .. toctree::                                                                    
-   :maxdepth: 3
+   :maxdepth: 1
    :caption: API
 
    API
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Bibliography
+
+   bibliography

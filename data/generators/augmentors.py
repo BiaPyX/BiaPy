@@ -46,20 +46,20 @@ def cutout(img, mask, nb_iterations=(1,3), size=(0.2,0.4), cval=0, apply_to_mask
             
        Calling this function with ``nb_iterations=(1,3)``, ``size=(0.05,0.3)``, 
        ``apply_to_mask=False`` may result in:
-
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_cutout.png   | .. figure:: img/orig_cutout_mask.png  |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Corresponding mask                  |
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/cutout.png        | .. figure:: img/cutout_mask.png       |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Augmented image                 |   Augmented mask                      |
-       +-----------------------------------+---------------------------------------+
+                                         
+       +-------------------------------------------+-------------------------------------------+
+       | .. figure:: ../../img/orig_cutout.png     | .. figure:: ../../img/orig_cutout_mask.png|
+       |   :width: 80%                             |   :width: 80%                             |
+       |   :align: center                          |   :align: center                          |
+       |                                           |                                           |
+       |   Input image                             |   Corresponding mask                      |
+       +-------------------------------------------+-------------------------------------------+
+       | .. figure:: ../../img/cutout.png          | .. figure:: ../../img/cutout_mask.png     |
+       |   :width: 80%                             |   :width: 80%                             |
+       |   :align: center                          |   :align: center                          |
+       |                                           |                                           |
+       |   Augmented image                         |   Augmented mask                          |
+       +-------------------------------------------+-------------------------------------------+
 
        The grid is painted for visualization purposes.
     """
@@ -120,19 +120,19 @@ def cutblur(img, size=(0.2,0.4), down_ratio_range=(2,8), only_inside=True):
        Calling this function with ``size=(0.2,0.4)``, ``down_ratio_range=(2,8)``,
        ``only_inside=True`` may result in:
 
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_cutblur.png  | .. figure:: img/cutblur.png           |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Augmented image                     |
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_cutblur2.png | .. figure:: img/cutblur2.png          |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Augmented image                     |
-       +-----------------------------------+---------------------------------------+
+       +-----------------------------------------+-----------------------------------------+
+       | .. figure:: ../../img/orig_cutblur.png  | .. figure:: ../../img/cutblur.png       |
+       |   :width: 80%                           |   :width: 80%                           |
+       |   :align: center                        |   :align: center                        |
+       |                                         |                                         |
+       |   Input image                           |   Augmented image                       |
+       +-----------------------------------------+-----------------------------------------+
+       | .. figure:: ../../img/orig_cutblur2.png | .. figure:: ../../img/cutblur2.png      |
+       |   :width: 80%                           |   :width: 80%                           |
+       |   :align: center                        |   :align: center                        |
+       |                                         |                                         |
+       |   Input image                           |   Augmented image                       |
+       +-----------------------------------------+-----------------------------------------+
 
        The grid and the red square are painted for visualization purposes. 
     """
@@ -213,19 +213,19 @@ def cutmix(im1, im2, mask1, mask2, size=(0.2,0.4)):
 
        Calling this function with ``size=(0.2,0.4)`` may result in:
 
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_cutmix.png   | .. figure:: img/orig_cutmix_mask.png  |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Corresponding mask                  |
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/cutmix.png        | .. figure:: img/cutmix_mask.png       |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Augmented image                 |   Augmented mask                      |
-       +-----------------------------------+---------------------------------------+
+       +-------------------------------------------+-------------------------------------------+
+       | .. figure:: ../../img/orig_cutmix.png     | .. figure:: ../../img/orig_cutmix_mask.png|
+       |   :width: 80%                             |   :width: 80%                             |
+       |   :align: center                          |   :align: center                          |
+       |                                           |                                           |
+       |   Input image                             |   Corresponding mask                      |
+       +-------------------------------------------+-------------------------------------------+
+       | .. figure:: ../../img/cutmix.png          | .. figure:: ../../img/cutmix_mask.png     |
+       |   :width: 80%                             |   :width: 80%                             |
+       |   :align: center                          |   :align: center                          |
+       |                                           |                                           |
+       |   Augmented image                         |   Augmented mask                          |
+       +-------------------------------------------+-------------------------------------------+
 
        The grid is painted for visualization purposes.
     """
@@ -282,19 +282,19 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
        Calling this function with ``scale=(0.1,0.2)``, ``nb_iterations=(1,3)`` and
        ``size=(0.2,0.4)`` may result in:
 
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_cutnoise.png | .. figure:: img/cutnoise.png          |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Augmented image                     |
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_cutnoise2.png| .. figure:: img/cutnoise2.png         |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Augmented image                     |
-       +-----------------------------------+---------------------------------------+
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_cutnoise.png  | .. figure:: ../../img/cutnoise.png       |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Augmented image                        |
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_cutnoise2.png | .. figure:: ../../img/cutnoise2.png      |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Augmented image                        |
+       +------------------------------------------+------------------------------------------+
 
        The grid and the red squares are painted for visualization purposes.
     """
@@ -358,19 +358,19 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0):
 
        Calling this function with ``displacement=16`` and ``rotate_ratio=0.5`` may result in:
 
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_miss.png     | .. figure:: img/orig_miss_mask.png    |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Corresponding mask                  |
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/miss.png          | .. figure:: img/miss_mask.png         |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Augmented image                 |   Augmented mask                      |
-       +-----------------------------------+---------------------------------------+
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_miss.png      | .. figure:: ../../img/orig_miss_mask.png |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Corresponding mask                     |
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/miss.png           | .. figure:: ../../img/miss_mask.png      |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Augmented image                        |   Augmented mask                         |
+       +------------------------------------------+------------------------------------------+
 
        The grid is painted for visualization purposes.
     """
@@ -486,19 +486,19 @@ def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False, invert_p
        Calling this function with ``brightness_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
        may result in:
 
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_bright.png   | .. figure:: img/bright.png            |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Augmented image                     |
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_bright2.png  | .. figure:: img/bright2.png           |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Augmented image                     |
-       +-----------------------------------+---------------------------------------+
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_bright.png    | .. figure:: ../../img/bright.png         |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Augmented image                        |
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_bright2.png   | .. figure:: ../../img/bright2.png        |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Augmented image                        |
+       +------------------------------------------+------------------------------------------+
 
        The grid is painted for visualization purposes.
     """
@@ -566,19 +566,19 @@ def contrast(img, contrast_factor=(0,0), mode='mix', invert=False, invert_p=0):
        Calling this function with ``contrast_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
        may result in:
 
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_contrast.png | .. figure:: img/contrast.png          |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Augmented image                     |
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_contrast2.png| .. figure:: img/contrast2.png         |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Augmented image                     |
-       +-----------------------------------+---------------------------------------+
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_contrast.png  | .. figure:: ../../img/contrast.png       |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Augmented image                        |
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_contrast2.png | .. figure:: ../../img/contrast2.png      |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Augmented image                        |
+       +------------------------------------------+------------------------------------------+
 
        The grid is painted for visualization purposes.
     """
@@ -635,19 +635,19 @@ def missing_parts(img, iterations=(30,40)):
 
        Calling this function with ``iterations=(30,40)`` may result in:
 
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_missing.png  | .. figure:: img/missing.png           |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Augmented image                     |
-       +-----------------------------------+---------------------------------------+
-       | .. figure:: img/orig_missing2.png | .. figure:: img/missing2.png          |
-       |   :width: 80%                     |   :width: 70%                         |
-       |   :align: center                  |   :align: center                      |
-       |                                   |                                       |
-       |   Input image                     |   Augmented image                     |
-       +-----------------------------------+---------------------------------------+
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_missing.png   | .. figure:: ../../img/missing.png        |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Augmented image                        |
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_missing2.png  | .. figure:: ../../img/missing2.png       |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Augmented image                        |
+       +------------------------------------------+------------------------------------------+
 
        The grid is painted for visualization purposes.
     """

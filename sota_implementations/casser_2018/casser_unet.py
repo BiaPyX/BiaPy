@@ -1,15 +1,10 @@
 import tensorflow as tf
-from tensorflow.keras.layers import Dropout, SpatialDropout2D, Conv2D,\
-                                    Conv2DTranspose, MaxPooling2D, concatenate,\
-                                    ELU, BatchNormalization, Activation, \
-                                    ZeroPadding2D, UpSampling2D
+from tensorflow.keras.layers import (Dropout, SpatialDropout2D, Conv2D, Conv2DTranspose, MaxPooling2D, concatenate,
+                                     ELU, BatchNormalization, Activation, ZeroPadding2D, UpSampling2D)
 from tensorflow.keras import Model, Input
-from metrics import binary_crossentropy_weighted, jaccard_index, \
-                    jaccard_index_softmax, weighted_bce_dice_loss
 
 
-def U_Net_2D(image_shape, start_filters=16, dr_rate=0.2, optimizer="adam",
-             lr=0.0005):
+def U_Net_2D(image_shape, start_filters=16, dr_rate=0.2):
     """Create 2D U-Net.
                                                                                 
        Copied from https://github.com/mpsych/mitochondria
@@ -20,19 +15,11 @@ def U_Net_2D(image_shape, start_filters=16, dr_rate=0.2, optimizer="adam",
            Dimensions of the input image.              
                                                                                 
        start_filters : int, optional
-           Feature maps to start with in the first level of the unet. It will 
-           be doubled on each downsampling.
+           Feature maps to start with in the first level of the unet. It will be doubled on each downsampling.
                                                                            
        drop_value : float, optional
            Dropout value to be fixed.
                                                                            
-       optimizer : str, optional
-           Optimizer used to minimize the loss function. Posible options: 
-           ``sgd`` or ``adam``.                 
-                                                                           
-       lr : float, optional
-           Learning rate value.                          
-        
        Returns
        -------                                                                 
        model : Keras model
@@ -92,20 +79,6 @@ def U_Net_2D(image_shape, start_filters=16, dr_rate=0.2, optimizer="adam",
     outputs = Conv2D(1, 1, activation = 'sigmoid')(conv9)
     
     model = Model(inputs=[inputs], outputs=[outputs])
-
-    # Select the optimizer
-    if optimizer == "sgd":
-        opt = tf.keras.optimizers.SGD(
-            lr=lr, momentum=0.99, decay=0.0, nesterov=False)
-    elif optimizer == "adam":
-        opt = tf.keras.optimizers.Adam(
-            lr=lr, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0,
-            amsgrad=False)
-    else:
-        raise ValueError("Error: optimizer value must be 'sgd' or 'adam'")
-
-    # Compile the model
-    model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
 
     return model
 

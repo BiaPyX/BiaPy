@@ -80,28 +80,34 @@
               
             
             
-              <p class="caption"><span class="caption-text">Quick start</span></p>
+              <p class="caption"><span class="caption-text">How to run</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../quick_start.html">Step 0: Prepare environment</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../quick_start.html#step-1-data-preparation">Step 1: Data preparation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../quick_start.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../quick_start.html#step-3-run-the-code">Step 3: Run the code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Manuscripts</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../mitochondria.html">Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../data_2d_manipulation.html">2D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../data_3d_manipulation.html">3D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../generators.html">Generators</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../networks.html">Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../grad_cam.html">Grad-CAM</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
 </ul>
 
             
@@ -164,31 +170,38 @@
            <div itemprop="articleBody">
             
   <h1>All modules for which code is available</h1>
-<ul><li><a href="aux/Grad_CAM/grad_cam.html">aux.Grad_CAM.grad_cam</a></li>
-<li><a href="aux/adabound.html">aux.adabound</a></li>
-<li><a href="aux/callbacks.html">aux.callbacks</a></li>
-<li><a href="data_2D_manipulation.html">data_2D_manipulation</a></li>
-<li><a href="data_3D_manipulation.html">data_3D_manipulation</a></li>
-<li><a href="generators/augmentors.html">generators.augmentors</a></li>
-<li><a href="generators/custom_da_gen.html">generators.custom_da_gen</a></li>
-<li><a href="generators/custom_da_gen_v2.html">generators.custom_da_gen_v2</a></li>
-<li><a href="generators/data_3D_generators.html">generators.data_3D_generators</a></li>
-<li><a href="generators/data_3D_generators_v2.html">generators.data_3D_generators_v2</a></li>
-<li><a href="metrics.html">metrics</a></li>
-<li><a href="networks/MultiResUNet.html">networks.MultiResUNet</a></li>
-<li><a href="networks/attention_unet_2d.html">networks.attention_unet_2d</a></li>
-<li><a href="networks/attention_unet_3d.html">networks.attention_unet_3d</a></li>
-<li><a href="networks/fc_densenet103.html">networks.fc_densenet103</a></li>
-<li><a href="networks/fcn_vgg.html">networks.fcn_vgg</a></li>
-<li><a href="networks/resunet.html">networks.resunet</a></li>
-<li><a href="networks/resunet_3d.html">networks.resunet_3d</a></li>
-<li><a href="networks/se_unet_2d.html">networks.se_unet_2d</a></li>
-<li><a href="networks/se_unet_3d.html">networks.se_unet_3d</a></li>
-<li><a href="networks/unet.html">networks.unet</a></li>
-<li><a href="networks/unet_3d.html">networks.unet_3d</a></li>
-<li><a href="networks/vanilla_unet_3d.html">networks.vanilla_unet_3d</a></li>
-<li><a href="post_processing.html">post_processing</a></li>
-<li><a href="sota_implementations/MNet_Fu_2018/MNet.html">sota_implementations.MNet_Fu_2018.MNet</a></li>
+<ul><li><a href="config/config.html">config.config</a></li>
+<li><a href="data.html">data</a></li>
+<ul><li><a href="data/data_2D_manipulation.html">data.data_2D_manipulation</a></li>
+<li><a href="data/data_3D_manipulation.html">data.data_3D_manipulation</a></li>
+<li><a href="data/generators.html">data.generators</a></li>
+<ul><li><a href="data/generators/augmentors.html">data.generators.augmentors</a></li>
+<li><a href="data/generators/data_2D_generator.html">data.generators.data_2D_generator</a></li>
+<li><a href="data/generators/data_3D_generator.html">data.generators.data_3D_generator</a></li>
+<li><a href="data/generators/simple_data_generators.html">data.generators.simple_data_generators</a></li>
+</ul><li><a href="data/post_processing.html">data.post_processing</a></li>
+<ul><li><a href="data/post_processing/post_processing.html">data.post_processing.post_processing</a></li>
+<li><a href="data/post_processing/smooth_tiled_predictions.html">data.post_processing.smooth_tiled_predictions</a></li>
+</ul></ul><li><a href="engine.html">engine</a></li>
+<ul><li><a href="engine/metrics.html">engine.metrics</a></li>
+<li><a href="engine/schedulers/cosine_decay.html">engine.schedulers.cosine_decay</a></li>
+<li><a href="engine/schedulers/one_cycle.html">engine.schedulers.one_cycle</a></li>
+<li><a href="engine/trainer.html">engine.trainer</a></li>
+</ul><li><a href="models.html">models</a></li>
+<ul><li><a href="models/attention_unet.html">models.attention_unet</a></li>
+<li><a href="models/attention_unet_3d.html">models.attention_unet_3d</a></li>
+<li><a href="models/fcn_vgg.html">models.fcn_vgg</a></li>
+<li><a href="models/mnet.html">models.mnet</a></li>
+<li><a href="models/multiresunet.html">models.multiresunet</a></li>
+<li><a href="models/resunet.html">models.resunet</a></li>
+<li><a href="models/resunet_3d.html">models.resunet_3d</a></li>
+<li><a href="models/se_unet_2d.html">models.se_unet_2d</a></li>
+<li><a href="models/se_unet_3d.html">models.se_unet_3d</a></li>
+<li><a href="models/tiramisu.html">models.tiramisu</a></li>
+<li><a href="models/unet.html">models.unet</a></li>
+<li><a href="models/unet_3d.html">models.unet_3d</a></li>
+<li><a href="models/vanilla_unet_3d.html">models.vanilla_unet_3d</a></li>
+</ul><li><a href="sota_implementations/MNet_Fu_2018/MNet.html">sota_implementations.MNet_Fu_2018.MNet</a></li>
 <li><a href="sota_implementations/casser_2018/casser_unet.html">sota_implementations.casser_2018.casser_unet</a></li>
 <li><a href="sota_implementations/cheng_2017/StochasticDownsampling2D.html">sota_implementations.cheng_2017.StochasticDownsampling2D</a></li>
 <li><a href="sota_implementations/cheng_2017/StochasticDownsampling3D.html">sota_implementations.cheng_2017.StochasticDownsampling3D</a></li>
@@ -199,7 +212,10 @@
 <li><a href="sota_implementations/oztel_2017/cnn_oztel.html">sota_implementations.oztel_2017.cnn_oztel</a></li>
 <li><a href="sota_implementations/oztel_2017/utils.html">sota_implementations.oztel_2017.utils</a></li>
 <li><a href="sota_implementations/xiao_2018/unet_3d_xiao.html">sota_implementations.xiao_2018.unet_3d_xiao</a></li>
-<li><a href="util.html">util</a></li>
+<li><a href="utils/adabound.html">utils.adabound</a></li>
+<li><a href="utils/callbacks.html">utils.callbacks</a></li>
+<li><a href="utils/grad_cam.html">utils.grad_cam</a></li>
+<li><a href="utils/util.html">utils.util</a></li>
 </ul>
 
            </div>

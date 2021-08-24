@@ -1,0 +1,673 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>data.post_processing.smooth_tiled_predictions &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../bibliography.html">Bibliography</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+          <li><a href="../../data.html">data</a> &raquo;</li>
+        
+          <li><a href="../post_processing.html">data.post_processing</a> &raquo;</li>
+        
+      <li>data.post_processing.smooth_tiled_predictions</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for data.post_processing.smooth_tiled_predictions</h1><div class="highlight"><pre>
+<span></span><span class="c1"># MIT License</span>
+<span class="c1"># Copyright (c) 2017 Vooban Inc.</span>
+<span class="c1"># Coded by: Guillaume Chevalier</span>
+<span class="c1"># Source to original code and license:</span>
+<span class="c1">#     https://github.com/Vooban/Smoothly-Blend-Image-Patches</span>
+<span class="c1">#     https://github.com/Vooban/Smoothly-Blend-Image-Patches/blob/master/LICENSE</span>
+
+
+<span class="sd">&quot;&quot;&quot;Do smooth predictions on an image from tiled prediction patches.&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">scipy.signal</span>
+<span class="kn">from</span> <span class="nn">tqdm</span> <span class="kn">import</span> <span class="n">tqdm</span>
+<span class="kn">import</span> <span class="nn">gc</span>
+<span class="kn">from</span> <span class="nn">tensorflow.keras.preprocessing.image</span> <span class="kn">import</span> <span class="n">ImageDataGenerator</span> <span class="k">as</span> <span class="n">kerasDA</span>
+<span class="kn">import</span> <span class="nn">math</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+    <span class="n">PLOT_PROGRESS</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="c1"># See end of file for the rest of the __main__.</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">PLOT_PROGRESS</span> <span class="o">=</span> <span class="kc">False</span>
+
+
+<span class="k">def</span> <span class="nf">_spline_window</span><span class="p">(</span><span class="n">window_size</span><span class="p">,</span> <span class="n">power</span><span class="o">=</span><span class="mi">2</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Squared spline (power=2) window function:</span>
+<span class="sd">    https://www.wolframalpha.com/input/?i=y%3Dx**2,+y%3D-(x-2)**2+%2B2,+y%3D(x-4)**2,+from+y+%3D+0+to+2</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">intersection</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">window_size</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span>
+    <span class="n">wind_outer</span> <span class="o">=</span> <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="n">scipy</span><span class="o">.</span><span class="n">signal</span><span class="o">.</span><span class="n">triang</span><span class="p">(</span><span class="n">window_size</span><span class="p">)))</span> <span class="o">**</span> <span class="n">power</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span>
+    <span class="n">wind_outer</span><span class="p">[</span><span class="n">intersection</span><span class="p">:</span><span class="o">-</span><span class="n">intersection</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">wind_inner</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="n">scipy</span><span class="o">.</span><span class="n">signal</span><span class="o">.</span><span class="n">triang</span><span class="p">(</span><span class="n">window_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="o">**</span> <span class="n">power</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span>
+    <span class="n">wind_inner</span><span class="p">[:</span><span class="n">intersection</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">wind_inner</span><span class="p">[</span><span class="o">-</span><span class="n">intersection</span><span class="p">:]</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">wind</span> <span class="o">=</span> <span class="n">wind_inner</span> <span class="o">+</span> <span class="n">wind_outer</span>
+    <span class="n">wind</span> <span class="o">=</span> <span class="n">wind</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">wind</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">wind</span>
+
+
+<span class="n">cached_2d_windows</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+<span class="k">def</span> <span class="nf">_window_2D</span><span class="p">(</span><span class="n">window_size</span><span class="p">,</span> <span class="n">power</span><span class="o">=</span><span class="mi">2</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Make a 1D window function, then infer and return a 2D window function.</span>
+<span class="sd">    Done with an augmentation, and self multiplication with its transpose.</span>
+<span class="sd">    Could be generalized to more dimensions.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Memoization</span>
+    <span class="k">global</span> <span class="n">cached_2d_windows</span>
+    <span class="n">key</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">_</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">window_size</span><span class="p">,</span> <span class="n">power</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">cached_2d_windows</span><span class="p">:</span>
+        <span class="n">wind</span> <span class="o">=</span> <span class="n">cached_2d_windows</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">wind</span> <span class="o">=</span> <span class="n">_spline_window</span><span class="p">(</span><span class="n">window_size</span><span class="p">,</span> <span class="n">power</span><span class="p">)</span>   
+        <span class="n">wind</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">wind</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">wind</span> <span class="o">=</span> <span class="n">wind</span> <span class="o">*</span> <span class="n">wind</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">PLOT_PROGRESS</span><span class="p">:</span>
+            <span class="c1"># For demo purpose, let&#39;s look once at the window:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">wind</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;viridis&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;2D Windowing Function for a Smooth Blending of &quot;</span>
+                      <span class="s2">&quot;Overlapping Patches&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+        <span class="n">cached_2d_windows</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">wind</span>
+    <span class="k">return</span> <span class="n">wind</span>
+
+
+<span class="k">def</span> <span class="nf">_pad_img</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Add borders to img for a &quot;valid&quot; border pattern according to &quot;window_size&quot; and</span>
+<span class="sd">    &quot;subdivisions&quot;.</span>
+<span class="sd">    Image is an np array of shape (x, y, nb_channels).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">aug</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">window_size</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="mf">1.0</span><span class="o">/</span><span class="n">subdivisions</span><span class="p">)))</span>
+    <span class="n">more_borders</span> <span class="o">=</span> <span class="p">((</span><span class="n">aug</span><span class="p">,</span> <span class="n">aug</span><span class="p">),</span> <span class="p">(</span><span class="n">aug</span><span class="p">,</span> <span class="n">aug</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">ret</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">pad_width</span><span class="o">=</span><span class="n">more_borders</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;reflect&#39;</span><span class="p">)</span>
+    <span class="c1"># gc.collect()</span>
+
+    <span class="k">if</span> <span class="n">PLOT_PROGRESS</span><span class="p">:</span>
+        <span class="c1"># For demo purpose, let&#39;s look once at the window:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Padded Image for Using Tiled Prediction Patches</span><span class="se">\n</span><span class="s2">&quot;</span>
+                  <span class="s2">&quot;(notice the reflection effect on the padded borders)&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">ret</span>
+
+
+<span class="k">def</span> <span class="nf">_unpad_img</span><span class="p">(</span><span class="n">padded_img</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Undo what&#39;s done in the `_pad_img` function.</span>
+<span class="sd">    Image is an np array of shape (x, y, nb_channels).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">aug</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">window_size</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="mf">1.0</span><span class="o">/</span><span class="n">subdivisions</span><span class="p">)))</span>
+    <span class="n">ret</span> <span class="o">=</span> <span class="n">padded_img</span><span class="p">[</span>
+        <span class="n">aug</span><span class="p">:</span><span class="o">-</span><span class="n">aug</span><span class="p">,</span>
+        <span class="n">aug</span><span class="p">:</span><span class="o">-</span><span class="n">aug</span><span class="p">,</span>
+        <span class="p">:</span>
+    <span class="p">]</span>
+    <span class="c1"># gc.collect()</span>
+    <span class="k">return</span> <span class="n">ret</span>
+
+
+<span class="k">def</span> <span class="nf">_rotate_mirror_do</span><span class="p">(</span><span class="n">im</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Duplicate an np array (image) of shape (x, y, nb_channels) 8 times, in order</span>
+<span class="sd">    to have all the possible rotations and mirrors of that image that fits the</span>
+<span class="sd">    possible 90 degrees rotations.</span>
+
+<span class="sd">    It is the D_4 (D4) Dihedral group:</span>
+<span class="sd">    https://en.wikipedia.org/wiki/Dihedral_group</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">mirrs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">mirrs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im</span><span class="p">))</span>
+    <span class="n">mirrs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im</span><span class="p">),</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">mirrs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im</span><span class="p">),</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
+    <span class="n">mirrs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im</span><span class="p">),</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">3</span><span class="p">))</span>
+    <span class="n">im</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im</span><span class="p">)[:,</span> <span class="p">::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">mirrs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im</span><span class="p">))</span>
+    <span class="n">mirrs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im</span><span class="p">),</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">mirrs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im</span><span class="p">),</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
+    <span class="n">mirrs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im</span><span class="p">),</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">3</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">mirrs</span>
+
+
+<span class="k">def</span> <span class="nf">_rotate_mirror_undo</span><span class="p">(</span><span class="n">im_mirrs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    merges a list of 8 np arrays (images) of shape (x, y, nb_channels) generated</span>
+<span class="sd">    from the `_rotate_mirror_do` function. Each images might have changed and</span>
+<span class="sd">    merging them implies to rotated them back in order and average things out.</span>
+
+<span class="sd">    It is the D_4 (D4) Dihedral group:</span>
+<span class="sd">    https://en.wikipedia.org/wiki/Dihedral_group</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">origs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">origs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im_mirrs</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+    <span class="n">origs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im_mirrs</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">3</span><span class="p">))</span>
+    <span class="n">origs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im_mirrs</span><span class="p">[</span><span class="mi">2</span><span class="p">]),</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
+    <span class="n">origs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im_mirrs</span><span class="p">[</span><span class="mi">3</span><span class="p">]),</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">origs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im_mirrs</span><span class="p">[</span><span class="mi">4</span><span class="p">])[:,</span> <span class="p">::</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">origs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im_mirrs</span><span class="p">[</span><span class="mi">5</span><span class="p">]),</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">3</span><span class="p">)[:,</span> <span class="p">::</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">origs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im_mirrs</span><span class="p">[</span><span class="mi">6</span><span class="p">]),</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">)[:,</span> <span class="p">::</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">origs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">im_mirrs</span><span class="p">[</span><span class="mi">7</span><span class="p">]),</span> <span class="n">axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">)[:,</span> <span class="p">::</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">origs</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_windowed_subdivs</span><span class="p">(</span><span class="n">padded_img</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="n">pred_func</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create tiled overlapping patches.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        5D numpy array of shape = (</span>
+<span class="sd">            nb_patches_along_X,</span>
+<span class="sd">            nb_patches_along_Y,</span>
+<span class="sd">            patches_resolution_along_X,</span>
+<span class="sd">            patches_resolution_along_Y,</span>
+<span class="sd">            nb_output_channels</span>
+<span class="sd">        )</span>
+
+<span class="sd">    Note:</span>
+<span class="sd">        patches_resolution_along_X == patches_resolution_along_Y == window_size</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">WINDOW_SPLINE_2D</span> <span class="o">=</span> <span class="n">_window_2D</span><span class="p">(</span><span class="n">window_size</span><span class="o">=</span><span class="n">window_size</span><span class="p">,</span> <span class="n">power</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="n">step</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">window_size</span><span class="o">/</span><span class="n">subdivisions</span><span class="p">)</span>
+    <span class="n">padx_len</span> <span class="o">=</span> <span class="n">padded_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">pady_len</span> <span class="o">=</span> <span class="n">padded_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">subdivs</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">padx_len</span><span class="o">-</span><span class="n">window_size</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
+        <span class="n">subdivs</span><span class="o">.</span><span class="n">append</span><span class="p">([])</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">pady_len</span><span class="o">-</span><span class="n">window_size</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
+            <span class="n">patch</span> <span class="o">=</span> <span class="n">padded_img</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span><span class="o">+</span><span class="n">window_size</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">j</span><span class="o">+</span><span class="n">window_size</span><span class="p">,</span> <span class="p">:]</span>
+            <span class="n">subdivs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">patch</span><span class="p">)</span>
+
+    <span class="c1"># Here, `gc.collect()` clears RAM between operations.</span>
+    <span class="c1"># It should run faster if they are removed, if enough memory is available.</span>
+    <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+    <span class="n">subdivs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">subdivs</span><span class="p">)</span>
+    <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+    <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span> <span class="o">=</span> <span class="n">subdivs</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">subdivs</span> <span class="o">=</span> <span class="n">subdivs</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+    <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+
+    <span class="n">subdivs</span> <span class="o">=</span> <span class="n">pred_func</span><span class="p">(</span><span class="n">subdivs</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">subdivs</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>                                             
+        <span class="n">subdivs</span> <span class="o">=</span> <span class="n">subdivs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+    <span class="n">subdivs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">patch</span> <span class="o">*</span> <span class="n">WINDOW_SPLINE_2D</span> <span class="k">for</span> <span class="n">patch</span> <span class="ow">in</span> <span class="n">subdivs</span><span class="p">])</span>
+    <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+
+    <span class="c1"># Such 5D array:</span>
+    <span class="n">subdivs</span> <span class="o">=</span> <span class="n">subdivs</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">)</span>
+    <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">subdivs</span>
+
+<span class="k">def</span> <span class="nf">_windowed_subdivs_weighted</span><span class="p">(</span><span class="n">padded_img</span><span class="p">,</span> <span class="n">padded_mask</span><span class="p">,</span> <span class="n">weight_map</span><span class="p">,</span> <span class="n">batch_size_value</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="n">pred_func</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create tiled overlapping patches with weights.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        5D numpy array of shape = (</span>
+<span class="sd">            nb_patches_along_X,</span>
+<span class="sd">            nb_patches_along_Y,</span>
+<span class="sd">            patches_resolution_along_X,</span>
+<span class="sd">            patches_resolution_along_Y,</span>
+<span class="sd">            nb_output_channels</span>
+<span class="sd">        )</span>
+
+<span class="sd">    Note:</span>
+<span class="sd">        patches_resolution_along_X == patches_resolution_along_Y == window_size</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">WINDOW_SPLINE_2D</span> <span class="o">=</span> <span class="n">_window_2D</span><span class="p">(</span><span class="n">window_size</span><span class="o">=</span><span class="n">window_size</span><span class="p">,</span> <span class="n">power</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="n">step</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">window_size</span><span class="o">/</span><span class="n">subdivisions</span><span class="p">)</span>
+    <span class="n">padx_len</span> <span class="o">=</span> <span class="n">padded_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">pady_len</span> <span class="o">=</span> <span class="n">padded_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">subdivs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">subdivs_m</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">subdivs_w</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">padx_len</span><span class="o">-</span><span class="n">window_size</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
+        <span class="n">subdivs</span><span class="o">.</span><span class="n">append</span><span class="p">([])</span>
+        <span class="n">subdivs_m</span><span class="o">.</span><span class="n">append</span><span class="p">([])</span>
+        <span class="n">subdivs_w</span><span class="o">.</span><span class="n">append</span><span class="p">([])</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">pady_len</span><span class="o">-</span><span class="n">window_size</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
+            <span class="n">patch</span> <span class="o">=</span> <span class="n">padded_img</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span><span class="o">+</span><span class="n">window_size</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">j</span><span class="o">+</span><span class="n">window_size</span><span class="p">,</span> <span class="p">:]</span>
+            <span class="n">subdivs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">patch</span><span class="p">)</span>
+            <span class="n">patch</span> <span class="o">=</span> <span class="n">padded_mask</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span><span class="o">+</span><span class="n">window_size</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">j</span><span class="o">+</span><span class="n">window_size</span><span class="p">,</span> <span class="p">:]</span>
+            <span class="n">subdivs_m</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">patch</span><span class="p">)</span>
+            <span class="n">patch</span> <span class="o">=</span> <span class="n">weight_map</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span><span class="o">+</span><span class="n">window_size</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">j</span><span class="o">+</span><span class="n">window_size</span><span class="p">,</span> <span class="p">:]</span>
+            <span class="n">subdivs_w</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">patch</span><span class="p">)</span>
+    
+    <span class="c1"># Here, `gc.collect()` clears RAM between operations.</span>
+    <span class="c1"># It should run faster if they are removed, if enough memory is available.</span>
+    <span class="n">subdivs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">subdivs</span><span class="p">)</span>
+    <span class="n">subdivs_m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">subdivs_m</span><span class="p">)</span>
+    <span class="n">subdivs_w</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">subdivs_w</span><span class="p">)</span>
+    <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span> <span class="o">=</span> <span class="n">subdivs</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">subdivs</span> <span class="o">=</span> <span class="n">subdivs</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+    <span class="n">subdivs_m</span> <span class="o">=</span> <span class="n">subdivs_m</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+    <span class="n">subdivs_w</span> <span class="o">=</span> <span class="n">subdivs_w</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span><span class="p">))</span>
+
+    <span class="c1"># merge images and weights to predict</span>
+    <span class="n">X_datagen</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">()</span>
+    <span class="n">Y_datagen</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">()</span>
+    <span class="n">W_datagen</span> <span class="o">=</span> <span class="n">kerasDA</span><span class="p">()</span>
+
+    <span class="n">X_aug</span> <span class="o">=</span> <span class="n">X_datagen</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">subdivs</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">Y_aug</span> <span class="o">=</span> <span class="n">Y_datagen</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">subdivs_m</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">W_aug</span> <span class="o">=</span> <span class="n">W_datagen</span><span class="o">.</span><span class="n">flow</span><span class="p">(</span><span class="n">subdivs_w</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size_value</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="n">gen</span> <span class="o">=</span> <span class="n">create_gen</span><span class="p">(</span><span class="n">X_aug</span><span class="p">,</span> <span class="n">Y_aug</span><span class="p">,</span> <span class="n">W_aug</span><span class="p">)</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">pred_func</span><span class="p">(</span><span class="n">gen</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">X_aug</span><span class="o">.</span><span class="n">n</span><span class="o">/</span><span class="n">batch_size_value</span><span class="p">))</span>
+            
+    <span class="n">subdivs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">patch</span> <span class="o">*</span> <span class="n">WINDOW_SPLINE_2D</span> <span class="k">for</span> <span class="n">patch</span> <span class="ow">in</span> <span class="n">r</span><span class="p">])</span>
+
+    <span class="c1"># Such 5D array:</span>
+    <span class="n">subdivs</span> <span class="o">=</span> <span class="n">subdivs</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">subdivs</span>
+
+<div class="viewcode-block" id="create_gen"><a class="viewcode-back" href="../../../data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.create_gen">[docs]</a><span class="k">def</span> <span class="nf">create_gen</span><span class="p">(</span><span class="n">subdivs</span><span class="p">,</span> <span class="n">subdivs_m</span><span class="p">,</span> <span class="n">subdivs_w</span><span class="p">):</span>
+    <span class="n">gen</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">subdivs</span><span class="p">,</span> <span class="n">subdivs_m</span><span class="p">,</span> <span class="n">subdivs_w</span><span class="p">)</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">weights</span><span class="p">)</span> <span class="ow">in</span> <span class="n">gen</span><span class="p">:</span>
+        <span class="k">yield</span> <span class="p">([</span><span class="n">img</span><span class="p">,</span> <span class="n">weights</span><span class="p">],</span> <span class="n">label</span><span class="p">)</span></div>
+
+<span class="k">def</span> <span class="nf">_recreate_from_subdivs</span><span class="p">(</span><span class="n">subdivs</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">,</span> <span class="n">padded_out_shape</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Merge tiled overlapping patches smoothly.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">step</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">window_size</span><span class="o">/</span><span class="n">subdivisions</span><span class="p">)</span>
+    <span class="n">padx_len</span> <span class="o">=</span> <span class="n">padded_out_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">pady_len</span> <span class="o">=</span> <span class="n">padded_out_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">padded_out_shape</span><span class="p">)</span>
+
+    <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">padx_len</span><span class="o">-</span><span class="n">window_size</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">pady_len</span><span class="o">-</span><span class="n">window_size</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
+            <span class="n">windowed_patch</span> <span class="o">=</span> <span class="n">subdivs</span><span class="p">[</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">]</span>
+            <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span><span class="o">+</span><span class="n">window_size</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">j</span><span class="o">+</span><span class="n">window_size</span><span class="p">]</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span><span class="o">+</span><span class="n">window_size</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">j</span><span class="o">+</span><span class="n">window_size</span><span class="p">]</span> <span class="o">+</span> <span class="n">windowed_patch</span>
+            <span class="n">b</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">a</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="k">return</span> <span class="n">y</span> <span class="o">/</span> <span class="p">(</span><span class="n">subdivisions</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+
+<div class="viewcode-block" id="predict_img_with_smooth_windowing"><a class="viewcode-back" href="../../../data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.predict_img_with_smooth_windowing">[docs]</a><span class="k">def</span> <span class="nf">predict_img_with_smooth_windowing</span><span class="p">(</span><span class="n">input_img</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="n">pred_func</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Apply the `pred_func` function to square patches of the image, and overlap</span>
+<span class="sd">    the predictions to merge them smoothly.</span>
+<span class="sd">    See 6th, 7th and 8th idea here:</span>
+<span class="sd">    http://blog.kaggle.com/2017/05/09/dstl-satellite-imagery-competition-3rd-place-winners-interview-vladimir-sergey/</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">pad</span> <span class="o">=</span> <span class="n">_pad_img</span><span class="p">(</span><span class="n">input_img</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">)</span>
+    <span class="n">pads</span> <span class="o">=</span> <span class="n">_rotate_mirror_do</span><span class="p">(</span><span class="n">pad</span><span class="p">)</span>
+
+    <span class="c1"># Note that the implementation could be more memory-efficient by merging</span>
+    <span class="c1"># the behavior of `_windowed_subdivs` and `_recreate_from_subdivs` into</span>
+    <span class="c1"># one loop doing in-place assignments to the new image matrix, rather than</span>
+    <span class="c1"># using a temporary 5D array.</span>
+
+    <span class="c1"># It would also be possible to allow different (and impure) window functions</span>
+    <span class="c1"># that might not tile well. Adding their weighting to another matrix could</span>
+    <span class="c1"># be done to later normalize the predictions correctly by dividing the whole</span>
+    <span class="c1"># reconstructed thing by this matrix of weightings - to normalize things</span>
+    <span class="c1"># back from an impure windowing function that would have badly weighted</span>
+    <span class="c1"># windows.</span>
+
+    <span class="c1"># For example, since the U-net of Kaggle&#39;s DSTL satellite imagery feature</span>
+    <span class="c1"># prediction challenge&#39;s 3rd place winners use a different window size for</span>
+    <span class="c1"># the input and output of the neural net&#39;s patches predictions, it would be</span>
+    <span class="c1"># possible to fake a full-size window which would in fact just have a narrow</span>
+    <span class="c1"># non-zero dommain. This may require to augment the `subdivisions` argument</span>
+    <span class="c1"># to 4 rather than 2.</span>
+
+    <span class="n">res</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">pad</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">pads</span><span class="p">):</span>
+        <span class="c1"># For every rotation:</span>
+        <span class="n">sd</span> <span class="o">=</span> <span class="n">_windowed_subdivs</span><span class="p">(</span><span class="n">pad</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="n">pred_func</span><span class="p">)</span>
+        <span class="n">one_padded_result</span> <span class="o">=</span> <span class="n">_recreate_from_subdivs</span><span class="p">(</span>
+            <span class="n">sd</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">,</span>
+            <span class="n">padded_out_shape</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">pad</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span><span class="o">+</span><span class="p">[</span><span class="n">n_classes</span><span class="p">])</span>
+
+        <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">one_padded_result</span><span class="p">)</span>
+
+    <span class="c1"># Merge after rotations:</span>
+    <span class="n">padded_results</span> <span class="o">=</span> <span class="n">_rotate_mirror_undo</span><span class="p">(</span><span class="n">res</span><span class="p">)</span>
+
+    <span class="n">prd</span> <span class="o">=</span> <span class="n">_unpad_img</span><span class="p">(</span><span class="n">padded_results</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">)</span>
+
+    <span class="n">prd</span> <span class="o">=</span> <span class="n">prd</span><span class="p">[:</span><span class="n">input_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">:</span><span class="n">input_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">:]</span>
+
+    <span class="k">if</span> <span class="n">PLOT_PROGRESS</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">prd</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Smoothly Merged Patches that were Tiled Tighter&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">prd</span></div>
+
+<div class="viewcode-block" id="predict_img_with_overlap"><a class="viewcode-back" href="../../../data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.predict_img_with_overlap">[docs]</a><span class="k">def</span> <span class="nf">predict_img_with_overlap</span><span class="p">(</span><span class="n">input_img</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="n">pred_func</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Based on predict_img_with_smooth_windowing but works just with the </span>
+<span class="sd">       original image instead of creating 8 new ones.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">pad</span> <span class="o">=</span> <span class="n">_pad_img</span><span class="p">(</span><span class="n">input_img</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">)</span>
+
+    <span class="n">sd</span> <span class="o">=</span> <span class="n">_windowed_subdivs</span><span class="p">(</span><span class="n">pad</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="n">pred_func</span><span class="p">)</span>
+    <span class="n">one_padded_result</span> <span class="o">=</span> <span class="n">_recreate_from_subdivs</span><span class="p">(</span><span class="n">sd</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">,</span>
+                                               <span class="n">padded_out_shape</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">pad</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span><span class="o">+</span><span class="p">[</span><span class="n">n_classes</span><span class="p">])</span>
+
+    <span class="n">prd</span> <span class="o">=</span> <span class="n">_unpad_img</span><span class="p">(</span><span class="n">one_padded_result</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">)</span>
+
+    <span class="n">prd</span> <span class="o">=</span> <span class="n">prd</span><span class="p">[:</span><span class="n">input_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">:</span><span class="n">input_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">:]</span>
+
+    <span class="k">if</span> <span class="n">PLOT_PROGRESS</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">prd</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Smoothly Merged Patches that were Tiled Tighter&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">prd</span></div>
+
+<div class="viewcode-block" id="predict_img_with_overlap_weighted"><a class="viewcode-back" href="../../../data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.predict_img_with_overlap_weighted">[docs]</a><span class="k">def</span> <span class="nf">predict_img_with_overlap_weighted</span><span class="p">(</span><span class="n">input_img</span><span class="p">,</span> <span class="n">input_mask</span><span class="p">,</span> <span class="n">weight_map</span><span class="p">,</span> <span class="n">batch_size_value</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="n">pred_func</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Based on predict_img_with_smooth_windowing but works just with the</span>
+<span class="sd">       original image (adding a weight map) instead of creating 8 new ones.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">pad</span> <span class="o">=</span> <span class="n">_pad_img</span><span class="p">(</span><span class="n">input_img</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">)</span>
+    <span class="n">pad_mask</span> <span class="o">=</span> <span class="n">_pad_img</span><span class="p">(</span><span class="n">input_mask</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">)</span>
+    <span class="n">pad_w</span> <span class="o">=</span> <span class="n">_pad_img</span><span class="p">(</span><span class="n">weight_map</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">)</span>
+
+    <span class="n">sd</span> <span class="o">=</span> <span class="n">_windowed_subdivs_weighted</span><span class="p">(</span><span class="n">pad</span><span class="p">,</span> <span class="n">pad_mask</span><span class="p">,</span> <span class="n">pad_w</span><span class="p">,</span> <span class="n">batch_size_value</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="n">pred_func</span><span class="p">)</span>
+    <span class="n">one_padded_result</span> <span class="o">=</span> <span class="n">_recreate_from_subdivs</span><span class="p">(</span><span class="n">sd</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">,</span>
+                                               <span class="n">padded_out_shape</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">pad</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span><span class="o">+</span><span class="p">[</span><span class="n">n_classes</span><span class="p">])</span>
+
+    <span class="n">prd</span> <span class="o">=</span> <span class="n">_unpad_img</span><span class="p">(</span><span class="n">one_padded_result</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">subdivisions</span><span class="p">)</span>
+
+    <span class="n">prd</span> <span class="o">=</span> <span class="n">prd</span><span class="p">[:</span><span class="n">input_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">:</span><span class="n">input_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">:]</span>
+
+    <span class="k">if</span> <span class="n">PLOT_PROGRESS</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">prd</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Smoothly Merged Patches that were Tiled Tighter&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">prd</span></div>
+
+<div class="viewcode-block" id="cheap_tiling_prediction"><a class="viewcode-back" href="../../../data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.cheap_tiling_prediction">[docs]</a><span class="k">def</span> <span class="nf">cheap_tiling_prediction</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">,</span> <span class="n">pred_func</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Does predictions on an image without tiling.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">original_shape</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">full_border</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="n">window_size</span> <span class="o">-</span> <span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">%</span> <span class="n">window_size</span><span class="p">))</span>
+    <span class="n">prd</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">full_border</span><span class="p">,</span> <span class="n">full_border</span><span class="p">,</span> <span class="n">n_classes</span><span class="p">))</span>
+    <span class="n">tmp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">full_border</span><span class="p">,</span> <span class="n">full_border</span><span class="p">,</span> <span class="n">original_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
+    <span class="n">tmp</span><span class="p">[:</span><span class="n">original_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">:</span><span class="n">original_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">img</span>
+    <span class="n">img</span> <span class="o">=</span> <span class="n">tmp</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">tmp</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">prd</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">prd</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">window_size</span><span class="p">)):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">prd</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">window_size</span><span class="p">):</span>
+            <span class="n">im</span> <span class="o">=</span> <span class="n">img</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span><span class="o">+</span><span class="n">window_size</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">j</span><span class="o">+</span><span class="n">window_size</span><span class="p">]</span>
+            <span class="n">prd</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span><span class="o">+</span><span class="n">window_size</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">j</span><span class="o">+</span><span class="n">window_size</span><span class="p">]</span> <span class="o">=</span> <span class="n">pred_func</span><span class="p">([</span><span class="n">im</span><span class="p">])</span>
+    <span class="n">prd</span> <span class="o">=</span> <span class="n">prd</span><span class="p">[:</span><span class="n">original_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">:</span><span class="n">original_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
+    <span class="k">if</span> <span class="n">PLOT_PROGRESS</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">prd</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Cheaply Merged Patches&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">prd</span></div>
+
+
+<div class="viewcode-block" id="get_dummy_img"><a class="viewcode-back" href="../../../data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.get_dummy_img">[docs]</a><span class="k">def</span> <span class="nf">get_dummy_img</span><span class="p">(</span><span class="n">xy_size</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">nb_channels</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a random image with different luminosity in the corners.</span>
+
+<span class="sd">    Returns an array of shape (xy_size, xy_size, nb_channels).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">((</span><span class="n">xy_size</span><span class="p">,</span> <span class="n">xy_size</span><span class="p">,</span> <span class="n">nb_channels</span><span class="p">))</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">xy_size</span><span class="p">,</span> <span class="n">xy_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">lin</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">xy_size</span><span class="p">),</span>
+            <span class="n">nb_channels</span><span class="p">),</span>
+        <span class="n">nb_channels</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">*</span> <span class="n">lin</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">*</span> <span class="n">lin</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">x</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">::</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">PLOT_PROGRESS</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Random image for a test&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">x</span></div>
+
+
+<div class="viewcode-block" id="round_predictions"><a class="viewcode-back" href="../../../data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.round_predictions">[docs]</a><span class="k">def</span> <span class="nf">round_predictions</span><span class="p">(</span><span class="n">prd</span><span class="p">,</span> <span class="n">nb_channels_out</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    From a threshold list `thresholds` containing one threshold per output</span>
+<span class="sd">    channel for comparison, the predictions are converted to a binary mask.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="p">(</span><span class="n">nb_channels_out</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">thresholds</span><span class="p">))</span>
+    <span class="n">prd</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">prd</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nb_channels_out</span><span class="p">):</span>
+        <span class="c1"># Per-pixel and per-channel comparison on a threshold to</span>
+        <span class="c1"># binarize prediction masks:</span>
+        <span class="n">prd</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">prd</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">thresholds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">prd</span></div>
+
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2021, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

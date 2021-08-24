@@ -1,13 +1,11 @@
 .. toctree::
    :maxdepth: 2
+   :glob:
 
-   data_2d_manipulation
-   data_3d_manipulation
-   generators
-   networks
-   metrics
-   util
-   post_processing
-   grad_cam
-   adabound
+   config/main_config
+   data/data
+   engine/engine
+   models/models
+   sota_implementations/sota_implementations
+   utils/utils
 

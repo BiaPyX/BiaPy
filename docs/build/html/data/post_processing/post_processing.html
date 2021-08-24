@@ -1,0 +1,469 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Post processing &mdash; EM Image Segmentation  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Smooth tiled predictions" href="smooth_tiled_predictions.html" />
+    <link rel="prev" title="Init" href="init.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">How to run</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
+</ul>
+<p class="caption"><span class="caption-text">API</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../config/main_config.html">config</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../data.html">data</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../init.html">Init</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../data_2d_manipulation.html">2D Data manipulation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../data_3d_manipulation.html">3D Data manipulation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../generators/generators.html">generators</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="main_post_proc.html">post_processing</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="init.html">Init</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Post processing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="smooth_tiled_predictions.html">Smooth tiled predictions</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../bibliography.html">Bibliography</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">EM Image Segmentation</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../../API.html">&lt;no title&gt;</a> &raquo;</li>
+        
+          <li><a href="../data.html">data</a> &raquo;</li>
+        
+          <li><a href="main_post_proc.html">post_processing</a> &raquo;</li>
+        
+      <li>Post processing</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-data.post_processing.post_processing">
+<span id="post-processing"></span><h1>Post processing<a class="headerlink" href="#module-data.post_processing.post_processing" title="Permalink to this headline">¶</a></h1>
+<dl class="py function">
+<dt id="data.post_processing.post_processing.boundary_refinement_watershed">
+<code class="sig-prename descclassname">data.post_processing.post_processing.</code><code class="sig-name descname">boundary_refinement_watershed</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span></em>, <em class="sig-param"><span class="n">Y_pred</span></em>, <em class="sig-param"><span class="n">erode</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">save_marks_dir</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/data/post_processing/post_processing.html#boundary_refinement_watershed"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.post_processing.post_processing.boundary_refinement_watershed" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply watershed to the given predictions with the goal of refine the boundaries of the artifacts.</p>
+<p>Based on <a class="reference external" href="https://docs.opencv.org/master/d3/db4/tutorial_py_watershed.html">https://docs.opencv.org/master/d3/db4/tutorial_py_watershed.html</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Original data to guide the watershed. E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_pred</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Predicted data to refine the boundaries. E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>erode</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>, <em>optional</em>) – To extract the sure foreground eroding the artifacts instead of doing with distanceTransform.</p></li>
+<li><p><strong>save_marks_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Directory to save the markers used to make the watershed. Useful for debugging.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>Array</strong> – Refined boundaries of the predictions. E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><div class="figure align-center" id="id2">
+<a class="reference internal image-reference" href="../../_images/FIBSEM_test_0.png"><img alt="../../_images/FIBSEM_test_0.png" src="../../_images/FIBSEM_test_0.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Original image</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+<td><div class="figure align-center" id="id3">
+<a class="reference internal image-reference" href="../../_images/FIBSEM_test_0_gt.png"><img alt="../../_images/FIBSEM_test_0_gt.png" src="../../_images/FIBSEM_test_0_gt.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Ground truth</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td><div class="figure align-center" id="id4">
+<a class="reference internal image-reference" href="../../_images/FIBSEM_test_0_pred.png"><img alt="../../_images/FIBSEM_test_0_pred.png" src="../../_images/FIBSEM_test_0_pred.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Predicted image</span><a class="headerlink" href="#id4" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+<td><div class="figure align-center" id="id5">
+<a class="reference internal image-reference" href="../../_images/FIBSEM_test_0_wa.png"><img alt="../../_images/FIBSEM_test_0_wa.png" src="../../_images/FIBSEM_test_0_wa.png" style="width: 80%;" /></a>
+<p class="caption"><span class="caption-text">Watershed ouput</span><a class="headerlink" href="#id5" title="Permalink to this image">¶</a></p>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<p>The marks used to guide the watershed is this example are these:</p>
+<blockquote>
+<div><a class="reference internal image-reference" href="../../_images/watershed2_marks_test0.png"><img alt="../../_images/watershed2_marks_test0.png" class="align-center" src="../../_images/watershed2_marks_test0.png" style="width: 70%;" /></a>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data.post_processing.post_processing.boundary_refinement_watershed2">
+<code class="sig-prename descclassname">data.post_processing.post_processing.</code><code class="sig-name descname">boundary_refinement_watershed2</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">X</span></em>, <em class="sig-param"><span class="n">Y_pred</span></em>, <em class="sig-param"><span class="n">save_marks_dir</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/data/post_processing/post_processing.html#boundary_refinement_watershed2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.post_processing.post_processing.boundary_refinement_watershed2" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply watershed to the given predictions with the goal of refine the boundaries of the artifacts. This function
+was implemented using scikit instead of opencv as <code class="xref py py-meth docutils literal notranslate"><span class="pre">post_processing.boundary_refinement_watershed()</span></code>.</p>
+<p>Based on <a class="reference external" href="https://scikit-image.org/docs/dev/auto_examples/segmentation/plot_watershed.html">https://scikit-image.org/docs/dev/auto_examples/segmentation/plot_watershed.html</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Original data to guide the watershed. E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>Y_pred</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Predicted data to refine the boundaries. E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>save_marks_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Directory to save the markers used to make the watershed. Useful for debugging.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>Array</strong> – Refined boundaries of the predictions. E.g. <code class="docutils literal notranslate"><span class="pre">(img_number,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data.post_processing.post_processing.bc_watershed">
+<code class="sig-prename descclassname">data.post_processing.post_processing.</code><code class="sig-name descname">bc_watershed</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">thres1</span><span class="o">=</span><span class="default_value">0.9</span></em>, <em class="sig-param"><span class="n">thres2</span><span class="o">=</span><span class="default_value">0.8</span></em>, <em class="sig-param"><span class="n">thres3</span><span class="o">=</span><span class="default_value">0.85</span></em>, <em class="sig-param"><span class="n">thres_small</span><span class="o">=</span><span class="default_value">128</span></em>, <em class="sig-param"><span class="n">save_dir</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/data/post_processing/post_processing.html#bc_watershed"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.post_processing.post_processing.bc_watershed" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
+algorithm.</p>
+<p>Implementation based on <a class="reference external" href="https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py">PyTorch Connectomics’ process.py</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Binary foreground labels and contours data to apply watershed into. E.g. <code class="docutils literal notranslate"><span class="pre">(397,</span> <span class="pre">1450,</span> <span class="pre">2000,</span> <span class="pre">2)</span></code>.</p></li>
+<li><p><strong>thres1</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Threshold used in the semantic mask to create watershed seeds.</p></li>
+<li><p><strong>thres2</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Threshold used in the contours to create watershed seeds.</p></li>
+<li><p><strong>thres3</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Threshold used in the semantic mask to create the foreground mask.</p></li>
+<li><p><strong>thres_small</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Theshold to remove small objects created by the watershed.</p></li>
+<li><p><strong>save_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Directory to save watershed output into.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data.post_processing.post_processing.bcd_watershed">
+<code class="sig-prename descclassname">data.post_processing.post_processing.</code><code class="sig-name descname">bcd_watershed</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">thres1</span><span class="o">=</span><span class="default_value">0.9</span></em>, <em class="sig-param"><span class="n">thres2</span><span class="o">=</span><span class="default_value">0.8</span></em>, <em class="sig-param"><span class="n">thres3</span><span class="o">=</span><span class="default_value">0.85</span></em>, <em class="sig-param"><span class="n">thres4</span><span class="o">=</span><span class="default_value">0.5</span></em>, <em class="sig-param"><span class="n">thres5</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">thres_small</span><span class="o">=</span><span class="default_value">128</span></em>, <em class="sig-param"><span class="n">save_dir</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/data/post_processing/post_processing.html#bcd_watershed"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.post_processing.post_processing.bcd_watershed" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert binary foreground probability maps, instance contours to instance masks via watershed segmentation
+algorithm.</p>
+<p>Implementation based on <a class="reference external" href="https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py">PyTorch Connectomics’ process.py</a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Binary foreground labels and contours data to apply watershed into. E.g. <code class="docutils literal notranslate"><span class="pre">(397,</span> <span class="pre">1450,</span> <span class="pre">2000,</span> <span class="pre">2)</span></code>.</p></li>
+<li><p><strong>thres1</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Threshold used in the semantic mask to create watershed seeds.</p></li>
+<li><p><strong>thres2</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Threshold used in the contours to create watershed seeds.</p></li>
+<li><p><strong>thres3</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Threshold used in the semantic mask to create the foreground mask.</p></li>
+<li><p><strong>thres4</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Threshold used in the distances to create watershed seeds.</p></li>
+<li><p><strong>thres5</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Threshold used in the distances to create the foreground mask.</p></li>
+<li><p><strong>thres_small</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Theshold to remove small objects created by the watershed.</p></li>
+<li><p><strong>save_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <em>optional</em>) – Directory to save watershed output into.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data.post_processing.post_processing.calculate_z_filtering">
+<code class="sig-prename descclassname">data.post_processing.post_processing.</code><code class="sig-name descname">calculate_z_filtering</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em>, <em class="sig-param"><span class="n">mf_size</span><span class="o">=</span><span class="default_value">5</span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/data/post_processing/post_processing.html#calculate_z_filtering"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.post_processing.post_processing.calculate_z_filtering" title="Permalink to this definition">¶</a></dt>
+<dd><p>Applies a median filtering in the z dimension of the provided data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Data to apply the filter to. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>mf_size</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Size of the median filter. Must be an odd number.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>Array</strong> – Z filtered data. E.g. <code class="docutils literal notranslate"><span class="pre">(num_of_images,</span> <span class="pre">x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data.post_processing.post_processing.ensemble8_2d_predictions">
+<code class="sig-prename descclassname">data.post_processing.post_processing.</code><code class="sig-name descname">ensemble8_2d_predictions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">o_img</span></em>, <em class="sig-param"><span class="n">pred_func</span></em>, <em class="sig-param"><span class="n">batch_size_value</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/data/post_processing/post_processing.html#ensemble8_2d_predictions"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.post_processing.post_processing.ensemble8_2d_predictions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Outputs the mean prediction of a given image generating its 8 possible rotations and flips.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>o_img</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Input image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>pred_func</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">function</span></code>) – Function to make predictions.</p></li>
+<li><p><strong>batch_size_value</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Batch size value.</p></li>
+<li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>out</strong> – Output image ensembled. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">3D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
+<span class="c1"># Apply ensemble to each image of X_test</span>
+<span class="n">X_test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">out_X_test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+    <span class="n">pred_ensembled</span> <span class="o">=</span> <span class="n">ensemble8_2d_predictions</span><span class="p">(</span><span class="n">X_test</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+        <span class="n">pred_func</span><span class="o">=</span><span class="p">(</span><span class="k">lambda</span> <span class="n">img_batch_subdiv</span><span class="p">:</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">img_batch_subdiv</span><span class="p">)),</span> <span class="n">n_classes</span><span class="o">=</span><span class="n">n_classes</span><span class="p">)</span>
+    <span class="n">out_X_test</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">pred_ensembled</span>
+
+<span class="c1"># Notice that here pred_func is created based on model.predict function of Keras</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="data.post_processing.post_processing.ensemble16_3d_predictions">
+<code class="sig-prename descclassname">data.post_processing.post_processing.</code><code class="sig-name descname">ensemble16_3d_predictions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">vol</span></em>, <em class="sig-param"><span class="n">pred_func</span></em>, <em class="sig-param"><span class="n">batch_size_value</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/data/post_processing/post_processing.html#ensemble16_3d_predictions"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#data.post_processing.post_processing.ensemble16_3d_predictions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Outputs the mean prediction of a given image generating its 16 possible rotations and flips.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>o_img</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Input image. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p></li>
+<li><p><strong>pred_func</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">function</span></code>) – Function to make predictions.</p></li>
+<li><p><strong>batch_size_value</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Batch size value.</p></li>
+<li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <em>optional</em>) – Number of classes.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>out</strong> – Output image ensembled. E.g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">channels)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">4D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># EXAMPLE 1</span>
+<span class="c1"># Apply ensemble to each image of X_test</span>
+<span class="n">X_test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">10</span><span class="p">,</span> <span class="mi">165</span><span class="p">,</span> <span class="mi">768</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">out_X_test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">X_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+    <span class="n">pred_ensembled</span> <span class="o">=</span> <span class="n">ensemble8_2d_predictions</span><span class="p">(</span><span class="n">X_test</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+        <span class="n">pred_func</span><span class="o">=</span><span class="p">(</span><span class="k">lambda</span> <span class="n">img_batch_subdiv</span><span class="p">:</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">img_batch_subdiv</span><span class="p">)),</span> <span class="n">n_classes</span><span class="o">=</span><span class="n">n_classes</span><span class="p">)</span>
+    <span class="n">out_X_test</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">pred_ensembled</span>
+
+<span class="c1"># Notice that here pred_func is created based on model.predict function of Keras</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="smooth_tiled_predictions.html" class="btn btn-neutral float-right" title="Smooth tiled predictions" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="init.html" class="btn btn-neutral float-left" title="Init" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2021, Daniel Franco
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

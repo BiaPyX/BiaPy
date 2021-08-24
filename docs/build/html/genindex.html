@@ -80,28 +80,34 @@
               
             
             
-              <p class="caption"><span class="caption-text">Quick start</span></p>
+              <p class="caption"><span class="caption-text">How to run</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Step 0: Prepare environment</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-1-data-preparation">Step 1: Data preparation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-3-run-the-code">Step 3: Run the code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Manuscripts</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="mitochondria.html">Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">2D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">3D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="generators.html">Generators</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
-<li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="bibliography.html">Bibliography</a></li>
 </ul>
 
             
@@ -194,53 +200,32 @@
 <h2 id="A">A</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="adabound.html#aux.adabound.AdaBound">AdaBound (class in aux.adabound)</a>
+      <li><a href="utils/adabound.html#utils.adabound.AdaBound">AdaBound (class in utils.adabound)</a>
 </li>
-      <li><a href="2d_generator_v2.html#generators.custom_da_gen_v2.ImageDataGenerator.apply_transform">apply_transform() (generators.custom_da_gen_v2.ImageDataGenerator method)</a>
+      <li><a href="data/post_processing/init.html#data.post_processing.apply_post_processing">apply_post_processing() (in module data.post_processing)</a>
+</li>
+      <li><a href="data/generators/2d_generator.html#data.generators.data_2D_generator.ImageDataGenerator.apply_transform">apply_transform() (data.generators.data_2D_generator.ImageDataGenerator method)</a>
 
       <ul>
-        <li><a href="3d_generator.html#generators.data_3D_generators.VoxelDataGenerator.apply_transform">(generators.data_3D_generators.VoxelDataGenerator method)</a>
-</li>
-        <li><a href="3d_generator_v2.html#generators.data_3D_generators_v2.VoxelDataGenerator.apply_transform">(generators.data_3D_generators_v2.VoxelDataGenerator method)</a>
+        <li><a href="data/generators/3d_generator.html#data.generators.data_3D_generator.VoxelDataGenerator.apply_transform">(data.generators.data_3D_generator.VoxelDataGenerator method)</a>
 </li>
       </ul></li>
-      <li><a href="util.html#util.array_to_img">array_to_img() (in module util)</a>
-</li>
-      <li><a href="cheng_3d_network.html#sota_implementations.cheng_2017.cheng_3D_network.asymmetric_3D_network">asymmetric_3D_network() (in module sota_implementations.cheng_2017.cheng_3D_network)</a>
-</li>
-      <li><a href="cheng_network.html#sota_implementations.cheng_2017.cheng_network.asymmetric_network">asymmetric_network() (in module sota_implementations.cheng_2017.cheng_network)</a>
-</li>
-      <li><a href="networks_att_unet_2d.html#networks.attention_unet_2d.Attention_U_Net_2D">Attention_U_Net_2D() (in module networks.attention_unet_2d)</a>
+      <li><a href="utils/util.html#utils.util.array_to_img">array_to_img() (in module utils.util)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="networks_att_unet_3d.html#networks.attention_unet_3d.Attention_U_Net_3D">Attention_U_Net_3D() (in module networks.attention_unet_3d)</a>
+      <li><a href="sota_implementations/cheng_2017/cheng_3d_network.html#sota_implementations.cheng_2017.cheng_3D_network.asymmetric_3D_network">asymmetric_3D_network() (in module sota_implementations.cheng_2017.cheng_3D_network)</a>
 </li>
-      <li><a href="networks_att_unet_2d.html#networks.attention_unet_2d.AttentionBlock">AttentionBlock() (in module networks.attention_unet_2d)</a>
+      <li><a href="sota_implementations/cheng_2017/cheng_network.html#sota_implementations.cheng_2017.cheng_network.asymmetric_network">asymmetric_network() (in module sota_implementations.cheng_2017.cheng_network)</a>
+</li>
+      <li><a href="models/att_unet_2d.html#models.attention_unet.Attention_U_Net_2D">Attention_U_Net_2D() (in module models.attention_unet)</a>
+</li>
+      <li><a href="models/att_unet_3d.html#models.attention_unet_3d.Attention_U_Net_3D">Attention_U_Net_3D() (in module models.attention_unet_3d)</a>
+</li>
+      <li><a href="models/att_unet_2d.html#models.attention_unet.AttentionBlock">AttentionBlock() (in module models.attention_unet)</a>
 
       <ul>
-        <li><a href="networks_att_unet_3d.html#networks.attention_unet_3d.AttentionBlock">(in module networks.attention_unet_3d)</a>
-</li>
-      </ul></li>
-      <li>
-    aux.adabound
-
-      <ul>
-        <li><a href="adabound.html#module-aux.adabound">module</a>
-</li>
-      </ul></li>
-      <li>
-    aux.callbacks
-
-      <ul>
-        <li><a href="callbacks.html#module-aux.callbacks">module</a>
-</li>
-      </ul></li>
-      <li>
-    aux.Grad_CAM.grad_cam
-
-      <ul>
-        <li><a href="grad_cam.html#module-aux.Grad_CAM.grad_cam">module</a>
+        <li><a href="models/att_unet_3d.html#models.attention_unet_3d.AttentionBlock">(in module models.attention_unet_3d)</a>
 </li>
       </ul></li>
   </ul></td>
@@ -249,19 +234,27 @@
 <h2 id="B">B</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="metrics.html#metrics.bce_dice_loss">bce_dice_loss() (in module metrics)</a>
+      <li><a href="data/post_processing/post_processing.html#data.post_processing.post_processing.bc_watershed">bc_watershed() (in module data.post_processing.post_processing)</a>
 </li>
-      <li><a href="metrics.html#metrics.binary_crossentropy_weighted">binary_crossentropy_weighted() (in module metrics)</a>
+      <li><a href="data/post_processing/post_processing.html#data.post_processing.post_processing.bcd_watershed">bcd_watershed() (in module data.post_processing.post_processing)</a>
 </li>
-      <li><a href="networks_fc_densetnet103.html#networks.fc_densenet103.BN_ReLU_Conv">BN_ReLU_Conv() (in module networks.fc_densenet103)</a>
+      <li><a href="engine/metrics.html#engine.metrics.bce_dice_loss">bce_dice_loss() (in module engine.metrics)</a>
+</li>
+      <li><a href="engine/metrics.html#engine.metrics.binary_crossentropy_weighted">binary_crossentropy_weighted() (in module engine.metrics)</a>
+</li>
+      <li><a href="models/tiramisu.html#models.tiramisu.BN_ReLU_Conv">BN_ReLU_Conv() (in module models.tiramisu)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="post_processing.html#post_processing.boundary_refinement_watershed">boundary_refinement_watershed() (in module post_processing)</a>
+      <li><a href="data/post_processing/post_processing.html#data.post_processing.post_processing.boundary_refinement_watershed">boundary_refinement_watershed() (in module data.post_processing.post_processing)</a>
 </li>
-      <li><a href="post_processing.html#post_processing.boundary_refinement_watershed2">boundary_refinement_watershed2() (in module post_processing)</a>
+      <li><a href="data/post_processing/post_processing.html#data.post_processing.post_processing.boundary_refinement_watershed2">boundary_refinement_watershed2() (in module data.post_processing.post_processing)</a>
 </li>
-      <li><a href="augmentors.html#generators.augmentors.brightness">brightness() (in module generators.augmentors)</a>
+      <li><a href="data/generators/augmentors.html#data.generators.augmentors.brightness">brightness() (in module data.generators.augmentors)</a>
+</li>
+      <li><a href="engine/init.html#engine.build_callbacks">build_callbacks() (in module engine)</a>
+</li>
+      <li><a href="models/init.html#models.build_model">build_model() (in module models)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -269,59 +262,86 @@
 <h2 id="C">C</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="util.html#util.calculate_2D_volume_prob_map">calculate_2D_volume_prob_map() (in module util)</a>
+      <li><a href="utils/util.html#utils.util.calculate_2D_volume_prob_map">calculate_2D_volume_prob_map() (in module utils.util)</a>
 </li>
-      <li><a href="util.html#util.calculate_3D_volume_prob_map">calculate_3D_volume_prob_map() (in module util)</a>
+      <li><a href="utils/util.html#utils.util.calculate_3D_volume_prob_map">calculate_3D_volume_prob_map() (in module utils.util)</a>
 </li>
-      <li><a href="post_processing.html#post_processing.calculate_z_filtering">calculate_z_filtering() (in module post_processing)</a>
+      <li><a href="data/post_processing/post_processing.html#data.post_processing.post_processing.calculate_z_filtering">calculate_z_filtering() (in module data.post_processing.post_processing)</a>
 </li>
-      <li><a href="cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D.call">call() (sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D method)</a>
+      <li><a href="sota_implementations/cheng_2017/cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D.call">call() (sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D method)</a>
 
       <ul>
-        <li><a href="cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D.call">(sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D method)</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D.call">(sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D method)</a>
 </li>
       </ul></li>
-      <li><a href="data_2d_manipulation.html#data_2D_manipulation.check_crops">check_crops() (in module data_2D_manipulation)</a>
+      <li><a href="data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.cheap_tiling_prediction">cheap_tiling_prediction() (in module data.post_processing.smooth_tiled_predictions)</a>
 </li>
-      <li><a href="util.html#util.check_masks">check_masks() (in module util)</a>
+      <li><a href="data/data_2d_manipulation.html#data.data_2D_manipulation.check_crops">check_crops() (in module data.data_2D_manipulation)</a>
 </li>
-      <li><a href="cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D.compute_output_shape">compute_output_shape() (sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D method)</a>
+      <li><a href="utils/util.html#utils.util.check_downsample_division">check_downsample_division() (in module utils.util)</a>
+</li>
+      <li><a href="data/generators/init.html#data.generators.check_generator_consistence">check_generator_consistence() (in module data.generators)</a>
+</li>
+      <li><a href="utils/util.html#utils.util.check_masks">check_masks() (in module utils.util)</a>
+</li>
+      <li><a href="sota_implementations/cheng_2017/cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D.compute_output_shape">compute_output_shape() (sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D method)</a>
 
       <ul>
-        <li><a href="cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D.compute_output_shape">(sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D method)</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D.compute_output_shape">(sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D method)</a>
 </li>
       </ul></li>
-      <li><a href="augmentors.html#generators.augmentors.contrast">contrast() (in module generators.augmentors)</a>
+      <li><a href="config/config.html#config.config.Config">Config (class in config.config)</a>
 </li>
-      <li><a href="networks_multiresunet.html#networks.MultiResUNet.conv2d_bn">conv2d_bn() (in module networks.MultiResUNet)</a>
+      <li>
+    config.config
+
+      <ul>
+        <li><a href="config/config.html#module-config.config">module</a>
 </li>
-      <li><a href="networks_nnunet.html#sota_implementations.nnUNet_2018.nnUNet_2d.ConvDropoutNormNonlin">ConvDropoutNormNonlin() (in module sota_implementations.nnUNet_2018.nnUNet_2d)</a>
+      </ul></li>
+      <li><a href="data/generators/augmentors.html#data.generators.augmentors.contrast">contrast() (in module data.generators.augmentors)</a>
+</li>
+      <li><a href="models/multiresunet.html#models.multiresunet.conv2d_bn">conv2d_bn() (in module models.multiresunet)</a>
+</li>
+      <li><a href="models/nnunet.html#sota_implementations.nnUNet_2018.nnUNet_2d.ConvDropoutNormNonlin">ConvDropoutNormNonlin() (in module sota_implementations.nnUNet_2018.nnUNet_2d)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model">create_oztel_model() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
+      <li><a href="engine/schedulers/cosine_decay.html#engine.schedulers.cosine_decay.WarmUpCosineDecayScheduler.cosine_decay_with_warmup">cosine_decay_with_warmup() (engine.schedulers.cosine_decay.WarmUpCosineDecayScheduler method)</a>
 </li>
-      <li><a href="oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model_V1">create_oztel_model_V1() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.CosineAnnealer">CosineAnnealer (class in engine.schedulers.one_cycle)</a>
 </li>
-      <li><a href="oztel_utils.html#sota_implementations.oztel_2017.utils.create_oztel_patches">create_oztel_patches() (in module sota_implementations.oztel_2017.utils)</a>
+      <li><a href="data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.create_gen">create_gen() (in module data.post_processing.smooth_tiled_predictions)</a>
 </li>
-      <li><a href="util.html#util.create_plots">create_plots() (in module util)</a>
+      <li><a href="sota_implementations/oztel_2017/oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model">create_oztel_model() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
 </li>
-      <li><a href="data_3d_manipulation.html#data_3D_manipulation.crop_3D_data">crop_3D_data() (in module data_3D_manipulation)</a>
+      <li><a href="sota_implementations/oztel_2017/oztel_network.html#sota_implementations.oztel_2017.cnn_oztel.create_oztel_model_V1">create_oztel_model_V1() (in module sota_implementations.oztel_2017.cnn_oztel)</a>
 </li>
-      <li><a href="data_3d_manipulation.html#data_3D_manipulation.crop_3D_data_with_overlap">crop_3D_data_with_overlap() (in module data_3D_manipulation)</a>
+      <li><a href="sota_implementations/oztel_2017/oztel_utils.html#sota_implementations.oztel_2017.utils.create_oztel_patches">create_oztel_patches() (in module sota_implementations.oztel_2017.utils)</a>
 </li>
-      <li><a href="data_2d_manipulation.html#data_2D_manipulation.crop_data">crop_data() (in module data_2D_manipulation)</a>
+      <li><a href="utils/util.html#utils.util.create_plots">create_plots() (in module utils.util)</a>
 </li>
-      <li><a href="data_2d_manipulation.html#data_2D_manipulation.crop_data_with_overlap">crop_data_with_overlap() (in module data_2D_manipulation)</a>
+      <li><a href="data/generators/init.html#data.generators.create_test_augmentor">create_test_augmentor() (in module data.generators)</a>
 </li>
-      <li><a href="augmentors.html#generators.augmentors.cutblur">cutblur() (in module generators.augmentors)</a>
+      <li><a href="data/init.html#data.create_test_instance_channels">create_test_instance_channels() (in module data)</a>
 </li>
-      <li><a href="augmentors.html#generators.augmentors.cutmix">cutmix() (in module generators.augmentors)</a>
+      <li><a href="data/generators/init.html#data.generators.create_train_val_augmentors">create_train_val_augmentors() (in module data.generators)</a>
 </li>
-      <li><a href="augmentors.html#generators.augmentors.cutnoise">cutnoise() (in module generators.augmentors)</a>
+      <li><a href="data/init.html#data.create_train_val_instance_channels">create_train_val_instance_channels() (in module data)</a>
 </li>
-      <li><a href="augmentors.html#generators.augmentors.cutout">cutout() (in module generators.augmentors)</a>
+      <li><a href="data/data_3d_manipulation.html#data.data_3D_manipulation.crop_3D_data">crop_3D_data() (in module data.data_3D_manipulation)</a>
+</li>
+      <li><a href="data/data_3d_manipulation.html#data.data_3D_manipulation.crop_3D_data_with_overlap">crop_3D_data_with_overlap() (in module data.data_3D_manipulation)</a>
+</li>
+      <li><a href="data/data_2d_manipulation.html#data.data_2D_manipulation.crop_data_with_overlap">crop_data_with_overlap() (in module data.data_2D_manipulation)</a>
+</li>
+      <li><a href="data/generators/augmentors.html#data.generators.augmentors.cutblur">cutblur() (in module data.generators.augmentors)</a>
+</li>
+      <li><a href="data/generators/augmentors.html#data.generators.augmentors.cutmix">cutmix() (in module data.generators.augmentors)</a>
+</li>
+      <li><a href="data/generators/augmentors.html#data.generators.augmentors.cutnoise">cutnoise() (in module data.generators.augmentors)</a>
+</li>
+      <li><a href="data/generators/augmentors.html#data.generators.augmentors.cutout">cutout() (in module data.generators.augmentors)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -330,36 +350,99 @@
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li>
-    data_2D_manipulation
+    data
 
       <ul>
-        <li><a href="data_2d_manipulation.html#module-data_2D_manipulation">module</a>
+        <li><a href="data/init.html#module-data">module</a>
 </li>
       </ul></li>
       <li>
-    data_3D_manipulation
+    data.data_2D_manipulation
 
       <ul>
-        <li><a href="data_3d_manipulation.html#module-data_3D_manipulation">module</a>
+        <li><a href="data/data_2d_manipulation.html#module-data.data_2D_manipulation">module</a>
 </li>
       </ul></li>
-      <li><a href="cheng_3d_network.html#sota_implementations.cheng_2017.cheng_3D_network.decode_block">decode_block() (in module sota_implementations.cheng_2017.cheng_3D_network)</a>
+      <li>
+    data.data_3D_manipulation
 
       <ul>
-        <li><a href="cheng_network.html#sota_implementations.cheng_2017.cheng_network.decode_block">(in module sota_implementations.cheng_2017.cheng_network)</a>
+        <li><a href="data/data_3d_manipulation.html#module-data.data_3D_manipulation">module</a>
+</li>
+      </ul></li>
+      <li>
+    data.generators
+
+      <ul>
+        <li><a href="data/generators/init.html#module-data.generators">module</a>
+</li>
+      </ul></li>
+      <li>
+    data.generators.augmentors
+
+      <ul>
+        <li><a href="data/generators/augmentors.html#module-data.generators.augmentors">module</a>
+</li>
+      </ul></li>
+      <li>
+    data.generators.data_2D_generator
+
+      <ul>
+        <li><a href="data/generators/2d_generator.html#module-data.generators.data_2D_generator">module</a>
+</li>
+      </ul></li>
+      <li>
+    data.generators.data_3D_generator
+
+      <ul>
+        <li><a href="data/generators/3d_generator.html#module-data.generators.data_3D_generator">module</a>
 </li>
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="metrics.html#metrics.DET_calculation">DET_calculation() (in module metrics)</a>
+      <li>
+    data.generators.simple_data_generators
+
+      <ul>
+        <li><a href="data/generators/simple_generator.html#module-data.generators.simple_data_generators">module</a>
 </li>
-      <li><a href="metrics.html#metrics.dice_coeff">dice_coeff() (in module metrics)</a>
+      </ul></li>
+      <li>
+    data.post_processing
+
+      <ul>
+        <li><a href="data/post_processing/init.html#module-data.post_processing">module</a>
 </li>
-      <li><a href="metrics.html#metrics.dice_loss">dice_loss() (in module metrics)</a>
+      </ul></li>
+      <li>
+    data.post_processing.post_processing
+
+      <ul>
+        <li><a href="data/post_processing/post_processing.html#module-data.post_processing.post_processing">module</a>
 </li>
-      <li><a href="util.html#util.divide_images_on_classes">divide_images_on_classes() (in module util)</a>
+      </ul></li>
+      <li>
+    data.post_processing.smooth_tiled_predictions
+
+      <ul>
+        <li><a href="data/post_processing/smooth_tiled_predictions.html#module-data.post_processing.smooth_tiled_predictions">module</a>
 </li>
-      <li><a href="util.html#util.do_save_wm">do_save_wm() (in module util)</a>
+      </ul></li>
+      <li><a href="sota_implementations/cheng_2017/cheng_3d_network.html#sota_implementations.cheng_2017.cheng_3D_network.decode_block">decode_block() (in module sota_implementations.cheng_2017.cheng_3D_network)</a>
+
+      <ul>
+        <li><a href="sota_implementations/cheng_2017/cheng_network.html#sota_implementations.cheng_2017.cheng_network.decode_block">(in module sota_implementations.cheng_2017.cheng_network)</a>
+</li>
+      </ul></li>
+      <li><a href="engine/metrics.html#engine.metrics.DET_calculation">DET_calculation() (in module engine.metrics)</a>
+</li>
+      <li><a href="engine/metrics.html#engine.metrics.dice_coeff">dice_coeff() (in module engine.metrics)</a>
+</li>
+      <li><a href="engine/metrics.html#engine.metrics.dice_loss">dice_loss() (in module engine.metrics)</a>
+</li>
+      <li><a href="utils/util.html#utils.util.divide_images_on_classes">divide_images_on_classes() (in module utils.util)</a>
+</li>
+      <li><a href="utils/util.html#utils.util.do_save_wm">do_save_wm() (in module utils.util)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -367,20 +450,55 @@
 <h2 id="E">E</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="cheng_3d_network.html#sota_implementations.cheng_2017.cheng_3D_network.encode_block">encode_block() (in module sota_implementations.cheng_2017.cheng_3D_network)</a>
+      <li><a href="sota_implementations/cheng_2017/cheng_3d_network.html#sota_implementations.cheng_2017.cheng_3D_network.encode_block">encode_block() (in module sota_implementations.cheng_2017.cheng_3D_network)</a>
 
       <ul>
-        <li><a href="cheng_network.html#sota_implementations.cheng_2017.cheng_network.encode_block">(in module sota_implementations.cheng_2017.cheng_network)</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_network.html#sota_implementations.cheng_2017.cheng_network.encode_block">(in module sota_implementations.cheng_2017.cheng_network)</a>
+</li>
+      </ul></li>
+      <li>
+    engine
+
+      <ul>
+        <li><a href="engine/init.html#module-engine">module</a>
+</li>
+      </ul></li>
+      <li>
+    engine.metrics
+
+      <ul>
+        <li><a href="engine/metrics.html#module-engine.metrics">module</a>
+</li>
+      </ul></li>
+      <li>
+    engine.schedulers.cosine_decay
+
+      <ul>
+        <li><a href="engine/schedulers/cosine_decay.html#module-engine.schedulers.cosine_decay">module</a>
 </li>
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="post_processing.html#post_processing.ensemble16_3d_predictions">ensemble16_3d_predictions() (in module post_processing)</a>
-</li>
-      <li><a href="post_processing.html#post_processing.ensemble8_2d_predictions">ensemble8_2d_predictions() (in module post_processing)</a>
+      <li>
+    engine.schedulers.one_cycle
 
       <ul>
-        <li><a href="oztel_utils.html#sota_implementations.oztel_2017.utils.ensemble8_2d_predictions">(in module sota_implementations.oztel_2017.utils)</a>
+        <li><a href="engine/schedulers/one_cycle.html#module-engine.schedulers.one_cycle">module</a>
+</li>
+      </ul></li>
+      <li>
+    engine.trainer
+
+      <ul>
+        <li><a href="engine/trainer.html#module-engine.trainer">module</a>
+</li>
+      </ul></li>
+      <li><a href="data/post_processing/post_processing.html#data.post_processing.post_processing.ensemble16_3d_predictions">ensemble16_3d_predictions() (in module data.post_processing.post_processing)</a>
+</li>
+      <li><a href="data/post_processing/post_processing.html#data.post_processing.post_processing.ensemble8_2d_predictions">ensemble8_2d_predictions() (in module data.post_processing.post_processing)</a>
+
+      <ul>
+        <li><a href="sota_implementations/oztel_2017/oztel_utils.html#sota_implementations.oztel_2017.utils.ensemble8_2d_predictions">(in module sota_implementations.oztel_2017.utils)</a>
 </li>
       </ul></li>
   </ul></td>
@@ -389,15 +507,15 @@
 <h2 id="F">F</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="networks_fc_densetnet103.html#networks.fc_densenet103.FC_DenseNet103">FC_DenseNet103() (in module networks.fc_densenet103)</a>
+      <li><a href="models/tiramisu.html#models.tiramisu.FC_DenseNet103">FC_DenseNet103() (in module models.tiramisu)</a>
 </li>
-      <li><a href="networks_fcn.html#networks.fcn_vgg.FCN32_VGG16">FCN32_VGG16() (in module networks.fcn_vgg)</a>
+      <li><a href="models/fcn.html#models.fcn_vgg.FCN32_VGG16">FCN32_VGG16() (in module models.fcn_vgg)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="networks_fcn.html#networks.fcn_vgg.FCN8_VGG16">FCN8_VGG16() (in module networks.fcn_vgg)</a>
+      <li><a href="models/fcn.html#models.fcn_vgg.FCN8_VGG16">FCN8_VGG16() (in module models.fcn_vgg)</a>
 </li>
-      <li><a href="util.html#util.foreground_percentage">foreground_percentage() (in module util)</a>
+      <li><a href="utils/util.html#utils.util.foreground_percentage">foreground_percentage() (in module utils.util)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -405,66 +523,35 @@
 <h2 id="G">G</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.generate_indexes">generate_indexes() (in module sota_implementations.cheng_2017.StochasticDownsampling2D)</a>
+      <li><a href="sota_implementations/cheng_2017/cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.generate_indexes">generate_indexes() (in module sota_implementations.cheng_2017.StochasticDownsampling2D)</a>
 
       <ul>
-        <li><a href="cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.generate_indexes">(in module sota_implementations.cheng_2017.StochasticDownsampling3D)</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.generate_indexes">(in module sota_implementations.cheng_2017.StochasticDownsampling3D)</a>
 </li>
       </ul></li>
-      <li>
-    generators.augmentors
-
-      <ul>
-        <li><a href="augmentors.html#module-generators.augmentors">module</a>
+      <li><a href="config/config.html#config.config.Config.get_cfg_defaults">get_cfg_defaults() (config.config.Config method)</a>
 </li>
-      </ul></li>
-      <li>
-    generators.custom_da_gen
-
-      <ul>
-        <li><a href="2d_generator.html#module-generators.custom_da_gen">module</a>
+      <li><a href="utils/adabound.html#utils.adabound.AdaBound.get_config">get_config() (utils.adabound.AdaBound method)</a>
 </li>
-      </ul></li>
-      <li>
-    generators.custom_da_gen_v2
-
-      <ul>
-        <li><a href="2d_generator_v2.html#module-generators.custom_da_gen_v2">module</a>
+      <li><a href="data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.get_dummy_img">get_dummy_img() (in module data.post_processing.smooth_tiled_predictions)</a>
 </li>
-      </ul></li>
-      <li>
-    generators.data_3D_generators
-
-      <ul>
-        <li><a href="3d_generator.html#module-generators.data_3D_generators">module</a>
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.OneCycleScheduler.get_lr">get_lr() (engine.schedulers.one_cycle.OneCycleScheduler method)</a>
 </li>
-      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li>
-    generators.data_3D_generators_v2
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.OneCycleScheduler.get_momentum">get_momentum() (engine.schedulers.one_cycle.OneCycleScheduler method)</a>
+</li>
+      <li><a href="data/generators/2d_generator.html#data.generators.data_2D_generator.ImageDataGenerator.get_transformed_samples">get_transformed_samples() (data.generators.data_2D_generator.ImageDataGenerator method)</a>
 
       <ul>
-        <li><a href="3d_generator_v2.html#module-generators.data_3D_generators_v2">module</a>
+        <li><a href="data/generators/3d_generator.html#data.generators.data_3D_generator.VoxelDataGenerator.get_transformed_samples">(data.generators.data_3D_generator.VoxelDataGenerator method)</a>
 </li>
       </ul></li>
-      <li><a href="adabound.html#aux.adabound.AdaBound.get_config">get_config() (aux.adabound.AdaBound method)</a>
+      <li><a href="utils/adabound.html#utils.adabound.AdaBound.get_updates">get_updates() (utils.adabound.AdaBound method)</a>
 </li>
-      <li><a href="2d_generator.html#generators.custom_da_gen.ImageDataGenerator.get_transformed_samples">get_transformed_samples() (generators.custom_da_gen.ImageDataGenerator method)</a>
-
-      <ul>
-        <li><a href="2d_generator_v2.html#generators.custom_da_gen_v2.ImageDataGenerator.get_transformed_samples">(generators.custom_da_gen_v2.ImageDataGenerator method)</a>
+      <li><a href="utils/grad_cam.html#utils.grad_cam.grad_cam_sample">grad_cam_sample() (in module utils.grad_cam)</a>
 </li>
-        <li><a href="3d_generator.html#generators.data_3D_generators.VoxelDataGenerator.get_transformed_samples">(generators.data_3D_generators.VoxelDataGenerator method)</a>
-</li>
-        <li><a href="3d_generator_v2.html#generators.data_3D_generators_v2.VoxelDataGenerator.get_transformed_samples">(generators.data_3D_generators_v2.VoxelDataGenerator method)</a>
-</li>
-      </ul></li>
-      <li><a href="adabound.html#aux.adabound.AdaBound.get_updates">get_updates() (aux.adabound.AdaBound method)</a>
-</li>
-      <li><a href="grad_cam.html#aux.Grad_CAM.grad_cam.grad_cam_sample">grad_cam_sample() (in module aux.Grad_CAM.grad_cam)</a>
-</li>
-      <li><a href="util.html#util.grayscale_2D_image_to_3D">grayscale_2D_image_to_3D() (in module util)</a>
+      <li><a href="utils/util.html#utils.util.grayscale_2D_image_to_3D">grayscale_2D_image_to_3D() (in module utils.util)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -472,19 +559,17 @@
 <h2 id="I">I</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="2d_generator.html#generators.custom_da_gen.ImageDataGenerator">ImageDataGenerator (class in generators.custom_da_gen)</a>
-
-      <ul>
-        <li><a href="2d_generator_v2.html#generators.custom_da_gen_v2.ImageDataGenerator">(class in generators.custom_da_gen_v2)</a>
+      <li><a href="data/generators/2d_generator.html#data.generators.data_2D_generator.ImageDataGenerator">ImageDataGenerator (class in data.generators.data_2D_generator)</a>
 </li>
-      </ul></li>
+      <li><a href="utils/util.html#utils.util.img_to_array">img_to_array() (in module utils.util)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="util.html#util.img_to_array">img_to_array() (in module util)</a>
+      <li><a href="utils/util.html#utils.util.img_to_onehot_encoding">img_to_onehot_encoding() (in module utils.util)</a>
 </li>
-      <li><a href="util.html#util.img_to_onehot_encoding">img_to_onehot_encoding() (in module util)</a>
+      <li><a href="sota_implementations/oztel_2017/oztel_utils.html#sota_implementations.oztel_2017.utils.improve_components">improve_components() (in module sota_implementations.oztel_2017.utils)</a>
 </li>
-      <li><a href="oztel_utils.html#sota_implementations.oztel_2017.utils.improve_components">improve_components() (in module sota_implementations.oztel_2017.utils)</a>
+      <li><a href="engine/metrics.html#engine.metrics.instance_segmentation_loss">instance_segmentation_loss() (in module engine.metrics)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -492,21 +577,23 @@
 <h2 id="J">J</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="metrics.html#metrics.jaccard_index">jaccard_index() (in module metrics)</a>
+      <li><a href="engine/metrics.html#engine.metrics.jaccard_index">jaccard_index() (in module engine.metrics)</a>
 </li>
-      <li><a href="metrics.html#metrics.jaccard_index_numpy">jaccard_index_numpy() (in module metrics)</a>
+      <li><a href="engine/metrics.html#engine.metrics.jaccard_index_instances">jaccard_index_instances() (in module engine.metrics)</a>
 </li>
-      <li><a href="metrics.html#metrics.jaccard_index_numpy_without_background">jaccard_index_numpy_without_background() (in module metrics)</a>
+      <li><a href="engine/metrics.html#engine.metrics.jaccard_index_numpy">jaccard_index_numpy() (in module engine.metrics)</a>
+</li>
+      <li><a href="engine/metrics.html#engine.metrics.jaccard_index_numpy_without_background">jaccard_index_numpy_without_background() (in module engine.metrics)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="metrics.html#metrics.jaccard_index_softmax">jaccard_index_softmax() (in module metrics)</a>
+      <li><a href="engine/metrics.html#engine.metrics.jaccard_index_softmax">jaccard_index_softmax() (in module engine.metrics)</a>
 </li>
-      <li><a href="metrics.html#metrics.jaccard_index_without_background">jaccard_index_without_background() (in module metrics)</a>
+      <li><a href="engine/metrics.html#engine.metrics.jaccard_index_without_background">jaccard_index_without_background() (in module engine.metrics)</a>
 </li>
-      <li><a href="metrics.html#metrics.jaccard_loss">jaccard_loss() (in module metrics)</a>
+      <li><a href="engine/metrics.html#engine.metrics.jaccard_loss">jaccard_loss() (in module engine.metrics)</a>
 </li>
-      <li><a href="cheng_loss.html#sota_implementations.cheng_2017.loss.jaccard_loss_cheng2017">jaccard_loss_cheng2017() (in module sota_implementations.cheng_2017.loss)</a>
+      <li><a href="sota_implementations/cheng_2017/cheng_loss.html#sota_implementations.cheng_2017.loss.jaccard_loss_cheng2017">jaccard_loss_cheng2017() (in module sota_implementations.cheng_2017.loss)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -514,27 +601,29 @@
 <h2 id="L">L</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="networks_resunet.html#networks.resunet.level_block">level_block() (in module networks.resunet)</a>
+      <li><a href="utils/util.html#utils.util.labels_into_bcd">labels_into_bcd() (in module utils.util)</a>
+</li>
+      <li><a href="models/resunet.html#models.resunet.level_block">level_block() (in module models.resunet)</a>
 
       <ul>
-        <li><a href="networks_resunet_3d.html#networks.resunet_3d.level_block">(in module networks.resunet_3d)</a>
+        <li><a href="models/resunet_3d.html#models.resunet_3d.level_block">(in module models.resunet_3d)</a>
 </li>
       </ul></li>
-      <li><a href="util.html#util.limit_threads">limit_threads() (in module util)</a>
+      <li><a href="utils/util.html#utils.util.limit_threads">limit_threads() (in module utils.util)</a>
 </li>
-      <li><a href="util.html#util.load_3d_images_from_dir">load_3d_images_from_dir() (in module util)</a>
+      <li><a href="utils/util.html#utils.util.load_3d_images_from_dir">load_3d_images_from_dir() (in module utils.util)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="data_2d_manipulation.html#data_2D_manipulation.load_and_prepare_2D_data">load_and_prepare_2D_data() (in module data_2D_manipulation)</a>
+      <li><a href="data/data_2d_manipulation.html#data.data_2D_manipulation.load_and_prepare_2D_train_data">load_and_prepare_2D_train_data() (in module data.data_2D_manipulation)</a>
 </li>
-      <li><a href="data_3d_manipulation.html#data_3D_manipulation.load_and_prepare_3D_data">load_and_prepare_3D_data() (in module data_3D_manipulation)</a>
+      <li><a href="data/data_3d_manipulation.html#data.data_3D_manipulation.load_and_prepare_3D_data">load_and_prepare_3D_data() (in module data.data_3D_manipulation)</a>
 </li>
-      <li><a href="data_3d_manipulation.html#data_3D_manipulation.load_and_prepare_3D_data_v2">load_and_prepare_3D_data_v2() (in module data_3D_manipulation)</a>
+      <li><a href="utils/util.html#utils.util.load_ct_data_from_dir">load_ct_data_from_dir() (in module utils.util)</a>
 </li>
-      <li><a href="util.html#util.load_ct_data_from_dir">load_ct_data_from_dir() (in module util)</a>
+      <li><a href="utils/util.html#utils.util.load_data_from_dir">load_data_from_dir() (in module utils.util)</a>
 </li>
-      <li><a href="util.html#util.load_data_from_dir">load_data_from_dir() (in module util)</a>
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.OneCycleScheduler.lr_schedule">lr_schedule() (engine.schedulers.one_cycle.OneCycleScheduler method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -542,111 +631,222 @@
 <h2 id="M">M</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="util.html#util.make_weight_map">make_weight_map() (in module util)</a>
+      <li><a href="utils/util.html#utils.util.make_weight_map">make_weight_map() (in module utils.util)</a>
 </li>
-      <li><a href="data_3d_manipulation.html#data_3D_manipulation.merge_3D_data_with_overlap">merge_3D_data_with_overlap() (in module data_3D_manipulation)</a>
+      <li><a href="engine/metrics.html#engine.metrics.masked_mse">masked_mse() (in module engine.metrics)</a>
 </li>
-      <li><a href="data_2d_manipulation.html#data_2D_manipulation.merge_data">merge_data() (in module data_2D_manipulation)</a>
+      <li><a href="data/data_3d_manipulation.html#data.data_3D_manipulation.merge_3D_data_with_overlap">merge_3D_data_with_overlap() (in module data.data_3D_manipulation)</a>
 </li>
-      <li><a href="data_2d_manipulation.html#data_2D_manipulation.merge_data_with_overlap">merge_data_with_overlap() (in module data_2D_manipulation)</a>
+      <li><a href="data/data_2d_manipulation.html#data.data_2D_manipulation.merge_data_with_overlap">merge_data_with_overlap() (in module data.data_2D_manipulation)</a>
+</li>
+      <li><a href="data/generators/augmentors.html#data.generators.augmentors.misalignment">misalignment() (in module data.generators.augmentors)</a>
+</li>
+      <li><a href="data/generators/augmentors.html#data.generators.augmentors.missing_parts">missing_parts() (in module data.generators.augmentors)</a>
+</li>
+      <li><a href="models/mnet.html#models.mnet.MNet">MNet() (in module models.mnet)</a>
+</li>
+      <li><a href="utils/callbacks.html#utils.callbacks.ModelCheckpoint">ModelCheckpoint (class in utils.callbacks)</a>
 </li>
       <li>
-    metrics
+    models
 
       <ul>
-        <li><a href="metrics.html#module-metrics">module</a>
+        <li><a href="models/init.html#module-models">module</a>
 </li>
       </ul></li>
-      <li><a href="augmentors.html#generators.augmentors.misalignment">misalignment() (in module generators.augmentors)</a>
+      <li>
+    models.attention_unet
+
+      <ul>
+        <li><a href="models/att_unet_2d.html#module-models.attention_unet">module</a>
 </li>
-      <li><a href="augmentors.html#generators.augmentors.missing_parts">missing_parts() (in module generators.augmentors)</a>
+      </ul></li>
+      <li>
+    models.attention_unet_3d
+
+      <ul>
+        <li><a href="models/att_unet_3d.html#module-models.attention_unet_3d">module</a>
 </li>
-      <li><a href="networks_mnet.html#sota_implementations.MNet_Fu_2018.MNet.MNet">MNet() (in module sota_implementations.MNet_Fu_2018.MNet)</a>
+      </ul></li>
+      <li>
+    models.fcn_vgg
+
+      <ul>
+        <li><a href="models/fcn.html#module-models.fcn_vgg">module</a>
 </li>
-      <li><a href="callbacks.html#aux.callbacks.ModelCheckpoint">ModelCheckpoint (class in aux.callbacks)</a>
+      </ul></li>
+      <li>
+    models.mnet
+
+      <ul>
+        <li><a href="models/mnet.html#module-models.mnet">module</a>
 </li>
+      </ul></li>
+      <li>
+    models.multiresunet
+
+      <ul>
+        <li><a href="models/multiresunet.html#module-models.multiresunet">module</a>
+</li>
+      </ul></li>
+      <li>
+    models.resunet
+
+      <ul>
+        <li><a href="models/resunet.html#module-models.resunet">module</a>
+</li>
+      </ul></li>
+      <li>
+    models.resunet_3d
+
+      <ul>
+        <li><a href="models/resunet_3d.html#module-models.resunet_3d">module</a>
+</li>
+      </ul></li>
+      <li>
+    models.se_unet_2d
+
+      <ul>
+        <li><a href="models/se_unet_2d.html#module-models.se_unet_2d">module</a>
+</li>
+      </ul></li>
+      <li>
+    models.se_unet_3d
+
+      <ul>
+        <li><a href="models/se_unet_3d.html#module-models.se_unet_3d">module</a>
+</li>
+      </ul></li>
+      <li>
+    models.tiramisu
+
+      <ul>
+        <li><a href="models/tiramisu.html#module-models.tiramisu">module</a>
+</li>
+      </ul></li>
+      <li>
+    models.unet
+
+      <ul>
+        <li><a href="models/unet.html#module-models.unet">module</a>
+</li>
+      </ul></li>
+      <li>
+    models.unet_3d
+
+      <ul>
+        <li><a href="models/unet_3d.html#module-models.unet_3d">module</a>
+</li>
+      </ul></li>
+      <li>
+    models.vanilla_unet_3d
+
+      <ul>
+        <li><a href="models/vanilla_unet_3d.html#module-models.vanilla_unet_3d">module</a>
+</li>
+      </ul></li>
       <li>
     module
 
       <ul>
-        <li><a href="adabound.html#module-aux.adabound">aux.adabound</a>
+        <li><a href="config/config.html#module-config.config">config.config</a>
 </li>
-        <li><a href="callbacks.html#module-aux.callbacks">aux.callbacks</a>
+        <li><a href="data/init.html#module-data">data</a>
 </li>
-        <li><a href="grad_cam.html#module-aux.Grad_CAM.grad_cam">aux.Grad_CAM.grad_cam</a>
+        <li><a href="data/data_2d_manipulation.html#module-data.data_2D_manipulation">data.data_2D_manipulation</a>
 </li>
-        <li><a href="data_2d_manipulation.html#module-data_2D_manipulation">data_2D_manipulation</a>
+        <li><a href="data/data_3d_manipulation.html#module-data.data_3D_manipulation">data.data_3D_manipulation</a>
 </li>
-        <li><a href="data_3d_manipulation.html#module-data_3D_manipulation">data_3D_manipulation</a>
+        <li><a href="data/generators/init.html#module-data.generators">data.generators</a>
 </li>
-        <li><a href="augmentors.html#module-generators.augmentors">generators.augmentors</a>
+        <li><a href="data/generators/augmentors.html#module-data.generators.augmentors">data.generators.augmentors</a>
 </li>
-        <li><a href="2d_generator.html#module-generators.custom_da_gen">generators.custom_da_gen</a>
+        <li><a href="data/generators/2d_generator.html#module-data.generators.data_2D_generator">data.generators.data_2D_generator</a>
 </li>
-        <li><a href="2d_generator_v2.html#module-generators.custom_da_gen_v2">generators.custom_da_gen_v2</a>
+        <li><a href="data/generators/3d_generator.html#module-data.generators.data_3D_generator">data.generators.data_3D_generator</a>
 </li>
-        <li><a href="3d_generator.html#module-generators.data_3D_generators">generators.data_3D_generators</a>
+        <li><a href="data/generators/simple_generator.html#module-data.generators.simple_data_generators">data.generators.simple_data_generators</a>
 </li>
-        <li><a href="3d_generator_v2.html#module-generators.data_3D_generators_v2">generators.data_3D_generators_v2</a>
+        <li><a href="data/post_processing/init.html#module-data.post_processing">data.post_processing</a>
 </li>
-        <li><a href="metrics.html#module-metrics">metrics</a>
+        <li><a href="data/post_processing/post_processing.html#module-data.post_processing.post_processing">data.post_processing.post_processing</a>
 </li>
-        <li><a href="networks_att_unet_2d.html#module-networks.attention_unet_2d">networks.attention_unet_2d</a>
+        <li><a href="data/post_processing/smooth_tiled_predictions.html#module-data.post_processing.smooth_tiled_predictions">data.post_processing.smooth_tiled_predictions</a>
 </li>
-        <li><a href="networks_att_unet_3d.html#module-networks.attention_unet_3d">networks.attention_unet_3d</a>
+        <li><a href="engine/init.html#module-engine">engine</a>
 </li>
-        <li><a href="networks_fc_densetnet103.html#module-networks.fc_densenet103">networks.fc_densenet103</a>
+        <li><a href="engine/metrics.html#module-engine.metrics">engine.metrics</a>
 </li>
-        <li><a href="networks_fcn.html#module-networks.fcn_vgg">networks.fcn_vgg</a>
+        <li><a href="engine/schedulers/cosine_decay.html#module-engine.schedulers.cosine_decay">engine.schedulers.cosine_decay</a>
 </li>
-        <li><a href="networks_multiresunet.html#module-networks.MultiResUNet">networks.MultiResUNet</a>
+        <li><a href="engine/schedulers/one_cycle.html#module-engine.schedulers.one_cycle">engine.schedulers.one_cycle</a>
 </li>
-        <li><a href="networks_resunet.html#module-networks.resunet">networks.resunet</a>
+        <li><a href="engine/trainer.html#module-engine.trainer">engine.trainer</a>
 </li>
-        <li><a href="networks_resunet_3d.html#module-networks.resunet_3d">networks.resunet_3d</a>
+        <li><a href="models/init.html#module-models">models</a>
 </li>
-        <li><a href="networks_se_unet_2d.html#module-networks.se_unet_2d">networks.se_unet_2d</a>
+        <li><a href="models/att_unet_2d.html#module-models.attention_unet">models.attention_unet</a>
 </li>
-        <li><a href="networks_se_unet_3d.html#module-networks.se_unet_3d">networks.se_unet_3d</a>
+        <li><a href="models/att_unet_3d.html#module-models.attention_unet_3d">models.attention_unet_3d</a>
 </li>
-        <li><a href="networks_unet.html#module-networks.unet">networks.unet</a>
+        <li><a href="models/fcn.html#module-models.fcn_vgg">models.fcn_vgg</a>
 </li>
-        <li><a href="networks_unet_3d.html#module-networks.unet_3d">networks.unet_3d</a>
+        <li><a href="models/mnet.html#module-models.mnet">models.mnet</a>
 </li>
-        <li><a href="networks_vanilla_unet_3d.html#module-networks.vanilla_unet_3d">networks.vanilla_unet_3d</a>
+        <li><a href="models/multiresunet.html#module-models.multiresunet">models.multiresunet</a>
 </li>
-        <li><a href="post_processing.html#module-post_processing">post_processing</a>
+        <li><a href="models/resunet.html#module-models.resunet">models.resunet</a>
 </li>
-        <li><a href="casser_network.html#module-sota_implementations.casser_2018.casser_unet">sota_implementations.casser_2018.casser_unet</a>
+        <li><a href="models/resunet_3d.html#module-models.resunet_3d">models.resunet_3d</a>
 </li>
-        <li><a href="cheng_3d_network.html#module-sota_implementations.cheng_2017.cheng_3D_network">sota_implementations.cheng_2017.cheng_3D_network</a>
+        <li><a href="models/se_unet_2d.html#module-models.se_unet_2d">models.se_unet_2d</a>
 </li>
-        <li><a href="cheng_network.html#module-sota_implementations.cheng_2017.cheng_network">sota_implementations.cheng_2017.cheng_network</a>
+        <li><a href="models/se_unet_3d.html#module-models.se_unet_3d">models.se_unet_3d</a>
 </li>
-        <li><a href="cheng_loss.html#module-sota_implementations.cheng_2017.loss">sota_implementations.cheng_2017.loss</a>
+        <li><a href="models/tiramisu.html#module-models.tiramisu">models.tiramisu</a>
 </li>
-        <li><a href="cheng_sto2D.html#module-sota_implementations.cheng_2017.StochasticDownsampling2D">sota_implementations.cheng_2017.StochasticDownsampling2D</a>
+        <li><a href="models/unet.html#module-models.unet">models.unet</a>
 </li>
-        <li><a href="cheng_sto3D.html#module-sota_implementations.cheng_2017.StochasticDownsampling3D">sota_implementations.cheng_2017.StochasticDownsampling3D</a>
+        <li><a href="models/unet_3d.html#module-models.unet_3d">models.unet_3d</a>
 </li>
-        <li><a href="networks_mnet.html#module-sota_implementations.MNet_Fu_2018.MNet">sota_implementations.MNet_Fu_2018.MNet</a>
+        <li><a href="models/vanilla_unet_3d.html#module-models.vanilla_unet_3d">models.vanilla_unet_3d</a>
 </li>
-        <li><a href="networks_nnunet.html#module-sota_implementations.nnUNet_2018.nnUNet_2d">sota_implementations.nnUNet_2018.nnUNet_2d</a>
+        <li><a href="sota_implementations/casser_2018/casser_network.html#module-sota_implementations.casser_2018.casser_unet">sota_implementations.casser_2018.casser_unet</a>
 </li>
-        <li><a href="oztel_network.html#module-sota_implementations.oztel_2017.cnn_oztel">sota_implementations.oztel_2017.cnn_oztel</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_3d_network.html#module-sota_implementations.cheng_2017.cheng_3D_network">sota_implementations.cheng_2017.cheng_3D_network</a>
 </li>
-        <li><a href="oztel_utils.html#module-sota_implementations.oztel_2017.utils">sota_implementations.oztel_2017.utils</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_network.html#module-sota_implementations.cheng_2017.cheng_network">sota_implementations.cheng_2017.cheng_network</a>
 </li>
-        <li><a href="xiao_network.html#module-sota_implementations.xiao_2018.unet_3d_xiao">sota_implementations.xiao_2018.unet_3d_xiao</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_loss.html#module-sota_implementations.cheng_2017.loss">sota_implementations.cheng_2017.loss</a>
 </li>
-        <li><a href="util.html#module-util">util</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_sto2D.html#module-sota_implementations.cheng_2017.StochasticDownsampling2D">sota_implementations.cheng_2017.StochasticDownsampling2D</a>
+</li>
+        <li><a href="sota_implementations/cheng_2017/cheng_sto3D.html#module-sota_implementations.cheng_2017.StochasticDownsampling3D">sota_implementations.cheng_2017.StochasticDownsampling3D</a>
+</li>
+        <li><a href="models/nnunet.html#module-sota_implementations.nnUNet_2018.nnUNet_2d">sota_implementations.nnUNet_2018.nnUNet_2d</a>
+</li>
+        <li><a href="sota_implementations/oztel_2017/oztel_network.html#module-sota_implementations.oztel_2017.cnn_oztel">sota_implementations.oztel_2017.cnn_oztel</a>
+</li>
+        <li><a href="sota_implementations/oztel_2017/oztel_utils.html#module-sota_implementations.oztel_2017.utils">sota_implementations.oztel_2017.utils</a>
+</li>
+        <li><a href="sota_implementations/xiao_2018/xiao_network.html#module-sota_implementations.xiao_2018.unet_3d_xiao">sota_implementations.xiao_2018.unet_3d_xiao</a>
+</li>
+        <li><a href="utils/adabound.html#module-utils.adabound">utils.adabound</a>
+</li>
+        <li><a href="utils/callbacks.html#module-utils.callbacks">utils.callbacks</a>
+</li>
+        <li><a href="utils/grad_cam.html#module-utils.grad_cam">utils.grad_cam</a>
+</li>
+        <li><a href="utils/util.html#module-utils.util">utils.util</a>
 </li>
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="networks_multiresunet.html#networks.MultiResUNet.MultiResBlock">MultiResBlock() (in module networks.MultiResUNet)</a>
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.OneCycleScheduler.mom_schedule">mom_schedule() (engine.schedulers.one_cycle.OneCycleScheduler method)</a>
 </li>
-      <li><a href="networks_multiresunet.html#networks.MultiResUNet.MultiResUnet">MultiResUnet() (in module networks.MultiResUNet)</a>
+      <li><a href="models/multiresunet.html#models.multiresunet.MultiResBlock">MultiResBlock() (in module models.multiresunet)</a>
+</li>
+      <li><a href="models/multiresunet.html#models.multiresunet.MultiResUnet">MultiResUnet() (in module models.multiresunet)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -654,95 +854,11 @@
 <h2 id="N">N</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li>
-    networks.attention_unet_2d
-
-      <ul>
-        <li><a href="networks_att_unet_2d.html#module-networks.attention_unet_2d">module</a>
+      <li><a href="models/nnunet.html#sota_implementations.nnUNet_2018.nnUNet_2d.nnUNet_2D">nnUNet_2D() (in module sota_implementations.nnUNet_2018.nnUNet_2d)</a>
 </li>
-      </ul></li>
-      <li>
-    networks.attention_unet_3d
-
-      <ul>
-        <li><a href="networks_att_unet_3d.html#module-networks.attention_unet_3d">module</a>
-</li>
-      </ul></li>
-      <li>
-    networks.fc_densenet103
-
-      <ul>
-        <li><a href="networks_fc_densetnet103.html#module-networks.fc_densenet103">module</a>
-</li>
-      </ul></li>
-      <li>
-    networks.fcn_vgg
-
-      <ul>
-        <li><a href="networks_fcn.html#module-networks.fcn_vgg">module</a>
-</li>
-      </ul></li>
-      <li>
-    networks.MultiResUNet
-
-      <ul>
-        <li><a href="networks_multiresunet.html#module-networks.MultiResUNet">module</a>
-</li>
-      </ul></li>
-      <li>
-    networks.resunet
-
-      <ul>
-        <li><a href="networks_resunet.html#module-networks.resunet">module</a>
-</li>
-      </ul></li>
-      <li>
-    networks.resunet_3d
-
-      <ul>
-        <li><a href="networks_resunet_3d.html#module-networks.resunet_3d">module</a>
-</li>
-      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li>
-    networks.se_unet_2d
-
-      <ul>
-        <li><a href="networks_se_unet_2d.html#module-networks.se_unet_2d">module</a>
-</li>
-      </ul></li>
-      <li>
-    networks.se_unet_3d
-
-      <ul>
-        <li><a href="networks_se_unet_3d.html#module-networks.se_unet_3d">module</a>
-</li>
-      </ul></li>
-      <li>
-    networks.unet
-
-      <ul>
-        <li><a href="networks_unet.html#module-networks.unet">module</a>
-</li>
-      </ul></li>
-      <li>
-    networks.unet_3d
-
-      <ul>
-        <li><a href="networks_unet_3d.html#module-networks.unet_3d">module</a>
-</li>
-      </ul></li>
-      <li>
-    networks.vanilla_unet_3d
-
-      <ul>
-        <li><a href="networks_vanilla_unet_3d.html#module-networks.vanilla_unet_3d">module</a>
-</li>
-      </ul></li>
-      <li><a href="networks_nnunet.html#sota_implementations.nnUNet_2018.nnUNet_2d.nnUNet_2D">nnUNet_2D() (in module sota_implementations.nnUNet_2018.nnUNet_2d)</a>
-</li>
-      <li><a href="grad_cam.html#aux.Grad_CAM.grad_cam.normalize">normalize() (in module aux.Grad_CAM.grad_cam)</a>
+      <li><a href="utils/grad_cam.html#utils.grad_cam.normalize">normalize() (in module utils.grad_cam)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -750,27 +866,43 @@
 <h2 id="O">O</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="util.html#util.TimeHistory.on_epoch_begin">on_epoch_begin() (util.TimeHistory method)</a>
+      <li><a href="engine/schedulers/cosine_decay.html#engine.schedulers.cosine_decay.WarmUpCosineDecayScheduler.on_batch_begin">on_batch_begin() (engine.schedulers.cosine_decay.WarmUpCosineDecayScheduler method)</a>
 </li>
-      <li><a href="callbacks.html#aux.callbacks.ModelCheckpoint.on_epoch_end">on_epoch_end() (aux.callbacks.ModelCheckpoint method)</a>
+      <li><a href="engine/schedulers/cosine_decay.html#engine.schedulers.cosine_decay.WarmUpCosineDecayScheduler.on_batch_end">on_batch_end() (engine.schedulers.cosine_decay.WarmUpCosineDecayScheduler method)</a>
+</li>
+      <li><a href="engine/schedulers/cosine_decay.html#engine.schedulers.cosine_decay.WarmUpCosineDecayScheduler.on_epoch_begin">on_epoch_begin() (engine.schedulers.cosine_decay.WarmUpCosineDecayScheduler method)</a>
 
       <ul>
-        <li><a href="2d_generator.html#generators.custom_da_gen.ImageDataGenerator.on_epoch_end">(generators.custom_da_gen.ImageDataGenerator method)</a>
+        <li><a href="utils/callbacks.html#utils.callbacks.TimeHistory.on_epoch_begin">(utils.callbacks.TimeHistory method)</a>
 </li>
-        <li><a href="2d_generator_v2.html#generators.custom_da_gen_v2.ImageDataGenerator.on_epoch_end">(generators.custom_da_gen_v2.ImageDataGenerator method)</a>
+      </ul></li>
+      <li><a href="data/generators/2d_generator.html#data.generators.data_2D_generator.ImageDataGenerator.on_epoch_end">on_epoch_end() (data.generators.data_2D_generator.ImageDataGenerator method)</a>
+
+      <ul>
+        <li><a href="data/generators/3d_generator.html#data.generators.data_3D_generator.VoxelDataGenerator.on_epoch_end">(data.generators.data_3D_generator.VoxelDataGenerator method)</a>
 </li>
-        <li><a href="3d_generator.html#generators.data_3D_generators.VoxelDataGenerator.on_epoch_end">(generators.data_3D_generators.VoxelDataGenerator method)</a>
+        <li><a href="data/generators/simple_generator.html#data.generators.simple_data_generators.simple_3D_data_generator.on_epoch_end">(data.generators.simple_data_generators.simple_3D_data_generator method)</a>
 </li>
-        <li><a href="3d_generator_v2.html#generators.data_3D_generators_v2.VoxelDataGenerator.on_epoch_end">(generators.data_3D_generators_v2.VoxelDataGenerator method)</a>
+        <li><a href="utils/callbacks.html#utils.callbacks.ModelCheckpoint.on_epoch_end">(utils.callbacks.ModelCheckpoint method)</a>
 </li>
-        <li><a href="util.html#util.TimeHistory.on_epoch_end">(util.TimeHistory method)</a>
+        <li><a href="utils/callbacks.html#utils.callbacks.TimeHistory.on_epoch_end">(utils.callbacks.TimeHistory method)</a>
 </li>
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="util.html#util.TimeHistory.on_train_begin">on_train_begin() (util.TimeHistory method)</a>
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.OneCycleScheduler.on_train_batch_begin">on_train_batch_begin() (engine.schedulers.one_cycle.OneCycleScheduler method)</a>
 </li>
-      <li><a href="util.html#util.onehot_encoding_to_img">onehot_encoding_to_img() (in module util)</a>
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.OneCycleScheduler.on_train_batch_end">on_train_batch_end() (engine.schedulers.one_cycle.OneCycleScheduler method)</a>
+</li>
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.OneCycleScheduler.on_train_begin">on_train_begin() (engine.schedulers.one_cycle.OneCycleScheduler method)</a>
+
+      <ul>
+        <li><a href="utils/callbacks.html#utils.callbacks.TimeHistory.on_train_begin">(utils.callbacks.TimeHistory method)</a>
+</li>
+      </ul></li>
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.OneCycleScheduler">OneCycleScheduler (class in engine.schedulers.one_cycle)</a>
+</li>
+      <li><a href="utils/util.html#utils.util.onehot_encoding_to_img">onehot_encoding_to_img() (in module utils.util)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -778,52 +910,53 @@
 <h2 id="P">P</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="cheng_3d_network.html#sota_implementations.cheng_2017.cheng_3D_network.pad_depth">pad_depth() (in module sota_implementations.cheng_2017.cheng_3D_network)</a>
+      <li><a href="sota_implementations/cheng_2017/cheng_3d_network.html#sota_implementations.cheng_2017.cheng_3D_network.pad_depth">pad_depth() (in module sota_implementations.cheng_2017.cheng_3D_network)</a>
 
       <ul>
-        <li><a href="cheng_network.html#sota_implementations.cheng_2017.cheng_network.pad_depth">(in module sota_implementations.cheng_2017.cheng_network)</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_network.html#sota_implementations.cheng_2017.cheng_network.pad_depth">(in module sota_implementations.cheng_2017.cheng_network)</a>
 </li>
       </ul></li>
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.OneCycleScheduler.plot">plot() (engine.schedulers.one_cycle.OneCycleScheduler method)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li>
-    post_processing
-
-      <ul>
-        <li><a href="post_processing.html#module-post_processing">module</a>
+      <li><a href="data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.predict_img_with_overlap">predict_img_with_overlap() (in module data.post_processing.smooth_tiled_predictions)</a>
 </li>
-      </ul></li>
+      <li><a href="data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.predict_img_with_overlap_weighted">predict_img_with_overlap_weighted() (in module data.post_processing.smooth_tiled_predictions)</a>
+</li>
+      <li><a href="data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.predict_img_with_smooth_windowing">predict_img_with_smooth_windowing() (in module data.post_processing.smooth_tiled_predictions)</a>
+</li>
+      <li><a href="engine/init.html#engine.prepare_optimizer">prepare_optimizer() (in module engine)</a>
+</li>
   </ul></td>
 </tr></table>
 
 <h2 id="R">R</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="data_3d_manipulation.html#data_3D_manipulation.random_3D_crop">random_3D_crop() (in module data_3D_manipulation)</a>
+      <li><a href="data/data_3d_manipulation.html#data.data_3D_manipulation.random_3D_crop">random_3D_crop() (in module data.data_3D_manipulation)</a>
+</li>
+      <li><a href="data/data_2d_manipulation.html#data.data_2D_manipulation.random_crop">random_crop() (in module data.data_2D_manipulation)</a>
+</li>
+      <li><a href="data/generators/augmentors.html#data.generators.augmentors.random_rotate_matrix">random_rotate_matrix() (in module data.generators.augmentors)</a>
+</li>
+      <li><a href="models/resunet.html#models.resunet.residual_block">residual_block() (in module models.resunet)</a>
 
       <ul>
-        <li><a href="3d_generator.html#generators.data_3D_generators.random_3D_crop">(in module generators.data_3D_generators)</a>
+        <li><a href="models/resunet_3d.html#models.resunet_3d.residual_block">(in module models.resunet_3d)</a>
 </li>
-      </ul></li>
-      <li><a href="data_2d_manipulation.html#data_2D_manipulation.random_crop">random_crop() (in module data_2D_manipulation)</a>
-</li>
-      <li><a href="augmentors.html#generators.augmentors.random_rotate_matrix">random_rotate_matrix() (in module generators.augmentors)</a>
-</li>
-      <li><a href="networks_resunet.html#networks.resunet.residual_block">residual_block() (in module networks.resunet)</a>
-
-      <ul>
-        <li><a href="networks_resunet_3d.html#networks.resunet_3d.residual_block">(in module networks.resunet_3d)</a>
-</li>
-        <li><a href="xiao_network.html#sota_implementations.xiao_2018.unet_3d_xiao.residual_block">(in module sota_implementations.xiao_2018.unet_3d_xiao)</a>
+        <li><a href="sota_implementations/xiao_2018/xiao_network.html#sota_implementations.xiao_2018.unet_3d_xiao.residual_block">(in module sota_implementations.xiao_2018.unet_3d_xiao)</a>
 </li>
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="networks_multiresunet.html#networks.MultiResUNet.ResPath">ResPath() (in module networks.MultiResUNet)</a>
+      <li><a href="models/multiresunet.html#models.multiresunet.ResPath">ResPath() (in module models.multiresunet)</a>
 </li>
-      <li><a href="networks_resunet.html#networks.resunet.ResUNet_2D">ResUNet_2D() (in module networks.resunet)</a>
+      <li><a href="models/resunet.html#models.resunet.ResUNet_2D">ResUNet_2D() (in module models.resunet)</a>
 </li>
-      <li><a href="networks_resunet_3d.html#networks.resunet_3d.ResUNet_3D">ResUNet_3D() (in module networks.resunet_3d)</a>
+      <li><a href="models/resunet_3d.html#models.resunet_3d.ResUNet_3D">ResUNet_3D() (in module models.resunet_3d)</a>
+</li>
+      <li><a href="data/post_processing/smooth_tiled_predictions.html#data.post_processing.smooth_tiled_predictions.round_predictions">round_predictions() (in module data.post_processing.smooth_tiled_predictions)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -831,116 +964,117 @@
 <h2 id="S">S</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="util.html#util.save_filters_of_convlayer">save_filters_of_convlayer() (in module util)</a>
+      <li><a href="utils/util.html#utils.util.save_filters_of_convlayer">save_filters_of_convlayer() (in module utils.util)</a>
 </li>
-      <li><a href="util.html#util.save_img">save_img() (in module util)</a>
+      <li><a href="utils/util.html#utils.util.save_img">save_img() (in module utils.util)</a>
 </li>
-      <li><a href="networks_se_unet_2d.html#networks.se_unet_2d.SE_U_Net_2D">SE_U_Net_2D() (in module networks.se_unet_2d)</a>
+      <li><a href="utils/util.html#utils.util.save_tif">save_tif() (in module utils.util)</a>
 </li>
-      <li><a href="networks_se_unet_3d.html#networks.se_unet_3d.SE_U_Net_3D">SE_U_Net_3D() (in module networks.se_unet_3d)</a>
+      <li><a href="models/se_unet_2d.html#models.se_unet_2d.SE_U_Net_2D">SE_U_Net_2D() (in module models.se_unet_2d)</a>
 </li>
-      <li><a href="cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.select_random_positions">select_random_positions() (in module sota_implementations.cheng_2017.StochasticDownsampling2D)</a>
+      <li><a href="models/se_unet_3d.html#models.se_unet_3d.SE_U_Net_3D">SE_U_Net_3D() (in module models.se_unet_3d)</a>
+</li>
+      <li><a href="sota_implementations/cheng_2017/cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.select_random_positions">select_random_positions() (in module sota_implementations.cheng_2017.StochasticDownsampling2D)</a>
 
       <ul>
-        <li><a href="cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.select_random_positions">(in module sota_implementations.cheng_2017.StochasticDownsampling3D)</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.select_random_positions">(in module sota_implementations.cheng_2017.StochasticDownsampling3D)</a>
 </li>
       </ul></li>
-      <li><a href="util.html#util.set_seed">set_seed() (in module util)</a>
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.OneCycleScheduler.set_lr">set_lr() (engine.schedulers.one_cycle.OneCycleScheduler method)</a>
+</li>
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.OneCycleScheduler.set_momentum">set_momentum() (engine.schedulers.one_cycle.OneCycleScheduler method)</a>
+</li>
+      <li><a href="utils/util.html#utils.util.set_seed">set_seed() (in module utils.util)</a>
+</li>
+      <li><a href="data/generators/simple_generator.html#data.generators.simple_data_generators.simple_3D_data_generator">simple_3D_data_generator (class in data.generators.simple_data_generators)</a>
 </li>
       <li>
     sota_implementations.casser_2018.casser_unet
 
       <ul>
-        <li><a href="casser_network.html#module-sota_implementations.casser_2018.casser_unet">module</a>
+        <li><a href="sota_implementations/casser_2018/casser_network.html#module-sota_implementations.casser_2018.casser_unet">module</a>
 </li>
       </ul></li>
       <li>
     sota_implementations.cheng_2017.cheng_3D_network
 
       <ul>
-        <li><a href="cheng_3d_network.html#module-sota_implementations.cheng_2017.cheng_3D_network">module</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_3d_network.html#module-sota_implementations.cheng_2017.cheng_3D_network">module</a>
 </li>
       </ul></li>
       <li>
     sota_implementations.cheng_2017.cheng_network
 
       <ul>
-        <li><a href="cheng_network.html#module-sota_implementations.cheng_2017.cheng_network">module</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_network.html#module-sota_implementations.cheng_2017.cheng_network">module</a>
 </li>
       </ul></li>
       <li>
     sota_implementations.cheng_2017.loss
 
       <ul>
-        <li><a href="cheng_loss.html#module-sota_implementations.cheng_2017.loss">module</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_loss.html#module-sota_implementations.cheng_2017.loss">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     sota_implementations.cheng_2017.StochasticDownsampling2D
 
       <ul>
-        <li><a href="cheng_sto2D.html#module-sota_implementations.cheng_2017.StochasticDownsampling2D">module</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_sto2D.html#module-sota_implementations.cheng_2017.StochasticDownsampling2D">module</a>
 </li>
       </ul></li>
       <li>
     sota_implementations.cheng_2017.StochasticDownsampling3D
 
       <ul>
-        <li><a href="cheng_sto3D.html#module-sota_implementations.cheng_2017.StochasticDownsampling3D">module</a>
-</li>
-      </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li>
-    sota_implementations.MNet_Fu_2018.MNet
-
-      <ul>
-        <li><a href="networks_mnet.html#module-sota_implementations.MNet_Fu_2018.MNet">module</a>
+        <li><a href="sota_implementations/cheng_2017/cheng_sto3D.html#module-sota_implementations.cheng_2017.StochasticDownsampling3D">module</a>
 </li>
       </ul></li>
       <li>
     sota_implementations.nnUNet_2018.nnUNet_2d
 
       <ul>
-        <li><a href="networks_nnunet.html#module-sota_implementations.nnUNet_2018.nnUNet_2d">module</a>
+        <li><a href="models/nnunet.html#module-sota_implementations.nnUNet_2018.nnUNet_2d">module</a>
 </li>
       </ul></li>
       <li>
     sota_implementations.oztel_2017.cnn_oztel
 
       <ul>
-        <li><a href="oztel_network.html#module-sota_implementations.oztel_2017.cnn_oztel">module</a>
+        <li><a href="sota_implementations/oztel_2017/oztel_network.html#module-sota_implementations.oztel_2017.cnn_oztel">module</a>
 </li>
       </ul></li>
       <li>
     sota_implementations.oztel_2017.utils
 
       <ul>
-        <li><a href="oztel_utils.html#module-sota_implementations.oztel_2017.utils">module</a>
+        <li><a href="sota_implementations/oztel_2017/oztel_utils.html#module-sota_implementations.oztel_2017.utils">module</a>
 </li>
       </ul></li>
       <li>
     sota_implementations.xiao_2018.unet_3d_xiao
 
       <ul>
-        <li><a href="xiao_network.html#module-sota_implementations.xiao_2018.unet_3d_xiao">module</a>
+        <li><a href="sota_implementations/xiao_2018/xiao_network.html#module-sota_implementations.xiao_2018.unet_3d_xiao">module</a>
 </li>
       </ul></li>
-      <li><a href="oztel_utils.html#sota_implementations.oztel_2017.utils.spuriuous_detection_filter">spuriuous_detection_filter() (in module sota_implementations.oztel_2017.utils)</a>
+      <li><a href="sota_implementations/oztel_2017/oztel_utils.html#sota_implementations.oztel_2017.utils.spuriuous_detection_filter">spuriuous_detection_filter() (in module sota_implementations.oztel_2017.utils)</a>
 </li>
-      <li><a href="networks_se_unet_2d.html#networks.se_unet_2d.squeeze_excite_block">squeeze_excite_block() (in module networks.se_unet_2d)</a>
+      <li><a href="models/se_unet_2d.html#models.se_unet_2d.squeeze_excite_block">squeeze_excite_block() (in module models.se_unet_2d)</a>
 
       <ul>
-        <li><a href="networks_se_unet_3d.html#networks.se_unet_3d.squeeze_excite_block">(in module networks.se_unet_3d)</a>
+        <li><a href="models/se_unet_3d.html#models.se_unet_3d.squeeze_excite_block">(in module models.se_unet_3d)</a>
 </li>
       </ul></li>
-      <li><a href="networks_nnunet.html#sota_implementations.nnUNet_2018.nnUNet_2d.StackedConvLayers">StackedConvLayers() (in module sota_implementations.nnUNet_2018.nnUNet_2d)</a>
+      <li><a href="models/nnunet.html#sota_implementations.nnUNet_2018.nnUNet_2d.StackedConvLayers">StackedConvLayers() (in module sota_implementations.nnUNet_2018.nnUNet_2d)</a>
 </li>
-      <li><a href="cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D">StochasticDownsampling2D (class in sota_implementations.cheng_2017.StochasticDownsampling2D)</a>
+      <li><a href="engine/schedulers/one_cycle.html#engine.schedulers.one_cycle.CosineAnnealer.step">step() (engine.schedulers.one_cycle.CosineAnnealer method)</a>
 </li>
-      <li><a href="cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D">StochasticDownsampling3D (class in sota_implementations.cheng_2017.StochasticDownsampling3D)</a>
+      <li><a href="sota_implementations/cheng_2017/cheng_sto2D.html#sota_implementations.cheng_2017.StochasticDownsampling2D.StochasticDownsampling2D">StochasticDownsampling2D (class in sota_implementations.cheng_2017.StochasticDownsampling2D)</a>
 </li>
-      <li><a href="util.html#util.store_history">store_history() (in module util)</a>
+      <li><a href="sota_implementations/cheng_2017/cheng_sto3D.html#sota_implementations.cheng_2017.StochasticDownsampling3D.StochasticDownsampling3D">StochasticDownsampling3D (class in sota_implementations.cheng_2017.StochasticDownsampling3D)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -948,21 +1082,27 @@
 <h2 id="T">T</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="grad_cam.html#aux.Grad_CAM.grad_cam.target_category_loss">target_category_loss() (in module aux.Grad_CAM.grad_cam)</a>
+      <li><a href="utils/grad_cam.html#utils.grad_cam.target_category_loss">target_category_loss() (in module utils.grad_cam)</a>
 </li>
-      <li><a href="grad_cam.html#aux.Grad_CAM.grad_cam.target_category_loss_output_shape">target_category_loss_output_shape() (in module aux.Grad_CAM.grad_cam)</a>
+      <li><a href="utils/grad_cam.html#utils.grad_cam.target_category_loss_output_shape">target_category_loss_output_shape() (in module utils.grad_cam)</a>
 </li>
-      <li><a href="util.html#util.threshold_plots">threshold_plots() (in module util)</a>
+      <li><a href="engine/trainer.html#engine.trainer.Trainer.test">test() (engine.trainer.Trainer method)</a>
+</li>
+      <li><a href="utils/util.html#utils.util.threshold_plots">threshold_plots() (in module utils.util)</a>
+</li>
+      <li><a href="utils/callbacks.html#utils.callbacks.TimeHistory">TimeHistory (class in utils.callbacks)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="util.html#util.TimeHistory">TimeHistory (class in util)</a>
+      <li><a href="engine/trainer.html#engine.trainer.Trainer.train">train() (engine.trainer.Trainer method)</a>
 </li>
-      <li><a href="networks_multiresunet.html#networks.MultiResUNet.trans_conv2d_bn">trans_conv2d_bn() (in module networks.MultiResUNet)</a>
+      <li><a href="engine/trainer.html#engine.trainer.Trainer">Trainer (class in engine.trainer)</a>
 </li>
-      <li><a href="networks_fc_densetnet103.html#networks.fc_densenet103.TransitionDown">TransitionDown() (in module networks.fc_densenet103)</a>
+      <li><a href="models/multiresunet.html#models.multiresunet.trans_conv2d_bn">trans_conv2d_bn() (in module models.multiresunet)</a>
 </li>
-      <li><a href="networks_fc_densetnet103.html#networks.fc_densenet103.TransitionUp">TransitionUp() (in module networks.fc_densenet103)</a>
+      <li><a href="models/tiramisu.html#models.tiramisu.TransitionDown">TransitionDown() (in module models.tiramisu)</a>
+</li>
+      <li><a href="models/tiramisu.html#models.tiramisu.TransitionUp">TransitionUp() (in module models.tiramisu)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -970,23 +1110,46 @@
 <h2 id="U">U</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="networks_unet.html#networks.unet.U_Net_2D">U_Net_2D() (in module networks.unet)</a>
+      <li><a href="models/unet.html#models.unet.U_Net_2D">U_Net_2D() (in module models.unet)</a>
 
       <ul>
-        <li><a href="casser_network.html#sota_implementations.casser_2018.casser_unet.U_Net_2D">(in module sota_implementations.casser_2018.casser_unet)</a>
+        <li><a href="sota_implementations/casser_2018/casser_network.html#sota_implementations.casser_2018.casser_unet.U_Net_2D">(in module sota_implementations.casser_2018.casser_unet)</a>
 </li>
       </ul></li>
-      <li><a href="networks_unet_3d.html#networks.unet_3d.U_Net_3D">U_Net_3D() (in module networks.unet_3d)</a>
+      <li><a href="models/unet_3d.html#models.unet_3d.U_Net_3D">U_Net_3D() (in module models.unet_3d)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="xiao_network.html#sota_implementations.xiao_2018.unet_3d_xiao.U_Net_3D_Xiao">U_Net_3D_Xiao() (in module sota_implementations.xiao_2018.unet_3d_xiao)</a>
+      <li><a href="sota_implementations/xiao_2018/xiao_network.html#sota_implementations.xiao_2018.unet_3d_xiao.U_Net_3D_Xiao">U_Net_3D_Xiao() (in module sota_implementations.xiao_2018.unet_3d_xiao)</a>
+</li>
+      <li><a href="config/config.html#config.config.Config.update_dependencies">update_dependencies() (config.config.Config method)</a>
 </li>
       <li>
-    util
+    utils.adabound
 
       <ul>
-        <li><a href="util.html#module-util">module</a>
+        <li><a href="utils/adabound.html#module-utils.adabound">module</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li>
+    utils.callbacks
+
+      <ul>
+        <li><a href="utils/callbacks.html#module-utils.callbacks">module</a>
+</li>
+      </ul></li>
+      <li>
+    utils.grad_cam
+
+      <ul>
+        <li><a href="utils/grad_cam.html#module-utils.grad_cam">module</a>
+</li>
+      </ul></li>
+      <li>
+    utils.util
+
+      <ul>
+        <li><a href="utils/util.html#module-utils.util">module</a>
 </li>
       </ul></li>
   </ul></td>
@@ -995,29 +1158,27 @@
 <h2 id="V">V</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="networks_vanilla_unet_3d.html#networks.vanilla_unet_3d.Vanilla_U_Net_3D">Vanilla_U_Net_3D() (in module networks.vanilla_unet_3d)</a>
-</li>
-      <li><a href="metrics.html#metrics.voc_calculation">voc_calculation() (in module metrics)</a>
+      <li><a href="models/vanilla_unet_3d.html#models.vanilla_unet_3d.Vanilla_U_Net_3D">Vanilla_U_Net_3D() (in module models.vanilla_unet_3d)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="3d_generator.html#generators.data_3D_generators.VoxelDataGenerator">VoxelDataGenerator (class in generators.data_3D_generators)</a>
-
-      <ul>
-        <li><a href="3d_generator_v2.html#generators.data_3D_generators_v2.VoxelDataGenerator">(class in generators.data_3D_generators_v2)</a>
+      <li><a href="engine/metrics.html#engine.metrics.voc_calculation">voc_calculation() (in module engine.metrics)</a>
 </li>
-      </ul></li>
+      <li><a href="data/generators/3d_generator.html#data.generators.data_3D_generator.VoxelDataGenerator">VoxelDataGenerator (class in data.generators.data_3D_generator)</a>
+</li>
   </ul></td>
 </tr></table>
 
 <h2 id="W">W</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="oztel_utils.html#sota_implementations.oztel_2017.utils.watershed_refinement">watershed_refinement() (in module sota_implementations.oztel_2017.utils)</a>
+      <li><a href="engine/schedulers/cosine_decay.html#engine.schedulers.cosine_decay.WarmUpCosineDecayScheduler">WarmUpCosineDecayScheduler (class in engine.schedulers.cosine_decay)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="metrics.html#metrics.weighted_bce_dice_loss">weighted_bce_dice_loss() (in module metrics)</a>
+      <li><a href="sota_implementations/oztel_2017/oztel_utils.html#sota_implementations.oztel_2017.utils.watershed_refinement">watershed_refinement() (in module sota_implementations.oztel_2017.utils)</a>
+</li>
+      <li><a href="engine/metrics.html#engine.metrics.weighted_bce_dice_loss">weighted_bce_dice_loss() (in module engine.metrics)</a>
 </li>
   </ul></td>
 </tr></table>

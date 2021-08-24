@@ -8,7 +8,9 @@ PROBLEM:
 
 DATA: 
     CHANNELS: BC
-    CONTOUR_MODE: outer
+    MW_TH1: 0.2
+    MW_TH2: 0.1 
+    MW_TH3: 0.3
     PATCH_SIZE: (64, 64, 64, 1)
     CHECK_GENERATORS: False
     TRAIN:

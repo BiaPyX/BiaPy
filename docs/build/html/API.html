@@ -36,8 +36,8 @@
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="2D Data manipulation" href="data_2d_manipulation.html" />
-    <link rel="prev" title="Mitochondria segmentation" href="mitochondria.html" /> 
+    <link rel="next" title="config" href="config/main_config.html" />
+    <link rel="prev" title="Stable DNN architectures for mitochondria segmentation" href="manuscripts/stable_mitochondria.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -82,28 +82,34 @@
               
             
             
-              <p class="caption"><span class="caption-text">Quick start</span></p>
+              <p class="caption"><span class="caption-text">How to run</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Step 0: Prepare environment</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-1-data-preparation">Step 1: Data preparation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-1-choose-a-template">Step 1: Choose a template</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quick_start.html#step-3-run-the-code">Step 3: Run the code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run/bash.html">Bash shell</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run/colab.html">Colab</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run/docker.html">Docker container</a></li>
+<li class="toctree-l1"><a class="reference internal" href="how_to_run/singularity.html">Singularity container</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Manuscripts</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="mitochondria.html">Mitochondria segmentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">2D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">3D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="generators.html">Generators</a></li>
-<li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
-<li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="config/main_config.html">config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data/data.html">data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="engine/engine.html">engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="models/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sota_implementations/sota_implementations.html">sota_implementations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="utils/utils.html">utils</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Bibliography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="bibliography.html">Bibliography</a></li>
 </ul>
 
             
@@ -169,29 +175,50 @@
             
   <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="data_2d_manipulation.html">2D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="data_3d_manipulation.html">3D Data manipulation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="generators.html">Generators</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="2d_generator_v2.html">Generator (2D)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="3d_generator_v2.html">Generator (3D)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="augmentors.html">Augmentors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="config/main_config.html">config</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="config/config.html">Config</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="networks_unet2d.html">2D U-Net</a></li>
-<li class="toctree-l2"><a class="reference internal" href="networks_unet3d.html">3D U-Net</a></li>
-<li class="toctree-l2"><a class="reference internal" href="networks_nnunet.html">nnU-Net</a></li>
-<li class="toctree-l2"><a class="reference internal" href="networks_fcn.html">FCN</a></li>
-<li class="toctree-l2"><a class="reference internal" href="networks_fc_densetnet103.html">Tiramisu (FC-DenseNet103)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="networks_multiresunet.html">MultiResUNet</a></li>
-<li class="toctree-l2"><a class="reference internal" href="networks_mnet.html">MNet</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data/data.html">data</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="data/init.html">Init</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data/data_2d_manipulation.html">2D Data manipulation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data/data_3d_manipulation.html">3D Data manipulation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data/generators/generators.html">generators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data/post_processing/main_post_proc.html">post_processing</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="metrics.html">Metrics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="util.html">Util</a></li>
-<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="grad_cam.html">Grad-CAM</a></li>
-<li class="toctree-l1"><a class="reference internal" href="adabound.html">Adabound</a></li>
+<li class="toctree-l1"><a class="reference internal" href="engine/engine.html">engine</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="engine/init.html">Init</a></li>
+<li class="toctree-l2"><a class="reference internal" href="engine/metrics.html">Metrics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="engine/trainer.html">Trainer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="engine/schedulers/schedulers.html">schedulers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="models/models.html">models</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="models/init.html">Init</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models/unet2d.html">2D U-Net</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models/unet3d.html">3D U-Net</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models/fcn.html">FCN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models/nnunet.html">nnU-Net</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models/multiresunet.html">MultiResUNet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models/tiramisu.html">Tiramisu (FC-DenseNet103)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="models/mnet.html">MNet</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sota_implementations/sota_implementations.html">sota_implementations</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sota_implementations/casser_2018/casser.html">Casser et al.</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sota_implementations/cheng_2017/cheng.html">Cheng et al.</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sota_implementations/oztel_2017/oztel.html">Oztel et al.</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sota_implementations/xiao_2018/xiao.html">Xiao et al.</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="utils/utils.html">utils</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="utils/adabound.html">Adabound</a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils/callbacks.html">Callbacks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils/grad_cam.html">Grad-CAM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils/util.html">Util</a></li>
+</ul>
+</li>
 </ul>
 </div>
 
@@ -203,10 +230,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="data_2d_manipulation.html" class="btn btn-neutral float-right" title="2D Data manipulation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="config/main_config.html" class="btn btn-neutral float-right" title="config" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="mitochondria.html" class="btn btn-neutral float-left" title="Mitochondria segmentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="manuscripts/stable_mitochondria.html" class="btn btn-neutral float-left" title="Stable DNN architectures for mitochondria segmentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

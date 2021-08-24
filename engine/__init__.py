@@ -12,8 +12,8 @@ def prepare_optimizer(cfg, model):
                                                                                                                         
        Parameters                                                                                                       
        ----------                                                                                                       
-       cfg : config.config (Config class)                                                                               
-           Configuration class.                                                                                         
+       cfg : YACS CN object                                                                               
+           Configuration.                                                                                         
                                                                                                                         
        model : Keras model
            Model to be compiled with the selected options. 
@@ -54,8 +54,8 @@ def build_callbacks(cfg):
                                                                                                                         
        Parameters                                                                                                       
        ----------                                                                                                       
-       cfg : config.config (Config class)                                                                               
-           Configuration class.                                                                                         
+       cfg : YACS CN object                                                                               
+           Configuration.                                                                                         
 
        Returns                                                                                                          
        -------                                                                                                          

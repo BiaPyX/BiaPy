@@ -39,13 +39,13 @@ def ResUNet_2D(image_shape, activation='elu', k_init='he_normal', drop_values=[0
 
        Calling this function with its default parameters returns the following network:
 
-       .. image:: img/resunet.png
+       .. image:: ../img/resunet.png
            :width: 100%
            :align: center
 
        Where each green layer represents a residual block as the following:
         
-       .. image:: img/res_block.png
+       .. image:: ../img/res_block.png
            :width: 45%
            :align: center
 

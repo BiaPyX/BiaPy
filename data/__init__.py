@@ -10,8 +10,8 @@ def create_train_val_instance_channels(cfg):
                                                                                                                         
        Parameters                                                                                                       
        ----------                                                                                                       
-       cfg : config.config (Config class)                                                                               
-           Configuration class.                                                                                         
+       cfg : YACS CN object                                                                               
+           Configuration.                                                                                         
                                                                                                                         
        Returns                                                                                                          
        -------                                                                                                          
@@ -48,8 +48,8 @@ def create_test_instance_channels(cfg):
                                                                                                                         
        Parameters                                                                                                       
        ----------                                                                                                       
-       cfg : config.config (Config class)                                                                               
-           Configuration class.                                                                                         
+       cfg : YACS CN object                                                                               
+           Configuration.                                                                                         
                                                                                                                         
        Returns                                                                                                          
        -------                                                                                                          

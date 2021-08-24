@@ -1,0 +1,88 @@
+Bash shell
+----------
+
+Step 0: Prepare environment 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Clone the `repository <https://github.com/danifranco/EM_Image_Segmentation>`_: ::
+
+    git clone https://github.com/danifranco/EM_Image_Segmentation.git 
+
+You can set-up a development environment with all necessary dependencies creating 
+directly a ``conda`` environment using the file located in `utils/env/environment.yml <https://github.com/danifranco/EM_Image_Segmentation/blob/master/utils/env/environment.yml>`_ ::
+    
+    conda env create -f utils/env/environment.yml
+
+
+Step 1: Data preparation
+~~~~~~~~~~~~~~~~~~~~~~~~
+.. _data_preparation:
+
+The data directory tree should be this: ::
+
+    dataset/
+    ├── test
+    │   ├── x
+    │   │   ├── testing-0001.tif
+    │   │   ├── testing-0002.tif
+    │   │   ├── . . .
+    │   │   ├── testing-9999.tif
+    │   └── y
+    │       ├── testing_groundtruth-0001.tif
+    │       ├── testing_groundtruth-0002.tif
+    │       ├── . . .
+    │       ├── testing_groundtruth-9999.tif
+    └── train
+        ├── x
+        │   ├── training-0001.tif
+        │   ├── training-0002.tif
+        │   ├── . . .
+        │   ├── training-9999.tif
+        └── y
+            ├── training_groundtruth-0001.tif
+            ├── training_groundtruth-0002.tif
+            ├── . . .
+            ├── training_groundtruth-9999.tif
+
+.. warning:: Ensure that images and their corresponding masks are sorted in the same way. A common approach is to fill with zeros the image number added to the filenames (as in the example). 
+
+In case you use other directory distribution ensure to configure ``DATA.TRAIN.PATH``, ``DATA.TRAIN.MASK_PATH``, ``DATA.VAL.PATH``, ``DATA.VAL.MASK_PATH``, ``DATA.TEST.PATH`` and ``DATA.TEST.MASK_PATH`` variables accordingly. 
+
+
+Step 2: Choose a template
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Choose a template from `templates <https://github.com/danifranco/EM_Image_Segmentation/blob/master/templates>`_ directory and modify it for you specific case. Find `config.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/config/config.py>`_ all configurable variables and their description.
+
+
+Step 3: Run the code
+~~~~~~~~~~~~~~~~~~~~
+
+Using, for instance, `unet_2d.yaml <https://github.com/danifranco/EM_Image_Segmentation/tree/master/templates/unet_2d.yaml>`_ template file, the code can be run as follows:
+
+.. code-block:: bash
+    
+    # Configuration file
+    job_cfg_file=/home/user/unet_2d.yaml       
+    # Where the experiment output directory should be created
+    result_dir=/data2/dfranco/exp_results  
+    # Path to the dataset
+    data_dir=/home/user/dataset  
+    # Just a name for the job
+    job_name=unet_basic_experiment      
+    # Number that should be increased when one need to run the same job multiple times (reproducibility)
+    job_counter=0                  
+    # Number of the GPU to run the job in (according to 'nvidia-smi' command
+    gpu_number=0                   
+
+    # Load the environment
+    conda activate EM_tools
+    
+    python -u main.py \
+           --config $job_cfg_file \
+           --result_dir $result_dir  \ 
+           --dataroot $data_dir   \
+           --name $job_name    \
+           --run_id $job_counter  \
+           --gpu $gpu_number  
+
