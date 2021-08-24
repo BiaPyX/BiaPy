@@ -3,9 +3,9 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   
   <title>Adabound &mdash; EM Image Segmentation  documentation</title>
   
@@ -13,10 +13,15 @@
   
   <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
 
   
   
+
   
+  
+
   
 
   
@@ -26,10 +31,10 @@
   
     
       <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
         <script src="../_static/jquery.js"></script>
         <script src="../_static/underscore.js"></script>
         <script src="../_static/doctools.js"></script>
-        <script src="../_static/language_data.js"></script>
     
     <script type="text/javascript" src="../_static/js/theme.js"></script>
 
@@ -51,7 +56,7 @@
           
 
           
-            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+            <a href="../index.html" class="icon icon-home"> EM Image Segmentation
           
 
           
@@ -82,23 +87,23 @@
               
             
             
-              <p class="caption"><span class="caption-text">How to run</span></p>
+              <p class="caption" role="heading"><span class="caption-text">How to run</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run/bash.html">Bash shell</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run/colab.html">Colab</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run/docker.html">Docker container</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run/singularity.html">Singularity container</a></li>
 </ul>
-<p class="caption"><span class="caption-text">Tutorials</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
 </ul>
-<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<p class="caption" role="heading"><span class="caption-text">Manuscripts</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
 </ul>
-<p class="caption"><span class="caption-text">API</span></p>
+<p class="caption" role="heading"><span class="caption-text">API</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../config/main_config.html">config</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../data/data.html">data</a></li>
@@ -113,7 +118,7 @@
 </ul>
 </li>
 </ul>
-<p class="caption"><span class="caption-text">Bibliography</span></p>
+<p class="caption" role="heading"><span class="caption-text">Bibliography</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
 </ul>
@@ -156,6 +161,8 @@
 
 
 
+
+
 <div role="navigation" aria-label="breadcrumbs navigation">
 
   <ul class="wy-breadcrumbs">
@@ -171,7 +178,7 @@
     
       <li class="wy-breadcrumbs-aside">
         
-            
+          
         
       </li>
     
@@ -187,23 +194,23 @@
 <span id="adabound"></span><h1>Adabound<a class="headerlink" href="#module-utils.adabound" title="Permalink to this headline">¶</a></h1>
 <p>Adabound optmizer. Code fully stracted from: <a class="reference external" href="https://github.com/Luolc/AdaBound">https://github.com/Luolc/AdaBound</a>.</p>
 <dl class="py class">
-<dt id="utils.adabound.AdaBound">
-<em class="property">class </em><code class="sig-prename descclassname">utils.adabound.</code><code class="sig-name descname">AdaBound</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">lr</span><span class="o">=</span><span class="default_value">0.001</span></em>, <em class="sig-param"><span class="n">final_lr</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">beta_1</span><span class="o">=</span><span class="default_value">0.9</span></em>, <em class="sig-param"><span class="n">beta_2</span><span class="o">=</span><span class="default_value">0.999</span></em>, <em class="sig-param"><span class="n">gamma</span><span class="o">=</span><span class="default_value">0.001</span></em>, <em class="sig-param"><span class="n">epsilon</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">decay</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">amsbound</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">weight_decay</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/adabound.html#AdaBound"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.adabound.AdaBound" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.optimizer_v2.optimizer_v2.OptimizerV2</span></code></p>
+<dt class="sig sig-object py" id="utils.adabound.AdaBound">
+<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">utils.adabound.</span></span><span class="sig-name descname"><span class="pre">AdaBound</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">final_lr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta_1</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.9</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta_2</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.999</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epsilon</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amsbound</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_decay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/adabound.html#AdaBound"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.adabound.AdaBound" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.optimizer_v2.optimizer_v2.OptimizerV2</span></code></p>
 <p>AdaBound optimizer.
 Default parameters follow those provided in the original paper.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>lr</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Must be <code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">0</span></code>. Learning rate.</p></li>
-<li><p><strong>final_lr</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Must be <code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">0</span></code>. Final learning rate.</p></li>
-<li><p><strong>beta_1</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Must be float, <code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">&lt;</span> <span class="pre">beta</span> <span class="pre">&lt;</span> <span class="pre">1</span></code>. Generally close to <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-<li><p><strong>beta_2</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Must be <code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">&lt;</span> <span class="pre">beta</span> <span class="pre">&lt;</span> <span class="pre">1</span></code>. Generally close to <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-<li><p><strong>gamma</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Must be <code class="docutils literal notranslate"><span class="pre">float</span> <span class="pre">&gt;=</span> <span class="pre">0</span></code>. Convergence speed of the bound function.</p></li>
-<li><p><strong>epsilon</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Must be <code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">0</span></code>. Fuzz factor. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, defaults to <code class="docutils literal notranslate"><span class="pre">K.epsilon()</span></code>.</p></li>
-<li><p><strong>decay</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Must be <code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">0</span></code>. Learning rate decay over each update.</p></li>
-<li><p><strong>weight_decay</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <em>optional</em>) – Weight decay weight.</p></li>
-<li><p><strong>amsbound</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">boolean</span></code>, <em>optional</em>) – Whether to apply the AMSBound variant of this algorithm.</p></li>
+<li><p><strong>lr</strong> (<em>float, optional</em>) – Must be <code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">0</span></code>. Learning rate.</p></li>
+<li><p><strong>final_lr</strong> (<em>float, optional</em>) – Must be <code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">0</span></code>. Final learning rate.</p></li>
+<li><p><strong>beta_1</strong> (<em>float, optional</em>) – Must be float, <code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">&lt;</span> <span class="pre">beta</span> <span class="pre">&lt;</span> <span class="pre">1</span></code>. Generally close to <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
+<li><p><strong>beta_2</strong> (<em>float, optional</em>) – Must be <code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">&lt;</span> <span class="pre">beta</span> <span class="pre">&lt;</span> <span class="pre">1</span></code>. Generally close to <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
+<li><p><strong>gamma</strong> (<em>float, optional</em>) – Must be <code class="docutils literal notranslate"><span class="pre">float</span> <span class="pre">&gt;=</span> <span class="pre">0</span></code>. Convergence speed of the bound function.</p></li>
+<li><p><strong>epsilon</strong> (<em>float, optional</em>) – Must be <code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">0</span></code>. Fuzz factor. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, defaults to <code class="docutils literal notranslate"><span class="pre">K.epsilon()</span></code>.</p></li>
+<li><p><strong>decay</strong> (<em>float, optional</em>) – Must be <code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">0</span></code>. Learning rate decay over each update.</p></li>
+<li><p><strong>weight_decay</strong> (<em>float, optional</em>) – Weight decay weight.</p></li>
+<li><p><strong>amsbound</strong> (<em>boolean, optional</em>) – Whether to apply the AMSBound variant of this algorithm.</p></li>
 </ul>
 </dd>
 </dl>
@@ -216,6 +223,12 @@ Default parameters follow those provided in the original paper.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Attributes</dt>
 <dd class="field-odd"><dl class="simple">
+<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">clipnorm</span></code></dt><dd><p><cite>float</cite> or <cite>None</cite>. If set, clips gradients to a maximum norm.</p>
+</dd>
+<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">clipvalue</span></code></dt><dd><p><cite>float</cite> or <cite>None</cite>. If set, clips gradients to a maximum value.</p>
+</dd>
+<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">global_clipnorm</span></code></dt><dd><p><cite>float</cite> or <cite>None</cite>. If set, clips gradients to a maximum norm.</p>
+</dd>
 <dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">iterations</span></code></dt><dd><p>Variable.</p>
 </dd>
 <dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">weights</span></code></dt><dd><p>Returns variables of this Optimizer based on the order created.</p>
@@ -230,17 +243,17 @@ Default parameters follow those provided in the original paper.</p>
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_slot</span></code>(var, slot_name[, initializer])</p></td>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_slot</span></code>(var, slot_name[, initializer, shape])</p></td>
 <td><p>Add a new slot variable for <cite>var</cite>.</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">apply_gradients</span></code>(grads_and_vars[, name])</p></td>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">apply_gradients</span></code>(grads_and_vars[, name, …])</p></td>
 <td><p>Apply gradients to variables.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_config</span></code>(config[, custom_objects])</p></td>
 <td><p>Creates an optimizer from its config.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#utils.adabound.AdaBound.get_config" title="utils.adabound.AdaBound.get_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_config</span></code></a>()</p></td>
-<td><p>Returns the config of the optimimizer.</p></td>
+<td><p>Returns the config of the optimizer.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_gradients</span></code>(loss, params)</p></td>
 <td><p>Returns gradients of <cite>loss</cite> with respect to <cite>params</cite>.</p></td>
@@ -248,13 +261,16 @@ Default parameters follow those provided in the original paper.</p>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_slot_names</span></code>()</p></td>
 <td><p>A list of names for this optimizer’s slots.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">minimize</span></code>(loss, var_list[, grad_loss, name])</p></td>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_weights</span></code>()</p></td>
+<td><p>Returns the current weights of the optimizer.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">minimize</span></code>(loss, var_list[, grad_loss, name, tape])</p></td>
 <td><p>Minimize <cite>loss</cite> by updating <cite>var_list</cite>.</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_weights</span></code>(weights)</p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_weights</span></code>(weights)</p></td>
+<td><p>Set the weights of the optimizer.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">variables</span></code>()</p></td>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">variables</span></code>()</p></td>
 <td><p>Returns variables of this Optimizer based on the order created.</p></td>
 </tr>
 </tbody>
@@ -274,20 +290,17 @@ Default parameters follow those provided in the original paper.</p>
 <tr class="row-odd"><td><p><strong>get_updates</strong></p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p><strong>get_weights</strong></p></td>
-<td></td>
-</tr>
 </tbody>
 </table>
 <dl class="py method">
-<dt id="utils.adabound.AdaBound.get_updates">
-<code class="sig-name descname">get_updates</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">loss</span></em>, <em class="sig-param"><span class="n">params</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/adabound.html#AdaBound.get_updates"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.adabound.AdaBound.get_updates" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="utils.adabound.AdaBound.get_updates">
+<span class="sig-name descname"><span class="pre">get_updates</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">loss</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/adabound.html#AdaBound.get_updates"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.adabound.AdaBound.get_updates" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="utils.adabound.AdaBound.get_config">
-<code class="sig-name descname">get_config</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/adabound.html#AdaBound.get_config"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.adabound.AdaBound.get_config" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns the config of the optimimizer.</p>
+<dt class="sig sig-object py" id="utils.adabound.AdaBound.get_config">
+<span class="sig-name descname"><span class="pre">get_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/adabound.html#AdaBound.get_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.adabound.AdaBound.get_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the config of the optimizer.</p>
 <p>An optimizer config is a Python dictionary (serializable)
 containing the configuration of an optimizer.
 The same optimizer can be reinstantiated later
@@ -307,37 +320,29 @@ The same optimizer can be reinstantiated later
            
           </div>
           <footer>
-  
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-      
-        <a href="callbacks.html" class="btn btn-neutral float-right" title="Callbacks" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
-      
-      
-        <a href="utils.html" class="btn btn-neutral float-left" title="utils" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
-      
+        <a href="callbacks.html" class="btn btn-neutral float-right" title="Callbacks" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="utils.html" class="btn btn-neutral float-left" title="utils" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
     </div>
-  
 
   <hr/>
 
   <div role="contentinfo">
     <p>
-        
-        &copy; Copyright 2021, Daniel Franco
+        &#169; Copyright 2021, Daniel Franco.
 
     </p>
   </div>
     
     
     
-    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
     
-    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
     
     provided by <a href="https://readthedocs.org">Read the Docs</a>. 
 
 </footer>
-
         </div>
       </div>
 

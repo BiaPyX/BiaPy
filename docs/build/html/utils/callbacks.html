@@ -3,9 +3,9 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   
   <title>Callbacks &mdash; EM Image Segmentation  documentation</title>
   
@@ -13,10 +13,15 @@
   
   <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
 
   
   
+
   
+  
+
   
 
   
@@ -26,10 +31,10 @@
   
     
       <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
         <script src="../_static/jquery.js"></script>
         <script src="../_static/underscore.js"></script>
         <script src="../_static/doctools.js"></script>
-        <script src="../_static/language_data.js"></script>
     
     <script type="text/javascript" src="../_static/js/theme.js"></script>
 
@@ -51,7 +56,7 @@
           
 
           
-            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+            <a href="../index.html" class="icon icon-home"> EM Image Segmentation
           
 
           
@@ -82,23 +87,23 @@
               
             
             
-              <p class="caption"><span class="caption-text">How to run</span></p>
+              <p class="caption" role="heading"><span class="caption-text">How to run</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run/bash.html">Bash shell</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run/colab.html">Colab</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run/docker.html">Docker container</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run/singularity.html">Singularity container</a></li>
 </ul>
-<p class="caption"><span class="caption-text">Tutorials</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
 </ul>
-<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<p class="caption" role="heading"><span class="caption-text">Manuscripts</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
 </ul>
-<p class="caption"><span class="caption-text">API</span></p>
+<p class="caption" role="heading"><span class="caption-text">API</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../config/main_config.html">config</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../data/data.html">data</a></li>
@@ -113,7 +118,7 @@
 </ul>
 </li>
 </ul>
-<p class="caption"><span class="caption-text">Bibliography</span></p>
+<p class="caption" role="heading"><span class="caption-text">Bibliography</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
 </ul>
@@ -156,6 +161,8 @@
 
 
 
+
+
 <div role="navigation" aria-label="breadcrumbs navigation">
 
   <ul class="wy-breadcrumbs">
@@ -171,7 +178,7 @@
     
       <li class="wy-breadcrumbs-aside">
         
-            
+          
         
       </li>
     
@@ -187,9 +194,9 @@
 <span id="callbacks"></span><h1>Callbacks<a class="headerlink" href="#module-utils.callbacks" title="Permalink to this headline">¶</a></h1>
 <p>Code copied from <a class="reference external" href="https://github.com/tensorflow/tensorflow/blob/b36436b087bd8e8701ef51718179037cccdfc26e/tensorflow/python/keras/callbacks.py#L1057">Tensorflow/keras/callbacks.py</a> just inserting a few lines on the prints to avoid this <a class="reference external" href="https://github.com/tensorflow/tensorflow/issues/35100">error</a>.</p>
 <dl class="py class">
-<dt id="utils.callbacks.ModelCheckpoint">
-<em class="property">class </em><code class="sig-prename descclassname">utils.callbacks.</code><code class="sig-name descname">ModelCheckpoint</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">filepath</span></em>, <em class="sig-param"><span class="n">monitor</span><span class="o">=</span><span class="default_value">'val_loss'</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">save_best_only</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">save_weights_only</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">mode</span><span class="o">=</span><span class="default_value">'auto'</span></em>, <em class="sig-param"><span class="n">period</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/callbacks.html#ModelCheckpoint"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.callbacks.ModelCheckpoint" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.callbacks.Callback</span></code></p>
+<dt class="sig sig-object py" id="utils.callbacks.ModelCheckpoint">
+<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">utils.callbacks.</span></span><span class="sig-name descname"><span class="pre">ModelCheckpoint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filepath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">monitor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'val_loss'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_best_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_weights_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/callbacks.html#ModelCheckpoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.callbacks.ModelCheckpoint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.callbacks.Callback</span></code></p>
 <p>Save the model after every epochimport tensorflow.keras.callbacks.Callback .
 <cite>filepath</cite> can contain named formatting options,
 which will be filled with the values of <cite>epoch</cite> and
@@ -200,21 +207,21 @@ the validation loss in the filename.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>filepath</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to save the model file.</p></li>
-<li><p><strong>monitor</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Quantity to monitor.</p></li>
-<li><p><strong>verbose</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Verbosity mode, 0 or 1.</p></li>
-<li><p><strong>save_best_only</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If <code class="docutils literal notranslate"><span class="pre">save_best_only=True</span></code>, the latest best model according to the
+<li><p><strong>filepath</strong> (<em>str</em>) – Path to save the model file.</p></li>
+<li><p><strong>monitor</strong> (<em>str</em>) – Quantity to monitor.</p></li>
+<li><p><strong>verbose</strong> (<em>int</em>) – Verbosity mode, 0 or 1.</p></li>
+<li><p><strong>save_best_only</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">save_best_only=True</span></code>, the latest best model according to the
 quantity monitored will not be overwritten.</p></li>
-<li><p><strong>save_weights_only</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, then only the model’s weights will be saved
+<li><p><strong>save_weights_only</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, then only the model’s weights will be saved
 (<code class="docutils literal notranslate"><span class="pre">model.save_weights(filepath)</span></code>), else the full model is saved
 (<code class="docutils literal notranslate"><span class="pre">model.save(filepath)</span></code>).</p></li>
-<li><p><strong>mode</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – One of <code class="docutils literal notranslate"><span class="pre">{auto,</span> <span class="pre">min,</span> <span class="pre">max}</span></code>. If <code class="docutils literal notranslate"><span class="pre">save_best_only=True</span></code>, the decision
+<li><p><strong>mode</strong> (<em>str</em>) – One of <code class="docutils literal notranslate"><span class="pre">{auto,</span> <span class="pre">min,</span> <span class="pre">max}</span></code>. If <code class="docutils literal notranslate"><span class="pre">save_best_only=True</span></code>, the decision
 to overwrite the current save file is made based on either the
 maximization or the minimization of the monitored quantity. For
 <code class="docutils literal notranslate"><span class="pre">val_acc</span></code>, this should be <code class="docutils literal notranslate"><span class="pre">max</span></code>, for <code class="docutils literal notranslate"><span class="pre">val_loss</span></code> this should
 be <code class="docutils literal notranslate"><span class="pre">min</span></code>, etc. In <code class="docutils literal notranslate"><span class="pre">auto</span></code> mode, the direction is automatically
 inferred from the name of the monitored quantity.</p></li>
-<li><p><strong>period</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Interval (number of epochs) between checkpoints.</p></li>
+<li><p><strong>period</strong> (<em>int</em>) – Interval (number of epochs) between checkpoints.</p></li>
 </ul>
 </dd>
 </dl>
@@ -290,17 +297,23 @@ inferred from the name of the monitored quantity.</p></li>
 </tbody>
 </table>
 <dl class="py method">
-<dt id="utils.callbacks.ModelCheckpoint.on_epoch_end">
-<code class="sig-name descname">on_epoch_end</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">epoch</span></em>, <em class="sig-param"><span class="n">logs</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/callbacks.html#ModelCheckpoint.on_epoch_end"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.callbacks.ModelCheckpoint.on_epoch_end" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="utils.callbacks.ModelCheckpoint.on_epoch_end">
+<span class="sig-name descname"><span class="pre">on_epoch_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/callbacks.html#ModelCheckpoint.on_epoch_end"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.callbacks.ModelCheckpoint.on_epoch_end" title="Permalink to this definition">¶</a></dt>
 <dd><p>Called at the end of an epoch.</p>
 <p>Subclasses should override for any actions to run. This function should only
 be called during TRAIN mode.</p>
 <dl>
-<dt>Arguments:</dt><dd><p>epoch: integer, index of epoch.
-logs: dict, metric results for this training epoch, and for the</p>
+<dt>Args:</dt><dd><p>epoch: Integer, index of epoch.
+logs: Dict, metric results for this training epoch, and for the</p>
 <blockquote>
+<div><blockquote>
 <div><p>validation epoch if validation is performed. Validation result keys
-are prefixed with <cite>val_</cite>.</p>
+are prefixed with <cite>val_</cite>. For training epoch, the values of the</p>
+</div></blockquote>
+<dl>
+<dt><cite>Model</cite>’s metrics are returned. Example<span class="classifier"><a href="#id1"><span class="problematic" id="id2">`</span></a>{‘loss’: 0.2, ‘accuracy’:</span></dt><dd><p>0.7}`.</p>
+</dd>
+</dl>
 </div></blockquote>
 </dd>
 </dl>
@@ -309,9 +322,9 @@ are prefixed with <cite>val_</cite>.</p>
 </dd></dl>
 
 <dl class="py class">
-<dt id="utils.callbacks.TimeHistory">
-<em class="property">class </em><code class="sig-prename descclassname">utils.callbacks.</code><code class="sig-name descname">TimeHistory</code><a class="reference internal" href="../_modules/utils/callbacks.html#TimeHistory"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.callbacks.TimeHistory" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tensorflow.python.keras.callbacks.Callback</span></code></p>
+<dt class="sig sig-object py" id="utils.callbacks.TimeHistory">
+<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">utils.callbacks.</span></span><span class="sig-name descname"><span class="pre">TimeHistory</span></span><a class="reference internal" href="../_modules/utils/callbacks.html#TimeHistory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.callbacks.TimeHistory" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">keras.callbacks.Callback</span></code></p>
 <p>Class to record each epoch time.</p>
 <p class="rubric">Methods</p>
 <table class="longtable docutils align-default">
@@ -385,13 +398,13 @@ are prefixed with <cite>val_</cite>.</p>
 </tbody>
 </table>
 <dl class="py method">
-<dt id="utils.callbacks.TimeHistory.on_train_begin">
-<code class="sig-name descname">on_train_begin</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">logs</span><span class="o">=</span><span class="default_value">{}</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/callbacks.html#TimeHistory.on_train_begin"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.callbacks.TimeHistory.on_train_begin" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="utils.callbacks.TimeHistory.on_train_begin">
+<span class="sig-name descname"><span class="pre">on_train_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/callbacks.html#TimeHistory.on_train_begin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.callbacks.TimeHistory.on_train_begin" title="Permalink to this definition">¶</a></dt>
 <dd><p>Called at the beginning of training.</p>
 <p>Subclasses should override for any actions to run.</p>
 <dl class="simple">
-<dt>Arguments:</dt><dd><dl class="simple">
-<dt>logs: dict. Currently no data is passed to this argument for this method</dt><dd><p>but that may change in the future.</p>
+<dt>Args:</dt><dd><dl class="simple">
+<dt>logs: Dict. Currently no data is passed to this argument for this method</dt><dd><p>but that may change in the future.</p>
 </dd>
 </dl>
 </dd>
@@ -399,14 +412,14 @@ are prefixed with <cite>val_</cite>.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="utils.callbacks.TimeHistory.on_epoch_begin">
-<code class="sig-name descname">on_epoch_begin</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">batch</span></em>, <em class="sig-param"><span class="n">logs</span><span class="o">=</span><span class="default_value">{}</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/callbacks.html#TimeHistory.on_epoch_begin"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.callbacks.TimeHistory.on_epoch_begin" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="utils.callbacks.TimeHistory.on_epoch_begin">
+<span class="sig-name descname"><span class="pre">on_epoch_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/callbacks.html#TimeHistory.on_epoch_begin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.callbacks.TimeHistory.on_epoch_begin" title="Permalink to this definition">¶</a></dt>
 <dd><p>Called at the start of an epoch.</p>
 <p>Subclasses should override for any actions to run. This function should only
 be called during TRAIN mode.</p>
 <dl>
-<dt>Arguments:</dt><dd><p>epoch: integer, index of epoch.
-logs: dict. Currently no data is passed to this argument for this method</p>
+<dt>Args:</dt><dd><p>epoch: Integer, index of epoch.
+logs: Dict. Currently no data is passed to this argument for this method</p>
 <blockquote>
 <div><p>but that may change in the future.</p>
 </div></blockquote>
@@ -415,17 +428,23 @@ logs: dict. Currently no data is passed to this argument for this method</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="utils.callbacks.TimeHistory.on_epoch_end">
-<code class="sig-name descname">on_epoch_end</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">batch</span></em>, <em class="sig-param"><span class="n">logs</span><span class="o">=</span><span class="default_value">{}</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/callbacks.html#TimeHistory.on_epoch_end"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.callbacks.TimeHistory.on_epoch_end" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="utils.callbacks.TimeHistory.on_epoch_end">
+<span class="sig-name descname"><span class="pre">on_epoch_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/callbacks.html#TimeHistory.on_epoch_end"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.callbacks.TimeHistory.on_epoch_end" title="Permalink to this definition">¶</a></dt>
 <dd><p>Called at the end of an epoch.</p>
 <p>Subclasses should override for any actions to run. This function should only
 be called during TRAIN mode.</p>
 <dl>
-<dt>Arguments:</dt><dd><p>epoch: integer, index of epoch.
-logs: dict, metric results for this training epoch, and for the</p>
+<dt>Args:</dt><dd><p>epoch: Integer, index of epoch.
+logs: Dict, metric results for this training epoch, and for the</p>
 <blockquote>
+<div><blockquote>
 <div><p>validation epoch if validation is performed. Validation result keys
-are prefixed with <cite>val_</cite>.</p>
+are prefixed with <cite>val_</cite>. For training epoch, the values of the</p>
+</div></blockquote>
+<dl>
+<dt><cite>Model</cite>’s metrics are returned. Example<span class="classifier"><a href="#id3"><span class="problematic" id="id4">`</span></a>{‘loss’: 0.2, ‘accuracy’:</span></dt><dd><p>0.7}`.</p>
+</dd>
+</dl>
 </div></blockquote>
 </dd>
 </dl>
@@ -440,37 +459,29 @@ are prefixed with <cite>val_</cite>.</p>
            
           </div>
           <footer>
-  
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-      
-        <a href="grad_cam.html" class="btn btn-neutral float-right" title="Grad-CAM" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
-      
-      
-        <a href="adabound.html" class="btn btn-neutral float-left" title="Adabound" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
-      
+        <a href="grad_cam.html" class="btn btn-neutral float-right" title="Grad-CAM" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="adabound.html" class="btn btn-neutral float-left" title="Adabound" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
     </div>
-  
 
   <hr/>
 
   <div role="contentinfo">
     <p>
-        
-        &copy; Copyright 2021, Daniel Franco
+        &#169; Copyright 2021, Daniel Franco.
 
     </p>
   </div>
     
     
     
-    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
     
-    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
     
     provided by <a href="https://readthedocs.org">Read the Docs</a>. 
 
 </footer>
-
         </div>
       </div>
 

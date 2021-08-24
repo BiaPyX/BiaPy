@@ -3,9 +3,9 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   
   <title>Grad-CAM &mdash; EM Image Segmentation  documentation</title>
   
@@ -13,10 +13,15 @@
   
   <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
 
   
   
+
   
+  
+
   
 
   
@@ -26,10 +31,10 @@
   
     
       <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
         <script src="../_static/jquery.js"></script>
         <script src="../_static/underscore.js"></script>
         <script src="../_static/doctools.js"></script>
-        <script src="../_static/language_data.js"></script>
     
     <script type="text/javascript" src="../_static/js/theme.js"></script>
 
@@ -51,7 +56,7 @@
           
 
           
-            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> EM Image Segmentation
+            <a href="../index.html" class="icon icon-home"> EM Image Segmentation
           
 
           
@@ -82,23 +87,23 @@
               
             
             
-              <p class="caption"><span class="caption-text">How to run</span></p>
+              <p class="caption" role="heading"><span class="caption-text">How to run</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run/bash.html">Bash shell</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run/colab.html">Colab</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run/docker.html">Docker container</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../how_to_run/singularity.html">Singularity container</a></li>
 </ul>
-<p class="caption"><span class="caption-text">Tutorials</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/mitochondria.html">2D Mitochondria segmentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/nucleus.html">3D Nuclei Instance Segmentation</a></li>
 </ul>
-<p class="caption"><span class="caption-text">Manuscripts</span></p>
+<p class="caption" role="heading"><span class="caption-text">Manuscripts</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../manuscripts/stable_mitochondria.html">Stable DNN architectures for mitochondria segmentation</a></li>
 </ul>
-<p class="caption"><span class="caption-text">API</span></p>
+<p class="caption" role="heading"><span class="caption-text">API</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../config/main_config.html">config</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../data/data.html">data</a></li>
@@ -113,7 +118,7 @@
 </ul>
 </li>
 </ul>
-<p class="caption"><span class="caption-text">Bibliography</span></p>
+<p class="caption" role="heading"><span class="caption-text">Bibliography</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
 </ul>
@@ -156,6 +161,8 @@
 
 
 
+
+
 <div role="navigation" aria-label="breadcrumbs navigation">
 
   <ul class="wy-breadcrumbs">
@@ -171,7 +178,7 @@
     
       <li class="wy-breadcrumbs-aside">
         
-            
+          
         
       </li>
     
@@ -187,20 +194,20 @@
 <span id="grad-cam"></span><h1>Grad-CAM<a class="headerlink" href="#module-utils.grad_cam" title="Permalink to this headline">¶</a></h1>
 <p>Code extracted from <a class="reference external" href="https://github.com/jacobgil/keras-grad-cam">https://github.com/jacobgil/keras-grad-cam</a></p>
 <dl class="py function">
-<dt id="utils.grad_cam.grad_cam_sample">
-<code class="sig-prename descclassname">utils.grad_cam.</code><code class="sig-name descname">grad_cam_sample</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_model</span></em>, <em class="sig-param"><span class="n">image</span></em>, <em class="sig-param"><span class="n">predicted_class</span></em>, <em class="sig-param"><span class="n">layer_name</span></em>, <em class="sig-param"><span class="n">out_dir</span></em>, <em class="sig-param"><span class="n">n_classes</span><span class="o">=</span><span class="default_value">2</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/grad_cam.html#grad_cam_sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.grad_cam.grad_cam_sample" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="utils.grad_cam.grad_cam_sample">
+<span class="sig-prename descclassname"><span class="pre">utils.grad_cam.</span></span><span class="sig-name descname"><span class="pre">grad_cam_sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predicted_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layer_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/grad_cam.html#grad_cam_sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.grad_cam.grad_cam_sample" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates an image with the activation maps in charge of the class decision on a specific layer.</p>
 <p>For a more detailed information refer to the paper: <a class="reference external" href="https://arxiv.org/abs/1610.02391">Grad-CAM: Visual Explanations from Deep Networks via
 Gradient-based Localization</a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>input_model</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Keras</span> <span class="pre">model</span></code>) – Model.</p></li>
-<li><p><strong>image</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">2D</span> <span class="pre">Numpy</span> <span class="pre">array</span></code>) – Image to visualize the heatmap from. E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
-<li><p><strong>predicted_class</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Number of the class predicted.</p></li>
-<li><p><strong>layer_name</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Keras layer name to extract the features from.</p></li>
-<li><p><strong>out_dir</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code>) – Path to save the image on.</p></li>
-<li><p><strong>n_classes</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Total number of classes.</p></li>
+<li><p><strong>input_model</strong> (<em>Keras model</em>) – Model.</p></li>
+<li><p><strong>image</strong> (<em>2D Numpy array</em>) – Image to visualize the heatmap from. E. g. <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>.</p></li>
+<li><p><strong>predicted_class</strong> (<em>int</em>) – Number of the class predicted.</p></li>
+<li><p><strong>layer_name</strong> (<em>str</em>) – Keras layer name to extract the features from.</p></li>
+<li><p><strong>out_dir</strong> (<em>str or Path</em>) – Path to save the image on.</p></li>
+<li><p><strong>n_classes</strong> (<em>int</em>) – Total number of classes.</p></li>
 </ul>
 </dd>
 </dl>
@@ -218,7 +225,7 @@ Gradient-based Localization</a>.</p>
 </colgroup>
 <tbody>
 <tr class="row-odd"><td><div class="figure align-center" id="id1">
-<a class="reference internal image-reference" href="../_images/FIBSEM_test_03.png"><img alt="../_images/FIBSEM_test_03.png" src="../_images/FIBSEM_test_03.png" style="width: 80%;" /></a>
+<a class="reference internal image-reference" href="../_images/FIBSEM_test_0.png"><img alt="../_images/FIBSEM_test_0.png" src="../_images/FIBSEM_test_0.png" style="width: 80%;" /></a>
 <p class="caption"><span class="caption-text">Input image</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
 </div>
 </td>
@@ -258,18 +265,18 @@ Gradient-based Localization</a>.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="utils.grad_cam.target_category_loss">
-<code class="sig-prename descclassname">utils.grad_cam.</code><code class="sig-name descname">target_category_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">predicted_class</span></em>, <em class="sig-param"><span class="n">n_classes</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/grad_cam.html#target_category_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.grad_cam.target_category_loss" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="utils.grad_cam.target_category_loss">
+<span class="sig-prename descclassname"><span class="pre">utils.grad_cam.</span></span><span class="sig-name descname"><span class="pre">target_category_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predicted_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_classes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/grad_cam.html#target_category_loss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.grad_cam.target_category_loss" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt id="utils.grad_cam.target_category_loss_output_shape">
-<code class="sig-prename descclassname">utils.grad_cam.</code><code class="sig-name descname">target_category_loss_output_shape</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_shape</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/grad_cam.html#target_category_loss_output_shape"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.grad_cam.target_category_loss_output_shape" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="utils.grad_cam.target_category_loss_output_shape">
+<span class="sig-prename descclassname"><span class="pre">utils.grad_cam.</span></span><span class="sig-name descname"><span class="pre">target_category_loss_output_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/grad_cam.html#target_category_loss_output_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.grad_cam.target_category_loss_output_shape" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt id="utils.grad_cam.normalize">
-<code class="sig-prename descclassname">utils.grad_cam.</code><code class="sig-name descname">normalize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/grad_cam.html#normalize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#utils.grad_cam.normalize" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="utils.grad_cam.normalize">
+<span class="sig-prename descclassname"><span class="pre">utils.grad_cam.</span></span><span class="sig-name descname"><span class="pre">normalize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/utils/grad_cam.html#normalize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#utils.grad_cam.normalize" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </div>
@@ -279,37 +286,29 @@ Gradient-based Localization</a>.</p>
            
           </div>
           <footer>
-  
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-      
-        <a href="util.html" class="btn btn-neutral float-right" title="Util" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
-      
-      
-        <a href="callbacks.html" class="btn btn-neutral float-left" title="Callbacks" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
-      
+        <a href="util.html" class="btn btn-neutral float-right" title="Util" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="callbacks.html" class="btn btn-neutral float-left" title="Callbacks" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
     </div>
-  
 
   <hr/>
 
   <div role="contentinfo">
     <p>
-        
-        &copy; Copyright 2021, Daniel Franco
+        &#169; Copyright 2021, Daniel Franco.
 
     </p>
   </div>
     
     
     
-    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
     
-    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
     
     provided by <a href="https://readthedocs.org">Read the Docs</a>. 
 
 </footer>
-
         </div>
       </div>
 

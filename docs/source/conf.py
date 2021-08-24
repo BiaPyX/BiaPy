@@ -42,7 +42,6 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
     'sphinxcontrib.bibtex',
-    'sphinxcontrib.video',
     'numpydoc'
 ]
 
