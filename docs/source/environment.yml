@@ -1,4 +1,4 @@
-name: prueba_readthedocs
+name: DL_EM_base_env
 channels:
   - conda-forge
   - defaults
@@ -13,10 +13,10 @@ dependencies:
   - blas=1.0=mkl
   - blinker=1.4=py36_0
   - c-ares=1.15.0=h7b6447c_1001
-  - ca-certificates=2020.6.20=hecda079_0
+  - ca-certificates=2021.5.30=ha878542_0
   - cachetools=3.1.1=py_0
   - cairo=1.14.12=h8948797_3
-  - certifi=2020.6.20=py36h9880bd3_2
+  - certifi=2020.6.20=py36_0
   - cffi=1.14.0=py36h2e261b9_0
   - chardet=3.0.4=py36_1003
   - click=7.1.1=py_0
@@ -90,13 +90,12 @@ dependencies:
   - oauthlib=3.1.0=py_0
   - olefile=0.46=py36_0
   - opencv=3.4.1=py36h6fd60c2_1
-  - openssl=1.1.1h=h516909a_0
+  - openssl=1.1.1k=h27cfd23_0
   - opt_einsum=3.1.0=py_0
   - packaging=20.4=py_0
   - pango=1.42.4=h049681c_0
   - pcre=8.43=he6710b0_0
   - pillow=7.0.0=py36hb39fc2d_0
-  - pip=20.2.3=py_0
   - pixman=0.38.0=h7b6447c_0
   - protobuf=3.11.4=py36he6710b0_0
   - pyasn1=0.4.8=py_0
@@ -152,15 +151,25 @@ dependencies:
   - wheel=0.34.2=py36_0
   - wrapt=1.12.1=py36h7b6447c_1
   - xz=5.2.5=h7b6447c_0
+  - yacs=0.1.6=py_0
   - yaml=0.2.5=h516909a_0
   - zlib=1.2.11=h7b6447c_3
   - zstd=1.3.7=h0b5b093_0
   - pip:
+    - dataclasses==0.8
+    - latexcodec==2.0.1
     - numpydoc==1.1.0
     - opencv-python==4.2.0.34
+    - pbr==5.6.0
+    - pip==20.2.3
     - pockets==0.9.1
+    - pybtex==0.24.0
+    - pybtex-docutils==1.0.1
+    - pyyaml==5.4.1
     - sphinx-rtd-theme==0.5.0
+    - sphinxcontrib-bibtex==2.3.0
     - sphinxcontrib-napoleon==0.7
+    - sphinxcontrib-video==0.0.1.dev3
     - texttable==1.6.2
-prefix: /home/dfranco/anaconda3/envs/prueba_readthedocs
+prefix: /home/dfranco/anaconda3/envs/DL_EM_base_env
 
