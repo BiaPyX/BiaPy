@@ -88,7 +88,7 @@ sphinxcontrib-jsmath==1.0.1
 sphinxcontrib-napoleon==0.7
 sphinxcontrib-qthelp==1.0.3
 sphinxcontrib-serializinghtml==1.1.4
-sphinxcontrib-video @ file:///home/dfranco/Documentos/thesis/EM_Image_Segmentation/docs/source/exts/video
+sphinxcontrib-video 
 tensorboard==2.1.0
 tensorflow==2.1.0
 tensorflow-estimator==2.1.0
