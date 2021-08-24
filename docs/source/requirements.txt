@@ -78,7 +78,7 @@ scipy==1.4.1
 Shapely==1.7.0
 six==1.14.0
 snowballstemmer==2.0.0
-Sphinx @ file:///tmp/build/80754af9/sphinx_1597004326341/work
+Sphinx 
 sphinx-rtd-theme==0.5.0
 sphinxcontrib-applehelp==1.0.2
 sphinxcontrib-bibtex==2.3.0
