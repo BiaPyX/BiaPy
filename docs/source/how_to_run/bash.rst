@@ -65,13 +65,13 @@ Using, for instance, `unet_2d.yaml <https://github.com/danifranco/EM_Image_Segme
     # Configuration file
     job_cfg_file=/home/user/unet_2d.yaml       
     # Where the experiment output directory should be created
-    result_dir=/data2/dfranco/exp_results  
+    result_dir=/home/user/exp_results  
     # Path to the dataset
     data_dir=/home/user/dataset  
     # Just a name for the job
     job_name=unet_basic_experiment      
     # Number that should be increased when one need to run the same job multiple times (reproducibility)
-    job_counter=0                  
+    job_counter=1
     # Number of the GPU to run the job in (according to 'nvidia-smi' command
     gpu_number=0                   
 
@@ -86,7 +86,58 @@ Using, for instance, `unet_2d.yaml <https://github.com/danifranco/EM_Image_Segme
            --run_id $job_counter  \
            --gpu $gpu_number  
 
-Step 3: Analizing the results 
+
+Step 4: Analizing the results 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.
+Following the example, you should see that the directory ``/home/user/exp_results/unet_basic_experiment`` has been 
+created. If the same experiment is run 5 times, varying ``--run_id`` argument only, you should find the following 
+directory tree: ::
+
+    unet_basic_experiment/
+    ├── config_files/
+    │   └── unet_2d.yaml                                                                                                           
+    ├── h5_files
+    │   └── model_weights_unet_2d_1.h5
+    └── results
+        ├── unet_2d_1
+        ├── . . .
+        └── unet_2d_5
+            ├── aug
+            │   └── .tif files
+            ├── charts
+            │   ├── unet_2d_1_jaccard_index.png
+            │   ├── unet_2d_1_loss.png
+            │   └── model_plot_unet_2d_1.png
+            ├── check_crop
+            │   └── .tif files
+            ├── full_image
+            │   └── .tif files
+            ├── full_post_processing
+            │   └── .tif files
+            └── per_image
+                └── .tif files
+
+- ``config_files``: directory where the .yaml filed used in the experiment is stored 
+    - unet_2d.yaml: YAML configuration file used (it will be overwrited every time the code is run)
+- ``h5_files``: directory where model's weights are stored 
+    - model_weights_unet_2d_1.h5: model's weights file.
+- ``results``: directory where all the generated checks and results will be stored. There, one folder per each run are going to be placed.
+    - ``unet_2d_1``: run 1 experiment folder. 
+        - ``aug``: image augmentation samples.
+        - ``charts``:  
+             - ``unet_2d_1_jaccard_index.png``: IoU (jaccard_index) over epochs plot (when training is done).
+             - ``unet_2d_1_loss.png``: Loss over epochs plot (when training is done). 
+             - ``model_plot_unet_2d_1.png``: plot of the model.
+        - ``check_crop``: 
+            - ``.tif files``: as there is a process of crop and merge, this files are: crops/patches from a sample file and a representation of the merge process.
+        - ``full_image``: 
+            - ``.tif files``: output of the model when feeding entire images (without patching). 
+        - ``full_post_processing``:
+            - ``.tif files``: output of the model when feeding entire images (without patching) and applying post-processing. 
+        - ``per_image``:
+            - ``.tif files``: predicted patches are combined again to recover the original test image. This folder contains these images. 
+
+.. note:: 
+   Here, for visualization purposes, only ``unet_2d_1`` has been described but ``unet_2d_2``, ``unet_2d_3``, ``unet_2d_4``
+   and ``unet_2d_5`` will follow the same structure.

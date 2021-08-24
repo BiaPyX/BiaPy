@@ -89,6 +89,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#step-1-data-preparation">Step 1: Data preparation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#step-2-choose-a-template">Step 2: Choose a template</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#step-3-run-the-code">Step 3: Run the code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#step-4-analizing-the-results">Step 4: Analizing the results</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="colab.html">Colab</a></li>
@@ -237,13 +238,13 @@ directly a <code class="docutils literal notranslate"><span class="pre">conda</s
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Configuration file</span>
 <span class="nv">job_cfg_file</span><span class="o">=</span>/home/user/unet_2d.yaml
 <span class="c1"># Where the experiment output directory should be created</span>
-<span class="nv">result_dir</span><span class="o">=</span>/data2/dfranco/exp_results
+<span class="nv">result_dir</span><span class="o">=</span>/home/user/exp_results
 <span class="c1"># Path to the dataset</span>
 <span class="nv">data_dir</span><span class="o">=</span>/home/user/dataset
 <span class="c1"># Just a name for the job</span>
 <span class="nv">job_name</span><span class="o">=</span>unet_basic_experiment
 <span class="c1"># Number that should be increased when one need to run the same job multiple times (reproducibility)</span>
-<span class="nv">job_counter</span><span class="o">=</span><span class="m">0</span>
+<span class="nv">job_counter</span><span class="o">=</span><span class="m">1</span>
 <span class="c1"># Number of the GPU to run the job in (according to &#39;nvidia-smi&#39; command</span>
 <span class="nv">gpu_number</span><span class="o">=</span><span class="m">0</span>
 
@@ -258,6 +259,108 @@ python -u main.py <span class="se">\</span>
        --run_id <span class="nv">$job_counter</span>  <span class="se">\</span>
        --gpu <span class="nv">$gpu_number</span>
 </pre></div>
+</div>
+</div>
+<div class="section" id="step-4-analizing-the-results">
+<h2>Step 4: Analizing the results<a class="headerlink" href="#step-4-analizing-the-results" title="Permalink to this headline">¶</a></h2>
+<p>Following the example, you should see that the directory <code class="docutils literal notranslate"><span class="pre">/home/user/exp_results/unet_basic_experiment</span></code> has been
+created. If the same experiment is run 5 times, varying <code class="docutils literal notranslate"><span class="pre">--run_id</span></code> argument only, you should find the following
+directory tree:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>unet_basic_experiment/
+├── config_files/
+│   └── unet_2d.yaml
+├── h5_files
+│   └── model_weights_unet_2d_1.h5
+└── results
+    ├── unet_2d_1
+    ├── . . .
+    └── unet_2d_5
+        ├── aug
+        │   └── .tif files
+        ├── charts
+        │   ├── unet_2d_1_jaccard_index.png
+        │   ├── unet_2d_1_loss.png
+        │   └── model_plot_unet_2d_1.png
+        ├── check_crop
+        │   └── .tif files
+        ├── full_image
+        │   └── .tif files
+        ├── full_post_processing
+        │   └── .tif files
+        └── per_image
+            └── .tif files
+</pre></div>
+</div>
+<ul class="simple">
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">config_files</span></code>: directory where the .yaml filed used in the experiment is stored</dt><dd><ul>
+<li><p>unet_2d.yaml: YAML configuration file used (it will be overwrited every time the code is run)</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">h5_files</span></code>: directory where model’s weights are stored</dt><dd><ul>
+<li><p>model_weights_unet_2d_1.h5: model’s weights file.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">results</span></code>: directory where all the generated checks and results will be stored. There, one folder per each run are going to be placed.</dt><dd><ul>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">unet_2d_1</span></code>: run 1 experiment folder.</dt><dd><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">aug</span></code>: image augmentation samples.</p></li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">charts</span></code>:</dt><dd><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">unet_2d_1_jaccard_index.png</span></code>: IoU (jaccard_index) over epochs plot (when training is done).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">unet_2d_1_loss.png</span></code>: Loss over epochs plot (when training is done).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">model_plot_unet_2d_1.png</span></code>: plot of the model.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">check_crop</span></code>:</dt><dd><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">.tif</span> <span class="pre">files</span></code>: as there is a process of crop and merge, this files are: crops/patches from a sample file and a representation of the merge process.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">full_image</span></code>:</dt><dd><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">.tif</span> <span class="pre">files</span></code>: output of the model when feeding entire images (without patching).</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">full_post_processing</span></code>:</dt><dd><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">.tif</span> <span class="pre">files</span></code>: output of the model when feeding entire images (without patching) and applying post-processing.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">per_image</span></code>:</dt><dd><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">.tif</span> <span class="pre">files</span></code>: predicted patches are combined again to recover the original test image. This folder contains these images.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Here, for visualization purposes, only <code class="docutils literal notranslate"><span class="pre">unet_2d_1</span></code> has been described but <code class="docutils literal notranslate"><span class="pre">unet_2d_2</span></code>, <code class="docutils literal notranslate"><span class="pre">unet_2d_3</span></code>, <code class="docutils literal notranslate"><span class="pre">unet_2d_4</span></code>
+and <code class="docutils literal notranslate"><span class="pre">unet_2d_5</span></code> will follow the same structure.</p>
 </div>
 </div>
 </div>
