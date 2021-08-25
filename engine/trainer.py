@@ -266,16 +266,16 @@ class Trainer(object):
                 _X = np.expand_dims(X[j],0)
                 _Y = np.expand_dims(Y[j],0) if self.cfg.DATA.TEST.LOAD_GT else None
                 if self.cfg.PROBLEM.NDIM == '3D':
-                    # Convert to (z, x, y, c)
-                    _X = _X[0].transpose((2,0,1,3))
-                    if gt: _Y = _Y[0].transpose((2,0,1,3))
+                    # Convert to (num_images, z, x, y, c)
+                    _X = _X.transpose((0,3,1,2,4))
+                    if gt: _Y = _Y.transpose((0,3,1,2,4))
 
                 #################
                 ### PER PATCH ###
                 #################
                 if self.cfg.TEST.STATS.PER_PATCH:
-                    original_data_shape = _X.shape
-                    if _X.shape != self.cfg.DATA.PATCH_SIZE:
+                    original_data_shape = _X.shape[1:]
+                    if _X.shape[1:] != self.cfg.DATA.PATCH_SIZE:
                         if self.cfg.PROBLEM.NDIM == '2D':
                             obj = crop_data_with_overlap(_X, self.cfg.DATA.PATCH_SIZE, data_mask=_Y,
                                 overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING, verbose=False)
@@ -284,14 +284,17 @@ class Trainer(object):
                             else:   
                                 X_test = obj
                         else:
-                            obj = crop_3D_data_with_overlap(_X, self.cfg.DATA.PATCH_SIZE, data_mask=_Y, 
+                            obj = crop_3D_data_with_overlap(_X[0], self.cfg.DATA.PATCH_SIZE, data_mask=_Y, 
                                 overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING, verbose=True,
                                 median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
                             if self.cfg.DATA.TEST.LOAD_GT:
                                 X_test, Y_test = obj
                             else:
                                 X_test = obj
-                  
+                    else:
+                        X_test = _X
+                        if self.cfg.DATA.TEST.LOAD_GT: Y_test = _Y
+
                     # Evaluate each patch
                     if self.cfg.DATA.TEST.LOAD_GT:
                         l = int(math.ceil(X_test.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
@@ -369,63 +372,68 @@ class Trainer(object):
                                 save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, filenames)               
                             else:                                                                                               
                                 save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, filenames)
-                    
-                        if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-                            # Create instances 
-                            print("Creating instances with watershed . . .")
-                            if self.cfg.DATA.CHANNELS == "BC":
-                                pred = bc_watershed(pred, thres1=self.cfg.DATA.MW_TH1, thres2=self.cfg.DATA.MW_TH2,
-                                    thres3=self.cfg.DATA.MW_TH3, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
-                                    save_dir=self.cfg.PATHS.WATERSHED_DIR)
-                            else:
-                                pred = bcd_watershed(pred, thres1=self.cfg.DATA.MW_TH1, thres2=self.cfg.DATA.MW_TH2,
-                                    thres3=self.cfg.DATA.MW_TH3, thres4=self.cfg.DATA.MW_TH4, thres5=self.cfg.DATA.MW_TH5,
-                                    thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, save_dir=self.cfg.PATHS.WATERSHED_DIR)
+                
+                    #############################                                                                               
+                    ### INSTANCE SEGMENTATION ###
+                    #############################  
+                    if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
+                        # Create instances 
+                        print("Creating instances with watershed . . .")
+                        if self.cfg.DATA.CHANNELS == "BC":
+                            pred = bc_watershed(pred, thres1=self.cfg.DATA.MW_TH1, thres2=self.cfg.DATA.MW_TH2,
+                                thres3=self.cfg.DATA.MW_TH3, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
+                                save_dir=self.cfg.PATHS.WATERSHED_DIR)
+                        else:
+                            pred = bcd_watershed(pred, thres1=self.cfg.DATA.MW_TH1, thres2=self.cfg.DATA.MW_TH2,
+                                thres3=self.cfg.DATA.MW_TH3, thres4=self.cfg.DATA.MW_TH4, thres5=self.cfg.DATA.MW_TH5,
+                                thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, save_dir=self.cfg.PATHS.WATERSHED_DIR)
+                                            
+                        save_tif(np.expand_dims(pred,-1), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, filenames)                
 
-                        if self.cfg.TEST.MAP and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
-                            print("####################\n"                                            
-                                  "#  mAP Calculation #\n"
-                                  "####################\n")  
-                            # Convert the prediction into an .h5 file   
-                            os.makedirs(self.cfg.PATHS.MAP_H5_DIR, exist_ok=True)
-                            filenames = self.test_mask_filenames[(i*X.shape[0])+j:(i*X.shape[0])+j+1]
-                            h5file_name = os.path.join(self.cfg.PATHS.MAP_H5_DIR, os.path.splitext(filenames[0])[0]+'.h5')
-                            print("Creating prediction h5 file to calculate mAP: {}".format(h5file_name))
-                            h5f = h5py.File(h5file_name, 'w')                                               
-                            h5f.create_dataset('dataset', data=pred, compression="lzf")             
-                            h5f.close()       
+                    if self.cfg.TEST.MAP and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+                        print("####################\n"                                            
+                              "#  mAP Calculation #\n"
+                              "####################\n")  
+                        # Convert the prediction into an .h5 file   
+                        os.makedirs(self.cfg.PATHS.MAP_H5_DIR, exist_ok=True)
+                        filenames = self.test_mask_filenames[(i*X.shape[0])+j:(i*X.shape[0])+j+1]
+                        h5file_name = os.path.join(self.cfg.PATHS.MAP_H5_DIR, os.path.splitext(filenames[0])[0]+'.h5')
+                        print("Creating prediction h5 file to calculate mAP: {}".format(h5file_name))
+                        h5f = h5py.File(h5file_name, 'w')                                               
+                        h5f.create_dataset('dataset', data=pred, compression="lzf")             
+                        h5f.close()       
+                        
+                        # Prepare mAP call
+                        sys.path.insert(0, self.cfg.PATHS.MAP_CODE_DIR)                                                  
+                        from demo_modified import main as mAP_calculation    
+                        class Namespace:                                                                
+                            def __init__(self, **kwargs):                                               
+                                self.__dict__.update(kwargs)                                            
+                                                               
+                        # Create GT H5 file if it does not exist 
+                        gt_f = os.path.join(self.cfg.PATHS.TEST_FULL_GT_H5, os.path.splitext(filenames[0])[0]+'.h5')
+                        test_file = os.path.join(self.cfg.PATHS.TEST_FULL_GT_H5, filenames[0])
+                        if not os.path.isfile(gt_f):
+                            print("GT .h5 file needed for mAP calculation is not found in {} so it will be created "
+                                  "from its mask: {}".format(gt_f, test_file))
+                    
+                            if not os.path.isfile(test_file):
+                                raise ValueError("The mask is supossed to have the same name as the image")
+                    
+                            Y_test = imread(test_file).squeeze()
                             
-                            # Prepare mAP call
-                            sys.path.insert(0, self.cfg.PATHS.MAP_CODE_DIR)                                                  
-                            from demo_modified import main as mAP_calculation    
-                            class Namespace:                                                                
-                                def __init__(self, **kwargs):                                               
-                                    self.__dict__.update(kwargs)                                            
-                                                                   
-                            # Create GT H5 file if it does not exist 
-                            gt_f = os.path.join(self.cfg.PATHS.TEST_FULL_GT_H5, os.path.splitext(filenames[0])[0]+'.h5')
-                            test_file = os.path.join(self.cfg.PATHS.TEST_FULL_GT_H5, filenames[0])
-                            if not os.path.isfile(gt_f):
-                                print("GT .h5 file needed for mAP calculation is not found in {} so it will be created "
-                                      "from its mask: {}".format(gt_f, test_file))
-                        
-                                if not os.path.isfile(test_file):
-                                    raise ValueError("The mask is supossed to have the same name as the image")
-                        
-                                Y_test = imread(test_file).squeeze()
-                                
-                                print("Saving .h5 GT data from array shape: {}".format(Y_test.shape))
-                                os.makedirs(self.cfg.PATHS.TEST_FULL_GT_H5, exist_ok=True)
-                                h5f = h5py.File(gt_f, 'w')                                           
-                                h5f.create_dataset('dataset', data=Y_test, compression="lzf")                 
-                                h5f.close() 
-                                del Y_test
-                        
-                            # Calculate mAP
-                            args = Namespace(gt_seg=gt_f, predict_seg=h5file_name, predict_score='', threshold="5e3, 3e4",
-                                             threshold_crumb=64, chunk_size=250, output_name=self.cfg.PATHS.RESULT_DIR.PATH,
-                                             do_txt=1, do_eval=1, slices="-1")
-                            mAP_calculation(args)
+                            print("Saving .h5 GT data from array shape: {}".format(Y_test.shape))
+                            os.makedirs(self.cfg.PATHS.TEST_FULL_GT_H5, exist_ok=True)
+                            h5f = h5py.File(gt_f, 'w')                                           
+                            h5f.create_dataset('dataset', data=Y_test, compression="lzf")                 
+                            h5f.close() 
+                            del Y_test
+                    
+                        # Calculate mAP
+                        args = Namespace(gt_seg=gt_f, predict_seg=h5file_name, predict_score='', threshold="5e3, 3e4",
+                                         threshold_crumb=64, chunk_size=250, output_name=self.cfg.PATHS.RESULT_DIR.PATH,
+                                         do_txt=1, do_eval=1, slices="-1")
+                        mAP_calculation(args)
 
                 ##################                                                                                       
                 ### FULL IMAGE ###

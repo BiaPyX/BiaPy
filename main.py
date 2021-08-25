@@ -93,8 +93,8 @@ if __name__ == '__main__':
         raise ValueError("When PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be lenght {}, given {}."                
                          .format(cfg.PROBLEM.NDIM, count+1, cfg.DATA.PATCH_SIZE))
     
-    if not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.MERGE_PATCHES and not cfg.TEST.STATS.FULL_IMG:
-        raise ValueError("One between 'TEST.STATS.PER_PATCH', 'TEST.STATS.MERGE_PATCHES' or 'TEST.STATS.FULL_IMG' need to be True")
+    if not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.FULL_IMG:
+        raise ValueError("One between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.FULL_IMG' need to be True")
 
     if cfg.PROBLEM.NDIM == '3D' and not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.MERGE_PATCHES:
         raise ValueError("One between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.MERGE_PATCHES' need to be True when 'PROBLEM.NDIM'=='3D'")
@@ -107,7 +107,7 @@ if __name__ == '__main__':
     if cfg.PROBLEM.NDIM == '3D' and cfg.TEST.STATS.FULL_IMG:
         print("WARNING: cfg.TEST.STATS.FULL_IMG == True while using PROBLEM.NDIM == '3D'. As 3D images are usually 'huge'"
               ", full image statistics will be disabled to avoid GPU memory overflow")
-    
+
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and cfg.DATA.CHANNELS == "B":
         raise ValueError("DATA.CHANNELS must be 'BC' or 'BCD' when PROBLEM.TYPE == 'INSTANCE_SEG'")
 
