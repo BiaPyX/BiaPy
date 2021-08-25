@@ -1,8 +1,0 @@
-Fu et. al (MNet)
-----------------
-
-.. toctree::
-   :maxdepth: 1
-   :glob:
-
-   *

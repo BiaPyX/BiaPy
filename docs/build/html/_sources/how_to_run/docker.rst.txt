@@ -1,5 +1,0 @@
-Docker container
-----------------
-
-Under construction ...
-
