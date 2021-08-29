@@ -70,7 +70,8 @@ def create_test_instance_channels(cfg):
     np.save(cfg.DATA.TEST.INSTANCE_CHANNELS_FILE, X_test)                                                      
     
     if cfg.DATA.TEST.LOAD_GT:                                                                                   
-        Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH)                                                          
+        Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
+                              overlap=cfg.DATA.TEST.OVERLAP, padding=cfg.DATA.TEST.PADDING)
         Y_test = labels_into_bcd(Y_test, mode=cfg.DATA.CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
                                  fb_mode=cfg.DATA.CONTOUR_MODE)                                                
         os.makedirs(cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR, exist_ok=True)                                    
