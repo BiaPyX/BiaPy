@@ -41,7 +41,7 @@ def prepare_optimizer(cfg, model):
             if cfg.DATA.CHANNELS == "B" or cfg.DATA.CHANNELS == "BC":
                 model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
             else:
-                model.compile(optimizer=opt, loss=instance_segmentation_loss(channel_weights, output_channels),
+                model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
                               metrics=[jaccard_index_instances])
     elif cfg.LOSS.TYPE == "W_CE_DICE" and cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
         model.compile(optimizer=opt, loss=weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33), metrics=[jaccard_index])
