@@ -5,7 +5,7 @@ from tqdm import tqdm
 from utils.util import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif
 from data.generators.data_2D_generator import ImageDataGenerator                                                     
 from data.generators.data_3D_generator import VoxelDataGenerator 
-from data.generators.simple_data_generators import simple_3D_data_generator
+from data.generators.simple_data_generators import simple_data_generator
 
 
 def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
@@ -112,20 +112,11 @@ def create_test_augmentor(cfg, X_test, Y_test):
                                                                                                                         
        Returns                                                                                                          
        -------                                                                                                          
-       test_generator : ImageDataGenerator (2D) or VoxelDataGenerator (3D)                                             
+       test_generator : simple_data_generator 
            Test data generator.                                                                                     
     """  
-    if cfg.DATA.TEST.LOAD_GT:
-        f_name = ImageDataGenerator if cfg.PROBLEM.NDIM == '2D' else VoxelDataGenerator
-        test_generator = f_name(X=X_test, Y=Y_test, batch_size=1, data_paths=[cfg.DATA.TEST.PATH, cfg.DATA.TEST.MASK_PATH],
-            in_memory=cfg.DATA.TEST.IN_MEMORY, da=False, shape=cfg.DATA.PATCH_SIZE, random_crops_in_DA=False, val=True,
-            n_classes=cfg.MODEL.N_CLASSES, seed=cfg.SYSTEM.SEED)
-    else:
-        if cfg.PROBLEM.NDIM == '2D':
-            raise ValueError("Not implemented pipeline option: no test data labels when PROBLEM.NDIM == '2D'")
-        else:
-            test_generator = simple_3D_data_generator(
-                X=X_test, d_path=cfg.DATA.TEST.PATH, batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED)
+    test_generator = simple_data_generator(X=X_test, d_path=cfg.DATA.TEST.PATH, Y=Y_test,
+        dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, dims=cfg.PROBLEM.NDIM, seed=cfg.SYSTEM.SEED)
     return test_generator
 
 

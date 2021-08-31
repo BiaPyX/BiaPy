@@ -3,21 +3,21 @@ import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping
 
 from utils.callbacks import ModelCheckpoint, TimeHistory
-from engine.metrics import (jaccard_index, jaccard_index_softmax, jaccard_index_instances, 
+from engine.metrics import (jaccard_index, jaccard_index_softmax, jaccard_index_instances,
                             instance_segmentation_loss, weighted_bce_dice_loss)
 
 
 def prepare_optimizer(cfg, model):
     """Select the optimizer, loss and metrics for the given model.
-                                                                                                                        
-       Parameters                                                                                                       
-       ----------                                                                                                       
-       cfg : YACS CN object                                                                               
-           Configuration.                                                                                         
-                                                                                                                        
+
+       Parameters
+       ----------
+       cfg : YACS CN object
+           Configuration.
+
        model : Keras model
-           Model to be compiled with the selected options. 
-    """      
+           Model to be compiled with the selected options.
+    """
 
     assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM']
     assert cfg.LOSS.TYPE in ['CE', 'W_CE_DICE']
@@ -34,8 +34,8 @@ def prepare_optimizer(cfg, model):
             model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=[jaccard_index_softmax])
         else:
             model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
-    elif cfg.LOSS.TYPE == "CE" and cfg.PROBLEM.TYPE == "INSTANCE_SEG": 
-        if cfg.MODEL.N_CLASSES > 1: 
+    elif cfg.LOSS.TYPE == "CE" and cfg.PROBLEM.TYPE == "INSTANCE_SEG":
+        if cfg.MODEL.N_CLASSES > 1:
             raise ValueError("Not implemented pipeline option: N_CLASSES > 1 and INSTANCE_SEG")
         else:
             if cfg.DATA.CHANNELS == "B" or cfg.DATA.CHANNELS == "BC":
@@ -47,21 +47,21 @@ def prepare_optimizer(cfg, model):
         model.compile(optimizer=opt, loss=weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33), metrics=[jaccard_index])
     elif cfg.LOSS.TYPE == "W_CE_DICE" and cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         raise ValueError("Not implemented pipeline option: LOSS.TYPE == W_CE_DICE and INSTANCE_SEG")
-                                                                                                                        
+
 
 def build_callbacks(cfg):
-    """Create training and validation generators.                                                                       
-                                                                                                                        
-       Parameters                                                                                                       
-       ----------                                                                                                       
-       cfg : YACS CN object                                                                               
-           Configuration.                                                                                         
+    """Create training and validation generators.
 
-       Returns                                                                                                          
-       -------                                                                                                          
+       Parameters
+       ----------
+       cfg : YACS CN object
+           Configuration.
+
+       Returns
+       -------
        callbacks : List of callbacks
            All callbacks to be applied to a model.
-    """      
+    """
 
     callbacks = []
 

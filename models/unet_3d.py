@@ -1,7 +1,7 @@
 import tensorflow as tf
+from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import (Dropout, SpatialDropout3D, Conv3D, Conv3DTranspose, MaxPooling3D, concatenate,
                                      ELU, BatchNormalization, Activation, ZeroPadding3D)
-from tensorflow.keras import Model, Input
 
 
 def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
@@ -10,39 +10,39 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
 
        Parameters
        ----------
-       image_shape : 3D tuple
-           Dimensions of the input image.
+       image_shape : 4D tuple
+           Dimensions of the input image. E.g. ``(x, y, z, channels)``
 
        activation : str, optional
            Keras available activation type.
 
        feature_maps : array of ints, optional
-           Feature maps to use on each level. 
-   
+           Feature maps to use on each level.
+
        drop_values : float, optional
-           Dropout value to be fixed. 
+           Dropout value to be fixed.
 
        spatial_dropout : bool, optional
            Use spatial dropout instead of the `normal` dropout.
 
        batch_norm : bool, optional
            Make batch normalization.
-    
+
        k_init : string, optional
            Kernel initialization for convolutional layers.
 
        z_down : int, optional
            Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
 
-       n_classes: int, optional                                                 
-           Number of classes.    
+       n_classes: int, optional
+           Number of classes.
 
        Returns
        -------
        model : Keras model
            Model containing the U-Net.
 
-    
+
        Calling this function with its default parameters returns the following network:
 
        .. image:: ../img/unet_3d.png
@@ -61,14 +61,14 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
     x = inputs
     #x = Input(image_shape)
     #inputs = x
-        
+
     # List used to access layers easily to make the skip connections of the U-Net
     l=[]
 
     # ENCODER
     for i in range(depth):
         x = Conv3D(feature_maps[i], (3, 3, 3), activation=None, kernel_initializer=k_init, padding='same') (x)
-        x = BatchNormalization() (x) if batch_norm else x 
+        x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
 
         if spatial_dropout and drop_values[i] > 0:
@@ -77,11 +77,11 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
             x = Dropout(drop_values[i]) (x)
 
         x = Conv3D(feature_maps[i], (3, 3, 3), activation=None, kernel_initializer=k_init, padding='same') (x)
-        x = BatchNormalization() (x) if batch_norm else x 
+        x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
 
         l.append(x)
-    
+
         x = MaxPooling3D((2, 2, z_down))(x)
 
     # BOTTLENECK
@@ -117,7 +117,7 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
         x = Activation(activation) (x)
 
     outputs = Conv3D(n_classes, (1, 1, 1), activation='sigmoid') (x)
-    
-    model = Model(inputs=[inputs], outputs=[outputs]) 
-    
+
+    model = Model(inputs=[inputs], outputs=[outputs])
+
     return model

@@ -144,26 +144,11 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
     create_val = True if val_split > 0 else False
 
     print("0) Loading train images . . .")
-    if not os.path.isfile(train_path):
-        X_train, orig_train_shape, _, _ = load_data_from_dir(train_path, crop=crop, crop_shape=crop_shape, overlap=ov,
-                                                             padding=padding, return_filenames=True)
-    else:
-        X_train = np.load(train_path)   
-        orig_train_shape = [X_train.shape[1:]]*X_train.shape[0]
-        t_filenames = None
-        if crop and X_train[0].shape != crop_shape[:2]+(X_train.shape[-1],):
-            X_train = crop_data_with_overlap(
-                X_train, crop_shape[:2]+(X_train.shape[-1],), overlap=ov, padding=padding, verbose=False)
-
+    X_train, orig_train_shape, _, _ = load_data_from_dir(train_path, crop=crop, crop_shape=crop_shape, overlap=ov,
+                                                         padding=padding, return_filenames=True)
     print("1) Loading train masks . . .")
-    if not os.path.isfile(train_mask_path):
-        Y_train, _, _, t_filenames = load_data_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
-                                                        padding=padding, return_filenames=True)
-    else:
-        Y_train = np.load(train_mask_path)
-        if crop and Y_train[0].shape != crop_shape[:2]+(Y_train.shape[-1],):
-            Y_train = crop_data_with_overlap(
-                Y_train, crop_shape[:2]+(Y_train.shape[-1],), overlap=ov, padding=padding, verbose=False)
+    Y_train, _, _, t_filenames = load_data_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
+                                                    padding=padding, return_filenames=True)
 
     if num_crops_per_dataset != 0:
         X_train = X_train[:num_crops_per_dataset]

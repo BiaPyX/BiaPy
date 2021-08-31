@@ -1,8 +1,8 @@
 import time
 import os
-import distutils                                                                                                        
-import tensorflow as tf                                                                                                 
-import numpy as np 
+import distutils
+import tensorflow as tf
+import numpy as np
 from tensorflow.keras import backend as K
 from skimage import measure
 from distutils import dir_util
@@ -42,7 +42,7 @@ def jaccard_index_numpy(y_true, y_pred):
 
 
 def jaccard_index_numpy_without_background(y_true, y_pred):
-    """Define Jaccard index excluding the background class (first channel). 
+    """Define Jaccard index excluding the background class (first channel).
 
        Parameters
        ----------
@@ -157,8 +157,8 @@ def jaccard_index_softmax(y_true, y_pred, t=0.5):
     """
 
     y_pred_ = tf.cast(y_pred > t, dtype=tf.int32)
-    y_pred_ = tf.math.argmax(y_pred_, axis=-1)    
-    
+    y_pred_ = tf.math.argmax(y_pred_, axis=-1)
+
     y_true_ = tf.cast(y_true, dtype=tf.int32)
     y_true_ = tf.math.argmax(y_true_, axis=-1)
 
@@ -222,7 +222,7 @@ def jaccard_loss(y_true, y_pred):
     """
 
     numerator = tf.reduce_sum(y_true * y_pred)
-    denominator = tf.reduce_sum(y_true + y_pred) - numerator 
+    denominator = tf.reduce_sum(y_true + y_pred) - numerator
 
     jac =  numerator / (denominator + tf.keras.backend.epsilon())
 
@@ -231,19 +231,19 @@ def jaccard_loss(y_true, y_pred):
 
 def dice_coeff(y_true, y_pred):
     """Dice coefficient.
-        
+
        Based on `image_segmentation.ipynb <https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb>`_.
-    
+
        Parameters
-       ----------                                                                    
+       ----------
        y_true : Tensor
-           Ground truth masks.                                
-                                                                                
+           Ground truth masks.
+
        y_pred : Tensor
            Predicted masks.
 
        Returns
-       -------                                                                  
+       -------
        score : Tensor
            Dice coefficient value.
     """
@@ -263,15 +263,15 @@ def dice_loss(y_true, y_pred):
        Based on `image_segmentation.ipynb <https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb>`_.
 
        Parameters
-       ----------                                                                    
+       ----------
        y_true : Tensor
-           Ground truth masks.                                
-                                                                                
+           Ground truth masks.
+
        y_pred : Tensor
            Predicted masks.
 
        Returns
-       -------                                                                  
+       -------
        loss : Tensor
            Loss value.
     """
@@ -281,8 +281,8 @@ def dice_loss(y_true, y_pred):
 
 
 def bce_dice_loss(y_true, y_pred):
-    """Loss function based on the combination of BCE and Dice.                  
-                                                                                
+    """Loss function based on the combination of BCE and Dice.
+
        Based on `image_segmentation.ipynb <https://colab.research.google.com/github/tensorflow/models/blob/master/samples/outreach/blogs/segmentation_blogpost/image_segmentation.ipynb>`_.
 
        Parameters
@@ -291,7 +291,7 @@ def bce_dice_loss(y_true, y_pred):
            Ground truth.
 
        y_pred : Numpy array
-           Predictions. 
+           Predictions.
 
        Returns
        -------
@@ -316,7 +316,7 @@ def weighted_bce_dice_loss(w_dice=0.5, w_bce=0.5):
            Weight to be applied to BCE.
 
        Returns
-       -------                                                                  
+       -------
        loss : Tensor
            Loss value.
     """
@@ -351,7 +351,7 @@ def voc_calculation(y_true, y_pred, foreground):
     y_pred[y_pred == 1] = 0
     y_pred[y_pred == 2] = 1
 
-    y_true[y_true == 0] = 2 
+    y_true[y_true == 0] = 2
     y_true[y_true == 1] = 0
     y_true[y_true == 2] = 1
 
@@ -372,7 +372,7 @@ def voc_calculation(y_true, y_pred, foreground):
 
 def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig, job_id="0"):
     """Cell tracking challenge detection accuracy (DET) calculation. This function uses the binary provided by the
-       challenge to detect the cell and it needs to store the images into some folders. 
+       challenge to detect the cell and it needs to store the images into some folders.
 
        To obtain more info please visit the following link:
 
@@ -397,15 +397,15 @@ def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig, job_
            Path where the evaluation of the metric will be done.
 
        det_bin : str
-           Path to the DET binary provided by the cell tracking challenge.      
+           Path to the DET binary provided by the cell tracking challenge.
 
-       n_dig : int  
+       n_dig : int
            The number of digits used for encoding temporal indices (e.g., ``3``). Used by the DET calculation binary,
            more info `here <https://public.celltrackingchallenge.net/documents/Evaluation%20software.pdf>`_.
 
        job_id : str, optional
            Id of the job. Necessary to store the images on a location based on this string.
-           
+
        Returns
        -------
        det : float
@@ -417,7 +417,7 @@ def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig, job_
     if not os.path.exists(ge_path):
         print("No ground truth folder detected. Creating it . . .")
         os.makedirs(ge_path, exist_ok=True)
-    
+
         gt_labels = measure.label(Y_test[:,:,:,0])
         for i in range(0,len(gt_labels)):
             i_dig = "{:0" + n_dig + "d}"
@@ -425,15 +425,15 @@ def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig, job_
             im = Image.fromarray(gt_labels[i].astype('uint8'))
             im = im.convert('I;16')
             im.save(os.path.join(ge_path, "man_track" + str(i_dig) + ".tif"))
-   
+
     # Copy ground truth folder
     gt_eval_path = os.path.join(eval_path, job_id + '_GT', 'TRA')
     distutils.dir_util.copy_tree(ge_path, gt_eval_path)
-  
-    # Create results folder 
+
+    # Create results folder
     res_eval_path = os.path.join(eval_path, job_id + '_RES')
     os.makedirs(res_eval_path, exist_ok=True)
-    
+
     res_labels = measure.label(preds_test[:,:,:,0])
     for i in range(0,len(res_labels)):
         i_dig = "{:0" + n_dig + "d}"
@@ -441,12 +441,12 @@ def DET_calculation(Y_test, preds_test, ge_path, eval_path, det_bin, n_dig, job_
         im = Image.fromarray(res_labels[i].astype('uint8'))
         im = im.convert('I;16')
         im.save(os.path.join(res_eval_path, "mask" + str(i_dig) + ".tif"))
-   
-    # Execute the metric with the given binary path 
+
+    # Execute the metric with the given binary path
     det_cmd = det_bin + " " + eval_path +  " " + job_id + " " + n_dig
     det_out = os.popen(det_cmd).read()
 
-    det = det_out.split()[2] 
+    det = det_out.split()[2]
     return det
 
 
@@ -459,16 +459,16 @@ def binary_crossentropy_weighted(weights):
        Parameters
        ----------
        weights : float
-           Weigth to multiply the BCE value by.   
-       
+           Weigth to multiply the BCE value by.
+
        Returns
-       -------                                                                  
+       -------
        loss : Tensor
            Loss value.
     """
-    def loss(y_true, y_pred): 
+    def loss(y_true, y_pred):
         return K.mean(weights * K.binary_crossentropy(y_true, y_pred), axis=-1)
-    
+
     return loss
 
 
@@ -496,7 +496,7 @@ def instance_segmentation_loss(weights=(1,0.2), out_channels="BC"):
 
 
 def masked_mse(y_true, y_pred, mask):
-    """Apply MSE just in the pixels denoted by ``mask`` variable. 
+    """Apply MSE just in the pixels denoted by ``mask`` variable.
 
        Parameters
        ----------
@@ -512,7 +512,7 @@ def masked_mse(y_true, y_pred, mask):
        Returns
        -------
        value : Tensor
-           MSE value. 
+           MSE value.
     """
 
     return K.mean(tf.expand_dims(mask*K.square(y_true - y_pred), -1), axis=-1)

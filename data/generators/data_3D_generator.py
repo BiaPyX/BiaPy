@@ -288,7 +288,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.len = len(self.data_paths)
             
             # Check if a division is required 
-            img = imread(os.path.join(data_paths[0], self.data_paths[0]))
+            if self.data_paths[0].endswith('.npy'):                                                     
+                img = np.load(os.path.join(data_paths[0], self.data_paths[0]))                          
+            else:
+                img = imread(os.path.join(data_paths[0], self.data_paths[0]))
             if img.ndim == 3: img = np.expand_dims(img, -1)
             img = img.transpose((1,2,0,3))
             self.div_X_on_load = True if np.max(img) > 100 else False
@@ -297,7 +300,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.div_Y_on_load = False
             self.first_no_bin_channel = -1
             for i in range(min(10,len(self.data_mask_path))):
-                img = imread(os.path.join(data_paths[1], self.data_mask_path[i]))   
+                if self.data_mask_path[i].endswith('.npy'):                                                             
+                    img = np.load(os.path.join(self.paths[1], self.data_mask_path[i]))                                  
+                else:
+                    img = imread(os.path.join(data_paths[1], self.data_mask_path[i]))   
                 if np.max(img) > 100: self.div_Y_on_load = True 
                 if img.ndim == 3: img = np.expand_dims(img, -1)
                 # Store wheter all channels of the gt are binary or not             
@@ -505,8 +511,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 img = self.X[j]
                 mask = self.Y[j]
             else:
-                img = imread(os.path.join(self.paths[0], self.data_paths[j])) 
-                mask = imread(os.path.join(self.paths[1], self.data_mask_path[j])) 
+                if self.data_paths[j].endswith('.npy'):                                                             
+                    img = np.load(os.path.join(self.paths[0], self.data_paths[j]))                                  
+                    mask = np.load(os.path.join(self.paths[1], self.data_mask_path[j]))                             
+                else:
+                    img = imread(os.path.join(self.paths[0], self.data_paths[j])) 
+                    mask = imread(os.path.join(self.paths[1], self.data_mask_path[j])) 
                 if img.ndim == 3: img = np.expand_dims(img, -1)
                 if mask.ndim == 3: mask = np.expand_dims(mask, -1)
                 img = img.transpose((1,2,0,3))
@@ -534,8 +544,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     e_img = self.X[extra_img]                                   
                     e_mask = self.Y[extra_img]
                 else:
-                    e_img = imread(os.path.join(self.paths[0], self.data_paths[extra_img]))
-                    e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
+                    if self.data_paths[extra_img].endswith('.npy'):                                                             
+                        e_img = np.load(os.path.join(self.paths[0], self.data_paths[extra_img]))                                  
+                        e_mask = np.load(os.path.join(self.paths[1], self.data_mask_path[extra_img]))                             
+                    else:
+                        e_img = imread(os.path.join(self.paths[0], self.data_paths[extra_img]))
+                        e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
                     if e_img.ndim == 3: e_img = np.expand_dims(e_img, -1)                 
                     if e_mask.ndim == 3: e_mask = np.expand_dims(e_mask, -1)
                     e_img = e_img.transpose((1,2,0,3))
@@ -736,8 +750,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 img = self.X[pos]
                 mask = self.Y[pos]
             else:
-                img = imread(os.path.join(self.paths[0], self.data_paths[pos]))
-                mask = imread(os.path.join(self.paths[1], self.data_mask_path[pos]))
+                if self.data_paths[pos].endswith('.npy'):                                                             
+                    img = np.load(os.path.join(self.paths[0], self.data_paths[pos]))                                  
+                    mask = np.load(os.path.join(self.paths[1], self.data_mask_path[pos]))
+                else:
+                    img = imread(os.path.join(self.paths[0], self.data_paths[pos]))
+                    mask = imread(os.path.join(self.paths[1], self.data_mask_path[pos]))
                 if img.ndim == 3: img = np.expand_dims(img, -1)
                 if mask.ndim == 3: mask = np.expand_dims(mask, -1)
                 img = img.transpose((1,2,0,3))
@@ -780,8 +798,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     e_img = self.X[extra_img]                                   
                     e_mask = self.Y[extra_img]
                 else:
-                    e_img = imread(os.path.join(self.paths[0], self.data_paths[extra_img]))
-                    e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
+                    if self.data_paths[extra_img].endswith('.npy'):                                                             
+                        e_img = np.load(os.path.join(self.paths[0], self.data_paths[extra_img]))                                  
+                        e_mask = np.load(os.path.join(self.paths[1], self.data_mask_path[extra_img]))                             
+                    else:
+                        e_img = imread(os.path.join(self.paths[0], self.data_paths[extra_img]))
+                        e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
                     if e_img.ndim == 3: e_img = np.expand_dims(e_img, -1)                 
                     if e_mask.ndim == 3: e_mask = np.expand_dims(e_mask, -1)
                     e_img = e_img.transpose((1,2,0,3))

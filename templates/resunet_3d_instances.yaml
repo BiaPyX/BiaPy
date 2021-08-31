@@ -54,6 +54,7 @@ TRAIN:
   
 TEST:
     ENABLE: True
+    VERBOSE: False
     AUGMENTATION: False
     STATS:
         PER_PATCH: True

@@ -93,30 +93,16 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
     create_val = True if val_split > 0 else False
 
     print("0) Loading train images . . .")
-    if not os.path.isfile(train_path):
-        X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, crop=crop, crop_shape=crop_shape,
-            overlap=ov, return_filenames=True)
-    else:
-        X_train = np.load(train_path)                                                                                   
-        t_filenames = None                                                                                              
-        if X_train.ndim == 4 and crop and X_train[0].shape != crop_shape[:3]+(X_train.shape[-1],):                                            
-            X_train = crop_3D_data_with_overlap(                                                                           
-                X_train, crop_shape[:3]+(X_train.shape[-1],), overlap=ov, padding=padding, verbose=True)
+    X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, crop=crop, crop_shape=crop_shape,
+                                                         overlap=ov, return_filenames=True)
     
     print("1) Loading train masks . . .")
-    if not os.path.isfile(train_mask_path):
-        Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov)
-    else:
-        Y_train = np.load(train_mask_path)                                                                              
-        if Y_train.ndim == 4 and crop and Y_train[0].shape != crop_shape[:3]+(Y_train.shape[-1],):                                            
-            Y_train = crop_data_with_overlap(                                                                           
-                Y_train, crop_shape[:3]+(Y_train.shape[-1],), overlap=ov, padding=padding, verbose=False)
+    Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov)
 
     # Create validation data splitting the train
     if create_val:
         X_train, X_val, \
-        Y_train, Y_val = train_test_split(X_train, Y_train, test_size=val_split, shuffle=shuffle_val,
-            random_state=seed)
+        Y_train, Y_val = train_test_split(X_train, Y_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
 
     # Convert the original volumes as they were a unique subvolume
     if random_crops_in_DA and X_train.ndim == 4:                                                 
@@ -214,6 +200,9 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
     """
     if data.ndim != 4:
         raise ValueError("data expected to be 4 dimensional, given {}".format(data.shape))
+    if data_mask is not None:
+        if data_mask.ndim != 4:
+            raise ValueError("data_mask expected to be 4 dimensional, given {}".format(data_mask.shape))
     if len(vol_shape) != 4:
         raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
     if data.shape[0] < vol_shape[0]:    
