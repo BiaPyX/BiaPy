@@ -1,5 +1,5 @@
-Colab
------
+Quickest: Colab
+---------------
 
 The fastest and easiest way to run the code is to use directly our 2D U-Net template
 for mitochondria segmentation in Colab: |colablink|

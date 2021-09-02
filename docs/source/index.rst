@@ -28,7 +28,10 @@ This repository is the base of the following work: ::
    :caption: How to run
    :glob:
 
-   how_to_run/*
+   how_to_run/colab.rst
+   how_to_run/first_steps.rst
+   how_to_run/bash.rst
+   how_to_run/docker.rst
 
 .. toctree::
    :maxdepth: 1

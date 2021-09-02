@@ -29,7 +29,6 @@ if __name__ == '__main__':
     parser.add_argument("-gpu", "--gpu", help="GPU number according to 'nvidia-smi' command", default="0", type=str)
     args = parser.parse_args()
 
-
     ############
     #  CHECKS  #
     ############
@@ -64,8 +63,9 @@ if __name__ == '__main__':
     print(cfg)
 
     # GPU selection
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu;
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
     # CPU limit
     limit_threads(cfg.SYSTEM.NUM_CPUS)

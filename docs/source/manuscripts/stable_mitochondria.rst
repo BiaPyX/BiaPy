@@ -46,7 +46,7 @@ There are differents datasets used on the above work:
 - `Lucchi++ <https://sites.google.com/view/connectomics/>`_.
 - `Kasthuri++ <https://sites.google.com/view/connectomics/>`_.
 
-Prepare the data as described `here <bash.html#step-1-data-preparation>`_.
+Prepare the data as described `here <../how_to_run/first_steps.html#step-1-data-preparation>`_.
 
 
 Choose a template
@@ -58,12 +58,12 @@ In case you are interested in reproducing one of the state-of-the-art works impl
 
 Find each work implementation here:
 
-- `Caseer et al. <casser.html>`_ 
-- `Xiao et al. <xiao.html>`_ 
-- `Cheng et al. <cheng.html>`_ 
-- `Oztel et al. <oztel.html>`_ 
+- `Casser et al. <../sota_implementations/casser_2018/casser.html>`_ 
+- `Xiao et al. <../sota_implementations/xiao_2018/xiao.html>`_ 
+- `Cheng et al. <../sota_implementations/cheng_2017/cheng.html>`_ 
+- `Oztel et al. <../sota_implementations/oztel_2017/oztel.html>`_ 
 
 Run
 ~~~
 
-Run the code as described `here <quick_start.html#step-3-run-the-code>`_.
+Run the code as described `here <quick_start.html#step-2-run-the-code>`_.

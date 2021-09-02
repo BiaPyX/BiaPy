@@ -30,7 +30,7 @@ used, so the foreground class correspond to mitochondria.
 Data preparation                                                                                                        
 ~~~~~~~~~~~~~~~~                                                                                                        
                                                                                                                         
-The data directory tree should follow the structure described `Bash Shell -> Step 1: Data preparation <../how_to_run/bash.html#step-1-data-preparation>`_.
+The data directory tree should follow the structure described `First steps -> Step 1: Data preparation <../how_to_run/first_steps.html#step-1-data-preparation>`_.
                                                                                                                         
                                                                                                                         
 Problem resolution                                                                                                      
@@ -56,7 +56,7 @@ Run
 ~~~                                                                                                                     
                                                                                                                         
 Run the code with any of the options described in **HOW TO RUN** section that best suits you. For instance, you can run 
-it through bash shell as described in: `Bash Shell -> Step 3: Run the code <../how_to_run/bash.html#step-3-run-the-code>`_.
+it through bash shell as described in: `Bash Shell -> Step 2: Run the code <../how_to_run/bash.html#step-2-run-the-code>`_.
 
   
 Results                                                                                                                 
