@@ -128,13 +128,10 @@ class Trainer(object):
             if not cfg.DATA.VAL.FROM_TRAIN:
                 if cfg.DATA.VAL.IN_MEMORY:
                     f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
-                    X_val, _, _ = f_name(cfg.DATA.VAL.PATH)
-                    Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH)
-
-                    f_name = crop_data_with_overlap if cfg.PROBLEM.NDIM == '2D' else crop_3D_data_with_overlap
-                    if cfg.DATA.PATCH_SIZE != X_val[0].shape:
-                        X_val, Y_val = f_name(X_val, cfg.DATA.PATCH_SIZE, data_mask=Y_val, overlap=cfg.DATA.VAL.OVERLAP,
-                                              padding=cfg.DATA.VAL.PADDING, verbose=cfg.DATA.TEST.VERBOSE)
+                    X_val, _, _ = f_name(cfg.DATA.VAL.PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
+                                         overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING)
+                    Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
+                                         overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING)
                 else:
                     if not os.path.exists(cfg.DATA.VAL.PATH):
                         raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))

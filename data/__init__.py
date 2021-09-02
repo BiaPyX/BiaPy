@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from tqdm import tqdm
 
 from utils.util import load_data_from_dir, load_3d_images_from_dir, labels_into_bcd, save_npy_files
 
@@ -21,6 +22,7 @@ def create_train_val_instance_channels(cfg):
 
     f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
     X_train, _, _, train_filenames = f_name(cfg.DATA.TRAIN.PATH, return_filenames=True)
+    print("Creating X_train channels . . .")
     if isinstance(X_train, list):
         for i in tqdm(range(len(X_train))):
             X_train[i] = X_train[i].transpose((0,3,1,2,4))
@@ -30,6 +32,7 @@ def create_train_val_instance_channels(cfg):
                    verbose=cfg.TEST.VERBOSE)
 
     Y_train, _, _ = f_name(cfg.DATA.TRAIN.MASK_PATH)
+    print("Creating Y_train channels . . .")
     if isinstance(Y_train, list):
         for i in tqdm(range(len(Y_train))):
             Y_train[i] = labels_into_bcd(Y_train[i], mode=cfg.DATA.CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
@@ -44,6 +47,7 @@ def create_train_val_instance_channels(cfg):
 
     if not cfg.DATA.VAL.FROM_TRAIN:
         X_val, _, _, val_filenames = f_name(cfg.DATA.VAL.PATH, return_filenames=True)
+        print("Creating X_val channels . . .")
         if isinstance(X_val, list):
             for i in tqdm(range(len(X_val))):
                 X_val[i] = X_val[i].transpose((0,3,1,2,4))
@@ -53,6 +57,7 @@ def create_train_val_instance_channels(cfg):
                        verbose=cfg.TEST.VERBOSE)
 
         Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH)
+        print("Creating Y_val channels . . .")
         if isinstance(Y_val, list):
             for i in tqdm(range(len(Y_val))):
                 Y_val[i] = labels_into_bcd(Y_val[i], mode=cfg.DATA.CHANNELS, save_dir=cfg.PATHS.VAL_INSTANCE_CHANNELS_CHECK,
@@ -76,6 +81,7 @@ def create_test_instance_channels(cfg):
 
     f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
     X_test, _, _, test_filenames = f_name(cfg.DATA.TEST.PATH, return_filenames=True)
+    print("Creating X_test channels . . .")
     if isinstance(X_test, list):
         for i in tqdm(range(len(X_test))):
             X_test[i] = X_test[i].transpose((0,3,1,2,4))
@@ -86,6 +92,7 @@ def create_test_instance_channels(cfg):
 
     if cfg.DATA.TEST.LOAD_GT:
         Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH)
+        print("Creating Y_test channels . . .")
         if isinstance(Y_test, list):
             for i in tqdm(range(len(Y_test))):
                 Y_test[i] = labels_into_bcd(Y_test[i], mode=cfg.DATA.CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
