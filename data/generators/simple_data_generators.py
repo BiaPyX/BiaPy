@@ -19,6 +19,9 @@ class simple_data_generator(tf.keras.utils.Sequence):
        d_path : Str, optional
            Path to load the data from.
 
+       provide_Y: bool, optional
+           Wheter to return ground truth, using ``Y`` or loading from ``dm_path``.
+
        Y : Numpy 5D/4D array, optional
            Data mask. E.g. ``(num_of_images, x, y, z, channels)`` or ``(num_of_images, x, y, channels)``.
 
@@ -38,21 +41,24 @@ class simple_data_generator(tf.keras.utils.Sequence):
            To shuffle data after each epoch.
     """
 
-    def __init__(self, X=None, d_path=None, Y=None, dm_path=None, dims='2D', batch_size=1, seed=42,
+    def __init__(self, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, dims='2D', batch_size=1, seed=42,
                  shuffle_each_epoch=False):
 
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
-        if Y is None and dm_path is None:
-            raise ValueError("One between 'Y' or 'dm_path' must be provided")
+        if provide_Y:
+            if Y is None and dm_path is None:
+                raise ValueError("One between 'Y' or 'dm_path' must be provided")
         assert dims in ['2D', '3D']
 
         self.X = X
         self.Y = Y
         self.d_path = d_path
         self.dm_path = dm_path
+        self.provide_Y = provide_Y
         self.data_path = sorted(next(os.walk(d_path))[2]) if X is None else None
-        self.data_mask_path = sorted(next(os.walk(dm_path))[2]) if Y is None else None
+        if provide_Y:
+            self.data_mask_path = sorted(next(os.walk(dm_path))[2]) if Y is None else None
         self.shuffle_each_epoch = shuffle_each_epoch
         self.seed = seed
         self.batch_size = batch_size
@@ -68,16 +74,17 @@ class simple_data_generator(tf.keras.utils.Sequence):
         else:
             self.len = len(X)
             img = X[0]
-        self.o_indexes = np.arange(self.len)
-        if Y is None:
-            if self.data_mask_path[0].endswith('.npy'):
-                mask = np.load(os.path.join(dm_path, self.data_mask_path[0]))
-            else:
-                mask = imread(os.path.join(dm_path, self.data_mask_path[0]))
-        else:
-            mask = Y[0]
         self.div_X_on_load = True if np.max(img) > 100 else False
-        self.div_Y_on_load = True if np.max(mask) > 100 else False
+        self.o_indexes = np.arange(self.len)
+        if provide_Y:
+            if Y is None:
+                if self.data_mask_path[0].endswith('.npy'):
+                    mask = np.load(os.path.join(dm_path, self.data_mask_path[0]))
+                else:
+                    mask = imread(os.path.join(dm_path, self.data_mask_path[0]))
+            else:
+                mask = Y[0]
+            self.div_Y_on_load = True if np.max(mask) > 100 else False
         self.on_epoch_end()
 
     def __len__(self):
@@ -104,7 +111,7 @@ class simple_data_generator(tf.keras.utils.Sequence):
 
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         batch_x = []
-        batch_y = []
+        if self.provide_Y: batch_y = []
 
         for i, j in zip(range(len(indexes)), indexes):
             if self.X is None:
@@ -114,40 +121,46 @@ class simple_data_generator(tf.keras.utils.Sequence):
                     img = imread(os.path.join(self.d_path, self.data_path[j]))
             else:
                 img = self.X[j]
-            if self.Y is None:
-                if self.data_mask_path[0].endswith('.npy'):
-                    mask = np.load(os.path.join(self.dm_path, self.data_mask_path[j]))
+            if self.provide_Y:
+                if self.Y is None:
+                    if self.data_mask_path[0].endswith('.npy'):
+                        mask = np.load(os.path.join(self.dm_path, self.data_mask_path[j]))
+                    else:
+                        mask = imread(os.path.join(self.dm_path, self.data_mask_path[j]))
                 else:
-                    mask = imread(os.path.join(self.dm_path, self.data_mask_path[j]))
-            else:
-                mask = self.Y[j]
+                    mask = self.Y[j]
 
-            print("self.data_3d: {}".format(self.data_3d))
             if self.data_3d:
                 if img.ndim == 3: img = np.expand_dims(img, -1)
                 img = img.transpose((1,2,0,3))
                 img = np.expand_dims(img, 0)
-                if mask.ndim == 3: mask = np.expand_dims(mask, -1)
-                mask = mask.transpose((1,2,0,3))
-                mask = np.expand_dims(mask, 0)
+                if self.provide_Y:
+                    if mask.ndim == 3: mask = np.expand_dims(mask, -1)
+                    mask = mask.transpose((1,2,0,3))
+                    mask = np.expand_dims(mask, 0)
             else:
                 if img.ndim == 2: img = np.expand_dims(img, -1)
                 img = np.expand_dims(img, 0)
-                if mask.ndim == 2: mask = np.expand_dims(mask, -1)
-                mask = np.expand_dims(mask, 0)
+                if self.provide_Y:
+                    if mask.ndim == 2: mask = np.expand_dims(mask, -1)
+                    mask = np.expand_dims(mask, 0)
             batch_x.append(img)
-            batch_y.append(mask)
+            if self.provide_Y: batch_y.append(mask)
 
         batch_x = np.concatenate(batch_x)
-        batch_y = np.concatenate(batch_y)
+        if self.provide_Y: batch_y = np.concatenate(batch_y)
 
         # Divide the values
         if self.div_X_on_load: batch_x = batch_x/255
-        if self.div_Y_on_load: batch_y = batch_y/255
+        if self.provide_Y:
+            if self.div_Y_on_load: batch_y = batch_y/255
 
         self.total_batches_seen += 1
 
-        return batch_x, batch_y
+        if self.provide_Y:
+            return batch_x, batch_y
+        else:
+            return batch_x
 
 
     def on_epoch_end(self):

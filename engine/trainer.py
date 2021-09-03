@@ -251,12 +251,16 @@ class Trainer(object):
                 X = obj
                 Y = None
 
-            for j in tqdm(range(X.shape[0]), leave=False):
+            for j in tqdm(range(len(X)), leave=False):
                 if not self.cfg.TEST.VERBOSE:
-                    print("Processing image(s): {}".format(self.test_filenames[(i*X.shape[0])+j:(i*X.shape[0])+j+1]))
+                    print("Processing image(s): {}".format(self.test_filenames[(i*len(X))+j:(i*len(X))+j+1]))
 
-                _X = np.expand_dims(X[j],0)
-                _Y = np.expand_dims(Y[j],0) if self.cfg.DATA.TEST.LOAD_GT else None
+                if type(X) is tuple:
+                    _X = X[j]
+                    _Y = Y[j] if self.cfg.DATA.TEST.LOAD_GT else None
+                else:
+                    _X = np.expand_dims(X[j],0)
+                    _Y = np.expand_dims(Y[j],0) if self.cfg.DATA.TEST.LOAD_GT else None
                 if self.cfg.PROBLEM.NDIM == '3D':
                     # Convert to (num_images, z, x, y, c)
                     _X = _X.transpose((0,3,1,2,4))
@@ -326,6 +330,8 @@ class Trainer(object):
                         f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
                         pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=self.cfg.DATA.TEST.PADDING,
                                       overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
+                    else:
+                        pred = pred[0]
 
                     # Argmax if needed
                     if self.cfg.MODEL.N_CLASSES > 1:
@@ -333,12 +339,13 @@ class Trainer(object):
                         if self.cfg.DATA.TEST.LOAD_GT: _Y = np.expand_dims(np.argmax(_Y,-1), -1)
 
                     # Save image
-                    filenames = self.test_filenames[(i*X.shape[0])+j:(i*X.shape[0])+j+1]
+                    filenames = self.test_filenames[(i*len(X))+j:(i*len(X))+j+1]
                     if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
                         save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames,
                                  verbose=self.cfg.TEST.VERBOSE)
                     else:
                         save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
+
 
                     #####################
                     ### MERGE PATCHES ###
@@ -371,15 +378,15 @@ class Trainer(object):
                     if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
                         # Create instances
                         print("Creating instances with watershed . . .")
+                        w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
                         if self.cfg.DATA.CHANNELS == "BC":
                             pred = bc_watershed(pred, thres1=self.cfg.DATA.MW_TH1, thres2=self.cfg.DATA.MW_TH2,
                                 thres3=self.cfg.DATA.MW_TH3, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
-                                save_dir=self.cfg.PATHS.WATERSHED_DIR)
+                                save_dir=w_dir)
                         else:
                             pred = bcd_watershed(pred, thres1=self.cfg.DATA.MW_TH1, thres2=self.cfg.DATA.MW_TH2,
                                 thres3=self.cfg.DATA.MW_TH3, thres4=self.cfg.DATA.MW_TH4, thres5=self.cfg.DATA.MW_TH5,
-                                thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, save_dir=self.cfg.PATHS.WATERSHED_DIR)
-
+                                thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, save_dir=w_dir)
                         save_tif(np.expand_dims(np.expand_dims(pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                                  filenames, verbose=self.cfg.TEST.VERBOSE)
 
@@ -389,7 +396,7 @@ class Trainer(object):
                               "####################\n")
                         # Convert the prediction into an .h5 file
                         os.makedirs(self.cfg.PATHS.MAP_H5_DIR, exist_ok=True)
-                        filenames = self.test_mask_filenames[(i*X.shape[0])+j:(i*X.shape[0])+j+1]
+                        filenames = self.test_mask_filenames[(i*len(X))+j:(i*len(X))+j+1]
                         h5file_name = os.path.join(self.cfg.PATHS.MAP_H5_DIR, os.path.splitext(filenames[0])[0]+'.h5')
                         print("Creating prediction h5 file to calculate mAP: {}".format(h5file_name))
                         h5f = h5py.File(h5file_name, 'w')
@@ -456,7 +463,7 @@ class Trainer(object):
                     if self.cfg.DATA.TEST.LOAD_GT: _Y = _Y[:,:o_test_shape[1],:o_test_shape[2]]
 
                     # Save image
-                    filenames = self.test_filenames[(i*_X.shape[0])+j:(i*_X.shape[0])+j+1]
+                    filenames = self.test_filenames[(i*len(_X))+j:(i*len(_X))+j+1]
                     if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
                         save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, filenames,
                                  verbose=self.cfg.TEST.VERBOSE)

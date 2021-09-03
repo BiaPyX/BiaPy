@@ -425,9 +425,9 @@ class Config:
         """Update some variables that depend of changes made after merge the .cfg file provide by the user. That is,
            this function should be called after YACS's merge_from_file().
         """
-        self._C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = os.path.join(self._C.DATA.ROOT_DIR, 'train', 'x_'+self._C.DATA.CHANNELS)
-        self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = os.path.join(self._C.DATA.ROOT_DIR, 'train', 'y_'+self._C.DATA.CHANNELS)
-        self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = os.path.join(self._C.DATA.ROOT_DIR, 'val', 'x_'+self._C.DATA.CHANNELS)
-        self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = os.path.join(self._C.DATA.ROOT_DIR, 'val', 'y_'+self._C.DATA.CHANNELS)
-        self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = os.path.join(self._C.DATA.ROOT_DIR, 'test', 'x_'+self._C.DATA.CHANNELS)
-        self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = os.path.join(self._C.DATA.ROOT_DIR, 'test', 'y_'+self._C.DATA.CHANNELS)
+        self._C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = self._C.DATA.TRAIN.PATH+'_'+self._C.DATA.CHANNELS
+        self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_'+self._C.DATA.CHANNELS
+        self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = self._C.DATA.VAL.MASK_PATH+'_'+self._C.DATA.CHANNELS
+        self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_'+self._C.DATA.CHANNELS
+        self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.DATA.CHANNELS
+        self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_'+self._C.DATA.CHANNELS

@@ -111,6 +111,9 @@ if __name__ == '__main__':
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
         if cfg.DATA.CHANNELS == "B":
             raise ValueError("DATA.CHANNELS must be 'BC' or 'BCD' when PROBLEM.TYPE == 'INSTANCE_SEG'")
+        else:
+            if cfg.MODEL.N_CLASSES > 1:
+                raise ValueError("Not implemented pipeline option")
 
     if cfg.DATA.VAL.FROM_TRAIN and cfg.DATA.VAL.SPLIT_TRAIN <= 0:
         raise ValueError("'DATA.VAL.SPLIT_TRAIN' needs to be > 0 when 'DATA.VAL.FROM_TRAIN' == True")
