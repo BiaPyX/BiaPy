@@ -39,7 +39,9 @@ This repository is the base of the following work: ::
    :hidden:
    :glob:
 
-   tutorials/*
+   tutorials/mitochondria.rst
+   tutorials/nucleus.rst
+   tutorials/cysto.rst
 
 .. toctree::
    :maxdepth: 1

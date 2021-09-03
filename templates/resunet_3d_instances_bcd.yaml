@@ -1,0 +1,64 @@
+SYSTEM:
+    NUM_GPUS: 1
+    NUM_CPUS: 1
+
+PROBLEM:
+    TYPE: INSTANCE_SEG
+    NDIM: 3D
+
+DATA: 
+    CHANNELS: BCD
+    MW_TH1: 0.8
+    MW_TH2: 0.1 
+    MW_TH3: 0.3
+    MW_TH4: 4.5
+    MW_TH5: 2.0
+    PATCH_SIZE: (64, 64, 64, 1)
+    CHECK_GENERATORS: False
+    TRAIN:
+        IN_MEMORY: True
+        PADDING: (0,0,0)
+        OVERLAP: (0,0,0)
+    VAL:
+        FROM_TRAIN: False
+        IN_MEMORY: True
+        PADDING: (0,0,0)
+        OVERLAP: (0,0,0)
+    TEST:
+        IN_MEMORY: False
+        LOAD_GT: True
+        PADDING: (16,16,16)
+        OVERLAP: (0,0,0)
+        
+AUGMENTOR:
+    ENABLE: True
+    RANDOM_ROT: True
+    VFLIP: True
+    HFLIP: True
+
+MODEL:
+    ARCHITECTURE: resunet
+    FEATURE_MAPS: [36, 48, 64]
+    DROPOUT_VALUES: [0, 0, 0]
+    Z_DOWN: 1
+    LOAD_CHECKPOINT: False
+
+LOSS:
+  TYPE: CE
+  
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAM
+    LR: 1.E-3
+    BATCH_SIZE: 2
+    EPOCHS: 150
+    PATIENCE: 20
+  
+TEST:
+    ENABLE: True
+    VERBOSE: True
+    AUGMENTATION: False
+    STATS:
+        PER_PATCH: True
+        MERGE_PATCHES: True
+        FULL_IMG: False

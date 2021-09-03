@@ -9,8 +9,8 @@ Problem description
 The goal is to segment and identify automatically each cell nuclei in EM images.
 This is an instance segmentation problem, which is the next step of semantic
 segmentation, as its requires identifying each blob unequivocally with a given
-id. In this tutorial, pairs of EM 3D images (:math:`X`) with their corresponding instance
-sementation annotations (:math:`Y`) are provided. Here NucMM-Z dataset :cite:p:`lin2021nucmm`
+id. In this tutorial, pairs of EM 3D images (``X``) with their corresponding instance
+sementation annotations (``Y``) are provided. Here NucMM-Z dataset :cite:p:`lin2021nucmm`
 is used: 
 
 .. figure:: ../img/nucmm_z_paper_view.png
@@ -31,12 +31,12 @@ truth:
   * - .. figure:: ../video/nucmm_z_volume.gif
          :align: center
 
-         EM tissue volume (:math:`X`).
+         EM tissue volume (``X``).
 
     - .. figure:: ../video/nucmm_z_volume_mask.gif
          :align: center
 
-         Corresponding instance labels (:math:`Y`).
+         Corresponding instance labels (``Y``).
 
 
 Data preparation
@@ -50,7 +50,16 @@ Problem resolution
 
 To produce the nuclei instances two main steps are done:
 
-* Firstly, new :math:`\hat{Y}` data representations are created from the original :math:`Y`. This new :math:`\hat{Y}` data is created with up to three channels (controlled by ``DATA.CHANNELS``). Binary segmentation (referred as ``B`` in the code), contour (``C``) and distances (``D``). This way, the network will be trained with 27 image pairs provided in NucMM-Z, each containing an EM image and its :math:`\hat{Y}` new data representation.
+* Firstly, new ``Y'`` data representations are created from the original ``Y``. This new ``Y'`` data is created with up to three channels (controlled by ``DATA.CHANNELS``). Binary segmentation (referred as ``B`` in the code) and contour (``C``). This way, the network will be trained with 27 image pairs provided in NucMM-Z, each containing an EM image and its ``Y'`` new data representation.
+
+.. figure:: ../img/nucmmz_instance_bc_scheme.svg
+  :width: 300px
+  :alt: Nucmm-z Y data representation
+  :align: center
+
+  Process of the new ``Y'`` data representation. From instance segmentation labels (left) to contour
+  and binary segmentation (right).
+
 * These extra channels predicted by the network are used to create the final instance segmentation labels using a marked controlled watershed (MW). This process involve a few thresholds that may be adjusted depending each case: ``DATA.MW_TH1``, ``DATA.MW_TH2``, ``DATA.MW_TH3``, ``DATA.MW_TH4`` and ``DATA.MW_TH5``. Find their description in `config.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/config/config.py>`_.
 
 
