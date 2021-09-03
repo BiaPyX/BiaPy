@@ -57,8 +57,8 @@ To produce the nuclei instances two main steps are done:
   :alt: Nucmm-z Y data representation
   :align: center
 
-  Process of the new ``Y'`` data representation. From instance segmentation labels (left) to contour
-  and binary segmentation (right).
+  Process of the new ``Y'`` data representation: from instance segmentation labels (left) to contour and binary
+  segmentation (right).
 
 * These extra channels predicted by the network are used to create the final instance segmentation labels using a marked controlled watershed (MW). This process involve a few thresholds that may be adjusted depending each case: ``DATA.MW_TH1``, ``DATA.MW_TH2``, ``DATA.MW_TH3``, ``DATA.MW_TH4`` and ``DATA.MW_TH5``. Find their description in `config.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/config/config.py>`_.
 
