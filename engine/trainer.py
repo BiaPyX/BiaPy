@@ -8,7 +8,7 @@ from skimage.io import imread
 
 from utils.util import (check_masks, check_downsample_division, create_plots, save_tif, load_data_from_dir,
                         load_3d_images_from_dir)
-from data import create_train_val_instance_channels, create_test_instance_channels
+from data import create_instance_channels, create_test_instance_channels
 from data.data_2D_manipulation import load_and_prepare_2D_train_data, crop_data_with_overlap, merge_data_with_overlap
 from data.data_3D_manipulation import load_and_prepare_3D_data, crop_3D_data_with_overlap, merge_3D_data_with_overlap
 from data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
@@ -47,13 +47,21 @@ class Trainer(object):
             print("###########################\n"
                   "#  PREPARE INSTANCE DATA  #\n"
                   "###########################\n")
-            # Create selected channels for train/val data
+            # Create selected channels for train data
             if cfg.TRAIN.ENABLE and not os.path.isdir(cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR):
                 print("You select to create {} channels from given instance labels and no file is detected in {}. "
                       "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.INSTANCE_CHANNELS_DIR' "
                       "path, this process will be done just once!".format(cfg.DATA.CHANNELS,
                       cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
-                self.train_filenames = create_train_val_instance_channels(cfg)
+                self.train_filenames = create_instance_channels(cfg)
+
+            # Create selected channels for val data
+            if cfg.TRAIN.ENABLE and not cfg.DATA.VAL.FROM_TRAIN and not os.path.isdir(cfg.DATA.VAL.INSTANCE_CHANNELS_DIR):
+                print("You select to create {} channels from given instance labels and no file is detected in {}. "
+                      "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.INSTANCE_CHANNELS_DIR' "
+                      "path, this process will be done just once!".format(cfg.DATA.CHANNELS,
+                      cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
+                create_instance_channels(cfg, data_type='val')
 
             # Create selected channels for test data once
             if cfg.TEST.ENABLE and not os.path.isdir(cfg.DATA.TEST.INSTANCE_CHANNELS_DIR):
@@ -186,7 +194,6 @@ class Trainer(object):
                     self.val_generator, cfg.PATHS.GEN_CHECKS+"_val", cfg.PATHS.GEN_MASK_CHECKS+"_val")
         if cfg.TEST.ENABLE:
             self.test_generator = create_test_augmentor(cfg, X_test, Y_test)
-
 
         print("#################\n"
               "#  BUILD MODEL  #\n"
