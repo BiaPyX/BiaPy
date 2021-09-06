@@ -249,73 +249,6 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin
     return  t_jac[r_val_pos], t_voc[r_val_pos], t_det[r_val_pos]
 
 
-def array_to_img(x, data_format='channels_last', scale=True, dtype='float32'):
-    """Converts a 3D Numpy array to a PIL Image instance.
-
-       As the Keras array_to_img function in:
-
-            `keras_preprocessing/image/utils.py <https://github.com/keras-team/keras-preprocessing/blob/28b8c9a57703b60ea7d23a196c59da1edf987ca0/keras_preprocessing/image/utils.py#L230>`_
-    """
-    if Image is None:
-        raise ImportError('Could not import PIL.Image. The use of `array_to_img` requires PIL.')
-    x = np.asarray(x, dtype=dtype)
-    if x.ndim != 3:
-        raise ValueError('Expected image array to have rank 3 (single image). Got array with shape: %s' % (x.shape,))
-
-    if data_format not in {'channels_first', 'channels_last'}: raise ValueError('Invalid data_format: %s' % data_format)
-
-    # Original Numpy array x has format (height, width, channel)
-    # or (channel, height, width)
-    # but target PIL image has format (width, height, channel)
-    if data_format == 'channels_first':
-        x = x.transpose(1, 2, 0)
-    if scale:
-        x = x - np.min(x)
-        x_max = np.max(x)
-        if x_max != 0:
-            x /= x_max
-        x *= 255
-    if x.shape[2] == 4:
-        # RGBA
-        return Image.fromarray(x.astype('uint8'), 'RGBA')
-    elif x.shape[2] == 3:
-        # RGB
-        return Image.fromarray(x.astype('uint8'), 'RGB')
-    elif x.shape[2] == 1:
-        # grayscale
-        if np.max(x) > 255:
-            # 32-bit signed integer grayscale image. PIL mode "I"
-            return Image.fromarray(x[:, :, 0].astype('int32'), 'I')
-        return Image.fromarray(x[:, :, 0].astype('uint8'), 'L')
-    else:
-        raise ValueError('Unsupported channel number: %s' % (x.shape[2],))
-
-
-def img_to_array(img, data_format='channels_last', dtype='float32'):
-    """Converts a PIL Image instance to a Numpy array.
-
-       It's a copy of the function `keras_preprocessing/image/utils.py <https://github.com/keras-team/keras-preprocessing/blob/28b8c9a57703b60ea7d23a196c59da1edf987ca0/keras_preprocessing/image/utils.py#L288>`_.
-    """
-
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format: %s' % data_format)
-    # Numpy array x has format (height, width, channel)
-    # or (channel, height, width)
-    # but original PIL image has format (width, height, channel)
-    x = np.asarray(img, dtype=dtype)
-    if len(x.shape) == 3:
-        if data_format == 'channels_first':
-            x = x.transpose(2, 0, 1)
-    elif len(x.shape) == 2:
-        if data_format == 'channels_first':
-            x = x.reshape((1, x.shape[0], x.shape[1]))
-        else:
-            x = x.reshape((x.shape[0], x.shape[1], 1))
-    else:
-        raise ValueError('Unsupported image shape: %s' % (x.shape,))
-    return x
-
-
 def save_tif(X, data_dir=None, filenames=None, verbose=True):
     """Save images in the given directory.
 
@@ -1020,50 +953,6 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
                 f = os.path.join(save_dir, 'prob_map'+str(i).zfill(d)+'.npy')
                 np.save(f, maps[i])
             return save_dir
-
-
-def grayscale_2D_image_to_3D(X, Y, th=127):
-    """Creates 3D surface from each image in X based on the grayscale of each image.
-
-       Parameters
-       ----------
-       X : 4D numpy array
-           Data that contains the images to create the surfaces from. E.g. ``(num_of_images, x, y, channels)``.
-
-       Y : 4D numpy array
-           Data mask of the same shape of X that will be converted into 3D volume, stacking multiple times each image.
-           Useful if you need the two data arrays to be of the same shape. E.g. ``(num_of_images, x, y, channels)``.
-
-       th : int, optional
-           Values to ommit when creating the surfaces. Useful to reduce the amount of data in z to be created and
-           reduce computational time.
-
-       Returns
-       -------
-       Array : 5D numpy array
-           3D surface of each image provided. E.g. ``(num_of_images, z, x, y, channels)``.
-
-       Array : 5D numpy array
-           3D stack of each mask provided. E.g. ``(num_of_images, z, x, y, channels)``.
-    """
-
-    print("Creating 3D surface for each image . . .")
-
-    _th = 255 - th
-    X_3D = np.zeros((X.shape[0], X.shape[1], X.shape[2], _th, X.shape[3]), dtype=np.int32)
-    Y_3D = np.zeros((Y.shape[0], Y.shape[1], Y.shape[2], _th, Y.shape[3]), dtype=np.int32)
-
-    for i in tqdm(range(X.shape[0])):
-        for x in range(X.shape[1]):
-            for y in range(X.shape[2]):
-                pos = int(X[i, x, y, 0])-_th if int(X[i, x, y, 0]) >_th else 0
-                X_3D[i, x, y, 0:pos, 0] = 1
-                pos = int(Y[i, x, y, 0:pos, 0])*255
-                Y_3D[i, x, y, 0:pos, 0] = 1
-
-    print("*** New surface 3D data shape is now: {}".format(X_3D.shape))
-
-    return X_3D, Y_3D
 
 
 def check_masks(path, n_classes=2):
