@@ -1,8 +1,8 @@
-import numpy as np
-from skimage import measure
 import cv2
 import os
 import math
+import numpy as np
+from skimage import measure
 from tqdm import tqdm
 from scipy import ndimage as ndi
 from skimage.morphology import disk, remove_small_objects
@@ -604,3 +604,4 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
             out[i] = out_vols[i,:,abs(pad_to_square):,:,:]
 
     return np.mean(out, axis=0)
+

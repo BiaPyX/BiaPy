@@ -251,16 +251,17 @@ class Trainer(object):
         for i in tqdm(range(len(self.test_generator))):
             batch = next(it)
 
-            obj = batch
             if self.cfg.DATA.TEST.LOAD_GT:
-                X, Y = obj
+                X, Y = batch
             else:
-                X = obj
+                X = batch
                 Y = None
+            del batch
 
-            for j in tqdm(range(len(X)), leave=False):
+            l_X = len(X)
+            for j in tqdm(range(l_X), leave=False):
                 if not self.cfg.TEST.VERBOSE:
-                    print("Processing image(s): {}".format(self.test_filenames[(i*len(X))+j:(i*len(X))+j+1]))
+                    print("Processing image(s): {}".format(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]))
 
                 if type(X) is tuple:
                     _X = X[j]
@@ -284,52 +285,48 @@ class Trainer(object):
                                 overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
                                 verbose=self.cfg.TEST.VERBOSE)
                             if self.cfg.DATA.TEST.LOAD_GT:
-                                X_test, Y_test = obj
+                                _X, _Y = obj
                             else:
-                                X_test = obj
+                                _X = obj
                         else:
                             if self.cfg.DATA.TEST.LOAD_GT: _Y = _Y[0]
                             obj = crop_3D_data_with_overlap(_X[0], self.cfg.DATA.PATCH_SIZE, data_mask=_Y,
                                 overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
                                 verbose=self.cfg.TEST.VERBOSE, median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
                             if self.cfg.DATA.TEST.LOAD_GT:
-                                X_test, Y_test = obj
+                                _X, _Y = obj
                             else:
-                                X_test = obj
-                    else:
-                        X_test = _X
-                        if self.cfg.DATA.TEST.LOAD_GT: Y_test = _Y
+                                _X = obj
 
                     # Evaluate each patch
                     if self.cfg.DATA.TEST.LOAD_GT:
-                        l = int(math.ceil(X_test.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
+                        l = int(math.ceil(_X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
                         for k in tqdm(range(l), leave=False):
-                            top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < X_test.shape[0] else X_test.shape[0]
+                            top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < _X.shape[0] else _X.shape[0]
                             score = self.model.evaluate(
-                                X_test[k*self.cfg.TRAIN.BATCH_SIZE:top], Y_test[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
+                                _X[k*self.cfg.TRAIN.BATCH_SIZE:top], _Y[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
                             loss_per_crop += score[0]
                             iou_per_crop += score[1]
-                        del Y_test
-                    patch_counter += X_test.shape[0]
+                        del _Y
+                    patch_counter += _X.shape[0]
 
                     # Predict each patch
                     pred = []
                     if self.cfg.TEST.AUGMENTATION:
-                        for k in tqdm(range(X_test.shape[0]), leave=False):
+                        for k in tqdm(range(_X.shape[0]), leave=False):
                             if self.cfg.PROBLEM.NDIM == '2D':
-                                p = ensemble8_2d_predictions(X_test[k], n_classes=self.cfg.MODEL.N_CLASSES,
+                                p = ensemble8_2d_predictions(_X[k], n_classes=self.cfg.MODEL.N_CLASSES,
                                         pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
                             else:
-                                p = ensemble16_3d_predictions(X_test[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                                p = ensemble16_3d_predictions(_X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                                         pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
                             pred.append(np.expand_dims(p, 0))
                     else:
-                        l = int(math.ceil(X_test.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
+                        l = int(math.ceil(_X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
                         for k in tqdm(range(l), leave=False):
-                            top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < X_test.shape[0] else X_test.shape[0]
-                            p = self.model.predict(X_test[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
+                            top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < _X.shape[0] else _X.shape[0]
+                            p = self.model.predict(_X[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
                             pred.append(p)
-                    del X_test
 
                     # Reconstruct the predictions
                     pred = np.concatenate(pred)
@@ -346,7 +343,7 @@ class Trainer(object):
                         if self.cfg.DATA.TEST.LOAD_GT: _Y = np.expand_dims(np.argmax(_Y,-1), -1)
 
                     # Save image
-                    filenames = self.test_filenames[(i*len(X))+j:(i*len(X))+j+1]
+                    filenames = self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]
                     if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
                         save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames,
                                  verbose=self.cfg.TEST.VERBOSE)
@@ -403,7 +400,7 @@ class Trainer(object):
                               "####################\n")
                         # Convert the prediction into an .h5 file
                         os.makedirs(self.cfg.PATHS.MAP_H5_DIR, exist_ok=True)
-                        filenames = self.test_mask_filenames[(i*len(X))+j:(i*len(X))+j+1]
+                        filenames = self.test_mask_filenames[(i*l_X)+j:(i*l_X)+j+1]
                         h5file_name = os.path.join(self.cfg.PATHS.MAP_H5_DIR, os.path.splitext(filenames[0])[0]+'.h5')
                         print("Creating prediction h5 file to calculate mAP: {}".format(h5file_name))
                         h5f = h5py.File(h5file_name, 'w')
@@ -427,19 +424,19 @@ class Trainer(object):
                             if not os.path.isfile(test_file):
                                 raise ValueError("The mask is supossed to have the same name as the image")
 
-                            Y_test = imread(test_file).squeeze()
+                            _Y = imread(test_file).squeeze()
 
-                            print("Saving .h5 GT data from array shape: {}".format(Y_test.shape))
+                            print("Saving .h5 GT data from array shape: {}".format(_Y.shape))
                             os.makedirs(self.cfg.PATHS.TEST_FULL_GT_H5, exist_ok=True)
                             h5f = h5py.File(gt_f, 'w')
-                            h5f.create_dataset('dataset', data=Y_test, compression="lzf")
+                            h5f.create_dataset('dataset', data=_Y, compression="lzf")
                             h5f.close()
-                            del Y_test
+                            del _Y
 
                         # Calculate mAP
                         args = Namespace(gt_seg=gt_f, predict_seg=h5file_name, predict_score='', threshold="5e3, 3e4",
-                                         threshold_crumb=64, chunk_size=250, output_name=self.cfg.PATHS.RESULT_DIR.PATH,
-                                         do_txt=1, do_eval=1, slices="-1")
+                                         threshold_crumb=64, chunk_size=250, output_name=w_dir, do_txt=1, do_eval=1,
+                                         slices="-1")
                         mAP_calculation(args)
 
                 ##################
@@ -550,3 +547,4 @@ class Trainer(object):
                 print("Test Foreground IoU (post-processing): {}".format(iou_post))
                 print("Test Overall IoU (post-processing): {}".format(ov_iou_post))
                 print(" ")
+
