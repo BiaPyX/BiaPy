@@ -26,7 +26,7 @@ DATA:
         OVERLAP: (0,0,0)
     TEST:
         IN_MEMORY: False
-        LOAD_GT: True
+        LOAD_GT: False
         PADDING: (16,16,16)
         OVERLAP: (0,0,0)
         
