@@ -86,7 +86,7 @@ class Trainer(object):
                 original_test_path = cfg.DATA.TEST.PATH
                 print("DATA.TEST.PATH changed from {} to {}".format(cfg.DATA.TEST.PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
                 opts.extend(['DATA.TEST.PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_DIR])
-                if cfg.DATA.TEST.LOAD_GT:
+                if cfg.DATA.TEST.LOAD_GT and cfg.TEST.EVALUATE:
                     original_test_mask_path = cfg.DATA.TEST.MASK_PATH
                     print("DATA.TEST.MASK_PATH changed from {} to {}".format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
                     opts.extend(['DATA.TEST.MASK_PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR])
@@ -299,7 +299,7 @@ class Trainer(object):
                                 _X = obj
 
                     # Evaluate each patch
-                    if self.cfg.DATA.TEST.LOAD_GT:
+                    if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
                         l = int(math.ceil(_X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
                         for k in tqdm(range(l), leave=False):
                             top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < _X.shape[0] else _X.shape[0]
@@ -307,7 +307,6 @@ class Trainer(object):
                                 _X[k*self.cfg.TRAIN.BATCH_SIZE:top], _Y[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
                             loss_per_crop += score[0]
                             iou_per_crop += score[1]
-                        del _Y
                     patch_counter += _X.shape[0]
 
                     # Predict each patch
@@ -332,8 +331,13 @@ class Trainer(object):
                     pred = np.concatenate(pred)
                     if original_data_shape != self.cfg.DATA.PATCH_SIZE:
                         f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
-                        pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=self.cfg.DATA.TEST.PADDING,
-                                      overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
+                        obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=_Y,
+                                      padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
+                                      verbose=self.cfg.TEST.VERBOSE)
+                        if self.cfg.DATA.TEST.LOAD_GT:
+                            pred, _Y = obj
+                        else:
+                            pred = obj
                     else:
                         pred = pred[0]
 
@@ -431,7 +435,6 @@ class Trainer(object):
                             h5f = h5py.File(gt_f, 'w')
                             h5f.create_dataset('dataset', data=_Y, compression="lzf")
                             h5f.close()
-                            del _Y
 
                         # Calculate mAP
                         args = Namespace(gt_seg=gt_f, predict_seg=h5file_name, predict_score='', threshold="5e3, 3e4",
@@ -443,9 +446,16 @@ class Trainer(object):
                 ### FULL IMAGE ###
                 ##################
                 if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D':
+                    if type(X) is tuple:
+                        _X = X[j]
+                        _Y = Y[j] if self.cfg.DATA.TEST.LOAD_GT else None
+                    else:
+                        _X = np.expand_dims(X[j],0)
+                        _Y = np.expand_dims(Y[j],0) if self.cfg.DATA.TEST.LOAD_GT else None
+
                     _X, _ = check_downsample_division(_X, len(self.cfg.MODEL.FEATURE_MAPS)-1)
                     if self.cfg.DATA.TEST.LOAD_GT:
-                        Y, o_test_shape = check_downsample_division(_Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
+                        _Y, o_test_shape = check_downsample_division(_Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
 
                     # Evaluate each img
                     if self.cfg.DATA.TEST.LOAD_GT:

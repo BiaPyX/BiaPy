@@ -119,6 +119,7 @@ class simple_data_generator(tf.keras.utils.Sequence):
                     img = np.load(os.path.join(self.d_path, self.data_path[j]))
                 else:
                     img = imread(os.path.join(self.d_path, self.data_path[j]))
+                img = np.squeeze(img)
             else:
                 img = self.X[j]
             if self.provide_Y:
@@ -127,6 +128,7 @@ class simple_data_generator(tf.keras.utils.Sequence):
                         mask = np.load(os.path.join(self.dm_path, self.data_mask_path[j]))
                     else:
                         mask = imread(os.path.join(self.dm_path, self.data_mask_path[j]))
+                    mask = np.squeeze(mask)
                 else:
                     mask = self.Y[j]
 

@@ -1134,10 +1134,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
         if len(img.shape) == 2:
             img = np.expand_dims(img, axis=-1)
         else:
-           img = img.transpose((1,2,0))
-
-        # Change channel order when RGB images
-        if img.shape[1] == 3: img = img.transpose((0,2,1))
+           if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
 
         data_shape.append(img.shape)
         img = np.expand_dims(img, axis=0)
@@ -1327,6 +1324,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, crop_verb=Fal
             img = np.load(os.path.join(data_dir, id_))
         else:
             img = imread(os.path.join(data_dir, id_))
+        img = np.squeeze(img)
 
         if return_filenames: filenames.append(id_)
 

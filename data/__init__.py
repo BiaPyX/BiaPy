@@ -73,7 +73,7 @@ def create_test_instance_channels(cfg):
     save_npy_files(X_test, data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_DIR, filenames=test_filenames,
                    verbose=cfg.TEST.VERBOSE)
 
-    if cfg.DATA.TEST.LOAD_GT:
+    if cfg.DATA.TEST.LOAD_GT and cfg.TEST.EVALUATE:
         Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH)
         print("Creating Y_test channels . . .")
         if isinstance(Y_test, list):

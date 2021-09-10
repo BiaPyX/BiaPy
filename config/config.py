@@ -339,6 +339,8 @@ class Config:
         _C.TEST.VERBOSE = True
         # Make test-time augmentation. Infer over 8 possible rotations for 2D img and 16 when 3D
         _C.TEST.AUGMENTATION = False
+        # Wheter to evaluate or not
+        _C.TEST.EVALUATE = True
         # Wheter to calculate mAP
         _C.TEST.MAP = False # Only applies when _C.TEST.STATS.MERGE_PATCHES = True
 
