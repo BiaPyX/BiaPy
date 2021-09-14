@@ -14,7 +14,7 @@ from data.data_3D_manipulation import load_and_prepare_3D_data, crop_3D_data_wit
 from data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
 from data.post_processing import apply_post_processing
 from data.post_processing.post_processing import (ensemble8_2d_predictions, ensemble16_3d_predictions, bc_watershed,
-                                                  bcd_watershed)
+                                                  bcd_watershed, calculate_optimal_mw_thresholds)
 from models import build_model
 from engine import build_callbacks, prepare_optimizer
 from engine.metrics import jaccard_index_numpy, voc_calculation
@@ -384,17 +384,28 @@ class Trainer(object):
                     ### INSTANCE SEGMENTATION ###
                     #############################
                     if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
+                        if self.cfg.DATA.MW_OPTIMIZE_THS:
+                            obj = calculate_optimal_mw_thresholds(self.model, self.cfg.DATA.VAL.PATH,
+                                self.cfg.DATA.VAL.MASK_PATH, self.cfg.DATA.CHANNELS, self.cfg.DATA.REMOVE_SMALL_OBJ,
+                                verbose=self.cfg.TEST.VERBOSE))
+                            if mode == 'BCD':
+                                th1_opt, th2_opt, th3_opt, th4_opt, th5_opt = obj
+                            else:
+                                th1_opt, th2_opt, th3_opt = obj
+                                th4_opt, th5_opt = self.cfg.DATA.MW_TH4, self.cfg.DATA.MW_TH5
+                        else:
+                            th1_opt, th2_opt, th3_opt = self.cfg.DATA.MW_TH1, self.cfg.DATA.MW_TH2, self.cfg.DATA.MW_TH3
+                            th4_opt, th5_opt = self.cfg.DATA.MW_TH4, self.cfg.DATA.MW_TH5
+
                         # Create instances
                         print("Creating instances with watershed . . .")
                         w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
                         if self.cfg.DATA.CHANNELS == "BC":
-                            pred = bc_watershed(pred, thres1=self.cfg.DATA.MW_TH1, thres2=self.cfg.DATA.MW_TH2,
-                                thres3=self.cfg.DATA.MW_TH3, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
-                                save_dir=w_dir)
-                        else:
-                            pred = bcd_watershed(pred, thres1=self.cfg.DATA.MW_TH1, thres2=self.cfg.DATA.MW_TH2,
-                                thres3=self.cfg.DATA.MW_TH3, thres4=self.cfg.DATA.MW_TH4, thres5=self.cfg.DATA.MW_TH5,
+                            pred = bc_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt,
                                 thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, save_dir=w_dir)
+                        else:
+                            pred = bcd_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt, thres4=th4_opt,
+                                thres5=th5_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, save_dir=w_dir)
                         save_tif(np.expand_dims(np.expand_dims(pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                                  filenames, verbose=self.cfg.TEST.VERBOSE)
 
@@ -402,6 +413,7 @@ class Trainer(object):
                         print("####################\n"
                               "#  mAP Calculation #\n"
                               "####################\n")
+
                         # Convert the prediction into an .h5 file
                         os.makedirs(self.cfg.PATHS.MAP_H5_DIR, exist_ok=True)
                         filenames = self.test_mask_filenames[(i*l_X)+j:(i*l_X)+j+1]

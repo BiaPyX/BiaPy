@@ -1,6 +1,8 @@
 import cv2
 import os
 import math
+import statistics
+import sys
 import numpy as np
 from skimage import measure
 from tqdm import tqdm
@@ -10,7 +12,11 @@ from skimage.segmentation import watershed
 from skimage.filters import rank
 from scipy.ndimage import rotate
 from skimage.measure import label
-from skimage.io import imsave
+from skimage.io import imsave, imread
+from scipy.ndimage.morphology import binary_dilation
+
+from engine.metrics import jaccard_index_numpy
+from utils.util import save_tif
 
 
 def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
@@ -605,3 +611,224 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
 
     return np.mean(out, axis=0)
 
+
+def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, mode="BC", thres_small=5, verbose=True):
+    """Calculate the optimum values for the marked controlled watershed thresholds.
+
+       Parameters
+       ----------
+       model: Keras model
+           Model to make the predictions.
+
+       data_path : str
+           Path to load the samples to infer.
+
+       data_mask_path : str
+           Path to load the mask samples.
+
+       mode : str, optional
+           Operation mode. Possible values: ``BC`` and ``BCD``.  ``BC`` corresponds to use binary segmentation+contour.
+           ``BCD`` stands for binary segmentation+contour+distances.
+
+       thres_small : int, optional
+           Theshold to remove small objects in the mask and the prediction.
+
+       verbose : bool, optional
+            To print saving information.
+
+       Return
+       ------
+       global_th1_min_opt: float
+           MW_TH1 optimum value.
+
+       global_th2_opt : float
+           MW_TH2 optimum value.
+
+       global_th3 : float
+           MW_TH3 optimum value.
+
+       global_th4_min_opt : float, optional
+           MW_TH4 optimum value.
+
+       global_th5 : float, optional
+           MW_TH5 optimum value.
+    """
+
+    assert mode in ['BC', 'BCD']
+
+    if verbose:
+        print("Calculating the best thresholds for the mark controlled watershed . . .")
+    ids = sorted(next(os.walk(data_path))[2])
+    mask_ids = sorted(next(os.walk(data_mask_path))[2])
+    ths = [1e-06, 5e-06, 1e-05, 5e-05, 1e-04, 5e-04, 1e-03, 5e-03, 1e-02, 5e-02]
+    ths.extend(np.arange(0.1, 1.0, 0.05))
+
+    l_th1_min_opt = []
+    l_th1_min = []
+    l_th2 = []
+    l_th2_opt = []
+    l_th3 = []
+    if mode == 'BCD':
+        l_th4_min_opt = []
+        l_th4_min = []
+        l_th5 = []
+
+    for i in tqdm(range(len(ids))):
+        if verbose: print("Analizing file {}".format(ids[i]))
+
+        # Read and prepare images
+        img = imread(os.path.join(data_path, ids[i]))
+        mask = imread(os.path.join(data_mask_path, mask_ids[i]))
+        img = np.squeeze(img)
+        mask = np.squeeze(mask)
+        if len(img.shape) == 3:
+            img = np.expand_dims(img, axis=-1)
+        if len(mask.shape) == 3:
+            mask = np.expand_dims(mask, axis=-1)
+        img = np.transpose(img, (1,2,0,3))
+        img = np.expand_dims(img, axis=0)
+        mask = np.transpose(mask, (1,2,0,3))
+        mask = np.expand_dims(mask, axis=0)
+
+        # Mask adjust
+        if len(np.unique(mask)) < 2:
+            mask = label(mask, connectivity=1)
+        mask = remove_small_objects(mask, thres_small)
+        labels = np.unique(mask)
+
+        # Prediction
+        if np.max(img) > 100: img = img/255
+        pred = model.predict(img, verbose=0)
+
+        if mode == 'BCD':
+            max_distance = np.max(pred[...,2])
+            ths_dis = np.arange(0.1, max_distance, 0.05)
+
+        for k in tqdm(range(1,len(labels))):
+            obj = (mask==labels[k]).astype(np.uint8)
+            obj_dil = binary_dilation(obj, iterations=3)
+
+            # TH1 and TH3
+            th1_min = -1
+            th3_best = -1
+            th3_max_jac = -1
+            for j in reversed(range(len(ths))):
+                # TH1: check when all pixels belong to the object dissapear moving the threshold (TH). When find that TH
+                # the best value of TH1 is considered the previous (j+1 because is a reversed for)
+                if th1_min == -1:
+                    p = (np.expand_dims(pred[...,0] < ths[j],-1)*(obj_dil > 0)).astype(np.uint8)
+                    jac = jaccard_index_numpy(obj, p)
+                    if jac < 0.1:
+                        th1_min = ths[j+1] if j < len(ths)-1 else ths[-1]
+
+                # TH3: look at the best IoU compared with the original label. Only the region that involve the object is
+                # taken into consideration. This is achieved dilating 2 iterations the original object mask. If we do not
+                # dilate that label, decreasing the TH will always ensure a IoU >= than the previous TH. This way, the
+                # IoU will reach a maximum and then it will start to decrease, as more points that are not from the
+                # object are added into it
+                p = (np.expand_dims(pred[...,0] > ths[j],-1)*(obj_dil > 0)).astype(np.uint8)
+                jac = jaccard_index_numpy(obj, p)
+                if jac > th3_max_jac:
+                    th3_max_jac = jac
+                    th3_best = ths[j]
+
+            if th1_min == -1: th1_min = ths[0]
+            th1_min_opt = ((1-th1_min)/2)+th1_min
+
+            l_th1_min_opt.append(th1_min_opt)
+            l_th1_min.append(th1_min)
+            l_th3.append(th3_best)
+
+            if mode == 'BCD':
+                # TH4 and TH5
+                th4_min = -1
+                th5_best = -1
+                th5_max_jac = -1
+                for j in reversed(range(len(ths_dis))):
+                    # TH4: same as TH1
+                    p = (np.expand_dims(pred[...,2] < ths_dis[j],-1)*(obj_dil > 0)).astype(np.uint8)
+                    jac = jaccard_index_numpy(obj, p)
+                    if jac < 0.1 and th4_min == -1:
+                        th4_min = ths_dis[j+1] if j < len(ths_dis)-1 else ths_dis[-1]
+
+                    # TH5: same as TH2
+                    p = (np.expand_dims(pred[...,2] > ths_dis[j],-1)*(obj_dil > 0)).astype(np.uint8)
+                    jac = jaccard_index_numpy(obj, p)
+                    if jac > th5_max_jac:
+                        th5_max_jac = jac
+                        th5_best = ths_dis[j]
+
+                if th4_min == -1: th4_min = ths_dis[0]
+                th4_min_opt = ((1-th4_min)/2)+th4_min
+
+                l_th4_min_opt.append(th4_min_opt)
+                l_th4_min.append(th4_min)
+                l_th5.append(th5_best)
+        del obj, obj_dil
+
+        # TH2: obtained the optimum value for the TH3, the TH2 threshold is calculated counting the objects. As this
+        # threshold looks at the contour channels, its purpose is to separed the entangled objects. This way, the TH2
+        # optimum should be reached when the number of objects of the prediction match the number of real objects
+        best_th3 = statistics.mean(l_th3)
+        objs_to_divide = (pred[...,0] > best_th3).astype(np.uint8)
+        objs_to_divide = binary_dilation(objs_to_divide, iterations=3)
+
+        th2_min = 0
+        th2_last = 0
+        th2_repeat_count = 0
+        th2_op_pos = -1
+        th2_obj_min_diff = sys.maxsize
+        for k in range(len(ths)):
+            p = (objs_to_divide * (pred[...,1] < ths[k])).astype(np.uint8)
+            p = label(np.squeeze(p), connectivity=1)
+            p = remove_small_objects(p, thres_small)
+            obj_count = len(np.unique(p))
+            if abs(obj_count-len(labels)) < th2_obj_min_diff:
+                th2_obj_min_diff = abs(obj_count-len(labels))
+                th2_min = ths[k]
+                th2_op_pos = k
+                th2_repeat_count = 0
+
+            if th2_obj_min_diff == th2_last: th2_repeat_count += 1
+            th2_last = abs(obj_count-len(labels))
+
+        l_th2.append(th2_min)
+        th2_opt_pos = th2_op_pos + int(th2_repeat_count/2)
+        if th2_opt_pos >= len(ths): th2_opt_pos = len(ths)-1
+        l_th2_opt.append(ths[th2_opt_pos])
+
+    global_th1_min_opt = statistics.mean(l_th1_min_opt)
+    global_th1_min_opt_std = statistics.stdev(l_th1_min_opt)
+    global_th1_min = statistics.mean(l_th1_min)
+    global_th1_min_std = statistics.stdev(l_th1_min)
+    if len(l_th2) != 1:
+        global_th2 = statistics.mean(l_th2)
+        global_th2_std = statistics.stdev(l_th2)
+        global_th2_opt = statistics.mean(l_th2_opt)
+        global_th2_opt_std = statistics.stdev(l_th2_opt)
+    else:
+        global_th2 = l_th2[0]
+        global_th2_std = 0
+        global_th2_opt = l_th2_opt[0]
+        global_th2_opt_std = 0
+    global_th3 = statistics.mean(l_th3)
+    global_th3_std = statistics.stdev(l_th3)
+    if mode == 'BCD':
+        global_th4_min_opt = statistics.mean(l_th4_min_opt)
+        global_th4_min_opt_std = statistics.stdev(l_th4_min_opt)
+        global_th4_min = statistics.mean(l_th4_min)
+        global_th4_min_std = statistics.stdev(l_th4_min)
+        global_th5 = statistics.mean(l_th5)
+        global_th5_std = statistics.stdev(l_th5)
+
+    if verbose:
+        print("MW_TH1 minimum value is {} (std:{}) so the optimum should be {} (std:{})".format(global_th1_min, global_th1_min_std, global_th1_min_opt, global_th1_min_opt_std))
+        print("MW_TH2 minimum value is {} (std:{}) and the optimum is {} (std:{})".format(global_th2, global_th2_std, global_th2_opt, global_th2_opt_std))
+        print("MW_TH3 optimum should be {} (std:{})".format(global_th3, global_th3_std))
+    if mode == 'BCD':
+        if verbose:
+            print("MW_TH4 minimum value is {} (std:{}) so the optimum should be {} (std:{})".format(global_th4_min, global_th4_min_std, global_th4_min_opt, global_th4_min_opt_std))
+            print("MW_TH5 optimum should be {} (std:{})".format(global_th5, global_th5_std))
+        return global_th1_min_opt, global_th2_opt, global_th3, global_th4_min_opt, global_th5
+    else:
+        return global_th1_min_opt, global_th2_opt, global_th3

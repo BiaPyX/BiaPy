@@ -8,10 +8,9 @@ import matplotlib.pyplot as plt
 import scipy.ndimage
 import tensorflow as tf
 import copy
-from skimage.io import imread
 from PIL import ImageEnhance, Image
 from tqdm import tqdm
-from skimage.io import imsave
+from skimage.io import imsave, imread
 from skimage import measure
 from skimage.transform import resize
 from skimage.segmentation import clear_border, find_boundaries

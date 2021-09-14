@@ -77,6 +77,9 @@ class Config:
         _C.DATA.MW_TH5 = 1.5
         # Size of small objects to be removed after doing watershed
         _C.DATA.REMOVE_SMALL_OBJ = 30
+        # Wheter to find an optimum value for each threshold with the validation data. If True the previous MW_TH*
+        # variables will be replaced by the optimum values found
+        _C.DATA.MW_OPTIMIZE_THS = False
 
         # Train
         _C.DATA.TRAIN = CN()
