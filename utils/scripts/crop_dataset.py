@@ -23,12 +23,12 @@ for n, id_ in tqdm(enumerate(ids), total=len(ids)):
     if len(img.shape) == 3:
         img = np.expand_dims(img, axis=-1)
 
-        if img.shape != crop_shape[:3]+(img.shape[-1],):
-            img = crop_3D_data_with_overlap(img, crop_shape[:3]+(img.shape[-1],), overlap=overlap, padding=padding,
-                                            median_padding=median_padding, verbose=True)
-        else:
-            img = np.transpose(img, (1,2,0,3))
-            img = np.expand_dims(img, axis=0)
+    if img.shape != crop_shape[:3]+(img.shape[-1],):
+        img = crop_3D_data_with_overlap(img, crop_shape[:3]+(img.shape[-1],), overlap=overlap, padding=padding,
+                                        median_padding=median_padding, verbose=True)
+    else:
+        img = np.transpose(img, (1,2,0,3))
+        img = np.expand_dims(img, axis=0)
 
     filenames = []
     d = len(str(len(img)))
