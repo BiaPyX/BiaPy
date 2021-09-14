@@ -387,8 +387,8 @@ class Trainer(object):
                         if self.cfg.DATA.MW_OPTIMIZE_THS:
                             obj = calculate_optimal_mw_thresholds(self.model, self.cfg.DATA.VAL.PATH,
                                 self.cfg.DATA.VAL.MASK_PATH, self.cfg.DATA.CHANNELS, self.cfg.DATA.REMOVE_SMALL_OBJ,
-                                verbose=self.cfg.TEST.VERBOSE))
-                            if mode == 'BCD':
+                                verbose=self.cfg.TEST.VERBOSE)
+                            if self.cfg.DATA.CHANNELS == "BCD":
                                 th1_opt, th2_opt, th3_opt, th4_opt, th5_opt = obj
                             else:
                                 th1_opt, th2_opt, th3_opt = obj
