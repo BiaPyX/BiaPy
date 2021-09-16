@@ -28,6 +28,12 @@ class Trainer(object):
         original_test_path = None
         self.test_mask_filenames = None
 
+        # Save paths in case we need them in a future
+        self.orig_train_path = cfg.DATA.TRAIN.PATH
+        self.orig_train_mask_path = cfg.DATA.TRAIN.MASK_PATH
+        self.orig_val_path = cfg.DATA.VAL.PATH
+        self.orig_val_mask_path = cfg.DATA.VAL.MASK_PATH
+
         if cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
             print("###################\n"
                   "#  SANITY CHECKS  #\n"
@@ -402,10 +408,12 @@ class Trainer(object):
                         w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
                         if self.cfg.DATA.CHANNELS == "BC":
                             pred = bc_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt,
-                                thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, save_dir=w_dir)
+                                thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, remove_before=self.cfg.DATA.REMOVE_BEFORE_MW,
+                                save_dir=w_dir)
                         else:
                             pred = bcd_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt, thres4=th4_opt,
-                                thres5=th5_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, save_dir=w_dir)
+                                thres5=th5_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
+                                remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=w_dir)
                         save_tif(np.expand_dims(np.expand_dims(pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                                  filenames, verbose=self.cfg.TEST.VERBOSE)
 
