@@ -289,6 +289,67 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
         imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
 
+def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discard=True, verbose=True):
+    """Save images in the given directory.
+
+       Parameters
+       ----------
+       X : 4D/5D numpy array
+           Data to save as images. The first dimension must be the number of images. E.g.
+           ``(num_of_images, x, y, channels)`` or ``(num_of_images, z, x, y, channels)``.
+
+       Y : 4D/5D numpy array
+           Data mask to save. The first dimension must be the number of images. E.g.
+           ``(num_of_images, x, y, channels)`` or ``(num_of_images, z, x, y, channels)``.
+
+       data_dir : str, optional
+           Path to store X images.
+
+       suffix : str, optional
+           Suffix to apply on output directory.
+
+       filenames : List, optional
+           Filenames that should be used when saving each image.
+
+       discard : bool, optional
+           Wheter to discard image/mask pairs if the mask has no label information.
+
+       verbose : bool, optional
+            To print saving information.
+    """
+
+    if verbose:
+        s = X.shape if not isinstance(X, list) else X[0].shape
+        print("Saving {} data as .tif in folder: {}".format(s, data_dir))
+
+    os.makedirs(os.path.join(data_dir, 'x'+suffix), exist_ok=True)
+    os.makedirs(os.path.join(data_dir, 'y'+suffix), exist_ok=True)
+    if filenames is not None:
+        if len(filenames) != len(X):
+            raise ValueError("Filenames array and length of X have different shapes: {} vs {}".format(len(filenames),len(X)))
+
+    d = len(str(len(X)))
+    for i in tqdm(range(X.shape[0]), leave=False):
+        if len(np.unique(Y[i])) >= 2 or not discard:
+            if filenames is None:
+                f1 = os.path.join(data_dir, 'x'+suffix, str(i).zfill(d)+'.tif')
+                f2 = os.path.join(data_dir, 'y'+suffix, str(i).zfill(d)+'.tif')
+            else:
+
+                f1 = os.path.join(data_dir, 'x'+suffix, os.path.splitext(filenames[i])[0]+'.tif')
+                f2 = os.path.join(data_dir, 'y'+suffix, os.path.splitext(filenames[i])[0]+'.tif')
+            if X.ndim == 4:
+                aux = np.expand_dims(np.expand_dims(X[i],0).transpose((0,3,1,2)), -1).astype(np.float32)
+            else:
+                aux = np.expand_dims(X[i].transpose((0,3,1,2)), -1).astype(np.float32)
+            imsave(f1, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+            if Y.ndim == 4:
+                aux = np.expand_dims(np.expand_dims(Y[i],0).transpose((0,3,1,2)), -1).astype(np.float32)
+            else:
+                aux = np.expand_dims(Y[i].transpose((0,3,1,2)), -1).astype(np.float32)
+            imsave(f2, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+
+
 def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
              prefix="", extension=".png", filenames=None):
     """Save images in the given directory.
