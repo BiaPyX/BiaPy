@@ -38,8 +38,12 @@ class Trainer(object):
             print("###################\n"
                   "#  SANITY CHECKS  #\n"
                   "###################\n")
-            check_masks(cfg.DATA.TRAIN.MASK_PATH)
-            check_masks(cfg.DATA.TEST.MASK_PATH)
+            if cfg.TRAIN.ENABLE:
+                check_masks(cfg.DATA.TRAIN.MASK_PATH)
+                if not cfg.DATA.VAL.FROM_TRAIN:
+                    check_masks(cfg.DATA.VAL.MASK_PATH)
+            if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT:
+                check_masks(cfg.DATA.TEST.MASK_PATH)
 
             # Adjust the metric used accordingly to the number of classes. This code is planned to be used in a binary
             # classification problem, so the function 'jaccard_index_softmax' will only calculate the IoU for the
@@ -538,6 +542,7 @@ class Trainer(object):
             else:
                 iou_post, ov_iou_post = 0, 0
             save_tif(all_pred, self.cfg.PATHS.RESULT_DIR.FULL_POST_PROCESSING, verbose=self.cfg.TEST.VERBOSE)
+            del all_pred
 
         if post_processing and self.cfg.PROBLEM.NDIM == '3D':
             iou_post = iou_post / image_counter
