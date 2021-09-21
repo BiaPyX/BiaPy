@@ -198,6 +198,13 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
            X_train, Y_train = crop_3D_data_with_overlap(
                 X_train, (80, 80, 80, 1), data_mask=Y_train, overlap=(0.5,0.5,0.5), padding=(64,64,64))
     """
+
+    if verbose:
+        print("### 3D-OV-CROP ###")
+        print("Cropping {} images into {} with overlapping . . .".format(data.shape, vol_shape))
+        print("Minimum overlap selected: {}".format(overlap))
+        print("Padding: {}".format(padding))
+
     if data.ndim != 4:
         raise ValueError("data expected to be 4 dimensional, given {}".format(data.shape))
     if data_mask is not None:
@@ -213,12 +220,6 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
         raise ValueError("'vol_shape[1]' {} greater than {}".format(vol_shape[1], data.shape[2]))
     if (overlap[0] >= 1 or overlap[0] < 0) and (overlap[1] >= 1 or overlap[1] < 0) and (overlap[2] >= 1 or overlap[2] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
-
-    if verbose:
-        print("### 3D-OV-CROP ###")
-        print("Cropping {} images into {} with overlapping . . .".format(data.shape, vol_shape))
-        print("Minimum overlap selected: {}".format(overlap))
-        print("Padding: {}".format(padding))
 
     padded_data = np.zeros((data.shape[0]+2*padding[2], data.shape[1]+2*padding[0],
                             data.shape[2]+2*padding[1], data.shape[3]), dtype=data.dtype)
