@@ -119,6 +119,8 @@ class Config:
         _C.DATA.TEST.PADDING = (0,0)
         # Wheter to use median values to fill padded pixels or zeros
         _C.DATA.TEST.MEDIAN_PADDING = False
+        # Directory where binary masks to apply to resulting images should be. Used when _C.TEST.APPLY_MASK  == True
+        _C.DATA.TEST.BINARY_MASKS = os.path.join(_C.DATA.ROOT_DIR, 'test', 'bin_mask')
 
         # Validation
         _C.DATA.VAL = CN()
@@ -146,6 +148,9 @@ class Config:
         _C.DATA.VAL.PADDING = (0,0)
         # Wheter to use median values to fill padded pixels or zeros
         _C.DATA.VAL.MEDIAN_PADDING = False
+        # Directory where validation binary masks should be located. This binary mask will be applied only when MW_TH*
+        # optimized values are find, that is, when _C.DATA.MW_OPTIMIZE_THS = True and _C.TEST.APPLY_MASK = True
+        _C.DATA.VAL.BINARY_MASKS = os.path.join(_C.DATA.ROOT_DIR, 'val', 'bin_mask')
 
         # _C.PROBLEM.NDIM='2D' -> _C.DATA.PATCH_SIZE=(x,y,c) ; _C.PROBLEM.NDIM='3D' -> _C.DATA.PATCH_SIZE=(x,y,z,c)
         _C.DATA.PATCH_SIZE = (256, 256, 1)
@@ -346,6 +351,8 @@ class Config:
         _C.TEST.AUGMENTATION = False
         # Wheter to evaluate or not
         _C.TEST.EVALUATE = True
+        # Apply a binary mask to remove possible segmentation outside it
+        _C.TEST.APPLY_MASK = False
         # Wheter to calculate mAP
         _C.TEST.MAP = False # Only applies when _C.TEST.STATS.MERGE_PATCHES = True
 
@@ -436,5 +443,7 @@ class Config:
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
         self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = self._C.DATA.VAL.PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
         self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
+        self._C.DATA.VAL.BINARY_MASKS = os.path.join(self._C.DATA.VAL.PATH, '..', 'bin_mask')
         self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
         self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
+        self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, '..', 'bin_mask')

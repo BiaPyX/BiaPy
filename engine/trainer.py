@@ -7,7 +7,7 @@ from tqdm import tqdm
 from skimage.io import imread
 
 from utils.util import (check_masks, check_downsample_division, create_plots, save_tif, load_data_from_dir,
-                        load_3d_images_from_dir)
+                        load_3d_images_from_dir, apply_binary_mask)
 from data import create_instance_channels, create_test_instance_channels
 from data.data_2D_manipulation import load_and_prepare_2D_train_data, crop_data_with_overlap, merge_data_with_overlap
 from data.data_3D_manipulation import load_and_prepare_3D_data, crop_3D_data_with_overlap, merge_3D_data_with_overlap
@@ -352,6 +352,10 @@ class Trainer(object):
                         pred = np.expand_dims(np.argmax(pred,-1), -1)
                         if self.cfg.DATA.TEST.LOAD_GT: _Y = np.expand_dims(np.argmax(_Y,-1), -1)
 
+                    # Apply mask
+                    if self.cfg.TEST.APPLY_MASK:
+                        pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
+
                     # Save image
                     filenames = self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]
                     if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
@@ -391,9 +395,13 @@ class Trainer(object):
                     #############################
                     if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
                         if self.cfg.DATA.MW_OPTIMIZE_THS:
+                            if self.cfg.TEST.APPLY_MASK and os.path.isdir(self.cfg.DATA.VAL.BINARY_MASKS):
+                                bin_mask = self.cfg.DATA.VAL.BINARY_MASKS
+                            else:
+                                bin_mask = None
                             obj = calculate_optimal_mw_thresholds(self.model, self.cfg.DATA.VAL.PATH,
-                                self.cfg.DATA.VAL.MASK_PATH, self.cfg.DATA.CHANNELS, self.cfg.DATA.REMOVE_SMALL_OBJ,
-                                verbose=self.cfg.TEST.VERBOSE)
+                                self.orig_val_mask_path, self.cfg.DATA.CHANNELS, self.cfg.DATA.VAL.MASK_PATH,
+                                self.cfg.DATA.REMOVE_SMALL_OBJ, bin_mask, verbose=self.cfg.TEST.VERBOSE)
                             if self.cfg.DATA.CHANNELS == "BCD":
                                 th1_opt, th2_opt, th3_opt, th4_opt, th5_opt = obj
                             else:
