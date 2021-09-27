@@ -14,6 +14,8 @@ from scipy.ndimage import rotate
 from skimage.measure import label
 from skimage.io import imsave, imread
 from scipy.ndimage.morphology import binary_dilation
+import matplotlib.pyplot as plt
+import matplotlib.transforms as transforms
 
 from engine.metrics import jaccard_index_numpy
 from utils.util import save_tif, apply_binary_mask
@@ -627,7 +629,7 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
 
 
 def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, mode="BC", distance_mask_path=None, thres_small=5,
-                                    bin_mask_path=None, verbose=True):
+                                    bin_mask_path=None, use_minimum=False, chart_dir=None, verbose=True):
     """Calculate the optimum values for the marked controlled watershed thresholds.
 
        Parameters
@@ -642,7 +644,7 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, mode="BC",
            Path to load the mask samples.
 
        mode : str, optional
-           Operation mode. Possible values: ``BC`` and ``BCD``.  ``BC`` corresponds to use binary segmentation+contour.
+           Operation mode. Possible values: ``BC`` and ``BCD``. ``BC`` corresponds to use binary segmentation+contour.
            ``BCD`` stands for binary segmentation+contour+distances.
 
        thres_small : int, optional
@@ -651,6 +653,12 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, mode="BC",
        bin_mask_path : str, optional
            Path of the binary masks to apply to the prediction. Useful to remove segmentation outside the masks.
            If ``None``, no mask is applied.
+
+       use_minimum : bool, optional
+           Return the minimum value of TH1 (and TH4) instead of the mean.
+
+       chart_dir : str, optional
+           Path where the charts are stored.
 
        verbose : bool, optional
            To print saving information.
@@ -681,17 +689,24 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, mode="BC",
     ids = sorted(next(os.walk(data_path))[2])
     mask_ids = sorted(next(os.walk(data_mask_path))[2])
     ths = [1e-06, 5e-06, 1e-05, 5e-05, 1e-04, 5e-04, 1e-03, 5e-03, 1e-02, 5e-02]
-    ths.extend(np.arange(0.1, 1.0, 0.05))
+    ths.extend(np.round(np.arange(0.1, 1.0, 0.05),3))
 
-    l_th1_min_opt = []
+    min_th1 = 1
+    g_l_th1 = []
     l_th1_min = []
-    l_th2 = []
+    l_th1_opt = []
+    g_l_th2 = []
+    l_th2_min = []
     l_th2_opt = []
-    l_th3 = []
+    ideal_number_obj = []
+    g_l_th3 = []
+    l_th3_max = []
     if mode == 'BCD':
-        l_th4_min_opt = []
+        g_l_th4 = []
         l_th4_min = []
-        l_th5 = []
+        l_th4_opt = []
+        g_l_th5 = []
+        l_th5_max = []
 
     if mode == 'BCD':
         print("Calculating the max distance value first. . ")
@@ -749,89 +764,59 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, mode="BC",
             if bin_mask_path is not None:
                 pred = apply_binary_mask(pred, bin_mask_path)
 
-            for k in tqdm(range(1,len(labels))):
-                obj = (mask==labels[k]).astype(np.uint8)
-                obj_dil = binary_dilation(obj, iterations=3)
-
-                # TH1 and TH4:
-                # Check when all pixels belong to the object dissapear moving the threshold (TH). When find that TH the best
-                # value of TH1 is considered the previous (j+1 because is a reversed for)
-                th1_min = -1
-                # TH1
-                for j in range(len(ths)):
-                    p = (np.expand_dims(pred[...,0] > ths[j],-1)*(obj_dil > 0)).astype(np.uint8)
-                    jac = jaccard_index_numpy(obj, p)
-                    if jac < 0.1:
-                        th1_min = ths[j-1] if j > 0 else ths[0]
-                        break
-                if th1_min == -1: th1_min = 1
-                th1_min_opt = th1_min-(th1_min*0.2)
-                l_th1_min_opt.append(th1_min_opt)
-                l_th1_min.append(th1_min)
-
-                # TH4
-                if mode == 'BCD':
-                    th4_min = -1
-                    for j in range(len(ths_dis)):
-                        p = (np.expand_dims(pred[...,2] > ths_dis[j],-1)*(obj_dil > 0)).astype(np.uint8)
-                        jac = jaccard_index_numpy(obj, p)
-                        if jac < 0.1:
-                            th4_min = ths_dis[j-1] if j > 0 else ths_dis[0]
-                            break
-                    if th4_min == -1: th4_min = ths_dis[0]
-                    th4_min_opt = th4_min-(th4_min*0.2)
-                    l_th4_min_opt.append(th4_min_opt)
-                    l_th4_min.append(th4_min)
-
-                # TH3 and TH5:
-                # Look at the best IoU compared with the original label. Only the region that involve the object is taken
-                # into consideration. This is achieved dilating 2 iterations the original object mask. If we do not dilate
-                # that label, decreasing the TH will always ensure a IoU >= than the previous TH. This way, the IoU will
-                # reach a maximum and then it will start to decrease, as more points that are not from the object are added
-                # into it
-                # TH3
-                th3_best = -1
-                th3_max_jac = -1
-                for j in reversed(range(len(ths))):
-                    # TH3
-                    p = (np.expand_dims(pred[...,0] > ths[j],-1)*(obj_dil > 0)).astype(np.uint8)
-                    jac = jaccard_index_numpy(obj, p)
-                    if jac > th3_max_jac:
-                        th3_max_jac = jac
-                        th3_best = ths[j]
-                l_th3.append(th3_best)
-                # TH5
-                if mode == 'BCD':
-                    th5_best = -1
-                    th5_max_jac = -1
-                    for j in reversed(range(len(ths_dis))):
-                        # TH5
-                        p = (np.expand_dims(pred[...,2] > ths_dis[j],-1)*(obj_dil > 0)).astype(np.uint8)
-                        jac = jaccard_index_numpy(obj, p)
-                        if jac > th5_max_jac:
-                            th5_max_jac = jac
-                            th5_best = ths_dis[j]
-                    l_th5.append(th5_best)
-            del obj, obj_dil
+            # TH3 and TH5:
+            # Look at the best IoU compared with the original label. Only the region that involve the object is taken
+            # into consideration. This is achieved dilating 2 iterations the original object mask. If we do not dilate
+            # that label, decreasing the TH will always ensure a IoU >= than the previous TH. This way, the IoU will
+            # reach a maximum and then it will start to decrease, as more points that are not from the object are added
+            # into it
+            # TH3
+            th3_best = -1
+            th3_max_jac = -1
+            l_th3 = []
+            for j in range(len(ths)):
+                p = np.expand_dims(pred[...,0] > ths[j],-1).astype(np.uint8)
+                jac = jaccard_index_numpy((mask>0).astype(np.uint8), p)
+                if jac > th3_max_jac:
+                    th3_max_jac = jac
+                    th3_best = ths[j]
+                l_th3.append(jac)
+            l_th3_max.append(th3_best)
+            g_l_th3.append(l_th3)
+            # TH5
+            if mode == 'BCD':
+                th5_best = -1
+                th5_max_jac = -1
+                l_th5 = []
+                for j in range(len(ths_dis)):
+                    p = np.expand_dims(pred[...,2] > ths_dis[j],-1).astype(np.uint8)
+                    jac = jaccard_index_numpy((mask>0).astype(np.uint8), p)
+                    if jac > th5_max_jac:
+                        th5_max_jac = jac
+                        th5_best = ths_dis[j]
+                    l_th5.append(jac)
+                l_th5_max.append(th5_best)
+                g_l_th5.append(l_th5)
 
             # TH2: obtained the optimum value for the TH3, the TH2 threshold is calculated counting the objects. As this
             # threshold looks at the contour channels, its purpose is to separed the entangled objects. This way, the TH2
             # optimum should be reached when the number of objects of the prediction match the number of real objects
-            best_th3 = statistics.mean(l_th3)
-            objs_to_divide = (pred[...,0] > best_th3).astype(np.uint8)
-            objs_to_divide = binary_dilation(objs_to_divide, iterations=3)
-
+            objs_to_divide = (pred[...,0] > th3_best).astype(np.uint8)
             th2_min = 0
             th2_last = 0
             th2_repeat_count = 0
             th2_op_pos = -1
             th2_obj_min_diff = sys.maxsize
+            l_th2 = []
             for k in range(len(ths)):
                 p = (objs_to_divide * (pred[...,1] < ths[k])).astype(np.uint8)
+
                 p = label(np.squeeze(p), connectivity=1)
                 if len(np.unique(p)) != 1:
                     p = remove_small_objects(p, thres_small)
                 obj_count = len(np.unique(p))
+                l_th2.append(obj_count)
+
                 if abs(obj_count-len(labels)) < th2_obj_min_diff:
                     th2_obj_min_diff = abs(obj_count-len(labels))
                     th2_min = ths[k]
@@ -841,43 +826,218 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, mode="BC",
                 if th2_obj_min_diff == th2_last: th2_repeat_count += 1
                 th2_last = abs(obj_count-len(labels))
 
-            l_th2.append(th2_min)
-            th2_opt_pos = th2_op_pos + int(th2_repeat_count/2)
+            g_l_th2.append(l_th2)
+            l_th2_min.append(th2_min)
+            th2_opt_pos = th2_op_pos + int(th2_repeat_count/2) if th2_repeat_count < 10 else th2_op_pos + 2
             if th2_opt_pos >= len(ths): th2_opt_pos = len(ths)-1
             l_th2_opt.append(ths[th2_opt_pos])
 
-    global_th1_min_opt = statistics.mean(l_th1_min_opt)
-    global_th1_min_opt_std = statistics.stdev(l_th1_min_opt)
-    global_th1_min = statistics.mean(l_th1_min)
-    global_th1_min_std = statistics.stdev(l_th1_min)
-    if len(l_th2) != 1:
-        global_th2 = statistics.mean(l_th2)
-        global_th2_std = statistics.stdev(l_th2)
+            # TH1 and TH4:
+            th1_min = 0
+            th1_last = 0
+            th1_repeat_count = 0
+            th1_op_pos = -1
+            th1_obj_min_diff = sys.maxsize
+            l_th1 = []
+            # TH1
+            for k in range(len(ths)):
+                p = ((pred[...,0] > ths[k])*(pred[...,1] < th2_min)).astype(np.uint8)
+
+                p = label(np.squeeze(p), connectivity=1)
+                obj_count = len(np.unique(p))
+                l_th1.append(obj_count)
+
+                if abs(obj_count-len(labels)) <= th1_obj_min_diff and th1_repeat_count < 2 \
+                    and abs(obj_count-len(labels)) != th1_last:
+                    th1_obj_min_diff = abs(obj_count-len(labels))
+                    th1_min = ths[k]
+                    th1_op_pos = k
+                    th1_repeat_count = 0
+
+                if th1_obj_min_diff == th1_last: th1_repeat_count += 1
+                th1_last = abs(obj_count-len(labels))
+
+            g_l_th1.append(l_th1)
+            l_th1_min.append(th1_min)
+            th1_opt_pos = th1_op_pos + 1 if th1_repeat_count > 2 else th1_op_pos
+            if th1_opt_pos >= len(ths): th1_opt_pos = len(ths)-1
+            l_th1_opt.append(ths[th1_opt_pos])
+
+            # TH4
+            if mode == 'BCD':
+                th4_min = 0
+                th4_last = 0
+                th4_repeat_count = 0
+                th4_op_pos = -1
+                th4_obj_min_diff = sys.maxsize
+                l_th4 = []
+                for k in range(len(ths_dis)):
+                    p = ((pred[...,2] > ths_dis[k])*(pred[...,1] < th2_min)).astype(np.uint8)
+
+                    p = label(np.squeeze(p), connectivity=1)
+                if len(np.unique(p)) != 1:
+                    p = remove_small_objects(p, thres_small)
+                obj_count = len(np.unique(p))
+                l_th4.append(obj_count)
+
+                if abs(obj_count-len(labels)) <= th4_obj_min_diff and th4_repeat_count < 2 \
+                    and abs(obj_count-len(labels)) != th4_last:
+                    th4_obj_min_diff = abs(obj_count-len(labels))
+                    th4_min = ths_dis[k]
+                    th4_op_pos = k
+                    th4_repeat_count = 0
+
+                if th4_obj_min_diff == th4_last: th4_repeat_count += 1
+                th4_last = abs(obj_count-len(labels))
+
+                g_l_th4.append(l_th4)
+                l_th4_min.append(th4_min)
+                th4_opt_pos = th4_op_pos + 1 if th4_repeat_count > 2 else th4_op_pos
+                if th4_opt_pos >= len(ths_dis): th4_opt_pos = len(ths_dis)-1
+                l_th4_opt.append(ths_dis[th4_opt_pos])
+
+        # Store the number of nucleus
+        ideal_number_obj.append(len(labels))
+
+    ideal_objects = statistics.mean(ideal_number_obj)
+    create_th_plot(ths, g_l_th1, "TH1", chart_dir)
+    create_th_plot(ths, g_l_th1, "TH1", chart_dir, per_sample=False, ideal_value=ideal_objects)
+    create_th_plot(ths, g_l_th2, "TH2", chart_dir)
+    create_th_plot(ths, g_l_th2, "TH2", chart_dir, per_sample=False, ideal_value=ideal_objects)
+    create_th_plot(ths, g_l_th3, "TH3", chart_dir)
+    create_th_plot(ths, g_l_th3, "TH3", chart_dir, per_sample=False)
+    if mode == 'BCD':
+        create_th_plot(ths_dis, g_l_th4, "TH4", chart_dir)
+        create_th_plot(ths_dis, g_l_th4, "TH4", chart_dir, per_sample=False, ideal_value=ideal_objects)
+        create_th_plot(ths_dis, g_l_th5, "TH5", chart_dir)
+        create_th_plot(ths_dis, g_l_th5, "TH5", chart_dir, per_sample=False)
+
+    if len(ideal_number_obj) > 1:
+        global_th1 = statistics.mean(l_th1_min)
+        global_th1_std = statistics.stdev(l_th1_min)
+        global_th1_opt = statistics.mean(l_th1_opt)
+        global_th1_opt_std = statistics.stdev(l_th1_opt)
+        global_th2 = statistics.mean(l_th2_min)
+        global_th2_std = statistics.stdev(l_th2_min)
         global_th2_opt = statistics.mean(l_th2_opt)
         global_th2_opt_std = statistics.stdev(l_th2_opt)
+        global_th3 = statistics.mean(l_th3_max)
+        global_th3_std = statistics.stdev(l_th3_max)
+        if mode == 'BCD':
+            global_th4 = statistics.mean(l_th4_min)
+            global_th4_std = statistics.stdev(l_th4_min)
+            global_th4_opt = statistics.mean(l_th4_opt)
+            global_th4_opt_std = statistics.stdev(l_th4_opt)
+            global_th5 = statistics.mean(l_th5_max)
+            global_th5_std = statistics.stdev(l_th5_max)
     else:
-        global_th2 = l_th2[0]
+        global_th1 = l_th1_min[0]
+        global_th1_std = 0
+        global_th1_opt = l_th1_opt[0]
+        global_th1_opt_std = 0
+        global_th2 = l_th2_min[0]
         global_th2_std = 0
         global_th2_opt = l_th2_opt[0]
         global_th2_opt_std = 0
-    global_th3 = statistics.mean(l_th3)
-    global_th3_std = statistics.stdev(l_th3)
-    if mode == 'BCD':
-        global_th4_min_opt = statistics.mean(l_th4_min_opt)
-        global_th4_min_opt_std = statistics.stdev(l_th4_min_opt)
-        global_th4_min = statistics.mean(l_th4_min)
-        global_th4_min_std = statistics.stdev(l_th4_min)
-        global_th5 = statistics.mean(l_th5)
-        global_th5_std = statistics.stdev(l_th5)
+        global_th3 = l_th3_max[0]
+        global_th3_std = 0
+        if mode == 'BCD':
+            global_th4 = l_th4_min[0]
+            global_th4_std = 0
+            global_th4_opt = l_th4_opt[0]
+            global_th4_opt_std = 0
+            global_th5 = l_th5_max[0]
+            global_th5_std = 0
 
     if verbose:
-        print("MW_TH1 maximum value is {} (std:{}) so the optimum should be {} (std:{})".format(global_th1_min, global_th1_min_std, global_th1_min_opt, global_th1_min_opt_std))
+        if not use_minimum:
+            print("MW_TH1 maximum value is {} (std:{}) so the optimum should be {} (std:{})".format(global_th1, global_th1_std, global_th1_opt, global_th1_opt_std))
+        else:
+            print("MW_TH1 minimum value is {}".format(min(l_th1_min)))
         print("MW_TH2 minimum value is {} (std:{}) and the optimum is {} (std:{})".format(global_th2, global_th2_std, global_th2_opt, global_th2_opt_std))
         print("MW_TH3 optimum should be {} (std:{})".format(global_th3, global_th3_std))
     if mode == 'BCD':
         if verbose:
-            print("MW_TH4 maximum value is {} (std:{}) so the optimum should be {} (std:{})".format(global_th4_min, global_th4_min_std, global_th4_min_opt, global_th4_min_opt_std))
+            print("MW_TH4 maximum value is {} (std:{}) so the optimum should be {} (std:{})".format(global_th4, global_th4_std, global_th4_opt, global_th4_opt_std))
+            print("MW_TH4 minimum value is {}".format(min(l_th4_min)))
             print("MW_TH5 optimum should be {} (std:{})".format(global_th5, global_th5_std))
-        return global_th1_min_opt, global_th2_opt, global_th3, global_th4_min_opt, global_th5
+        if not use_minimum:
+            return global_th1_opt, global_th2_opt, global_th3, global_th4_opt, global_th5
+        else:
+            return min(l_th1_min), global_th2_opt, global_th3, min(l_th4_min), global_th5
     else:
-        return global_th1_min_opt, global_th2_opt, global_th3
+        if not use_minimum:
+            return global_th1_opt, global_th2_opt, global_th3
+        else:
+            return min(l_th1_min), global_th2_opt, global_th3
+
+
+def create_th_plot(ths, y_list, th_name="TH1", chart_dir=None, per_sample=True, ideal_value=None):
+    """Create plots for threshold value calculation.
+
+       Parameters
+       ----------
+       ths : List of floats
+           List of thresholds. It will be the ``x`` axis.
+
+       y_list : List of ints/floats
+           Values of ``y`` axis.
+
+       th_name : str, optional
+           Name of the threshold.
+
+       chart_dir : str, optional
+           Path where the charts are stored.
+
+       per_sample : bool, optional
+           Create the plot per list in ``y_list``.
+
+       ideal_value : int/float, optional
+           Value that should be the ideal optimum. It is going to be marked with a red line in the chart.
+    """
+
+    assert th_name in ['TH1', 'TH2', 'TH3', 'TH4', 'TH5']
+    fig, ax = plt.subplots(figsize=(25,10))
+    ths = [str(i) for i in ths]
+    num_points=len(ths)
+
+    N = len(y_list)
+    colors = list(range(0,N))
+    c_labels = list("vol_"+str(i) for i in range(0,N))
+    if per_sample:
+        for i in range(N):
+            l = '_nolegend_'  if i > 30 else c_labels[i]
+            ax.plot(ths, y_list[i], label=l, alpha=0.4)
+
+        # Shrink current axis by 20%
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+        # Put a legend to the right of the current axis
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    else:
+        y_list = np.array(y_list)
+        y_mean = np.mean(y_list, axis=0)
+        y_std = np.std(y_list, axis=0)
+        ax.plot(ths, y_mean, label="sample (mean)")
+        plt.fill_between(ths, y_mean-y_std, y_mean+y_std, alpha=0.25)
+        if ideal_value is not None:
+            plt.axhline(ideal_value, color='r')
+            trans = transforms.blended_transform_factory(ax.get_yticklabels()[0].get_transform(), ax.transData)
+            ax.text(1.12,ideal_value, "Ideal (mean)", color="red", transform=trans, ha="right", va="center")
+        ax.legend(loc='center right')
+
+    # Set labels of x axis
+    plt.xticks(ths)
+    a = np.arange(num_points)
+    ax.xaxis.set_ticks(a)
+    ax.xaxis.set_ticklabels(ths)
+
+    plt.title('Threshold '+str(th_name))
+    plt.xlabel("Threshold")
+    if th_name == 'TH3' or th_name == 'TH5':
+        plt.ylabel("IoU")
+    else:
+        plt.ylabel("Number of objects")
+    p = "_per_validation_sample" if per_sample else ""
+    plt.savefig(os.path.join(chart_dir, str(th_name)+p+".svg"), format = 'svg', dpi=100)
+    plt.show()

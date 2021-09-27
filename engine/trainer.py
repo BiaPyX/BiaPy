@@ -405,7 +405,8 @@ class Trainer(object):
                                 bin_mask = None
                             obj = calculate_optimal_mw_thresholds(self.model, self.cfg.DATA.VAL.PATH,
                                 self.orig_val_mask_path, self.cfg.DATA.CHANNELS, self.cfg.DATA.VAL.MASK_PATH,
-                                self.cfg.DATA.REMOVE_SMALL_OBJ, bin_mask, verbose=self.cfg.TEST.VERBOSE)
+                                self.cfg.DATA.REMOVE_SMALL_OBJ, bin_mask, chart_dir=self.cfg.PATHS.CHARTS,
+                                verbose=self.cfg.TEST.VERBOSE)
                             if self.cfg.DATA.CHANNELS == "BCD":
                                 th1_opt, th2_opt, th3_opt, th4_opt, th5_opt = obj
                             else:

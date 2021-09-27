@@ -396,8 +396,8 @@ class Config:
         _C.PATHS.RESULT_DIR.FULL_IMAGE = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_image')
         _C.PATHS.RESULT_DIR.FULL_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_post_processing')
 
-        # Name of the folder where the charts of the loss and metrics values while training the network will be shown.
-        # This folder will be created under the folder pointed by "args.base_work_dir" variable
+        # Name of the folder where the charts of the loss and metrics values while training the network are stored.
+        # Additionally, MW_TH* variable charts are stored if _C.DATA.MW_OPTIMIZE_THS = True
         _C.PATHS.CHARTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'charts')
         # Directory where weight maps will be stored
         _C.PATHS.LOSS_WEIGHTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'loss_weights')
@@ -413,9 +413,7 @@ class Config:
         _C.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'train_instance_channels')
         _C.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'val_instance_channels')
         _C.PATHS.TEST_INSTANCE_CHANNELS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'test_instance_channels')
-        # Name of the folder where weights files will be stored/loaded from. This folder must be located inside the
-        # directory pointed by "args.base_work_dir" variable. If there is no such directory, it will be created for the
-        # first time
+        # Name of the folder where weights files will be stored/loaded from.
         _C.PATHS.CHECKPOINT = os.path.join(job_dir, 'h5_files')
         # Checkpoint file to load/store the model weights
         _C.PATHS.CHECKPOINT_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'model_weights_' + job_identifier + '.h5')
