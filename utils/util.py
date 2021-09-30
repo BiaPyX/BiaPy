@@ -1463,7 +1463,7 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
 
     print("Creating {} labels from semantic masks . . .".format(mode))
     for img in tqdm(range(data_mask.shape[0])):
-        vol = data_mask[img,...,0]
+        vol = data_mask[img,...,0].astype(np.int64)
         l = np.unique(vol)
 
         # If only have background -> skip
