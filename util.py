@@ -990,7 +990,7 @@ def calculate_2D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
         raise ValueError("'w_foreground' plus 'w_background' can not be greater "
                          "than one")
 
-    prob_map = np.copy(Y[...,0])
+    prob_map = np.copy(Y[...,0]).astype(np.float32)
 
     print("Constructing the probability map . . .")
     for i in tqdm(range(prob_map.shape[0])):
@@ -999,13 +999,12 @@ def calculate_2D_volume_prob_map(Y, w_foreground=0.94, w_background=0.06,
         # Remove artifacts connected to image border
         pdf = clear_border(pdf)
 
-        foreground_pixels = (pdf == 255).sum()
+        foreground_pixels = (pdf > 1).sum()
         background_pixels = (pdf == 0).sum()
 
-        pdf[np.where(pdf == 255)] = w_foreground/foreground_pixels
+        pdf[np.where(pdf > 1)] = w_foreground/foreground_pixels
         pdf[np.where(pdf == 0)] = w_background/background_pixels
-        print("pdf {} {}".format(pdf.dtype, pdf.sum().dtype))
-        pdf /= pdf.sum() # Necessary to get all probs sum 1
+        pdf = pdf/pdf.sum() # Necessary to get all probs sum 1
         prob_map[i] = pdf
 
     if save_file is not None:
