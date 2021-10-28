@@ -1461,7 +1461,6 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
 
     new_mask = np.zeros(data_mask.shape[:d_shape] + (c_number,), dtype=np.float32)
 
-    print("Creating {} labels from instance segmentation masks . . .".format(mode))
     for img in tqdm(range(data_mask.shape[0])):
         vol = data_mask[img,...,0].astype(np.int64)
         l = np.unique(vol)
