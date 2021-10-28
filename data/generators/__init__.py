@@ -76,8 +76,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
         misalignment=cfg.AUGMENTOR.MISALIGNMENT, ms_displacement=cfg.AUGMENTOR.MS_DISPLACEMENT,
         ms_rotate_ratio=cfg.AUGMENTOR.MS_ROTATE_RATIO, missing_parts=cfg.AUGMENTOR.MISSING_PARTS,
         missp_iterations=cfg.AUGMENTOR.MISSP_ITERATIONS, shape=cfg.DATA.PATCH_SIZE,
-        random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, prob_map=cfg.DATA.PROBABILITY_MAP,
-        n_classes=cfg.MODEL.N_CLASSES, extra_data_factor=cfg.DATA.TRAIN.REPLICATE)
+        random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, prob_map=prob_map, n_classes=cfg.MODEL.N_CLASSES,
+        extra_data_factor=cfg.DATA.TRAIN.REPLICATE)
     if cfg.PROBLEM.NDIM == '3D':
         dic['zflip'] = cfg.AUGMENTOR.ZFLIP
 

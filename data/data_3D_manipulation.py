@@ -703,6 +703,9 @@ def random_3D_crop(vol, vol_mask, random_crop_size, val=False, vol_prob=None, we
 
     rows, cols, deep = vol.shape[0], vol.shape[1], vol.shape[2]
     dx, dy, dz = random_crop_size
+    assert rows >= dx
+    assert cols >= dy
+    assert deep >= dz
     if val:
         x, y, z, ox, oy, oz = 0, 0, 0, 0, 0, 0
     else:
