@@ -13,7 +13,7 @@ from skimage.filters import rank
 from scipy.ndimage import rotate
 from skimage.measure import label
 from skimage.io import imsave, imread
-from scipy.ndimage.morphology import binary_dilation
+from scipy.ndimage.morphology import binary_erosion
 import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 
@@ -219,7 +219,7 @@ def bc_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres_small=128, rem
         segm = watershed(-semantic, seed_map, mask=foreground)
     else:
         segm = watershed(-semantic, seed_map, mask=foreground)
-        seed_map = remove_small_objects(seed_map, thres_small)
+        segm = remove_small_objects(segm, thres_small)
 
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
@@ -288,7 +288,7 @@ def bcd_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres4=0.5, thres5=
         segm = watershed(-semantic, seed_map, mask=foreground)
     else:
         segm = watershed(-semantic, seed_map, mask=foreground)
-        seed_map = remove_small_objects(seed_map, thres_small)
+        segm = remove_small_objects(segm, thres_small)
 
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
@@ -307,6 +307,66 @@ def bcd_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres4=0.5, thres5=
 
         f = os.path.join(save_dir, "watershed.tif")
         aux = np.expand_dims(np.expand_dims((segm).astype(np.float32), -1),1)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+
+    return segm
+
+
+def bdv2_watershed(data, bin_th=0.5, thres_small=128, remove_before=False, save_dir=None):
+    """Convert binary foreground probability maps, instance contours to instance masks via watershed segmentation
+       algorithm.
+
+       Implementation based on `PyTorch Connectomics' process.py
+       <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py>`_.
+
+       Parameters
+       ----------
+       data : 4D Numpy array
+           Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
+
+       bin_th : float, optional
+           Threshold used to binarize the input.
+
+       thres_small : int, optional
+           Theshold to remove small objects created by the watershed.
+
+       remove_before : bool, optional
+           To remove objects before watershed. If ``False`` it is done after watershed.
+
+       save_dir :  str, optional
+           Directory to save watershed output into.
+    """
+
+    # 'BDv2'
+    if data.shape[-1] == 2:
+        # Label all the instance seeds
+        seed_map = binary_erosion(data[...,0] > bin_th, iterations=2)
+        seed_map, num = label(seed_map, return_num=True)
+
+        # Create background seed and label correctly
+        background_seed = binary_erosion(np.invert(data[...,0] > bin_th), iterations=2).astype(np.int64)
+        background_seed[background_seed==1] = num+1
+
+        seed_map = seed_map + background_seed
+        del background_seed
+
+    # Assume is 'Dv2'
+    else:
+        raise NotImplementedError("Not implemented watershed with 'Dv2'")
+        seed_map = (data[...,1] < thres1)
+
+    if remove_before:
+        seed_map = remove_small_objects(seed_map, thres_small)
+        segm = watershed(data[...,0], seed_map)
+    else:
+        segm = watershed(data[...,0], seed_map)
+        seed_map = remove_small_objects(seed_map, thres_small)
+
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+
+        f = os.path.join(save_dir, "seed_map.tif")
+        aux = np.expand_dims(np.expand_dims((seed_map).astype(np.float32), -1),1)
         imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
     return segm
@@ -839,6 +899,7 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, mode="BC",
             th1_op_pos = -1
             th1_obj_min_diff = sys.maxsize
             l_th1 = []
+            in_row = False
             # TH1
             for k in range(len(ths)):
                 p = ((pred[...,0] > ths[k])*(pred[...,1] < th2_min)).astype(np.uint8)
@@ -847,19 +908,23 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, mode="BC",
                 obj_count = len(np.unique(p))
                 l_th1.append(obj_count)
 
-                if abs(obj_count-len(labels)) <= th1_obj_min_diff and th1_repeat_count < 2 \
-                    and abs(obj_count-len(labels)) != th1_last:
-                    th1_obj_min_diff = abs(obj_count-len(labels))
+                diff = abs(obj_count-len(labels))
+                if diff <= th1_obj_min_diff and th1_repeat_count < 4 and diff != th1_last:
+                    th1_obj_min_diff = diff
                     th1_min = ths[k]
                     th1_op_pos = k
                     th1_repeat_count = 0
+                    in_row = True
 
-                if th1_obj_min_diff == th1_last: th1_repeat_count += 1
-                th1_last = abs(obj_count-len(labels))
+                if diff == th1_last and diff == th1_obj_min_diff and in_row:
+                    th1_repeat_count += 1
+                elif k != th1_op_pos:
+                    in_row = False
+                th1_last = diff
 
             g_l_th1.append(l_th1)
             l_th1_min.append(th1_min)
-            th1_opt_pos = th1_op_pos + 1 if th1_repeat_count > 2 else th1_op_pos
+            th1_opt_pos = th1_op_pos + th1_repeat_count
             if th1_opt_pos >= len(ths): th1_opt_pos = len(ths)-1
             l_th1_opt.append(ths[th1_opt_pos])
 

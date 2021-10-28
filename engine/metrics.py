@@ -171,7 +171,7 @@ def jaccard_index_softmax(y_true, y_pred, t=0.5):
     return jac
 
 
-def jaccard_index_instances(y_true, y_pred, t=0.5):
+def IoU_instances(t=0.5, binary_channels=2):
     """Define Jaccard index. It only applies for the first two segmentation
        channels.
 
@@ -192,16 +192,18 @@ def jaccard_index_instances(y_true, y_pred, t=0.5):
            Jaccard index value
     """
 
-    y_pred_ = tf.cast(y_pred[...,:2] > t, dtype=tf.int32)
-    y_true_ = tf.cast(y_true[...,:2] > t, dtype=tf.int32)
+    def jaccard_index_instances(y_true, y_pred):
+        y_pred_ = tf.cast(y_pred[...,:binary_channels] > t, dtype=tf.int32)
+        y_true_ = tf.cast(y_true[...,:binary_channels] > t, dtype=tf.int32)
 
-    TP = tf.math.count_nonzero(y_pred_ * y_true_)
-    FP = tf.math.count_nonzero(y_pred_ * (y_true_ - 1))
-    FN = tf.math.count_nonzero((y_pred_ - 1) * y_true_)
+        TP = tf.math.count_nonzero(y_pred_ * y_true_)
+        FP = tf.math.count_nonzero(y_pred_ * (y_true_ - 1))
+        FN = tf.math.count_nonzero((y_pred_ - 1) * y_true_)
 
-    jac = tf.cond(tf.greater((TP + FP + FN), 0), lambda: TP / (TP + FP + FN), lambda: K.cast(0.000, dtype='float64'))
+        jac = tf.cond(tf.greater((TP + FP + FN), 0), lambda: TP / (TP + FP + FN), lambda: K.cast(0.000, dtype='float64'))
+        return jac
 
-    return jac
+    return jaccard_index_instances
 
 
 def jaccard_loss(y_true, y_pred):
@@ -489,9 +491,19 @@ def instance_segmentation_loss(weights=(1,0.2), out_channels="BC"):
     def loss(y_true, y_pred):
         if out_channels == "BC":
             return weights[0]*losses.binary_crossentropy(tf.cast(y_true[...,:2], dtype=tf.float32), y_pred[...,:2])
-        else:
+        elif out_channels == "BCD":
             return weights[0]*losses.binary_crossentropy(tf.cast(y_true[...,:2], dtype=tf.float32), y_pred[...,:2])+\
                    weights[1]*masked_mse(tf.cast(y_true[...,2], dtype=tf.float32), y_pred[...,2], tf.cast(y_true[...,0], dtype=tf.float32))
+        elif out_channels == "BDv2":
+            #a = tf.expand_dims(K.square(tf.cast(y_true[...,1], dtype=tf.float32) - y_pred[...,1]), -1)
+            #b = weights[1]*K.mean(a, axis=-1)
+            #print("B: {}".format(b.shape)) B: (None, 64, 64, 64)
+            #print("A: {}".format(a.shape)) A: (None, 64, 64, 64, 1)
+            return weights[0]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,0], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,0],-1))+\
+                   weights[1]*K.mean(tf.expand_dims(K.square(tf.cast(y_true[...,1], dtype=tf.float32) - y_pred[...,1]), -1), axis=-1)
+        # Dv2
+        else:
+            return K.mean(tf.expand_dims(K.square(tf.cast(y_true, dtype=tf.float32) - y_pred), -1), axis=-1)
     return loss
 
 

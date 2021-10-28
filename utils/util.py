@@ -14,6 +14,7 @@ from skimage.io import imsave, imread
 from skimage import measure
 from skimage.transform import resize
 from skimage.segmentation import clear_border, find_boundaries
+
 from engine.metrics import jaccard_index, jaccard_index_numpy, voc_calculation, DET_calculation
 
 matplotlib.use('pdf')
@@ -1447,21 +1448,20 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
            5D array with 3 channels instead of one. E.g. ``(10, 1000, 1000, 200, 3)``
     """
 
-    assert mode in ['BC', 'BCD']
+    assert mode in ['BC', 'BCD', 'BDv2', 'Dv2']
     assert data_mask.ndim in [5, 4]
 
+    d_shape = 4 if data_mask.ndim == 5 else 3
     if mode == "BCD":
-        if data_mask.ndim == 5:
-            new_mask = np.zeros(data_mask.shape[:4] + (3,), dtype=np.float32)
-        else:
-            new_mask = np.zeros(data_mask.shape[:3] + (3,), dtype=np.float32)
-    else:
-        if data_mask.ndim == 5:
-            new_mask = np.zeros(data_mask.shape[:4] + (2,), dtype=np.float32)
-        else:
-            new_mask = np.zeros(data_mask.shape[:3] + (2,), dtype=np.float32)
+        c_number = 3
+    if mode in ['BC', 'BDv2']:
+        c_number = 2
+    elif mode == 'Dv2':
+        c_number = 1
 
-    print("Creating {} labels from semantic masks . . .".format(mode))
+    new_mask = np.zeros(data_mask.shape[:d_shape] + (c_number,), dtype=np.float32)
+
+    print("Creating {} labels from instance segmentation masks . . .".format(mode))
     for img in tqdm(range(data_mask.shape[0])):
         vol = data_mask[img,...,0].astype(np.int64)
         l = np.unique(vol)
@@ -1470,47 +1470,62 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
         if len(l) != 1:
             vol_dist = np.zeros(vol.shape)
 
-            if mode == "BCD":
+            if mode in ["BCD", "BDv2", "Dv2"]:
                 # For each nucleus
                 for i in tqdm(range(1,len(l)), leave=False):
                     obj = l[i]
                     distance = scipy.ndimage.distance_transform_edt(vol==obj)
                     vol_dist += distance
+
                 # Distance
-                new_mask[img,...,2] = vol_dist.copy()
+                if mode in ["BDv2", "Dv2"]:
+                    vol_b_dist = np.invert(vol>0)
+                    vol_b_dist= scipy.ndimage.distance_transform_edt(vol_b_dist)
+                    vol_dist = vol_dist+vol_b_dist
+                    # Invert
+                    vol_dist = np.max(vol_dist)-vol_dist
+                    # Normalize
+                    vol_dist = vol_dist/np.linalg.norm(vol_dist)
+
+                    if mode == "BDv2":
+                        new_mask[img,...,1] = vol_dist.copy()
+                    else: # "Dv2"
+                        new_mask[img,...,0] = vol_dist.copy()
+                else: # "BCD"
+                    new_mask[img,...,2] = vol_dist.copy()
 
             # Semantic mask
-            new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)
+            if mode in ["BCD", "BDv2"]:
+                new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)
 
             # Contour
-            new_mask[img,...,1] = find_boundaries(vol, mode=fb_mode).astype(np.uint8)
-            # Remove contours from segmentation maps
-            new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0
+            if mode in ["BCD", "BC"]:
+                new_mask[img,...,1] = find_boundaries(vol, mode=fb_mode).astype(np.uint8)
+                # Remove contours from segmentation maps
+                new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0
 
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
         for i in range(min(3,len(new_mask))):
-            # Save segmentation mask
-            if data_mask.ndim == 5:
-                aux = np.transpose(new_mask[i,...,0],(2,0,1)).astype(np.uint8)
-            else:
-                aux = new_mask[i,...,0].astype(np.uint8)
-            imsave(os.path.join(save_dir,'vol'+str(i)+'_semantic.tif'), aux, check_contrast=False)
+            # Save segmentation mask ["BC", "BCD", "BDv2"] or distance mask ["Dv2"]
+            name = 'semantic' if mode in ["BC", "BCD", "BDv2"] else 'distanceV2'
+            aux = np.transpose(new_mask[i,...,0],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,0]
+            aux = np.expand_dims(np.expand_dims(aux,-1),0)
+            save_tif(aux, save_dir, filenames=['vol'+str(i)+'_'+name+'.tif'], verbose=False)
 
-            # Save contour mask
-            if data_mask.ndim == 5:
-                aux = np.transpose(new_mask[i,...,1],(2,0,1)).astype(np.uint8)
-            else:
-                aux = new_mask[i,...,1].astype(np.uint8)
-            imsave(os.path.join(save_dir,'vol'+str(i)+'_contour.tif'), aux, check_contrast=False)
+            # Save contour mask ["BC", "BCD"] or distance mask ["BDv2"]
+            if mode in ["BC", "BCD", "BDv2"]:
+                name = 'semantic' if mode in ["BC", "BCD"] else 'distanceV2'
+                aux = np.transpose(new_mask[i,...,1],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,1]
+                aux = np.expand_dims(np.expand_dims(aux,-1),0)
+                save_tif(aux, save_dir, filenames=['vol'+str(i)+'_'+name+'.tif'], verbose=False)
 
             # Save distances
             if mode == "BCD":
-                if data_mask.ndim == 5:
-                    aux = np.transpose(new_mask[i,...,2],(2,0,1)).astype(np.uint8)
-                else:
-                    aux = new_mask[i,...,2].astype(np.uint8)
-                imsave(os.path.join(save_dir,'vol'+str(i)+'_distance.tif'), aux, check_contrast=False)
+                aux = np.transpose(new_mask[i,...,2],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,2]
+                aux = np.expand_dims(np.expand_dims(aux,-1),0)
+                save_tif(aux, save_dir, filenames=['vol'+str(i)+'_distance.tif'], verbose=False)
+
     return new_mask
 
 

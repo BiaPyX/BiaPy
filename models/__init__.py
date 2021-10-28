@@ -3,21 +3,21 @@ import os
 from tensorflow.keras.utils import plot_model
 
 
-def build_model(cfg, job_identifier):   
-    """Build selected model 
+def build_model(cfg, job_identifier):
+    """Build selected model
 
-       Parameters                                                                                                       
-       ----------                                                                                                       
+       Parameters
+       ----------
        cfg : YACS CN object
            Configuration.
-                                                                                                                        
+
        job_identifier: str
            Job name.
-                                                                                                                        
-       Returns                                                                                                          
-       -------                  
-       model : Keras model                                                                                              
-           Selected model. 
+
+       Returns
+       -------
+       model : Keras model
+           Selected model.
     """
 
     assert cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'nnunet', 'tiramisu', 'mnet',
@@ -33,7 +33,7 @@ def build_model(cfg, job_identifier):
          or cfg.MODEL.ARCHITECTURE == 'multiresunet':
         modelname = cfg.MODEL.ARCHITECTURE
     else:
-        modelname = cfg.MODEL.ARCHITECTURE if cfg.PROBLEM.NDIM == '2D' else cfg.MODEL.ARCHITECTURE + '_3d' 
+        modelname = cfg.MODEL.ARCHITECTURE if cfg.PROBLEM.NDIM == '2D' else cfg.MODEL.ARCHITECTURE + '_3d'
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG': modelname = modelname+"_instances"
     mdl = importlib.import_module('models.'+modelname)
     names = [x for x in mdl.__dict__ if not x.startswith("_")]
@@ -78,7 +78,7 @@ def build_model(cfg, job_identifier):
 
     elif cfg.MODEL.ARCHITECTURE == 'tiramisu':
         if cfg.PROBLEM.NDIM == '2D':
-            model = FC_DenseNet103(cfg.DATA.PATCH_SIZE, n_filters_first_conv=n_filters_first_conv, n_pool=cfg.MODEL.DEPTH, 
+            model = FC_DenseNet103(cfg.DATA.PATCH_SIZE, n_filters_first_conv=n_filters_first_conv, n_pool=cfg.MODEL.DEPTH,
                 growth_rate=growth_rate, n_layers_per_block=n_layers_per_block, dropout_p=dropout_value)
         else:
             raise ValueError("Not implemented pipeline option")
@@ -90,11 +90,11 @@ def build_model(cfg, job_identifier):
             raise ValueError("Not implemented pipeline option")
 
     elif cfg.MODEL.ARCHITECTURE == 'multiresunet':
-        if cfg.PROBLEM.NDIM == '2D': 
+        if cfg.PROBLEM.NDIM == '2D':
             model = MultiResUnet(None, None, cfg.DATA.PATCH_SIZE[-1])
         else:
             raise ValueError("Not implemented pipeline option")
-    
+
     # Check the network created
     model.summary(line_length=150)
     os.makedirs(cfg.PATHS.CHARTS, exist_ok=True)

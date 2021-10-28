@@ -14,7 +14,7 @@ from data.data_3D_manipulation import load_and_prepare_3D_data, crop_3D_data_wit
 from data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
 from data.post_processing import apply_post_processing
 from data.post_processing.post_processing import (ensemble8_2d_predictions, ensemble16_3d_predictions, bc_watershed,
-                                                  bcd_watershed, calculate_optimal_mw_thresholds)
+                                                  bcd_watershed, bdv2_watershed, calculate_optimal_mw_thresholds)
 from models import build_model
 from engine import build_callbacks, prepare_optimizer
 from engine.metrics import jaccard_index_numpy, voc_calculation
@@ -50,7 +50,7 @@ class Trainer(object):
             # foreground class (channel 1)
             self.metric = "jaccard_index_softmax" if cfg.MODEL.N_CLASSES > 1 else "jaccard_index"
         else:
-            self.metric = "jaccard_index_instances" if cfg.DATA.CHANNELS == "BCD" else "jaccard_index"
+            self.metric = "jaccard_index" if cfg.DATA.CHANNELS in ["B", "BC"] else "jaccard_index_instances"
 
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and cfg.DATA.CHANNELS != 'B':
@@ -398,7 +398,7 @@ class Trainer(object):
                     ### INSTANCE SEGMENTATION ###
                     #############################
                     if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-                        if self.cfg.DATA.MW_OPTIMIZE_THS:
+                        if self.cfg.DATA.MW_OPTIMIZE_THS and self.cfg.DATA.CHANNELS != "BDv2":
                             if self.cfg.TEST.APPLY_MASK and os.path.isdir(self.cfg.DATA.VAL.BINARY_MASKS):
                                 bin_mask = self.cfg.DATA.VAL.BINARY_MASKS
                             else:
@@ -423,10 +423,14 @@ class Trainer(object):
                             pred = bc_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt,
                                 thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, remove_before=self.cfg.DATA.REMOVE_BEFORE_MW,
                                 save_dir=w_dir)
-                        else:
+                        elif self.cfg.DATA.CHANNELS == "BCD":
                             pred = bcd_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt, thres4=th4_opt,
                                 thres5=th5_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
                                 remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=w_dir)
+                        else: # "BDv2" and "Dv2"
+                            pred = bdv2_watershed(pred, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
+                                remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=w_dir)
+
                         save_tif(np.expand_dims(np.expand_dims(pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                                  filenames, verbose=self.cfg.TEST.VERBOSE)
 
