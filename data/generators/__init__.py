@@ -84,7 +84,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
     train_generator = f_name(**dic)
 
     val_generator = f_name(X=X_val, Y=Y_val, batch_size=cfg.TRAIN.BATCH_SIZE,
-        shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, in_memory=cfg.DATA.TRAIN.IN_MEMORY,
+        shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, in_memory=cfg.DATA.VAL.IN_MEMORY,
         data_paths=[cfg.DATA.VAL.PATH, cfg.DATA.VAL.MASK_PATH], da=False, shape=cfg.DATA.PATCH_SIZE,
         random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, seed=cfg.SYSTEM.SEED)
 
