@@ -294,17 +294,18 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 img = imread(os.path.join(data_paths[0], self.data_paths[0]))
             if img.ndim == 3: img = np.expand_dims(img, -1)
             img = img.transpose((1,2,0,3))
-            self.div_X_on_load = True if np.max(img) > 100 else False
+            self.div_X_on_load = True if np.max(img) > 10 else False
             self.shape = shape if random_crops_in_DA else img.shape
             # Loop over a few masks to ensure foreground class is present
-            self.div_Y_on_load = False
             self.first_no_bin_channel = -1
-            for i in range(min(10,len(self.data_mask_path))):
+            self.div_Y_no_bin_channels_max = 0
+            self.div_Y_no_bin_channels_min = 9999999
+            prin("Calculating generator values . . .")
+            for i in range(min(len(self.data_mask_path))):
                 if self.data_mask_path[i].endswith('.npy'):
                     img = np.load(os.path.join(self.paths[1], self.data_mask_path[i]))
                 else:
                     img = imread(os.path.join(data_paths[1], self.data_mask_path[i]))
-                if np.max(img) > 100: self.div_Y_on_load = True
                 if img.ndim == 3: img = np.expand_dims(img, -1)
                 # Store wheter all channels of the gt are binary or not
                 # (e.g. distance transform channel)
@@ -314,6 +315,19 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                         if len(np.unique(img[...,j])) > 2:
                             self.first_no_bin_channel = j
                             break
+
+                if self.first_no_bin_channel != -1:
+                    self.div_Y_on_load_bin_channels = True if np.max(img[...,:self.first_no_bin_channel]) > 10 else False
+                    max_no_bin_channel = np.max(img[...,self.first_no_bin_channel:])
+                    self.div_Y_on_load_no_bin_channels = True if max_no_bin_channel > 10 else False
+                    if max_no_bin_channel > self.div_Y_no_bin_channels_max:
+                        self.div_Y_no_bin_channels_max = max_no_bin_channel
+                    min_no_bin_channel = np.min(img[...,self.first_no_bin_channel:])
+                    if min_no_bin_channel < self.div_Y_no_bin_channels_min:
+                        self.div_Y_no_bin_channels_min = min_no_bin_channel
+                else:
+                    self.div_Y_on_load_bin_channels = True if np.max(img) > 10 else False
+
                 self.channels = img.shape[-1]
                 self.Y_dtype = img.dtype
                 del img
@@ -324,13 +338,23 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             # Store wheter all channels of the gt are binary or not
             # (e.g. distance transform channel)
             self.first_no_bin_channel = -1
+            self.div_Y_no_bin_channels_max = 0
+            self.div_Y_no_bin_channels_min = 9999999
             if Y.dtype is np.dtype(np.float32) or Y.dtype is np.dtype(np.float64):
                 for i in range(Y.shape[-1]):
                     if len(np.unique(Y[...,i])) > 2:
                         self.first_no_bin_channel = i
                         break
-            self.div_X_on_load = True if np.max(X) > 100 else False
-            self.div_Y_on_load = True if np.max(Y) > 100 else False
+            self.div_X_on_load = True if np.max(X) > 10 else False
+            if self.first_no_bin_channel != -1:
+                self.div_Y_on_load_bin_channels = True if np.max(Y[...,:self.first_no_bin_channel]) > 10 else False
+                max_no_bin_channel = np.max(Y[...,self.first_no_bin_channel:])
+                self.div_Y_on_load_no_bin_channels = True if max_no_bin_channel > 10 else False
+                self.div_Y_no_bin_channels_max = max_no_bin_channel
+                self.div_Y_no_bin_channels_min = np.min(Y[...,self.first_no_bin_channel:])
+            else:
+                self.div_Y_on_load_bin_channels = True if np.max(Y) > 10 else False
+
             self.channels = Y.shape[-1]
             self.len = len(self.X)
             self.shape = shape if random_crops_in_DA else X.shape[1:]
@@ -559,7 +583,14 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
         # Divide the values
         if self.div_X_on_load: batch_x = batch_x/255
-        if self.div_Y_on_load: batch_y = batch_y/255
+        if self.first_no_bin_channel != -1:
+            if self.div_Y_on_load_bin_channels:
+                batch_y[...,:self.first_no_bin_channel] = batch_y[...,:self.first_no_bin_channel]/255
+            if self.div_Y_on_load_no_bin_channels:
+                batch_y[...,self.first_no_bin_channel:] = \
+                    (batch_y[...,self.first_no_bin_channel:]-self.div_Y_no_bin_channels_min)/(self.div_Y_no_bin_channels_max-self.div_Y_no_bin_channels_min)
+        else:
+            if self.div_Y_on_load_bin_channels: batch_y = batch_y/255
 
         if self.n_classes > 1 and (self.n_classes != self.channels):
             batch_y_ = np.zeros((len(indexes), ) + self.shape[:3] + (self.n_classes,))

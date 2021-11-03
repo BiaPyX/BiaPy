@@ -63,7 +63,7 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
         raise ValueError("'feature_maps' dimension must be equal 'drop_values' dimension")
     depth = len(feature_maps)-1
 
-    assert output_channels in ['B', 'BC', 'BCD', 'BDv2', 'Dv2']
+    assert output_channels in ['B', 'BC', 'BCD', 'BCDv2', 'BDv2', 'Dv2']
     if len(channel_weights) != 2:
         raise ValueError("Channel weights need to be len(2) and not {}".format(len(channel_weights)))
 
@@ -126,7 +126,7 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
         outputs = Conv2D(1, (2, 2), activation="sigmoid", padding='same') (x)
     elif output_channels == "BC":
         outputs = Conv2D(2, (2, 2), activation="sigmoid", padding='same') (x)
-    elif output_channels == "BCD":
+    elif output_channels in ["BCD", "BCDv2"]:
         seg = Conv2D(2, (2, 2), activation="sigmoid", padding='same') (x)
         dis = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
         outputs = Concatenate()([seg, dis])

@@ -7,7 +7,8 @@ from utils.util import load_data_from_dir, load_3d_images_from_dir
 
 
 def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True,
-                             crop_shape=(80, 80, 80, 1), random_crops_in_DA=False, ov=(0,0,0), padding=(0,0,0)):
+                             crop_shape=(80, 80, 80, 1), random_crops_in_DA=False, ov=(0,0,0), padding=(0,0,0),
+                             reflect_to_complete_shape=False):
     """Load train and validation images from the given paths to create 3D data.
 
        Parameters
@@ -40,6 +41,10 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
 
        padding : Tuple of ints, optional
            Size of padding to be added on each axis ``(x, y, z)``. E.g. ``(24, 24, 24)``.
+
+       reflect_to_complete_shape : bool, optional
+           Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
+           'reflect'.
 
        Returns
        -------
@@ -94,10 +99,17 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
 
     print("0) Loading train images . . .")
     X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, crop=crop, crop_shape=crop_shape,
-                                                         overlap=ov, return_filenames=True)
+        overlap=ov, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape)
 
     print("1) Loading train masks . . .")
-    Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov)
+    Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
+        reflect_to_complete_shape=reflect_to_complete_shape)
+
+    if isinstance(X_train, list):
+        raise NotImplementedError("If you arrived here means that your images are not all of the same shape, and you "
+                                  "select DATA.EXTRACT_RANDOM_PATCH = True, so no crops are made to ensure all images "
+                                  "have the same shape. Please, crop them into your DATA.PATCH_SIZE and run again (you "
+                                  "can use one of the script from here to crop: https://github.com/danifranco/EM_Image_Segmentation/tree/master/utils/scripts)")
 
     # Create validation data splitting the train
     if create_val:

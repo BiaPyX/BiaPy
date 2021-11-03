@@ -1107,7 +1107,8 @@ def onehot_encoding_to_img(encoded_image):
     return img
 
 
-def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), padding=(0,0), return_filenames=False):
+def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), padding=(0,0), return_filenames=False,
+                       reflect_to_complete_shape=False):
     """Load data from a directory. If ``crop=False`` all the data is suposed to have the same shape.
 
        Parameters
@@ -1131,6 +1132,9 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
        return_filenames : bool, optional
            Return a list with the loaded filenames. Useful when you need to save them afterwards with the same names as
            the original ones.
+
+       reflect_to_complete_shape : bool, optional
+           Not implemented for 2D.
 
        Returns
        -------
@@ -1289,8 +1293,8 @@ def load_ct_data_from_dir(data_dir, shape=None):
     return data
 
 
-def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, crop_verb=False, overlap=(0,0,0), padding=(0,0,0),
-                            median_padding=False, return_filenames=False):
+def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False, overlap=(0,0,0), padding=(0,0,0),
+                            median_padding=False, reflect_to_complete_shape=False, return_filenames=False):
     """Load data from a directory.
 
        Parameters
@@ -1304,8 +1308,8 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, crop_verb=Fal
        crop_shape : Tuple of 4 ints, optional
            Shape of the subvolumes to create when cropping.  E.g. ``(x, y, z, channels)``.
 
-       crop_verb : bool, optional
-           Wheter to use verbose mode on crop.
+       verbose : bool, optional
+           Wheter to enable verbosity.
 
        overlap : Tuple of 3 floats, optional
            Amount of minimum overlap on x, y and z dimensions. The values must be on range ``[0, 1)``, that is, ``0%``
@@ -1316,6 +1320,10 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, crop_verb=Fal
 
        median_padding : bool, optional
            If ``True`` the padding value is the median value. If ``False``, the added values are zeroes.
+
+       reflect_to_complete_shape : bool, optional
+           Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
+           'reflect'.
 
        return_filenames : bool, optional
            Return a list with the loaded filenames. Useful when you need to save them afterwards with the same names as
@@ -1388,14 +1396,13 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, crop_verb=Fal
         img = np.squeeze(img)
 
         if return_filenames: filenames.append(id_)
-
-        if len(img.shape) == 3:
-            img = np.expand_dims(img, axis=-1)
+        if len(img.shape) == 3: img = np.expand_dims(img, axis=-1)
+        if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=verbose)
 
         data_shape.append(img.shape)
         if crop and img.shape != crop_shape[:3]+(img.shape[-1],):
             img = crop_3D_data_with_overlap(img, crop_shape[:3]+(img.shape[-1],), overlap=overlap, padding=padding,
-                                            median_padding=median_padding, verbose=crop_verb)
+                                            median_padding=median_padding, verbose=verbose)
         else:
             img = np.transpose(img, (1,2,0,3))
             img = np.expand_dims(img, axis=0)
@@ -1448,11 +1455,11 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
            5D array with 3 channels instead of one. E.g. ``(10, 1000, 1000, 200, 3)``
     """
 
-    assert mode in ['BC', 'BCD', 'BDv2', 'Dv2']
+    assert mode in ['BC', 'BCD', 'BCDv2', 'BDv2', 'Dv2']
     assert data_mask.ndim in [5, 4]
 
     d_shape = 4 if data_mask.ndim == 5 else 3
-    if mode == "BCD":
+    if mode in ['BCD', 'BCDv2']:
         c_number = 3
     if mode in ['BC', 'BDv2']:
         c_number = 2
@@ -1469,7 +1476,7 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
         if len(l) != 1:
             vol_dist = np.zeros(vol.shape)
 
-            if mode in ["BCD", "BDv2", "Dv2"]:
+            if mode in ["BCD", "BCDv2", "BDv2", "Dv2"]:
                 # For each nucleus
                 for i in tqdm(range(1,len(l)), leave=False):
                     obj = l[i]
@@ -1477,19 +1484,21 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
                     vol_dist += distance
 
                 # Distance
-                if mode in ["BDv2", "Dv2"]:
+                if mode in ["BCDv2", "BDv2", "Dv2"]:
                     vol_b_dist = np.invert(vol>0)
                     vol_b_dist= scipy.ndimage.distance_transform_edt(vol_b_dist)
                     vol_dist = vol_dist+vol_b_dist
                     # Invert
                     vol_dist = np.max(vol_dist)-vol_dist
                     # Normalize
-                    vol_dist = vol_dist/np.linalg.norm(vol_dist)
+                    #vol_dist = vol_dist/np.linalg.norm(vol_dist)
 
+                    if mode == "Dv2":
+                        new_mask[img,...,0] = vol_dist.copy()
                     if mode == "BDv2":
                         new_mask[img,...,1] = vol_dist.copy()
                     else: # "Dv2"
-                        new_mask[img,...,0] = vol_dist.copy()
+                        new_mask[img,...,2] = vol_dist.copy()
                 else: # "BCD"
                     new_mask[img,...,2] = vol_dist.copy()
 
@@ -1498,7 +1507,7 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
                 new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)
 
             # Contour
-            if mode in ["BCD", "BC"]:
+            if mode in ["BCD", "BCDv2", "BC"]:
                 new_mask[img,...,1] = find_boundaries(vol, mode=fb_mode).astype(np.uint8)
                 # Remove contours from segmentation maps
                 new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0
@@ -1507,22 +1516,22 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
         os.makedirs(save_dir, exist_ok=True)
         for i in range(min(3,len(new_mask))):
             # Save segmentation mask ["BC", "BCD", "BDv2"] or distance mask ["Dv2"]
-            name = 'semantic' if mode in ["BC", "BCD", "BDv2"] else 'distanceV2'
+            name = 'semantic' if mode in ["BC", "BCD", "BCDv2", "BDv2"] else 'distanceV2'
             aux = np.transpose(new_mask[i,...,0],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,0]
             aux = np.expand_dims(np.expand_dims(aux,-1),0)
             save_tif(aux, save_dir, filenames=['vol'+str(i)+'_'+name+'.tif'], verbose=False)
 
             # Save contour mask ["BC", "BCD"] or distance mask ["BDv2"]
-            if mode in ["BC", "BCD", "BDv2"]:
-                name = 'semantic' if mode in ["BC", "BCD"] else 'distanceV2'
+            if mode in ["BC", "BCD", "BCDv2", "BDv2"]:
+                name = 'semantic' if mode in ["BC", "BCD", "BCDv2"] else 'distanceV2'
                 aux = np.transpose(new_mask[i,...,1],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,1]
                 aux = np.expand_dims(np.expand_dims(aux,-1),0)
                 save_tif(aux, save_dir, filenames=['vol'+str(i)+'_'+name+'.tif'], verbose=False)
 
             # Save distances
-            if mode == "BCD":
+            if mode in ["BCD", "BCDv2"]:
                 aux = np.transpose(new_mask[i,...,2],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,2]
-                aux = np.expand_dims(np.expand_dims(aux,-1),0)
+                aux = np .expand_dims(np.expand_dims(aux,-1),0)
                 save_tif(aux, save_dir, filenames=['vol'+str(i)+'_distance.tif'], verbose=False)
 
     return new_mask
@@ -1653,4 +1662,41 @@ def apply_binary_mask(X, bin_mask_dir):
     return X
 
 
+def pad_and_reflect(img, crop_shape, verbose=False):
+    """Load data from a directory.
 
+       Parameters
+       ----------
+       img : 4D Numpy array
+           Image to pad. E.g. ``(x, y, z, channels)``.
+
+       crop_shape : Tuple of 4 ints, optional
+           Shape of the subvolumes to create when cropping.  E.g. ``(x, y, z, channels)``.
+
+       verbose : bool, optional
+           Wheter to output information.
+
+       Returns
+       -------
+       img : 4D Numpy array
+           Image padded (if needed). E.g. ``(x, y, z, channels)``.
+    """
+
+    if img.shape[0] < crop_shape[2]:
+        diff = crop_shape[2]-img.shape[0]
+        pad = (diff//2) + 1
+        img = np.pad(img, ((pad,pad),(0,0),(0,0),(0,0)), 'reflect')
+        if verbose: print("Reflected {}".format(img.shape))
+
+    if img.shape[1] < crop_shape[0]:
+        diff = crop_shape[0]-img.shape[1]
+        pad = (diff//2) + 1
+        img = np.pad(img, ((0,0),(pad,pad),(0,0),(0,0)), 'reflect')
+        if verbose: print("Reflected {}".format(img.shape))
+
+    if img.shape[2] < crop_shape[1]:
+        diff = crop_shape[1]-img.shape[2]
+        pad = (diff//2) + 1
+        img = np.pad(img, ((0,0),(0,0),(pad,pad),(0,0)), 'reflect')
+        if verbose: print("Reflected {}".format(img.shape))
+    return img

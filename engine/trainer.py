@@ -121,12 +121,13 @@ class Trainer(object):
                         val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                         random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
                         ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, check_crop=cfg.DATA.TRAIN.CHECK_CROP,
-                        check_crop_path=cfg.PATHS.CROP_CHECKS)
+                        check_crop_path=cfg.PATHS.CROP_CHECKS, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
                 else:
                     objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
                         val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                         random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
-                        ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING)
+                        ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING,
+                        reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
 
                 if cfg.DATA.VAL.FROM_TRAIN:
                     X_train, Y_train, X_val, Y_val, self.train_filenames = objs
@@ -143,18 +144,21 @@ class Trainer(object):
             ##################
             ### VALIDATION ###
             ##################
-            if not cfg.DATA.VAL.FROM_TRAIN and cfg.DATA.VAL.IN_MEMORY:
-                f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
-                X_val, _, _ = f_name(cfg.DATA.VAL.PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
-                                     overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING)
-                Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
-                                     overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING)
-            else:
-                if not os.path.exists(cfg.DATA.VAL.PATH):
-                    raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
-                if not os.path.exists(cfg.DATA.VAL.MASK_PATH):
-                    raise ValueError("Validation mask data dir not found: {}".format(cfg.DATA.VAL.MASK_PATH))
-                X_val, Y_val = None, None
+            if not cfg.DATA.VAL.FROM_TRAIN:
+                if cfg.DATA.VAL.IN_MEMORY:
+                    f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
+                    X_val, _, _ = f_name(cfg.DATA.VAL.PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
+                                         overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
+                                         reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                    Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
+                                         overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
+                                         reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                else:
+                    if not os.path.exists(cfg.DATA.VAL.PATH):
+                        raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
+                    if not os.path.exists(cfg.DATA.VAL.MASK_PATH):
+                        raise ValueError("Validation mask data dir not found: {}".format(cfg.DATA.VAL.MASK_PATH))
+                    X_val, Y_val = None, None
 
         ############
         ### TEST ###
@@ -397,7 +401,7 @@ class Trainer(object):
                     ### INSTANCE SEGMENTATION ###
                     #############################
                     if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-                        if self.cfg.DATA.MW_OPTIMIZE_THS and self.cfg.DATA.CHANNELS != "BDv2":
+                        if self.cfg.DATA.MW_OPTIMIZE_THS and self.cfg.DATA.CHANNELS in ["BDv2", "BCDv2"]:
                             if self.cfg.TEST.APPLY_MASK and os.path.isdir(self.cfg.DATA.VAL.BINARY_MASKS):
                                 bin_mask = self.cfg.DATA.VAL.BINARY_MASKS
                             else:
@@ -456,8 +460,8 @@ class Trainer(object):
 
                         # Create GT H5 file if it does not exist
                         gt_f = os.path.join(self.cfg.PATHS.TEST_FULL_GT_H5, os.path.splitext(filenames[0])[0]+'.h5')
-                        test_file = os.path.join(self.cfg.PATHS.TEST_FULL_GT_H5, filenames[0])
                         if not os.path.isfile(gt_f):
+                            test_file = os.path.join(self.cfg.DATA.TEST.MASK_PATH, filenames[0])
                             print("GT .h5 file needed for mAP calculation is not found in {} so it will be created "
                                   "from its mask: {}".format(gt_f, test_file))
 
