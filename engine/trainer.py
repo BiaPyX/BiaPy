@@ -7,14 +7,15 @@ from tqdm import tqdm
 from skimage.io import imread
 
 from utils.util import (check_masks, check_downsample_division, create_plots, save_tif, load_data_from_dir,
-                        load_3d_images_from_dir, apply_binary_mask)
+                        load_3d_images_from_dir, apply_binary_mask, pad_and_reflect)
 from data import create_instance_channels, create_test_instance_channels
 from data.data_2D_manipulation import load_and_prepare_2D_train_data, crop_data_with_overlap, merge_data_with_overlap
 from data.data_3D_manipulation import load_and_prepare_3D_data, crop_3D_data_with_overlap, merge_3D_data_with_overlap
 from data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
 from data.post_processing import apply_post_processing
 from data.post_processing.post_processing import (ensemble8_2d_predictions, ensemble16_3d_predictions, bc_watershed,
-                                                  bcd_watershed, bdv2_watershed, calculate_optimal_mw_thresholds)
+                                                  bcd_watershed, bdv2_watershed, calculate_optimal_mw_thresholds,
+                                                  voronoi_on_mask)
 from models import build_model
 from engine import build_callbacks, prepare_optimizer
 from engine.metrics import jaccard_index_numpy, voc_calculation
@@ -82,16 +83,15 @@ class Trainer(object):
                 create_test_instance_channels(cfg)
 
             opts = []
-            if cfg.TRAIN.ENABLE:
-                print("DATA.TRAIN.PATH changed from {} to {}".format(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
-                print("DATA.TRAIN.MASK_PATH changed from {} to {}".format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR))
-                opts.extend(['DATA.TRAIN.PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR,
-                             'DATA.TRAIN.MASK_PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR])
-                if not cfg.DATA.VAL.FROM_TRAIN:
-                    print("DATA.VAL.PATH changed from {} to {}".format(cfg.DATA.VAL.PATH, cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
-                    print("DATA.VAL.MASK_PATH changed from {} to {}".format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR))
-                    opts.extend(['DATA.VAL.PATH', cfg.DATA.VAL.INSTANCE_CHANNELS_DIR,
-                                 'DATA.VAL.MASK_PATH', cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR])
+            print("DATA.TRAIN.PATH changed from {} to {}".format(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
+            print("DATA.TRAIN.MASK_PATH changed from {} to {}".format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR))
+            opts.extend(['DATA.TRAIN.PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR,
+                         'DATA.TRAIN.MASK_PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR])
+            if not cfg.DATA.VAL.FROM_TRAIN:
+                print("DATA.VAL.PATH changed from {} to {}".format(cfg.DATA.VAL.PATH, cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
+                print("DATA.VAL.MASK_PATH changed from {} to {}".format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR))
+                opts.extend(['DATA.VAL.PATH', cfg.DATA.VAL.INSTANCE_CHANNELS_DIR,
+                             'DATA.VAL.MASK_PATH', cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR])
             if cfg.TEST.ENABLE:
                 original_test_path = cfg.DATA.TEST.PATH
                 print("DATA.TEST.PATH changed from {} to {}".format(cfg.DATA.TEST.PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
@@ -248,6 +248,32 @@ class Trainer(object):
            loss_per_imag, iou_per_image, ov_iou_per_image = 0, 0, 0
         if self.cfg.TEST.STATS.FULL_IMG:
            loss, iou, ov_iou = 0, 0, 0
+        if self.cfg.TEST.MAP and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+            mAP_50_total = 0
+            mAP_75_total = 0
+            if self.cfg.TEST.VORONOI_ON_MASK:
+                mAP_50_total_vor = 0
+                mAP_75_total_vor = 0
+
+        if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
+            if self.cfg.DATA.MW_OPTIMIZE_THS and self.cfg.DATA.CHANNELS != "BCDv2":
+                if self.cfg.TEST.APPLY_MASK and os.path.isdir(self.cfg.DATA.VAL.BINARY_MASKS):
+                    bin_mask = self.cfg.DATA.VAL.BINARY_MASKS
+                else:
+                    bin_mask = None
+                obj = calculate_optimal_mw_thresholds(self.model, self.cfg.DATA.VAL.PATH,
+                    self.orig_val_mask_path, self.cfg.DATA.PATCH_SIZE, self.cfg.DATA.CHANNELS,
+                    self.cfg.DATA.VAL.MASK_PATH, self.cfg.DATA.REMOVE_SMALL_OBJ, bin_mask,
+                    chart_dir=self.cfg.PATHS.CHARTS, verbose=self.cfg.TEST.VERBOSE)
+                if self.cfg.DATA.CHANNELS == "BCD":
+                    th1_opt, th2_opt, th3_opt, th4_opt, th5_opt = obj
+                else:
+                    th1_opt, th2_opt, th3_opt = obj
+                    th4_opt, th5_opt = self.cfg.DATA.MW_TH4, self.cfg.DATA.MW_TH5
+            else:
+                th1_opt, th2_opt, th3_opt = self.cfg.DATA.MW_TH1, self.cfg.DATA.MW_TH2, self.cfg.DATA.MW_TH3
+                th4_opt, th5_opt = self.cfg.DATA.MW_TH4, self.cfg.DATA.MW_TH5
+
         image_counter = 0
 
         if self.cfg.TEST.POST_PROCESSING.BLENDING or self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or \
@@ -291,6 +317,11 @@ class Trainer(object):
                 ### PER PATCH ###
                 #################
                 if self.cfg.TEST.STATS.PER_PATCH:
+                    if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE and self.cfg.PROBLEM.NDIM == '3D':
+                        reflected_orig_shape = _X.shape
+                        _X = np.expand_dims(pad_and_reflect(_X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+                        _Y = np.expand_dims(pad_and_reflect(_Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+
                     original_data_shape = _X.shape if self.cfg.PROBLEM.NDIM == '2D' else _X.shape[1:]
                     if _X.shape[1:] != self.cfg.DATA.PATCH_SIZE:
                         if self.cfg.PROBLEM.NDIM == '2D':
@@ -354,6 +385,10 @@ class Trainer(object):
                     else:
                         pred = pred[0]
 
+                    if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE and self.cfg.PROBLEM.NDIM == '3D':
+                        pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                        _Y = _Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+
                     # Argmax if needed
                     if self.cfg.MODEL.N_CLASSES > 1:
                         pred = np.expand_dims(np.argmax(pred,-1), -1)
@@ -401,41 +436,27 @@ class Trainer(object):
                     ### INSTANCE SEGMENTATION ###
                     #############################
                     if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-                        if self.cfg.DATA.MW_OPTIMIZE_THS and self.cfg.DATA.CHANNELS in ["BDv2", "BCDv2"]:
-                            if self.cfg.TEST.APPLY_MASK and os.path.isdir(self.cfg.DATA.VAL.BINARY_MASKS):
-                                bin_mask = self.cfg.DATA.VAL.BINARY_MASKS
-                            else:
-                                bin_mask = None
-                            obj = calculate_optimal_mw_thresholds(self.model, self.cfg.DATA.VAL.PATH,
-                                self.orig_val_mask_path, self.cfg.DATA.CHANNELS, self.cfg.DATA.VAL.MASK_PATH,
-                                self.cfg.DATA.REMOVE_SMALL_OBJ, bin_mask, chart_dir=self.cfg.PATHS.CHARTS,
-                                verbose=self.cfg.TEST.VERBOSE)
-                            if self.cfg.DATA.CHANNELS == "BCD":
-                                th1_opt, th2_opt, th3_opt, th4_opt, th5_opt = obj
-                            else:
-                                th1_opt, th2_opt, th3_opt = obj
-                                th4_opt, th5_opt = self.cfg.DATA.MW_TH4, self.cfg.DATA.MW_TH5
-                        else:
-                            th1_opt, th2_opt, th3_opt = self.cfg.DATA.MW_TH1, self.cfg.DATA.MW_TH2, self.cfg.DATA.MW_TH3
-                            th4_opt, th5_opt = self.cfg.DATA.MW_TH4, self.cfg.DATA.MW_TH5
-
-                        # Create instances
                         print("Creating instances with watershed . . .")
                         w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
                         if self.cfg.DATA.CHANNELS == "BC":
-                            pred = bc_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt,
+                            w_pred = bc_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt,
                                 thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, remove_before=self.cfg.DATA.REMOVE_BEFORE_MW,
                                 save_dir=w_dir)
                         elif self.cfg.DATA.CHANNELS == "BCD":
-                            pred = bcd_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt, thres4=th4_opt,
+                            w_pred = bcd_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt, thres4=th4_opt,
                                 thres5=th5_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
                                 remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=w_dir)
-                        else: # "BDv2" and "Dv2"
-                            pred = bdv2_watershed(pred, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
+                        else: # "BCDv2"
+                            w_pred = bdv2_watershed(pred, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
                                 remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=w_dir)
 
-                        save_tif(np.expand_dims(np.expand_dims(pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                        save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                                  filenames, verbose=self.cfg.TEST.VERBOSE)
+
+                        if self.cfg.TEST.VORONOI_ON_MASK:
+                            vor_pred = voronoi_on_mask(np.expand_dims(w_pred,0), np.expand_dims(pred,0),
+                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI, filenames, verbose=self.cfg.TEST.VERBOSE)[0]
+
 
                     if self.cfg.TEST.MAP and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
                         print("####################\n"
@@ -448,7 +469,7 @@ class Trainer(object):
                         h5file_name = os.path.join(self.cfg.PATHS.MAP_H5_DIR, os.path.splitext(filenames[0])[0]+'.h5')
                         print("Creating prediction h5 file to calculate mAP: {}".format(h5file_name))
                         h5f = h5py.File(h5file_name, 'w')
-                        h5f.create_dataset('dataset', data=pred, compression="lzf")
+                        h5f.create_dataset('dataset', data=w_pred, compression="lzf")
                         h5f.close()
 
                         # Prepare mAP call
@@ -481,6 +502,38 @@ class Trainer(object):
                                          threshold_crumb=64, chunk_size=250, output_name=w_dir, do_txt=1, do_eval=1,
                                          slices="-1")
                         mAP_calculation(args)
+
+                        # Save metric
+                        with open(os.path.join(w_dir, 'nucmm_map.txt'), "r") as read_obj:
+                            for line in read_obj:
+                                if 'Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] =' in line:
+                                    mAP_50_total += float(line.split()[-1])
+                                elif 'Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] =' in line:
+                                    mAP_75_total += float(line.split()[-1])
+
+                        if self.cfg.TEST.VORONOI_ON_MASK:
+                            print("mAP with Voronoi")
+                            h5file_name_vor = os.path.join(self.cfg.PATHS.MAP_H5_DIR, os.path.splitext(filenames[0])[0]+'_voronoi.h5')
+                            print("Creating prediction h5 file to calculate mAP: {}".format(h5file_name_vor))
+                            h5f = h5py.File(h5file_name_vor, 'w')
+                            h5f.create_dataset('dataset', data=vor_pred, compression="lzf")
+                            h5f.close()
+
+                            w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0], "voronoi")
+                            os.makedirs(w_dir, exist_ok=True)
+                            # Calculate mAP
+                            args = Namespace(gt_seg=gt_f, predict_seg=h5file_name_vor, predict_score='', threshold="5e3, 3e4",
+                                             threshold_crumb=64, chunk_size=250, output_name=w_dir, do_txt=1, do_eval=1,
+                                             slices="-1")
+                            mAP_calculation(args)
+
+                            # Save metric
+                            with open(os.path.join(w_dir, 'nucmm_map.txt'), "r") as read_obj:
+                                for line in read_obj:
+                                    if 'Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] =' in line:
+                                        mAP_50_total_vor += float(line.split()[-1])
+                                    elif 'Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] =' in line:
+                                        mAP_75_total_vor += float(line.split()[-1])
 
                 ##################
                 ### FULL IMAGE ###
@@ -561,6 +614,13 @@ class Trainer(object):
             if self.cfg.TEST.STATS.MERGE_PATCHES:
                 iou_per_image = iou_per_image / image_counter
                 ov_iou_per_image = ov_iou_per_image / image_counter
+            if self.cfg.TEST.MAP and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+                mAP_50_total = mAP_50_total / image_counter
+                mAP_75_total = mAP_75_total / image_counter
+                if self.cfg.TEST.VORONOI_ON_MASK:
+                    mAP_50_total_vor = mAP_50_total_vor / image_counter
+                    mAP_75_total_vor = mAP_75_total_vor / image_counter
+
         iou = iou / image_counter
         ov_iou = ov_iou / image_counter
 
@@ -586,6 +646,15 @@ class Trainer(object):
                 if self.cfg.TEST.STATS.MERGE_PATCHES:
                     print("Test Foreground IoU (merge patches): {}".format(iou_per_image))
                     print("Test Overall IoU (merge patches): {}".format(ov_iou_per_image))
+                    print(" ")
+
+            if self.cfg.TEST.MAP and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
+                print("Test Average Precision (AP) - IoU=0.50 : {}".format(mAP_50_total))
+                print("Test Average Precision (AP) - IoU=0.75 : {}".format(mAP_75_total))
+                print(" ")
+                if self.cfg.TEST.VORONOI_ON_MASK:
+                    print("Test Average Precision (AP) (Voronoi) - IoU=0.50 : {}".format(mAP_50_total_vor))
+                    print("Test Average Precision (AP) (Voronoi) - IoU=0.75 : {}".format(mAP_75_total_vor))
                     print(" ")
 
             if self.cfg.TEST.STATS.FULL_IMG:

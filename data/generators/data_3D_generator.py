@@ -319,7 +319,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 if self.first_no_bin_channel != -1:
                     self.div_Y_on_load_bin_channels = True if np.max(img[...,:self.first_no_bin_channel]) > 10 else False
                     max_no_bin_channel = np.max(img[...,self.first_no_bin_channel:])
-                    self.div_Y_on_load_no_bin_channels = True if max_no_bin_channel > 10 else False
+                    self.div_Y_on_load_no_bin_channels = True if max_no_bin_channel > 200 else False
                     if max_no_bin_channel > self.div_Y_no_bin_channels_max:
                         self.div_Y_no_bin_channels_max = max_no_bin_channel
                     min_no_bin_channel = np.min(img[...,self.first_no_bin_channel:])
@@ -349,7 +349,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             if self.first_no_bin_channel != -1:
                 self.div_Y_on_load_bin_channels = True if np.max(Y[...,:self.first_no_bin_channel]) > 10 else False
                 max_no_bin_channel = np.max(Y[...,self.first_no_bin_channel:])
-                self.div_Y_on_load_no_bin_channels = True if max_no_bin_channel > 10 else False
+                self.div_Y_on_load_no_bin_channels = True if max_no_bin_channel > 200 else False
                 self.div_Y_no_bin_channels_max = max_no_bin_channel
                 self.div_Y_no_bin_channels_min = np.min(Y[...,self.first_no_bin_channel:])
             else:
@@ -587,8 +587,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             if self.div_Y_on_load_bin_channels:
                 batch_y[...,:self.first_no_bin_channel] = batch_y[...,:self.first_no_bin_channel]/255
             if self.div_Y_on_load_no_bin_channels:
-                batch_y[...,self.first_no_bin_channel:] = \
-                    (batch_y[...,self.first_no_bin_channel:]-self.div_Y_no_bin_channels_min)/(self.div_Y_no_bin_channels_max-self.div_Y_no_bin_channels_min)
+                batch_y[...,self.first_no_bin_channel:] = batch_y[...,self.first_no_bin_channel:]/255
+                    #(batch_y[...,self.first_no_bin_channel:]-self.div_Y_no_bin_channels_min)/(self.div_Y_no_bin_channels_max-self.div_Y_no_bin_channels_min)
         else:
             if self.div_Y_on_load_bin_channels: batch_y = batch_y/255
 

@@ -1455,16 +1455,16 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
            5D array with 3 channels instead of one. E.g. ``(10, 1000, 1000, 200, 3)``
     """
 
-    assert mode in ['BC', 'BCD', 'BCDv2', 'BDv2', 'Dv2']
+    assert mode in ['BC', 'BCD', 'BCDv2']
     assert data_mask.ndim in [5, 4]
 
     d_shape = 4 if data_mask.ndim == 5 else 3
-    if mode in ['BCD', 'BCDv2']:
+    if mode  == 'BCDv2':
+        c_number = 4
+    elif mode == 'BCD':
         c_number = 3
-    if mode in ['BC', 'BDv2']:
+    if mode == 'BC':
         c_number = 2
-    elif mode == 'Dv2':
-        c_number = 1
 
     new_mask = np.zeros(data_mask.shape[:d_shape] + (c_number,), dtype=np.float32)
 
@@ -1476,35 +1476,26 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
         if len(l) != 1:
             vol_dist = np.zeros(vol.shape)
 
-            if mode in ["BCD", "BCDv2", "BDv2", "Dv2"]:
+            if mode in ["BCD", "BCDv2"]:
                 # For each nucleus
                 for i in tqdm(range(1,len(l)), leave=False):
                     obj = l[i]
                     distance = scipy.ndimage.distance_transform_edt(vol==obj)
                     vol_dist += distance
 
-                # Distance
-                if mode in ["BCDv2", "BDv2", "Dv2"]:
+                # Foreground distance
+                new_mask[img,...,2] = vol_dist.copy()
+
+                # Background distance
+                if mode == "BCDv2":
+                    # Background distance
                     vol_b_dist = np.invert(vol>0)
                     vol_b_dist= scipy.ndimage.distance_transform_edt(vol_b_dist)
-                    vol_dist = vol_dist+vol_b_dist
-                    # Invert
-                    vol_dist = np.max(vol_dist)-vol_dist
-                    # Normalize
-                    #vol_dist = vol_dist/np.linalg.norm(vol_dist)
-
-                    if mode == "Dv2":
-                        new_mask[img,...,0] = vol_dist.copy()
-                    if mode == "BDv2":
-                        new_mask[img,...,1] = vol_dist.copy()
-                    else: # "Dv2"
-                        new_mask[img,...,2] = vol_dist.copy()
-                else: # "BCD"
-                    new_mask[img,...,2] = vol_dist.copy()
+                    vol_b_dist = np.max(vol_b_dist)-vol_b_dist
+                    new_mask[img,...,3] = vol_b_dist.copy()
 
             # Semantic mask
-            if mode in ["BCD", "BDv2"]:
-                new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)
+            new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)
 
             # Contour
             if mode in ["BCD", "BCDv2", "BC"]:
@@ -1512,21 +1503,35 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
                 # Remove contours from segmentation maps
                 new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0
 
+    # Normalize and merge distance channels
+    if mode == "BCDv2":
+        f_min = np.min(new_mask[...,2])
+        f_max = np.max(new_mask[...,2])
+        b_min = np.min(new_mask[...,3])
+        b_max = np.max(new_mask[...,3])
+
+        # Normalize foreground and background separately
+        new_mask[...,2] = (new_mask[...,2]-f_min)/(f_max-f_min)
+        new_mask[...,3] = (new_mask[...,3]-b_min)/(b_max-b_min)
+
+        new_mask[...,2] = new_mask[...,3] - new_mask[...,2]
+        # The intersection of the channels is the contour channel, so set it to the maximum value 1
+        new_mask[...,2][new_mask[...,1]>0] = 1
+        new_mask = new_mask[...,:3]
+
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
         for i in range(min(3,len(new_mask))):
-            # Save segmentation mask ["BC", "BCD", "BDv2"] or distance mask ["Dv2"]
-            name = 'semantic' if mode in ["BC", "BCD", "BCDv2", "BDv2"] else 'distanceV2'
+            # Save segmentation mask ["BC", "BCD", "BDv2"]
             aux = np.transpose(new_mask[i,...,0],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,0]
             aux = np.expand_dims(np.expand_dims(aux,-1),0)
-            save_tif(aux, save_dir, filenames=['vol'+str(i)+'_'+name+'.tif'], verbose=False)
+            save_tif(aux, save_dir, filenames=['vol'+str(i)+'_semantic.tif'], verbose=False)
 
-            # Save contour mask ["BC", "BCD"] or distance mask ["BDv2"]
-            if mode in ["BC", "BCD", "BCDv2", "BDv2"]:
-                name = 'semantic' if mode in ["BC", "BCD", "BCDv2"] else 'distanceV2'
+            # Save contour mask ["BC", "BCD"]
+            if mode in ["BC", "BCD", "BCDv2"]:
                 aux = np.transpose(new_mask[i,...,1],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,1]
                 aux = np.expand_dims(np.expand_dims(aux,-1),0)
-                save_tif(aux, save_dir, filenames=['vol'+str(i)+'_'+name+'.tif'], verbose=False)
+                save_tif(aux, save_dir, filenames=['vol'+str(i)+'_contour.tif'], verbose=False)
 
             # Save distances
             if mode in ["BCD", "BCDv2"]:
@@ -1684,19 +1689,19 @@ def pad_and_reflect(img, crop_shape, verbose=False):
 
     if img.shape[0] < crop_shape[2]:
         diff = crop_shape[2]-img.shape[0]
-        pad = (diff//2) + 1
-        img = np.pad(img, ((pad,pad),(0,0),(0,0),(0,0)), 'reflect')
-        if verbose: print("Reflected {}".format(img.shape))
+        o_shape = img.shape
+        img = np.pad(img, ((diff,0),(0,0),(0,0),(0,0)), 'reflect')
+        if verbose: print("Reflected from {} to {}".format(o_shape, img.shape))
 
     if img.shape[1] < crop_shape[0]:
         diff = crop_shape[0]-img.shape[1]
-        pad = (diff//2) + 1
-        img = np.pad(img, ((0,0),(pad,pad),(0,0),(0,0)), 'reflect')
-        if verbose: print("Reflected {}".format(img.shape))
+        o_shape = img.shape
+        img = np.pad(img, ((0,0),(diff,0),(0,0),(0,0)), 'reflect')
+        if verbose: print("Reflected from {} to {}".format(o_shape, img.shape))
 
     if img.shape[2] < crop_shape[1]:
         diff = crop_shape[1]-img.shape[2]
-        pad = (diff//2) + 1
-        img = np.pad(img, ((0,0),(0,0),(pad,pad),(0,0)), 'reflect')
-        if verbose: print("Reflected {}".format(img.shape))
+        o_shape = img.shape
+        img = np.pad(img, ((0,0),(0,0),(diff,0),(0,0)), 'reflect')
+        if verbose: print("Reflected from {} to {}".format(o_shape, img.shape))
     return img

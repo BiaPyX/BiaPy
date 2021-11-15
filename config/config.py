@@ -50,6 +50,7 @@ class Config:
         # 'BCD' stands for 'Binary segmentation' + 'Contour' + 'Distance'. As 'BC' but creating an additional channel
         # that represents the distance of the pixels to the border. This setting should be used when
         # _C.PROBLEM.TYPE = 'INSTANCE_SEG'
+        # 'Dv2' channels is a updated version of 'D' channel calculating background distance as well.
         _C.DATA.CHANNELS = 'B'
         # Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. (1, 0.2), 1
         # should be multipled by BCE for the first two channels and 0.2 to MSE for the last channel.
@@ -356,6 +357,8 @@ class Config:
         _C.TEST.EVALUATE = True
         # Apply a binary mask to remove possible segmentation outside it
         _C.TEST.APPLY_MASK = False
+        # Whether to apply Voronoi using 'B' or 'BC' channels
+        _C.TEST.VORONOI_ON_MASK = False
         # Wheter to calculate mAP
         _C.TEST.MAP = False # Only applies when _C.TEST.STATS.MERGE_PATCHES = True
 
@@ -395,6 +398,7 @@ class Config:
         _C.PATHS.RESULT_DIR.PATH = os.path.join(job_dir, 'results', job_identifier)
         _C.PATHS.RESULT_DIR.PER_IMAGE = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image')
         _C.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_instances')
+        _C.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_instances_voronoi')
         _C.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_post_processing')
         _C.PATHS.RESULT_DIR.FULL_IMAGE = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_image')
         _C.PATHS.RESULT_DIR.FULL_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_post_processing')
