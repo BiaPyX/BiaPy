@@ -5,12 +5,12 @@ import numpy as np
 from skimage.io import imread
 from tqdm import tqdm
 
-job_name = 'cyst1'
-code_dir = "/scratch/dfranco/thesis/data2/dfranco/EM_Image_Segmentation"
-map_code_dir = "/scratch/dfranco/thesis/data2/dfranco/mAP_3Dvolume"
-input_dir = "/scratch/dfranco/thesis/data2/dfranco/exp_results/cyst1/results/cyst1_1/per_image_instances"
-gt_dir = "/scratch/dfranco/thesis/data2/dfranco/datasets/sevilla/cyst/cysts_dataset_150/train/y"
-partial_base_dir = "/scratch/dfranco/thesis/data2/dfranco/exp_results/partial_map_files"
+job_name = 'jobname'
+code_dir = "/home/user/EM_Image_Segmentation"
+map_code_dir = "/home/user/mAP_3Dvolume"
+input_dir = "/home/user/input_images"
+gt_dir = "/home/user/gt"
+partial_base_dir = "/home/user/partial_files"
 partial_files_dir = os.path.join(partial_base_dir, job_name)
 gt_partial_files_dir = partial_base_dir+'_gt'
 
@@ -54,7 +54,6 @@ for n, id_ in enumerate(ids):
             raise ValueError("The mask is supossed to have the same name as the image")
 
         _Y = imread(test_file).squeeze()
-        print("_Y: {}".format(_Y.shape))
 
         print("Saving .h5 GT data from array shape: {}".format(_Y.shape))
         os.makedirs(gt_partial_files_dir, exist_ok=True)
