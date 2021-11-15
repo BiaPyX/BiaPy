@@ -222,6 +222,8 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
     if data_mask is not None:
         if data_mask.ndim != 4:
             raise ValueError("data_mask expected to be 4 dimensional, given {}".format(data_mask.shape))
+        if data.shape != data_mask.shape:
+            raise ValueError("data and data_mask shapes mismatch: {} vs {}".format(data.shape, data_mask.shape))
     if len(vol_shape) != 4:
         raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
     if vol_shape[2] > data.shape[0]:
@@ -568,6 +570,9 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
            # The function will print the shape of the generated arrays. In this example:
            #     **** New data shape is: (165, 768, 1024, 1)
     """
+    if data_mask is not None:
+        if data.shape[:-1] != data_mask.shape[:-1]:
+            raise ValueError("data and data_mask shapes mismatch: {} vs {}".format(data.shape[:-1], data_mask.shape[:-1]))
 
     if verbose:
         print("### MERGE-3D-OV-CROP ###")
