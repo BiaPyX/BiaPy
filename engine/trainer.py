@@ -51,7 +51,7 @@ class Trainer(object):
             # foreground class (channel 1)
             self.metric = "jaccard_index_softmax" if cfg.MODEL.N_CLASSES > 1 else "jaccard_index"
         else:
-            self.metric = "jaccard_index" if cfg.DATA.CHANNELS in ["B", "BC"] else "jaccard_index_instances"
+            self.metric = "jaccard_index" if cfg.DATA.CHANNELS in ["BC", "BCM"] else "jaccard_index_instances"
 
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and cfg.DATA.CHANNELS != 'B':
@@ -440,7 +440,7 @@ class Trainer(object):
                     if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
                         print("Creating instances with watershed . . .")
                         w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
-                        if self.cfg.DATA.CHANNELS == "BC":
+                        if self.cfg.DATA.CHANNELS in ["BC", "BCM"]:
                             w_pred = bc_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt,
                                 thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, remove_before=self.cfg.DATA.REMOVE_BEFORE_MW,
                                 save_dir=w_dir)

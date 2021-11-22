@@ -38,7 +38,7 @@ def prepare_optimizer(cfg, model):
         if cfg.MODEL.N_CLASSES > 1:
             raise ValueError("Not implemented pipeline option: N_CLASSES > 1 and INSTANCE_SEG")
         else:
-            if cfg.DATA.CHANNELS == "B" or cfg.DATA.CHANNELS == "BC":
+            if cfg.DATA.CHANNELS in ["BC", "BCM"]:
                 model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
             else:
                 bin_channels = 2 if cfg.DATA.CHANNELS in ["BCD", "BCDv2"] else 1

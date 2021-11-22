@@ -1455,13 +1455,13 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
            5D array with 3 channels instead of one. E.g. ``(10, 1000, 1000, 200, 3)``
     """
 
-    assert mode in ['BC', 'BCD', 'BCDv2']
+    assert mode in ['BC', 'BCM', 'BCD', 'BCDv2']
     assert data_mask.ndim in [5, 4]
 
     d_shape = 4 if data_mask.ndim == 5 else 3
     if mode  == 'BCDv2':
         c_number = 4
-    elif mode == 'BCD':
+    elif mode in ['BCD', 'BCM']:
         c_number = 3
     if mode == 'BC':
         c_number = 2
@@ -1498,10 +1498,12 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
             new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)
 
             # Contour
-            if mode in ["BCD", "BCDv2", "BC"]:
+            if mode in ["BCD", "BCDv2", "BC", "BCM"]:
                 new_mask[img,...,1] = find_boundaries(vol, mode=fb_mode).astype(np.uint8)
                 # Remove contours from segmentation maps
                 new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0
+                if mode == "BCM":
+                    new_mask[img,...,2] = new_mask[img,...,0]+new_mask[img,...,1]
 
     # Normalize and merge distance channels
     if mode == "BCDv2":
@@ -1521,23 +1523,20 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
 
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
-        for i in range(min(3,len(new_mask))):
-            # Save segmentation mask ["BC", "BCD", "BDv2"]
-            aux = np.transpose(new_mask[i,...,0],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,0]
-            aux = np.expand_dims(np.expand_dims(aux,-1),0)
-            save_tif(aux, save_dir, filenames=['vol'+str(i)+'_semantic.tif'], verbose=False)
-
-            # Save contour mask ["BC", "BCD"]
-            if mode in ["BC", "BCD", "BCDv2"]:
-                aux = np.transpose(new_mask[i,...,1],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,1]
-                aux = np.expand_dims(np.expand_dims(aux,-1),0)
-                save_tif(aux, save_dir, filenames=['vol'+str(i)+'_contour.tif'], verbose=False)
-
-            # Save distances
+        suffix = []
+        suffix.append('_semantic.tif')
+        if mode in ["BC", "BCM", "BCD", "BCDv2"]:
+            suffix.append('_contour.tif')
             if mode in ["BCD", "BCDv2"]:
-                aux = np.transpose(new_mask[i,...,2],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,2]
-                aux = np .expand_dims(np.expand_dims(aux,-1),0)
-                save_tif(aux, save_dir, filenames=['vol'+str(i)+'_distance.tif'], verbose=False)
+                suffix.append('_distance.tif')
+            elif mode == "BCM":
+                suffix.append('_binary_mask.tif')
+
+        for i in range(min(3,len(new_mask))):
+            for j in range(len(suffix)):
+                aux = np.transpose(new_mask[i,...,j],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,j]
+                aux = np.expand_dims(np.expand_dims(aux,-1),0)
+                save_tif(aux, save_dir, filenames=['vol'+str(i)+suffix[j]], verbose=False)
 
     return new_mask
 
