@@ -7,9 +7,10 @@ import numpy as np
 from skimage import measure
 from tqdm import tqdm
 from scipy import ndimage as ndi
+from skimage import morphology 
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import watershed
-from skimage.filters import rank
+from skimage.filters import rank, threshold_otsu, gaussian
 from scipy.ndimage import rotate
 from skimage.measure import label
 from skimage.io import imsave, imread
@@ -18,6 +19,8 @@ import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 import numpy_indexed as npi
 from scipy.spatial import KDTree
+from scipy.spatial.distance import cdist
+from joblib import Parallel, delayed
 
 from engine.metrics import jaccard_index_numpy
 from utils.util import save_tif, apply_binary_mask, pad_and_reflect
@@ -1217,3 +1220,108 @@ def voronoi_on_mask(data, mask, save_dir, filenames, th=0.3, thres_small=128, ve
         imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
     return _data
+    
+
+def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
+    """Apply Voronoi to the voxels not labeled yet marked by the mask. It is done using distances from the un-labeled voxels to the cell perimeters.
+
+       Parameters
+       ----------
+       data : 4D Numpy array
+           Data to apply Voronoi. ``(num_of_images, z, x, y)`` e.g. ``(1, 397, 1450, 2000)``
+
+       mask : 5D Numpy array
+           Data mask to determine which points need to be proccessed. ``(num_of_images, z, x, y, channels)`` e.g.
+           ``(1, 397, 1450, 2000, 3)``.
+
+       save_dir :  str, optional
+           Directory to save the resulting image.
+
+       filenames : List, optional
+           Filenames that should be used when saving each image.
+
+       th : float, optional
+           Threshold used to binarize the input. If th=0, otsu threshold is used.
+
+       thres_small : int, optional
+           Theshold to remove small objects created by the watershed.
+
+       verbose : bool, optional
+            To print saving information.
+
+       Returns
+       -------
+       data : 4D Numpy array
+           Image with Voronoi applied. ``(num_of_images, z, x, y)`` e.g. ``(1, 397, 1450, 2000)``
+
+    """
+    
+    if data.ndim != 4:
+        raise ValueError("Data must be 4 dimensional, provided {}".format(data.shape))
+    if mask.ndim != 5:
+        raise ValueError("Data mask must be 5 dimensional, provided {}".format(mask.shape))
+    if mask.shape[-1] < 2:
+        raise ValueError("Mask needs to have two channels at least, received {}".format(mask.shape[-1]))
+
+    if verbose:
+        print("Applying Voronoi 3D . . .")
+
+    os.makedirs(save_dir, exist_ok=True)
+    if filenames is not None:
+        if len(filenames) != len(data):
+            raise ValueError("Filenames array and length of X have different shapes: {} vs {}".format(len(filenames),len(data)))
+
+
+	#Extract mask from prediction
+    mask = mask[:, :, :, :, 2]
+    mask_shape = np.shape(mask)
+    mask = mask[0, :, :, :]
+    data = data[0, :, :, :]
+    #binarize
+    if th == 0:
+        thresh = threshold_otsu(mask)
+    else:
+        thresh = th
+   
+    binaryMask = mask > thresh
+
+    #Close to fill holes
+    closedBinaryMask = morphology.closing(binaryMask).astype(np.uint8)
+    
+    #
+    voronoiCyst = data*closedBinaryMask
+
+    binaryVoronoiCyst = (voronoiCyst > 0)*1
+
+    binaryVoronoiCyst = binaryVoronoiCyst.astype('uint8')
+
+    #Cell Perimeter
+    erodedVoronoiCyst = morphology.binary_erosion(binaryVoronoiCyst, morphology.ball(radius=2))
+    cellPerimeter = binaryVoronoiCyst - erodedVoronoiCyst
+
+    #Define ids to fill where there is mask but no labels
+    idsToFill = np.argwhere((closedBinaryMask==1) & (data==0))
+    labelPerId = np.zeros(np.size(idsToFill));
+
+    idsPerim = np.argwhere(cellPerimeter==1)
+
+    labelsPerimIds = voronoiCyst[cellPerimeter==1]
+
+    #Generating voronoi
+    
+    for nId in range(1,len(idsToFill)):
+        distCoord = cdist([idsToFill[nId]], idsPerim)
+        idSeedMin = np.argwhere(distCoord==np.min(distCoord))
+        idSeedMin = idSeedMin[0][1]
+        labelPerId[nId] = labelsPerimIds[idSeedMin]
+        voronoiCyst[idsToFill[nId][0], idsToFill[nId][1], idsToFill[nId][2]] = labelsPerimIds[idSeedMin]
+        
+    # Save image
+
+    f = os.path.join(save_dir, filenames[0])
+
+    voronoiCyst = np.reshape(voronoiCyst, (1, mask_shape[1], mask_shape[2], mask_shape[3]))
+    
+    imsave(f, voronoiCyst.astype(np.uint16), imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+    
+    return voronoiCyst
