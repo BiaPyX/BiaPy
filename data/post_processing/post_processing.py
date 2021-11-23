@@ -20,7 +20,6 @@ import matplotlib.transforms as transforms
 import numpy_indexed as npi
 from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
-from joblib import Parallel, delayed
 
 from engine.metrics import jaccard_index_numpy
 from utils.util import save_tif, apply_binary_mask, pad_and_reflect
