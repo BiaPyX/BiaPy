@@ -1503,7 +1503,7 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
                 # Remove contours from segmentation maps
                 new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0
                 if mode == "BCM":
-                    new_mask[img,...,2] = new_mask[img,...,0]+new_mask[img,...,1]
+                    new_mask[img,...,2] = (vol>0).astype(np.uint8)
 
     # Normalize and merge distance channels
     if mode == "BCDv2":
