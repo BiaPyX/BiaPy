@@ -1284,7 +1284,7 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
     binaryMask = mask > thresh
 
     # Close to fill holes
-    closedBinaryMask = morphology.closing(binaryMask).astype(np.uint8)
+    closedBinaryMask = morphology.closing(binaryMask, morphology.ball(radius=5)).astype(np.uint8)
 
     voronoiCyst = data*closedBinaryMask
     binaryVoronoiCyst = (voronoiCyst > 0)*1
@@ -1312,6 +1312,7 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
     # Save image
     f = os.path.join(save_dir, filenames[0])
     voronoiCyst = np.reshape(voronoiCyst, (1, mask_shape[1], mask_shape[2], mask_shape[3]))
-    imsave(f, voronoiCyst.astype(np.uint16), imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+    aux = np.reshape(voronoiCyst, (mask_shape[1], 1, mask_shape[2], mask_shape[3], 1))
+    imsave(f, aux.astype(np.uint16), imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
     return voronoiCyst
