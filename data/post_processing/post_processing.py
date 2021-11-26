@@ -1221,7 +1221,7 @@ def voronoi_on_mask(data, mask, save_dir, filenames, th=0.3, thres_small=128, ve
     return _data
 
 
-def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0.97, verbose=False):
+def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
     """Apply Voronoi to the voxels not labeled yet marked by the mask. It is done using distances from the un-labeled
        voxels to the cell perimeters.
 
