@@ -15,7 +15,7 @@ from data.generators import create_train_val_augmentors, create_test_augmentor, 
 from data.post_processing import apply_post_processing
 from data.post_processing.post_processing import (ensemble8_2d_predictions, ensemble16_3d_predictions, bc_watershed,
                                                   bcd_watershed, bdv2_watershed, calculate_optimal_mw_thresholds,
-                                                  voronoi_on_mask)
+                                                  voronoi_on_mask_2)
 from models import build_model
 from engine import build_callbacks, prepare_optimizer
 from engine.metrics import jaccard_index_numpy, voc_calculation
@@ -456,7 +456,7 @@ class Trainer(object):
                                  filenames, verbose=self.cfg.TEST.VERBOSE)
 
                         if self.cfg.TEST.VORONOI_ON_MASK:
-                            vor_pred = voronoi_on_mask(np.expand_dims(w_pred,0), np.expand_dims(pred,0),
+                            vor_pred = voronoi_on_mask_2(np.expand_dims(w_pred,0), np.expand_dims(pred,0),
                                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI, filenames, verbose=self.cfg.TEST.VERBOSE)[0]
 
 
