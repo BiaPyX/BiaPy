@@ -13,7 +13,7 @@ from skimage.io import imsave
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True, e_d_data=[],
     e_d_mask=[], e_d_data_dim=[], num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, ov=(0,0),
-    padding=(0,0), check_crop=True, check_crop_path="check_crop"):
+    padding=(0,0), check_crop=True, check_crop_path="check_crop", reflect_to_complete_shape=False):
     """Load train and validation images from the given paths to create 2D data.
 
        Parameters
@@ -67,6 +67,10 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
 
        check_crop_path : str, optional
            Path to save the crop samples.
+
+       reflect_to_complete_shape : bool, optional
+           Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
+           'reflect'.
 
        Returns
        -------

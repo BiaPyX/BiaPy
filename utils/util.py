@@ -1199,7 +1199,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
         if len(img.shape) == 2:
             img = np.expand_dims(img, axis=-1)
         else:
-           if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
+           if img.shape[0] <= 3: img = img.transpose((1,2,0))
 
         data_shape.append(img.shape)
         img = np.expand_dims(img, axis=0)

@@ -141,10 +141,16 @@ class simple_data_generator(tf.keras.utils.Sequence):
                     mask = mask.transpose((1,2,0,3))
                     mask = np.expand_dims(mask, 0)
             else:
-                if img.ndim == 2: img = np.expand_dims(img, -1)
+                if img.ndim == 2:
+                    img = np.expand_dims(img, -1)
+                else:
+                    if img.shape[0] <= 3: img = img.transpose((1,2,0))
                 img = np.expand_dims(img, 0)
                 if self.provide_Y:
-                    if mask.ndim == 2: mask = np.expand_dims(mask, -1)
+                    if mask.ndim == 2:
+                        mask = np.expand_dims(mask, -1)
+                    else:
+                        if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
                     mask = np.expand_dims(mask, 0)
             batch_x.append(img)
             if self.provide_Y: batch_y.append(mask)
