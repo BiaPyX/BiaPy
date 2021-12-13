@@ -29,7 +29,9 @@ def prepare_optimizer(cfg, model):
         opt = tf.keras.optimizers.Adam(lr=cfg.TRAIN.LR, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
 
     # Compile the model
-    if cfg.LOSS.TYPE == "CE" and cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
+    if cfg.PROBLEM.TYPE == "CLASSIFICATION":
+        model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=["accuracy"])
+    elif cfg.LOSS.TYPE == "CE" and cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
         if cfg.MODEL.N_CLASSES > 1:
             model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=[jaccard_index_softmax])
         else:

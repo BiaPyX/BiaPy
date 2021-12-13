@@ -74,7 +74,7 @@ if __name__ == '__main__':
     set_seed(cfg.SYSTEM.SEED)
 
     assert cfg.PROBLEM.NDIM in ['2D', '3D']
-    assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG']
+    assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION']
 
     count = 2 if cfg.PROBLEM.NDIM == '2D' else 3
     if len(cfg.DATA.TRAIN.OVERLAP) != count:

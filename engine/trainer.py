@@ -5,11 +5,13 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 from skimage.io import imread
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
 from utils.util import (check_masks, check_downsample_division, create_plots, save_tif, load_data_from_dir,
                         load_3d_images_from_dir, apply_binary_mask, pad_and_reflect)
 from data import create_instance_channels, create_test_instance_channels
-from data.data_2D_manipulation import load_and_prepare_2D_train_data, crop_data_with_overlap, merge_data_with_overlap
+from data.data_2D_manipulation import (load_and_prepare_2D_train_data, crop_data_with_overlap, merge_data_with_overlap,
+                                       load_data_classification)
 from data.data_3D_manipulation import load_and_prepare_3D_data, crop_3D_data_with_overlap, merge_3D_data_with_overlap
 from data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
 from data.post_processing import apply_post_processing
@@ -50,8 +52,11 @@ class Trainer(object):
             # classification problem, so the function 'jaccard_index_softmax' will only calculate the IoU for the
             # foreground class (channel 1)
             self.metric = "jaccard_index_softmax" if cfg.MODEL.N_CLASSES > 1 else "jaccard_index"
-        else:
+        elif cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             self.metric = "jaccard_index" if cfg.DATA.CHANNELS in ["BC", "BCM"] else "jaccard_index_instances"
+        # CLASSIFICATION
+        else:
+            self.metric = "accuracy"
 
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and cfg.DATA.CHANNELS != 'B':
@@ -115,84 +120,102 @@ class Trainer(object):
         ### TRAIN ###
         #############
         if cfg.TRAIN.ENABLE:
-            if cfg.DATA.TRAIN.IN_MEMORY:
-                if cfg.PROBLEM.NDIM == '2D':
-                    objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
-                        val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
-                        random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
-                        ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, check_crop=cfg.DATA.TRAIN.CHECK_CROP,
-                        check_crop_path=cfg.PATHS.CROP_CHECKS, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
-                else:
-                    objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
-                        val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
-                        random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
-                        ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING,
-                        reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG']:
+                if cfg.DATA.TRAIN.IN_MEMORY:
+                    if cfg.PROBLEM.NDIM == '2D':
+                        objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
+                            val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
+                            random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
+                            ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, check_crop=cfg.DATA.TRAIN.CHECK_CROP,
+                            check_crop_path=cfg.PATHS.CROP_CHECKS, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                    else:
+                        objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
+                            val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
+                            random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
+                            ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING,
+                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
 
-                if cfg.DATA.VAL.FROM_TRAIN:
-                    X_train, Y_train, X_val, Y_val, self.train_filenames = objs
+                    if cfg.DATA.VAL.FROM_TRAIN:
+                        X_train, Y_train, X_val, Y_val, self.train_filenames = objs
+                    else:
+                        X_train, Y_train, self.train_filenames = objs
+                    del objs
                 else:
-                    X_train, Y_train, self.train_filenames = objs
-                del objs
+                    if not os.path.exists(cfg.DATA.TRAIN.PATH):
+                        raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
+                    if not os.path.exists(cfg.DATA.TRAIN.MASK_PATH):
+                        raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.MASK_PATH))
+                    X_train, Y_train = None, None
+
+                ##################
+                ### VALIDATION ###
+                ##################
+                if not cfg.DATA.VAL.FROM_TRAIN:
+                    if cfg.DATA.VAL.IN_MEMORY:
+                        f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
+                        X_val, _, _ = f_name(cfg.DATA.VAL.PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
+                                             overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
+                                             reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                        Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
+                                             overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
+                                             reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                    else:
+                        if not os.path.exists(cfg.DATA.VAL.PATH):
+                            raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
+                        if not os.path.exists(cfg.DATA.VAL.MASK_PATH):
+                            raise ValueError("Validation mask data dir not found: {}".format(cfg.DATA.VAL.MASK_PATH))
+                        X_val, Y_val = None, None
+
+            # CLASSIFICATION
             else:
-                if not os.path.exists(cfg.DATA.TRAIN.PATH):
-                    raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
-                if not os.path.exists(cfg.DATA.TRAIN.MASK_PATH):
-                    raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.MASK_PATH))
-                X_train, Y_train = None, None
-
-            ##################
-            ### VALIDATION ###
-            ##################
-            if not cfg.DATA.VAL.FROM_TRAIN:
-                if cfg.DATA.VAL.IN_MEMORY:
-                    f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
-                    X_val, _, _ = f_name(cfg.DATA.VAL.PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
-                                         overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
-                                         reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
-                    Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
-                                         overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
-                                         reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                if cfg.DATA.TRAIN.IN_MEMORY:
+                    X_train, Y_train, X_val, Y_val = load_data_classification(cfg)
                 else:
+                    X_train, Y_train = None, None
+                    if not os.path.exists(cfg.DATA.TRAIN.PATH):
+                        raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
+
+                    X_val, Y_val = None, None
                     if not os.path.exists(cfg.DATA.VAL.PATH):
                         raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
-                    if not os.path.exists(cfg.DATA.VAL.MASK_PATH):
-                        raise ValueError("Validation mask data dir not found: {}".format(cfg.DATA.VAL.MASK_PATH))
-                    X_val, Y_val = None, None
 
         ############
         ### TEST ###
         ############
         if cfg.TEST.ENABLE:
-            # Path comprobations
-            if not os.path.exists(cfg.DATA.TEST.PATH):
-                raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
-            if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.MASK_PATH):
-                    raise ValueError("Test data mask not found: {}".format(cfg.DATA.TEST.MASK_PATH))
+            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG']:
+                # Path comprobations
+                if not os.path.exists(cfg.DATA.TEST.PATH):
+                    raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
+                if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.MASK_PATH):
+                        raise ValueError("Test data mask not found: {}".format(cfg.DATA.TEST.MASK_PATH))
 
-            if cfg.DATA.TEST.IN_MEMORY:
-                print("2) Loading test images . . .")
-                f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
-                X_test, _, _ = f_name(cfg.DATA.TEST.PATH)
-                if cfg.DATA.TEST.LOAD_GT:
-                    print("3) Loading test masks . . .")
-                    Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH)
-                else:
-                    if cfg.PROBLEM.NDIM == '2D':
-                        raise ValueError("Not implemented pipeline option: no test data labels when PROBLEM.NDIM == '2D'")
+                if cfg.DATA.TEST.IN_MEMORY:
+                    print("2) Loading test images . . .")
+                    f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
+                    X_test, _, _ = f_name(cfg.DATA.TEST.PATH)
+                    if cfg.DATA.TEST.LOAD_GT:
+                        print("3) Loading test masks . . .")
+                        Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH)
                     else:
-                        Y_test = None
-            else:
-                X_test, Y_test = None, None
+                        if cfg.PROBLEM.NDIM == '2D':
+                            raise ValueError("Not implemented pipeline option: no test data labels when PROBLEM.NDIM == '2D'")
+                        else:
+                            Y_test = None
+                else:
+                    X_test, Y_test = None, None
 
-            if original_test_path is None:
-                self.test_filenames = sorted(next(os.walk(cfg.DATA.TEST.PATH))[2])
-                if cfg.TEST.MAP and cfg.DATA.TEST.LOAD_GT:
-                    self.test_mask_filenames = sorted(next(os.walk(cfg.DATA.TEST.MASK_PATH))[2])
+                if original_test_path is None:
+                    self.test_filenames = sorted(next(os.walk(cfg.DATA.TEST.PATH))[2])
+                    if cfg.TEST.MAP and cfg.DATA.TEST.LOAD_GT:
+                        self.test_mask_filenames = sorted(next(os.walk(cfg.DATA.TEST.MASK_PATH))[2])
+                else:
+                    self.test_filenames = sorted(next(os.walk(original_test_path))[2])
+                    if cfg.TEST.MAP and cfg.DATA.TEST.LOAD_GT:
+                        self.test_mask_filenames = sorted(next(os.walk(original_test_path))[2])
+            # CLASSIFICATION
             else:
-                self.test_filenames = sorted(next(os.walk(original_test_path))[2])
-                if cfg.TEST.MAP and cfg.DATA.TEST.LOAD_GT:
-                    self.test_mask_filenames = sorted(next(os.walk(original_test_path))[2])
+                X_test, Y_test = load_data_classification(cfg, test=True)
 
 
         print("########################\n"
@@ -242,7 +265,7 @@ class Trainer(object):
         print("Making predictions on test data . . .")
         iou, ov_iou, c1, c2  = 0, 0, 0, 0
 
-        if self.cfg.TEST.STATS.PER_PATCH:
+        if self.cfg.TEST.STATS.PER_PATCH or self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
            loss_per_crop, iou_per_crop, patch_counter = 0, 0, 0
         if self.cfg.TEST.STATS.MERGE_PATCHES:
            loss_per_imag, iou_per_image, ov_iou_per_image = 0, 0, 0
@@ -282,7 +305,8 @@ class Trainer(object):
         else:
             post_processing = False
 
-        if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D' and post_processing:
+        if (self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D' and post_processing) or \
+            self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
             all_pred = []
             all_gt = []
 
@@ -302,29 +326,38 @@ class Trainer(object):
                 if not self.cfg.TEST.VERBOSE:
                     print("Processing image(s): {}".format(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]))
 
-                if type(X) is tuple:
-                    _X = X[j]
-                    _Y = Y[j] if self.cfg.DATA.TEST.LOAD_GT else None
+                if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+                    if type(X) is tuple:
+                        _X = X[j]
+                        _Y = Y[j] if self.cfg.DATA.TEST.LOAD_GT else None
+                    else:
+                        _X = np.expand_dims(X[j],0)
+                        _Y = np.expand_dims(Y[j],0) if self.cfg.DATA.TEST.LOAD_GT else None
+                    if self.cfg.PROBLEM.NDIM == '3D':
+                        # Convert to (num_images, z, x, y, c)
+                        _X = _X.transpose((0,3,1,2,4))
+                        if self.cfg.DATA.TEST.LOAD_GT: _Y = _Y.transpose((0,3,1,2,4))
                 else:
-                    _X = np.expand_dims(X[j],0)
-                    _Y = np.expand_dims(Y[j],0) if self.cfg.DATA.TEST.LOAD_GT else None
-                if self.cfg.PROBLEM.NDIM == '3D':
-                    # Convert to (num_images, z, x, y, c)
-                    _X = _X.transpose((0,3,1,2,4))
-                    if self.cfg.DATA.TEST.LOAD_GT: _Y = _Y.transpose((0,3,1,2,4))
+                    _X = np.expand_dims(X[j], 0)
+                    _Y = np.expand_dims(Y[j], 0)
+
 
                 #################
                 ### PER PATCH ###
                 #################
-                if self.cfg.TEST.STATS.PER_PATCH:
+                if self.cfg.TEST.STATS.PER_PATCH or self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
                     if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE and self.cfg.PROBLEM.NDIM == '3D':
                         reflected_orig_shape = _X.shape
                         _X = np.expand_dims(pad_and_reflect(_X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
                         if _Y is not None:
                             _Y = np.expand_dims(pad_and_reflect(_Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
 
-                    original_data_shape = _X.shape if self.cfg.PROBLEM.NDIM == '2D' else _X.shape[1:]
+                    original_data_shape = _X.shape[1:]
                     if _X.shape[1:] != self.cfg.DATA.PATCH_SIZE:
+                        if self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+                            raise ValueError("For classification the images provided need to be of the selected "
+                                             "'DATA.PATCH_SIZE', {} given".format(_X.shape[1:]))
+
                         if self.cfg.PROBLEM.NDIM == '2D':
                             obj = crop_data_with_overlap(_X, self.cfg.DATA.PATCH_SIZE, data_mask=_Y,
                                 overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
@@ -344,7 +377,7 @@ class Trainer(object):
                                 _X = obj
 
                     # Evaluate each patch
-                    if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
+                    if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                         l = int(math.ceil(_X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
                         for k in tqdm(range(l), leave=False):
                             top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < _X.shape[0] else _X.shape[0]
@@ -356,7 +389,7 @@ class Trainer(object):
 
                     # Predict each patch
                     pred = []
-                    if self.cfg.TEST.AUGMENTATION:
+                    if self.cfg.TEST.AUGMENTATION and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                         for k in tqdm(range(_X.shape[0]), leave=False):
                             if self.cfg.PROBLEM.NDIM == '2D':
                                 p = ensemble8_2d_predictions(_X[k], n_classes=self.cfg.MODEL.N_CLASSES,
@@ -370,11 +403,14 @@ class Trainer(object):
                         for k in tqdm(range(l), leave=False):
                             top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < _X.shape[0] else _X.shape[0]
                             p = self.model.predict(_X[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
+                            if self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+                                p = np.argmax(p, axis=1)
+                                all_pred.append(pred)
                             pred.append(p)
 
                     # Reconstruct the predictions
                     pred = np.concatenate(pred)
-                    if original_data_shape != self.cfg.DATA.PATCH_SIZE:
+                    if original_data_shape != self.cfg.DATA.PATCH_SIZE and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                         f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
                         obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=_Y,
                                       padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
@@ -391,28 +427,25 @@ class Trainer(object):
                         if _Y is not None:
                             _Y = _Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
 
-                    # Argmax if needed
-                    if self.cfg.MODEL.N_CLASSES > 1:
-                        pred = np.expand_dims(np.argmax(pred,-1), -1)
-                        if self.cfg.DATA.TEST.LOAD_GT: _Y = np.expand_dims(np.argmax(_Y,-1), -1)
+                    if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+                        # Argmax if needed
+                        if self.cfg.MODEL.N_CLASSES > 1:
+                            pred = np.expand_dims(np.argmax(pred,-1), -1)
+                            if self.cfg.DATA.TEST.LOAD_GT: _Y = np.expand_dims(np.argmax(_Y,-1), -1)
 
-                    # Apply mask
-                    if self.cfg.TEST.APPLY_MASK:
-                        pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
+                        # Apply mask
+                        if self.cfg.TEST.APPLY_MASK:
+                            pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
-                    # Save image
-                    filenames = self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]
-                    if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
-                        save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames,
-                                 verbose=self.cfg.TEST.VERBOSE)
-                    else:
-                        save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
+                        # Save image
+                        filenames = self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]
+                        save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
 
 
                     #####################
                     ### MERGE PATCHES ###
                     #####################
-                    if self.cfg.TEST.STATS.MERGE_PATCHES:
+                    if self.cfg.TEST.STATS.MERGE_PATCHES and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                         if self.cfg.DATA.TEST.LOAD_GT:
                             _iou_per_image = jaccard_index_numpy((_Y>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8))
                             _ov_iou_per_image = voc_calculation((_Y>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8),
@@ -540,7 +573,7 @@ class Trainer(object):
                 ##################
                 ### FULL IMAGE ###
                 ##################
-                if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D':
+                if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D' and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                     if type(X) is tuple:
                         _X = X[j]
                         _Y = Y[j] if self.cfg.DATA.TEST.LOAD_GT else None
@@ -592,12 +625,24 @@ class Trainer(object):
                         if self.cfg.DATA.TEST.LOAD_GT: all_gt.append(_Y)
 
                 image_counter += 1
+
         del pred, _X, _Y
+
+        if self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+            all_pred = np.concatenate(all_pred)
+            print("ALLPRED: {}".format(all_pred.shape))
+            print("X.shape: {}".format(X.shape))
+            print("Yargamax.shape: {}".format(np.argmax(Y, axis=-1).shape))
+            if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
+                display_labels = ["Category {}".format(i) for i in range(self.cfg.MODEL.N_CLASSES)]
+                test_accuracy = accuracy_score(np.argmax(Y, axis=-1), all_pred)
+                cm = confusion_matrix(np.argmax(Y, axis=-1), all_pred)
+
 
         ############################
         ### POST-PROCESSING (2D) ###
         ############################
-        if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D' and post_processing:
+        if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D' and post_processing and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
             all_pred = np.concatenate(all_pred)
             if self.cfg.DATA.TEST.LOAD_GT:
                 all_gt = np.concatenate(all_gt)
@@ -610,7 +655,7 @@ class Trainer(object):
         if post_processing and self.cfg.PROBLEM.NDIM == '3D':
             iou_post = iou_post / image_counter
             ov_iou_post = ov_iou_post / image_counter
-        if self.cfg.TEST.STATS.PER_PATCH:
+        if self.cfg.TEST.STATS.PER_PATCH and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
             loss_per_crop = loss_per_crop / patch_counter
             iou_per_crop = iou_per_crop / patch_counter
             if self.cfg.TEST.STATS.MERGE_PATCHES:
@@ -623,8 +668,9 @@ class Trainer(object):
                     mAP_50_total_vor = mAP_50_total_vor / image_counter
                     mAP_75_total_vor = mAP_75_total_vor / image_counter
 
-        iou = iou / image_counter
-        ov_iou = ov_iou / image_counter
+        if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+            iou = iou / image_counter
+            ov_iou = ov_iou / image_counter
 
 
         print("#############\n"
@@ -641,32 +687,39 @@ class Trainer(object):
             print("Validation Foreground IoU: {}".format(np.max(self.results.history['val_'+self.metric])))
 
         if self.cfg.DATA.TEST.LOAD_GT:
-            if self.cfg.TEST.STATS.PER_PATCH:
-                print("Loss (per patch): {}".format(loss_per_crop))
-                print("Test Foreground IoU (per patch): {}".format(iou_per_crop))
-                print(" ")
-                if self.cfg.TEST.STATS.MERGE_PATCHES:
-                    print("Test Foreground IoU (merge patches): {}".format(iou_per_image))
-                    print("Test Overall IoU (merge patches): {}".format(ov_iou_per_image))
+            if self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+                print('Test Accuracy: ', round((test_accuracy * 100), 2), "%")
+                print("Confusion matrix: ")
+                print(cm)
+                print(classification_report(np.argmax(Y, axis=-1), all_pred, target_names=display_labels))
+
+            else:
+                if self.cfg.TEST.STATS.PER_PATCH:
+                    print("Loss (per patch): {}".format(loss_per_crop))
+                    print("Test Foreground IoU (per patch): {}".format(iou_per_crop))
+                    print(" ")
+                    if self.cfg.TEST.STATS.MERGE_PATCHES:
+                        print("Test Foreground IoU (merge patches): {}".format(iou_per_image))
+                        print("Test Overall IoU (merge patches): {}".format(ov_iou_per_image))
+                        print(" ")
+
+                if self.cfg.TEST.MAP and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
+                    print("Test Average Precision (AP) - IoU=0.50 : {}".format(mAP_50_total))
+                    print("Test Average Precision (AP) - IoU=0.75 : {}".format(mAP_75_total))
+                    print(" ")
+                    if self.cfg.TEST.VORONOI_ON_MASK:
+                        print("Test Average Precision (AP) (Voronoi) - IoU=0.50 : {}".format(mAP_50_total_vor))
+                        print("Test Average Precision (AP) (Voronoi) - IoU=0.75 : {}".format(mAP_75_total_vor))
+                        print(" ")
+
+                if self.cfg.TEST.STATS.FULL_IMG:
+                    print("Loss (per image): {}".format(iou))
+                    print("Test Foreground IoU (per image): {}".format(iou))
+                    print("Test Overall IoU (per image): {}".format(ov_iou))
                     print(" ")
 
-            if self.cfg.TEST.MAP and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-                print("Test Average Precision (AP) - IoU=0.50 : {}".format(mAP_50_total))
-                print("Test Average Precision (AP) - IoU=0.75 : {}".format(mAP_75_total))
-                print(" ")
-                if self.cfg.TEST.VORONOI_ON_MASK:
-                    print("Test Average Precision (AP) (Voronoi) - IoU=0.50 : {}".format(mAP_50_total_vor))
-                    print("Test Average Precision (AP) (Voronoi) - IoU=0.75 : {}".format(mAP_75_total_vor))
+                if post_processing:
+                    print("Test Foreground IoU (post-processing): {}".format(iou_post))
+                    print("Test Overall IoU (post-processing): {}".format(ov_iou_post))
                     print(" ")
-
-            if self.cfg.TEST.STATS.FULL_IMG:
-                print("Loss (per image): {}".format(iou))
-                print("Test Foreground IoU (per image): {}".format(iou))
-                print("Test Overall IoU (per image): {}".format(ov_iou))
-                print(" ")
-
-            if post_processing:
-                print("Test Foreground IoU (post-processing): {}".format(iou_post))
-                print("Test Overall IoU (post-processing): {}".format(ov_iou_post))
-                print(" ")
 

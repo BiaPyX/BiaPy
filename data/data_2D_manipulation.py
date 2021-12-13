@@ -3,12 +3,14 @@ import os
 import sys
 import math
 import random
+import itertools
 from tqdm import tqdm
 from skimage.io import imread
 from sklearn.model_selection import train_test_split
 from PIL import Image
 from utils.util import load_data_from_dir, foreground_percentage
 from skimage.io import imsave
+from sklearn.model_selection import KFold
 
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True, e_d_data=[],
@@ -827,4 +829,193 @@ def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=F
         else:
             return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :]
 
+
+def random_crop_classification(image, random_crop_size, val=False, draw_prob_map_points=False, weight_map=None):
+    """Random crop.
+
+       Parameters
+       ----------
+       image : Numpy 3D array
+           Image. E.g. ``(x, y, channels)``.
+
+       random_crop_size : 2 int tuple
+           Size of the crop. E.g. ``(height, width)``.
+
+       val : bool, optional
+           If the image provided is going to be used in the validation data. This forces to crop from the origin,
+           e. g. ``(0, 0)`` point.
+
+       draw_prob_map_points : bool, optional
+           To return the pixel chosen to be the center of the crop.
+
+       weight_map : bool, optional
+           Weight map of the given image. E.g. ``(x, y, channels)``.
+
+       Returns
+       -------
+       img : 2D Numpy array
+           Crop of the given image. E.g. ``(x, y)``.
+
+       weight_map : 2D Numpy array, optional
+           Crop of the given image's weigth map. E.g. ``(x, y)``.
+
+       ox : int, optional
+           X coordinate in the complete image of the chose central pixel to make the crop.
+
+       oy : int, optional
+           Y coordinate in the complete image of the chose central pixel to make the crop.
+
+       x : int, optional
+           X coordinate in the complete image where the crop starts.
+
+       y : int, optional
+           Y coordinate in the complete image where the crop starts.
+    """
+
+    if weight_map is not None:
+        img, we = image
+    else:
+        img = image
+
+    height, width = img.shape[0], img.shape[1]
+    dy, dx = random_crop_size
+    if val == True:
+        x = 0
+        y = 0
+        ox = 0
+        oy = 0
+    else:
+        ox = 0
+        oy = 0
+        x = np.random.randint(0, width - dx + 1)
+        y = np.random.randint(0, height - dy + 1)
+
+    if draw_prob_map_points == True:
+        return img[y:(y+dy), x:(x+dx), :], ox, oy, x, y
+    else:
+        if weight_map is not None:
+            return img[y:(y+dy), x:(x+dx), :], weight_map[y:(y+dy), x:(x+dx), :]
+        else:
+            return img[y:(y+dy), x:(x+dx), :]
+
+
+def load_data_classification(cfg, test=False):
+    """Load data to train classification methods.
+
+       Parameters
+       ----------
+       test : bool, optional
+           To load test data isntead of train/validation.
+
+       Returns
+       -------
+       X_data : 4D Numpy array
+           Train/test images. E.g. ``(num_of_images, y, x, channels)``.
+
+       Y_data : 1D Numpy array
+           Train/test images' classes. E.g. ``(num_of_images)``.
+
+       X_val : 4D Numpy array, optional
+           Validation images. E.g. ``(num_of_images, y, x, channels)``.
+
+       Y_val : 1D Numpy array, optional
+           Validation images' classes. E.g. ``(num_of_images)``.
+    """
+
+    print("### LOAD ###")
+    if not test:
+        path = cfg.DATA.TRAIN.PATH
+    else:
+        path = cfg.DATA.TEST.PATH
+
+    if not test:
+        if not cfg.DATA.VAL.CROSS_VAL:
+            X_data_npy_file = os.path.join(path, '../prepared_npy', 'X_data.npy')
+            Y_data_npy_file = os.path.join(path, '../prepared_npy', 'Y_data.npy')
+            X_val_npy_file = os.path.join(path, '../prepared_npy', 'X_val.npy')
+            Y_val_npy_file = os.path.join(path, '../prepared_npy', 'Y_val.npy')
+        else:
+            f_info = str(cfg.DATA.VAL.CROSS_VAL_FOLD)+'of'+str(cfg.DATA.VAL.CROSS_VAL_NFOLD)
+            X_data_npy_file = os.path.join(path, '../prepared_npy', 'X_data'+f_info+'.npy')
+            Y_data_npy_file = os.path.join(path, '../prepared_npy', 'Y_data'+f_info+'.npy')
+            X_val_npy_file = os.path.join(path, '../prepared_npy', 'X_val'+f_info+'.npy')
+            Y_val_npy_file = os.path.join(path, '../prepared_npy', 'Y_val'+f_info+'.npy')
+    else:
+        X_data_npy_file = os.path.join(path, '../prepared_npy', 'X_data.npy')
+        Y_data_npy_file = os.path.join(path, '../prepared_npy', 'Y_data.npy')
+
+    if not os.path.exists(X_data_npy_file):
+        class_names = sorted(next(os.walk(path))[1])
+        X_data, Y_data = [], []
+        if not test:
+            X_val, Y_val = [], []
+        for c_num, folder in enumerate(class_names):
+            print("Analizing folder {}".format(os.path.join(path,folder)))
+            ids = sorted(next(os.walk(os.path.join(path,folder)))[2])
+            print("Found {} samples".format(len(ids)))
+            class_X_data, class_Y_data = [], []
+            for i in tqdm(range(len(ids)), leave=False):
+                img = imread(os.path.join(path, folder, ids[i]))
+                if img.ndim == 2:
+                    img = np.expand_dims(img, -1)
+                else:
+                    if img.shape[0] <= 3: img = img.transpose((1,2,0))
+                img = np.expand_dims(img, 0)
+                class_X_data.append(img)
+                class_Y_data.append(np.expand_dims(np.array(c_num),0))
+
+            class_X_data = np.concatenate(class_X_data, 0)
+            class_Y_data = np.concatenate(class_Y_data, 0)
+            # Obtain the validation per class to ensure all class images are in the validation data
+            # (in case of class imbalance)
+            if cfg.DATA.VAL.CROSS_VAL and not test:
+                kf = KFold(n_splits=cfg.DATA.VAL.CROSS_VAL_NFOLD)
+                f_num = 1
+                for train_index, test_index in kf.split(class_X_data, class_Y_data):
+                    if cfg.DATA.VAL.CROSS_VAL_FOLD == f_num:
+                        class_X_data, class_X_val = class_X_data[train_index], class_X_data[test_index]
+                        class_Y_data, class_Y_val = class_Y_data[train_index], class_Y_data[test_index]
+                        break
+                    f_num += 1
+            elif not cfg.DATA.VAL.CROSS_VAL and not test:
+                class_X_data, class_X_val, class_Y_data, class_Y_val = train_test_split(class_X_data,
+                    class_Y_data, test_size=cfg.DATA.VAL.SPLIT_TRAIN, shuffle=cfg.DATA.VAL.RANDOM,
+                    random_state=cfg.SYSTEM.SEED)
+
+            X_data.append(class_X_data)
+            Y_data.append(class_Y_data)
+            if not test:
+                X_val.append(class_X_val)
+                Y_val.append(class_Y_val)
+
+        # Fuse all data
+        X_data = np.concatenate(X_data, 0)
+        Y_data = np.concatenate(Y_data, 0)
+        Y_data = np.squeeze(Y_data)
+        # Saving arrays as .npy files to load them easily in future runs
+        os.makedirs(os.path.join(path, '../prepared_npy'), exist_ok=True)
+        np.save(X_data_npy_file, X_data)
+        np.save(Y_data_npy_file, Y_data)
+        if not test:
+            X_val = np.concatenate(X_val, 0)
+            Y_val = np.concatenate(Y_val, 0)
+            Y_val = np.squeeze(Y_val)
+            # Saving arrays as .npy files to load them easily in future runs
+            np.save(X_val_npy_file, X_val)
+            np.save(Y_val_npy_file, Y_val)
+    else:
+        X_data = np.load(X_data_npy_file)
+        Y_data = np.load(Y_data_npy_file)
+        if not test:
+            X_val = np.load(X_val_npy_file)
+            Y_val = np.load(Y_val_npy_file)
+
+    if not test:
+        print("*** Loaded train data shape is: {}".format(X_data.shape))
+        print("*** Loaded validation data shape is: {}".format(X_val.shape))
+        print("### END LOAD ###")
+        return X_data, Y_data, X_val, Y_val
+    else:
+        print("*** Loaded test data shape is: {}".format(X_data.shape))
+        return X_data, Y_data
 

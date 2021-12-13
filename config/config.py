@@ -26,7 +26,7 @@ class Config:
         # Problem specification
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.PROBLEM = CN()
-        # Possible options: 'SEMANTIC_SEG' and 'INSTANCE_SEG'
+        # Possible options: 'CLASSIFICATION', 'SEMANTIC_SEG' and 'INSTANCE_SEG'
         _C.PROBLEM.TYPE = 'SEMANTIC_SEG'
         # Possible options: '2D' and '3D'
         _C.PROBLEM.NDIM = '2D'
@@ -130,6 +130,12 @@ class Config:
         _C.DATA.VAL = CN()
         # Wheter to create validation data from training set or read it from a directory
         _C.DATA.VAL.FROM_TRAIN = True
+        # Use a cross validation strategy instead of just split the train data in two
+        _C.DATA.VAL.CROSS_VAL = False
+        # Number of folds
+        _C.DATA.VAL.CROSS_VAL_NFOLD = 5
+        # Number of the fold to choose as validation
+        _C.DATA.VAL.CROSS_VAL_FOLD = 1
         # Percentage of the training data used as validation
         _C.DATA.VAL.SPLIT_TRAIN = 0.0 # Used when _C.DATA.VAL.FROM_TRAIN = True
         # Create the validation data with random images of the training data. If False the validation data will be the last
