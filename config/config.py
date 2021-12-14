@@ -373,6 +373,9 @@ class Config:
         _C.TEST.VORONOI_ON_MASK = False
         # Wheter to calculate mAP
         _C.TEST.MAP = False # Only applies when _C.TEST.STATS.MERGE_PATCHES = True
+        # Wheter to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
+        _C.TEST.MATCHING_STATS = False
+        _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
 
         _C.TEST.STATS = CN()
         _C.TEST.STATS.PER_PATCH = False

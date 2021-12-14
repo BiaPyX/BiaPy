@@ -14,8 +14,10 @@ from skimage.io import imsave, imread
 from skimage import measure
 from skimage.transform import resize
 from skimage.segmentation import clear_border, find_boundaries
+from collections import namedtuple
 
 from engine.metrics import jaccard_index, jaccard_index_numpy, voc_calculation, DET_calculation
+from utils.matching import _safe_divide, precision, recall, accuracy, f1
 
 matplotlib.use('pdf')
 
@@ -1704,3 +1706,56 @@ def pad_and_reflect(img, crop_shape, verbose=False):
         img = np.pad(img, ((0,0),(0,0),(diff,0),(0,0)), 'reflect')
         if verbose: print("Reflected from {} to {}".format(o_shape, img.shape))
     return img
+
+
+def wrapper_matching_dataset_lazy(stats_all, thresh, criterion='iou', by_image=False):
+
+    expected_keys = set(('fp', 'tp', 'fn', 'precision', 'recall', 'accuracy', 'f1', 'criterion', 'thresh', 'n_true', 'n_pred', 'mean_true_score', 'mean_matched_score', 'panoptic_quality'))
+
+    # accumulate results over all images for each threshold separately
+    n_images, n_threshs = len(stats_all), len(thresh)
+
+    single_thresh = True if n_threshs == 1 else False
+    accumulate = [{} for _ in range(n_threshs)]
+    for stats in stats_all:
+        for i,s in enumerate(stats):
+            acc = accumulate[i]
+            for k,v in s._asdict().items():
+                if k == 'mean_true_score' and not bool(by_image):
+                    # convert mean_true_score to "sum_matched_score"
+                    acc[k] = acc.setdefault(k,0) + v * s.n_true
+                else:
+                    try:
+                        acc[k] = acc.setdefault(k,0) + v
+                    except TypeError:
+                        pass
+
+    # normalize/compute 'precision', 'recall', 'accuracy', 'f1'
+    for thr,acc in zip(thresh,accumulate):
+        set(acc.keys()) == expected_keys or _raise(ValueError("unexpected keys"))
+        acc['criterion'] = criterion
+        acc['thresh'] = thr
+        acc['by_image'] = bool(by_image)
+        if bool(by_image):
+            for k in ('precision', 'recall', 'accuracy', 'f1', 'mean_true_score', 'mean_matched_score', 'panoptic_quality'):
+                acc[k] /= n_images
+        else:
+            tp, fp, fn, n_true = acc['tp'], acc['fp'], acc['fn'], acc['n_true']
+            sum_matched_score = acc['mean_true_score']
+
+            mean_matched_score = _safe_divide(sum_matched_score, tp)
+            mean_true_score    = _safe_divide(sum_matched_score, n_true)
+            panoptic_quality   = _safe_divide(sum_matched_score, tp+fp/2+fn/2)
+
+            acc.update(
+                precision          = precision(tp,fp,fn),
+                recall             = recall(tp,fp,fn),
+                accuracy           = accuracy(tp,fp,fn),
+                f1                 = f1(tp,fp,fn),
+                mean_true_score    = mean_true_score,
+                mean_matched_score = mean_matched_score,
+                panoptic_quality   = panoptic_quality,
+            )
+
+    accumulate = tuple(namedtuple('DatasetMatching',acc.keys())(*acc.values()) for acc in accumulate)
+    return accumulate[0] if single_thresh else accumulate

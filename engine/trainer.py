@@ -1,6 +1,5 @@
 import os
 import math
-import sys
 import h5py
 import numpy as np
 from tqdm import tqdm
@@ -8,7 +7,8 @@ from skimage.io import imread
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
 from utils.util import (check_masks, check_downsample_division, create_plots, save_tif, load_data_from_dir,
-                        load_3d_images_from_dir, apply_binary_mask, pad_and_reflect)
+                        load_3d_images_from_dir, apply_binary_mask, pad_and_reflect, wrapper_matching_dataset_lazy)
+from utils.matching import matching
 from data import create_instance_channels, create_test_instance_channels
 from data.data_2D_manipulation import (load_and_prepare_2D_train_data, crop_data_with_overlap, merge_data_with_overlap,
                                        load_data_classification)
@@ -277,6 +277,8 @@ class Trainer(object):
             if self.cfg.TEST.VORONOI_ON_MASK:
                 mAP_50_total_vor = 0
                 mAP_75_total_vor = 0
+        if self.cfg.TEST.MATCHING_STATS and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+            all_matching_stats = []
 
         if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             if self.cfg.DATA.MW_OPTIMIZE_THS and self.cfg.DATA.CHANNELS != "BCDv2":
@@ -508,6 +510,7 @@ class Trainer(object):
                         h5f.close()
 
                         # Prepare mAP call
+                        import sys
                         sys.path.insert(0, self.cfg.PATHS.MAP_CODE_DIR)
                         from demo_modified import main as mAP_calculation
                         class Namespace:
@@ -523,8 +526,9 @@ class Trainer(object):
 
                             if not os.path.isfile(test_file):
                                 raise ValueError("The mask is supossed to have the same name as the image")
-
+                            print("ANTES, por si cambia: {}".format(_Y.shape))
                             _Y = imread(test_file).squeeze()
+                            print("DESPUES, por si cambia: {}".format(_Y.shape))
 
                             print("Saving .h5 GT data from array shape: {}".format(_Y.shape))
                             os.makedirs(self.cfg.PATHS.TEST_FULL_GT_H5, exist_ok=True)
@@ -569,6 +573,17 @@ class Trainer(object):
                                         mAP_50_total_vor += float(line.split()[-1])
                                     elif 'Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] =' in line:
                                         mAP_75_total_vor += float(line.split()[-1])
+
+                    if self.cfg.TEST.MATCHING_STATS and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+                        print("Calculating matching stats . . .")
+                        test_file = os.path.join(self.cfg.DATA.TEST.MASK_PATH, filenames[0])
+                        if not os.path.isfile(test_file):
+                            raise ValueError("The mask is supossed to have the same name as the image")
+                        _Y = imread(test_file).squeeze()
+
+                        r_stats = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=False)
+                        print(r_stats)
+                        all_matching_stats.append(r_stats)
 
                 ##################
                 ### FULL IMAGE ###
@@ -630,9 +645,6 @@ class Trainer(object):
 
         if self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
             all_pred = np.concatenate(all_pred)
-            print("ALLPRED: {}".format(all_pred.shape))
-            print("X.shape: {}".format(X.shape))
-            print("Yargamax.shape: {}".format(np.argmax(Y, axis=-1).shape))
             if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
                 display_labels = ["Category {}".format(i) for i in range(self.cfg.MODEL.N_CLASSES)]
                 test_accuracy = accuracy_score(np.argmax(Y, axis=-1), all_pred)
@@ -672,6 +684,8 @@ class Trainer(object):
             iou = iou / image_counter
             ov_iou = ov_iou / image_counter
 
+        if self.cfg.TEST.MATCHING_STATS and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+            stats = wrapper_matching_dataset_lazy(all_matching_stats, self.cfg.TEST.MATCHING_STATS_THS)
 
         print("#############\n"
               "#  RESULTS  #\n"
@@ -703,14 +717,19 @@ class Trainer(object):
                         print("Test Overall IoU (merge patches): {}".format(ov_iou_per_image))
                         print(" ")
 
-                if self.cfg.TEST.MAP and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-                    print("Test Average Precision (AP) - IoU=0.50 : {}".format(mAP_50_total))
-                    print("Test Average Precision (AP) - IoU=0.75 : {}".format(mAP_75_total))
-                    print(" ")
-                    if self.cfg.TEST.VORONOI_ON_MASK:
-                        print("Test Average Precision (AP) (Voronoi) - IoU=0.50 : {}".format(mAP_50_total_vor))
-                        print("Test Average Precision (AP) (Voronoi) - IoU=0.75 : {}".format(mAP_75_total_vor))
+                if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
+                    if self.cfg.TEST.MAP:
+                        print("Test Average Precision (AP) - IoU=0.50 : {}".format(mAP_50_total))
+                        print("Test Average Precision (AP) - IoU=0.75 : {}".format(mAP_75_total))
                         print(" ")
+                        if self.cfg.TEST.VORONOI_ON_MASK:
+                            print("Test Average Precision (AP) (Voronoi) - IoU=0.50 : {}".format(mAP_50_total_vor))
+                            print("Test Average Precision (AP) (Voronoi) - IoU=0.75 : {}".format(mAP_75_total_vor))
+                            print(" ")
+                    if self.cfg.TEST.MATCHING_STATS:
+                        for i in range(len(self.cfg.TEST.MATCHING_STATS_THS)):
+                            print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
+                            print(stats[i])
 
                 if self.cfg.TEST.STATS.FULL_IMG:
                     print("Loss (per image): {}".format(iou))
