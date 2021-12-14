@@ -1,3 +1,4 @@
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.applications import EfficientNetB0
 from tensorflow.keras import Model
 from tensorflow.keras.layers import GlobalAveragePooling2D, Dropout, Dense

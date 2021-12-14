@@ -34,6 +34,9 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        batch_size : int, optional
            Size of the batches.
 
+       seed : int, optional
+           Seed for random functions.
+
        shuffle_each_epoch : bool, optional
            To decide if the indexes will be shuffled after every epoch.
 

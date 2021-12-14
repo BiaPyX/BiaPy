@@ -86,18 +86,19 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
         if cfg.PROBLEM.NDIM == '3D':
             dic['zflip'] = cfg.AUGMENTOR.ZFLIP
     else:
-        dic = dict(X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, n_classes=cfg.MODEL.N_CLASSES,batch_size=cfg.TRAIN.BATCH_SIZE,
-            seed=cfg.SYSTEM.SEED, shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_TRAIN_DATA_EACH_EPOCH,
-            da=cfg.AUGMENTOR.ENABLE, in_memory=cfg.DATA.TRAIN.IN_MEMORY,
-            da_prob=cfg.AUGMENTOR.DA_PROB, rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT,
-            rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE, shear=cfg.AUGMENTOR.SHEAR, shear_range=cfg.AUGMENTOR.SHEAR_RANGE,
-            zoom=cfg.AUGMENTOR.ZOOM, zoom_range=cfg.AUGMENTOR.ZOOM_RANGE, shift=cfg.AUGMENTOR.SHIFT,
-            shift_range=cfg.AUGMENTOR.SHIFT_RANGE, vflip=cfg.AUGMENTOR.VFLIP, hflip=cfg.AUGMENTOR.HFLIP,
-            elastic=cfg.AUGMENTOR.ELASTIC, e_alpha=cfg.AUGMENTOR.E_ALPHA, e_sigma=cfg.AUGMENTOR.E_SIGMA,
-            e_mode=cfg.AUGMENTOR.E_MODE, g_blur=cfg.AUGMENTOR.G_BLUR, g_sigma=cfg.AUGMENTOR.G_SIGMA,
-            median_blur=cfg.AUGMENTOR.MEDIAN_BLUR, mb_kernel=cfg.AUGMENTOR.MB_KERNEL, motion_blur=cfg.AUGMENTOR.MOTION_BLUR,
-            motb_k_range=cfg.AUGMENTOR.MOTB_K_RANGE, gamma_contrast=cfg.AUGMENTOR.GAMMA_CONTRAST,
-            gc_gamma=cfg.AUGMENTOR.GC_GAMMA, dropout=cfg.AUGMENTOR.DROPOUT, drop_range=cfg.AUGMENTOR.DROP_RANGE)
+        r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' else None
+        dic = dict(X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, n_classes=cfg.MODEL.N_CLASSES,
+            batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED, shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_TRAIN_DATA_EACH_EPOCH,
+            da=cfg.AUGMENTOR.ENABLE, in_memory=cfg.DATA.TRAIN.IN_MEMORY, da_prob=cfg.AUGMENTOR.DA_PROB,
+            rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT, rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE,
+            shear=cfg.AUGMENTOR.SHEAR, shear_range=cfg.AUGMENTOR.SHEAR_RANGE, zoom=cfg.AUGMENTOR.ZOOM,
+            zoom_range=cfg.AUGMENTOR.ZOOM_RANGE, shift=cfg.AUGMENTOR.SHIFT, shift_range=cfg.AUGMENTOR.SHIFT_RANGE,
+            vflip=cfg.AUGMENTOR.VFLIP, hflip=cfg.AUGMENTOR.HFLIP, elastic=cfg.AUGMENTOR.ELASTIC,
+            e_alpha=cfg.AUGMENTOR.E_ALPHA, e_sigma=cfg.AUGMENTOR.E_SIGMA, e_mode=cfg.AUGMENTOR.E_MODE,
+            g_blur=cfg.AUGMENTOR.G_BLUR, g_sigma=cfg.AUGMENTOR.G_SIGMA, median_blur=cfg.AUGMENTOR.MEDIAN_BLUR,
+            mb_kernel=cfg.AUGMENTOR.MB_KERNEL, motion_blur=cfg.AUGMENTOR.MOTION_BLUR, motb_k_range=cfg.AUGMENTOR.MOTB_K_RANGE,
+            gamma_contrast=cfg.AUGMENTOR.GAMMA_CONTRAST, gc_gamma=cfg.AUGMENTOR.GC_GAMMA, dropout=cfg.AUGMENTOR.DROPOUT,
+            drop_range=cfg.AUGMENTOR.DROP_RANGE, resize_shape=r_shape)
 
     print("Initializing train data generator . . .")
     train_generator = f_name(**dic)

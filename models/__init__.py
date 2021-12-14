@@ -22,7 +22,7 @@ def build_model(cfg, job_identifier):
 
     # Checks
     assert cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'nnunet', 'tiramisu', 'mnet',
-                                      'multiresunet', 'seunet', 'simple_cnn']
+                                      'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0']
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and cfg.MODEL.ARCHITECTURE != 'unet' and cfg.MODEL.ARCHITECTURE != 'resunet':
         raise ValueError("Not implemented pipeline option: instance segmentation models adapted are 'unet' or 'resunet'")
 
@@ -67,7 +67,8 @@ def build_model(cfg, job_identifier):
             if cfg.MODEL.ARCHITECTURE == 'simple_cnn':
                 model = simple_CNN(image_shape=cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
             elif cfg.MODEL.ARCHITECTURE == 'EfficientNetB0':
-                model = EfficientNetB0(cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
+                shape = (224, 224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.DATA.PATCH_SIZE[:-1] != (224, 224) else cfg.DATA.PATCH_SIZE
+                model = efficientnetb0(shape, n_classes=cfg.MODEL.N_CLASSES)
             elif cfg.MODEL.ARCHITECTURE == 'fcn32':
                 model = FCN32_VGG16(cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
             elif cfg.MODEL.ARCHITECTURE == 'fcn8':

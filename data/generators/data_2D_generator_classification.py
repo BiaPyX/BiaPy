@@ -28,11 +28,20 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
        X : 4D Numpy array
            Data. E.g. ``(num_of_images, x, y, channels)``.
 
+       Y : 4D Numpy array
+           Mask data. E.g. ``(num_of_images, x, y, 1)``.
+
+       data_path : List of str, optional
+          If ``in_memory`` is ``True`` this should contain the path to load images.
+
        n_classes : int
            Number of classes to predict.
 
        batch_size : int, optional
            Size of the batches.
+
+       seed : int, optional
+           Seed for random functions.
 
        shuffle_each_epoch : bool, optional
            To decide if the indexes will be shuffled after every epoch.
@@ -40,9 +49,6 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
        in_memory : bool, optional
            If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will be loaded directly from disk using
            ``data_paths``.
-
-       data_path : List of str, optional
-          If ``in_memory`` is ``True`` this should contain the path to load images.
 
        da : bool, optional
            To activate the data augmentation.
@@ -129,14 +135,18 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
        val : bool, optional
            Advise the generator that the images will be to validate the model to not make random crops (as the val.
            data must be the same on each epoch). Valid when ``random_crops_in_DA`` is set.
+
+       resize_shape : tuple of ints, optional
+           If defined the input samples will be scaled into that shape.
     """
 
-    def __init__(self, X, Y, data_path, n_classes, batch_size=32, seed=0, shuffle_each_epoch=False, in_memory=False, da=True,
-                 da_prob=0.5, rotation90=False, rand_rot=False, rnd_rot_range=(-180,180), shear=False,
+    def __init__(self, X, Y, data_path, n_classes, batch_size=32, seed=0, shuffle_each_epoch=False, in_memory=False,
+                 da=True, da_prob=0.5, rotation90=False, rand_rot=False, rnd_rot_range=(-180,180), shear=False,
                  shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), shift=False, shift_range=(0.1,0.2), vflip=False,
                  hflip=False, elastic=False, e_alpha=(240,250), e_sigma=25, e_mode='constant', g_blur=False,
                  g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), motion_blur=False, motb_k_range=(3,8),
-                 gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, drop_range=(0, 0.2), val=False):
+                 gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, drop_range=(0, 0.2), val=False,
+                 resize_shape=None):
 
         self.batch_size = batch_size
         self.in_memory = in_memory
@@ -175,7 +185,7 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
         else:
             img = self.X[0]
         self.div_X_on_load = True if np.max(img) > 100 else False
-        self.shape = img.shape
+        self.shape = resize_shape if resize_shape is not None else img.shape
 
         self.o_indexes = np.arange(self.len)
         self.shuffle = shuffle_each_epoch
@@ -278,6 +288,9 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
                     if img.shape[0] <= 3: img = img.transpose((1,2,0))
                 batch_y[i] = self.class_numbers[sample_class_dir]
 
+            if img.shape[:-1] != self.shape:
+                img = self.resize_img(img, self.shape)
+
             batch_x[i] = img
 
             # Apply transformations
@@ -301,11 +314,12 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
 
         self.total_batches_seen += 1
         batch_y = tf.keras.utils.to_categorical(batch_y, self.n_classes)
+
         return batch_x, batch_y
 
     # For EfficientNet
-    def resize_img(img, shape):
-        return cv2.resize(img, (shape[1], shape[0], img.shape[-1]), interpolation=cv2.INTER_CUBIC)
+    def resize_img(self, img, shape):
+        return cv2.resize(img, (shape[1], shape[0]), interpolation=cv2.INTER_CUBIC)
 
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
@@ -459,8 +473,3 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
         print("### END TR-SAMPLES ###")
         return batch_x, batch_y
 
-def read_csv(file):
-    with open(file, mode='r') as csvfile:
-        reader = csv.DictReader(csvfile)
-        mydict = {rows[0]:rows[1] for rows in reader}
-    return mydict
