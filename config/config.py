@@ -109,8 +109,14 @@ class Config:
         # Test
         _C.DATA.TEST = CN()
         _C.DATA.TEST.IN_MEMORY = False
+        # Wheter to load ground truth (GT)
         _C.DATA.TEST.LOAD_GT = False
+        # Wheter to use validation data as test instead of trying to load test from _C.DATA.TEST.PATH and
+        # _C.DATA.TEST.MASK_PATH. Currently only used if _C.PROBLEM.TYPE == 'CLASSIFICATION'
+        _C.DATA.TEST.USE_VAL_AS_TEST = False
+        # Path to load the test data from. Not used when _C.DATA.TEST.USE_VAL == True
         _C.DATA.TEST.PATH = os.path.join(_C.DATA.ROOT_DIR, 'test', 'x')
+        # Path to load the test data masks from. Not used when _C.DATA.TEST.USE_VAL == True
         _C.DATA.TEST.MASK_PATH = os.path.join(_C.DATA.ROOT_DIR, 'test', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.DATA.CHANNELS != 'B'
@@ -130,16 +136,16 @@ class Config:
         _C.DATA.VAL = CN()
         # Wheter to create validation data from training set or read it from a directory
         _C.DATA.VAL.FROM_TRAIN = True
-        # Use a cross validation strategy instead of just split the train data in two
+        # Use a cross validation strategy instead of just split the train data in two. Currently only used if
+        # _C.PROBLEM.TYPE == 'CLASSIFICATION'
         _C.DATA.VAL.CROSS_VAL = False
-        # Number of folds
+        # Number of folds. Used when _C.DATA.VAL.CROSS_VAL == True
         _C.DATA.VAL.CROSS_VAL_NFOLD = 5
-        # Number of the fold to choose as validation
+        # Number of the fold to choose as validation. Used when _C.DATA.VAL.CROSS_VAL == True
         _C.DATA.VAL.CROSS_VAL_FOLD = 1
-        # Percentage of the training data used as validation
-        _C.DATA.VAL.SPLIT_TRAIN = 0.0 # Used when _C.DATA.VAL.FROM_TRAIN = True
-        # Create the validation data with random images of the training data. If False the validation data will be the last
-        # portion of training images. Used when _C.DATA.VAL.FROM_TRAIN = True
+        # Percentage of the training data used as validation. Used when _C.DATA.VAL.FROM_TRAIN = True and _C.DATA.VAL.CROSS_VAL == False
+        _C.DATA.VAL.SPLIT_TRAIN = 0.0
+        # Create the validation data with random images of the training data. Used when _C.DATA.VAL.FROM_TRAIN = True
         _C.DATA.VAL.RANDOM = True
         # Used when _C.DATA.VAL.FROM_TRAIN = False, as DATA.VAL.FROM_TRAIN = True always implies DATA.VAL.IN_MEMORY = True
         _C.DATA.VAL.IN_MEMORY = True

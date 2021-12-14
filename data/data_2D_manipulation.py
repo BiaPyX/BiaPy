@@ -3,14 +3,12 @@ import os
 import sys
 import math
 import random
-import itertools
 from tqdm import tqdm
 from skimage.io import imread
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold
 from PIL import Image
 from utils.util import load_data_from_dir, foreground_percentage
 from skimage.io import imsave
-from sklearn.model_selection import KFold
 
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True, e_d_data=[],
@@ -941,14 +939,18 @@ def load_data_classification(cfg, test=False):
             X_val_npy_file = os.path.join(path, '../prepared_npy', 'X_val'+f_info+'.npy')
             Y_val_npy_file = os.path.join(path, '../prepared_npy', 'Y_val'+f_info+'.npy')
     else:
-        X_data_npy_file = os.path.join(path, '../prepared_npy', 'X_data.npy')
-        Y_data_npy_file = os.path.join(path, '../prepared_npy', 'Y_data.npy')
+        if not cfg.DATA.TEST.USE_VAL_AS_TEST:
+            X_data_npy_file = os.path.join(path, '../prepared_npy', 'X_data.npy')
+            Y_data_npy_file = os.path.join(path, '../prepared_npy', 'Y_data.npy')
+        else:
+            f_info = str(cfg.DATA.VAL.CROSS_VAL_FOLD)+'of'+str(cfg.DATA.VAL.CROSS_VAL_NFOLD)
+            X_data_npy_file = os.path.join(path, '../prepared_npy', 'X_val'+f_info+'.npy')
+            Y_data_npy_file = os.path.join(path, '../prepared_npy', 'Y_val'+f_info+'.npy')
 
     if not os.path.exists(X_data_npy_file):
+        print("Seems to be the first run as no data is prepared. Creating .npy files: {}".format(X_data_npy_file))
         class_names = sorted(next(os.walk(path))[1])
         X_data, Y_data = [], []
-        if not test:
-            X_val, Y_val = [], []
         for c_num, folder in enumerate(class_names):
             print("Analizing folder {}".format(os.path.join(path,folder)))
             ids = sorted(next(os.walk(os.path.join(path,folder)))[2])
@@ -966,43 +968,33 @@ def load_data_classification(cfg, test=False):
 
             class_X_data = np.concatenate(class_X_data, 0)
             class_Y_data = np.concatenate(class_Y_data, 0)
-            # Obtain the validation per class to ensure all class images are in the validation data
-            # (in case of class imbalance)
-            if cfg.DATA.VAL.CROSS_VAL and not test:
-                kf = KFold(n_splits=cfg.DATA.VAL.CROSS_VAL_NFOLD)
-                f_num = 1
-                for train_index, test_index in kf.split(class_X_data, class_Y_data):
-                    if cfg.DATA.VAL.CROSS_VAL_FOLD == f_num:
-                        class_X_data, class_X_val = class_X_data[train_index], class_X_data[test_index]
-                        class_Y_data, class_Y_val = class_Y_data[train_index], class_Y_data[test_index]
-                        break
-                    f_num += 1
-            elif not cfg.DATA.VAL.CROSS_VAL and not test:
-                class_X_data, class_X_val, class_Y_data, class_Y_val = train_test_split(class_X_data,
-                    class_Y_data, test_size=cfg.DATA.VAL.SPLIT_TRAIN, shuffle=cfg.DATA.VAL.RANDOM,
-                    random_state=cfg.SYSTEM.SEED)
-
             X_data.append(class_X_data)
             Y_data.append(class_Y_data)
-            if not test:
-                X_val.append(class_X_val)
-                Y_val.append(class_Y_val)
 
         # Fuse all data
         X_data = np.concatenate(X_data, 0)
         Y_data = np.concatenate(Y_data, 0)
         Y_data = np.squeeze(Y_data)
-        # Saving arrays as .npy files to load them easily in future runs
-        os.makedirs(os.path.join(path, '../prepared_npy'), exist_ok=True)
-        np.save(X_data_npy_file, X_data)
-        np.save(Y_data_npy_file, Y_data)
+
         if not test:
-            X_val = np.concatenate(X_val, 0)
-            Y_val = np.concatenate(Y_val, 0)
-            Y_val = np.squeeze(Y_val)
-            # Saving arrays as .npy files to load them easily in future runs
+            if cfg.DATA.VAL.CROSS_VAL:
+                skf = StratifiedKFold(n_splits=cfg.DATA.VAL.CROSS_VAL_NFOLD, shuffle=cfg.DATA.VAL.RANDOM,
+                    random_state=cfg.SYSTEM.SEED)
+                f_num = 1
+                for train_index, test_index in skf.split(X_data, Y_data):
+                    if cfg.DATA.VAL.CROSS_VAL_FOLD == f_num:
+                        X_data, X_val = X_data[train_index], X_data[test_index]
+                        Y_data, Y_val = Y_data[train_index], Y_data[test_index]
+                        break
+                    f_num+= 1
+            else:
+                X_data, X_val, Y_data, Y_val = train_test_split(X_data, Y_data, test_size=cfg.DATA.VAL.SPLIT_TRAIN,
+                    shuffle=cfg.DATA.VAL.RANDOM, random_state=cfg.SYSTEM.SEED)
+            os.makedirs(os.path.join(path, '../prepared_npy'), exist_ok=True)
             np.save(X_val_npy_file, X_val)
             np.save(Y_val_npy_file, Y_val)
+        np.save(X_data_npy_file, X_data)
+        np.save(Y_data_npy_file, Y_data)
     else:
         X_data = np.load(X_data_npy_file)
         Y_data = np.load(Y_data_npy_file)
