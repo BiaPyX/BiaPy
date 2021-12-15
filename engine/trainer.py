@@ -279,6 +279,8 @@ class Trainer(object):
                 mAP_75_total_vor = 0
         if self.cfg.TEST.MATCHING_STATS and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
             all_matching_stats = []
+            if self.cfg.TEST.VORONOI_ON_MASK:
+                all_matching_stats_voronoi = []
 
         if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             if self.cfg.DATA.MW_OPTIMIZE_THS and self.cfg.DATA.CHANNELS != "BCDv2":
@@ -585,6 +587,12 @@ class Trainer(object):
                         print(r_stats)
                         all_matching_stats.append(r_stats)
 
+                        if self.cfg.TEST.VORONOI_ON_MASK:
+                            r_stats = matching(_Y, vor_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=False)
+                            print("Stats with Voronoi")
+                            print(r_stats)
+                            all_matching_stats_voronoi.append(r_stats)
+
                 ##################
                 ### FULL IMAGE ###
                 ##################
@@ -686,6 +694,8 @@ class Trainer(object):
 
         if self.cfg.TEST.MATCHING_STATS and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
             stats = wrapper_matching_dataset_lazy(all_matching_stats, self.cfg.TEST.MATCHING_STATS_THS)
+            if self.cfg.TEST.VORONOI_ON_MASK:
+                stats_vor = wrapper_matching_dataset_lazy(all_matching_stats_voronoi, self.cfg.TEST.MATCHING_STATS_THS)
 
         print("#############\n"
               "#  RESULTS  #\n"
@@ -730,6 +740,9 @@ class Trainer(object):
                         for i in range(len(self.cfg.TEST.MATCHING_STATS_THS)):
                             print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                             print(stats[i])
+                            if self.cfg.TEST.VORONOI_ON_MASK:
+                                print("IoU TH={} (Voronoi)".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
+                                print(stats_vor[i])
 
                 if self.cfg.TEST.STATS.FULL_IMG:
                     print("Loss (per image): {}".format(iou))
