@@ -741,7 +741,7 @@ class Trainer(object):
                             print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                             print(stats[i])
                             if self.cfg.TEST.VORONOI_ON_MASK:
-                                print("IoU TH={} (Voronoi)".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
+                                print("IoU (Voronoi) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                                 print(stats_vor[i])
 
                 if self.cfg.TEST.STATS.FULL_IMG:
