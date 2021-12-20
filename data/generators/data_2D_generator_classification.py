@@ -288,7 +288,7 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
                     if img.shape[0] <= 3: img = img.transpose((1,2,0))
                 batch_y[i] = self.class_numbers[sample_class_dir]
 
-            if img.shape[:-1] != self.shape:
+            if img.shape[:-1] != self.shape[:-1]:
                 img = self.resize_img(img, self.shape)
 
             batch_x[i] = img
