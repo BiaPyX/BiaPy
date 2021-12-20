@@ -962,9 +962,9 @@ def load_data_classification(cfg, test=False):
                     img = np.expand_dims(img, -1)
                 else:
                     if img.shape[0] <= 3: img = img.transpose((1,2,0))
-                img = np.expand_dims(img, 0)
+                img = np.expand_dims(img, 0).astype(np.uint8)
                 class_X_data.append(img)
-                class_Y_data.append(np.expand_dims(np.array(c_num),0))
+                class_Y_data.append(np.expand_dims(np.array(c_num),0).astype(np.uint8))
 
             class_X_data = np.concatenate(class_X_data, 0)
             class_Y_data = np.concatenate(class_Y_data, 0)
