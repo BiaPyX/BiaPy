@@ -355,13 +355,16 @@ class Trainer(object):
                 ### PER PATCH ###
                 #################
                 if self.cfg.TEST.STATS.PER_PATCH or self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-                    if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE and self.cfg.PROBLEM.NDIM == '3D':
+                    if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
                         reflected_orig_shape = _X.shape
                         _X = np.expand_dims(pad_and_reflect(_X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
                         if _Y is not None:
                             _Y = np.expand_dims(pad_and_reflect(_Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
 
-                    original_data_shape = _X.shape[1:]
+                    if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+                        original_data_shape = _X.shape if self.cfg.PROBLEM.NDIM == '2D' else _X.shape[1:]
+                    else:
+                        original_data_shape = _X.shape[1:]
                     if _X.shape[1:] != self.cfg.DATA.PATCH_SIZE:
                         if self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
                             raise ValueError("For classification the images provided need to be of the selected "

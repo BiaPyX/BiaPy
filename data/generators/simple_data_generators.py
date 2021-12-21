@@ -119,18 +119,19 @@ class simple_data_generator(tf.keras.utils.Sequence):
                     img = np.load(os.path.join(self.d_path, self.data_path[j]))
                 else:
                     img = imread(os.path.join(self.d_path, self.data_path[j]))
-                img = np.squeeze(img)
             else:
                 img = self.X[j]
+            img = np.squeeze(img)
+
             if self.provide_Y:
                 if self.Y is None:
                     if self.data_mask_path[0].endswith('.npy'):
                         mask = np.load(os.path.join(self.dm_path, self.data_mask_path[j]))
                     else:
                         mask = imread(os.path.join(self.dm_path, self.data_mask_path[j]))
-                    mask = np.squeeze(mask)
                 else:
                     mask = self.Y[j]
+                mask = np.squeeze(mask)
 
             if self.data_3d:
                 if img.ndim == 3: img = np.expand_dims(img, -1)
