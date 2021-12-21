@@ -354,9 +354,10 @@ def bdv2_watershed(data, bin_th=0.2, thres_small=128, remove_before=False, save_
 
         seed_map = seed_map + background_seed
         del background_seed
-    # Assume is 'Dv2' or 'BDv2'
+    # Assume is 'Dv2'
     else:
-        raise NotImplementedError("Not implemented watershed with 'BDv2' and 'Dv2'")
+        seed_map = data[...,0] < bin_th
+        seed_map = label(seed_map)
 
     if remove_before:
         seed_map = remove_small_objects(seed_map, thres_small)
@@ -365,8 +366,9 @@ def bdv2_watershed(data, bin_th=0.2, thres_small=128, remove_before=False, save_
         segm = watershed(data[...,-1], seed_map)
         seed_map = remove_small_objects(seed_map, thres_small)
 
-    # Change background instance value to 0 again
-    segm[segm == num+1] = 0
+    if data.shape[-1] == 3:
+        # Change background instance value to 0 again
+        segm[segm == num+1] = 0
 
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)

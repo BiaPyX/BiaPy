@@ -315,16 +315,25 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                         if len(np.unique(img[...,j])) > 2:
                             self.first_no_bin_channel = j
                             break
-
                 if self.first_no_bin_channel != -1:
-                    self.div_Y_on_load_bin_channels = True if np.max(img[...,:self.first_no_bin_channel]) > 10 else False
-                    max_no_bin_channel = np.max(img[...,self.first_no_bin_channel:])
-                    self.div_Y_on_load_no_bin_channels = True if max_no_bin_channel > 200 else False
-                    if max_no_bin_channel > self.div_Y_no_bin_channels_max:
-                        self.div_Y_no_bin_channels_max = max_no_bin_channel
-                    min_no_bin_channel = np.min(img[...,self.first_no_bin_channel:])
-                    if min_no_bin_channel < self.div_Y_no_bin_channels_min:
-                        self.div_Y_no_bin_channels_min = min_no_bin_channel
+                    if self.first_no_bin_channel != 0:
+                        self.div_Y_on_load_bin_channels = True if np.max(img[...,:self.first_no_bin_channel]) > 10 else False
+                        max_no_bin_channel = np.max(img[...,self.first_no_bin_channel:])
+                        self.div_Y_on_load_no_bin_channels = True if max_no_bin_channel > 200 else False
+                        if max_no_bin_channel > self.div_Y_no_bin_channels_max:
+                            self.div_Y_no_bin_channels_max = max_no_bin_channel
+                        min_no_bin_channel = np.min(img[...,self.first_no_bin_channel:])
+                        if min_no_bin_channel < self.div_Y_no_bin_channels_min:
+                            self.div_Y_no_bin_channels_min = min_no_bin_channel
+                    else:
+                        self.div_Y_on_load_bin_channels = True if np.max(img) > 10 else False
+                        max_no_bin_channel = np.max(img)
+                        self.div_Y_on_load_no_bin_channels = True if max_no_bin_channel > 200 else False
+                        if max_no_bin_channel > self.div_Y_no_bin_channels_max:
+                            self.div_Y_no_bin_channels_max = max_no_bin_channel
+                        min_no_bin_channel = np.min(img)
+                        if min_no_bin_channel < self.div_Y_no_bin_channels_min:
+                            self.div_Y_no_bin_channels_min = min_no_bin_channel
                 else:
                     self.div_Y_on_load_bin_channels = True if np.max(img) > 10 else False
 
@@ -347,11 +356,18 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                         break
             self.div_X_on_load = True if np.max(X) > 10 else False
             if self.first_no_bin_channel != -1:
-                self.div_Y_on_load_bin_channels = True if np.max(Y[...,:self.first_no_bin_channel]) > 10 else False
-                max_no_bin_channel = np.max(Y[...,self.first_no_bin_channel:])
-                self.div_Y_on_load_no_bin_channels = True if max_no_bin_channel > 200 else False
-                self.div_Y_no_bin_channels_max = max_no_bin_channel
-                self.div_Y_no_bin_channels_min = np.min(Y[...,self.first_no_bin_channel:])
+                if self.first_no_bin_channel != 0:
+                    self.div_Y_on_load_bin_channels = True if np.max(Y[...,:self.first_no_bin_channel]) > 10 else False
+                    max_no_bin_channel = np.max(Y[...,self.first_no_bin_channel:])
+                    self.div_Y_on_load_no_bin_channels = True if max_no_bin_channel > 200 else False
+                    self.div_Y_no_bin_channels_max = max_no_bin_channel
+                    self.div_Y_no_bin_channels_min = np.min(Y[...,self.first_no_bin_channel:])
+                else:
+                    self.div_Y_on_load_bin_channels = False
+                    max_no_bin_channel = np.max(Y)
+                    self.div_Y_on_load_no_bin_channels = True if max_no_bin_channel > 200 else False
+                    self.div_Y_no_bin_channels_max = max_no_bin_channel
+                    self.div_Y_no_bin_channels_min = np.min(Y)
             else:
                 self.div_Y_on_load_bin_channels = True if np.max(Y) > 10 else False
 
@@ -587,7 +603,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             if self.div_Y_on_load_bin_channels:
                 batch_y[...,:self.first_no_bin_channel] = batch_y[...,:self.first_no_bin_channel]/255
             if self.div_Y_on_load_no_bin_channels:
-                batch_y[...,self.first_no_bin_channel:] = batch_y[...,self.first_no_bin_channel:]/255
+                if self.first_no_bin_channel != 0:
+                    batch_y[...,self.first_no_bin_channel:] = batch_y[...,self.first_no_bin_channel:]/255
+                else:
+                    batch_y = batch_y/255
                     #(batch_y[...,self.first_no_bin_channel:]-self.div_Y_no_bin_channels_min)/(self.div_Y_no_bin_channels_max-self.div_Y_no_bin_channels_min)
         else:
             if self.div_Y_on_load_bin_channels: batch_y = batch_y/255
@@ -655,8 +674,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
         # Split heatmaps from masks
         if self.first_no_bin_channel != -1:
-            heat = mask[...,self.first_no_bin_channel:]
-            mask = mask[...,:self.first_no_bin_channel]
+            if self.first_no_bin_channel != 0:
+                heat = mask[...,self.first_no_bin_channel:]
+                mask = mask[...,:self.first_no_bin_channel]
+            else:
+                heat = mask
+                mask = np.zeros(mask.shape) # Fake mask
             o_heat_shape = heat.shape
             o_mask_shape = mask.shape
             heat = heat.reshape(heat.shape[:2]+(heat.shape[2]*heat.shape[3],))
@@ -727,7 +750,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if self.first_no_bin_channel != -1:
             heat = heat_out.get_arr()
             heat = heat.reshape(o_heat_shape)
-            mask = np.concatenate((mask,heat),axis=-1)
+            if self.first_no_bin_channel != 0:
+                mask = np.concatenate((mask,heat),axis=-1)
+            else:
+                mask = heat
 
         return image, mask
 

@@ -490,9 +490,9 @@ def instance_segmentation_loss(weights=(1,0.2), out_channels="BC"):
 
     def loss(y_true, y_pred):
         if out_channels == "BC":
-            return weights[0]*losses.binary_crossentropy(tf.cast(y_true, dtype=tf.float32), y_pred)
+            return losses.binary_crossentropy(tf.cast(y_true, dtype=tf.float32), y_pred)
         elif out_channels == "BCM":
-            return weights[0]*losses.binary_crossentropy(tf.cast(y_true, dtype=tf.float32), y_pred)
+            return losses.binary_crossentropy(tf.cast(y_true, dtype=tf.float32), y_pred)
         elif out_channels == "BCD":
             return weights[0]*losses.binary_crossentropy(tf.cast(y_true[...,:2], dtype=tf.float32), y_pred[...,:2])+\
                    weights[1]*masked_mse(tf.cast(y_true[...,2], dtype=tf.float32), y_pred[...,2], tf.cast(y_true[...,0], dtype=tf.float32))
@@ -504,7 +504,7 @@ def instance_segmentation_loss(weights=(1,0.2), out_channels="BC"):
                    weights[1]*masked_mse(tf.cast(y_true[...,1], dtype=tf.float32), y_pred[...,1], tf.cast(y_true[...,0], dtype=tf.float32))
         # Dv2
         else:
-            return K.mean(tf.expand_dims(K.square(tf.cast(y_true, dtype=tf.float32) - y_pred), -1), axis=-1)
+            return K.mean(K.square(tf.cast(y_true, dtype=tf.float32) - y_pred), axis=-1)
     return loss
 
 

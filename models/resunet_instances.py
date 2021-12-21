@@ -68,7 +68,7 @@ def ResUNet_2D(image_shape, activation='elu', k_init='he_normal', drop_values=[0
         raise ValueError("'feature_maps' dimension must be equal 'drop_values' dimension")
     depth = len(feature_maps)-1
 
-    assert output_channels in ['B', 'BC', 'BCD']
+    assert output_channels in ['Dv2', 'BC', 'BCD']
     if len(channel_weights) != 2:
         raise ValueError("Channel weights need to be len(2) and not {}".format(len(channel_weights)))
 
@@ -79,8 +79,8 @@ def ResUNet_2D(image_shape, activation='elu', k_init='he_normal', drop_values=[0
 
     x = level_block(inputs, depth, fm, 3, activation, k_init, drop_values, spatial_dropout, batch_norm, True)
 
-    if output_channels == "B":
-        outputs = Conv2D(1, (2, 2), activation="sigmoid", padding='same') (x)
+    if output_channels == "Dv2":
+        outputs = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
     elif output_channels == "BC":
         outputs = Conv2D(2, (2, 2), activation="sigmoid", padding='same') (x)
     else:

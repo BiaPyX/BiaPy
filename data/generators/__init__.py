@@ -52,7 +52,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
                               save_dir=cfg.PATHS.PROB_MAP_DIR)
 
     if cfg.PROBLEM.NDIM == '2D':
-        f_name = ImageDataGenerator if cfg.PROBLEM.TYPE == 'SEGMENTATION' else ClassImageDataGenerator
+        f_name = ImageDataGenerator if cfg.PROBLEM.TYPE != 'CLASSIFICATION' else ClassImageDataGenerator
     else:
         f_name = VoxelDataGenerator
 

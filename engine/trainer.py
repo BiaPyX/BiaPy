@@ -53,7 +53,12 @@ class Trainer(object):
             # foreground class (channel 1)
             self.metric = "jaccard_index_softmax" if cfg.MODEL.N_CLASSES > 1 else "jaccard_index"
         elif cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-            self.metric = "jaccard_index" if cfg.DATA.CHANNELS in ["BC", "BCM"] else "jaccard_index_instances"
+            if cfg.DATA.CHANNELS in ["BC", "BCM"]:
+                self.metric = "jaccard_index"
+            elif  cfg.DATA.CHANNELS == 'Dv2':
+                self.metric = "mse"
+            else:
+                self.metric = "jaccard_index_instances"
         # CLASSIFICATION
         else:
             self.metric = "accuracy"
@@ -450,7 +455,7 @@ class Trainer(object):
                     ### MERGE PATCHES ###
                     #####################
                     if self.cfg.TEST.STATS.MERGE_PATCHES and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-                        if self.cfg.DATA.TEST.LOAD_GT:
+                        if self.cfg.DATA.TEST.LOAD_GT and self.cfg.DATA.CHANNELS != "Dv2":
                             _iou_per_image = jaccard_index_numpy((_Y>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8))
                             _ov_iou_per_image = voc_calculation((_Y>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8),
                                                                 _iou_per_image)
@@ -486,7 +491,7 @@ class Trainer(object):
                                 thres5=th5_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
                                 remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=w_dir)
                         else: # "BCDv2"
-                            w_pred = bdv2_watershed(pred, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
+                            w_pred = bdv2_watershed(pred, bin_th=th1_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
                                 remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=w_dir)
 
                         save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
@@ -528,9 +533,9 @@ class Trainer(object):
 
                             if not os.path.isfile(test_file):
                                 raise ValueError("The mask is supossed to have the same name as the image")
-                            print("ANTES, por si cambia: {}".format(_Y.shape))
                             _Y = imread(test_file).squeeze()
-                            print("DESPUES, por si cambia: {}".format(_Y.shape))
+                            if (_Y.shape[0] > 1 and _Y.ndim == 3) or (_Y.shape[0] > 1 and _Y.ndim == 4):
+                                _Y =  _Y[0]
 
                             print("Saving .h5 GT data from array shape: {}".format(_Y.shape))
                             os.makedirs(self.cfg.PATHS.TEST_FULL_GT_H5, exist_ok=True)

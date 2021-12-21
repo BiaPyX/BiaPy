@@ -43,9 +43,13 @@ def prepare_optimizer(cfg, model):
             if cfg.DATA.CHANNELS in ["BC", "BCM"]:
                 model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
             else:
-                bin_channels = 2 if cfg.DATA.CHANNELS in ["BCD", "BCDv2"] else 1
-                model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
-                              metrics=[IoU_instances(binary_channels=bin_channels)])
+                if cfg.DATA.CHANNELS == "Dv2":
+                    model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
+                                  metrics=["mse"])
+                else:
+                    bin_channels = 2 if cfg.DATA.CHANNELS in ["BCD", "BCDv2"] else 1
+                    model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
+                                  metrics=[IoU_instances(binary_channels=bin_channels)])
     elif cfg.LOSS.TYPE == "W_CE_DICE" and cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
         model.compile(optimizer=opt, loss=weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33), metrics=[jaccard_index])
     elif cfg.LOSS.TYPE == "W_CE_DICE" and cfg.PROBLEM.TYPE == "INSTANCE_SEG":
