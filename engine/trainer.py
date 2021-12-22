@@ -28,7 +28,8 @@ class Trainer(object):
     def __init__(self, cfg, job_identifier):
         self.cfg = cfg
         self.job_identifier = job_identifier
-        original_test_path = None
+        self.original_test_path = None
+        self.original_test_mask_path = None
         self.test_mask_filenames = None
 
         # Save paths in case we need them in a future
@@ -64,7 +65,7 @@ class Trainer(object):
             self.metric = "accuracy"
 
 
-        if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and cfg.DATA.CHANNELS != 'B':
+        if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             print("###########################\n"
                   "#  PREPARE INSTANCE DATA  #\n"
                   "###########################\n")
@@ -103,11 +104,11 @@ class Trainer(object):
                 opts.extend(['DATA.VAL.PATH', cfg.DATA.VAL.INSTANCE_CHANNELS_DIR,
                              'DATA.VAL.MASK_PATH', cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR])
             if cfg.TEST.ENABLE:
-                original_test_path = cfg.DATA.TEST.PATH
+                self.original_test_path = cfg.DATA.TEST.PATH
                 print("DATA.TEST.PATH changed from {} to {}".format(cfg.DATA.TEST.PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
                 opts.extend(['DATA.TEST.PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_DIR])
+                self.original_test_mask_path = cfg.DATA.TEST.MASK_PATH
                 if cfg.DATA.TEST.LOAD_GT and cfg.TEST.EVALUATE:
-                    original_test_mask_path = cfg.DATA.TEST.MASK_PATH
                     print("DATA.TEST.MASK_PATH changed from {} to {}".format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
                     opts.extend(['DATA.TEST.MASK_PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR])
             cfg.merge_from_list(opts)
@@ -210,14 +211,14 @@ class Trainer(object):
                 else:
                     X_test, Y_test = None, None
 
-                if original_test_path is None:
+                if self.original_test_path is None:
                     self.test_filenames = sorted(next(os.walk(cfg.DATA.TEST.PATH))[2])
                     if cfg.TEST.MAP and cfg.DATA.TEST.LOAD_GT:
                         self.test_mask_filenames = sorted(next(os.walk(cfg.DATA.TEST.MASK_PATH))[2])
                 else:
-                    self.test_filenames = sorted(next(os.walk(original_test_path))[2])
+                    self.test_filenames = sorted(next(os.walk(self.original_test_path))[2])
                     if cfg.TEST.MAP and cfg.DATA.TEST.LOAD_GT:
-                        self.test_mask_filenames = sorted(next(os.walk(original_test_path))[2])
+                        self.test_mask_filenames = sorted(next(os.walk(self.original_test_mask_path))[2])
             # CLASSIFICATION
             else:
                 X_test, Y_test = load_data_classification(cfg, test=True)
@@ -365,6 +366,7 @@ class Trainer(object):
                         original_data_shape = _X.shape if self.cfg.PROBLEM.NDIM == '2D' else _X.shape[1:]
                     else:
                         original_data_shape = _X.shape[1:]
+
                     if _X.shape[1:] != self.cfg.DATA.PATCH_SIZE:
                         if self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
                             raise ValueError("For classification the images provided need to be of the selected "
@@ -422,7 +424,7 @@ class Trainer(object):
 
                     # Reconstruct the predictions
                     pred = np.concatenate(pred)
-                    if original_data_shape != self.cfg.DATA.PATCH_SIZE and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+                    if original_data_shape[1:] != self.cfg.DATA.PATCH_SIZE and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                         f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
                         obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=_Y,
                                       padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
@@ -497,11 +499,15 @@ class Trainer(object):
                             w_pred = bdv2_watershed(pred, bin_th=th1_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
                                 remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=w_dir)
 
-                        save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                        # Add extra dimensrion if working in 2D
+                        if w_pred.ndim == 2:
+                            w_pred = np.expand_dims(w_pred,0)
+
+                        save_tif(np.expand_dims(w_pred,-1), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                                  filenames, verbose=self.cfg.TEST.VERBOSE)
 
                         if self.cfg.TEST.VORONOI_ON_MASK:
-                            vor_pred = voronoi_on_mask_2(np.expand_dims(w_pred,0), np.expand_dims(pred,0),
+                            vor_pred = voronoi_on_mask_2(w_pred, np.expand_dims(pred,0),
                                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI, filenames, verbose=self.cfg.TEST.VERBOSE)[0]
 
 
@@ -529,16 +535,23 @@ class Trainer(object):
 
                         # Create GT H5 file if it does not exist
                         gt_f = os.path.join(self.cfg.PATHS.TEST_FULL_GT_H5, os.path.splitext(filenames[0])[0]+'.h5')
+                        test_file = os.path.join(self.original_test_mask_path, filenames[0])
                         if not os.path.isfile(gt_f):
-                            test_file = os.path.join(self.cfg.DATA.TEST.MASK_PATH, filenames[0])
                             print("GT .h5 file needed for mAP calculation is not found in {} so it will be created "
                                   "from its mask: {}".format(gt_f, test_file))
 
                             if not os.path.isfile(test_file):
                                 raise ValueError("The mask is supossed to have the same name as the image")
                             _Y = imread(test_file).squeeze()
+
+                            # If multiple-channel data then only capture the first channel that is assumed to be instance labels
                             if (_Y.shape[0] > 1 and _Y.ndim == 3) or (_Y.shape[0] > 1 and _Y.ndim == 4):
                                 _Y =  _Y[0]
+
+                            # As the mAP code is prepared for 2D we need an extra z dimension and change dtype ot int
+                            if _Y.dtype == np.float32: _Y = _Y.astype(np.int32)
+                            if _Y.dtype == np.float64: _Y = _Y.astype(np.int64)
+                            if _Y.ndim == 2: _Y = np.expand_dims(_Y,0)
 
                             print("Saving .h5 GT data from array shape: {}".format(_Y.shape))
                             os.makedirs(self.cfg.PATHS.TEST_FULL_GT_H5, exist_ok=True)
@@ -546,33 +559,12 @@ class Trainer(object):
                             h5f.create_dataset('dataset', data=_Y, compression="lzf")
                             h5f.close()
 
-                        # Calculate mAP
-                        args = Namespace(gt_seg=gt_f, predict_seg=h5file_name, predict_score='', threshold="5e3, 3e4",
-                                         threshold_crumb=64, chunk_size=250, output_name=w_dir, do_txt=1, do_eval=1,
-                                         slices="-1")
-                        mAP_calculation(args)
-
-                        # Save metric
-                        with open(os.path.join(w_dir, 'nucmm_map.txt'), "r") as read_obj:
-                            for line in read_obj:
-                                if 'Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] =' in line:
-                                    mAP_50_total += float(line.split()[-1])
-                                elif 'Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] =' in line:
-                                    mAP_75_total += float(line.split()[-1])
-
-                        if self.cfg.TEST.VORONOI_ON_MASK:
-                            print("mAP with Voronoi")
-                            h5file_name_vor = os.path.join(self.cfg.PATHS.MAP_H5_DIR, os.path.splitext(filenames[0])[0]+'_voronoi.h5')
-                            print("Creating prediction h5 file to calculate mAP: {}".format(h5file_name_vor))
-                            h5f = h5py.File(h5file_name_vor, 'w')
-                            h5f.create_dataset('dataset', data=vor_pred, compression="lzf")
-                            h5f.close()
-
-                            w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0], "voronoi")
-                            os.makedirs(w_dir, exist_ok=True)
+                        # In case the GT has no labels in this image
+                        gt_num_labels = len(np.unique(imread(test_file)))
+                        if gt_num_labels > 1:
                             # Calculate mAP
-                            args = Namespace(gt_seg=gt_f, predict_seg=h5file_name_vor, predict_score='', threshold="5e3, 3e4",
-                                             threshold_crumb=64, chunk_size=250, output_name=w_dir, do_txt=1, do_eval=1,
+                            args = Namespace(gt_seg=gt_f, predict_seg=h5file_name, predict_score='', threshold="5e3, 3e4",
+                                             threshold_crumb=-1, chunk_size=250, output_name=w_dir, do_txt=1, do_eval=1,
                                              slices="-1")
                             mAP_calculation(args)
 
@@ -580,16 +572,62 @@ class Trainer(object):
                             with open(os.path.join(w_dir, 'nucmm_map.txt'), "r") as read_obj:
                                 for line in read_obj:
                                     if 'Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] =' in line:
-                                        mAP_50_total_vor += float(line.split()[-1])
+                                        mAP_50_total += float(line.split()[-1])
                                     elif 'Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] =' in line:
-                                        mAP_75_total_vor += float(line.split()[-1])
+                                        mAP_75_total += float(line.split()[-1])
+                        else:
+                            print("No labels found in {} file. Skipping sample from mAP calculation . . .".format(test_file))
+
+                        if self.cfg.TEST.VORONOI_ON_MASK:
+                            print("mAP with Voronoi")
+                            # As the mAP code is prepared for 2D we need an extra z dimension
+                            if vor_pred.ndim == 2:
+                                vor_pred = np.expand_dims(vor_pred,0)
+
+                            h5file_name_vor = os.path.join(self.cfg.PATHS.MAP_H5_DIR, os.path.splitext(filenames[0])[0]+'_voronoi.h5')
+                            print("Creating prediction h5 file to calculate mAP: {}".format(h5file_name_vor))
+                            h5f = h5py.File(h5file_name_vor, 'w')
+                            h5f.create_dataset('dataset', data=vor_pred, compression="lzf")
+                            h5f.close()
+
+                            if gt_num_labels > 1:
+                                w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0], "voronoi")
+                                os.makedirs(w_dir, exist_ok=True)
+                                # Calculate mAP
+                                args = Namespace(gt_seg=gt_f, predict_seg=h5file_name_vor, predict_score='', threshold="5e3, 3e4",
+                                                 threshold_crumb=-1, chunk_size=250, output_name=w_dir, do_txt=1, do_eval=1,
+                                                 slices="-1")
+                                mAP_calculation(args)
+
+                                # Save metric
+                                with open(os.path.join(w_dir, 'nucmm_map.txt'), "r") as read_obj:
+                                    for line in read_obj:
+                                        if 'Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] =' in line:
+                                            mAP_50_total_vor += float(line.split()[-1])
+                                        elif 'Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] =' in line:
+                                            mAP_75_total_vor += float(line.split()[-1])
+                            else:
+                                print("No labels found in {} file. Skipping sample from mAP calculation (Voronoi). . .".format(test_file))
 
                     if self.cfg.TEST.MATCHING_STATS and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
                         print("Calculating matching stats . . .")
-                        test_file = os.path.join(self.cfg.DATA.TEST.MASK_PATH, filenames[0])
+                        test_file = os.path.join(self.original_test_mask_path, filenames[0])
                         if not os.path.isfile(test_file):
                             raise ValueError("The mask is supossed to have the same name as the image")
                         _Y = imread(test_file).squeeze()
+
+                        # If multiple-channel data then only capture the first channel that is assumed to be instance labels
+                        if (_Y.shape[0] > 1 and _Y.ndim == 3) or (_Y.shape[0] > 1 and _Y.ndim == 4):
+                            _Y =  _Y[0]
+
+                        # As the mAP code is prepared for 2D we need an extra z dimension and change dtype ot int
+                        if _Y.dtype == np.float32: _Y = _Y.astype(np.int32)
+                        if _Y.dtype == np.float64: _Y = _Y.astype(np.int64)
+                        if _Y.ndim == 2: _Y = np.expand_dims(_Y,0)
+
+                        # Convert instances to integer
+                        if _Y.dtype == np.float32: _Y = _Y.astype(np.int32)
+                        if _Y.dtype == np.float64: _Y = _Y.astype(np.int64)
 
                         r_stats = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=False)
                         print(r_stats)

@@ -406,7 +406,7 @@ class Config:
         # Folder where the mAP code should be placed
         _C.PATHS.MAP_CODE_DIR = ''
         # Path to the GT h5 files to calculate the mAP
-        _C.PATHS.TEST_FULL_GT_H5 = os.path.join(_C.DATA.TEST.PATH, 'h5')
+        _C.PATHS.TEST_FULL_GT_H5 = os.path.join(_C.DATA.TEST.MASK_PATH, 'h5')
 
         # Directories to store the results
         _C.PATHS.RESULT_DIR = CN()
@@ -467,5 +467,5 @@ class Config:
         self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
         self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
         self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, '..', 'bin_mask')
-        self._C.PATHS.TEST_FULL_GT_H5 = os.path.join(self._C.DATA.TEST.PATH, 'h5')
+        self._C.PATHS.TEST_FULL_GT_H5 = os.path.join(self._C.DATA.TEST.MASK_PATH, 'h5')
 
