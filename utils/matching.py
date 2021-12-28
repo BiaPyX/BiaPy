@@ -6,9 +6,15 @@ from numba import jit
 from tqdm import tqdm
 from scipy.optimize import linear_sum_assignment
 from collections import namedtuple
-from csbdeep.utils import _raise
 
 matching_criteria = dict()
+
+# Copied from https://github.com/CSBDeep/CSBDeep/blob/master/csbdeep/utils/utils.py
+def _raise(e):
+    if isinstance(e, BaseException):
+        raise e
+    else:
+        raise ValueError(e)
 
 def label_are_sequential(y):
     """ returns true if y has only sequential labels from 1... """

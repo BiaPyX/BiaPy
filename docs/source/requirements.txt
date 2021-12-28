@@ -6,7 +6,6 @@ cachetools==4.2.2
 certifi==2021.5.30
 charset-normalizer==2.0.4
 clang==5.0
-csbdeep==0.6.3
 cycler==0.10.0
 docutils==0.16
 flatbuffers==1.12
