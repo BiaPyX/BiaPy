@@ -1,0 +1,60 @@
+SYSTEM:
+    NUM_GPUS: 1
+    NUM_CPUS: 1
+
+PROBLEM:
+    TYPE: INSTANCE_SEG
+    NDIM: 2D
+  
+DATA: 
+    PATCH_SIZE: (256, 256, 1)
+    CHANNELS: BC
+    MW_TH1: 0.1
+    MW_TH2: 0.01
+    MW_TH3: 0.1   
+    CHECK_GENERATORS: False
+    TRAIN:                                                                                                              
+        IN_MEMORY: True
+    VAL:
+        FROM_TRAIN: False
+    TEST:                                                                                                               
+        IN_MEMORY: False
+        LOAD_GT: False
+
+AUGMENTOR:
+    ENABLE: True
+    RANDOM_ROT: True
+    VFLIP: True
+    HFLIP: True
+    ELASTIC: True
+    BRIGHTNESS: True
+    CONTRAST: True
+
+MODEL:
+    ARCHITECTURE: unet
+    FEATURE_MAPS: [16, 32, 64, 128, 256]
+    DROPOUT_VALUES: [0.1, 0.1, 0.2, 0.2, 0.3]
+    ACTIVATION: 'elu'
+    LOAD_CHECKPOINT: False
+
+LOSS:
+  TYPE: CE
+  
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAM
+    LR: 1.E-4
+    BATCH_SIZE: 6
+    EPOCHS: 200
+    PATIENCE: 30
+  
+TEST:
+    ENABLE: True
+    AUGMENTATION: False
+    STATS:
+        PER_PATCH: True
+        MERGE_PATCHES: True
+        FULL_IMG: False
+    POST_PROCESSING:
+        YZ_FILTERING: True
+    VERBOSE: True

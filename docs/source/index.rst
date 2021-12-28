@@ -40,6 +40,7 @@ This repository is the base of the following work: ::
    :glob:
 
    tutorials/mitochondria.rst
+   tutorials/mitochondria_instance.rst
    tutorials/nucleus.rst
    tutorials/cysto.rst
 

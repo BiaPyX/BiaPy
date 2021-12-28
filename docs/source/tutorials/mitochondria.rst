@@ -62,10 +62,24 @@ it through bash shell as described in: `Bash Shell -> Step 2: Run the code <../h
 Results                                                                                                                 
 ~~~~~~~  
 
+The results are placed in ``results`` folder under ``--result_dir`` directory with the ``--name`` given. See `Step-4-analizing-the-results <../          how_to_run/first_steps.html#step-4-analizing-the-results>`_ to find more details about the files and directories created. There
+you should find something similiar to these results:
+
+
 .. figure:: ../img/unet2d_prediction.gif
    :align: center                                                                                                 
                                                                                                                         
    2D U-Net model predictions. From left to right: original test images, its ground truth (GT) and the overlap between
    GT and the model's output. 
+
+
+Evaluation
+~~~~~~~~~~
+
+To evaluate the quality of the results in semantic segmentation:
+
+- IoU values will be printed when ``DATA.TEST.LOAD_GT`` is True, as we have GT to compare the predictions with. The results
+  will be divided in: per patch, merging patches and full image depending on the options selected to True in
+  ``TEST.STATS.*`` variable. 
 
 

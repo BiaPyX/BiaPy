@@ -32,7 +32,7 @@ Problem resolution
 
 To produce the cysto instances two main steps are done:
 
-* Firstly, new ``Y'`` data representations are created from the original ``Y``. This new ``Y'`` data is created with up to three channels (controlled by ``DATA.CHANNELS``). Binary segmentation (referred as ``B`` in the code), contour (``C``) and distances (``D``). This way, the network will be trained with a bunch of image pairs, each containing an EM image and its ``Y'`` new data representation.
+* Firstly, new ``Y'`` data representations are created from the original ``Y``. This new ``Y'`` data is created with up to three channels (controlled by ``DATA.CHANNELS``). In this problem only two channels are presented: binary segmentation (referred as ``B`` in the code), contour (``C``) and distances (``D``). This way, the network will be trained with a bunch of image pairs, each containing an EM image and its ``Y'`` new data representation.
 
 .. figure:: ../img/cysto_instance_bcd_scheme.svg
   :width: 300px
@@ -64,7 +64,8 @@ it through bash shell as described in: `Bash Shell -> Step 2: Run the code <../h
 Results
 ~~~~~~~
 
-The resulting instance segmentation should be something like this:
+The results are placed in ``results`` folder under ``--result_dir`` directory with the ``--name`` given. See `Step-4-analizing-the-results <../          how_to_run/first_steps.html#step-4-analizing-the-results>`_ to find more details about the files and directories created. There
+you should find something similiar to these results:
 
 .. figure:: ../video/cyst_instance_prediction.gif 
   :scale: 60% 
@@ -73,3 +74,29 @@ The resulting instance segmentation should be something like this:
                                                                                 
   Instance segmentation results for the cysto.
     
+
+Evaluation
+~~~~~~~~~~
+
+To evaluate the quality of the results there are different options implemented for instance segmentation:
+
+- IoU values will be printed when ``DATA.TEST.LOAD_GT`` is True, as we have GT to compare the predictions with. The results
+  will be divided in: per patch, merging patches and full image depending on the options selected to True in
+  ``TEST.STATS.*`` variable. Notice that the IoU are only calculated over binary channels (``BC``) and not in distances
+  ones (``D`` or ``Dv2``).
+
+- mAP for instance segmentation (introduced in :cite:p:`wei2020mitoem`) with ``TEST.MAP`` to True. It requires the path
+  to the code to be set in ``PATHS.MAP_CODE_DIR``. Find `mAP_3Dvolume <https://github.com/danifranco/mAP_3Dvolume>`_ and
+  more information of the implementation in :cite:p:`wei2020mitoem`. If ``TEST.VORONOI_ON_MASK`` is True separate values
+  are printed, before and after applying it. Follow this steps to download have mAP ready for use:
+
+.. code-block:: bash
+
+     git clone https://github.com/danifranco/mAP_3Dvolume.git
+     git checkout grand-challenge
+
+- Other common matching statistics as precision, accuracy, recall, F1 and panoptic quality measured in the way Stardist
+  (:cite:p:`schmidt2018cell,weigert2020star`) does. Set ``TEST.MATCHING_STATS`` to True and control the IoU thresholds
+  with ``TEST.MATCHING_STATS_THS`` variable.
+
+
