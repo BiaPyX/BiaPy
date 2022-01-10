@@ -28,12 +28,15 @@ To use the code please visit our [documentation site](https://em-image-segmentat
 This repository is the base of the following work:                                                                      
                                                                                                                         
 ```                                                                                                                     
-@misc{francobarranco2021stable,                                                                                         
-      title={Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes},    
-      author={Daniel Franco-Barranco and Arrate Muñoz-Barrutia and Ignacio Arganda-Carreras},                           
-      year={2021},                                                                                                      
-      eprint={2104.03577},                                                                                              
-      archivePrefix={arXiv},                                                                                            
-      primaryClass={eess.IV}                                                                                            
-}                                                                                                                       
+@Article{Franco-Barranco2021,
+author={Franco-Barranco, Daniel and Mu{\~{n}}oz-Barrutia, Arrate and Arganda-Carreras, Ignacio},
+title={Stable Deep Neural Network Architectures for Mitochondria Segmentation on Electron Microscopy Volumes},
+journal={Neuroinformatics},
+year={2021},
+month={Dec},
+day={02},
+issn={1559-0089},
+doi={10.1007/s12021-021-09556-1},
+url={https://doi.org/10.1007/s12021-021-09556-1}
+}
 ``` 
