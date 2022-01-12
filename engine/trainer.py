@@ -496,17 +496,16 @@ class Trainer(object):
                             w_pred = bdv2_watershed(pred, bin_th=th1_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
                                 remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=w_dir)
 
-                        # Add extra dimensrion if working in 2D
-                        if w_pred.ndim == 2:
-                            w_pred = np.expand_dims(w_pred,0)
-
-                        save_tif(np.expand_dims(w_pred,-1), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                        save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                                  filenames, verbose=self.cfg.TEST.VERBOSE)
 
                         if self.cfg.TEST.VORONOI_ON_MASK:
-                            vor_pred = voronoi_on_mask_2(w_pred, np.expand_dims(pred,0),
+                            vor_pred = voronoi_on_mask_2(np.expand_dims(w_pred,0), np.expand_dims(pred,0),
                                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI, filenames, verbose=self.cfg.TEST.VERBOSE)[0]
 
+                        # Add extra dimension if working in 2D
+                        if w_pred.ndim == 2:
+                            w_pred = np.expand_dims(w_pred,0)
 
                     if self.cfg.TEST.MAP and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
                         print("####################\n"
