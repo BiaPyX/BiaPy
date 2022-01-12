@@ -407,3 +407,177 @@ def relabel_sequential(label_field, offset=1):
     inverse_map[offset:] = labels0
     relabeled = forward_map[label_field]
     return relabeled, forward_map, inverse_map
+    
+def match_using_VJI_and_PAI(y_true, y_pred):
+
+    """Calcualte Volume Averaged Jaccard Index (VJI) metric as well as over-segmentation and 
+    under-segmentation rates based on the paper entitled "Assessment of deep learning algorithms
+    for 3D instance segmentation of confocal image datasets" by A. Kar et al 
+    (https://doi.org/10.1101/2021.06.09.447748)
+     
+    The numbers next to the calculations correspond to equation number in the aforementioned
+    paper.                                                             
+
+       Inputs
+       ----------
+       y_true : 4D Numpy array
+           Ground Truth data. E.g. ``(img_number, x, y, channels)``.
+           
+       y_pred : 4D Numpy array
+           Predicted data  E.g. ``(img_number, x, y, channels)``.
+
+      Returns
+      -------
+      stats_dict: Dictionary with the following info:
+		  VJI: float
+		      Volume Averaged Jaccard Index. As defined in https://doi.org/10.1101/2021.06.09.447748
+		  backgroundRate: float
+		      Percentage of predicted cells pair-associated with the ground truth background
+		  oversegmentationRate: float
+		      Percentage of ground truth cells pair-associated with more than one predicted cell.
+		  undersegmentationRate: float
+		      Percentage of predicted cells pair-associated with more than one ground truth cell.
+		  bijectionRate: float
+		      Percentage of predicted cells pair-associated with just one ground truth cell.
+
+    """
+
+    ground_truth_cells = np.unique(y_true)
+    predicted_cells = np.unique(y_pred)
+
+    ground_truth_cells_num = np.size(ground_truth_cells)
+    predicted_cells_num = np.size(predicted_cells)
+    
+    #Initialize variables
+    jaccard_index = np.zeros([ground_truth_cells_num, predicted_cells_num])
+    ground_truth_cellVolume = np.zeros([ground_truth_cells_num])
+    predicted_cellVolume = np.zeros([predicted_cells_num])
+    asymetric_inclusion_GC = np.zeros([ground_truth_cells_num, predicted_cells_num])
+    asymetric_inclusion_PC = np.zeros([predicted_cells_num, ground_truth_cells_num])
+    A = np.zeros([ground_truth_cells_num], dtype=np.int)
+    B = np.zeros([ground_truth_cells_num], dtype=np.int)
+    Bprime = np.zeros([predicted_cells_num], dtype=np.int)
+
+    #Relabel
+    new_label = 0
+    for ground_truth_cell in ground_truth_cells:
+        y_true[y_true==ground_truth_cell] = new_label
+        new_label = new_label + 1
+    ground_truth_cells = np.unique(y_true)
+
+    new_label = 0
+    for predicted_cell in predicted_cells:
+        y_pred[y_pred==predicted_cell] = new_label
+        new_label = new_label + 1
+    predicted_cells = np.unique(y_pred)
+
+    #Calculate unions, intersections, jaccard_index, volumes and assymetric inclusion indices
+    for predicted_cell in predicted_cells:
+        #Calculate GroundTruth cell and predicted_cellVolume Volume
+        predicted_cellVolume[predicted_cell] = np.count_nonzero(y_pred==predicted_cell)
+    matchingCells = np.unique(y_pred[(y_true==3) & (y_pred>0)])
+    
+    for ground_truth_cell in ground_truth_cells:
+        gt_cell = y_true==ground_truth_cell
+        #Crop to speed up
+        validSlices = [np.count_nonzero(gt_cell[slice, :, :])>0 for slice in range(np.shape(gt_cell)[0])]
+        gt_cell = gt_cell[validSlices, :, :]
+    
+        matchingCells = np.unique(y_pred[(y_true==ground_truth_cell) & (y_pred>0)])
+
+        #Calculate GroundTruth cell and predicted_cellVolume Volume
+        ground_truth_cellVolume[ground_truth_cell] = np.count_nonzero(y_true==ground_truth_cells[ground_truth_cell])
+            
+        for predicted_cell in matchingCells:
+            p_cell =  y_pred==predicted_cell
+            p_cell = p_cell[validSlices, :, :]
+        
+            #Calculate union and intersection
+            intersection = (gt_cell & p_cell).sum()
+
+            union = ground_truth_cellVolume[ground_truth_cell]+predicted_cellVolume[predicted_cell]-intersection
+        
+            #Calculate Jaccard Index (1)
+            jaccard_index[ground_truth_cell, predicted_cell] = intersection/union
+
+            #Calculate Assymetric Inclusion Index (2)
+            asymetric_inclusion_GC[ground_truth_cell, predicted_cell] = intersection/ground_truth_cellVolume[ground_truth_cell]
+            asymetric_inclusion_PC[predicted_cell, ground_truth_cell] = intersection/predicted_cellVolume[predicted_cell]
+
+        #Calculate A (3) and B (4)
+        A[ground_truth_cell] = np.argmax(jaccard_index[ground_truth_cell, :])
+        B[ground_truth_cell] = np.argmax(asymetric_inclusion_GC[ground_truth_cell, :])
+
+    #Calculate B prime (5)
+    for predicted_cell in predicted_cells:
+        Bprime[predicted_cell] = np.argmax(asymetric_inclusion_PC[predicted_cell, :])
+
+    #Calculate Volume Averaged Jaccard (VJI) (6)
+    upperPart = 0
+    lowerPart = 0
+
+    for ground_truth_cell in ground_truth_cells[1:]:
+        upperPart = upperPart + ground_truth_cellVolume[ground_truth_cell]*jaccard_index[ground_truth_cell,predicted_cells[A[ground_truth_cell]]]
+        lowerPart = lowerPart + ground_truth_cellVolume[ground_truth_cell]
+
+    VJI = upperPart/lowerPart
+
+    print('VJI = {}'.format(VJI))
+
+    #Under and over segmentation rates
+    pair_asociated_indices = [0, 0];
+    for ground_truth_cell in ground_truth_cells:
+        for predicted_cell in predicted_cells:
+	        if(B[ground_truth_cell]==predicted_cell or Bprime[predicted_cell]==ground_truth_cell):
+	            pair_asociated_indices = np.vstack([pair_asociated_indices, [ground_truth_cell, predicted_cell]])
+	        
+    pair_asociated_indices = pair_asociated_indices[1:]
+
+    oversegmented = 0;
+    for ground_truth_cell in ground_truth_cells[1:]:
+        if(np.shape(pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, :])[0]>1):
+            for predicted_cell in pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, 1]:
+                if ground_truth_cell in pair_asociated_indices[pair_asociated_indices[:, 1]==predicted_cell, 0]:
+                    oversegmented = oversegmented + 1
+       
+    background = 0
+    ground_truth_cell = ground_truth_cells[0]
+    if(np.shape(pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, :])[0]>1):
+        for predicted_cell in pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, 1]:
+            if ground_truth_cell in pair_asociated_indices[pair_asociated_indices[:, 1]==predicted_cell, 0]:
+                background = background + 1
+    
+    bijection = 0;
+    for predicted_cell in predicted_cells:
+        if(np.shape(pair_asociated_indices[pair_asociated_indices[:, 1]==predicted_cell, :])[0]==1):
+            for ground_truth_cell in pair_asociated_indices[pair_asociated_indices[:, 1]==predicted_cell, 0]:
+                if predicted_cells in pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, 1]:
+                    bijection = bijection + 1
+                
+    undersegmented = 0;
+    for predicted_cell in predicted_cells:
+        if(np.shape(pair_asociated_indices[pair_asociated_indices[:, 1]==predicted_cell, :])[0]>1):
+            undersegmented_aux = 0;
+            for ground_truth_cell in pair_asociated_indices[pair_asociated_indices[:, 1]==predicted_cell, 0]:
+                if predicted_cell in pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, 1]:
+                    undersegmented_aux = undersegmented_aux + 1
+                if undersegmented_aux == len(pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, 1]):
+                    undersegmented = undersegmented + 1
+                    
+    validCells = len(np.unique(pair_asociated_indices[:, 1]))
+
+    background_rate = (background/validCells)
+    oversegmentation_rate = (oversegmented/validCells)
+    undersegmentation_rate = (undersegmented/validCells)
+    bijection_rate = (bijection/validCells)
+
+    stats_dict = dict (
+        VJI = VJI,
+        background_rate = background_rate,
+        oversegmentation_rate = oversegmentation_rate,
+        undersegmentation_rate = undersegmentation_rate,
+        bijection_rate = bijection_rate,
+    )
+
+    return stats_dict
+    
