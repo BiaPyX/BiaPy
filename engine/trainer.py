@@ -204,10 +204,7 @@ class Trainer(object):
                         print("3) Loading test masks . . .")
                         Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH)
                     else:
-                        if cfg.PROBLEM.NDIM == '2D':
-                            raise ValueError("Not implemented pipeline option: no test data labels when PROBLEM.NDIM == '2D'")
-                        else:
-                            Y_test = None
+                        Y_test = None
                 else:
                     X_test, Y_test = None, None
 
@@ -669,7 +666,7 @@ class Trainer(object):
                         _X = np.expand_dims(X[j],0)
                         _Y = np.expand_dims(Y[j],0) if self.cfg.DATA.TEST.LOAD_GT else None
 
-                    _X, _ = check_downsample_division(_X, len(self.cfg.MODEL.FEATURE_MAPS)-1)
+                    _X, o_test_shape = check_downsample_division(_X, len(self.cfg.MODEL.FEATURE_MAPS)-1)
                     if self.cfg.DATA.TEST.LOAD_GT:
                         _Y, o_test_shape = check_downsample_division(_Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
 
