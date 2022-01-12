@@ -7,8 +7,8 @@ from skimage.io import imread
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
 from utils.util import (check_masks, check_downsample_division, create_plots, save_tif, load_data_from_dir,
-                        load_3d_images_from_dir, apply_binary_mask, pad_and_reflect, wrapper_matching_dataset_lazy)
-from utils.matching import matching
+                        load_3d_images_from_dir, apply_binary_mask, pad_and_reflect, wrapper_matching_dataset_lazy, wrapper_matching_VJI_and_PAI)
+from utils.matching import matching, match_using_VJI_and_PAI
 from data import create_instance_channels, create_test_instance_channels
 from data.data_2D_manipulation import (load_and_prepare_2D_train_data, crop_data_with_overlap, merge_data_with_overlap,
                                        load_data_classification)
@@ -204,7 +204,10 @@ class Trainer(object):
                         print("3) Loading test masks . . .")
                         Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH)
                     else:
-                        Y_test = None
+                        if cfg.PROBLEM.NDIM == '2D':
+                            raise ValueError("Not implemented pipeline option: no test data labels when PROBLEM.NDIM == '2D'")
+                        else:
+                            Y_test = None
                 else:
                     X_test, Y_test = None, None
 
@@ -281,6 +284,11 @@ class Trainer(object):
                 mAP_50_total_vor = 0
                 mAP_75_total_vor = 0
         if self.cfg.TEST.MATCHING_STATS and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+            all_matching_stats = []
+            if self.cfg.TEST.VORONOI_ON_MASK:
+                all_matching_stats_voronoi = []
+                
+        if self.cfg.TEST.MATCHING_VJI_PAI and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
             all_matching_stats = []
             if self.cfg.TEST.VORONOI_ON_MASK:
                 all_matching_stats_voronoi = []
@@ -634,7 +642,22 @@ class Trainer(object):
                             print("Stats with Voronoi")
                             print(r_stats)
                             all_matching_stats_voronoi.append(r_stats)
+                            
+                    if self.cfg.TEST.MATCHING_VJI_PAI and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+                        print("Calculating matching stats using VJI and PAI. . .")
+                        test_file = os.path.join(self.cfg.DATA.TEST.MASK_PATH, filenames[0])
+                        if not os.path.isfile(test_file):
+                            raise ValueError("The mask is supossed to have the same name as the image")
+                        _Y = imread(test_file).squeeze()
+                        r_stats = match_using_VJI_and_PAI(_Y, w_pred)
+                        print(r_stats)
+                        all_matching_stats.append(r_stats)
 
+                        if self.cfg.TEST.VORONOI_ON_MASK:
+                            r_stats = match_using_VJI_and_PAI(_Y, vor_pred)
+                            print("Stats with Voronoi")
+                            print(r_stats)
+                            all_matching_stats_voronoi.append(r_stats)
                 ##################
                 ### FULL IMAGE ###
                 ##################
@@ -646,9 +669,9 @@ class Trainer(object):
                         _X = np.expand_dims(X[j],0)
                         _Y = np.expand_dims(Y[j],0) if self.cfg.DATA.TEST.LOAD_GT else None
 
-                    _X, o_test_shape = check_downsample_division(_X, len(self.cfg.MODEL.FEATURE_MAPS)-1)
+                    _X, _ = check_downsample_division(_X, len(self.cfg.MODEL.FEATURE_MAPS)-1)
                     if self.cfg.DATA.TEST.LOAD_GT:
-                        _Y, _ = check_downsample_division(_Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
+                        _Y, o_test_shape = check_downsample_division(_Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
 
                     # Evaluate each img
                     if self.cfg.DATA.TEST.LOAD_GT:
@@ -738,6 +761,12 @@ class Trainer(object):
             stats = wrapper_matching_dataset_lazy(all_matching_stats, self.cfg.TEST.MATCHING_STATS_THS)
             if self.cfg.TEST.VORONOI_ON_MASK:
                 stats_vor = wrapper_matching_dataset_lazy(all_matching_stats_voronoi, self.cfg.TEST.MATCHING_STATS_THS)
+                
+                
+        if self.cfg.TEST.MATCHING_VJI_PAI and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+            stats = wrapper_matching_VJI_and_PAI(all_matching_stats)
+            if self.cfg.TEST.VORONOI_ON_MASK:
+                stats_vor = wrapper_matching_VJI_and_PAI(all_matching_stats_voronoi)
 
         print("#############\n"
               "#  RESULTS  #\n"
@@ -785,6 +814,13 @@ class Trainer(object):
                             if self.cfg.TEST.VORONOI_ON_MASK:
                                 print("IoU (Voronoi) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                                 print(stats_vor[i])
+                                
+                    if self.cfg.TEST.MATCHING_VJI_PAI:
+                        print("Volume Averaged Jaccard Index (VJI) and segmentation rates:")
+                        print(stats)
+                        if self.cfg.TEST.VORONOI_ON_MASK:
+                            print("Volume Averaged Jaccard Index (VJI) and segmentation rates (voronoi):")
+                            print(stats_vor)
 
                 if self.cfg.TEST.STATS.FULL_IMG:
                     print("Loss (per image): {}".format(iou))
@@ -796,4 +832,3 @@ class Trainer(object):
                     print("Test Foreground IoU (post-processing): {}".format(iou_post))
                     print("Test Overall IoU (post-processing): {}".format(ov_iou_post))
                     print(" ")
-
