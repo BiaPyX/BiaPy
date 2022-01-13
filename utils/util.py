@@ -1783,3 +1783,15 @@ def wrapper_matching_dataset_lazy(stats_all, thresh, criterion='iou', by_image=F
 
     accumulate = tuple(namedtuple('DatasetMatching',acc.keys())(*acc.values()) for acc in accumulate)
     return accumulate[0] if single_thresh else accumulate
+    
+def wrapper_matching_VJI_and_PAI(stats_all):
+
+    expected_keys = ['VJI', 'background_rate', 'oversegmentation_rate', 'undersegmentation_rate', 'bijection_rate']
+    
+    accumulated_values = dict.fromkeys(expected_keys, 0)
+    
+    for key in expected_keys:
+        for stat in stats_all:
+            accumulated_values[key] = accumulated_values[key] + stat[key]
+        accumulated_values[key] = accumulated_values[key]/len(stats_all)
+    return accumulated_values

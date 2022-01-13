@@ -376,7 +376,8 @@ class Config:
         # Wheter to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
         _C.TEST.MATCHING_STATS = False
         _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
-
+        _C.TEST.MATCHING_VJI_PAI = False
+        
         _C.TEST.STATS = CN()
         _C.TEST.STATS.PER_PATCH = False
         _C.TEST.STATS.MERGE_PATCHES = False # Only used when _C.TEST.STATS.PER_PATCH = True
@@ -468,4 +469,3 @@ class Config:
         self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
         self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, '..', 'bin_mask')
         self._C.PATHS.TEST_FULL_GT_H5 = os.path.join(self._C.DATA.TEST.MASK_PATH, 'h5')
-
