@@ -668,7 +668,7 @@ class Trainer(object):
 
                     _X, o_test_shape = check_downsample_division(_X, len(self.cfg.MODEL.FEATURE_MAPS)-1)
                     if self.cfg.DATA.TEST.LOAD_GT:
-                        _Y, o_test_shape = check_downsample_division(_Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
+                        _Y, _ = check_downsample_division(_Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
 
                     # Evaluate each img
                     if self.cfg.DATA.TEST.LOAD_GT:
