@@ -286,9 +286,9 @@ class Trainer(object):
                 all_matching_stats_voronoi = []
                 
         if self.cfg.TEST.MATCHING_VJI_PAI and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
-            all_matching_stats = []
+            all_matching_stats_VJI = []
             if self.cfg.TEST.VORONOI_ON_MASK:
-                all_matching_stats_voronoi = []
+                all_matching_stats_voronoi_VJI = []
 
         if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             if self.cfg.DATA.MW_OPTIMIZE_THS and self.cfg.DATA.CHANNELS != "BCDv2":
@@ -646,15 +646,15 @@ class Trainer(object):
                         if not os.path.isfile(test_file):
                             raise ValueError("The mask is supossed to have the same name as the image")
                         _Y = imread(test_file).squeeze()
-                        r_stats = match_using_VJI_and_PAI(_Y, w_pred)
-                        print(r_stats)
-                        all_matching_stats.append(r_stats)
+                        r_stats_VJI = match_using_VJI_and_PAI(_Y, w_pred)
+                        print(r_stats_VJI)
+                        all_matching_stats_VJI.append(r_stats_VJI)
 
                         if self.cfg.TEST.VORONOI_ON_MASK:
-                            r_stats = match_using_VJI_and_PAI(_Y, vor_pred)
+                            r_stats_VJI = match_using_VJI_and_PAI(_Y, vor_pred)
                             print("Stats with Voronoi")
-                            print(r_stats)
-                            all_matching_stats_voronoi.append(r_stats)
+                            print(r_stats_VJI)
+                            all_matching_stats_voronoi_VJI.append(r_stats_VJI)
                 ##################
                 ### FULL IMAGE ###
                 ##################
@@ -761,9 +761,9 @@ class Trainer(object):
                 
                 
         if self.cfg.TEST.MATCHING_VJI_PAI and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
-            stats = wrapper_matching_VJI_and_PAI(all_matching_stats)
+            stats_VJI = wrapper_matching_VJI_and_PAI(all_matching_stats_VJI)
             if self.cfg.TEST.VORONOI_ON_MASK:
-                stats_vor = wrapper_matching_VJI_and_PAI(all_matching_stats_voronoi)
+                stats_vor_VJI = wrapper_matching_VJI_and_PAI(all_matching_stats_voronoi_VJI)
 
         print("#############\n"
               "#  RESULTS  #\n"
@@ -814,10 +814,10 @@ class Trainer(object):
                                 
                     if self.cfg.TEST.MATCHING_VJI_PAI:
                         print("Volume Averaged Jaccard Index (VJI) and segmentation rates:")
-                        print(stats)
+                        print(stats_VJI)
                         if self.cfg.TEST.VORONOI_ON_MASK:
                             print("Volume Averaged Jaccard Index (VJI) and segmentation rates (voronoi):")
-                            print(stats_vor)
+                            print(stats_vor_VJI)
 
                 if self.cfg.TEST.STATS.FULL_IMG:
                     print("Loss (per image): {}".format(iou))
