@@ -284,7 +284,7 @@ class Trainer(object):
             all_matching_stats = []
             if self.cfg.TEST.VORONOI_ON_MASK:
                 all_matching_stats_voronoi = []
-                
+
         if self.cfg.TEST.MATCHING_VJI_PAI and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
             all_matching_stats_VJI = []
             if self.cfg.TEST.VORONOI_ON_MASK:
@@ -546,10 +546,11 @@ class Trainer(object):
                             _Y = imread(test_file).squeeze()
 
                             # If multiple-channel data then only capture the first channel that is assumed to be instance labels
-                            if (_Y.shape[0] > 1 and _Y.ndim == 3) or (_Y.shape[0] > 1 and _Y.ndim == 4):
+                            if (self.cfg.PROBLEM.NDIM == '2D' and (_Y.shape[0] > 1 and _Y.ndim == 3)) or\
+                               (self.cfg.PROBLEM.NDIM == '3D' and (_Y.shape[0] > 1 and _Y.ndim == 4)):
                                 _Y =  _Y[0]
 
-                            # As the mAP code is prepared for 2D we need an extra z dimension and change dtype ot int
+                            # As the mAP code is prepared for 3D we need an extra z dimension and change dtype ot int
                             if _Y.dtype == np.float32: _Y = _Y.astype(np.int32)
                             if _Y.dtype == np.float64: _Y = _Y.astype(np.int64)
                             if _Y.ndim == 2: _Y = np.expand_dims(_Y,0)
@@ -581,7 +582,7 @@ class Trainer(object):
 
                         if self.cfg.TEST.VORONOI_ON_MASK:
                             print("mAP with Voronoi")
-                            # As the mAP code is prepared for 2D we need an extra z dimension
+                            # As the mAP code is prepared for 3D we need an extra z dimension
                             if vor_pred.ndim == 2:
                                 vor_pred = np.expand_dims(vor_pred,0)
 
@@ -618,10 +619,11 @@ class Trainer(object):
                         _Y = imread(test_file).squeeze()
 
                         # If multiple-channel data then only capture the first channel that is assumed to be instance labels
-                        if (_Y.shape[0] > 1 and _Y.ndim == 3) or (_Y.shape[0] > 1 and _Y.ndim == 4):
+                        if (self.cfg.PROBLEM.NDIM == '2D' and (_Y.shape[0] > 1 and _Y.ndim == 3)) or\
+                           (self.cfg.PROBLEM.NDIM == '3D' and (_Y.shape[0] > 1 and _Y.ndim == 4)):
                             _Y =  _Y[0]
 
-                        # As the mAP code is prepared for 2D we need an extra z dimension and change dtype ot int
+                        # As the mAP code is prepared for 3D we need an extra z dimension and change dtype ot int
                         if _Y.dtype == np.float32: _Y = _Y.astype(np.int32)
                         if _Y.dtype == np.float64: _Y = _Y.astype(np.int64)
                         if _Y.ndim == 2: _Y = np.expand_dims(_Y,0)
@@ -639,7 +641,7 @@ class Trainer(object):
                             print("Stats with Voronoi")
                             print(r_stats)
                             all_matching_stats_voronoi.append(r_stats)
-                            
+
                     if self.cfg.TEST.MATCHING_VJI_PAI and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
                         print("Calculating matching stats using VJI and PAI. . .")
                         test_file = os.path.join(self.cfg.DATA.TEST.MASK_PATH, filenames[0])
@@ -758,8 +760,8 @@ class Trainer(object):
             stats = wrapper_matching_dataset_lazy(all_matching_stats, self.cfg.TEST.MATCHING_STATS_THS)
             if self.cfg.TEST.VORONOI_ON_MASK:
                 stats_vor = wrapper_matching_dataset_lazy(all_matching_stats_voronoi, self.cfg.TEST.MATCHING_STATS_THS)
-                
-                
+
+
         if self.cfg.TEST.MATCHING_VJI_PAI and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
             stats_VJI = wrapper_matching_VJI_and_PAI(all_matching_stats_VJI)
             if self.cfg.TEST.VORONOI_ON_MASK:
@@ -811,7 +813,7 @@ class Trainer(object):
                             if self.cfg.TEST.VORONOI_ON_MASK:
                                 print("IoU (Voronoi) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                                 print(stats_vor[i])
-                                
+
                     if self.cfg.TEST.MATCHING_VJI_PAI:
                         print("Volume Averaged Jaccard Index (VJI) and segmentation rates:")
                         print(stats_VJI)
