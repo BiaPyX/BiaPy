@@ -12,7 +12,9 @@ from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 
 from utils.util import img_to_onehot_encoding
 from data.data_2D_manipulation import random_crop
-from data.generators.augmentors import cutout, cutblur, cutmix, cutnoise, misalignment, brightness, contrast, missing_parts
+from data.generators.augmentors import (cutout, cutblur, cutmix, cutnoise, misalignment, brightness, contrast,
+                                        missing_parts, grayscale, shuffle_channels)
+
 
 
 class ImageDataGenerator(tf.keras.utils.Sequence):
@@ -202,6 +204,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        missp_iterations : tuple of 2 ints, optional
            Iterations to dilate the missing line with. E.g. ``(30, 40)``.
 
+       grayscale : bool, optional
+           Wheter to augment images converting partially in grayscale.
+
+       channel_shuffle : bool, optional
+           Wheter to shuflle the channels of the images.
+
        random_crops_in_DA : bool, optional
            Decide to make random crops in DA (before transformations).
 
@@ -284,8 +292,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                  cblur_down_range=(2,8), cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), cutnoise=False,
                  cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False,
                  ms_displacement=16, ms_rotate_ratio=0.0, missing_parts=False, missp_iterations=(30, 40),
-                 random_crops_in_DA=False, shape=(256,256,1), prob_map=None, val=False, n_classes=1, out_number=1,
-                 extra_data_factor=1):
+                 grayscale=False, channel_shuffle=False, random_crops_in_DA=False, shape=(256,256,1), prob_map=None,
+                 val=False, n_classes=1, out_number=1, extra_data_factor=1):
 
         if in_memory:
             if X.ndim != 4 or Y.ndim != 4:
@@ -382,6 +390,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         self.contrast = contrast
         self.missing_parts = missing_parts
         self.missp_iterations = missp_iterations
+        self.grayscale = grayscale
+        self.channel_shuffle = channel_shuffle
 
         self.prob_map = None
         if random_crops_in_DA and prob_map is not None:
@@ -448,6 +458,9 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += '_drop'+str(drop_range)
+
+        if grayscale: self.trans_made += '_gray'
+        if channel_suffle: self.trans_made += '_chshuffle'
         if cutout: self.trans_made += '_cout'+str(cout_nb_iterations)+'+'+str(cout_size)+'+'+str(cout_cval)+'+'+str(cout_apply_to_mask)
         if cutblur: self.trans_made += '_cblur'+str(cblur_size)+'+'+str(cblur_down_range)+'+'+str(cblur_inside)
         if cutmix: self.trans_made += '_cmix'+str(cmix_size)
@@ -637,6 +650,14 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         # Apply missing parts
         if self.missing_parts and random.uniform(0, 1) < self.da_prob:
             image = missing_parts(image, self.missp_iterations)
+
+        # Convert to grayscale
+        if self.grayscale and random.uniform(0, 1) < self.da_prob:
+            image = grayscale(image)
+
+        # Apply channel shuffle
+        if self.channel_shuffle and random.uniform(0, 1) < self.da_prob:
+            image = shuffle_channels(image)
 
         # Apply transformations to the volume and its mask
         segmap = SegmentationMapsOnImage(mask, shape=mask.shape)

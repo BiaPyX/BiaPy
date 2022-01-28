@@ -297,6 +297,10 @@ class Config:
         _C.AUGMENTOR.MISSING_PARTS = False
         # Iterations to dilate the missing line with
         _C.AUGMENTOR.MISSP_ITERATIONS = (10, 30)
+        # Convert images in grasycale gradually based on '_C.AUGMENTOR.GRAY_RANGE'
+        _C.AUGMENTOR.GRAYSCALE = False
+        # Shuffle channels of the images
+        _C.AUGMENTOR.CHANNEL_SHUFFLE = False
 
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -377,7 +381,7 @@ class Config:
         _C.TEST.MATCHING_STATS = False
         _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
         _C.TEST.MATCHING_VJI_PAI = False
-        
+
         _C.TEST.STATS = CN()
         _C.TEST.STATS.PER_PATCH = False
         _C.TEST.STATS.MERGE_PATCHES = False # Only used when _C.TEST.STATS.PER_PATCH = True

@@ -17,7 +17,7 @@ from imgaug import parameters as iap
 from skimage.io import imsave
 from utils.util import img_to_onehot_encoding
 from data.generators.augmentors import (cutout, cutblur, cutmix, cutnoise, misalignment, brightness, contrast,
-                                        missing_parts)
+                                        missing_parts, shuffle_channels, grayscale)
 from data.data_3D_manipulation import random_3D_crop
 
 
@@ -223,6 +223,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
        missp_iterations : tuple of 2 ints, optional
            Iterations to dilate the missing line with. E.g. ``(30, 40)``.
 
+       grayscale : bool, optional
+           Wheter to augment images converting partially in grayscale.
+
+       channel_shuffle : bool, optional
+           Wheter to shuflle the channels of the images.
+
        n_classes : int, optional
            Number of classes. If ``> 1`` one-hot encoding will be done on the ground truth.
 
@@ -250,8 +256,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                  cout_cval=0, cout_apply_to_mask=False, cutblur=False, cblur_size=(0.2,0.4), cblur_down_range=(2,8),
                  cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), cutnoise=False, cnoise_scale=(0.1,0.2),
                  cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False, ms_displacement=16,
-                 ms_rotate_ratio=0.0, missing_parts=False, missp_iterations=(30, 40), n_classes=1, out_number=1,
-                 val=False, extra_data_factor=1):
+                 ms_rotate_ratio=0.0, missing_parts=False, missp_iterations=(30, 40), grayscale=False,
+                 channel_shuffle=False, n_classes=1, out_number=1, val=False, extra_data_factor=1):
 
         if in_memory:
             if X.ndim != 5 or Y.ndim != 5:
@@ -416,6 +422,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.ms_rotate_ratio = ms_rotate_ratio
         self.missing_parts = missing_parts
         self.missp_iterations = missp_iterations
+        self.grayscale = grayscale
+        self.channel_shuffle = channel_shuffle
         self.val = val
         self.batch_size = batch_size
         self.o_indexes = np.arange(self.len)
@@ -476,6 +484,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += '_drop'+str(drop_range)
+        if grayscale: self.trans_made += '_gray'
+        if channel_shuffle: self.trans_made += '_chshuffle'
         if cutout: self.trans_made += '_cout'+str(cout_nb_iterations)+'+'+str(cout_size)+'+'+str(cout_cval)+'+'+str(cout_apply_to_mask)
         if cutblur: self.trans_made += '_cblur'+str(cblur_size)+'+'+str(cblur_down_range)+'+'+str(cblur_inside)
         if cutmix: self.trans_made += '_cmix'+str(cmix_size)
@@ -695,6 +705,14 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         o_img_shape = image.shape
         o_mask_shape = mask.shape
 
+        # Convert to grayscale
+        if self.grayscale and random.uniform(0, 1) < self.da_prob:
+            image = grayscale(image)
+
+        # Apply channel shuffle
+        if self.channel_shuffle and random.uniform(0, 1) < self.da_prob:
+            image = shuffle_channels(image)
+
         # Reshape 3D volumes to 2D image type with multiple channels to pass
         # through imgaug lib
         image = image.reshape(image.shape[:2]+(image.shape[2]*image.shape[3],))
@@ -709,8 +727,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                                  self.cout_apply_to_mask)
 
         # Apply cblur
-        prob = random.uniform(0, 1)
-        if self.cutblur and prob < self.da_prob:
+        if self.cutblur and random.uniform(0, 1) < self.da_prob:
             image = cutblur(image, self.cblur_size, self.cblur_down_range, self.cblur_inside)
 
         # Apply cutmix

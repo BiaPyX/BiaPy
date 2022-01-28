@@ -1,5 +1,5 @@
 import cv2
-import random                                                                   
+import random
 import math
 import numpy as np
 from skimage.transform import resize
@@ -9,30 +9,30 @@ from scipy.ndimage.measurements import label
 from scipy.ndimage.morphology import binary_dilation
 
 
-def cutout(img, mask, nb_iterations=(1,3), size=(0.2,0.4), cval=0, apply_to_mask=False): 
+def cutout(img, mask, nb_iterations=(1,3), size=(0.2,0.4), cval=0, apply_to_mask=False):
     """Cutout data augmentation presented in `Improved Regularization of Convolutional Neural Networks with Cutout
        <https://arxiv.org/pdf/1708.04552.pdf>`_.
-    
+
        Parameters
        ----------
        img : 3D Numpy array
            Image to transform. E.g. ``(x, y, channels)``.
 
-       mask : 3D Numpy array                                                   
-           Mask to transform. E.g. ``(x, y, channels)``.   
-        
+       mask : 3D Numpy array
+           Mask to transform. E.g. ``(x, y, channels)``.
+
        nb_iterations : tuple of ints, optional
            Number of areas to fill the image with. E.g. ``(1, 3)``.
-    
+
        size : tuple of floats, optional
            Range to choose the size of the areas to create.
 
        cval : int, optional
            Value to fill the area with.
-    
+
        apply_to_mask : boolean, optional
            To apply cutout to the mask.
-        
+
        Returns
        -------
        out : 3D Numpy array
@@ -43,10 +43,10 @@ def cutout(img, mask, nb_iterations=(1,3), size=(0.2,0.4), cval=0, apply_to_mask
 
        Example
        -------
-            
-       Calling this function with ``nb_iterations=(1,3)``, ``size=(0.05,0.3)``, 
+
+       Calling this function with ``nb_iterations=(1,3)``, ``size=(0.05,0.3)``,
        ``apply_to_mask=False`` may result in:
-                                         
+
        +-------------------------------------------+-------------------------------------------+
        | .. figure:: ../../img/orig_cutout.png     | .. figure:: ../../img/orig_cutout_mask.png|
        |   :width: 80%                             |   :width: 80%                             |
@@ -83,7 +83,7 @@ def cutout(img, mask, nb_iterations=(1,3), size=(0.2,0.4), cval=0, apply_to_mask
         if apply_to_mask:
             for i in range(mask.shape[-1]):
                 m_out[cy:cy+y_size, cx:cx+x_size, i] = 0
-        
+
     return out, m_out
 
 
@@ -91,24 +91,24 @@ def cutblur(img, size=(0.2,0.4), down_ratio_range=(2,8), only_inside=True):
     """CutBlur data augmentation introduced in `Rethinking Data Augmentation for Image Super-resolution: A Comprehensive
        Analysis and a New Strategy <https://arxiv.org/pdf/2004.00448.pdf>`_ and adapted from
        https://github.com/clovaai/cutblur .
-     
-    
+
+
        Parameters
        ----------
        img : 3D Numpy array
            Image to transform. E.g. ``(x, y, channels)``.
-        
+
        size : float, optional
            Size of the region to transform.
-    
+
        down_ratio_range : tuple of ints, optional
-           Downsampling ratio range to be applied. E.g. ``(2, 8)``. 
-            
+           Downsampling ratio range to be applied. E.g. ``(2, 8)``.
+
        only_inside : bool, optional
            If ``True`` only the region inside will be modified (cut LR into HR image). If ``False`` the ``50%`` of the
            times the region inside will be modified (cut LR into HR image) and the other ``50%`` the inverse will be
-           done (cut HR into LR image). See Figure 1 of the official `paper <https://arxiv.org/pdf/2004.00448.pdf>`_. 
-    
+           done (cut HR into LR image). See Figure 1 of the official `paper <https://arxiv.org/pdf/2004.00448.pdf>`_.
+
        Returns
        -------
        out : 3D Numpy array
@@ -134,7 +134,7 @@ def cutblur(img, size=(0.2,0.4), down_ratio_range=(2,8), only_inside=True):
        |   Input image                           |   Augmented image                       |
        +-----------------------------------------+-----------------------------------------+
 
-       The grid and the red square are painted for visualization purposes. 
+       The grid and the red square are painted for visualization purposes.
     """
 
     _size = random.uniform(size[0], size[1])
@@ -152,7 +152,7 @@ def cutblur(img, size=(0.2,0.4), down_ratio_range=(2,8), only_inside=True):
 
     if not only_inside:
         inside = True if random.uniform(0, 1) < 0.5 else False
-    else:   
+    else:
         inside = True
 
     out = img.copy()
@@ -173,7 +173,7 @@ def cutblur(img, size=(0.2,0.4), down_ratio_range=(2,8), only_inside=True):
         else:
             temp[cy:cy+y_size, cx:cx+x_size] = img[cy:cy+y_size, cx:cx+x_size, i]
             out[...,i] = temp
-        
+
     return out
 
 
@@ -181,7 +181,7 @@ def cutmix(im1, im2, mask1, mask2, size=(0.2,0.4)):
     """Cutmix augmentation introduced in `CutMix: Regularization Strategy to Train Strong Classifiers with Localizable
        Features <https://arxiv.org/abs/1905.04899>`_. With this augmentation a region of the image sample is filled
        with a given second image. This implementation is used for semantic segmentation so the masks of the images are
-       also needed. It assumes that the images are of the same shape. 
+       also needed. It assumes that the images are of the same shape.
 
        Parameters
        ----------
@@ -327,32 +327,32 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
 
 def misalignment(img, mask, displacement=16, rotate_ratio=0.0):
     """Mis-alignment data augmentation of image stacks. This augmentation is applied to both images and masks.
-    
+
        Implementation based on `PyTorch Connectomics' misalign.py
        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/misalign.py>`_.
 
        Parameters
        ----------
-       img : 3D Numpy array                                                     
-           Image to transform. E.g. ``(x, y, channels)``.                       
-                                                                                
-       mask : 3D Numpy array                                                   
+       img : 3D Numpy array
+           Image to transform. E.g. ``(x, y, channels)``.
+
+       mask : 3D Numpy array
            Mask to transform. E.g. ``(x, y, channels)``
 
        displacement : int, optional
            Maximum pixel displacement in ``xy``-plane.
 
        rotate_ratio : float, optional
-           Ratio of rotation-based mis-alignment. 
+           Ratio of rotation-based mis-alignment.
 
-       Returns                                                                  
-       -------                                                                  
-       out : 3D Numpy array                                                     
-           Transformed image. E.g. ``(x, y, channels)``.                        
-                                                                                
-       m_out : 3D Numpy array                                                   
-           Transformed mask. E.g. ``(x, y, channels)``.  
-    
+       Returns
+       -------
+       out : 3D Numpy array
+           Transformed image. E.g. ``(x, y, channels)``.
+
+       m_out : 3D Numpy array
+           Transformed mask. E.g. ``(x, y, channels)``.
+
        Example
        -------
 
@@ -375,35 +375,35 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0):
        The grid is painted for visualization purposes.
     """
 
-    out = np.zeros(img.shape, img.dtype)  
-    m_out = np.zeros(mask.shape, mask.dtype)  
+    out = np.zeros(img.shape, img.dtype)
+    m_out = np.zeros(mask.shape, mask.dtype)
 
     # 2D
     if img.shape[-1] < 5:
-        oy = np.random.randint(1, img.shape[0]-1)                           
-        d = np.random.randint(0, displacement)                              
+        oy = np.random.randint(1, img.shape[0]-1)
+        d = np.random.randint(0, displacement)
         if random.uniform(0, 1) < rotate_ratio:
-            # Apply misalignment to all channels                                             
-            for i in range(img.shape[-1]):                                      
-                out[:oy,:,i] = img[:oy,:,i]                                     
-                out[oy:,:img.shape[1]-d,i] = img[oy:,d:,i]    
-                m_out[:oy,:,i] = mask[:oy,:,i]                                     
-                m_out[oy:,:mask.shape[1]-d,i] = mask[oy:,d:,i]    
-        else:   
+            # Apply misalignment to all channels
+            for i in range(img.shape[-1]):
+                out[:oy,:,i] = img[:oy,:,i]
+                out[oy:,:img.shape[1]-d,i] = img[oy:,d:,i]
+                m_out[:oy,:,i] = mask[:oy,:,i]
+                m_out[oy:,:mask.shape[1]-d,i] = mask[oy:,d:,i]
+        else:
             H, W = img.shape[:2]
             M = random_rotate_matrix(H, displacement)
             H = H - oy
-            # Apply misalignment to all channels                                             
-            for i in range(img.shape[-1]):                                      
-                out[:oy,:,i] = img[:oy,:,i]                                     
-                out[oy:,:,i] = cv2.warpAffine(img[oy:,:,i], M, (W,H), 1.0, flags=cv2.INTER_LINEAR, 
-                                              borderMode=cv2.BORDER_CONSTANT)                      
-                m_out[:oy,:,i] = mask[:oy,:,i]                                  
+            # Apply misalignment to all channels
+            for i in range(img.shape[-1]):
+                out[:oy,:,i] = img[:oy,:,i]
+                out[oy:,:,i] = cv2.warpAffine(img[oy:,:,i], M, (W,H), 1.0, flags=cv2.INTER_LINEAR,
+                                              borderMode=cv2.BORDER_CONSTANT)
+                m_out[:oy,:,i] = mask[:oy,:,i]
                 m_out[oy:,:,i] = cv2.warpAffine(mask[oy:,:,i], M, (W,H), 1.0, flags=cv2.INTER_NEAREST,
-                                                borderMode=cv2.BORDER_CONSTANT)                          
+                                                borderMode=cv2.BORDER_CONSTANT)
     # 3D
     else:
-        out_shape = (img.shape[0]-displacement, img.shape[1]-displacement,  
+        out_shape = (img.shape[0]-displacement, img.shape[1]-displacement,
                      img.shape[2])
         mode = 'slip' if random.uniform(0, 1) < 0.5 else 'translation'
         idx = np.random.randint(1, img.shape[-1]-1)
@@ -412,16 +412,16 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0):
             H, W = img.shape[:2]
             M = random_rotate_matrix(H, displacement)
             if mode == 'slip':
-                out[idx] = cv2.warpAffine(img[idx], M, (H,W), 1.0, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT) 
+                out[idx] = cv2.warpAffine(img[idx], M, (H,W), 1.0, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
                 m_out[idx] = cv2.warpAffine(mask[idx], M, (H,W), 1.0, flags=cv2.INTER_NEAREST,
-                                            borderMode=cv2.BORDER_CONSTANT) 
+                                            borderMode=cv2.BORDER_CONSTANT)
             else:
-                for i in range(idx, img.shape[-1]):   
+                for i in range(idx, img.shape[-1]):
                     out[...,i] = cv2.warpAffine(img[...,i], M, (H,W), 1.0, flags=cv2.INTER_LINEAR,
                                                 borderMode=cv2.BORDER_CONSTANT)
-                for i in range(idx, mask.shape[-1]):   
+                for i in range(idx, mask.shape[-1]):
                     m_out[...,i] = cv2.warpAffine(mask[...,i], M, (H,W), 1.0, flags=cv2.INTER_NEAREST,
-                                                  borderMode=cv2.BORDER_CONSTANT)   
+                                                  borderMode=cv2.BORDER_CONSTANT)
         else:
             x0 = random_state.randint(displacement)
             y0 = random_state.randint(displacement)
@@ -440,7 +440,7 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0):
 
     return out, m_out
 
-                                                                                
+
 def random_rotate_matrix(height, displacement):
     """Auxiliary function for missaligmnet. """
     x = (displacement / 2.0)
@@ -457,7 +457,7 @@ def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False, invert_p
 
        Implementation based on `PyTorch Connectomics' grayscale.py
        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
- 
+
        Parameters
        ----------
        img : 3D Numpy array
@@ -466,11 +466,11 @@ def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False, invert_p
        brightness_factor : tuple of 2 floats, optional
            Range of brightness' intensity. E.g. ``(0.1, 0.3)``.
 
-       mode : str, optional 
-           One of ``2D``, ``3D`` or ``mix``. 
+       mode : str, optional
+           One of ``2D``, ``3D`` or ``mix``.
 
-       invert : bool, optional 
-           Whether to invert the images. 
+       invert : bool, optional
+           Whether to invert the images.
 
        invert_p : float, optional
            Probability of inverting the images.
@@ -503,7 +503,7 @@ def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False, invert_p
        The grid is painted for visualization purposes.
     """
 
-    image = img/255 
+    image = img/255
 
     if brightness_factor[0] == 0 and brightness_factor[1] == 0: return image
 
@@ -714,7 +714,49 @@ def _prepare_deform_slice(slice_shape, iterations):
     pos_val = components[-1, -1] if fixed_x else components[0, 0]
 
     # dilate the line mask
-    line_mask = binary_dilation(line_mask, iterations=iterations) 
-    
+    line_mask = binary_dilation(line_mask, iterations=iterations)
+
     return line_mask
 
+
+def shuffle_channels(img):
+    """Augment the image by shuffling its channels.
+
+       Parameters
+       ----------
+       img : 3D/4D Numpy array
+           Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+
+       Returns
+       -------
+       out : 3D/4D Numpy array
+           Transformed image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+    """
+    if img.ndim != 3 and img.ndim != 4:
+        raise ValueError("Image is supposed to be 3 or 4 dimensions but provided {} image shape instead".format(img.shape))
+
+    new_channel_order = np.random.permutation(img.shape[-1])
+    if img.ndim == 3:
+        out = img[:,:,new_channel_order]
+    else:
+        out = img[:,:,:,new_channel_order]
+    return out
+
+def grayscale(img):
+    """Augment the image by converting it into grayscale.
+
+       Parameters
+       ----------
+       img : 3D/4D Numpy array
+           Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+
+       Returns
+       -------
+       out : 3D/4D Numpy array
+           Transformed image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+    """
+
+    if img.shape[-1] != 3:
+        raise ValueError("Image is supposed to have 3 channels (RGB). Provided {} image shape instead".format(img.shape))
+
+    return np.tile(np.expand_dims(np.mean(img, -1), -1), 3)

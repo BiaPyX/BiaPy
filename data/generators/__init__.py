@@ -80,7 +80,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             cnoise_nb_iterations=cfg.AUGMENTOR.CNOISE_NB_ITERATIONS, cnoise_scale=cfg.AUGMENTOR.CNOISE_SCALE,
             misalignment=cfg.AUGMENTOR.MISALIGNMENT, ms_displacement=cfg.AUGMENTOR.MS_DISPLACEMENT,
             ms_rotate_ratio=cfg.AUGMENTOR.MS_ROTATE_RATIO, missing_parts=cfg.AUGMENTOR.MISSING_PARTS,
-            missp_iterations=cfg.AUGMENTOR.MISSP_ITERATIONS, shape=cfg.DATA.PATCH_SIZE,
+            missp_iterations=cfg.AUGMENTOR.MISSP_ITERATIONS, grayscale=cfg.AUGMENTOR.GRAYSCALE,
+            channel_shuffle=cfg.AUGMENTOR.CHANNEL_SHUFFLE, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, prob_map=prob_map, n_classes=cfg.MODEL.N_CLASSES,
             extra_data_factor=cfg.DATA.TRAIN.REPLICATE)
         if cfg.PROBLEM.NDIM == '3D':
