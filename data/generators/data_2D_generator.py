@@ -460,7 +460,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             self.trans_made += '_drop'+str(drop_range)
 
         if grayscale: self.trans_made += '_gray'
-        if channel_suffle: self.trans_made += '_chshuffle'
+        if channel_shuffle: self.trans_made += '_chshuffle'
         if cutout: self.trans_made += '_cout'+str(cout_nb_iterations)+'+'+str(cout_size)+'+'+str(cout_cval)+'+'+str(cout_apply_to_mask)
         if cutblur: self.trans_made += '_cblur'+str(cblur_size)+'+'+str(cblur_down_range)+'+'+str(cblur_inside)
         if cutmix: self.trans_made += '_cmix'+str(cmix_size)
