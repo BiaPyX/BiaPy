@@ -804,6 +804,11 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
         else:
             _img = imread(os.path.join(data_path, ids[i]))
         _img = np.squeeze(_img)
+
+        # Ensure uint8
+        if _img.dtype == np.uint16:
+            _img = normalize(_img, 0, 65535)
+
         if mask_ids[i].endswith('.npy'):
             _mask = np.load(os.path.join(data_mask_path, mask_ids[i]))
         else:

@@ -336,6 +336,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 img = np.expand_dims(img, -1)
             else:
                 if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
+
+            # Ensure uint8
+            if img.dtype == np.uint16:
+                img = normalize(img, 0, 65535)
+
             self.div_X_on_load = True if np.max(img) > 100 else False
             self.shape = shape if random_crops_in_DA else img.shape
             # Loop over a few masks to ensure foreground class is present
@@ -520,6 +525,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     img = np.expand_dims(img, -1)
                 else:
                     if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
+
+                # Ensure uint8
+                if img.dtype == np.uint16:
+                    img = normalize(img, 0, 65535)
+
                 if mask.ndim == 2:
                     mask = np.expand_dims(mask, -1)
                 else:
@@ -557,6 +567,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                         e_img = np.expand_dims(e_img, -1)
                     else:
                         if e_img.shape[0] == 1 or e_img.shape[0] == 3: e_img = e_img.transpose((1,2,0))
+
+                    # Ensure uint8
+                    if e_img.dtype == np.uint16:
+                        e_img = normalize(e_img, 0, 65535)
+
                     if e_mask.ndim == 2:
                         e_mask = np.expand_dims(e_mask, -1)
                     else:
@@ -833,6 +848,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     img = np.expand_dims(img, -1)
                 else:
                     if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
+
+                # Ensure uint8
+                if img.dtype == np.uint16:
+                    img = normalize(img, 0, 65535)
+
                 if mask.ndim == 2:
                     mask = np.expand_dims(mask, -1)
                 else:
@@ -879,6 +899,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                         e_img = np.expand_dims(e_img, -1)
                     else:
                         if e_img.shape[0] == 1 or e_img.shape[0] == 3: e_img = e_img.transpose((1,2,0))
+
+                    # Ensure uint8
+                    if e_img.dtype == np.uint16:
+                        e_img = normalize(e_img, 0, 65535)
+
                     if e_mask.ndim == 2:
                         e_mask = np.expand_dims(e_mask, -1)
                     else:
@@ -921,7 +946,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                             img = np.expand_dims(img, -1)
                         else:
                             img = img.transpose((1,2,0))
-                        if np.max(img) < 100: img = img
+
+                        # Ensure uint8
+                        if img.dtype == np.uint16:
+                            img = normalize(img, 0, 65535)
 
                     if self.shape[-1] == 1:
                         im = Image.fromarray(np.repeat(img, 3, axis=2), 'RGB')

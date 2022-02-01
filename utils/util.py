@@ -1203,6 +1203,10 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
         else:
            if img.shape[0] <= 3: img = img.transpose((1,2,0))
 
+        # Ensure uint8
+        if img.dtype == np.uint16:
+            img = normalize(img, 0, 65535)
+
         data_shape.append(img.shape)
         img = np.expand_dims(img, axis=0)
         if crop and img[0].shape != crop_shape[:2]+(img.shape[-1],):
@@ -1396,6 +1400,10 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
         else:
             img = imread(os.path.join(data_dir, id_))
         img = np.squeeze(img)
+
+        # Ensure uint8
+        if img.dtype == np.uint16:
+            img = normalize(img, 0, 65535)
 
         if return_filenames: filenames.append(id_)
         if len(img.shape) == 3: img = np.expand_dims(img, axis=-1)
@@ -1783,15 +1791,18 @@ def wrapper_matching_dataset_lazy(stats_all, thresh, criterion='iou', by_image=F
 
     accumulate = tuple(namedtuple('DatasetMatching',acc.keys())(*acc.values()) for acc in accumulate)
     return accumulate[0] if single_thresh else accumulate
-    
+
 def wrapper_matching_VJI_and_PAI(stats_all):
 
     expected_keys = ['VJI', 'background_rate', 'oversegmentation_rate', 'undersegmentation_rate', 'bijection_rate']
-    
+
     accumulated_values = dict.fromkeys(expected_keys, 0)
-    
+
     for key in expected_keys:
         for stat in stats_all:
             accumulated_values[key] = accumulated_values[key] + stat[key]
         accumulated_values[key] = accumulated_values[key]/len(stats_all)
     return accumulated_values
+
+def normalize(x, x_min, x_max, out_min=0, out_max=255, out_type=np.uint8):
+    return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)

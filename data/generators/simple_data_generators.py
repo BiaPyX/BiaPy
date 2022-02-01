@@ -71,6 +71,10 @@ class simple_data_generator(tf.keras.utils.Sequence):
                 img = np.load(os.path.join(d_path, self.data_path[0]))
             else:
                 img = imread(os.path.join(d_path, self.data_path[0]))
+
+            # Ensure uint8
+            if img.dtype == np.uint16:
+                img = normalize(img, 0, 65535)
         else:
             self.len = len(X)
             img = X[0]
@@ -119,6 +123,10 @@ class simple_data_generator(tf.keras.utils.Sequence):
                     img = np.load(os.path.join(self.d_path, self.data_path[j]))
                 else:
                     img = imread(os.path.join(self.d_path, self.data_path[j]))
+
+                # Ensure uint8
+                if img.dtype == np.uint16:
+                    img = normalize(img, 0, 65535)
             else:
                 img = self.X[j]
             img = np.squeeze(img)

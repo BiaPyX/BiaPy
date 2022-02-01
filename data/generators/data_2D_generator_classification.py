@@ -182,6 +182,10 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
                 img = np.expand_dims(img, -1)
             else:
                 if img.shape[0] <= 3: img = img.transpose((1,2,0))
+
+            # Ensure uint8
+            if img.dtype == np.uint16:
+                img = normalize(img, 0, 65535)
         else:
             img = self.X[0]
         self.div_X_on_load = True if np.max(img) > 100 else False
@@ -286,6 +290,11 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
                     img = np.expand_dims(img, -1)
                 else:
                     if img.shape[0] <= 3: img = img.transpose((1,2,0))
+
+                # Ensure uint8
+                if img.dtype == np.uint16:
+                    img = normalize(img, 0, 65535)
+
                 batch_y[i] = self.class_numbers[sample_class_dir]
 
             if img.shape[:-1] != self.shape[:-1]:
@@ -306,6 +315,11 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
                         e_img = np.expand_dims(e_img, -1)
                     else:
                         if e_img.shape[0] == 1 or e_img.shape[0] == 3: e_img = e_img.transpose((1,2,0))
+
+                    # Ensure uint8
+                    if e_img.dtype == np.uint16:
+                        e_img = normalize(e_img, 0, 65535)
+
 
                 batch_x[i] = self.apply_transform(batch_x[i], e_im=e_img)
 
@@ -434,6 +448,11 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
                     img = np.expand_dims(img, -1)
                 else:
                     if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
+
+                # Ensure uint8
+                if img.dtype == np.uint16:
+                    img = normalize(img, 0, 65535)
+
             batch_x[i] = img
 
             if save_to_dir:
@@ -455,6 +474,10 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
                         e_img = np.expand_dims(e_img, -1)
                     else:
                         if e_img.shape[0] == 1 or e_img.shape[0] == 3: e_img = e_img.transpose((1,2,0))
+                    # Ensure uint8
+                    if e_img.dtype == np.uint16:
+                        e_img = normalize(e_img, 0, 65535)
+
                 batch_x[i] = self.apply_transform(batch_x[i], e_im=e_img)
 
             if save_to_dir:

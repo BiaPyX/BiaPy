@@ -300,6 +300,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 img = imread(os.path.join(data_paths[0], self.data_paths[0]))
             if img.ndim == 3: img = np.expand_dims(img, -1)
             img = img.transpose((1,2,0,3))
+            # Ensure uint8
+            if img.dtype == np.uint16:
+                img = normalize(img, 0, 65535)
             self.div_X_on_load = True if np.max(img) > 10 else False
             self.shape = shape if random_crops_in_DA else img.shape
             # Loop over a few masks to ensure foreground class is present
@@ -571,6 +574,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 if mask.ndim == 3: mask = np.expand_dims(mask, -1)
                 img = img.transpose((1,2,0,3))
                 mask = mask.transpose((1,2,0,3))
+                # Ensure uint8
+                if img.dtype == np.uint16:
+                    img = normalize(img, 0, 65535)
 
             # Apply ramdom crops if it is selected
             if self.random_crops_in_DA:
@@ -604,6 +610,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     if e_mask.ndim == 3: e_mask = np.expand_dims(e_mask, -1)
                     e_img = e_img.transpose((1,2,0,3))
                     e_mask = e_mask.transpose((1,2,0,3))
+                    # Ensure uint8
+                    if e_img.dtype == np.uint16:
+                        e_img = normalize(e_img, 0, 65535)
 
                 batch_x[i], batch_y[i] = self.apply_transform(batch_x[i], batch_y[i], e_im=e_img, e_mask=e_mask)
 
@@ -834,6 +843,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 if mask.ndim == 3: mask = np.expand_dims(mask, -1)
                 img = img.transpose((1,2,0,3))
                 mask = mask.transpose((1,2,0,3))
+                # Ensure uint8
+                if img.dtype == np.uint16:
+                    img = normalize(img, 0, 65535)
+
 
             # Apply ramdom crops if it is selected
             if self.random_crops_in_DA:
@@ -882,6 +895,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     if e_mask.ndim == 3: e_mask = np.expand_dims(e_mask, -1)
                     e_img = e_img.transpose((1,2,0,3))
                     e_mask = e_mask.transpose((1,2,0,3))
+                    # Ensure uint8
+                    if e_img.dtype == np.uint16:
+                        e_img = normalize(e_img, 0, 65535)
 
                 sample_x[i], sample_y[i] = self.apply_transform(
                     sample_x[i], sample_y[i], e_im=e_img, e_mask=e_mask)
