@@ -1136,7 +1136,8 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
            the original ones.
 
        reflect_to_complete_shape : bool, optional
-           Not implemented for 2D.
+           Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
+           'reflect'.
 
        Returns
        -------
@@ -1202,6 +1203,8 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
             img = np.expand_dims(img, axis=-1)
         else:
            if img.shape[0] <= 3: img = img.transpose((1,2,0))
+
+        if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=False)
 
         # Ensure uint8
         if img.dtype == np.uint16:
