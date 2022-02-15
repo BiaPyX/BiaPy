@@ -39,10 +39,13 @@ class simple_data_generator(tf.keras.utils.Sequence):
 
        shuffle_each_epoch : bool, optional
            To shuffle data after each epoch.
+
+       instance_problem : bool, optional
+           To not divide the labels if being in an instance segmenation problem.
     """
 
     def __init__(self, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, dims='2D', batch_size=1, seed=42,
-                 shuffle_each_epoch=False):
+                 shuffle_each_epoch=False, instance_problem=False):
 
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
@@ -78,7 +81,7 @@ class simple_data_generator(tf.keras.utils.Sequence):
         else:
             self.len = len(X)
             img = X[0]
-        self.div_X_on_load = True if np.max(img) > 100 else False
+        self.div_X_on_load = True if np.max(img) > 10 else False
         self.o_indexes = np.arange(self.len)
         if provide_Y:
             if Y is None:
@@ -88,7 +91,7 @@ class simple_data_generator(tf.keras.utils.Sequence):
                     mask = imread(os.path.join(dm_path, self.data_mask_path[0]))
             else:
                 mask = Y[0]
-            self.div_Y_on_load = True if np.max(mask) > 100 else False
+            self.div_Y_on_load = True if (np.max(mask) > 10 and not instance_problem) else False
         self.on_epoch_end()
 
     def __len__(self):
@@ -118,49 +121,63 @@ class simple_data_generator(tf.keras.utils.Sequence):
         if self.provide_Y: batch_y = []
 
         for i, j in zip(range(len(indexes)), indexes):
+            # X
             if self.X is None:
                 if self.data_path[0].endswith('.npy'):
                     img = np.load(os.path.join(self.d_path, self.data_path[j]))
                 else:
                     img = imread(os.path.join(self.d_path, self.data_path[j]))
+                img = np.squeeze(img)
+
+                if self.data_3d:
+                    if img.ndim == 3: img = np.expand_dims(img, -1)
+                    img = img.transpose((1,2,0,3)) # When 3D images transpose it to (x,y,z,c)
+                else:
+                    if img.ndim == 2:
+                        img = np.expand_dims(img, -1)
+                    else:
+                        if img.shape[0] <= 3: img = img.transpose((1,2,0))
 
                 # Ensure uint8
                 if img.dtype == np.uint16:
                     img = normalize(img, 0, 65535)
             else:
                 img = self.X[j]
-            img = np.squeeze(img)
+                img = np.squeeze(img)
 
+                if self.data_3d:
+                    if img.ndim == 3: img = np.expand_dims(img, -1)
+                else:
+                    if img.ndim == 2: img = np.expand_dims(img, -1)
+            img = np.expand_dims(img, 0)
+
+            # Y
             if self.provide_Y:
                 if self.Y is None:
                     if self.data_mask_path[0].endswith('.npy'):
                         mask = np.load(os.path.join(self.dm_path, self.data_mask_path[j]))
                     else:
                         mask = imread(os.path.join(self.dm_path, self.data_mask_path[j]))
+                    mask = np.squeeze(mask)
+
+                    if self.data_3d:
+                        if mask.ndim == 3: mask = np.expand_dims(mask, -1)
+                        mask = mask.transpose((1,2,0,3)) # When 3D images transpose it to (x,y,z,c)
+                    else:
+                        if mask.ndim == 2:
+                            mask = np.expand_dims(mask, -1)
+                        else:
+                            if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
                 else:
                     mask = self.Y[j]
-                mask = np.squeeze(mask)
+                    mask = np.squeeze(mask)
 
-            if self.data_3d:
-                if img.ndim == 3: img = np.expand_dims(img, -1)
-                img = img.transpose((1,2,0,3))
-                img = np.expand_dims(img, 0)
-                if self.provide_Y:
-                    if mask.ndim == 3: mask = np.expand_dims(mask, -1)
-                    mask = mask.transpose((1,2,0,3))
-                    mask = np.expand_dims(mask, 0)
-            else:
-                if img.ndim == 2:
-                    img = np.expand_dims(img, -1)
-                else:
-                    if img.shape[0] <= 3: img = img.transpose((1,2,0))
-                img = np.expand_dims(img, 0)
-                if self.provide_Y:
-                    if mask.ndim == 2:
-                        mask = np.expand_dims(mask, -1)
+                    if self.data_3d:
+                        if mask.ndim == 3: mask = np.expand_dims(mask, -1)
                     else:
-                        if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
-                    mask = np.expand_dims(mask, 0)
+                        if mask.ndim == 2: mask = np.expand_dims(mask, -1)
+                mask = np.expand_dims(mask, 0)
+
             batch_x.append(img)
             if self.provide_Y: batch_y.append(mask)
 

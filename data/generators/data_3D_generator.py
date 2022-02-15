@@ -309,8 +309,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.first_no_bin_channel = -1
             self.div_Y_no_bin_channels_max = 0
             self.div_Y_no_bin_channels_min = 9999999
-            prin("Calculating generator values . . .")
-            for i in range(min(len(self.data_mask_path))):
+            print("Calculating generator values . . .")
+            for i in range(min(10,len(self.data_mask_path))):
                 if self.data_mask_path[i].endswith('.npy'):
                     img = np.load(os.path.join(self.paths[1], self.data_mask_path[i]))
                 else:
@@ -353,8 +353,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.X = X.astype(np.uint8)
             self.Y = Y
             self.Y_dtype = Y.dtype
-            # Store wheter all channels of the gt are binary or not
-            # (e.g. distance transform channel)
+            # Store wheter all channels of the gt are binary or not (e.g. distance transform channel)
             self.first_no_bin_channel = -1
             self.div_Y_no_bin_channels_max = 0
             self.div_Y_no_bin_channels_min = 9999999

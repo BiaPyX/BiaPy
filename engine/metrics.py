@@ -29,6 +29,9 @@ def jaccard_index_numpy(y_true, y_pred):
            Jaccard index value.
     """
 
+    if y_true.ndim != y_pred.ndim:
+        raise ValueError("Dimension mismatch: {} and {} provided".format(y_true.shape, y_pred.shape))
+
     TP = np.count_nonzero(y_pred * y_true)
     FP = np.count_nonzero(y_pred * (y_true - 1))
     FN = np.count_nonzero((y_pred - 1) * y_true)
@@ -59,6 +62,9 @@ def jaccard_index_numpy_without_background(y_true, y_pred):
        jac : float
            Jaccard index value.
     """
+
+    if y_true.ndim != y_pred.ndim:
+        raise ValueError("Dimension mismatch: {} and {} provided".format(y_true.shape, y_pred.shape))
 
     TP = np.count_nonzero(y_pred[...,1:] * y_true[...,1:])
     FP = np.count_nonzero(y_pred[...,1:] * (y_true[...,1:] - 1))
@@ -91,7 +97,6 @@ def jaccard_index(y_true, y_pred, t=0.5):
        jac : Tensor
            Jaccard index value
     """
-
     y_pred_ = tf.cast(y_pred > t, dtype=tf.int32)
     y_true = tf.cast(y_true, dtype=tf.int32)
 
@@ -124,6 +129,9 @@ def jaccard_index_without_background(y_true, y_pred, t=0.5):
            Jaccard index value
     """
 
+    if y_true.ndim != y_pred.ndim:
+        raise ValueError("Dimension mismatch: {} and {} provided".format(y_true.shape, y_pred.shape))
+
     _y_pred = tf.cast(y_pred[...,1:] > t, dtype=tf.int32)
     _y_true = tf.cast(y_true[...,1:], dtype=tf.int32)
 
@@ -155,6 +163,8 @@ def jaccard_index_softmax(y_true, y_pred, t=0.5):
        jac : Tensor
            Jaccard index value
     """
+    if y_true.ndim != y_pred.ndim:
+        raise ValueError("Dimension mismatch: {} and {} provided".format(y_true.shape, y_pred.shape))
 
     y_pred_ = tf.cast(y_pred > t, dtype=tf.int32)
     y_pred_ = tf.math.argmax(y_pred_, axis=-1)

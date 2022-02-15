@@ -222,8 +222,8 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
     if data_mask is not None:
         if data_mask.ndim != 4:
             raise ValueError("data_mask expected to be 4 dimensional, given {}".format(data_mask.shape))
-        if data.shape != data_mask.shape:
-            raise ValueError("data and data_mask shapes mismatch: {} vs {}".format(data.shape, data_mask.shape))
+        if data.shape[:-1] != data_mask.shape[:-1]:
+            raise ValueError("data and data_mask shapes mismatch: {} vs {}".format(data.shape[:-1], data_mask.shape[:-1]))
     if len(vol_shape) != 4:
         raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
     if vol_shape[2] > data.shape[0]:
@@ -574,6 +574,9 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError("data and data_mask shapes mismatch: {} vs {}".format(data.shape[:-1], data_mask.shape[:-1]))
 
+    if (overlap[0] >= 1 or overlap[0] < 0) and (overlap[1] >= 1 or overlap[1] < 0) and (overlap[2] >= 1 or overlap[2] < 0):
+        raise ValueError("'overlap' values must be floats between range [0, 1)")
+
     if verbose:
         print("### MERGE-3D-OV-CROP ###")
         print("Merging {} images into {} with overlapping . . .".format(data.shape, orig_vol_shape))
@@ -584,9 +587,6 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
     data = data[:, padding[0]:data.shape[1]-padding[0],
                 padding[1]:data.shape[2]-padding[1],
                 padding[2]:data.shape[3]-padding[2], :]
-
-    if (overlap[0] >= 1 or overlap[0] < 0) and (overlap[1] >= 1 or overlap[1] < 0) and (overlap[2] >= 1 or overlap[2] < 0):
-        raise ValueError("'overlap' values must be floats between range [0, 1)")
 
     merged_data = np.zeros((orig_vol_shape), dtype=data.dtype)
     if data_mask is not None:

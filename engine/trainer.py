@@ -463,8 +463,9 @@ class Trainer(object):
                     #####################
                     if self.cfg.TEST.STATS.MERGE_PATCHES and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                         if self.cfg.DATA.TEST.LOAD_GT and self.cfg.DATA.CHANNELS != "Dv2":
-                            _iou_per_image = jaccard_index_numpy((_Y>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8))
-                            _ov_iou_per_image = voc_calculation((_Y>0.5).astype(np.uint8), (pred[0] > 0.5).astype(np.uint8),
+                            if pred.ndim == 3: _Y = _Y[0]
+                            _iou_per_image = jaccard_index_numpy((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
+                            _ov_iou_per_image = voc_calculation((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
                                                                 _iou_per_image)
                             iou_per_image += _iou_per_image
                             ov_iou_per_image += _ov_iou_per_image

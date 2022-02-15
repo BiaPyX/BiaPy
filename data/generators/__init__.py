@@ -148,7 +148,8 @@ def create_test_augmentor(cfg, X_test, Y_test):
             seed=cfg.SYSTEM.SEED, shuffle_each_epoch=False, da=False)
     else:
         test_generator = simple_data_generator(X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=cfg.DATA.TEST.LOAD_GT, Y=Y_test,
-            dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, dims=cfg.PROBLEM.NDIM, seed=cfg.SYSTEM.SEED)
+            dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, dims=cfg.PROBLEM.NDIM, seed=cfg.SYSTEM.SEED,
+            instance_problem=cfg.PROBLEM.TYPE)
     return test_generator
 
 
