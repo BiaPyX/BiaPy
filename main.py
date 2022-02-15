@@ -119,6 +119,9 @@ if __name__ == '__main__':
 
     if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.CROSS_VAL and cfg.DATA.VAL.SPLIT_TRAIN <= 0:
         raise ValueError("'DATA.VAL.SPLIT_TRAIN' needs to be > 0 when 'DATA.VAL.FROM_TRAIN' == True")
+    if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.TRAIN.IN_MEMORY:
+        raise ValueError("Validation can be extracted from train while 'DATA.TRAIN.IN_MEMORY' == False. Please set"
+                         "'DATA.VAL.FROM_TRAIN' to False")
 
 
     ##########################
