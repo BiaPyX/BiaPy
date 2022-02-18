@@ -2,9 +2,12 @@ import os
 import math
 import h5py
 import numpy as np
+import csv
 from tqdm import tqdm
 from skimage.io import imread
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from skimage.feature import peak_local_max
+from scipy.ndimage.morphology import binary_dilation
 
 from utils.util import (check_masks, check_downsample_division, create_plots, save_tif, load_data_from_dir,
                         load_3d_images_from_dir, apply_binary_mask, pad_and_reflect, wrapper_matching_dataset_lazy, wrapper_matching_VJI_and_PAI)
@@ -483,6 +486,30 @@ class Trainer(object):
                             else:
                                 save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, filenames,
                                          verbose=self.cfg.TEST.VERBOSE)
+
+                    if self.cfg.TEST.LOCAL_MAX_COORDS and self.cfg.PROBLEM.TYPE == 'SEMANTIC_SEG' and self.cfg.PROBLEM.NDIM == '3D':
+                        print("Capturing the local maxima ")
+                        coordinates = peak_local_max(pred[...,0], threshold_rel=0.2, min_distance=10, exclude_border=False)
+
+                        # Create a file that represent the local maxima
+                        points_pred = np.zeros((pred[...,0].shape + (1,)), dtype=np.uint8)
+                        for n, coord in enumerate(coordinates):
+                            z,x,y = coord
+                            points_pred[z,x,y,0] = 255
+                        for z_index in range(len(points_pred)):
+                            points_pred[z_index,...,0] = binary_dilation(points_pred[z_index,...,0], iterations=2)
+
+                        save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.LOCAL_MAX_COORDS_CHECK,
+                                 filenames, verbose=self.cfg.TEST.VERBOSE)
+
+                        # Save coords in csv file
+                        f = os.path.join(self.cfg.PATHS.RESULT_DIR.LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'.csv')
+                        with open(f, 'w', newline="") as file:
+                            csvwriter = csv.writer(file)
+                            csvwriter.writerow(['z','x','y'])
+                            csvwriter.writerows(coordinates)
+                        del points_pred
+
 
                     #############################
                     ### INSTANCE SEGMENTATION ###

@@ -381,6 +381,8 @@ class Config:
         _C.TEST.MATCHING_STATS = False
         _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
         _C.TEST.MATCHING_VJI_PAI = False
+        # Wheter to return local maximum coords. Only applies when _C.PROBLEM.TYPE = 'SEMANTIC_SEG'
+        _C.TEST.LOCAL_MAX_COORDS = False
 
         _C.TEST.STATS = CN()
         _C.TEST.STATS.PER_PATCH = False
@@ -422,6 +424,7 @@ class Config:
         _C.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_post_processing')
         _C.PATHS.RESULT_DIR.FULL_IMAGE = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_image')
         _C.PATHS.RESULT_DIR.FULL_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_post_processing')
+        _C.PATHS.RESULT_DIR.LOCAL_MAX_COORDS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_local_max_check')
 
         # Name of the folder where the charts of the loss and metrics values while training the network are stored.
         # Additionally, MW_TH* variable charts are stored if _C.DATA.MW_OPTIMIZE_THS = True
