@@ -986,6 +986,7 @@ def load_data_classification(cfg, test=False):
         Y_data = np.concatenate(Y_data, 0)
         Y_data = np.squeeze(Y_data)
 
+        os.makedirs(os.path.join(path, '../prepared_npy'), exist_ok=True)
         if not test:
             if cfg.DATA.VAL.CROSS_VAL:
                 skf = StratifiedKFold(n_splits=cfg.DATA.VAL.CROSS_VAL_NFOLD, shuffle=cfg.DATA.VAL.RANDOM,
@@ -1000,7 +1001,6 @@ def load_data_classification(cfg, test=False):
             else:
                 X_data, X_val, Y_data, Y_val = train_test_split(X_data, Y_data, test_size=cfg.DATA.VAL.SPLIT_TRAIN,
                     shuffle=cfg.DATA.VAL.RANDOM, random_state=cfg.SYSTEM.SEED)
-            os.makedirs(os.path.join(path, '../prepared_npy'), exist_ok=True)
             np.save(X_val_npy_file, X_val)
             np.save(Y_val_npy_file, Y_val)
         np.save(X_data_npy_file, X_data)
