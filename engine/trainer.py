@@ -3,6 +3,7 @@ import math
 import h5py
 import numpy as np
 import csv
+import pandas as pd
 from tqdm import tqdm
 from skimage.io import imread
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
@@ -221,7 +222,7 @@ class Trainer(object):
                         self.test_mask_filenames = sorted(next(os.walk(self.original_test_mask_path))[2])
             # CLASSIFICATION
             else:
-                X_test, Y_test = load_data_classification(cfg, test=True)
+                X_test, Y_test, self.test_filenames = load_data_classification(cfg, test=True)
 
 
         print("########################\n"
@@ -458,7 +459,8 @@ class Trainer(object):
 
                         # Save image
                         filenames = self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]
-                        save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
+                        if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+                            save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
 
 
                     #####################
@@ -517,17 +519,18 @@ class Trainer(object):
                     if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
                         print("Creating instances with watershed . . .")
                         w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
+                        check_wa = w_dir if self.cfg.DATA.CHECK_MW else None
                         if self.cfg.DATA.CHANNELS in ["BC", "BCM"]:
                             w_pred = bc_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt,
                                 thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, remove_before=self.cfg.DATA.REMOVE_BEFORE_MW,
-                                save_dir=w_dir)
+                                save_dir=check_wa)
                         elif self.cfg.DATA.CHANNELS == "BCD":
                             w_pred = bcd_watershed(pred, thres1=th1_opt, thres2=th2_opt, thres3=th3_opt, thres4=th4_opt,
                                 thres5=th5_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
-                                remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=w_dir)
+                                remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=check_wa)
                         else: # "BCDv2"
                             w_pred = bdv2_watershed(pred, bin_th=th1_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
-                                remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=w_dir)
+                                remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=check_wa)
 
                         save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                                  filenames, verbose=self.cfg.TEST.VERBOSE)
@@ -745,6 +748,14 @@ class Trainer(object):
 
         if self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
             all_pred = np.concatenate(all_pred)
+
+            # Save predictions in a csv file
+            df = pd.DataFrame(self.test_filenames, columns=['Nuclei file'])
+            df['pred_class'] = np.array(all_pred).squeeze()
+            f= os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, "..", "predictions.csv")
+            os.makedirs(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, exist_ok=True)
+            df.to_csv(f, index=False, header=True)
+
             if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
                 display_labels = ["Category {}".format(i) for i in range(self.cfg.MODEL.N_CLASSES)]
                 test_accuracy = accuracy_score(np.argmax(Y, axis=-1), all_pred)
@@ -810,11 +821,11 @@ class Trainer(object):
 
         if self.cfg.DATA.TEST.LOAD_GT:
             if self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-                print('Test Accuracy: ', round((test_accuracy * 100), 2), "%")
-                print("Confusion matrix: ")
-                print(cm)
-                print(classification_report(np.argmax(Y, axis=-1), all_pred, target_names=display_labels))
-
+                if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
+                    print('Test Accuracy: ', round((test_accuracy * 100), 2), "%")
+                    print("Confusion matrix: ")
+                    print(cm)
+                    print(classification_report(np.argmax(Y, axis=-1), all_pred, target_names=display_labels))
             else:
                 if self.cfg.TEST.STATS.PER_PATCH:
                     print("Loss (per patch): {}".format(loss_per_crop))

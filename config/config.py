@@ -83,6 +83,8 @@ class Config:
         # Wheter to find an optimum value for each threshold with the validation data. If True the previous MW_TH*
         # variables will be replaced by the optimum values found
         _C.DATA.MW_OPTIMIZE_THS = False
+        # Wheter to save watershed check files
+        _C.DATA.CHECK_MW = True
 
         # Wheter to reshape de dimensions that does not satisfy the pathc shape selected by padding it with reflect.
         _C.DATA.REFLECT_TO_COMPLETE_SHAPE = False

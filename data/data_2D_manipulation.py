@@ -918,6 +918,9 @@ def load_data_classification(cfg, test=False):
        Y_data : 1D Numpy array
            Train/test images' classes. E.g. ``(num_of_images)``.
 
+       ids : List of str
+           Filenames loaded.
+
        X_val : 4D Numpy array, optional
            Validation images. E.g. ``(num_of_images, y, x, channels)``.
 
@@ -1019,5 +1022,5 @@ def load_data_classification(cfg, test=False):
         return X_data, Y_data, X_val, Y_val
     else:
         print("*** Loaded test data shape is: {}".format(X_data.shape))
-        return X_data, Y_data
+        return X_data, Y_data, ids
 
