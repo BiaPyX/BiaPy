@@ -98,6 +98,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
        shift_range : tuple of float, optional
            Range to make a shift. E. g. ``(0.1, 0.2)``.
 
+       affine_mode: optional, str
+           Method to use when filling in newly created pixels. Same meaning as in `skimage` (and `numpy.pad()`).
+           E.g. ``constant``, ``reflect`` etc.
+
        vflip : bool, optional
            To activate vertical flips.
 
@@ -248,16 +252,16 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
     def __init__(self, X, Y, in_memory=True, data_paths=None, random_crops_in_DA=False, shape=None, prob_map=None,
                  seed=0, shuffle_each_epoch=False, batch_size=32, da=True, da_prob=0.5, rotation90=False,
                  rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False,
-                 zoom_range=(0.8,1.2), shift=False, shift_range=(0.1,0.2), vflip=False, hflip=False, zflip=False,
-                 elastic=False, e_alpha=(240,250), e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0),
-                 median_blur=False, mb_kernel=(3,7), motion_blur=False, motb_k_range=(3,8), gamma_contrast=False,
-                 gc_gamma=(1.25,1.75), brightness=False, brightness_factor=(1,3), contrast=False, contrast_factor=(1,3),
-                 dropout=False, drop_range=(0,0.2), cutout=False, cout_nb_iterations=(1,3), cout_size=(0.2,0.4),
-                 cout_cval=0, cout_apply_to_mask=False, cutblur=False, cblur_size=(0.2,0.4), cblur_down_range=(2,8),
-                 cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), cutnoise=False, cnoise_scale=(0.1,0.2),
-                 cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False, ms_displacement=16,
-                 ms_rotate_ratio=0.0, missing_parts=False, missp_iterations=(30, 40), grayscale=False,
-                 channel_shuffle=False, n_classes=1, out_number=1, val=False, extra_data_factor=1):
+                 zoom_range=(0.8,1.2), shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False,
+                 hflip=False, zflip=False, elastic=False, e_alpha=(240,250), e_sigma=25, e_mode='constant', g_blur=False,
+                 g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), motion_blur=False, motb_k_range=(3,8),
+                 gamma_contrast=False, gc_gamma=(1.25,1.75), brightness=False, brightness_factor=(1,3), contrast=False,
+                 contrast_factor=(1,3), dropout=False, drop_range=(0,0.2), cutout=False, cout_nb_iterations=(1,3),
+                 cout_size=(0.2,0.4), cout_cval=0, cout_apply_to_mask=False, cutblur=False, cblur_size=(0.2,0.4),
+                 cblur_down_range=(2,8), cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), cutnoise=False,
+                 cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False,
+                 ms_displacement=16, ms_rotate_ratio=0.0, missing_parts=False, missp_iterations=(30, 40),
+                 grayscale=False, channel_shuffle=False, n_classes=1, out_number=1, val=False, extra_data_factor=1):
 
         if in_memory:
             if X.ndim != 5 or Y.ndim != 5:
@@ -442,16 +446,16 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Rot90((1, 3))))
             self.trans_made += '_rot[90,180,270]'
         if rand_rot:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=rnd_rot_range)))
+            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=rnd_rot_range, mode=affine_mode)))
             self.trans_made += '_rrot'+str(rnd_rot_range)
         if shear:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range)))
+            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode)))
             self.trans_made += '_shear'+str(shear_range)
         if zoom:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(scale={"x": zoom_range, "y": zoom_range})))
+            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(scale={"x": zoom_range, "y": zoom_range}, mode=affine_mode)))
             self.trans_made += '_zoom'+str(zoom_range)
         if shift:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(translate_percent=shift_range)))
+            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(translate_percent=shift_range, mode=affine_mode)))
             self.trans_made += '_shift'+str(shift_range)
         if vflip:
             self.da_options.append(iaa.Flipud(0.5))

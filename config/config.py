@@ -216,6 +216,9 @@ class Config:
         _C.AUGMENTOR.SHIFT = False
         # Shift range
         _C.AUGMENTOR.SHIFT_RANGE = (0.1, 0.2)
+        # How to fill up the new values created with affine transformations (rotations, shear, shift and zoom).
+        # Same meaning as in skimage (and numpy.pad()): 'constant', 'edge', 'symmetric', 'reflect' and 'wrap'
+        _C.AUGMENTOR.AFFINE_MODE = 'constant'
         # Make vertical flips
         _C.AUGMENTOR.VFLIP = False
         # Make horizontal flips
