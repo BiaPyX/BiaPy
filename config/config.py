@@ -253,10 +253,16 @@ class Config:
         _C.AUGMENTOR.BRIGHTNESS = False
         # Strength of the brightness range, with valid values being 0 <= brightness_factor <= 1
         _C.AUGMENTOR.BRIGHTNESS_FACTOR = (0.1, 0.3)
+        # If apply same contrast to the entire image or select one for each slice. For 2D does not matter but yes for
+        # 3D images. Possible values: '2D' or '3D'. Used when '_C.PROBLEM.NDIM' = '3D'.
+        _C.AUGMENTOR.BRIGHTNESS_MODE = '3D'
         # To apply contrast changes to images
         _C.AUGMENTOR.CONTRAST = False
         # Strength of the contrast change range, with valid values being 0 <= contrast_factor <= 1
         _C.AUGMENTOR.CONTRAST_FACTOR = (0.1, 0.3)
+        # If apply same contrast to the entire image or select one for each slice. For 2D does not matter but yes for
+        # 3D images. Possible values: '2D' or '3D'. Used when '_C.PROBLEM.NDIM' = '3D'.
+        _C.AUGMENTOR.CONTRAST_MODE = '3D'
         # Set a certain fraction of pixels in images to zero (not get confused with the dropout concept of neural networks)
         _C.AUGMENTOR.DROPOUT = False
         # Range to take the probability to drop a pixel

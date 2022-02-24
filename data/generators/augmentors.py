@@ -451,7 +451,7 @@ def random_rotate_matrix(height, displacement):
     return M
 
 
-def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False, invert_p=0):
+def brightness(img, brightness_factor=(0,0),  mode='2D', invert=False, invert_p=0):
     """Grayscale intensity augmentation. Randomly adjust contrast/brightness, randomly invert the color space and apply
        gamma correction. The input image will be divided by ``255``.
 
@@ -460,14 +460,14 @@ def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False, invert_p
 
        Parameters
        ----------
-       img : 3D Numpy array
-           Image to transform. E.g. ``(x, y, channels)``.
+       image : 3D/4D Numpy array
+           Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
 
        brightness_factor : tuple of 2 floats, optional
            Range of brightness' intensity. E.g. ``(0.1, 0.3)``.
 
        mode : str, optional
-           One of ``2D``, ``3D`` or ``mix``.
+           One of ``2D`` or ``3D``.
 
        invert : bool, optional
            Whether to invert the images.
@@ -507,13 +507,13 @@ def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False, invert_p
 
     if brightness_factor[0] == 0 and brightness_factor[1] == 0: return image
 
-    if mode == 'mix':
-        mode = '3D' if random.uniform(0, 1) > 0.5 and image.shape[-1] > 3 else '2D'
+    # Force mode if 2D
+    if img.ndim == 3: mode == '3D'
 
     b_factor = random.uniform(brightness_factor[0], brightness_factor[1])
     if mode == '2D':
         ran = np.random.rand(image.shape[-1]*3)
-        for z in range(image.shape[-1]):
+        for z in range(image.shape[2]):
             img = image[:, :, z]
             image[:, :, z] += (ran[z*3+1] - 0.5)*b_factor
             image[:, :, z] = np.clip(image[:, :, z], 0, 1)
@@ -531,7 +531,7 @@ def brightness(img, brightness_factor=(0,0),  mode='mix', invert=False, invert_p
     return (image*255).astype(np.uint8)
 
 
-def contrast(img, contrast_factor=(0,0), mode='mix', invert=False, invert_p=0):
+def contrast(img, contrast_factor=(0,0), mode='2D', invert=False, invert_p=0):
     """Contrast augmentation. Randomly invert the color space and apply gamma correction. The input image will be
        divided by ``255``.
 
@@ -540,14 +540,14 @@ def contrast(img, contrast_factor=(0,0), mode='mix', invert=False, invert_p=0):
 
        Parameters
        ----------
-       img : 3D Numpy array
-           Image to transform. E.g. ``(x, y, channels)``.
+       image : 3D/4D Numpy array
+           Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
 
        contrast_factor : tuple of 2 floats, optional
            Range of contrast's intensity. E.g. ``(0.1, 0.3)``.
 
        mode : str, optional
-           One of ``2D``, ``3D`` or ``mix``.
+           One of ``2D`` or ``3D``.
 
        invert : bool, optional
            Whether to invert the image.
@@ -587,13 +587,13 @@ def contrast(img, contrast_factor=(0,0), mode='mix', invert=False, invert_p=0):
 
     if contrast_factor[0] == 0 and contrast_factor[1] == 0: return image
 
-    if mode == 'mix':
-        mode = '3D' if random.uniform(0, 1) > 0.5 and image.shape[-1] > 3 else '2D'
+    # Force mode if 2D
+    if img.ndim == 3: mode == '3D'
 
     c_factor = random.uniform(contrast_factor[0], contrast_factor[1])
     if mode == '2D':
         ran = np.random.rand(image.shape[-1]*3)
-        for z in range(image.shape[-1]):
+        for z in range(image.shape[2]):
             img = image[:, :, z]
             image[:, :, z] *= 1 + (ran[z*3] - 0.5)*c_factor
             image[:, :, z] = np.clip(image[:, :, z], 0, 1)

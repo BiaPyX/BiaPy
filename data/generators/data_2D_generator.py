@@ -83,7 +83,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        shift_range : tuple of float, optional
            Range to make a shift. E. g. ``(0.1, 0.2)``.
 
-       affine_mode: optional, str
+       affine_mode: str, optional
            Method to use when filling in newly created pixels. Same meaning as in `skimage` (and `numpy.pad()`).
            E.g. ``constant``, ``reflect`` etc.
 
@@ -135,11 +135,17 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        brightness_factor : tuple of 2 floats, optional
            Strength of the brightness range, with valid values being ``0 <= brightness_factor <= 1``. E.g. ``(0.1, 0.3)``.
 
+       brightness_mode : str, optional
+           Apply same brightness change to the whole image or diffent to slice by slice.
+
        contrast : boolen, optional
            To apply contrast changes to the images.
 
        contrast_factor : tuple of 2 floats, optional
            Strength of the contrast change range, with valid values being ``0 <= contrast_factor <= 1``. E.g. ``(0.1, 0.3)``.
+
+       contrast_mode : str, optional
+           Apply same contrast change to the whole image or diffent to slice by slice.
 
        dropout : bool, optional
            To set a certain fraction of pixels in images to zero.
@@ -291,11 +297,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                  affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), e_sigma=25,
                  e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), motion_blur=False,
                  motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), brightness=False, brightness_factor=(1,3),
-                 contrast=False, contrast_factor=(1,3), dropout=False, drop_range=(0, 0.2), cutout=False,
-                 cout_nb_iterations=(1,3), cout_size=(0.2,0.4), cout_cval=0, cout_apply_to_mask=False, cutblur=False,
-                 cblur_size=(0.1,0.5), cblur_down_range=(2,8), cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4),
-                 cutnoise=False, cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4),
-                 misalignment=False, ms_displacement=16, ms_rotate_ratio=0.0, missing_parts=False,
+                 brightness_mode='2D', contrast=False, contrast_factor=(1,3), contrast_mode='2D', dropout=False,
+                 drop_range=(0, 0.2), cutout=False, cout_nb_iterations=(1,3), cout_size=(0.2,0.4), cout_cval=0,
+                 cout_apply_to_mask=False, cutblur=False, cblur_size=(0.1,0.5), cblur_down_range=(2,8), cblur_inside=True,
+                 cutmix=False, cmix_size=(0.2,0.4), cutnoise=False, cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3),
+                 cnoise_size=(0.2,0.4), misalignment=False, ms_displacement=16, ms_rotate_ratio=0.0, missing_parts=False,
                  missp_iterations=(30, 40), grayscale=False, channel_shuffle=False, random_crops_in_DA=False,
                  shape=(256,256,1), prob_map=None, val=False, n_classes=1, out_number=1, extra_data_factor=1):
 
@@ -460,9 +466,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             self.trans_made += '_gcontrast'+str(gc_gamma)
         if brightness:
             self.brightness_factor = brightness_factor
+            self.brightness_mode = brightness_mode # Not used
             self.trans_made += '_brightness'+str(brightness_factor)
         if contrast:
             self.contrast_factor = contrast_factor
+            self.contrast_mode = contrast_mode # Not used
             self.trans_made += '_contrast'+str(contrast_factor)
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
