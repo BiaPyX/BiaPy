@@ -77,12 +77,14 @@ def build_callbacks(cfg):
     callbacks.append(time_callback)
 
     # Stop early and restore the best model weights when finished the training
-    earlystopper = EarlyStopping(patience=cfg.TRAIN.PATIENCE, verbose=1, restore_best_weights=True)
+    earlystopper = EarlyStopping(monitor=cfg.TRAIN.EARLYSTOPPING_MONITOR, patience=cfg.TRAIN.PATIENCE, verbose=1,
+                                 restore_best_weights=True)
     callbacks.append(earlystopper)
 
     # Save the best model into a h5 file in case one need again the weights learned
     os.makedirs(cfg.PATHS.CHECKPOINT, exist_ok=True)
-    checkpointer = ModelCheckpoint(cfg.PATHS.CHECKPOINT_FILE, verbose=1, save_best_only=True)
+    checkpointer = ModelCheckpoint(cfg.PATHS.CHECKPOINT_FILE, monitor=cfg.TRAIN.CHECKPOINT_MONITOR, verbose=1,
+                                   save_best_only=True)
     callbacks.append(checkpointer)
 
     return callbacks

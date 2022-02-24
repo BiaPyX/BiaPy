@@ -370,6 +370,11 @@ class Config:
         _C.TRAIN.LR_SCHEDULER.ENABLE = False
         _C.TRAIN.LR_SCHEDULER.NAME = '' # Possible options: 'cosine', 'reduceonplateau'
 
+        # Callbacks
+        # To determine which value monitor to stop the training
+        _C.TRAIN.EARLYSTOPPING_MONITOR = 'val_loss'
+        # To determine which value monitor to consider which epoch consider the best to save
+        _C.TRAIN.CHECKPOINT_MONITOR = 'val_loss'
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Inference phase
