@@ -339,8 +339,7 @@ class Trainer(object):
 
             l_X = len(X)
             for j in tqdm(range(l_X), leave=False):
-                if not self.cfg.TEST.VERBOSE:
-                    print("Processing image(s): {}".format(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]))
+                print("Processing image(s): {}".format(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]))
 
                 if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                     if type(X) is tuple:
@@ -736,7 +735,7 @@ class Trainer(object):
                         if self.cfg.DATA.TEST.LOAD_GT: _Y = np.expand_dims(np.argmax(_Y,-1), -1)
 
                     if self.cfg.DATA.TEST.LOAD_GT:
-                        ov_iou += voc_calculation((_Y>0.5).astype(np.uint8), (pred[0]>0.5).astype(np.uint8), score[1])
+                        ov_iou += voc_calculation((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8), score[1])
 
                     if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D' and post_processing:
                         all_pred.append(pred)
