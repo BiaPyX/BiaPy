@@ -13,7 +13,7 @@ from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from utils.util import img_to_onehot_encoding
 from data.data_2D_manipulation import random_crop
 from data.generators.augmentors import (cutout, cutblur, cutmix, cutnoise, misalignment, brightness, contrast,
-                                        missing_parts, grayscale, shuffle_channels)
+                                        brightness_em, contrast_em, missing_parts, grayscale, shuffle_channels)
 
 
 
@@ -130,7 +130,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            Exponent for the contrast adjustment. Higher values darken the image. E. g. ``(1.25, 1.75)``.
 
        brightness : bool, optional
-           To aply brightness to the images.
+           To aply brightness to the images as `PyTorch Connectomics
+           <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
 
        brightness_factor : tuple of 2 floats, optional
            Strength of the brightness range, with valid values being ``0 <= brightness_factor <= 1``. E.g. ``(0.1, 0.3)``.
@@ -139,12 +140,35 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            Apply same brightness change to the whole image or diffent to slice by slice.
 
        contrast : boolen, optional
-           To apply contrast changes to the images.
+           To apply contrast changes to the images as `PyTorch Connectomics
+           <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
 
        contrast_factor : tuple of 2 floats, optional
-           Strength of the contrast change range, with valid values being ``0 <= contrast_factor <= 1``. E.g. ``(0.1, 0.3)``.
+           Strength of the contrast change range, with valid values being ``0 <= contrast_factor <= 1``.
+           E.g. ``(0.1, 0.3)``.
 
        contrast_mode : str, optional
+           Apply same contrast change to the whole image or diffent to slice by slice.
+
+       brightness_em : bool, optional
+           To aply brightness to the images as `PyTorch Connectomics
+           <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
+
+       brightness_em_factor : tuple of 2 floats, optional
+           Strength of the brightness range, with valid values being ``0 <= brightness_em_factor <= 1``. E.g. ``(0.1, 0.3)``.
+
+       brightness_em_mode : str, optional
+           Apply same brightness change to the whole image or diffent to slice by slice.
+
+       contrast_em : boolen, optional
+           To apply contrast changes to the images as `PyTorch Connectomics
+           <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
+
+       contrast_em_factor : tuple of 2 floats, optional
+           Strength of the contrast change range, with valid values being ``0 <= contrast_em_factor <= 1``.
+           E.g. ``(0.1, 0.3)``.
+
+       contrast_em_mode : str, optional
            Apply same contrast change to the whole image or diffent to slice by slice.
 
        dropout : bool, optional
@@ -297,13 +321,15 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                  affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), e_sigma=25,
                  e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), motion_blur=False,
                  motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), brightness=False, brightness_factor=(1,3),
-                 brightness_mode='2D', contrast=False, contrast_factor=(1,3), contrast_mode='2D', dropout=False,
-                 drop_range=(0, 0.2), cutout=False, cout_nb_iterations=(1,3), cout_size=(0.2,0.4), cout_cval=0,
-                 cout_apply_to_mask=False, cutblur=False, cblur_size=(0.1,0.5), cblur_down_range=(2,8), cblur_inside=True,
-                 cutmix=False, cmix_size=(0.2,0.4), cutnoise=False, cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3),
-                 cnoise_size=(0.2,0.4), misalignment=False, ms_displacement=16, ms_rotate_ratio=0.0, missing_parts=False,
-                 missp_iterations=(30, 40), grayscale=False, channel_shuffle=False, random_crops_in_DA=False,
-                 shape=(256,256,1), prob_map=None, val=False, n_classes=1, out_number=1, extra_data_factor=1):
+                 brightness_mode='2D', contrast=False, contrast_factor=(1,3), contrast_mode='2D', brightness_em=False,
+                 brightness_em_factor=(1,3), brightness_em_mode='2D', contrast_em=False, contrast_em_factor=(1,3),
+                 contrast_em_mode='2D', dropout=False, drop_range=(0, 0.2), cutout=False, cout_nb_iterations=(1,3),
+                 cout_size=(0.2,0.4), cout_cval=0, cout_apply_to_mask=False, cutblur=False, cblur_size=(0.1,0.5),
+                 cblur_down_range=(2,8), cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), cutnoise=False,
+                 cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False,
+                 ms_displacement=16, ms_rotate_ratio=0.0, missing_parts=False, missp_iterations=(30, 40),
+                 grayscale=False, channel_shuffle=False, random_crops_in_DA=False, shape=(256,256,1), prob_map=None,
+                 val=False, n_classes=1, out_number=1, extra_data_factor=1):
 
         if in_memory:
             if X.ndim != 4 or Y.ndim != 4:
@@ -472,6 +498,14 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             self.contrast_factor = contrast_factor
             self.contrast_mode = contrast_mode # Not used
             self.trans_made += '_contrast'+str(contrast_factor)
+        if brightness_em:
+            self.brightness_em_factor = brightness_em_factor
+            self.brightness_em_mode = brightness_em_mode # Not used
+            self.trans_made += '_brightness_em'+str(brightness_em_factor)
+        if contrast_em:
+            self.contrast_em_factor = contrast_em_factor
+            self.contrast_em_mode = contrast_em_mode # Not used
+            self.trans_made += '_contrast_em'+str(contrast_em_factor)
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += '_drop'+str(drop_range)
@@ -673,6 +707,14 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         # Apply contrast
         if self.contrast and random.uniform(0, 1) < self.da_prob:
             image = contrast(image, contrast_factor=self.contrast_factor)
+
+        # Apply brightness (EM)
+        if self.brightness_em and random.uniform(0, 1) < self.da_prob:
+            image = brightness_em(image, brightness_em_factor=self.brightness_em_factor)
+
+        # Apply contrast (EM)
+        if self.contrast_em and random.uniform(0, 1) < self.da_prob:
+            image = contrast_em(image, contrast_em_factor=self.contrast_em_factor)
 
         # Apply missing parts
         if self.missing_parts and random.uniform(0, 1) < self.da_prob:

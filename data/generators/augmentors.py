@@ -450,17 +450,139 @@ def random_rotate_matrix(height, displacement):
     M = cv2.getRotationMatrix2D((height/2, height/2), rand_angle, 1)
     return M
 
+def brightness(img, brightness_factor=(0,0),  mode='2D'):
+    """Randomly adjust brightness between a range. The input image will be divided by ``255``.
 
-def brightness(img, brightness_factor=(0,0),  mode='2D', invert=False, invert_p=0):
-    """Grayscale intensity augmentation. Randomly adjust contrast/brightness, randomly invert the color space and apply
-       gamma correction. The input image will be divided by ``255``.
+       Parameters
+       ----------
+       img : 3D/4D Numpy array
+           Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+
+       brightness_factor : tuple of 2 floats, optional
+           Range of brightness' intensity. E.g. ``(0.1, 0.3)``.
+
+       mode : str, optional
+           One of ``2D`` or ``3D``.
+
+       Returns
+       -------
+       image : 3D Numpy array
+           Transformed image. E.g. ``(x, y, channels)``.
+
+       Example
+       -------
+
+       Calling this function with ``brightness_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
+       may result in:
+
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_bright.png    | .. figure:: ../../img/bright.png         |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Augmented image                        |
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_bright2.png   | .. figure:: ../../img/bright2.png        |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Augmented image                        |
+       +------------------------------------------+------------------------------------------+
+
+       The grid is painted for visualization purposes.
+    """
+
+    image = img/255
+
+    if brightness_factor[0] == 0 and brightness_factor[1] == 0: return image
+
+    # Force mode if 2D
+    if img.ndim == 3: mode == '3D'
+
+    if mode == '2D':
+        b_factor = np.random.uniform(brightness_factor[0], brightness_factor[1], image.shape[-1]*3)
+        for z in range(image.shape[2]):
+            image[:, :, z] += b_factor[z*3]
+            image[:, :, z] = np.clip(image[:, :, z], 0, 1)
+    else:
+        b_factor = np.random.uniform(brightness_factor[0], brightness_factor[1])
+        image += b_factor
+        image = np.clip(image, 0, 1)
+
+    return (image*255).astype(np.uint8)
+
+def contrast(img, contrast_factor=(0,0), mode='2D'):
+    """Contrast augmentation. The input image will be divided by ``255``.
+
+       Parameters
+       ----------
+       img : 3D/4D Numpy array
+           Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+
+       contrast_factor : tuple of 2 floats, optional
+           Range of contrast's intensity. E.g. ``(0.1, 0.3)``.
+
+       mode : str, optional
+           One of ``2D`` or ``3D``.
+
+       Returns
+       -------
+       image : 3D Numpy array
+           Transformed image. E.g. ``(x, y, channels)``.
+
+       Example
+       -------
+
+       Calling this function with ``contrast_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
+       may result in:
+
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_contrast.png  | .. figure:: ../../img/contrast.png       |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Augmented image                        |
+       +------------------------------------------+------------------------------------------+
+       | .. figure:: ../../img/orig_contrast2.png | .. figure:: ../../img/contrast2.png      |
+       |   :width: 80%                            |   :width: 80%                            |
+       |   :align: center                         |   :align: center                         |
+       |                                          |                                          |
+       |   Input image                            |   Augmented image                        |
+       +------------------------------------------+------------------------------------------+
+
+       The grid is painted for visualization purposes.
+    """
+
+    image = img/255
+
+    if contrast_factor[0] == 0 and contrast_factor[1] == 0: return image
+
+    # Force mode if 2D
+    if img.ndim == 3: mode == '3D'
+
+    if mode == '2D':
+        c_factor = np.random.uniform(contrast_factor[0], contrast_factor[1], image.shape[-1]*3)
+        for z in range(image.shape[2]):
+            image[:, :, z] *= 1 + c_factor[z*3]
+            image[:, :, z] = np.clip(image[:, :, z], 0, 1)
+    else:
+        c_factor = np.random.uniform(contrast_factor[0], contrast_factor[1])
+        image *= 1 + c_factor
+        image = np.clip(image, 0, 1)
+
+    return (image*255).astype(np.uint8)
+
+
+def brightness_em(img, brightness_factor=(0,0),  mode='2D', invert=False, invert_p=0):
+    """Randomly adjust brightness, randomly invert the color space and apply gamma correction. The input image will be
+       divided by ``255``.
 
        Implementation based on `PyTorch Connectomics' grayscale.py
        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
 
        Parameters
        ----------
-       image : 3D/4D Numpy array
+       img : 3D/4D Numpy array
            Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
 
        brightness_factor : tuple of 2 floats, optional
@@ -531,7 +653,7 @@ def brightness(img, brightness_factor=(0,0),  mode='2D', invert=False, invert_p=
     return (image*255).astype(np.uint8)
 
 
-def contrast(img, contrast_factor=(0,0), mode='2D', invert=False, invert_p=0):
+def contrast_em(img, contrast_factor=(0,0), mode='2D', invert=False, invert_p=0):
     """Contrast augmentation. Randomly invert the color space and apply gamma correction. The input image will be
        divided by ``255``.
 
@@ -540,7 +662,7 @@ def contrast(img, contrast_factor=(0,0), mode='2D', invert=False, invert_p=0):
 
        Parameters
        ----------
-       image : 3D/4D Numpy array
+       img : 3D/4D Numpy array
            Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
 
        contrast_factor : tuple of 2 floats, optional
