@@ -429,6 +429,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         self.ms_rotate_ratio = ms_rotate_ratio
         self.brightness = brightness
         self.contrast = contrast
+        self.brightness_em = brightness_em
+        self.contrast_em = contrast_em
         self.missing_parts = missing_parts
         self.missp_iterations = missp_iterations
         self.grayscale = grayscale
