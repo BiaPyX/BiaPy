@@ -507,8 +507,9 @@ class Trainer(object):
                         f = os.path.join(self.cfg.PATHS.RESULT_DIR.LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'.csv')
                         with open(f, 'w', newline="") as file:
                             csvwriter = csv.writer(file)
-                            csvwriter.writerow(['z','x','y'])
-                            csvwriter.writerows(coordinates)
+                            csvwriter.writerow(['index', 'axis-0', 'axis-1', 'axis-2'])
+                            for nr in range(len(coordinates)):
+                                csvwriter.writerow([nr+1] + coordinates[nr].tolist())
                         del points_pred
 
 
