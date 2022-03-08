@@ -325,7 +325,7 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
     return out
 
 
-def misalignment(img, mask, displacement=16, rotate_ratio=0.0):
+def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1"):
     """Mis-alignment data augmentation of image stacks. This augmentation is applied to both images and masks.
 
        Implementation based on `PyTorch Connectomics' misalign.py
@@ -405,38 +405,64 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0):
     else:
         out_shape = (img.shape[0]-displacement, img.shape[1]-displacement,
                      img.shape[2])
+
         mode = 'slip' if random.uniform(0, 1) < 0.5 else 'translation'
+
+        # Calculate the amount of image and mask channels to determine which slice apply the tranformation to
         idx = np.random.randint(1, img.shape[-1]-1)
+        relation = c_relation.split('_')
+        img_rel = int(relation[0])
+        mask_rel = int(relation[1])
+        idx = int(idx - (idx%img_rel))
+        idx_mask = int((idx/img_rel)*mask_rel)
 
         if random.uniform(0, 1) < rotate_ratio:
+            out = img.copy()
+            m_out = mask.copy()
+
             H, W = img.shape[:2]
             M = random_rotate_matrix(H, displacement)
             if mode == 'slip':
-                out[idx] = cv2.warpAffine(img[idx], M, (H,W), 1.0, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-                m_out[idx] = cv2.warpAffine(mask[idx], M, (H,W), 1.0, flags=cv2.INTER_NEAREST,
-                                            borderMode=cv2.BORDER_CONSTANT)
+                # Apply the change to all images/masks in the last dimension that represent the slice selected. This
+                # needs to be done because the last dimension is z axis mutiplied by the channels
+                for k in range(img_rel):
+                    out[...,idx+k] = 0
+                    out[...,idx+k] = cv2.warpAffine(img[...,idx+k], M, (H,W), 1.0, flags=cv2.INTER_LINEAR,
+                                                    borderMode=cv2.BORDER_CONSTANT)
+                for k in range(mask_rel):
+                    m_out[...,idx_mask+k] = 0
+                    m_out[...,idx_mask+k] = cv2.warpAffine(mask[...,idx_mask+k], M, (H,W), 1.0, flags=cv2.INTER_NEAREST,
+                                                           borderMode=cv2.BORDER_CONSTANT)
             else:
                 for i in range(idx, img.shape[-1]):
+                    out[...,i] = 0
                     out[...,i] = cv2.warpAffine(img[...,i], M, (H,W), 1.0, flags=cv2.INTER_LINEAR,
                                                 borderMode=cv2.BORDER_CONSTANT)
-                for i in range(idx, mask.shape[-1]):
+                for i in range(idx_mask, mask.shape[-1]):
+                    m_out[...,i] = 0
                     m_out[...,i] = cv2.warpAffine(mask[...,i], M, (H,W), 1.0, flags=cv2.INTER_NEAREST,
                                                   borderMode=cv2.BORDER_CONSTANT)
         else:
+            random_state = np.random.RandomState()
             x0 = random_state.randint(displacement)
             y0 = random_state.randint(displacement)
             x1 = random_state.randint(displacement)
             y1 = random_state.randint(displacement)
             if mode == 'slip':
-                out = img[y0:y0+out_shape[0], x0:x0+out_shape[1],:]
-                out[idx] = img[idx, y1:y1+out_shape[0], x1:x1+out_shape[1], idx]
-                m_out = mask[y0:y0+out_shape[0], x0:x0+out_shape[1], :]
-                m_out[idx] = mask[y1:y1+out_shape[0], x1:x1+out_shape[1], idx]
+                out[y0:y0+out_shape[0],x0:x0+out_shape[1],:] = img[y0:y0+out_shape[0],x0:x0+out_shape[1],:]
+                for k in range(img_rel):
+                    out[...,idx+k] = 0
+                    out[y1:y1+out_shape[0],x1:x1+out_shape[1],idx+k] = img[y1:y1+out_shape[0], x1:x1+out_shape[1],idx+k]
+
+                m_out[y0:y0+out_shape[0], x0:x0+out_shape[1],:] = mask[y0:y0+out_shape[0], x0:x0+out_shape[1],:]
+                for k in range(mask_rel):
+                    m_out[...,idx_mask+k] = 0
+                    m_out[y1:y1+out_shape[0],x1:x1+out_shape[1],idx_mask+k] = mask[y1:y1+out_shape[0],x1:x1+out_shape[1],idx_mask+k]
             else:
-                out[:idx] = img[y0:y0+out_shape[0], x0:x0+out_shape[1], :idx]
-                out[idx:] = img[y1:y1+out_shape[0], x1:x1+out_shape[1], idx:]
-                m_out[:idx] = mask[y0:y0+out_shape[0], x0:x0+out_shape[1], :idx]
-                m_out[idx:] = mask[y1:y1+out_shape[0], x1:x1+out_shape[1], idx:]
+                out[y0:y0+out_shape[0],x0:x0+out_shape[1],:idx] = img[y0:y0+out_shape[0],x0:x0+out_shape[1],:idx]
+                out[y1:y1+out_shape[0],x1:x1+out_shape[1],idx:] = img[y1:y1+out_shape[0],x1:x1+out_shape[1],idx:]
+                m_out[y0:y0+out_shape[0],x0:x0+out_shape[1],:idx_mask] = mask[y0:y0+out_shape[0],x0:x0+out_shape[1],:idx_mask]
+                m_out[y1:y1+out_shape[0],x1:x1+out_shape[1],idx_mask:] = mask[y1:y1+out_shape[0],x1:x1+out_shape[1],idx_mask:]
 
     return out, m_out
 

@@ -795,7 +795,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
         # Apply misalignment
         if self.misalignment and random.uniform(0, 1) < self.da_prob:
-            image, mask = misalignment(image, mask, self.ms_displacement, self.ms_rotate_ratio)
+            rel = str(o_img_shape[-1])+"_"+str(o_mask_shape[-1])
+            image, mask = misalignment(image, mask, self.ms_displacement, self.ms_rotate_ratio, c_relation=rel)
 
         # Apply brightness
         if self.brightness and random.uniform(0, 1) < self.da_prob:
