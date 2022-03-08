@@ -26,6 +26,13 @@ def build_model(cfg, job_identifier):
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and cfg.MODEL.ARCHITECTURE != 'unet' and cfg.MODEL.ARCHITECTURE != 'resunet':
         raise ValueError("Not implemented pipeline option: instance segmentation models adapted are 'unet' or 'resunet'")
 
+    if cfg.MODEL.OUT_CHANNELS > 1 and cfg.MODEL.N_CLASSES > 1:
+        raise ValueError("Only one between 'OUT_CHANNELS' and 'N_CLASSES' can be > 1. Please read the difference in "
+                         "config.py file")
+
+    if cfg.MODEL.OUT_CHANNELS > 1 and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
+        raise ValueError("'OUT_CHANNELS' > 1 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'seunet', 'attention_unet']")
+
     # Import the model
     if cfg.MODEL.ARCHITECTURE in ['fcn32', 'fcn8']:
         modelname = 'fcn_vgg'
@@ -51,11 +58,12 @@ def build_model(cfg, job_identifier):
             f_name = Attention_U_Net_3D if cfg.PROBLEM.NDIM == '3D' else Attention_U_Net_2D
         elif cfg.MODEL.ARCHITECTURE == 'seunet':
             f_name = SE_U_Net_3D if cfg.PROBLEM.NDIM == '3D' else SE_U_Net_2D
+
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             args['output_channels'] = cfg.DATA.CHANNELS
             args['channel_weights'] = cfg.DATA.CHANNEL_WEIGHTS
         else:
-            args['n_classes'] = cfg.MODEL.N_CLASSES
+            args['n_classes'] = cfg.MODEL.N_CLASSES if cfg.MODEL.OUT_CHANNELS == 1 else cfg.MODEL.OUT_CHANNELS
         if cfg.PROBLEM.NDIM == '3D':
             args['z_down'] = cfg.MODEL.Z_DOWN
 
