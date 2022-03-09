@@ -24,7 +24,7 @@ from data.post_processing.post_processing import (ensemble8_2d_predictions, ense
                                                   voronoi_on_mask_2)
 from models import build_model
 from engine import build_callbacks, prepare_optimizer
-from engine.metrics import jaccard_index_numpy, voc_calculation
+from engine.metrics import jaccard_index_numpy, voc_calculation, detection_metrics
 
 
 class Trainer(object):
@@ -42,7 +42,7 @@ class Trainer(object):
         self.orig_val_path = cfg.DATA.VAL.PATH
         self.orig_val_mask_path = cfg.DATA.VAL.MASK_PATH
 
-        if cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
+        if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'DETECTION']:
             print("###################\n"
                   "#  SANITY CHECKS  #\n"
                   "###################\n")
@@ -130,7 +130,7 @@ class Trainer(object):
         ### TRAIN ###
         #############
         if cfg.TRAIN.ENABLE:
-            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG']:
+            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']:
                 if cfg.DATA.TRAIN.IN_MEMORY:
                     if cfg.PROBLEM.NDIM == '2D':
                         objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
@@ -193,7 +193,7 @@ class Trainer(object):
         ### TEST ###
         ############
         if cfg.TEST.ENABLE:
-            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG']:
+            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']:
                 # Path comprobations
                 if not os.path.exists(cfg.DATA.TEST.PATH):
                     raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
@@ -270,10 +270,10 @@ class Trainer(object):
               "###############\n")
 
         print("Making predictions on test data . . .")
-        iou, ov_iou, c1, c2  = 0, 0, 0, 0
-
         if self.cfg.TEST.STATS.PER_PATCH or self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
            loss_per_crop, iou_per_crop, patch_counter = 0, 0, 0
+        if self.cfg.TEST.STATS.PER_PATCH and self.cfg.PROBLEM.TYPE == 'DETECTION':
+            d_precision, d_recall, d_f1 = 0, 0, 0
         if self.cfg.TEST.STATS.MERGE_PATCHES:
            loss_per_imag, iou_per_image, ov_iou_per_image = 0, 0, 0
         if self.cfg.TEST.STATS.FULL_IMG:
@@ -488,29 +488,38 @@ class Trainer(object):
                                 save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, filenames,
                                          verbose=self.cfg.TEST.VERBOSE)
 
-                    if self.cfg.TEST.LOCAL_MAX_COORDS and self.cfg.PROBLEM.TYPE == 'SEMANTIC_SEG' and self.cfg.PROBLEM.NDIM == '3D':
+                    # Detection in 3D
+                    if self.cfg.TEST.DET_LOCAL_MAX_COORDS and self.cfg.PROBLEM.TYPE == 'DETECTION' and self.cfg.PROBLEM.NDIM == '3D':
                         print("Capturing the local maxima ")
-                        coordinates = peak_local_max(pred[...,0], threshold_rel=0.2, min_distance=10, exclude_border=False)
+                        pred_coordinates = peak_local_max(pred[...,0], threshold_rel=0.2, min_distance=10, exclude_border=False)
+                        gt_coordinates = peak_local_max(_Y[...,0], min_distance=10, exclude_border=False)
 
                         # Create a file that represent the local maxima
                         points_pred = np.zeros((pred[...,0].shape + (1,)), dtype=np.uint8)
-                        for n, coord in enumerate(coordinates):
+                        for n, coord in enumerate(pred_coordinates):
                             z,x,y = coord
                             points_pred[z,x,y,0] = 255
                         for z_index in range(len(points_pred)):
                             points_pred[z_index,...,0] = binary_dilation(points_pred[z_index,...,0], iterations=2)
 
-                        save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.LOCAL_MAX_COORDS_CHECK,
+                        save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                                  filenames, verbose=self.cfg.TEST.VERBOSE)
+                        del points_pred
 
                         # Save coords in csv file
-                        f = os.path.join(self.cfg.PATHS.RESULT_DIR.LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'.csv')
+                        f = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'.csv')
                         with open(f, 'w', newline="") as file:
                             csvwriter = csv.writer(file)
                             csvwriter.writerow(['index', 'axis-0', 'axis-1', 'axis-2'])
-                            for nr in range(len(coordinates)):
-                                csvwriter.writerow([nr+1] + coordinates[nr].tolist())
-                        del points_pred
+                            for nr in range(len(pred_coordinates)):
+                                csvwriter.writerow([nr+1] + pred_coordinates[nr].tolist())
+
+                        d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE,
+                                                      res_adjustment=self.cfg.TEST.DET_RES_ADJUSTMENT)
+                        d_precision += d_metrics[1]
+                        d_recall += d_metrics[3]
+                        d_f1 += d_metrics[5]
+                        print("Detection metrics: {}".format(d_metrics))
 
 
                     #############################
@@ -688,6 +697,8 @@ class Trainer(object):
                             print("Stats with Voronoi")
                             print(r_stats_VJI)
                             all_matching_stats_voronoi_VJI.append(r_stats_VJI)
+
+
                 ##################
                 ### FULL IMAGE ###
                 ##################
@@ -791,8 +802,9 @@ class Trainer(object):
                     mAP_50_total_vor = mAP_50_total_vor / image_counter
                     mAP_75_total_vor = mAP_75_total_vor / image_counter
 
-        if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+        if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D' and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
             iou = iou / image_counter
+            loss = loss / image_counter
             ov_iou = ov_iou / image_counter
 
         if self.cfg.TEST.MATCHING_STATS and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
@@ -805,6 +817,12 @@ class Trainer(object):
             stats_VJI = wrapper_matching_VJI_and_PAI(all_matching_stats_VJI)
             if self.cfg.TEST.VORONOI_ON_MASK:
                 stats_vor_VJI = wrapper_matching_VJI_and_PAI(all_matching_stats_voronoi_VJI)
+
+        if self.cfg.TEST.STATS.PER_PATCH and self.cfg.PROBLEM.TYPE == 'DETECTION':
+            d_precision = d_precision / image_counter
+            d_recall = d_recall / image_counter
+            d_f1 = d_f1 / image_counter
+
 
         print("#############\n"
               "#  RESULTS  #\n"
@@ -835,6 +853,10 @@ class Trainer(object):
                         print("Test Foreground IoU (merge patches): {}".format(iou_per_image))
                         print("Test Overall IoU (merge patches): {}".format(ov_iou_per_image))
                         print(" ")
+                    if self.cfg.PROBLEM.TYPE == 'DETECTION':
+                        print("Detection - Test Precision: {}".format(d_precision))
+                        print("Detection - Test Recall: {}".format(d_recall))
+                        print("Detection - Test F1: {}".format(d_f1))
 
                 if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
                     if self.cfg.TEST.MAP:
@@ -861,7 +883,7 @@ class Trainer(object):
                             print(stats_vor_VJI)
 
                 if self.cfg.TEST.STATS.FULL_IMG:
-                    print("Loss (per image): {}".format(iou))
+                    print("Loss (per image): {}".format(loss))
                     print("Test Foreground IoU (per image): {}".format(iou))
                     print("Test Overall IoU (per image): {}".format(ov_iou))
                     print(" ")

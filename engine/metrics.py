@@ -8,6 +8,8 @@ from skimage import measure
 from distutils import dir_util
 from PIL import Image
 from tensorflow.keras import losses
+from scipy.spatial import distance_matrix
+from scipy.optimize import linear_sum_assignment
 
 
 def jaccard_index_numpy(y_true, y_pred):
@@ -539,4 +541,60 @@ def masked_mse(y_true, y_pred, mask):
     """
 
     return K.mean(tf.expand_dims(mask*K.square(y_true - y_pred), -1), axis=-1)
+
+
+def detection_metrics(true, pred, tolerance=10, res_adjustment=(1,1,1)):
+    """Calculate detection metrics based on
+
+       Parameters
+       ----------
+       true : List of list
+           List containing coordinates of ground truth points (in (z,x,y) form). E.g. ``[[5,3,2], [4,6,7]]``.
+
+       pred : 4D Tensor
+           List containing coordinates of predicted points (in (z,x,y) form). E.g. ``[[5,3,2], [4,6,7]]``.
+
+       tolerance : optional, int
+           Maximum distance to not consider a point as a true positive.
+
+       res_adjustment : List of floats
+           Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value
+           on the axis with less resolution. Need to be provided in ``(x,y,z)`` order. E.g. ``(1,1,0.5)`` should represent
+           half resolution in ``z`` axis, so the distance need to be adjusted.
+
+       Returns
+       -------
+       metrics : List of strings
+           List containing precision, accuracy and F1 between the predicted points and ground truth.
+
+    """
+
+    _true = np.array(true)
+    _pred = np.array(pred)
+
+    # Multiply each axis for the its real value
+    for i in range(3):
+        _true[:,i] *= res_adjustment[2-i]
+        _pred[:,i] *= res_adjustment[2-i]
+
+    # Create cost matrix
+    distances = distance_matrix(_pred, _true)
+
+    true_ind, pred_ind = linear_sum_assignment(distances)
+
+    TP, FP, FN = 0, 0, 0
+    for i in range(len(true_ind)):
+        if distances[true_ind[i],pred_ind[i]] > tolerance:
+            TP += 1
+        else:
+            FN += 1
+
+    FN += len(true_ind) - len(pred_ind)
+    FP = len(pred) - len(true_ind)
+
+    precision = TP/(TP+FP)
+    recall = TP/(TP+FN)
+    F1 = 2*((precision*recall)/(precision+recall))
+
+    return ["Precision", precision, "Recall", recall, "F1", F1]
 

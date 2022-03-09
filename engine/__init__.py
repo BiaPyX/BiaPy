@@ -31,7 +31,7 @@ def prepare_optimizer(cfg, model):
     # Compile the model
     if cfg.PROBLEM.TYPE == "CLASSIFICATION":
         model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=["accuracy"])
-    elif cfg.LOSS.TYPE == "CE" and cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
+    elif cfg.LOSS.TYPE == "CE" and cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", 'DETECTION']:
         if cfg.MODEL.N_CLASSES > 1:
             model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=[jaccard_index_softmax])
         else:
@@ -50,7 +50,7 @@ def prepare_optimizer(cfg, model):
                     bin_channels = 2 if cfg.DATA.CHANNELS in ["BCD", "BCDv2"] else 1
                     model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
                                   metrics=[IoU_instances(binary_channels=bin_channels)])
-    elif cfg.LOSS.TYPE == "W_CE_DICE" and cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
+    elif cfg.LOSS.TYPE == "W_CE_DICE" and cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "DETECTION"]:
         model.compile(optimizer=opt, loss=weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33), metrics=[jaccard_index])
     elif cfg.LOSS.TYPE == "W_CE_DICE" and cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         raise ValueError("Not implemented pipeline option: LOSS.TYPE == W_CE_DICE and INSTANCE_SEG")
