@@ -515,7 +515,7 @@ class Trainer(object):
                                 csvwriter.writerow([nr+1] + pred_coordinates[nr].tolist())
 
                         d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE,
-                                                      res_adjustment=self.cfg.TEST.DET_RES_ADJUSTMENT)
+                                                      voxel_size=self.cfg.TEST.DET_VOXEL_SIZE)
                         d_precision += d_metrics[1]
                         d_recall += d_metrics[3]
                         d_f1 += d_metrics[5]

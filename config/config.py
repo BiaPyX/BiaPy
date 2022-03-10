@@ -422,7 +422,7 @@ class Config:
         _C.TEST.DET_TOLERANCE = 10
         # Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value
         # on the axis with less resolution. Need to be provided in (x,y,z) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
-        _C.TEST.DET_RES_ADJUSTMENT = (1,1,1)
+        _C.TEST.DET_VOXEL_SIZE = (1,1,1)
 
         _C.TEST.STATS = CN()
         _C.TEST.STATS.PER_PATCH = False

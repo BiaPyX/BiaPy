@@ -543,7 +543,7 @@ def masked_mse(y_true, y_pred, mask):
     return K.mean(tf.expand_dims(mask*K.square(y_true - y_pred), -1), axis=-1)
 
 
-def detection_metrics(true, pred, tolerance=10, res_adjustment=(1,1,1)):
+def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1)):
     """Calculate detection metrics based on
 
        Parameters
@@ -555,12 +555,12 @@ def detection_metrics(true, pred, tolerance=10, res_adjustment=(1,1,1)):
            List containing coordinates of predicted points (in (z,x,y) form). E.g. ``[[5,3,2], [4,6,7]]``.
 
        tolerance : optional, int
-           Maximum distance to not consider a point as a true positive.
+           Maximum distance to consider a point as a true positive.
 
-       res_adjustment : List of floats
+       voxel_size : List of floats
            Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value
            on the axis with less resolution. Need to be provided in ``(x,y,z)`` order. E.g. ``(1,1,0.5)`` should represent
-           half resolution in ``z`` axis, so the distance need to be adjusted.
+           half resolution in ``z`` axis.
 
        Returns
        -------
@@ -569,13 +569,13 @@ def detection_metrics(true, pred, tolerance=10, res_adjustment=(1,1,1)):
 
     """
 
-    _true = np.array(true)
-    _pred = np.array(pred)
+    _true = np.array(true, dtype=np.float32)
+    _pred = np.array(pred, dtype=np.float32)
 
     # Multiply each axis for the its real value
     for i in range(3):
-        _true[:,i] *= res_adjustment[2-i]
-        _pred[:,i] *= res_adjustment[2-i]
+        _true[:,i] *= voxel_size[2-i]
+        _pred[:,i] *= voxel_size[2-i]
 
     # Create cost matrix
     distances = distance_matrix(_pred, _true)
@@ -584,7 +584,7 @@ def detection_metrics(true, pred, tolerance=10, res_adjustment=(1,1,1)):
 
     TP, FP, FN = 0, 0, 0
     for i in range(len(true_ind)):
-        if distances[true_ind[i],pred_ind[i]] > tolerance:
+        if distances[true_ind[i],pred_ind[i]] < tolerance:
             TP += 1
         else:
             FN += 1
