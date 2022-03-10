@@ -9,6 +9,7 @@ from skimage.io import imread
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from skimage.feature import peak_local_max
 from scipy.ndimage.morphology import binary_dilation
+from skimage.measure import label, regionprops_table
 
 from utils.util import (check_masks, check_downsample_division, create_plots, save_tif, load_data_from_dir,
                         load_3d_images_from_dir, apply_binary_mask, pad_and_reflect, wrapper_matching_dataset_lazy, wrapper_matching_VJI_and_PAI)
@@ -492,7 +493,12 @@ class Trainer(object):
                     if self.cfg.TEST.DET_LOCAL_MAX_COORDS and self.cfg.PROBLEM.TYPE == 'DETECTION' and self.cfg.PROBLEM.NDIM == '3D':
                         print("Capturing the local maxima ")
                         pred_coordinates = peak_local_max(pred[...,0], threshold_rel=0.2, min_distance=10, exclude_border=False)
-                        gt_coordinates = peak_local_max(_Y[...,0], min_distance=10, exclude_border=False)
+
+                        props = regionprops_table(label(_Y[...,0]), properties=('area','centroid'))
+                        gt_coordinates = []
+                        for n in range(len(props['centroid-0'])):
+                            gt_coordinates.append([props['centroid-0'][n], props['centroid-1'][n], props['centroid-2'][n]])
+                        gt_coordinates = np.array(gt_coordinates)
 
                         # Create a file that represent the local maxima
                         points_pred = np.zeros((pred[...,0].shape + (1,)), dtype=np.uint8)
@@ -514,8 +520,9 @@ class Trainer(object):
                             for nr in range(len(pred_coordinates)):
                                 csvwriter.writerow([nr+1] + pred_coordinates[nr].tolist())
 
+                        v_size = (self.cfg.TEST.DET_VOXEL_SIZE[2], self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
                         d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE,
-                                                      voxel_size=self.cfg.TEST.DET_VOXEL_SIZE)
+                                                      voxel_size=v_size)
                         d_precision += d_metrics[1]
                         d_recall += d_metrics[3]
                         d_f1 += d_metrics[5]

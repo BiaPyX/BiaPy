@@ -549,18 +549,17 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1)):
        Parameters
        ----------
        true : List of list
-           List containing coordinates of ground truth points (in (z,x,y) form). E.g. ``[[5,3,2], [4,6,7]]``.
+           List containing coordinates of ground truth points. E.g. ``[[5,3,2], [4,6,7]]``.
 
        pred : 4D Tensor
-           List containing coordinates of predicted points (in (z,x,y) form). E.g. ``[[5,3,2], [4,6,7]]``.
+           List containing coordinates of predicted points. E.g. ``[[5,3,2], [4,6,7]]``.
 
        tolerance : optional, int
            Maximum distance to consider a point as a true positive.
 
        voxel_size : List of floats
            Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value
-           on the axis with less resolution. Need to be provided in ``(x,y,z)`` order. E.g. ``(1,1,0.5)`` should represent
-           half resolution in ``z`` axis.
+           on the axis with less resolution. E.g. ``(1,1,0.5)``.
 
        Returns
        -------
@@ -574,23 +573,21 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1)):
 
     # Multiply each axis for the its real value
     for i in range(3):
-        _true[:,i] *= voxel_size[2-i]
-        _pred[:,i] *= voxel_size[2-i]
+        _true[:,i] *= voxel_size[i]
+        _pred[:,i] *= voxel_size[i]
 
     # Create cost matrix
     distances = distance_matrix(_pred, _true)
 
-    true_ind, pred_ind = linear_sum_assignment(distances)
+    pred_ind, true_ind = linear_sum_assignment(distances)
 
     TP, FP, FN = 0, 0, 0
-    for i in range(len(true_ind)):
-        if distances[true_ind[i],pred_ind[i]] < tolerance:
+    for i in range(len(pred_ind)):
+        if distances[pred_ind[i],true_ind[i]] < tolerance:
             TP += 1
-        else:
-            FN += 1
 
-    FN += len(true_ind) - len(pred_ind)
-    FP = len(pred) - len(true_ind)
+    FN = len(true) - TP
+    FP = len(pred_ind) - TP
 
     precision = TP/(TP+FP)
     recall = TP/(TP+FN)
