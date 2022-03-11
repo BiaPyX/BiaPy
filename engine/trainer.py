@@ -523,7 +523,7 @@ class Trainer(object):
 
                         v_size = (self.cfg.TEST.DET_VOXEL_SIZE[2], self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
                         d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE,
-                                                      voxel_size=v_size)
+                                                      voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
                         d_precision += d_metrics[1]
                         d_recall += d_metrics[3]
                         d_f1 += d_metrics[5]

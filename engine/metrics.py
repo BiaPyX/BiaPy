@@ -543,7 +543,7 @@ def masked_mse(y_true, y_pred, mask):
     return K.mean(tf.expand_dims(mask*K.square(y_true - y_pred), -1), axis=-1)
 
 
-def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1)):
+def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), verbose=False):
     """Calculate detection metrics based on
 
        Parameters
@@ -592,6 +592,10 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1)):
     precision = TP/(TP+FP)
     recall = TP/(TP+FN)
     F1 = 2*((precision*recall)/(precision+recall))
+
+    if verbose:
+    	print("Points in ground truth: {}, Points in prediction: {}".format(len(_true), len(_pred)))
+    	print("True positives: {}, False positives: {}, False negatives: {}".format(TP, FP, FN))
 
     return ["Precision", precision, "Recall", recall, "F1", F1]
 
