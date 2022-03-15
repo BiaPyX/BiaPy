@@ -589,9 +589,18 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), verbose=Fals
     FN = len(_true) - TP
     FP = len(_pred) - TP
 
-    precision = TP/(TP+FP)
-    recall = TP/(TP+FN)
-    F1 = 2*((precision*recall)/(precision+recall))
+    try:
+        precision = TP/(TP+FP)
+    except:
+        precision = 1
+    try:
+        recall = TP/(TP+FN)
+    except:
+        recall = 1
+    try:
+        F1 = 2*((precision*recall)/(precision+recall))
+    except:
+        F1 = 1
 
     if verbose:
     	print("Points in ground truth: {}, Points in prediction: {}".format(len(_true), len(_pred)))

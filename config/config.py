@@ -418,7 +418,7 @@ class Config:
 
         # Wheter to return local maximum coords. Only applies when _C.PROBLEM.TYPE = 'DETECTION'
         _C.TEST.DET_LOCAL_MAX_COORDS = False
-        # Minimun value to consider a point as a peak. Corresponds to 'threshold_rel' argument of the function
+        # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
         # 'peak_local_max' of skimage.feature
         _C.TEST.DET_MIN_TH_TO_BE_PEAK = 0.2
         # Maximum distance to not consider a point as a true positive. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
