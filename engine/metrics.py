@@ -586,8 +586,8 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), verbose=Fals
         if distances[pred_ind[i],true_ind[i]] < tolerance:
             TP += 1
 
-    FN = len(true) - TP
-    FP = len(pred_ind) - TP
+    FN = len(_true) - TP
+    FP = len(_pred) - TP
 
     precision = TP/(TP+FP)
     recall = TP/(TP+FN)
