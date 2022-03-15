@@ -492,8 +492,8 @@ class Trainer(object):
                     # Detection in 3D
                     if self.cfg.TEST.DET_LOCAL_MAX_COORDS and self.cfg.PROBLEM.TYPE == 'DETECTION' and self.cfg.PROBLEM.NDIM == '3D':
                         print("Capturing the local maxima ")
-                        pred_coordinates = peak_local_max(pred[...,0], threshold_rel=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK,
-                                                          min_distance=10, exclude_border=False)
+                        pred_coordinates = peak_local_max(pred[...,0], threshold_abs=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK,
+                                                          exclude_border=False)
 
                         props = regionprops_table(label(_Y[...,0]), properties=('area','centroid'))
                         gt_coordinates = []
