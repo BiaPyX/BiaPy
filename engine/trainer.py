@@ -273,7 +273,7 @@ class Trainer(object):
         print("Making predictions on test data . . .")
         if self.cfg.TEST.STATS.PER_PATCH or self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
            loss_per_crop, iou_per_crop, patch_counter = 0, 0, 0
-        if self.cfg.TEST.STATS.PER_PATCH and self.cfg.PROBLEM.TYPE == 'DETECTION':
+        if self.cfg.TEST.STATS.PER_PATCH and self.cfg.PROBLEM.TYPE == 'DETECTION' and self.cfg.DATA.TEST.LOAD_GT:
             d_precision, d_recall, d_f1 = 0, 0, 0
         if self.cfg.TEST.STATS.MERGE_PATCHES:
            loss_per_imag, iou_per_image, ov_iou_per_image = 0, 0, 0
@@ -495,11 +495,12 @@ class Trainer(object):
                         pred_coordinates = peak_local_max(pred[...,0], threshold_abs=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK,
                                                           exclude_border=False)
 
-                        props = regionprops_table(label(_Y[...,0]), properties=('area','centroid'))
-                        gt_coordinates = []
-                        for n in range(len(props['centroid-0'])):
-                            gt_coordinates.append([props['centroid-0'][n], props['centroid-1'][n], props['centroid-2'][n]])
-                        gt_coordinates = np.array(gt_coordinates)
+                        if self.cfg.DATA.TEST.LOAD_GT:
+                            props = regionprops_table(label(_Y[...,0]), properties=('area','centroid'))
+                            gt_coordinates = []
+                            for n in range(len(props['centroid-0'])):
+                                gt_coordinates.append([props['centroid-0'][n], props['centroid-1'][n], props['centroid-2'][n]])
+                            gt_coordinates = np.array(gt_coordinates)
 
                         # Create a file that represent the local maxima
                         points_pred = np.zeros((pred[...,0].shape + (1,)), dtype=np.uint8)
@@ -521,13 +522,14 @@ class Trainer(object):
                             for nr in range(len(pred_coordinates)):
                                 csvwriter.writerow([nr+1] + pred_coordinates[nr].tolist())
 
-                        v_size = (self.cfg.TEST.DET_VOXEL_SIZE[2], self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
-                        d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE,
-                                                      voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
-                        d_precision += d_metrics[1]
-                        d_recall += d_metrics[3]
-                        d_f1 += d_metrics[5]
-                        print("Detection metrics: {}".format(d_metrics))
+                        if self.cfg.DATA.TEST.LOAD_GT:
+                            v_size = (self.cfg.TEST.DET_VOXEL_SIZE[2], self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
+                            d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE,
+                                                          voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
+                            d_precision += d_metrics[1]
+                            d_recall += d_metrics[3]
+                            d_f1 += d_metrics[5]
+                            print("Detection metrics: {}".format(d_metrics))
 
 
                     #############################
@@ -826,7 +828,7 @@ class Trainer(object):
             if self.cfg.TEST.VORONOI_ON_MASK:
                 stats_vor_VJI = wrapper_matching_VJI_and_PAI(all_matching_stats_voronoi_VJI)
 
-        if self.cfg.TEST.STATS.PER_PATCH and self.cfg.PROBLEM.TYPE == 'DETECTION':
+        if self.cfg.TEST.STATS.PER_PATCH and self.cfg.PROBLEM.TYPE == 'DETECTION' and self.cfg.DATA.TEST.LOAD_GT:
             d_precision = d_precision / image_counter
             d_recall = d_recall / image_counter
             d_f1 = d_f1 / image_counter
