@@ -101,8 +101,9 @@ class Config:
         # Extra train data generation: number of times to duplicate the train data. Useful when
         # _C.DATA.EXTRACT_RANDOM_PATCH=True is made, as more original train data can be cover on each epoch
         _C.DATA.TRAIN.REPLICATE = 0
-        # Percentage of overlap in (x,y)/(x,y,z) when cropping train. Set to 0 to calculate  the minimun overlap.
-        # _C.PROBLEM.NDIM='2D' -> _C.DATA.TRAIN.OVERLAP=(0,0). _C.PROBLEM.NDIM ='3D' -> _C.DATA.TRAIN.OVERLAP=(0,0,0)
+        # Percentage of overlap in (x,y)/(x,y,z) when cropping validation. Set to 0 to calculate  the minimun overlap.
+        # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
+        # 3D tuple when using _C.PROBLEM.NDIM='3D'
         _C.DATA.TRAIN.OVERLAP = (0,0)
         # Padding to be done in (x,y)/(x,y,z) when reconstructing train data. Useful to avoid patch 'border effect'.
         _C.DATA.TRAIN.PADDING = (0,0)
@@ -124,8 +125,9 @@ class Config:
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.DATA.CHANNELS != 'B'
         _C.DATA.TEST.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'x_'+_C.DATA.CHANNELS)
         _C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'y_'+_C.DATA.CHANNELS)
-        # Percentage of overlap in (x,y)/(x,y,z) when cropping test. Set to 0 to calculate  the minimun overlap.
-        # _C.PROBLEM.NDIM='2D' -> _C.DATA.TEST.OVERLAP=(0,0). _C.PROBLEM.NDIM ='3D' -> _C.DATA.TEST.OVERLAP=(0,0,0)
+        # Percentage of overlap in (x,y)/(x,y,z) when cropping validation. Set to 0 to calculate  the minimun overlap.
+        # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
+        # 3D tuple when using _C.PROBLEM.NDIM='3D'
         _C.DATA.TEST.OVERLAP = (0,0)
         # Padding to be done in (x,y)/(x,y,z) when reconstructing test data. Useful to avoid patch 'border effect'
         _C.DATA.TEST.PADDING = (0,0)
@@ -160,7 +162,8 @@ class Config:
         _C.DATA.VAL.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'x_'+_C.DATA.CHANNELS)
         _C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'y_'+_C.DATA.CHANNELS)
         # Percentage of overlap in (x,y)/(x,y,z) when cropping validation. Set to 0 to calculate  the minimun overlap.
-        # _C.PROBLEM.NDIM='2D' -> _C.DATA.VAL.OVERLAP=(0,0). _C.PROBLEM.NDIM ='3D' -> _C.DATA.VAL.OVERLAP=(0,0,0)
+        # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
+        # 3D tuple when using _C.PROBLEM.NDIM='3D'
         _C.DATA.VAL.OVERLAP = (0,0)
         # Padding to be done in (x,y)/(x,y,z) when reconstructing validation data. Useful to avoid patch 'border effect'
         _C.DATA.VAL.PADDING = (0,0)

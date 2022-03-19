@@ -232,7 +232,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
         raise ValueError("'vol_shape[0]' {} greater than {}".format(vol_shape[0], data.shape[1]))
     if vol_shape[1] > data.shape[2]:
         raise ValueError("'vol_shape[1]' {} greater than {}".format(vol_shape[1], data.shape[2]))
-    if (overlap[0] >= 1 or overlap[0] < 0) and (overlap[1] >= 1 or overlap[1] < 0) and (overlap[2] >= 1 or overlap[2] < 0):
+    if (overlap[0] >= 1 or overlap[0] < 0) or (overlap[1] >= 1 or overlap[1] < 0) or (overlap[2] >= 1 or overlap[2] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 
     padded_data = np.zeros((data.shape[0]+2*padding[2], data.shape[1]+2*padding[0],
@@ -574,7 +574,7 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError("data and data_mask shapes mismatch: {} vs {}".format(data.shape[:-1], data_mask.shape[:-1]))
 
-    if (overlap[0] >= 1 or overlap[0] < 0) and (overlap[1] >= 1 or overlap[1] < 0) and (overlap[2] >= 1 or overlap[2] < 0):
+    if (overlap[0] >= 1 or overlap[0] < 0) or (overlap[1] >= 1 or overlap[1] < 0) or (overlap[2] >= 1 or overlap[2] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 
     if verbose:
