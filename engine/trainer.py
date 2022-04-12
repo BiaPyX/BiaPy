@@ -48,16 +48,28 @@ class Trainer(object):
                   "#  SANITY CHECKS  #\n"
                   "###################\n")
             if cfg.TRAIN.ENABLE:
-                check_masks(cfg.DATA.TRAIN.MASK_PATH)
+                print( cfg.LOSS.TYPE )
+                if cfg.LOSS.TYPE == 'MASKED_BCE':
+                    check_masks(cfg.DATA.TRAIN.MASK_PATH, n_classes=3)
+                else:
+                    check_masks(cfg.DATA.TRAIN.MASK_PATH)
                 if not cfg.DATA.VAL.FROM_TRAIN:
-                    check_masks(cfg.DATA.VAL.MASK_PATH)
+                    if cfg.LOSS.TYPE == 'MASKED_BCE':
+                        check_masks(cfg.DATA.VAL.MASK_PATH, n_classes=3)
+                    else:
+                        check_masks(cfg.DATA.VAL.MASK_PATH)
             if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT:
-                check_masks(cfg.DATA.TEST.MASK_PATH)
+                if cfg.LOSS.TYPE == 'MASKED_BCE':
+                    check_masks(cfg.DATA.TEST.MASK_PATH, n_classes=3)
+                else:
+                    check_masks(cfg.DATA.TEST.MASK_PATH)
 
             # Adjust the metric used accordingly to the number of classes. This code is planned to be used in a binary
             # classification problem, so the function 'jaccard_index_softmax' will only calculate the IoU for the
             # foreground class (channel 1)
             self.metric = "jaccard_index_softmax" if cfg.MODEL.N_CLASSES > 1 else "jaccard_index"
+            if cfg.LOSS.TYPE == 'MASKED_BCE':
+                self.metric = "masked_jaccard_index"
         elif cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             if cfg.DATA.CHANNELS in ["BC", "BCM"]:
                 self.metric = "jaccard_index"
@@ -469,8 +481,15 @@ class Trainer(object):
                     if self.cfg.TEST.STATS.MERGE_PATCHES and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                         if self.cfg.DATA.TEST.LOAD_GT and self.cfg.DATA.CHANNELS != "Dv2":
                             if pred.ndim == 3: _Y = _Y[0]
-                            _iou_per_image = jaccard_index_numpy((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
-                            _ov_iou_per_image = voc_calculation((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
+                            if self.cfg.LOSS.TYPE != 'MASKED_BCE':
+                                _iou_per_image = jaccard_index_numpy((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
+                                _ov_iou_per_image = voc_calculation((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
+                                                                _iou_per_image)
+                            else:
+                                exclusion_mask = _Y < 2
+                                bin_Y = _Y * exclusion_mask.astype( float )
+                                _iou_per_image = jaccard_index_numpy((bin_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
+                                _ov_iou_per_image = voc_calculation((bin_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
                                                                 _iou_per_image)
                             iou_per_image += _iou_per_image
                             ov_iou_per_image += _ov_iou_per_image
@@ -496,7 +515,9 @@ class Trainer(object):
                                                           exclude_border=False)
 
                         if self.cfg.DATA.TEST.LOAD_GT:
-                            props = regionprops_table(label(_Y[...,0]), properties=('area','centroid'))
+                            exclusion_mask = _Y[...,0] < 2
+                            bin_Y = _Y[...,0] * exclusion_mask.astype( float )
+                            props = regionprops_table(label( bin_Y ), properties=('area','centroid'))
                             gt_coordinates = []
                             for n in range(len(props['centroid-0'])):
                                 gt_coordinates.append([props['centroid-0'][n], props['centroid-1'][n], props['centroid-2'][n]])

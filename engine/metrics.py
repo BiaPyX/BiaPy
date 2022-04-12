@@ -608,3 +608,61 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), verbose=Fals
 
     return ["Precision", precision, "Recall", recall, "F1", F1]
 
+def masked_bce_loss( y_true, y_pred ):
+    """Binary cross-entropy loss masking pixels of value 2 out.
+
+       Based on `U-Net: deep learning for cell counting, detection, and morphometry <https://www.nature.com/articles/s41592-018-0261-2>`_.
+
+       Parameters
+       ----------
+       y_true : Numpy array
+           Ground truth.
+
+       y_pred : Numpy array
+           Predictions.
+
+       Returns
+       -------
+       loss : Tensor
+           Loss value.
+    """
+	ring_value = tf.constant( [ 2.0 ], dtype=tf.float32 )
+	exclusion_mask = tf.dtypes.cast( tf.math.less( y_true, ring_value ), tf.float32 )
+	return losses.binary_crossentropy( y_true * exclusion_mask, y_pred * exclusion_mask )
+
+def masked_jaccard_index(y_true, y_pred, t=0.5, mask_value=2.0):
+    """Define Jaccard index masking out some pixels.
+
+       Parameters
+       ----------
+       y_true : Tensor
+           Ground truth masks.
+
+       y_pred : Tensor
+           Predicted masks.
+
+       t : optional, float
+           Threshold to be applied.
+
+       mask_value : optional, float
+           Value of the pixels to ommit.
+
+       Returns
+       -------
+       jac : Tensor
+           Jaccard index value
+    """
+
+    exclusion_mask = tf.cast( y_true < mask_value, dtype=tf.int32 )
+
+    y_pred_ = exclusion_mask * tf.cast(y_pred > t, dtype=tf.int32)
+    y_true = exclusion_mask * tf.cast(y_true, dtype=tf.int32)
+
+    TP = tf.math.count_nonzero(y_pred_ * y_true)
+    FP = tf.math.count_nonzero(y_pred_ * (y_true - 1))
+    FN = tf.math.count_nonzero((y_pred_ - 1) * y_true)
+
+    jac = tf.cond(tf.greater((TP + FP + FN), 0), lambda: TP / (TP + FP + FN), lambda: K.cast(0.000, dtype='float64'))
+
+    return jac
+

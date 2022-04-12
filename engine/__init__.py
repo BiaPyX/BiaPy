@@ -4,7 +4,8 @@ from tensorflow.keras.callbacks import EarlyStopping
 
 from utils.callbacks import ModelCheckpoint, TimeHistory
 from engine.metrics import (jaccard_index, jaccard_index_softmax, IoU_instances,
-                            instance_segmentation_loss, weighted_bce_dice_loss)
+                            instance_segmentation_loss, weighted_bce_dice_loss,
+                            masked_bce_loss, masked_jaccard_index)
 
 
 def prepare_optimizer(cfg, model):
@@ -20,7 +21,7 @@ def prepare_optimizer(cfg, model):
     """
 
     assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM']
-    assert cfg.LOSS.TYPE in ['CE', 'W_CE_DICE']
+    assert cfg.LOSS.TYPE in ['CE', 'W_CE_DICE', 'MASKED_BCE']
 
     # Select the optimizer
     if cfg.TRAIN.OPTIMIZER == "SGD":
@@ -36,6 +37,11 @@ def prepare_optimizer(cfg, model):
             model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=[jaccard_index_softmax])
         else:
             model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
+    elif cfg.LOSS.TYPE == "MASKED_BCE" and cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", 'DETECTION']:
+        if cfg.MODEL.N_CLASSES > 1:
+            raise ValueError("Not implemented pipeline option: N_CLASSES > 1 and MASKED_BCE")
+        else:
+            model.compile(optimizer=opt, loss=masked_bce_loss, metrics=[masked_jaccard_index])
     elif cfg.LOSS.TYPE == "CE" and cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         if cfg.MODEL.N_CLASSES > 1:
             raise ValueError("Not implemented pipeline option: N_CLASSES > 1 and INSTANCE_SEG")
