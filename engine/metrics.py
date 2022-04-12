@@ -626,9 +626,9 @@ def masked_bce_loss( y_true, y_pred ):
        loss : Tensor
            Loss value.
     """
-	ring_value = tf.constant( [ 2.0 ], dtype=tf.float32 )
-	exclusion_mask = tf.dtypes.cast( tf.math.less( y_true, ring_value ), tf.float32 )
-	return losses.binary_crossentropy( y_true * exclusion_mask, y_pred * exclusion_mask )
+    ring_value = tf.constant( [ 2.0 ], dtype=tf.float32 )
+    exclusion_mask = tf.dtypes.cast( tf.math.less( y_true, ring_value ), tf.float32 )
+    return losses.binary_crossentropy( y_true * exclusion_mask, y_pred * exclusion_mask )
 
 def masked_jaccard_index(y_true, y_pred, t=0.5, mask_value=2.0):
     """Define Jaccard index masking out some pixels.
