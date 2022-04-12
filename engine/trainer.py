@@ -48,7 +48,6 @@ class Trainer(object):
                   "#  SANITY CHECKS  #\n"
                   "###################\n")
             if cfg.TRAIN.ENABLE:
-                print( cfg.LOSS.TYPE )
                 if cfg.LOSS.TYPE == 'MASKED_BCE':
                     check_masks(cfg.DATA.TRAIN.MASK_PATH, n_classes=3)
                 else:
