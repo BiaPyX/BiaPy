@@ -162,6 +162,8 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
 
     if check_crop and (orig_train_shape[0] != X_train.shape[1:]):
         print("Checking the crops . . .")
+        print("WARNING: All the images in train need to be of the same shape in order to use this option. If not, the "
+              "merge function will crash")
         s = [len(orig_train_shape), *orig_train_shape[0]]
         check_crops(X_train, s, ov, out_dir=check_crop_path, prefix="X_train_")
         s[-1] = Y_train.shape[-1]

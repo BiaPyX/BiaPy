@@ -107,7 +107,7 @@ class Config:
         _C.DATA.TRAIN.OVERLAP = (0,0)
         # Padding to be done in (x,y)/(x,y,z) when reconstructing train data. Useful to avoid patch 'border effect'.
         _C.DATA.TRAIN.PADDING = (0,0)
-        _C.DATA.TRAIN.CHECK_CROP = True # Used when _C.DATA.IN_MEMORY=True
+        _C.DATA.TRAIN.CHECK_CROP = False # Used when _C.DATA.IN_MEMORY=True
 
         # Test
         _C.DATA.TEST = CN()
