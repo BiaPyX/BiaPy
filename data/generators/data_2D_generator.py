@@ -600,7 +600,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
             # Apply transformations
             if self.da:
-                extra_img = np.random.randint(0, self.len-1)
+                extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
                 if self.in_memory:
                     e_img = self.X[extra_img]
                     e_mask = self.Y[extra_img]
@@ -887,7 +887,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         # Generate the examples
         print("0) Creating the examples of data augmentation . . .")
         for i in tqdm(range(num_examples)):
-            pos = np.random.randint(0, self.len-1) if random_images else i
+            if random_images:
+                pos = np.random.randint(0, self.len-1) if self.len > 2 else 0
+            else:
+                pos = i
 
             # Take the data samples
             if self.in_memory:
@@ -940,7 +943,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     self.__draw_grid(batch_x[i])
                     self.__draw_grid(batch_y[i])
 
-                extra_img = np.random.randint(0, self.len-1)
+                extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
                 if self.in_memory:
                     e_img = self.X[extra_img]
                     e_mask = self.Y[extra_img]

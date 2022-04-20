@@ -641,7 +641,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
             # Apply transformations
             if self.da:
-                extra_img = np.random.randint(0, self.len-1)
+                extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
                 if self.in_memory:
                     e_img = self.X[extra_img]
                     e_mask = self.Y[extra_img]
@@ -881,12 +881,15 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         # Generate the examples
         print("0) Creating samples of data augmentation . . .")
         for i in tqdm(range(num_examples)):
-            pos = random.randint(0,self.len-1) if random_images else i
+            if random_images:
+                pos = random.randint(0,self.len-1) if self.len > 2 else 0
+            else:
+                pos = i
 
             # Choose the data source
             if self.in_memory:
-                img = self.X[pos]
-                mask = self.Y[pos]
+                img = np.copy(self.X[pos])
+                mask = np.copy(self.Y[pos])
             else:
                 if self.data_paths[pos].endswith('.npy'):
                     img = np.load(os.path.join(self.paths[0], self.data_paths[pos]))
@@ -935,7 +938,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     self.__draw_grid(sample_x[i])
                     self.__draw_grid(sample_y[i])
 
-                extra_img = np.random.randint(0, self.len-1)
+                extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
                 if self.in_memory:
                     e_img = self.X[extra_img]
                     e_mask = self.Y[extra_img]
@@ -961,20 +964,20 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             if save_to_dir:
                 os.makedirs(out_dir, exist_ok=True)
                 # Original image/mask
-                f = os.path.join(out_dir, "orig_x_"+str(pos)+self.trans_made+'.tiff')
+                f = os.path.join(out_dir, "orig_x_"+str(pos)+"_"+str(i)+"_"+self.trans_made+'.tiff')
                 self.__draw_grid(o_x)
                 aux = np.expand_dims((np.transpose(o_x, (2,3,0,1))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-                f = os.path.join(out_dir, "orig_y_"+str(pos)+self.trans_made+'.tiff')
+                f = os.path.join(out_dir, "orig_y_"+str(pos)+"_"+str(i)+"_"+self.trans_made+'.tiff')
                 self.__draw_grid(o_y)
                 aux = np.expand_dims((np.transpose(o_y, (2,3,0,1))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                 # Transformed
-                f = os.path.join(out_dir, "x_aug_"+str(pos)+self.trans_made+'.tiff')
+                f = os.path.join(out_dir, "x_aug_"+str(pos)+"_"+str(i)+"_"+self.trans_made+'.tiff')
                 aux = np.expand_dims((np.transpose(sample_x[i], (2,3,0,1))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                 # Mask
-                f = os.path.join(out_dir, "y_aug_"+str(pos)+self.trans_made+'.tiff')
+                f = os.path.join(out_dir, "y_aug_"+str(pos)+"_"+str(i)+"_"+self.trans_made+'.tiff')
                 aux = np.expand_dims((np.transpose(sample_y[i], (2,3,0,1))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
@@ -990,6 +993,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     auxm = (o_y2).astype(np.uint8)
                     if auxm.shape[-1] == 1: auxm = np.repeat(auxm, 3, axis=3)
 
+                    print(aux.shape)
                     for s in range(aux.shape[2]):
                         if s >= s_z and s < s_z+self.shape[2]:
                             im = Image.fromarray(aux[:,:,s,0])
@@ -1023,10 +1027,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                             auxm[:,:,s,:] = m
 
                     aux = np.expand_dims((np.transpose(aux, (2,3,0,1))).astype(np.float32), -1)
-                    f = os.path.join(out_dir, str(pos)+"_mark_x_"+self.trans_made+'.tiff')
+                    f = os.path.join(out_dir, "extract_example_"+str(pos)+"_"+"_mark_x_"+self.trans_made+'.tiff')
                     imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                     auxm = np.expand_dims((np.transpose(auxm, (2,3,0,1))).astype(np.float32), -1)
-                    f = os.path.join(out_dir, str(pos)+"_mark_y_"+self.trans_made+'.tiff')
+                    f = os.path.join(out_dir, "extract_example_"+str(pos)+"_"+"_mark_y_"+self.trans_made+'.tiff')
                     imsave(f, auxm, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                     del o_x2, o_y2
 
