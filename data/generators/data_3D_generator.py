@@ -233,7 +233,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            Randomly add noise to a cuboid region in the image.
 
        cnoise_scale : tuple of floats, optional
-           Scale of the random noise. E.g. ``(0.1, 0.2)``.
+           Range to choose a value that will represent the % of the maximum value of the image that will be used as the
+           std of the Gaussian Noise distribution. E.g. ``(0.1, 0.2)``.
 
        cnoise_nb_iterations : tuple of ints, optional
            Number of areas with noise to create. E.g. ``(1, 3)``.
@@ -554,7 +555,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         return int(np.ceil(self.len*self.extra_data_factor/self.batch_size))
 
 
-    def __draw_grid(self, im, grid_width=50, v=1):
+    def __draw_grid(self, im, grid_width=50):
         """Draw grid of the specified size on an image.
 
            Parameters
@@ -564,10 +565,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
            grid_width : int, optional
                Grid's width.
-
-           v : int, optional
-               Value to create the grid with.
         """
+        v = 1 if int(np.max(im)) == 0 else int(np.max(im))
 
         for k in range(0, im.shape[2]):
             for i in range(0, im.shape[0], grid_width):

@@ -301,7 +301,7 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
 
     it = np.random.randint(nb_iterations[0], nb_iterations[1])
 
-    out = img.copy()
+    out = img.copy().astype(np.int16)
     for i in range(it):
         _size = random.uniform(size[0], size[1])
         y_size = int(img.shape[0]*_size)
@@ -311,18 +311,11 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
         cy = np.random.randint(0, img.shape[0]-(y_size))
         cx = np.random.randint(0, img.shape[1]-(x_size))
 
-        _scale = random.uniform(scale[0], scale[1])
-        noise_shape = (y_size, x_size)
-        noise = np.random.uniform(-_scale, _scale, noise_shape)
-        noise = (noise*255).astype(np.uint8)
-
-        # Apply cutnoise to all channels
-        for i in range(img.shape[-1]):
-            out[cy:cy+y_size, cx:cx+x_size, i] += noise
-
-        out = np.clip(out, 0, 255)
-
-    return out
+        max_value = np.max(out)
+        _scale = random.uniform(scale[0], scale[1])*max_value
+        noise = np.random.normal(loc=0, scale=_scale, size=(y_size, x_size))
+        out[cy:cy+y_size, cx:cx+x_size, :] += np.stack((noise,)*out.shape[-1], axis=-1).astype(np.int16)
+    return np.clip(out, 0, max_value).astype(np.uint8)
 
 
 def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1"):

@@ -215,7 +215,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            Randomly add noise to a cuboid region in the image.
 
        cnoise_scale : tuple of floats, optional
-           Scale of the random noise. E.g. ``(0.1, 0.2)``.
+           Range to choose a value that will represent the % of the maximum value of the image that will be used as the
+           std of the Gaussian Noise distribution. E.g. ``(0.1, 0.2)``.
 
        cnoise_nb_iterations : tuple of ints, optional
            Number of areas with noise to create. E.g. ``(1, 3)``.

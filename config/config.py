@@ -309,8 +309,9 @@ class Config:
         _C.AUGMENTOR.CMIX_SIZE = (0.2, 0.4)
         # Apply noise to a region of the image
         _C.AUGMENTOR.CUTNOISE = False
-        # Scale of the random noise
-        _C.AUGMENTOR.CNOISE_SCALE = (0.1, 0.2)
+        # Range to choose a value that will represent the % of the maximum value of the image that will be used as the std
+        # of the Gaussian Noise distribution
+        _C.AUGMENTOR.CNOISE_SCALE = (0.05, 0.1)
         # Number of areas to fill with noise
         _C.AUGMENTOR.CNOISE_NB_ITERATIONS = (1, 3)
         # Size of the regions
