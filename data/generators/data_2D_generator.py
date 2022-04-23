@@ -785,6 +785,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            random_images : bool, optional
                Randomly select images from the dataset. If ``False`` the examples will be generated from the start of
                the dataset.
+           draw_grid : bool, optional
+               Draw a grid in the generated samples. Useful to see some types of deformations.
 
            Returns
            -------
@@ -940,7 +942,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
             # Apply transformations
             if self.da:
-                if not train:
+                if not train and draw_grid:
                     self.__draw_grid(batch_x[i])
                     self.__draw_grid(batch_y[i])
 
@@ -974,8 +976,9 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
             if save_to_dir:
                 # Save original images
-                self.__draw_grid(o_x)
-                self.__draw_grid(o_y)
+                if draw_grid:
+                    self.__draw_grid(o_x)
+                    self.__draw_grid(o_y)
 
                 f = os.path.join(out_dir,str(pos)+'_orig_x'+self.trans_made+".tif")
                 aux = np.expand_dims(np.expand_dims(o_x.transpose((2,0,1)), -1), 0).astype(np.float32)

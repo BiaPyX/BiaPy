@@ -838,7 +838,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         return image, mask
 
 
-    def get_transformed_samples(self, num_examples, random_images=True, save_to_dir=True, out_dir='aug_3d', train=False):
+    def get_transformed_samples(self, num_examples, random_images=True, save_to_dir=True, out_dir='aug_3d', train=False,
+                                draw_grid=True):
         """Apply selected transformations to a defined number of images from the dataset.
 
            Parameters
@@ -860,6 +861,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            train : bool, optional
                To avoid drawing a grid on the generated images. This should be set when the samples will be used for
                training.
+           draw_grid : bool, optional
+               Draw a grid in the generated samples. Useful to see some types of deformations.
 
            Returns
            -------
@@ -933,7 +936,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
             # Apply transformations
             if self.da:
-                if not train:
+                if not train and draw_grid:
                     self.__draw_grid(sample_x[i])
                     self.__draw_grid(sample_y[i])
 
@@ -964,11 +967,11 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 os.makedirs(out_dir, exist_ok=True)
                 # Original image/mask
                 f = os.path.join(out_dir, "orig_x_"+str(pos)+"_"+str(i)+"_"+self.trans_made+'.tiff')
-                self.__draw_grid(o_x)
+                if draw_grid: self.__draw_grid(o_x)
                 aux = np.expand_dims((np.transpose(o_x, (2,3,0,1))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                 f = os.path.join(out_dir, "orig_y_"+str(pos)+"_"+str(i)+"_"+self.trans_made+'.tiff')
-                self.__draw_grid(o_y)
+                if draw_grid: self.__draw_grid(o_y)
                 aux = np.expand_dims((np.transpose(o_y, (2,3,0,1))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                 # Transformed

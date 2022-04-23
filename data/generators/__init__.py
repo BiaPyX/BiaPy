@@ -124,7 +124,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
     if cfg.AUGMENTOR.AUG_SAMPLES:
         print("Creating generator samples . . .")
         train_generator.get_transformed_samples(
-            cfg.AUGMENTOR.AUG_NUM_SAMPLES, save_to_dir=True, train=False, out_dir=cfg.PATHS.DA_SAMPLES)
+            cfg.AUGMENTOR.AUG_NUM_SAMPLES, save_to_dir=True, train=False, out_dir=cfg.PATHS.DA_SAMPLES,
+            draw_grid=cfg.AUGMENTOR.DRAW_GRID)
 
     return train_generator, val_generator
 

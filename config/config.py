@@ -195,6 +195,8 @@ class Config:
         _C.AUGMENTOR.DA_PROB = 0.5
         # Create samples of the DA made. Useful to check the output images made.
         _C.AUGMENTOR.AUG_SAMPLES = True
+        # Draw a grid in the augenation samples generated. Used when _C.AUGMENTOR.AUG_SAMPLES=True
+        _C.AUGMENTOR.DRAW_GRID = True
         # Number of samples to create
         _C.AUGMENTOR.AUG_NUM_SAMPLES = 10
         # Flag to shuffle the training data on every epoch
