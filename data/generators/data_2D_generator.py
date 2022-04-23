@@ -251,6 +251,9 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        shape : 3D int tuple, optional
            Shape of the desired images when using 'random_crops_in_DA'.
 
+       resolution : 2D tuple of floats, optional
+           Resolution of the given data ``(x,y)``. E.g. ``(8,8)``.
+
        prob_map : 4D Numpy array or str, optional
            If it is an array, it should represent the probability map used to make random crops when
            ``random_crops_in_DA`` is set. If str given should be the path to read these maps from.
@@ -329,8 +332,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                  cblur_down_range=(2,8), cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), cutnoise=False,
                  cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False,
                  ms_displacement=16, ms_rotate_ratio=0.0, missing_parts=False, missp_iterations=(30, 40),
-                 grayscale=False, channel_shuffle=False, random_crops_in_DA=False, shape=(256,256,1), prob_map=None,
-                 val=False, n_classes=1, out_number=1, extra_data_factor=1):
+                 grayscale=False, channel_shuffle=False, random_crops_in_DA=False, shape=(256,256,1), resolution=(1,1),
+                 prob_map=None, val=False, n_classes=1, out_number=1, extra_data_factor=1):
 
         if in_memory:
             if X.ndim != 4 or Y.ndim != 4:
@@ -355,6 +358,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         if rotation90 and rand_rot:
             print("Warning: you selected double rotation type. Maybe you should set only 'rand_rot'?")
 
+        if len(resolution) == 1 and resolution[0] == -1:
+            resolution = (1,1)
+
+        if len(resolution) != 2:
+            raise ValueError("The resolution needs to be a tuple with 2 values")
+
         self.batch_size = batch_size
         self.in_memory = in_memory
         if not in_memory:
@@ -373,7 +382,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 img = np.expand_dims(img, -1)
             else:
                 if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
-
+            self.X_channels = img.shape[-1]
             # Ensure uint8
             if img.dtype == np.uint16:
                 img = normalize(img, 0, 65535)
@@ -400,9 +409,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             self.div_X_on_load = True if np.max(X) > 100 else False
             self.div_Y_on_load = True if np.max(Y) > 100 else False
             self.channels = Y.shape[-1]
+            self.X_channels = X.shape[-1]
             self.len = len(self.X)
             self.shape = shape if random_crops_in_DA else X.shape[1:]
 
+        self.resolution = resolution
+        self.res_relation = (1.0,resolution[0]/resolution[1])
         self.o_indexes = np.arange(self.len)
         self.shuffle = shuffle_each_epoch
         self.n_classes = n_classes
@@ -684,8 +696,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
         # Apply cutout
         if self.cutout and random.uniform(0, 1) < self.da_prob:
-            image, mask = cutout(image, mask, self.cout_nb_iterations, self.cout_size, self.cout_cval,
-                                 self.cout_apply_to_mask)
+            image, mask = cutout(image, mask, self.X_channels, -1, self.cout_nb_iterations, self.cout_size, self.cout_cval,
+                                 self.res_relation, self.cout_apply_to_mask)
 
         # Apply cblur
         if self.cutblur and random.uniform(0, 1) < self.da_prob:
@@ -759,7 +771,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
 
     def get_transformed_samples(self, num_examples, save_to_dir=False, out_dir='aug', save_prefix=None, train=True,
-                                random_images=True):
+                                random_images=True, draw_grid=True):
         """Apply selected transformations to a defined number of images from the dataset.
 
            Parameters
@@ -785,6 +797,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            random_images : bool, optional
                Randomly select images from the dataset. If ``False`` the examples will be generated from the start of
                the dataset.
+
            draw_grid : bool, optional
                Draw a grid in the generated samples. Useful to see some types of deformations.
 

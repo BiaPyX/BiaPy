@@ -9,7 +9,7 @@ from scipy.ndimage.measurements import label
 from scipy.ndimage.morphology import binary_dilation
 
 
-def cutout(img, mask, nb_iterations=(1,3), size=(0.2,0.4), cval=0, apply_to_mask=False):
+def cutout(img, mask, channels, z_size, nb_iterations=(1,3), size=(0.2,0.4), cval=0, res_relation=(1,1), apply_to_mask=False):
     """Cutout data augmentation presented in `Improved Regularization of Convolutional Neural Networks with Cutout
        <https://arxiv.org/pdf/1708.04552.pdf>`_.
 
@@ -21,6 +21,13 @@ def cutout(img, mask, nb_iterations=(1,3), size=(0.2,0.4), cval=0, apply_to_mask
        mask : 3D Numpy array
            Mask to transform. E.g. ``(x, y, channels)``.
 
+       channels : int
+           Size of channel dimension. Used for 3D images as the channels have been merged with the z axis.
+
+       z_size : int
+           Size of z dimension. Used for 3D images as the z axis has been merged with the channels. Set to -1 to when
+           do not want to be applied.
+
        nb_iterations : tuple of ints, optional
            Number of areas to fill the image with. E.g. ``(1, 3)``.
 
@@ -29,6 +36,9 @@ def cutout(img, mask, nb_iterations=(1,3), size=(0.2,0.4), cval=0, apply_to_mask
 
        cval : int, optional
            Value to fill the area with.
+
+       res_relation: tuple of ints/floats, optional
+           Relation between axis resolution. E.g. ``(1,1,0.27)`` for anisotropic data of 8umx8umx30um resolution.
 
        apply_to_mask : boolean, optional
            To apply cutout to the mask.
@@ -70,19 +80,24 @@ def cutout(img, mask, nb_iterations=(1,3), size=(0.2,0.4), cval=0, apply_to_mask
     m_out = mask.copy()
     for i in range(it):
         _size = random.uniform(size[0], size[1])
-        y_size = int(img.shape[0]*_size)
-        x_size = int(img.shape[1]*_size)
+        y_size = int(max(min(img.shape[0]*_size*res_relation[1],img.shape[0]),1))
+        x_size = int(max(min(img.shape[1]*_size*res_relation[0],img.shape[1]),1))
 
         # Choose a random point
-        cy = np.random.randint(0, img.shape[0]-(y_size))
-        cx = np.random.randint(0, img.shape[1]-(x_size))
+        cy = np.random.randint(0, img.shape[0]-y_size)
+        cx = np.random.randint(0, img.shape[1]-x_size)
 
-        # Apply cutout to all channels
-        for i in range(img.shape[-1]):
-            out[cy:cy+y_size, cx:cx+x_size, i] = cval
-        if apply_to_mask:
-            for i in range(mask.shape[-1]):
-                m_out[cy:cy+y_size, cx:cx+x_size, i] = 0
+        if z_size != -1:
+            _z_size = int(max(min(z_size*_size*res_relation[2],z_size),1))
+            cz = np.random.randint(0, z_size-_z_size)
+
+            out[cy:cy+y_size, cx:cx+x_size, cz*channels:(cz*channels)+(_z_size*channels)] = cval
+            if apply_to_mask:
+                m_out[cy:cy+y_size, cx:cx+x_size, cz*channels:(cz*channels)+(_z_size*channels)] = 0
+        else:
+            out[cy:cy+y_size, cx:cx+x_size] = cval
+            if apply_to_mask:
+                m_out[cy:cy+y_size, cx:cx+x_size] = 0
 
     return out, m_out
 

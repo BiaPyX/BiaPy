@@ -52,6 +52,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
        shape : 4D tuple of ints, optional
            Shape of the subvolume to be extracted randomly from the data. E. g. ``(x, y, z, channels)``.
 
+       resolution : 3D tuple of floats, optional
+           Resolution of the given data ``(x,y,z)``. E.g. ``(8,8,30)``.
+
        prob_map : 5D Numpy array or str, optional
            If it is an array, it should represent the probability map used to make random crops when
            ``random_crops_in_DA`` is set. If ``str`` is given it should be the path to read these maps from.
@@ -279,8 +282,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            ``extra_data_factor`` times.
     """
 
-    def __init__(self, X, Y, in_memory=True, data_paths=None, random_crops_in_DA=False, shape=None, prob_map=None,
-                 seed=0, shuffle_each_epoch=False, batch_size=32, da=True, da_prob=0.5, rotation90=False,
+    def __init__(self, X, Y, in_memory=True, data_paths=None, random_crops_in_DA=False, shape=None, resolution=(1,1,1),
+                 prob_map=None, seed=0, shuffle_each_epoch=False, batch_size=32, da=True, da_prob=0.5, rotation90=False,
                  rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False,
                  zoom_range=(0.8,1.2), shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False,
                  hflip=False, zflip=False, elastic=False, e_alpha=(240,250), e_sigma=25, e_mode='constant', g_blur=False,
@@ -306,6 +309,12 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
         if not in_memory and len(data_paths) != 2:
             raise ValueError("'data_paths' must contain the following paths: 1) data path ; 2) data masks path")
+
+        if len(resolution) == 1 and resolution[0] == -1:
+            resolution = (1,1,1)
+
+        if len(resolution) != 3:
+            raise ValueError("The resolution needs to be a tuple with 3 values")
 
         if random_crops_in_DA:
             if shape is None:
@@ -336,6 +345,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 img = imread(os.path.join(data_paths[0], self.data_paths[0]))
             if img.ndim == 3: img = np.expand_dims(img, -1)
             img = img.transpose((1,2,0,3))
+            self.X_channels = img.shape[-1]
+            self.z_size = img.shape[-2]
             # Ensure uint8
             if img.dtype == np.uint16:
                 img = normalize(img, 0, 65535)
@@ -416,6 +427,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 self.div_Y_on_load_bin_channels = True if np.max(Y) > 10 else False
 
             self.channels = Y.shape[-1]
+            self.X_channels = X.shape[-1]
+            self.z_size = X.shape[-2]
             self.len = len(self.X)
             self.shape = shape if random_crops_in_DA else X.shape[1:]
 
@@ -429,6 +442,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             else:
                 self.prob_map = prob_map
 
+        self.resolution = resolution
+        self.res_relation = (1.0,resolution[0]/resolution[1],resolution[0]/resolution[2])
         self.n_classes = n_classes
         self.out_number = out_number
         self.random_crops_in_DA = random_crops_in_DA
@@ -777,8 +792,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
         # Apply cutout
         if self.cutout and random.uniform(0, 1) < self.da_prob:
-            image, mask = cutout(image, mask, self.cout_nb_iterations, self.cout_size, self.cout_cval,
-                                 self.cout_apply_to_mask)
+            image, mask = cutout(image, mask, self.X_channels, self.z_size, self.cout_nb_iterations, self.cout_size,
+                                 self.cout_cval, self.res_relation, self.cout_apply_to_mask)
 
         # Apply cblur
         if self.cutblur and random.uniform(0, 1) < self.da_prob:

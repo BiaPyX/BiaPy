@@ -108,6 +108,10 @@ class Config:
         # Padding to be done in (x,y)/(x,y,z) when reconstructing train data. Useful to avoid patch 'border effect'.
         _C.DATA.TRAIN.PADDING = (0,0)
         _C.DATA.TRAIN.CHECK_CROP = False # Used when _C.DATA.IN_MEMORY=True
+        # Train data resolution. It is not completely necessary but when configured it is taken into account when
+        # performing some augmentations, e.g. cutout. If defined it need to be (x,y)/(x,y,z) and needs to be to be a 2D
+        # tuple when using _C.PROBLEM.NDIM='2D' and 3D tuple when using _C.PROBLEM.NDIM='3D'
+        _C.DATA.TRAIN.RESOLUTION = (-1,)
 
         # Test
         _C.DATA.TEST = CN()
@@ -135,6 +139,8 @@ class Config:
         _C.DATA.TEST.MEDIAN_PADDING = False
         # Directory where binary masks to apply to resulting images should be. Used when _C.TEST.APPLY_MASK  == True
         _C.DATA.TEST.BINARY_MASKS = os.path.join(_C.DATA.ROOT_DIR, 'test', 'bin_mask')
+        # Not used yet.
+        _C.DATA.TEST.RESOLUTION = (-1,)
 
         # Validation
         _C.DATA.VAL = CN()
@@ -172,6 +178,8 @@ class Config:
         # Directory where validation binary masks should be located. This binary mask will be applied only when MW_TH*
         # optimized values are find, that is, when _C.DATA.MW_OPTIMIZE_THS = True and _C.TEST.APPLY_MASK = True
         _C.DATA.VAL.BINARY_MASKS = os.path.join(_C.DATA.ROOT_DIR, 'val', 'bin_mask')
+        # Not used yet.
+        _C.DATA.VAL.RESOLUTION = (-1,)
 
         # _C.PROBLEM.NDIM='2D' -> _C.DATA.PATCH_SIZE=(x,y,c) ; _C.PROBLEM.NDIM='3D' -> _C.DATA.PATCH_SIZE=(x,y,z,c)
         _C.DATA.PATCH_SIZE = (256, 256, 1)
