@@ -2,7 +2,7 @@ import os
 import numpy as np
 from tqdm import tqdm
 
-from utils.util import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif
+from utils.util import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif, check_value
 from data.generators.data_2D_generator import ImageDataGenerator
 from data.generators.data_2D_generator_classification import ClassImageDataGenerator
 from data.generators.data_3D_generator import VoxelDataGenerator
@@ -51,6 +51,21 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             prob_map = f_name(Y_train, cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.W_FOREGROUND, cfg.DATA.W_BACKGROUND,
                               save_dir=cfg.PATHS.PROB_MAP_DIR)
 
+    # Checks
+    if cfg.AUGMENTOR.GRIDMASK:
+        if not check_value(cfg.AUGMENTOR.GRID_RATIO):
+            raise ValueError("cfg.AUGMENTOR.GRID_RATIO needs to be in [0, 1] range. Provided {}"
+                            .format(cfg.AUGMENTOR.GRID_RATIO))
+        if cfg.AUGMENTOR.GRID_D_RANGE[0] >= cfg.AUGMENTOR.GRID_D_RANGE[1]:
+            raise ValueError("cfg.AUGMENTOR.GRID_D_RANGE[0] needs to be larger than cfg.AUGMENTOR.GRID_D_RANGE[1]"
+                             "Provided {}".format(cfg.AUGMENTOR.GRID_D_RANGE))
+        if not check_value(cfg.AUGMENTOR.GRID_D_RANGE[0]) or not check_value(cfg.AUGMENTOR.GRID_D_RANGE[1]):
+            raise ValueError("cfg.AUGMENTOR.GRID_D_RANGE need to be in [0, 1] range. Provided {}"
+                             .format(cfg.AUGMENTOR.GRID_D_RANGE))
+        if not check_value(cfg.AUGMENTOR.GRID_ROTATE):
+             raise ValueError("cfg.AUGMENTOR.GRID_ROTATE need to be in [0, 1] range. Provided {}"
+                             .format(cfg.AUGMENTOR.GRID_ROTATE))
+
     if cfg.PROBLEM.NDIM == '2D':
         f_name = ImageDataGenerator if cfg.PROBLEM.TYPE != 'CLASSIFICATION' else ClassImageDataGenerator
     else:
@@ -85,7 +100,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             misalignment=cfg.AUGMENTOR.MISALIGNMENT, ms_displacement=cfg.AUGMENTOR.MS_DISPLACEMENT,
             ms_rotate_ratio=cfg.AUGMENTOR.MS_ROTATE_RATIO, missing_parts=cfg.AUGMENTOR.MISSING_PARTS,
             missp_iterations=cfg.AUGMENTOR.MISSP_ITERATIONS, grayscale=cfg.AUGMENTOR.GRAYSCALE,
-            channel_shuffle=cfg.AUGMENTOR.CHANNEL_SHUFFLE, shape=cfg.DATA.PATCH_SIZE, resolution=cfg.DATA.TRAIN.RESOLUTION,
+            channel_shuffle=cfg.AUGMENTOR.CHANNEL_SHUFFLE, gridmask=cfg.AUGMENTOR.GRIDMASK,
+            grid_ratio=cfg.AUGMENTOR.GRID_RATIO, grid_d_range=cfg.AUGMENTOR.GRID_D_RANGE, grid_rotate=cfg.AUGMENTOR.GRID_ROTATE,
+            grid_invert=cfg.AUGMENTOR.GRID_INVERT, shape=cfg.DATA.PATCH_SIZE, resolution=cfg.DATA.TRAIN.RESOLUTION,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, prob_map=prob_map, n_classes=cfg.MODEL.N_CLASSES,
             extra_data_factor=cfg.DATA.TRAIN.REPLICATE)
         if cfg.PROBLEM.NDIM == '3D':

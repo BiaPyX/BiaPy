@@ -1809,3 +1809,9 @@ def wrapper_matching_VJI_and_PAI(stats_all):
 
 def normalize(x, x_min, x_max, out_min=0, out_max=255, out_type=np.uint8):
     return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)
+
+def check_value(value, range=(0,1)):
+    """Checks if a value is within a range """
+    if range[0] <= value <= range[1]:
+        return True
+    return False

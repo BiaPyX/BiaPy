@@ -310,7 +310,7 @@ class Config:
         _C.AUGMENTOR.CBLUR_SIZE = (0.2, 0.4)
         # Range of the downsampling to be made in cutblur
         _C.AUGMENTOR.CBLUR_DOWN_RANGE = (2, 8)
-        # Wheter to apply cut-and-paste just LR into HR image. If False, HR to LR will  be applied also (see Figure 1
+        # Wheter to apply cut-and-paste just LR into HR image. If False, HR to LR will be applied also (see Figure 1
         # of the paper https://arxiv.org/pdf/2004.00448.pdf)
         _C.AUGMENTOR.CBLUR_INSIDE = True
         # Apply cutmix operation
@@ -340,6 +340,16 @@ class Config:
         _C.AUGMENTOR.GRAYSCALE = False
         # Shuffle channels of the images
         _C.AUGMENTOR.CHANNEL_SHUFFLE = False
+        # Apply gridmask to the image. Original paper: https://arxiv.org/pdf/2001.04086v1.pdf
+        _C.AUGMENTOR.GRIDMASK = False
+        # Determines the keep ratio of an input image
+        _C.AUGMENTOR.GRID_RATIO = 0.6
+        #  Range to choose a ``d`` value
+        _C.AUGMENTOR.GRID_D_RANGE = (0.4, 1)
+        # Rotation of the mask in GridMask. Needs to be between [0,1] where 1 is 360 degrees.
+        _C.AUGMENTOR.GRID_ROTATE = 1
+        # Whether to invert the mask
+        _C.AUGMENTOR.GRID_INVERT = False
 
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

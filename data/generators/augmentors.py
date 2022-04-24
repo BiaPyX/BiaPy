@@ -2,6 +2,7 @@ import cv2
 import random
 import math
 import numpy as np
+from PIL import Image
 from skimage.transform import resize
 from scipy.ndimage.interpolation import map_coordinates
 from skimage.draw import line
@@ -898,6 +899,7 @@ def shuffle_channels(img):
         out = img[:,:,:,new_channel_order]
     return out
 
+
 def grayscale(img):
     """Augment the image by converting it into grayscale.
 
@@ -916,3 +918,101 @@ def grayscale(img):
         raise ValueError("Image is supposed to have 3 channels (RGB). Provided {} image shape instead".format(img.shape))
 
     return np.tile(np.expand_dims(np.mean(img, -1), -1), 3)
+
+
+def GridMask(img, channels, z_size, ratio=0.6, d_range=(30,60), rotate=1, invert=False):
+    """GridMask data augmentation presented in `GridMask Data Augmentation <https://arxiv.org/abs/2001.04086v1>`_.
+       Code adapted from `<https://github.com/dvlab-research/GridMask/blob/master/imagenet_grid/utils/grid.py>`_.
+
+       Parameters
+       ----------
+       img : 3D Numpy array
+           Image to transform. E.g. ``(x, y, channels)``.
+
+       channels : int
+           Size of channel dimension. Used for 3D images as the channels have been merged with the z axis.
+
+       z_size : int
+           Size of z dimension. Used for 3D images as the z axis has been merged with the channels. Set to -1 to when
+           do not want to be applied.
+
+       ratio : tuple of floats, optional
+           Range to choose the size of the areas to create.
+
+       d_range : tuple of ints, optional
+           Range to choose the ``d`` value in the original paper.
+
+       rotate : float, optional
+           Rotation of the mask in GridMask. Needs to be between ``[0,1]`` where 1 is 360 degrees.
+
+       invert : bool, optional
+           Whether to invert the mask.
+
+       Returns
+       -------
+       out : 3D Numpy array
+           Transformed image. E.g. ``(x, y, channels)``.
+
+       Example
+       -------
+
+       Calling this function with the default settings may result in:
+
+       +-------------------------------------------+-------------------------------------------+
+       | .. figure:: ../../img/orig_GridMask.png   | .. figure:: ../../img/GridMask.png        |
+       |   :width: 80%                             |   :width: 80%                             |
+       |   :align: center                          |   :align: center                          |
+       |                                           |                                           |
+       |   Input image                             |   Augmented image                         |
+       +-------------------------------------------+-------------------------------------------+
+
+       The grid is painted for visualization purposes.
+    """
+
+    h,w,c = img.shape
+
+    # 1.5 * h, 1.5 * w works fine with the squared images
+    # But with rectangular input, the mask might not be able to recover back to the input image shape
+    # A square mask with edge length equal to the diagnoal of the input image
+    # will be able to cover all the image spot after the rotation. This is also the minimum square.
+    hh = math.ceil((math.sqrt(h*h + w*w)))
+
+    d = np.random.randint(d_range[0], d_range[1])
+
+    l = math.ceil(d*ratio)
+
+    mask = np.ones((hh, hh), np.float32)
+    st_h = np.random.randint(d)
+    st_w = np.random.randint(d)
+    for i in range(-1, hh//d+1):
+            s = d*i + st_h
+            t = s+l
+            s = max(min(s, hh), 0)
+            t = max(min(t, hh), 0)
+            mask[s:t,:] *= 0
+    for i in range(-1, hh//d+1):
+            s = d*i + st_w
+            t = s+l
+            s = max(min(s, hh), 0)
+            t = max(min(t, hh), 0)
+            mask[:,s:t] *= 0
+    r = np.random.randint(rotate)
+    mask = Image.fromarray(np.uint8(mask))
+    mask = mask.rotate(r)
+    mask = np.asarray(mask)
+    mask = mask[(hh-h)//2:(hh-h)//2+h, (hh-w)//2:(hh-w)//2+w]
+
+    if not invert: mask = 1-mask
+
+    if z_size != -1:
+        print("d_range[2]: {} d_range[2]: {}".format(d_range[2], d_range[3]))
+        _z_size = np.random.randint(d_range[2], d_range[3])
+        print("_z_size: {}".format(_z_size))
+        print("Z_size: {}".format(z_size))
+        cz = np.random.randint(0, z_size-_z_size)
+        print("cz: {}".format(cz))
+        print("{}:{}".format(cz*channels,(cz*channels)+(_z_size*channels)))
+        img[...,cz*channels:(cz*channels)+(_z_size*channels)] *= np.stack((mask,)*(_z_size*channels), axis=-1)
+        return img
+    else:
+        return img*np.stack((mask,)*img.shape[-1], axis=-1)

@@ -13,7 +13,7 @@ from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from utils.util import img_to_onehot_encoding
 from data.data_2D_manipulation import random_crop
 from data.generators.augmentors import (cutout, cutblur, cutmix, cutnoise, misalignment, brightness, contrast,
-                                        brightness_em, contrast_em, missing_parts, grayscale, shuffle_channels)
+                                        brightness_em, contrast_em, missing_parts, grayscale, shuffle_channels, GridMask)
 
 
 
@@ -192,7 +192,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            Value to fill the area of cutout with.
 
        cout_apply_to_mask : boolen, optional
-           Wheter to apply cutout to the mask.
+           Whether to apply cutout to the mask.
 
        cutblur : boolean, optional
            Blur a rectangular area of the image by downsampling and upsampling it again.
@@ -240,10 +240,26 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            Iterations to dilate the missing line with. E.g. ``(30, 40)``.
 
        grayscale : bool, optional
-           Wheter to augment images converting partially in grayscale.
+           Whether to augment images converting partially in grayscale.
+
+       gridmask : bool, optional
+           Whether to apply gridmask to the image. See the official `paper <https://arxiv.org/abs/2001.04086v1>`_ for
+           more information about it and its parameters.
+
+       grid_ratio : float, optional
+           Determines the keep ratio of an input image (``r`` in the original paper).
+
+       grid_d_range : tuple of floats, optional
+           Range to choose a ``d`` value. It represents the % of the image size. E.g. ``(0.4,1)``.
+
+       grid_rotate : float, optional
+           Rotation of the mask in GridMask. Needs to be between ``[0,1]`` where 1 is 360 degrees.
+
+       grid_invert : bool, optional
+           Whether to invert the mask of GridMask.
 
        channel_shuffle : bool, optional
-           Wheter to shuflle the channels of the images.
+           Whether to shuflle the channels of the images.
 
        random_crops_in_DA : bool, optional
            Decide to make random crops in DA (before transformations).
@@ -332,7 +348,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                  cblur_down_range=(2,8), cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), cutnoise=False,
                  cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False,
                  ms_displacement=16, ms_rotate_ratio=0.0, missing_parts=False, missp_iterations=(30, 40),
-                 grayscale=False, channel_shuffle=False, random_crops_in_DA=False, shape=(256,256,1), resolution=(1,1),
+                 grayscale=False, channel_shuffle=False, gridmask=False, grid_ratio=0.6, grid_d_range=(0.4,1),
+                 grid_rotate=1, grid_invert=False, random_crops_in_DA=False, shape=(256,256,1), resolution=(1,1),
                  prob_map=None, val=False, n_classes=1, out_number=1, extra_data_factor=1):
 
         if in_memory:
@@ -447,6 +464,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         self.missing_parts = missing_parts
         self.missp_iterations = missp_iterations
         self.grayscale = grayscale
+        self.gridmask = gridmask
+        self.grid_ratio = grid_ratio
+        self.grid_d_range = grid_d_range
+        self.grid_rotate = grid_rotate
+        self.grid_invert = grid_invert
+        self.grid_d_size = (self.shape[0]*grid_d_range[0], self.shape[1]*grid_d_range[1])
         self.channel_shuffle = channel_shuffle
 
         self.prob_map = None
@@ -526,6 +549,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             self.trans_made += '_drop'+str(drop_range)
 
         if grayscale: self.trans_made += '_gray'
+        if gridmask: self.trans_made += '_gridmask'+str(self.grid_ratio)+str(self.grid_d_range)+str(self.grid_rotate)+str(self.grid_invert)
         if channel_shuffle: self.trans_made += '_chshuffle'
         if cutout: self.trans_made += '_cout'+str(cout_nb_iterations)+'+'+str(cout_size)+'+'+str(cout_cval)+'+'+str(cout_apply_to_mask)
         if cutblur: self.trans_made += '_cblur'+str(cblur_size)+'+'+str(cblur_down_range)+'+'+str(cblur_inside)
@@ -742,6 +766,11 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         # Apply channel shuffle
         if self.channel_shuffle and random.uniform(0, 1) < self.da_prob:
             image = shuffle_channels(image)
+
+        # Apply GridMask
+        if self.gridmask and random.uniform(0, 1) < self.da_prob:
+            image = GridMask(image, self.X_channels, -1, self.grid_ratio, self.grid_d_size, self.grid_rotate,
+                             self.grid_invert)
 
         # Apply transformations to the volume and its mask
         segmap = SegmentationMapsOnImage(mask, shape=mask.shape)
