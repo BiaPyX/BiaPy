@@ -1406,7 +1406,10 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
 
         # Ensure uint8
         if img.dtype == np.uint16:
-            img = normalize(img, 0, 65535)
+            if np.max(img) > 255:
+                img = normalize(img, 0, 65535)
+            else:
+                img = img.astype(np.uint8)
 
         if return_filenames: filenames.append(id_)
         if len(img.shape) == 3: img = np.expand_dims(img, axis=-1)
