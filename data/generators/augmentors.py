@@ -888,7 +888,21 @@ def shuffle_channels(img):
        -------
        out : 3D/4D Numpy array
            Transformed image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+
+       Example
+       -------
+
+       +--------------------------------------------+--------------------------------------------+
+       | .. figure:: ../../img/orig_chshuffle.png   | .. figure:: ../../img/chshuffle.png        |
+       |   :width: 80%                              |   :width: 80%                              |
+       |   :align: center                           |   :align: center                           |
+       |                                            |                                            |
+       |   Input image                              |   Augmented image                          |
+       +--------------------------------------------+--------------------------------------------+
+
+       The grid is painted for visualization purposes.
     """
+
     if img.ndim != 3 and img.ndim != 4:
         raise ValueError("Image is supposed to be 3 or 4 dimensions but provided {} image shape instead".format(img.shape))
 
@@ -912,6 +926,19 @@ def grayscale(img):
        -------
        out : 3D/4D Numpy array
            Transformed image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+
+       Example
+       -------
+
+       +--------------------------------------------+--------------------------------------------+
+       | .. figure:: ../../img/orig_grayscale.png   | .. figure:: ../../img/grayscale.png        |
+       |   :width: 80%                              |   :width: 80%                              |
+       |   :align: center                           |   :align: center                           |
+       |                                            |                                            |
+       |   Input image                              |   Augmented image                          |
+       +--------------------------------------------+--------------------------------------------+
+
+       The grid is painted for visualization purposes.
     """
 
     if img.shape[-1] != 3:
@@ -1005,13 +1032,8 @@ def GridMask(img, channels, z_size, ratio=0.6, d_range=(30,60), rotate=1, invert
     if not invert: mask = 1-mask
 
     if z_size != -1:
-        print("d_range[2]: {} d_range[2]: {}".format(d_range[2], d_range[3]))
         _z_size = np.random.randint(d_range[2], d_range[3])
-        print("_z_size: {}".format(_z_size))
-        print("Z_size: {}".format(z_size))
         cz = np.random.randint(0, z_size-_z_size)
-        print("cz: {}".format(cz))
-        print("{}:{}".format(cz*channels,(cz*channels)+(_z_size*channels)))
         img[...,cz*channels:(cz*channels)+(_z_size*channels)] *= np.stack((mask,)*(_z_size*channels), axis=-1)
         return img
     else:
