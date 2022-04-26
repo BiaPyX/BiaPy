@@ -1208,7 +1208,10 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
 
         # Ensure uint8
         if img.dtype == np.uint16:
-            img = normalize(img, 0, 65535)
+            if np.max(img) > 255:
+                img = normalize(img, 0, 65535)
+            else:
+                img = img.astype(np.uint8)
 
         data_shape.append(img.shape)
         img = np.expand_dims(img, axis=0)

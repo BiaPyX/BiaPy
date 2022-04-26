@@ -366,7 +366,11 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.z_size = img.shape[-2]
             # Ensure uint8
             if img.dtype == np.uint16:
-                img = normalize(img, 0, 65535)
+                if np.max(img) > 255:
+                    img = normalize(img, 0, 65535)
+                else:
+                    img = img.astype(np.uint8)
+
             self.div_X_on_load = True if np.max(img) > 10 else False
             self.shape = shape if random_crops_in_DA else img.shape
             # Loop over a few masks to ensure foreground class is present
@@ -661,7 +665,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 mask = mask.transpose((1,2,0,3))
                 # Ensure uint8
                 if img.dtype == np.uint16:
-                    img = normalize(img, 0, 65535)
+                    if np.max(img) > 255:
+                        img = normalize(img, 0, 65535)
+                    else:
+                        img = img.astype(np.uint8)
 
             # Apply ramdom crops if it is selected
             if self.random_crops_in_DA:
@@ -697,7 +704,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     e_mask = e_mask.transpose((1,2,0,3))
                     # Ensure uint8
                     if e_img.dtype == np.uint16:
-                        e_img = normalize(e_img, 0, 65535)
+                        if np.max(e_img) > 255:
+                            e_img = normalize(e_img, 0, 65535)
+                        else:
+                            e_img = e_img.astype(np.uint8)
 
                 batch_x[i], batch_y[i] = self.apply_transform(batch_x[i], batch_y[i], e_im=e_img, e_mask=e_mask)
 
@@ -950,8 +960,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 mask = mask.transpose((1,2,0,3))
                 # Ensure uint8
                 if img.dtype == np.uint16:
-                    img = normalize(img, 0, 65535)
-
+                    if np.max(img) > 255:
+                        img = normalize(img, 0, 65535)
+                    else:
+                        img = img.astype(np.uint8)
 
             # Apply ramdom crops if it is selected
             if self.random_crops_in_DA:
@@ -1002,7 +1014,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     e_mask = e_mask.transpose((1,2,0,3))
                     # Ensure uint8
                     if e_img.dtype == np.uint16:
-                        e_img = normalize(e_img, 0, 65535)
+                        if np.max(e_img) > 255:
+                            e_img = normalize(e_img, 0, 65535)
+                        else:
+                            e_img = e_img.astype(np.uint8)
 
                 sample_x[i], sample_y[i] = self.apply_transform(
                     sample_x[i], sample_y[i], e_im=e_img, e_mask=e_mask)

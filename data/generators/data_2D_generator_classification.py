@@ -185,7 +185,10 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
 
             # Ensure uint8
             if img.dtype == np.uint16:
-                img = normalize(img, 0, 65535)
+                if np.max(img) > 255:
+                    img = normalize(img, 0, 65535)
+                else:
+                    img = img.astype(np.uint8)
         else:
             img = self.X[0]
         self.div_X_on_load = True if np.max(img) > 100 else False
@@ -293,7 +296,10 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
 
                 # Ensure uint8
                 if img.dtype == np.uint16:
-                    img = normalize(img, 0, 65535)
+                    if np.max(img) > 255:
+                        img = normalize(img, 0, 65535)
+                    else:
+                        img = img.astype(np.uint8)
 
                 batch_y[i] = self.class_numbers[sample_class_dir]
 
@@ -318,8 +324,10 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
 
                     # Ensure uint8
                     if e_img.dtype == np.uint16:
-                        e_img = normalize(e_img, 0, 65535)
-
+                        if np.max(e_img) > 255:
+                            e_img = normalize(e_img, 0, 65535)
+                        else:
+                            e_img = e_img.astype(np.uint8)
 
                 batch_x[i] = self.apply_transform(batch_x[i], e_im=e_img)
 
@@ -451,7 +459,10 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
 
                 # Ensure uint8
                 if img.dtype == np.uint16:
-                    img = normalize(img, 0, 65535)
+                    if np.max(img) > 255:
+                        img = normalize(img, 0, 65535)
+                    else:
+                        img = img.astype(np.uint8)
 
             batch_x[i] = img
 
@@ -476,7 +487,10 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
                         if e_img.shape[0] == 1 or e_img.shape[0] == 3: e_img = e_img.transpose((1,2,0))
                     # Ensure uint8
                     if e_img.dtype == np.uint16:
-                        e_img = normalize(e_img, 0, 65535)
+                        if np.max(e_img) > 255:
+                            e_img = normalize(e_img, 0, 65535)
+                        else:
+                            e_img = e_img.astype(np.uint8)
 
                 batch_x[i] = self.apply_transform(batch_x[i], e_im=e_img)
 

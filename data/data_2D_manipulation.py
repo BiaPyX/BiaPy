@@ -193,7 +193,10 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
                     im = np.expand_dims(im, axis=-1)
                 # Ensure uint8
                 if im.dtype == np.uint16:
-                    im = normalize(im, 0, 65535)
+                    if np.max(im) > 255:
+                        im = normalize(im, 0, 65535)
+                    else:
+                        im = im.astype(np.uint8)
                 e_X_train[n] = im
 
             print("{} Loading masks of the extra dataset . . .".format(i))
@@ -976,7 +979,10 @@ def load_data_classification(cfg, test=False):
 
                 # Ensure uint8
                 if img.dtype == np.uint16:
-                    img = normalize(img, 0, 65535)
+                    if np.max(img) > 255:
+                        img = normalize(img, 0, 65535)
+                    else:
+                        img = img.astype(np.uint8)
 
                 class_X_data.append(img)
                 class_Y_data.append(np.expand_dims(np.array(c_num),0).astype(np.uint8))

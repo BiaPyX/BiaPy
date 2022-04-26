@@ -77,7 +77,10 @@ class simple_data_generator(tf.keras.utils.Sequence):
 
             # Ensure uint8
             if img.dtype == np.uint16:
-                img = normalize(img, 0, 65535)
+                if np.max(img) > 255:
+                    img = normalize(img, 0, 65535)
+                else:
+                    img = img.astype(np.uint8)
         else:
             self.len = len(X)
             img = X[0]
@@ -140,7 +143,10 @@ class simple_data_generator(tf.keras.utils.Sequence):
 
                 # Ensure uint8
                 if img.dtype == np.uint16:
-                    img = normalize(img, 0, 65535)
+                    if np.max(img) > 255:
+                        img = normalize(img, 0, 65535)
+                    else:
+                        img = img.astype(np.uint8)
             else:
                 img = self.X[j]
                 img = np.squeeze(img)

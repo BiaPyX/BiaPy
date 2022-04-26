@@ -402,7 +402,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             self.X_channels = img.shape[-1]
             # Ensure uint8
             if img.dtype == np.uint16:
-                img = normalize(img, 0, 65535)
+                if np.max(img) > 255:
+                    img = normalize(img, 0, 65535)
+                else:
+                    img = img.astype(np.uint8)
 
             self.div_X_on_load = True if np.max(img) > 100 else False
             self.shape = shape if random_crops_in_DA else img.shape
@@ -613,7 +616,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
                 # Ensure uint8
                 if img.dtype == np.uint16:
-                    img = normalize(img, 0, 65535)
+                    if np.max(img) > 255:
+                        img = normalize(img, 0, 65535)
+                    else:
+                        img = img.astype(np.uint8)
 
                 if mask.ndim == 2:
                     mask = np.expand_dims(mask, -1)
@@ -655,7 +661,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
                     # Ensure uint8
                     if e_img.dtype == np.uint16:
-                        e_img = normalize(e_img, 0, 65535)
+                        if np.max(e_img) > 255:
+                            e_img = normalize(e_img, 0, 65535)
+                        else:
+                            e_img = e_img.astype(np.uint8)
 
                     if e_mask.ndim == 2:
                         e_mask = np.expand_dims(e_mask, -1)
@@ -955,7 +964,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
                 # Ensure uint8
                 if img.dtype == np.uint16:
-                    img = normalize(img, 0, 65535)
+                    if np.max(img) > 255:
+                        img = normalize(img, 0, 65535)
+                    else:
+                        img = img.astype(np.uint8)
 
                 if mask.ndim == 2:
                     mask = np.expand_dims(mask, -1)
@@ -1006,7 +1018,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
                     # Ensure uint8
                     if e_img.dtype == np.uint16:
-                        e_img = normalize(e_img, 0, 65535)
+                        if np.max(e_img) > 255:
+                            e_img = normalize(e_img, 0, 65535)
+                        else:
+                            e_img = e_img.astype(np.uint8)
 
                     if e_mask.ndim == 2:
                         e_mask = np.expand_dims(e_mask, -1)
@@ -1054,7 +1069,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
                         # Ensure uint8
                         if img.dtype == np.uint16:
-                            img = normalize(img, 0, 65535)
+                            if np.max(img) > 255:
+                                img = normalize(img, 0, 65535)
+                            else:
+                                img = img.astype(np.uint8)
 
                     if self.shape[-1] == 1:
                         im = Image.fromarray(np.repeat(img, 3, axis=2), 'RGB')

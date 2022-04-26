@@ -807,7 +807,10 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
 
         # Ensure uint8
         if _img.dtype == np.uint16:
-            _img = normalize(_img, 0, 65535)
+            if np.max(_img) > 255:
+                _img = normalize(_img, 0, 65535)
+            else:
+                _img = _img.astype(np.uint8)
 
         if mask_ids[i].endswith('.npy'):
             _mask = np.load(os.path.join(data_mask_path, mask_ids[i]))
