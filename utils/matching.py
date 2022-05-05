@@ -6,6 +6,8 @@ from numba import jit
 from tqdm import tqdm
 from scipy.optimize import linear_sum_assignment
 from collections import namedtuple
+import pandas as pd
+import networkx as nx
 
 matching_criteria = dict()
 
@@ -408,15 +410,46 @@ def relabel_sequential(label_field, offset=1):
     relabeled = forward_map[label_field]
     return relabeled, forward_map, inverse_map
     
-def match_using_VJI_and_PAI(y_true, y_pred):
+    
+def segmentation_state(row):
+    """Function from https://mosaic.gitlabpages.inria.fr/publications/seg_compare/
+    used in match_using_segCompare function                                                    
 
-    """Calcualte Volume Averaged Jaccard Index (VJI) metric as well as over-segmentation and 
+       Inputs
+       ----------
+       row : pandas dataframe row
+           
+       Returns
+       -------
+       string with the segmentation state of a cell based on the row
+
+    """
+
+    if len(row.reference) == 0:
+        return 'background'
+    elif len(row.target) == 0:
+        return 'missing'
+    elif len(row.target) == 1:
+        if len(row.reference) == 1:
+            return 'one-to-one'
+        else:
+            return 'under-segmentation'
+    else:
+        if len(row.reference) == 1:
+            return 'over-segmentation'
+        else:
+            return 'misc.'
+    
+def match_using_segCompare(y_true, y_pred, BACKGROUND_LABEL=0, thresh_background=0.5):
+
+    """Calcualte over-segmentation and under-segmentation rates based on the paper
     under-segmentation rates based on the paper entitled "Assessment of deep learning algorithms
     for 3D instance segmentation of confocal image datasets" by A. Kar et al 
     (https://doi.org/10.1101/2021.06.09.447748)
      
-    The numbers next to the calculations correspond to equation number in the aforementioned
-    paper.                                                             
+    Their code is available at https://mosaic.gitlabpages.inria.fr/publications/seg_compare/
+    but uses some libraries that are not compatible with the python version used in this 
+    repository.                                                      
 
        Inputs
        ----------
@@ -429,154 +462,186 @@ def match_using_VJI_and_PAI(y_true, y_pred):
       Returns
       -------
       stats_dict: Dictionary with the following info:
-		  VJI: float
-		      Volume Averaged Jaccard Index. As defined in https://doi.org/10.1101/2021.06.09.447748
-		  backgroundRate: float
-		      Percentage of predicted cells pair-associated with the ground truth background
-		  oversegmentationRate: float
-		      Percentage of ground truth cells pair-associated with more than one predicted cell.
-		  undersegmentationRate: float
-		      Percentage of predicted cells pair-associated with more than one ground truth cell.
-		  bijectionRate: float
-		      Percentage of predicted cells pair-associated with just one ground truth cell.
+          % correct segmentations: float
+              one-to-one associations
+          % undersegmentation: float
+              one-to-many associations
+          % oversegmentation: float
+              many-to-one associations
+          % misc: float
+              many-to-many associations
+          % missing: float
+              if ground truth cell is associated is not in predicted image
+          % background: float
+              if predicted cell is associated with ground truth background
 
     """
-
-    ground_truth_cells = np.unique(y_true)
-    predicted_cells = np.unique(y_pred)
-
-    ground_truth_cells_num = np.size(ground_truth_cells)
-    predicted_cells_num = np.size(predicted_cells)
     
+    #Number of labels
+    groundTruthLabelsNum = np.size(np.unique(y_true))
+    predictedCellsNum = np.size(np.unique(y_pred))
+
     #Initialize variables
-    jaccard_index = np.zeros([ground_truth_cells_num, predicted_cells_num])
-    ground_truth_cellVolume = np.zeros([ground_truth_cells_num])
-    predicted_cellVolume = np.zeros([predicted_cells_num])
-    asymetric_inclusion_GC = np.zeros([ground_truth_cells_num, predicted_cells_num])
-    asymetric_inclusion_PC = np.zeros([predicted_cells_num, ground_truth_cells_num])
-    A = np.zeros([ground_truth_cells_num], dtype=np.int)
-    B = np.zeros([ground_truth_cells_num], dtype=np.int)
-    Bprime = np.zeros([predicted_cells_num], dtype=np.int)
+    groundTruthCellVolume = np.zeros([groundTruthLabelsNum])
+    predictedCellVolume = np.zeros([predictedCellsNum])
 
-    #Relabel
-    new_label = 0
-    for ground_truth_cell in ground_truth_cells:
-        y_true[y_true==ground_truth_cell] = new_label
-        new_label = new_label + 1
-    ground_truth_cells = np.unique(y_true)
+    #Relabel (we assume that background is the lowest value in image)
+    if min(np.unique(y_true)) != 0:
+        y_true = relabel_sequential(y_true, 1)[0]-1
+    else:
+        y_true = relabel_sequential(y_true, 1)[0]
+    if min(np.unique(y_pred)) != 0:
+        y_pred = relabel_sequential(y_pred, 1)[0]-1
+    else:
+        y_pred = relabel_sequential(y_pred, 1)[0]  
 
-    new_label = 0
-    for predicted_cell in predicted_cells:
-        y_pred[y_pred==predicted_cell] = new_label
-        new_label = new_label + 1
-    predicted_cells = np.unique(y_pred)
+    predictedCells = np.unique(y_pred)
+    groundTruthCells = np.unique(y_true)
 
-    #Calculate unions, intersections, jaccard_index, volumes and assymetric inclusion indices
-    for predicted_cell in predicted_cells:
-        #Calculate GroundTruth cell and predicted_cellVolume Volume
-        predicted_cellVolume[predicted_cell] = np.count_nonzero(y_pred==predicted_cell)
-    matchingCells = np.unique(y_pred[(y_true==3) & (y_pred>0)])
-    
-    for ground_truth_cell in ground_truth_cells:
-        gt_cell = y_true==ground_truth_cell
-        #Crop to speed up
-        validSlices = [np.count_nonzero(gt_cell[slice, :, :])>0 for slice in range(np.shape(gt_cell)[0])]
-        gt_cell = gt_cell[validSlices, :, :]
-    
-        matchingCells = np.unique(y_pred[(y_true==ground_truth_cell) & (y_pred>0)])
+    #Calculate unions, intersections, jaccardIndex, volumes and assymetric inclusion indices
+    #VJI is not strictly neccessary, could be removed or maybe hidden w/ an if statement.
 
-        #Calculate GroundTruth cell and predicted_cellVolume Volume
-        ground_truth_cellVolume[ground_truth_cell] = np.count_nonzero(y_true==ground_truth_cells[ground_truth_cell])
-            
-        for predicted_cell in matchingCells:
-            p_cell =  y_pred==predicted_cell
-            p_cell = p_cell[validSlices, :, :]
+    for predictedCell in predictedCells:
+        #Calculate GroundTruth cell and predictedCellVolume Volume
+        predictedCellVolume[predictedCell] = np.count_nonzero(y_pred==predictedCell)
+
+    df_target = pd.DataFrame(columns = ['target', 'reference', 'target_in_reference'])
+    df_reference = pd.DataFrame(columns = ['target', 'reference', 'reference_in_target'])
+
+    for groundTruthCell in groundTruthCells:
+        gtCell = y_true==groundTruthCell
+
+        validSlices = [np.count_nonzero(gtCell[slice, :, :])>0 for slice in range(np.shape(gtCell)[0])]
+        
+        gtCell = gtCell[validSlices, :, :]
+        groundTruthCellVolume[groundTruthCell] = np.count_nonzero(y_true[validSlices, :, :]==groundTruthCell)
+        matchingCells = np.unique(y_pred[(y_true==groundTruthCell)])
+
+        for predictedCell in matchingCells:
+        
+            pCell =  y_pred[validSlices, :, :]==predictedCell
         
             #Calculate union and intersection
-            intersection = (gt_cell & p_cell).sum()
+            intersection = (gtCell & pCell).sum()
 
-            union = ground_truth_cellVolume[ground_truth_cell]+predicted_cellVolume[predicted_cell]-intersection
+            df_target.loc[len(df_target.index)] = [predictedCell, groundTruthCell, intersection/predictedCellVolume[predictedCell]]
+            df_reference.loc[len(df_reference.index)] = [predictedCell, groundTruthCell, intersection/groundTruthCellVolume[groundTruthCell]]
+
+
+    ### - Solve the background associations - ###
+    # target --> reference background
+    target_background = df_target.target.loc[(df_target.reference == BACKGROUND_LABEL) &
+                                             (df_target.target_in_reference >= thresh_background)].to_list()
+
+    # reference --> target background
+    reference_background = df_reference.reference.loc[(df_reference.target == BACKGROUND_LABEL) &
+                                                      (df_reference.reference_in_target >= thresh_background)].to_list()
+
+    # - Add the background (make sure we remove them for the clique associations)
+    target_background.append(BACKGROUND_LABEL)
+    reference_background.append(BACKGROUND_LABEL)
+
+    # - Remove the cells associated with the background + backgrounds
+    df_target = df_target.loc[~((df_target.target.isin(target_background)) |
+                            (df_target.reference == BACKGROUND_LABEL))].copy()
+    df_reference = df_reference.loc[~((df_reference.reference.isin(reference_background)) |
+                                  (df_reference.target == BACKGROUND_LABEL))].copy()
+                       
+    ### - Get the 1 <--> 1 associations - ###
+    # - Associate each reference/target cell with the target/reference cell in which it is the most included
+    df_target = df_target.loc[df_target.groupby('target')['target_in_reference'].idxmax()]
+    df_reference = df_reference.loc[df_reference.groupby('reference')['reference_in_target'].idxmax()]
+
+    # - Convert in dict
+    target_in_reference = df_target[['target', 'reference']].set_index('target').to_dict()['reference']
+    reference_in_target = df_reference[['reference', 'target']].set_index('reference').to_dict()['target']
+
+    ### - Build the associations (bijection, over-segmentation,...) - ###
+    # - Create a bipartite graph where nodes represent the A labels (left) and B labels (right)
+    #   and the edges the associations obtained using the max/min methods
+
+    # - Reindex the labels
+    target_labels = list(set(df_target.target.values) | set(df_reference.target.values))
+    reference_labels = list(set(df_target.reference.values) | set(df_reference.reference.values))
+
+    label_tp_list = [(m, 'l') for m in target_labels] + [(d, 'r') for d in reference_labels]
+    lg2nid = dict(zip(label_tp_list, range(len(label_tp_list))))
+
+    # - Create the graph
+    G = nx.Graph()
+
+    G.add_nodes_from([(nid, {'label': lab, 'group': g}) for (lab, g), nid in lg2nid.items()])
+
+    target_to_ref_list = [(lg2nid[(i, 'l')], lg2nid[(j, 'r')]) for i, j in target_in_reference.items()]
+    G.add_edges_from(target_to_ref_list)
+
+    ref_to_target_list = [(lg2nid[(i, 'r')], lg2nid[(j, 'l')]) for i, j in reference_in_target.items()]
+    G.add_edges_from(ref_to_target_list)
+
+    # - Overlap analysis
+    # - Get the  target_cells <--> reference_cells from the connected subgraph in G
+    connected_graph = [list(G.subgraph(c)) for c in nx.connected_components(G)]
+
+    # - Gather all the connected subgraph and reindex according to the image labels
+    nid2lg = {v: k for k, v in lg2nid.items()}
+
+    out_results = []
+    for c in connected_graph:
+        if len(c) > 1:  # at least two labels
+            target, reference = [], []
+            for nid in c:
+                if nid2lg[nid][1] == 'l':
+                    target.append(nid2lg[nid][0])  # label from target image
+                else:
+                    reference.append(nid2lg[nid][0])  # label from reference image
+
+            out_results.append({'target': target, 'reference': reference})
+
+    # - Add the background associations
+    # - target --> reference background
+    for lab in target_background:
+        if lab != BACKGROUND_LABEL:  # ignore target background
+            out_results.append({'target': [lab], 'reference': []})
+
+    # - reference --> target background
+    for lab in reference_background:
+        if lab != BACKGROUND_LABEL:  # ignore reference background
+            out_results.append({'target': [], 'reference': [lab]})
+
+    out_results = pd.DataFrame(out_results)
         
-            #Calculate Jaccard Index (1)
-            jaccard_index[ground_truth_cell, predicted_cell] = intersection/union
+    out_results['segmentation_state'] = out_results.apply(segmentation_state, axis=1) # add name for each type of association
 
-            #Calculate Assymetric Inclusion Index (2)
-            asymetric_inclusion_GC[ground_truth_cell, predicted_cell] = intersection/ground_truth_cellVolume[ground_truth_cell]
-            asymetric_inclusion_PC[predicted_cell, ground_truth_cell] = intersection/predicted_cellVolume[predicted_cell]
+    ignore_background = True
 
-        #Calculate A (3) and B (4)
-        A[ground_truth_cell] = np.argmax(jaccard_index[ground_truth_cell, :])
-        B[ground_truth_cell] = np.argmax(asymetric_inclusion_GC[ground_truth_cell, :])
+    cell_statistics = {'one-to-one': 0, 'over-segmentation': 0, 'under-segmentation': 0, 'misc.': 0}
 
-    #Calculate B prime (5)
-    for predicted_cell in predicted_cells:
-        Bprime[predicted_cell] = np.argmax(asymetric_inclusion_PC[predicted_cell, :])
+    if not ignore_background:
+        cell_statistics['background'] = 0 # add background
 
-    #Calculate Volume Averaged Jaccard (VJI) (6)
-    upperPart = 0
-    lowerPart = 0
+    state_target = {lab: state for list_lab, state
+                    in zip(out_results.target.values, out_results.segmentation_state.values)
+                    for lab in list_lab if state in cell_statistics}
 
-    for ground_truth_cell in ground_truth_cells[1:]:
-        upperPart = upperPart + ground_truth_cellVolume[ground_truth_cell]*jaccard_index[ground_truth_cell,predicted_cells[A[ground_truth_cell]]]
-        lowerPart = lowerPart + ground_truth_cellVolume[ground_truth_cell]
+    for lab, state in state_target.items():
+        cell_statistics[state] += 1
 
-    VJI = upperPart/lowerPart
+    total_cells = len(state_target)
+    cell_statistics = {state: np.around(val / total_cells * 100, 2) for state, val in cell_statistics.items()}
 
-    print('VJI = {}'.format(VJI))
+    # - add the missing  cells : percentage of reference cells that are missing in the predicted segmentation
+    total_reference_cells = len(np.unique([item for sublist in out_results.reference.values for item in sublist]))
+    missing_cells = [item for sublist in out_results.reference.loc[out_results.segmentation_state == 'missing'].values for item in sublist]
 
-    #Under and over segmentation rates
-    pair_asociated_indices = [0, 0];
-    for ground_truth_cell in ground_truth_cells:
-        for predicted_cell in predicted_cells:
-	        if(B[ground_truth_cell]==predicted_cell or Bprime[predicted_cell]==ground_truth_cell):
-	            pair_asociated_indices = np.vstack([pair_asociated_indices, [ground_truth_cell, predicted_cell]])
-	        
-    pair_asociated_indices = pair_asociated_indices[1:]
-
-    oversegmented = 0;
-    for ground_truth_cell in ground_truth_cells[1:]:
-        if(np.shape(pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, :])[0]>1):
-            for predicted_cell in pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, 1]:
-                if ground_truth_cell in pair_asociated_indices[pair_asociated_indices[:, 1]==predicted_cell, 0]:
-                    oversegmented = oversegmented + 1
-       
-    background = 0
-    ground_truth_cell = ground_truth_cells[0]
-    if(np.shape(pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, :])[0]>1):
-        for predicted_cell in pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, 1]:
-            if ground_truth_cell in pair_asociated_indices[pair_asociated_indices[:, 1]==predicted_cell, 0]:
-                background = background + 1
-    
-    bijection = 0;
-    for predicted_cell in predicted_cells:
-        if(np.shape(pair_asociated_indices[pair_asociated_indices[:, 1]==predicted_cell, :])[0]==1):
-            for ground_truth_cell in pair_asociated_indices[pair_asociated_indices[:, 1]==predicted_cell, 0]:
-                if predicted_cells in pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, 1]:
-                    bijection = bijection + 1
-                
-    undersegmented = 0;
-    for predicted_cell in predicted_cells:
-        if(np.shape(pair_asociated_indices[pair_asociated_indices[:, 1]==predicted_cell, :])[0]>1):
-            undersegmented_aux = 0;
-            for ground_truth_cell in pair_asociated_indices[pair_asociated_indices[:, 1]==predicted_cell, 0]:
-                if predicted_cell in pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, 1]:
-                    undersegmented_aux = undersegmented_aux + 1
-                if undersegmented_aux == len(pair_asociated_indices[pair_asociated_indices[:, 0]==ground_truth_cell, 1]):
-                    undersegmented = undersegmented + 1
-                    
-    validCells = len(np.unique(pair_asociated_indices[:, 1]))
-
-    background_rate = (background/validCells)
-    oversegmentation_rate = (oversegmented/validCells)
-    undersegmentation_rate = (undersegmented/validCells)
-    bijection_rate = (bijection/validCells)
+    total_missing = len(missing_cells)
+    cell_statistics['missing'] = np.around(total_missing/total_reference_cells * 100, 2)
 
     stats_dict = dict (
-        VJI = VJI,
-        background_rate = background_rate,
-        oversegmentation_rate = oversegmentation_rate,
-        undersegmentation_rate = undersegmentation_rate,
-        bijection_rate = bijection_rate,
+        number_of_cells = total_cells,
+        correct_segmentations = cell_statistics['one-to-one'],
+        oversegmentation_rate = cell_statistics['over-segmentation'],
+        undersegmentation_rate = cell_statistics['under-segmentation'],
+        missing_rate = cell_statistics['missing']
     )
 
     return stats_dict
