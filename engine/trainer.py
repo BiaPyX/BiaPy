@@ -510,7 +510,7 @@ class Trainer(object):
                     # Detection in 3D
                     if self.cfg.TEST.DET_LOCAL_MAX_COORDS and self.cfg.PROBLEM.TYPE == 'DETECTION' and self.cfg.PROBLEM.NDIM == '3D':
                         print("Capturing the local maxima ")
-                        pred_coordinates = peak_local_max(pred[...,0], threshold_abs=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK,
+                        pred_coordinates = peak_local_max(pred[...,0], threshold_abs=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK, min_distance=self.cfg.TEST.DET_TOLERANCE,
                                                           exclude_border=False)
 
                         if self.cfg.DATA.TEST.LOAD_GT:
