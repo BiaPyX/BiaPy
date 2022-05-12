@@ -748,7 +748,6 @@ class Trainer(object):
                     if self.cfg.DATA.TEST.LOAD_GT:
                         score = self.model.evaluate(_X, _Y, verbose=0)
                         loss += score[0]
-                        iou += score[1]
 
                     # Make the prediction
                     if self.cfg.TEST.AUGMENTATION:
@@ -777,6 +776,8 @@ class Trainer(object):
                         if self.cfg.DATA.TEST.LOAD_GT: _Y = np.expand_dims(np.argmax(_Y,-1), -1)
 
                     if self.cfg.DATA.TEST.LOAD_GT:
+                        score[1] = jaccard_index_numpy((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
+                        iou += score[1]
                         ov_iou += voc_calculation((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8), score[1])
 
                     if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D' and post_processing:
