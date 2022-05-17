@@ -279,6 +279,7 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
         if len(filenames) != len(X):
             raise ValueError("Filenames array and length of X have different shapes: {} vs {}".format(len(filenames),len(X)))
 
+    _dtype = X.dtype if X.dtype in [np.uint8, np.uint16, np.float32] else np.float32
     d = len(str(len(X)))
     for i in tqdm(range(X.shape[0]), leave=False):
         if filenames is None:
@@ -286,9 +287,9 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
         else:
             f = os.path.join(data_dir, os.path.splitext(filenames[i])[0]+'.tif')
         if X.ndim == 4:
-            aux = np.expand_dims(np.expand_dims(X[i],0).transpose((0,3,1,2)), -1).astype(np.float32)
+            aux = np.expand_dims(np.expand_dims(X[i],0).transpose((0,3,1,2)), -1).astype(_dtype)
         else:
-            aux = np.expand_dims(X[i].transpose((0,3,1,2)), -1).astype(np.float32)
+            aux = np.expand_dims(X[i].transpose((0,3,1,2)), -1).astype(_dtype)
         imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
 
