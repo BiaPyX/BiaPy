@@ -3,7 +3,6 @@ import sys
 import h5py
 import numpy as np
 from skimage.io import imread
-from tqdm import tqdm
 
 code_dir = "/home/user/EM_Image_Segmentation"
 map_code_dir = "/home/user/mAP_3Dvolume"
@@ -24,7 +23,6 @@ os.makedirs(gt_partial_files_dir, exist_ok=True)
 
 sys.path.insert(0, code_dir)
 from utils.matching import matching, match_using_segCompare
-from data.data_3D_manipulation import crop_3D_data_with_overlap
 from utils.util import save_tif_pair_discard, wrapper_matching_dataset_lazy, wrapper_matching_segCompare
 from engine.metrics import jaccard_index_numpy, voc_calculation
 
