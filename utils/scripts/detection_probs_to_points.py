@@ -103,9 +103,9 @@ z_axis = []
 y_axis = []
 x_axis = []
 for i in range(0, len(points)):
-    x_axis.append( points[i][0]*x_res )
-    y_axis.append( points[i][1]*y_res )
-    z_axis.append( points[i][2]*z_res )
+    z_axis.append( points[i][0]*z_res )
+    x_axis.append( points[i][1]*x_res )
+    y_axis.append( points[i][2]*y_res )
 
 df = pd.DataFrame(list(zip(z_axis,x_axis,y_axis)), columns =['axis-0', 'axis-1', 'axis-2'])
 
@@ -130,9 +130,9 @@ z_axis = []
 y_axis = []
 x_axis = []
 for i in range(0, len(new_points)):
-    z_axis.append( new_points[i][0]/z_res )
-    x_axis.append( new_points[i][1]/x_res )
-    y_axis.append( new_points[i][2]/y_res )
+    z_axis.append( round( new_points[i][0]/z_res ) )
+    x_axis.append( round( new_points[i][1]/x_res ) )
+    y_axis.append( round( new_points[i][2]/y_res ) )
 
 # create data frame in Napari CSV format
 df_save = pd.DataFrame(list(zip(z_axis,x_axis,y_axis)), columns =['axis-0', 'axis-1', 'axis-2'])
