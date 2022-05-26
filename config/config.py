@@ -438,7 +438,7 @@ class Config:
         # Wheter to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
         _C.TEST.MATCHING_STATS = False
         _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
-        _C.TEST.MATCHING_VJI_PAI = False
+        _C.TEST.MATCHING_SEGCOMPARE = False
 
         # Wheter to return local maximum coords. Only applies when _C.PROBLEM.TYPE = 'DETECTION'
         _C.TEST.DET_LOCAL_MAX_COORDS = False

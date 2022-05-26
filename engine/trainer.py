@@ -12,8 +12,8 @@ from scipy.ndimage.morphology import binary_dilation
 from skimage.measure import label, regionprops_table
 
 from utils.util import (check_masks, check_downsample_division, create_plots, save_tif, load_data_from_dir,
-                        load_3d_images_from_dir, apply_binary_mask, pad_and_reflect, wrapper_matching_dataset_lazy, wrapper_matching_VJI_and_PAI)
-from utils.matching import matching, match_using_VJI_and_PAI
+                        load_3d_images_from_dir, apply_binary_mask, pad_and_reflect, wrapper_matching_dataset_lazy, wrapper_matching_segCompare)
+from utils.matching import matching, match_using_segCompare
 from data import create_instance_channels, create_test_instance_channels
 from data.data_2D_manipulation import (load_and_prepare_2D_train_data, crop_data_with_overlap, merge_data_with_overlap,
                                        load_data_classification)
@@ -301,10 +301,10 @@ class Trainer(object):
             if self.cfg.TEST.VORONOI_ON_MASK:
                 all_matching_stats_voronoi = []
 
-        if self.cfg.TEST.MATCHING_VJI_PAI and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
-            all_matching_stats_VJI = []
+        if self.cfg.TEST.MATCHING_SEGCOMPARE and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+            all_matching_stats_segCompare = []
             if self.cfg.TEST.VORONOI_ON_MASK:
-                all_matching_stats_voronoi_VJI = []
+                all_matching_stats_voronoi_segCompare = []
 
         if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             if self.cfg.DATA.MW_OPTIMIZE_THS and self.cfg.DATA.CHANNELS != "BCDv2":
@@ -712,21 +712,21 @@ class Trainer(object):
                             print(r_stats)
                             all_matching_stats_voronoi.append(r_stats)
 
-                    if self.cfg.TEST.MATCHING_VJI_PAI and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
-                        print("Calculating matching stats using VJI and PAI. . .")
+                    if self.cfg.TEST.MATCHING_SEGCOMPARE and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+                        print("Calculating matching stats using segCompare. . .")
                         test_file = os.path.join(self.cfg.DATA.TEST.MASK_PATH, filenames[0])
                         if not os.path.isfile(test_file):
                             raise ValueError("The mask is supossed to have the same name as the image")
                         _Y = imread(test_file).squeeze()
-                        r_stats_VJI = match_using_VJI_and_PAI(_Y, w_pred)
-                        print(r_stats_VJI)
-                        all_matching_stats_VJI.append(r_stats_VJI)
+                        r_stats_segCompare = match_using_segCompare(_Y, w_pred)
+                        print(r_stats_segCompare)
+                        all_matching_stats_segCompare.append(r_stats_segCompare)
 
                         if self.cfg.TEST.VORONOI_ON_MASK:
-                            r_stats_VJI = match_using_VJI_and_PAI(_Y, vor_pred)
+                            r_stats_segCompare = match_using_segCompare(_Y, vor_pred)
                             print("Stats with Voronoi")
-                            print(r_stats_VJI)
-                            all_matching_stats_voronoi_VJI.append(r_stats_VJI)
+                            print(r_stats_segCompare)
+                            all_matching_stats_voronoi_segCompare.append(r_stats_segCompare)
 
 
                 ##################
@@ -844,10 +844,10 @@ class Trainer(object):
                 stats_vor = wrapper_matching_dataset_lazy(all_matching_stats_voronoi, self.cfg.TEST.MATCHING_STATS_THS)
 
 
-        if self.cfg.TEST.MATCHING_VJI_PAI and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
-            stats_VJI = wrapper_matching_VJI_and_PAI(all_matching_stats_VJI)
+        if self.cfg.TEST.MATCHING_SEGCOMPARE and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+            stats_segCompare = wrapper_matching_segCompare(all_matching_stats_segCompare)
             if self.cfg.TEST.VORONOI_ON_MASK:
-                stats_vor_VJI = wrapper_matching_VJI_and_PAI(all_matching_stats_voronoi_VJI)
+                stats_vor_segCompare = wrapper_matching_segCompare(all_matching_stats_voronoi_segCompare)
 
         if self.cfg.TEST.STATS.PER_PATCH and self.cfg.PROBLEM.TYPE == 'DETECTION' and self.cfg.DATA.TEST.LOAD_GT:
             d_precision = d_precision / image_counter
@@ -906,12 +906,12 @@ class Trainer(object):
                                 print("IoU (Voronoi) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                                 print(stats_vor[i])
 
-                    if self.cfg.TEST.MATCHING_VJI_PAI:
-                        print("Volume Averaged Jaccard Index (VJI) and segmentation rates:")
-                        print(stats_VJI)
+                    if self.cfg.TEST.MATCHING_SEGCOMPARE:
+                        print("segCompare segmentation rates:")
+                        print(stats_segCompare)
                         if self.cfg.TEST.VORONOI_ON_MASK:
-                            print("Volume Averaged Jaccard Index (VJI) and segmentation rates (voronoi):")
-                            print(stats_vor_VJI)
+                            print("segCompare segmentation rates (voronoi):")
+                            print(stats_vor_segCompare)
 
                 if self.cfg.TEST.STATS.FULL_IMG:
                     print("Loss (per image): {}".format(loss))
