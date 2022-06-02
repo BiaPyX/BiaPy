@@ -137,7 +137,7 @@ for i in range(0, len(new_points)):
 # create data frame in Napari CSV format
 df_save = pd.DataFrame(list(zip(z_axis,x_axis,y_axis)), columns =['axis-0', 'axis-1', 'axis-2'])
 # save to file
-df_save.to_csv( out_csv, index=False )
+df_save.to_csv( out_csv, index=True )
 
 if verbose:
     print( 'Filtered points saved in ' + out_csv )
