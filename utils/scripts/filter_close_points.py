@@ -80,7 +80,7 @@ x_res = args['resolution_axis2']
 verbose = args['verbose']
 
 # read input CSV
-df = pd.read_csv( input_csv, index_col=False )
+df = pd.read_csv( input_csv, index_col=False, usecols=['axis-0','axis-1','axis-2'] )
 
 # apply calibration
 df['axis-0'] = df['axis-0'].apply(lambda z: z * z_res)
