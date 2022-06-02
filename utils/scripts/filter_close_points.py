@@ -74,8 +74,8 @@ out_csv = args['output']
 radius = args['radius']
 
 z_res = args['resolution_axis0']
-x_res = args['resolution_axis1']
-y_res = args['resolution_axis2']
+y_res = args['resolution_axis1']
+x_res = args['resolution_axis2']
 
 verbose = args['verbose']
 
@@ -84,8 +84,8 @@ df = pd.read_csv( input_csv, index_col=False )
 
 # apply calibration
 df['axis-0'] = df['axis-0'].apply(lambda z: z * z_res)
-df['axis-1'] = df['axis-1'].apply(lambda x: x * x_res)
-df['axis-2'] = df['axis-2'].apply(lambda y: y * y_res)
+df['axis-1'] = df['axis-1'].apply(lambda y: y * y_res)
+df['axis-2'] = df['axis-2'].apply(lambda x: x * x_res)
 
 # extract points as list
 points = df.values.tolist()
@@ -105,11 +105,11 @@ y_axis = []
 x_axis = []
 for i in range(0, len(new_points)):
     z_axis.append( new_points[i][0]/z_res )
-    x_axis.append( new_points[i][1]/x_res )
-    y_axis.append( new_points[i][2]/y_res )
+    y_axis.append( new_points[i][1]/y_res )
+    x_axis.append( new_points[i][2]/x_res )
 
 # create data frame in Napari CSV format
-df_save = pd.DataFrame(list(zip(z_axis,x_axis,y_axis)), columns =['axis-0', 'axis-1', 'axis-2'])
+df_save = pd.DataFrame(list(zip(z_axis,y_axis,x_axis)), columns =['axis-0', 'axis-1', 'axis-2'])
 # save to file
 df_save.to_csv( out_csv, index=False )
 
