@@ -968,9 +968,9 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
     diff_shape = False
     for i in range(l):
         if isinstance(prob_map, list):
-            _map = prob_map[i][0].copy().astype(np.float32)
+            _map = prob_map[i][0].copy().astype(np.float64)
         else:
-            _map = prob_map[i].copy().astype(np.float32)
+            _map = prob_map[i].copy().astype(np.float64)
 
         for k in range(channels):
             for j in range(_map.shape[2]):

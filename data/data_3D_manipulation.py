@@ -686,8 +686,8 @@ def random_3D_crop(vol, vol_mask, random_crop_size, val=False, vol_prob=None, we
            If the image provided is going to be used in the validation data. This forces to crop from the origin, e.g.
            ``(0, 0)`` point.
 
-       vol_prob : Numpy 3D array, optional
-           Probability of each pixel to be chosen as the center of the crop. E. g. ``(x, y, channels)``.
+       vol_prob : Numpy 4D array, optional
+           Probability of each pixel to be chosen as the center of the crop. E. g. ``(x, y, z, channels)``.
 
        weight_map : bool, optional
            Weight map of the given image. E.g. ``(x, y, channels)``.
