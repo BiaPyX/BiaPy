@@ -332,6 +332,7 @@ def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discar
         if len(filenames) != len(X):
             raise ValueError("Filenames array and length of X have different shapes: {} vs {}".format(len(filenames),len(X)))
 
+    _dtype = X.dtype if X.dtype in [np.uint8, np.uint16, np.float32] else np.float32
     d = len(str(len(X)))
     for i in tqdm(range(X.shape[0]), leave=False):
         if len(np.unique(Y[i])) >= 2 or not discard:
@@ -343,14 +344,14 @@ def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discar
                 f1 = os.path.join(data_dir, 'x'+suffix, os.path.splitext(filenames[i])[0]+'.tif')
                 f2 = os.path.join(data_dir, 'y'+suffix, os.path.splitext(filenames[i])[0]+'.tif')
             if X.ndim == 4:
-                aux = np.expand_dims(np.expand_dims(X[i],0).transpose((0,3,1,2)), -1).astype(np.float32)
+                aux = np.expand_dims(np.expand_dims(X[i],0).transpose((0,3,1,2)), -1).astype(_dtype)
             else:
-                aux = np.expand_dims(X[i].transpose((0,3,1,2)), -1).astype(np.float32)
+                aux = np.expand_dims(X[i].transpose((0,3,1,2)), -1).astype(_dtype)
             imsave(f1, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
             if Y.ndim == 4:
-                aux = np.expand_dims(np.expand_dims(Y[i],0).transpose((0,3,1,2)), -1).astype(np.float32)
+                aux = np.expand_dims(np.expand_dims(Y[i],0).transpose((0,3,1,2)), -1).astype(_dtype)
             else:
-                aux = np.expand_dims(Y[i].transpose((0,3,1,2)), -1).astype(np.float32)
+                aux = np.expand_dims(Y[i].transpose((0,3,1,2)), -1).astype(_dtype)
             imsave(f2, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
 
