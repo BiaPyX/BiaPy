@@ -1281,7 +1281,11 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
             raise ValueError("Filenames array and length of X have different shapes: {} vs {}".format(len(filenames),len(data)))
 
 	# Extract mask from prediction
-    mask = mask[...,2]
+    if mask.shape[-1] == 3:
+        mask = mask[...,2]
+    else:
+        mask = mask[...,0]+mask[...,1]
+
     mask_shape = np.shape(mask)
     mask = mask[0]
     data = data[0]
