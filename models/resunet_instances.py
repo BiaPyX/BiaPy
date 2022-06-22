@@ -5,8 +5,7 @@ from tensorflow.keras.layers import (Dropout, Lambda, SpatialDropout2D, Conv2D, 
 
 
 def ResUNet_2D(image_shape, activation='elu', k_init='he_normal', drop_values=[0.1,0.1,0.1,0.1,0.1], batch_norm=False,
-               spatial_dropout=False, feature_maps=[16,32,64,128,256], n_classes=1, output_channels="BC",
-               channel_weights=(1,0.2)):
+               spatial_dropout=False, feature_maps=[16,32,64,128,256], n_classes=1, output_channels="BC"):
     """Create 2D Residual_U-Net.
 
        Parameters
@@ -39,10 +38,6 @@ def ResUNet_2D(image_shape, activation='elu', k_init='he_normal', drop_values=[0
            Channels to operate with. Possible values: ``B``, ``BC`` and ``BCD``. ``B`` stands for binary segmentation.
            ``BC`` corresponds to use binary segmentation+contour. ``BCD`` stands for binary segmentation+contour+distances.
 
-       channel_weights : 2 float tuple, optional
-           Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. ``(1, 0.2)``,
-           ``1`` should be multipled by ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the last channel.
-
        Returns
        -------
        model : Keras model
@@ -69,8 +64,6 @@ def ResUNet_2D(image_shape, activation='elu', k_init='he_normal', drop_values=[0
     depth = len(feature_maps)-1
 
     assert output_channels in ['Dv2', 'BC', 'BCD']
-    if len(channel_weights) != 2:
-        raise ValueError("Channel weights need to be len(2) and not {}".format(len(channel_weights)))
 
     fm = feature_maps[::-1]
 

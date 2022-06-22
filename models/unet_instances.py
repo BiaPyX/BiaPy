@@ -5,8 +5,7 @@ from tensorflow.keras import Model, Input
 
 
 def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256], drop_values=[0.1,0.1,0.2,0.2,0.3],
-             spatial_dropout=False, batch_norm=False, k_init='he_normal', n_classes=1, output_channels="BC",
-             channel_weights=(1,0.2)):
+             spatial_dropout=False, batch_norm=False, k_init='he_normal', n_classes=1, output_channels="BC"):
     """Create 2D U-Net.
 
        Parameters
@@ -40,10 +39,6 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
            Channels to operate with. Possible values: ``B``, ``BC`` and ``BCD``. ``B`` stands for binary segmentation.
            ``BC`` corresponds to use binary segmentation+contour. ``BCD`` stands for binary segmentation+contour+distances.
 
-       channel_weights : 2 float tuple, optional
-           Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. ``(1, 0.2)``,
-           ``1`` should be multipled by ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the last channel.
-
        Returns
        -------
        model : Keras model
@@ -64,8 +59,6 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
     depth = len(feature_maps)-1
 
     assert output_channels in ['B', 'BC', 'BCD', 'BCDv2', 'BDv2', 'Dv2']
-    if len(channel_weights) != 2:
-        raise ValueError("Channel weights need to be len(2) and not {}".format(len(channel_weights)))
 
     dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)
     x = Input(dinamic_dim)

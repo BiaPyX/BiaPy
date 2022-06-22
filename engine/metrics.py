@@ -502,15 +502,20 @@ def instance_segmentation_loss(weights=(1,0.2), out_channels="BC"):
 
     def loss(y_true, y_pred):
         if out_channels == "BC":
-            return losses.binary_crossentropy(tf.cast(y_true, dtype=tf.float32), y_pred)
+            return weights[0]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,0], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,0],-1))+\
+                    weights[1]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,1], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,1],-1))
         elif out_channels == "BCM":
-            return losses.binary_crossentropy(tf.cast(y_true, dtype=tf.float32), y_pred)
+            return weights[0]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,0], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,0],-1))+\
+                    weights[1]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,1], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,1],-1))+\
+                    weights[2]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,2], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,2],-1))   
         elif out_channels == "BCD":
-            return weights[0]*losses.binary_crossentropy(tf.cast(y_true[...,:2], dtype=tf.float32), y_pred[...,:2])+\
-                   weights[1]*masked_mse(tf.cast(y_true[...,2], dtype=tf.float32), y_pred[...,2], tf.cast(y_true[...,0], dtype=tf.float32))
+            return weights[0]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,0], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,0],-1))+\
+                    weights[1]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,1], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,1],-1))+\
+                    weights[2]*masked_mse(tf.cast(y_true[...,2], dtype=tf.float32), y_pred[...,2], tf.cast(y_true[...,0], dtype=tf.float32))
         elif out_channels == "BCDv2":
-            return weights[0]*losses.binary_crossentropy(tf.cast(y_true[...,:2], dtype=tf.float32), y_pred[...,:2])+\
-                   weights[1]*K.mean(tf.expand_dims(K.square(tf.cast(y_true[...,2], dtype=tf.float32) - y_pred[...,2]), -1), axis=-1)
+            return weights[0]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,0], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,0],-1))+\
+                    weights[1]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,1], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,1],-1))+\
+                    weights[2]*K.mean(tf.expand_dims(K.square(tf.cast(y_true[...,2], dtype=tf.float32) - y_pred[...,2]), -1), axis=-1)
         elif out_channels == "BDv2":
             return weights[0]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,0], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,0],-1))+\
                    weights[1]*masked_mse(tf.cast(y_true[...,1], dtype=tf.float32), y_pred[...,1], tf.cast(y_true[...,0], dtype=tf.float32))

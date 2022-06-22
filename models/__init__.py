@@ -61,7 +61,6 @@ def build_model(cfg, job_identifier):
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             args['output_channels'] = cfg.DATA.CHANNELS
-            args['channel_weights'] = cfg.DATA.CHANNEL_WEIGHTS
         else:
             args['n_classes'] = cfg.MODEL.N_CLASSES if cfg.MODEL.OUT_CHANNELS == 1 else cfg.MODEL.OUT_CHANNELS
         if cfg.PROBLEM.NDIM == '3D':

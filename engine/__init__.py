@@ -46,16 +46,17 @@ def prepare_optimizer(cfg, model):
         if cfg.MODEL.N_CLASSES > 1:
             raise ValueError("Not implemented pipeline option: N_CLASSES > 1 and INSTANCE_SEG")
         else:
-            if cfg.DATA.CHANNELS in ["BC", "BCM"]:
-                model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
+            if cfg.DATA.CHANNELS == "Dv2":
+                model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
+                                metrics=["mse"])
             else:
-                if cfg.DATA.CHANNELS == "Dv2":
-                    model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
-                                  metrics=["mse"])
-                else:
-                    bin_channels = 2 if cfg.DATA.CHANNELS in ["BCD", "BCDv2"] else 1
-                    model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
-                                  metrics=[IoU_instances(binary_channels=bin_channels)])
+                if len(cfg.DATA.CHANNEL_WEIGHTS) != len(str(cfg.DATA.CHANNELS)):
+                    raise ValueError("'DATA.CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'DATA.CHANNELS'. "
+                                    "E.g. 'DATA.CHANNELS'='BC' 'DATA.CHANNEL_WEIGHTS'=[1,0.5]. "
+                                    "'DATA.CHANNELS'='BCD' 'DATA.CHANNEL_WEIGHTS'=[0.5,0.5,1]")
+                bin_channels = 2 if cfg.DATA.CHANNELS in ["BCD", "BCDv2", "BC", "BCM"] else 1
+                model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
+                              metrics=[IoU_instances(binary_channels=bin_channels)])
     elif cfg.LOSS.TYPE == "W_CE_DICE" and cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "DETECTION"]:
         model.compile(optimizer=opt, loss=weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33), metrics=[jaccard_index])
     elif cfg.LOSS.TYPE == "W_CE_DICE" and cfg.PROBLEM.TYPE == "INSTANCE_SEG":

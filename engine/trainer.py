@@ -70,9 +70,7 @@ class Trainer(object):
             if cfg.LOSS.TYPE == 'MASKED_BCE':
                 self.metric = "masked_jaccard_index"
         elif cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-            if cfg.DATA.CHANNELS in ["BC", "BCM"]:
-                self.metric = "jaccard_index"
-            elif  cfg.DATA.CHANNELS == 'Dv2':
+            if  cfg.DATA.CHANNELS == 'Dv2':
                 self.metric = "mse"
             else:
                 self.metric = "jaccard_index_instances"
