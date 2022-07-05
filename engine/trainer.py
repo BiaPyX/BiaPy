@@ -282,8 +282,14 @@ class Trainer(object):
         print("Making predictions on test data . . .")
         if self.cfg.TEST.STATS.PER_PATCH or self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
            loss_per_crop, iou_per_crop, patch_counter = 0, 0, 0
-        if self.cfg.TEST.STATS.PER_PATCH and self.cfg.PROBLEM.TYPE == 'DETECTION' and self.cfg.DATA.TEST.LOAD_GT:
-            d_precision, d_recall, d_f1 = 0, 0, 0
+        if self.cfg.PROBLEM.TYPE == 'DETECTION':
+            cell_count_file = os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, 'cell_counter.csv')
+            cell_count_lines = []
+            if self.cfg.DATA.TEST.LOAD_GT:
+                if self.cfg.TEST.STATS.PER_PATCH:
+                    d_precision_per_crop, d_recall_per_crop, d_f1_per_crop = 0, 0, 0
+                if self.cfg.TEST.STATS.FULL_IMG:
+                    d_precision, d_recall, d_f1 = 0, 0, 0
         if self.cfg.TEST.STATS.MERGE_PATCHES:
            loss_per_imag, iou_per_image, ov_iou_per_image = 0, 0, 0
         if self.cfg.TEST.STATS.FULL_IMG:
@@ -505,14 +511,14 @@ class Trainer(object):
                                 save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, filenames,
                                          verbose=self.cfg.TEST.VERBOSE)
 
-                    # Detection in 3D
-                    if self.cfg.TEST.DET_LOCAL_MAX_COORDS and self.cfg.PROBLEM.TYPE == 'DETECTION' and self.cfg.PROBLEM.NDIM == '3D':
+                    # Detection
+                    if self.cfg.TEST.DET_LOCAL_MAX_COORDS and self.cfg.PROBLEM.TYPE == 'DETECTION':
                         print("Capturing the local maxima ")
                         pred_coordinates = peak_local_max(pred[...,0], threshold_abs=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK, min_distance=self.cfg.TEST.DET_TOLERANCE,
                                                           exclude_border=False)
-
+                        
                         if self.cfg.DATA.TEST.LOAD_GT:
-                            exclusion_mask = _Y[...,0] < 2
+                            exclusion_mask = _Y[...,0] > 0
                             bin_Y = _Y[...,0] * exclusion_mask.astype( float )
                             props = regionprops_table(label( bin_Y ), properties=('area','centroid'))
                             gt_coordinates = []
@@ -523,13 +529,17 @@ class Trainer(object):
                         # Create a file that represent the local maxima
                         points_pred = np.zeros((pred[...,0].shape + (1,)), dtype=np.uint8)
                         for n, coord in enumerate(pred_coordinates):
-                            z,x,y = coord
-                            points_pred[z,x,y,0] = 255
-                        for z_index in range(len(points_pred)):
-                            points_pred[z_index,...,0] = binary_dilation(points_pred[z_index,...,0], iterations=2)
+                                z,x,y = coord
+                                points_pred[z,x,y,0] = 255
+                        cell_count_lines.append([self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], len(pred_coordinates)])
 
+                        if self.cfg.PROBLEM.NDIM == '3D':
+                            for z_index in range(len(points_pred)):
+                                points_pred[z_index,...,0] = binary_dilation(points_pred[z_index,...,0], iterations=2)
+                        else:
+                            points_pred = binary_dilation(points_pred, iterations=2)
                         save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                                 filenames, verbose=self.cfg.TEST.VERBOSE)
+                                    filenames, verbose=self.cfg.TEST.VERBOSE)
                         del points_pred
 
                         # Save coords in csv file
@@ -541,12 +551,15 @@ class Trainer(object):
                                 csvwriter.writerow([nr+1] + pred_coordinates[nr].tolist())
 
                         if self.cfg.DATA.TEST.LOAD_GT:
-                            v_size = (self.cfg.TEST.DET_VOXEL_SIZE[2], self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
+                            if self.cfg.PROBLEM.NDIM == '3D':
+                                v_size = (self.cfg.TEST.DET_VOXEL_SIZE[2], self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
+                            else:
+                                v_size = (1,self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
                             d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE,
                                                           voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
-                            d_precision += d_metrics[1]
-                            d_recall += d_metrics[3]
-                            d_f1 += d_metrics[5]
+                            d_precision_per_crop += d_metrics[1]
+                            d_recall_per_crop += d_metrics[3]
+                            d_f1_per_crop += d_metrics[5]
                             print("Detection metrics: {}".format(d_metrics))
 
 
@@ -782,6 +795,56 @@ class Trainer(object):
                         all_pred.append(pred)
                         if self.cfg.DATA.TEST.LOAD_GT: all_gt.append(_Y)
 
+                    # Detection
+                    if self.cfg.TEST.DET_LOCAL_MAX_COORDS and self.cfg.PROBLEM.TYPE == 'DETECTION':
+                        print("Capturing the local maxima ")
+                        pred_coordinates = peak_local_max(pred[...,0], threshold_abs=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK, min_distance=self.cfg.TEST.DET_TOLERANCE,
+                                                          exclude_border=False)
+                        
+                        if self.cfg.DATA.TEST.LOAD_GT:
+                            exclusion_mask = _Y[...,0] > 0
+                            bin_Y = _Y[...,0] * exclusion_mask.astype( float )
+                            props = regionprops_table(label( bin_Y ), properties=('area','centroid'))
+                            gt_coordinates = []
+                            for n in range(len(props['centroid-0'])):
+                                gt_coordinates.append([props['centroid-0'][n], props['centroid-1'][n], props['centroid-2'][n]])
+                            gt_coordinates = np.array(gt_coordinates)
+
+                        # Create a file that represent the local maxima
+                        points_pred = np.zeros((pred[...,0].shape + (1,)), dtype=np.uint8)
+                        for n, coord in enumerate(pred_coordinates):
+                                z,x,y = coord
+                                points_pred[z,x,y,0] = 255
+                        cell_count_lines.append([self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], len(pred_coordinates)])
+
+                        if self.cfg.PROBLEM.NDIM == '3D':
+                            for z_index in range(len(points_pred)):
+                                points_pred[z_index,...,0] = binary_dilation(points_pred[z_index,...,0], iterations=2)
+                        else:
+                            points_pred = binary_dilation(points_pred, iterations=2)
+                        save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                                    filenames, verbose=self.cfg.TEST.VERBOSE)
+                        del points_pred
+
+                        # Save coords in csv file
+                        f = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'.csv')
+                        with open(f, 'w', newline="") as file:
+                            csvwriter = csv.writer(file)
+                            csvwriter.writerow(['index', 'axis-0', 'axis-1', 'axis-2'])
+                            for nr in range(len(pred_coordinates)):
+                                csvwriter.writerow([nr+1] + pred_coordinates[nr].tolist())
+
+                        if self.cfg.DATA.TEST.LOAD_GT:
+                            if self.cfg.PROBLEM.NDIM == '3D':
+                                v_size = (self.cfg.TEST.DET_VOXEL_SIZE[2], self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
+                            else:
+                                v_size = (1,self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
+                            d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE,
+                                                          voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
+                            d_precision += d_metrics[1]
+                            d_recall += d_metrics[3]
+                            d_f1 += d_metrics[5]
+                            print("Detection metrics: {}".format(d_metrics))
                 image_counter += 1
 
         del pred, _X, _Y
@@ -841,16 +904,26 @@ class Trainer(object):
             if self.cfg.TEST.VORONOI_ON_MASK:
                 stats_vor = wrapper_matching_dataset_lazy(all_matching_stats_voronoi, self.cfg.TEST.MATCHING_STATS_THS)
 
-
         if self.cfg.TEST.MATCHING_SEGCOMPARE and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
             stats_segCompare = wrapper_matching_segCompare(all_matching_stats_segCompare)
             if self.cfg.TEST.VORONOI_ON_MASK:
                 stats_vor_segCompare = wrapper_matching_segCompare(all_matching_stats_voronoi_segCompare)
 
-        if self.cfg.TEST.STATS.PER_PATCH and self.cfg.PROBLEM.TYPE == 'DETECTION' and self.cfg.DATA.TEST.LOAD_GT:
-            d_precision = d_precision / image_counter
-            d_recall = d_recall / image_counter
-            d_f1 = d_f1 / image_counter
+        if self.cfg.PROBLEM.TYPE == 'DETECTION':
+            with open(cell_count_file, 'w', newline="") as file:
+                csvwriter = csv.writer(file)
+                csvwriter.writerow(['filename', 'cells'])
+                for nr in range(len(cell_count_lines)):
+                    csvwriter.writerow([nr+1] + cell_count_lines[nr])
+            if self.cfg.DATA.TEST.LOAD_GT:
+                if self.cfg.TEST.STATS.PER_PATCH:
+                    d_precision_per_crop = d_precision_per_crop / image_counter
+                    d_recall_per_crop = d_recall_per_crop / image_counter
+                    d_f1_per_crop = d_f1_per_crop / image_counter
+                if self.cfg.TEST.STATS.PER_PATCH:
+                    d_precision = d_precision / image_counter
+                    d_recall = d_recall / image_counter
+                    d_f1 = d_f1 / image_counter
 
 
         print("#############\n"
@@ -883,9 +956,9 @@ class Trainer(object):
                         print("Test Overall IoU (merge patches): {}".format(ov_iou_per_image))
                         print(" ")
                     if self.cfg.PROBLEM.TYPE == 'DETECTION':
-                        print("Detection - Test Precision: {}".format(d_precision))
-                        print("Detection - Test Recall: {}".format(d_recall))
-                        print("Detection - Test F1: {}".format(d_f1))
+                        print("Detection - Test Precision (merge patches): {}".format(d_precision_per_crop))
+                        print("Detection - Test Recall (merge patches): {}".format(d_recall_per_crop))
+                        print("Detection - Test F1 (merge patches): {}".format(d_f1_per_crop))
 
                 if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
                     if self.cfg.TEST.MAP:
@@ -916,6 +989,10 @@ class Trainer(object):
                     print("Test Foreground IoU (per image): {}".format(iou))
                     print("Test Overall IoU (per image): {}".format(ov_iou))
                     print(" ")
+                    if self.cfg.PROBLEM.TYPE == 'DETECTION':
+                        print("Detection - Test Precision (per image): {}".format(d_precision))
+                        print("Detection - Test Recall (per image): {}".format(d_recall))
+                        print("Detection - Test F1 (per image): {}".format(d_f1))
 
                 if post_processing:
                     print("Test Foreground IoU (post-processing): {}".format(iou_post))

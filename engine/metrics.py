@@ -575,9 +575,9 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), verbose=Fals
 
     _true = np.array(true, dtype=np.float32)
     _pred = np.array(pred, dtype=np.float32)
-
+    
     # Multiply each axis for the its real value
-    for i in range(3):
+    for i in range(len(voxel_size)):
         _true[:,i] *= voxel_size[i]
         _pred[:,i] *= voxel_size[i]
 
