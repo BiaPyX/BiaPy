@@ -141,6 +141,8 @@ class Config:
         _C.DATA.TEST.BINARY_MASKS = os.path.join(_C.DATA.ROOT_DIR, 'test', 'bin_mask')
         # Not used yet.
         _C.DATA.TEST.RESOLUTION = (-1,)
+        # Wheter to apply argmax to the predicted images 
+        _C.DATA.TEST.ARGMAX_TO_OUTPUT = False
 
         # Validation
         _C.DATA.VAL = CN()
@@ -444,7 +446,7 @@ class Config:
         _C.TEST.DET_LOCAL_MAX_COORDS = False
         # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
         # 'peak_local_max' of skimage.feature
-        _C.TEST.DET_MIN_TH_TO_BE_PEAK = 0.2
+        _C.TEST.DET_MIN_TH_TO_BE_PEAK = [0.2]
         # Maximum distance to not consider a point as a true positive. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
         _C.TEST.DET_TOLERANCE = 10
         # Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value

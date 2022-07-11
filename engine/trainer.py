@@ -464,7 +464,7 @@ class Trainer(object):
 
                     if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                         # Argmax if needed
-                        if self.cfg.MODEL.N_CLASSES > 1:
+                        if self.cfg.MODEL.N_CLASSES > 1 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
                             pred = np.expand_dims(np.argmax(pred,-1), -1)
                             if self.cfg.DATA.TEST.LOAD_GT: _Y = np.expand_dims(np.argmax(_Y,-1), -1)
 
@@ -514,54 +514,85 @@ class Trainer(object):
                     # Detection
                     if self.cfg.TEST.DET_LOCAL_MAX_COORDS and self.cfg.PROBLEM.TYPE == 'DETECTION':
                         print("Capturing the local maxima ")
-                        pred_coordinates = peak_local_max(pred[...,0], threshold_abs=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK, min_distance=self.cfg.TEST.DET_TOLERANCE,
-                                                          exclude_border=False)
+                        all_channel_coord = []
+                        for channel in range(pred.shape[-1]):
+                            if len(self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK) == 1: 
+                                min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[0] 
+                            else:
+                                min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[channel]
+                            pred_coordinates = peak_local_max(pred[...,channel], threshold_abs=min_th_peak, min_distance=self.cfg.TEST.DET_TOLERANCE,
+                                                              exclude_border=False)
+                            all_channel_coord.append(pred_coordinates)
                         
-                        if self.cfg.DATA.TEST.LOAD_GT:
-                            exclusion_mask = _Y[...,0] > 0
-                            bin_Y = _Y[...,0] * exclusion_mask.astype( float )
-                            props = regionprops_table(label( bin_Y ), properties=('area','centroid'))
-                            gt_coordinates = []
-                            for n in range(len(props['centroid-0'])):
-                                gt_coordinates.append([props['centroid-0'][n], props['centroid-1'][n], props['centroid-2'][n]])
-                            gt_coordinates = np.array(gt_coordinates)
-
                         # Create a file that represent the local maxima
-                        points_pred = np.zeros((pred[...,0].shape + (1,)), dtype=np.uint8)
-                        for n, coord in enumerate(pred_coordinates):
-                                z,x,y = coord
-                                points_pred[z,x,y,0] = 255
-                        cell_count_lines.append([self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], len(pred_coordinates)])
+                        points_pred = np.zeros((pred.shape[:-1] + (len(all_channel_coord),)), dtype=np.uint8)
+                        for n, pred_coordinates in enumerate(all_channel_coord):
+                            for coord in pred_coordinates:
+                                    z,x,y = coord
+                                    points_pred[z,x,y,n] = n
+                            cell_count_lines.append([self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], len(pred_coordinates)])
 
                         if self.cfg.PROBLEM.NDIM == '3D':
                             for z_index in range(len(points_pred)):
-                                points_pred[z_index,...,0] = binary_dilation(points_pred[z_index,...,0], iterations=2)
+                                for ch in range(points_pred.shape[-1]):
+                                    points_pred[z_index,...,ch] = binary_dilation(points_pred[z_index,...,ch], iterations=2)
                         else:
-                            points_pred = binary_dilation(points_pred, iterations=2)
+                            for ch in range(points_pred.shape[-1]):
+                                points_pred[...,ch] = binary_dilation(points_pred[...,ch], iterations=2)
+
+                        # Reduce image to only 1 channel
+                        if points_pred.shape[-1] > 1:
+                            points_pred = np.expand_dims(np.argmax(points_pred, axis=-1), -1)
+
                         save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                                     filenames, verbose=self.cfg.TEST.VERBOSE)
                         del points_pred
+                                            
+                        all_channel_d_metrics = [0,0,0]
+                        for ch, pred_coordinates in enumerate(all_channel_coord):
+                            # Save coords in csv file
+                            f = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'.csv')
+                            with open(f, 'w', newline="") as file:
+                                csvwriter = csv.writer(file)
+                                csvwriter.writerow(['index', 'axis-0', 'axis-1', 'axis-2'])
+                                for nr in range(len(pred_coordinates)):
+                                    csvwriter.writerow([nr+1] + pred_coordinates[nr].tolist())
 
-                        # Save coords in csv file
-                        f = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'.csv')
-                        with open(f, 'w', newline="") as file:
-                            csvwriter = csv.writer(file)
-                            csvwriter.writerow(['index', 'axis-0', 'axis-1', 'axis-2'])
-                            for nr in range(len(pred_coordinates)):
-                                csvwriter.writerow([nr+1] + pred_coordinates[nr].tolist())
+                            # Calculate detection metrics 
+                            if self.cfg.DATA.TEST.LOAD_GT:
+                                exclusion_mask = _Y[...,ch] > 0
+                                bin_Y = _Y[...,ch] * exclusion_mask.astype( float )
+                                props = regionprops_table(label( bin_Y ), properties=('area','centroid'))
+                                gt_coordinates = []
+                                for n in range(len(props['centroid-0'])):
+                                    gt_coordinates.append([props['centroid-0'][n], props['centroid-1'][n], props['centroid-2'][n]])
+                                gt_coordinates = np.array(gt_coordinates)
+
+                                if self.cfg.PROBLEM.NDIM == '3D':
+                                    v_size = (self.cfg.TEST.DET_VOXEL_SIZE[2], self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
+                                else:
+                                    v_size = (1,self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
+                                print("Detection (class "+str(ch+1)+")")
+                                d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE,
+                                                            voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
+                                print("Detection metrics: {}".format(d_metrics))  
+                                all_channel_d_metrics[0] += d_metrics[1]
+                                all_channel_d_metrics[1] += d_metrics[3]
+                                all_channel_d_metrics[2] += d_metrics[5]
 
                         if self.cfg.DATA.TEST.LOAD_GT:
-                            if self.cfg.PROBLEM.NDIM == '3D':
-                                v_size = (self.cfg.TEST.DET_VOXEL_SIZE[2], self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
-                            else:
-                                v_size = (1,self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
-                            d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE,
-                                                          voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
-                            d_precision_per_crop += d_metrics[1]
-                            d_recall_per_crop += d_metrics[3]
-                            d_f1_per_crop += d_metrics[5]
-                            print("Detection metrics: {}".format(d_metrics))
+                            print("All classes "+str(ch+1))
+                            all_channel_d_metrics[0] = all_channel_d_metrics[0]/_Y.shape[-1]
+                            all_channel_d_metrics[1] = all_channel_d_metrics[1]/_Y.shape[-1]
+                            all_channel_d_metrics[2] = all_channel_d_metrics[2]/_Y.shape[-1]
+                            print("Detection metrics: {}".format(["Precision", all_channel_d_metrics[0],
+                                                                  "Recall", all_channel_d_metrics[1],
+                                                                  "F1", all_channel_d_metrics[2]]))
 
+                            d_precision_per_crop += all_channel_d_metrics[0]
+                            d_recall_per_crop += all_channel_d_metrics[1]
+                            d_f1_per_crop += all_channel_d_metrics[2]
+                            
 
                     #############################
                     ### INSTANCE SEGMENTATION ###
@@ -782,7 +813,7 @@ class Trainer(object):
                         save_tif(pred, self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
 
                     # Argmax if needed
-                    if self.cfg.MODEL.N_CLASSES > 1:
+                    if self.cfg.MODEL.N_CLASSES > 1 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
                         pred = np.expand_dims(np.argmax(pred,-1), -1)
                         if self.cfg.DATA.TEST.LOAD_GT: _Y = np.expand_dims(np.argmax(_Y,-1), -1)
 
@@ -798,53 +829,85 @@ class Trainer(object):
                     # Detection
                     if self.cfg.TEST.DET_LOCAL_MAX_COORDS and self.cfg.PROBLEM.TYPE == 'DETECTION':
                         print("Capturing the local maxima ")
-                        pred_coordinates = peak_local_max(pred[...,0], threshold_abs=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK, min_distance=self.cfg.TEST.DET_TOLERANCE,
-                                                          exclude_border=False)
+                        all_channel_coord = []
+                        for channel in range(pred.shape[-1]):
+                            if len(self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK) == 1: 
+                                min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[0] 
+                            else:
+                                min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[channel]
+                            pred_coordinates = peak_local_max(pred[...,channel], threshold_abs=min_th_peak, min_distance=self.cfg.TEST.DET_TOLERANCE,
+                                                              exclude_border=False)
+                            all_channel_coord.append(pred_coordinates)
                         
-                        if self.cfg.DATA.TEST.LOAD_GT:
-                            exclusion_mask = _Y[...,0] > 0
-                            bin_Y = _Y[...,0] * exclusion_mask.astype( float )
-                            props = regionprops_table(label( bin_Y ), properties=('area','centroid'))
-                            gt_coordinates = []
-                            for n in range(len(props['centroid-0'])):
-                                gt_coordinates.append([props['centroid-0'][n], props['centroid-1'][n], props['centroid-2'][n]])
-                            gt_coordinates = np.array(gt_coordinates)
-
                         # Create a file that represent the local maxima
-                        points_pred = np.zeros((pred[...,0].shape + (1,)), dtype=np.uint8)
-                        for n, coord in enumerate(pred_coordinates):
-                                z,x,y = coord
-                                points_pred[z,x,y,0] = 255
-                        cell_count_lines.append([self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], len(pred_coordinates)])
+                        points_pred = np.zeros((pred.shape[:-1] + (len(all_channel_coord),)), dtype=np.uint8)
+                        for n, pred_coordinates in enumerate(all_channel_coord):
+                            for coord in pred_coordinates:
+                                    z,x,y = coord
+                                    points_pred[z,x,y,n] = n
+                            cell_count_lines.append([self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], len(pred_coordinates)])
 
                         if self.cfg.PROBLEM.NDIM == '3D':
                             for z_index in range(len(points_pred)):
-                                points_pred[z_index,...,0] = binary_dilation(points_pred[z_index,...,0], iterations=2)
+                                for ch in range(points_pred.shape[-1]):
+                                    points_pred[z_index,...,ch] = binary_dilation(points_pred[z_index,...,ch], iterations=2)
                         else:
-                            points_pred = binary_dilation(points_pred, iterations=2)
+                            for ch in range(points_pred.shape[-1]):
+                                points_pred[...,ch] = binary_dilation(points_pred[...,ch], iterations=2)
+
+                        # Reduce image to only 1 channel
+                        if points_pred.shape[-1] > 1:
+                            points_pred = np.expand_dims(np.argmax(points_pred, axis=-1), -1)
+
                         save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                                     filenames, verbose=self.cfg.TEST.VERBOSE)
                         del points_pred
+                                            
+                        all_channel_d_metrics = [0,0,0]
+                        for ch, pred_coordinates in enumerate(all_channel_coord):
+                            # Save coords in csv file
+                            f = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'.csv')
+                            with open(f, 'w', newline="") as file:
+                                csvwriter = csv.writer(file)
+                                csvwriter.writerow(['index', 'axis-0', 'axis-1', 'axis-2'])
+                                for nr in range(len(pred_coordinates)):
+                                    csvwriter.writerow([nr+1] + pred_coordinates[nr].tolist())
 
-                        # Save coords in csv file
-                        f = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'.csv')
-                        with open(f, 'w', newline="") as file:
-                            csvwriter = csv.writer(file)
-                            csvwriter.writerow(['index', 'axis-0', 'axis-1', 'axis-2'])
-                            for nr in range(len(pred_coordinates)):
-                                csvwriter.writerow([nr+1] + pred_coordinates[nr].tolist())
+                            # Calculate detection metrics 
+                            if self.cfg.DATA.TEST.LOAD_GT:
+                                exclusion_mask = _Y[...,ch] > 0
+                                bin_Y = _Y[...,ch] * exclusion_mask.astype( float )
+                                props = regionprops_table(label( bin_Y ), properties=('area','centroid'))
+                                gt_coordinates = []
+                                for n in range(len(props['centroid-0'])):
+                                    gt_coordinates.append([props['centroid-0'][n], props['centroid-1'][n], props['centroid-2'][n]])
+                                gt_coordinates = np.array(gt_coordinates)
+
+                                if self.cfg.PROBLEM.NDIM == '3D':
+                                    v_size = (self.cfg.TEST.DET_VOXEL_SIZE[2], self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
+                                else:
+                                    v_size = (1,self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
+                                print("Detection (class "+str(ch+1)+")")
+                                d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE,
+                                                            voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
+                                print("Detection metrics: {}".format(d_metrics))  
+                                all_channel_d_metrics[0] += d_metrics[1]
+                                all_channel_d_metrics[1] += d_metrics[3]
+                                all_channel_d_metrics[2] += d_metrics[5]
 
                         if self.cfg.DATA.TEST.LOAD_GT:
-                            if self.cfg.PROBLEM.NDIM == '3D':
-                                v_size = (self.cfg.TEST.DET_VOXEL_SIZE[2], self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
-                            else:
-                                v_size = (1,self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
-                            d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE,
-                                                          voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
-                            d_precision += d_metrics[1]
-                            d_recall += d_metrics[3]
-                            d_f1 += d_metrics[5]
-                            print("Detection metrics: {}".format(d_metrics))
+                            print("All classes "+str(ch+1))
+                            all_channel_d_metrics[0] = all_channel_d_metrics[0]/_Y.shape[-1]
+                            all_channel_d_metrics[1] = all_channel_d_metrics[1]/_Y.shape[-1]
+                            all_channel_d_metrics[2] = all_channel_d_metrics[2]/_Y.shape[-1]
+                            print("Detection metrics: {}".format(["Precision", all_channel_d_metrics[0],
+                                                                  "Recall", all_channel_d_metrics[1],
+                                                                  "F1", all_channel_d_metrics[2]]))
+
+                            d_precision += all_channel_d_metrics[0]
+                            d_recall += all_channel_d_metrics[1]
+                            d_f1 += all_channel_d_metrics[2]
+                            
                 image_counter += 1
 
         del pred, _X, _Y
@@ -920,7 +983,7 @@ class Trainer(object):
                     d_precision_per_crop = d_precision_per_crop / image_counter
                     d_recall_per_crop = d_recall_per_crop / image_counter
                     d_f1_per_crop = d_f1_per_crop / image_counter
-                if self.cfg.TEST.STATS.PER_PATCH:
+                if self.cfg.TEST.STATS.FULL_IMG:
                     d_precision = d_precision / image_counter
                     d_recall = d_recall / image_counter
                     d_f1 = d_f1 / image_counter
