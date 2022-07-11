@@ -354,13 +354,27 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.data_paths = sorted(next(os.walk(data_paths[0]))[2])
             self.data_mask_path = sorted(next(os.walk(data_paths[1]))[2])
             self.len = len(self.data_paths)
-
+            self.ax_x = None
             # Check if a division is required
             if self.data_paths[0].endswith('.npy'):
                 img = np.load(os.path.join(data_paths[0], self.data_paths[0]))
             else:
-                img = imread(os.path.join(data_paths[0], self.data_paths[0]))
-            if img.ndim == 3: img = np.expand_dims(img, -1)
+                img = imread(os.path.join(data_paths[0], self.data_paths[0]))              
+            if img.ndim == 3: 
+                img = np.expand_dims(img, -1)
+            elif img.ndim == 4 and self.data_paths[0].endswith('.tif'):
+            # Obtain axis position once
+                if self.ax_x is None:
+                    from PIL import Image
+                    from PIL.TiffTags import TAGS
+                    img_aux = Image.open(os.path.join(data_paths[0], self.data_paths[0]))
+                    meta_dict = {TAGS[key] : img_aux.tag[key] for key in img_aux.tag_v2}
+                    axis = meta_dict['ImageDescription'][0].split('\n')[-2].split('=')[-1]
+                    self.ax_x = {}
+                    for k, c in enumerate(axis):
+                        self.ax_x[c] = k  
+                    del img_aux   
+                img = img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
             img = img.transpose((1,2,0,3))
             self.X_channels = img.shape[-1]
             self.z_size = img.shape[-2]
@@ -377,13 +391,28 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.first_no_bin_channel = -1
             self.div_Y_no_bin_channels_max = 0
             self.div_Y_no_bin_channels_min = 9999999
+            self.ax_y = None
             print("Calculating generator values . . .")
             for i in range(min(10,len(self.data_mask_path))):
                 if self.data_mask_path[i].endswith('.npy'):
                     img = np.load(os.path.join(self.paths[1], self.data_mask_path[i]))
                 else:
                     img = imread(os.path.join(data_paths[1], self.data_mask_path[i]))
-                if img.ndim == 3: img = np.expand_dims(img, -1)
+                    if img.ndim == 3: 
+                        img = np.expand_dims(img, -1)
+                    elif img.ndim == 4 and self.data_mask_path[i].endswith('.tif'):
+                    # Obtain axis position once
+                        if self.ax_y is None:
+                            from PIL import Image
+                            from PIL.TiffTags import TAGS
+                            img_aux = Image.open(os.path.join(data_paths[0], self.data_paths[0]))
+                            meta_dict = {TAGS[key] : img_aux.tag[key] for key in img_aux.tag_v2}
+                            axis = meta_dict['ImageDescription'][0].split('\n')[-2].split('=')[-1]
+                            self.ax_y = {}
+                            for k, c in enumerate(axis):
+                                self.ax_y[c] = k  
+                            del img_aux   
+                        img = img.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
                 # Store wheter all channels of the gt are binary or not
                 # (e.g. distance transform channel)
                 if img.dtype is np.dtype(np.float32) or \
@@ -659,8 +688,14 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 else:
                     img = imread(os.path.join(self.paths[0], self.data_paths[j]))
                     mask = imread(os.path.join(self.paths[1], self.data_mask_path[j]))
-                if img.ndim == 3: img = np.expand_dims(img, -1)
-                if mask.ndim == 3: mask = np.expand_dims(mask, -1)
+                if img.ndim == 3: 
+                    img = np.expand_dims(img, -1)
+                elif img.ndim == 4 and self.ax_x is not None:
+                    img = img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
+                if mask.ndim == 3: 
+                    mask = np.expand_dims(mask, -1)
+                elif mask.ndim == 4 and self.ax_y is not None:
+                    mask = mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
                 img = img.transpose((1,2,0,3))
                 mask = mask.transpose((1,2,0,3))
                 # Ensure uint8
@@ -698,8 +733,14 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     else:
                         e_img = imread(os.path.join(self.paths[0], self.data_paths[extra_img]))
                         e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
-                    if e_img.ndim == 3: e_img = np.expand_dims(e_img, -1)
-                    if e_mask.ndim == 3: e_mask = np.expand_dims(e_mask, -1)
+                    if e_img.ndim == 3: 
+                        e_img = np.expand_dims(e_img, -1)
+                    elif e_img.ndim == 4 and self.ax_x is not None:
+                        e_img = e_img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
+                    if e_mask.ndim == 3: 
+                        e_mask = np.expand_dims(e_mask, -1)
+                    elif e_mask.ndim == 4 and self.ax_y is not None:
+                        e_mask = e_mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
                     e_img = e_img.transpose((1,2,0,3))
                     e_mask = e_mask.transpose((1,2,0,3))
                     # Ensure uint8
@@ -954,8 +995,14 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 else:
                     img = imread(os.path.join(self.paths[0], self.data_paths[pos]))
                     mask = imread(os.path.join(self.paths[1], self.data_mask_path[pos]))
-                if img.ndim == 3: img = np.expand_dims(img, -1)
-                if mask.ndim == 3: mask = np.expand_dims(mask, -1)
+                if img.ndim == 3: 
+                    img = np.expand_dims(img, -1)
+                elif img.ndim == 4 and self.ax_x is not None:
+                    img = img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
+                if mask.ndim == 3: 
+                    mask = np.expand_dims(mask, -1)
+                elif mask.ndim == 4 and self.ax_y is not None:
+                    mask = mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
                 img = img.transpose((1,2,0,3))
                 mask = mask.transpose((1,2,0,3))
                 # Ensure uint8
@@ -1008,8 +1055,14 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     else:
                         e_img = imread(os.path.join(self.paths[0], self.data_paths[extra_img]))
                         e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
-                    if e_img.ndim == 3: e_img = np.expand_dims(e_img, -1)
-                    if e_mask.ndim == 3: e_mask = np.expand_dims(e_mask, -1)
+                    if e_img.ndim == 3: 
+                        e_img = np.expand_dims(e_img, -1)
+                    elif e_img.ndim == 4 and self.ax_x is not None:
+                        e_img = e_img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
+                    if e_mask.ndim == 3: 
+                        e_mask = np.expand_dims(e_mask, -1)
+                    elif e_mask.ndim == 4 and self.ax_y is not None:
+                        e_mask = e_mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
                     e_img = e_img.transpose((1,2,0,3))
                     e_mask = e_mask.transpose((1,2,0,3))
                     # Ensure uint8

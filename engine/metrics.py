@@ -165,9 +165,7 @@ def jaccard_index_softmax(y_true, y_pred, t=0.5):
        jac : Tensor
            Jaccard index value
     """
-    if y_true.ndim != y_pred.ndim:
-        raise ValueError("Dimension mismatch: {} and {} provided".format(y_true.shape, y_pred.shape))
-
+    
     y_pred_ = tf.cast(y_pred > t, dtype=tf.int32)
     y_pred_ = tf.math.argmax(y_pred_, axis=-1)
 
@@ -610,7 +608,7 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), verbose=Fals
     if verbose:
     	print("Points in ground truth: {}, Points in prediction: {}".format(len(_true), len(_pred)))
     	print("True positives: {}, False positives: {}, False negatives: {}".format(TP, FP, FN))
-
+        
     return ["Precision", precision, "Recall", recall, "F1", F1]
 
 def masked_bce_loss( y_true, y_pred ):

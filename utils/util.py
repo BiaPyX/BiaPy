@@ -1400,6 +1400,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
     data_shape = []
     c_shape = []
     if return_filenames: filenames = []
+    ax = None
 
     # Read images
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
@@ -1407,6 +1408,19 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
             img = np.load(os.path.join(data_dir, id_))
         else:
             img = imread(os.path.join(data_dir, id_))
+            if img.ndim == 4 and id_.endswith('.tif'):
+                # Obtain axis position once
+                if ax is None:
+                    from PIL import Image
+                    from PIL.TiffTags import TAGS
+                    img_aux = Image.open(os.path.join(data_dir, id_))
+                    meta_dict = {TAGS[key] : img_aux.tag[key] for key in img_aux.tag_v2}
+                    axis = meta_dict['ImageDescription'][0].split('\n')[-2].split('=')[-1]
+                    ax = {}
+                    for k, c in enumerate(axis):
+                        ax[c] = k  
+                    del img_aux   
+                img = img.transpose((ax['Z'],ax['Y'],ax['X'],ax['C']))
         img = np.squeeze(img)
 
         # Ensure uint8
