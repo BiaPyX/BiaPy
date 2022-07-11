@@ -34,7 +34,7 @@ def prepare_optimizer(cfg, model):
         model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=["accuracy"])
     elif cfg.LOSS.TYPE == "CE" and cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", 'DETECTION']:
         if cfg.MODEL.N_CLASSES > 1:
-            model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=[jaccard_index_softmax])
+            model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index_softmax])
         else:
             model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
     elif cfg.LOSS.TYPE == "MASKED_BCE" and cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", 'DETECTION']:
