@@ -29,7 +29,7 @@ This repository is the base of the following work:
                                                                                                                         
 ```bibtex
 @Article{Franco-Barranco2021,
-    author={Franco-Barranco, Daniel and Mu{\~{n}}oz-Barrutia, Arrate and Arganda-Carreras, Ignacio},
+    author={Franco-Barranco, Daniel and Muñoz-Barrutia, Arrate and Arganda-Carreras, Ignacio},
     title={Stable Deep Neural Network Architectures for Mitochondria Segmentation on Electron Microscopy Volumes},
     journal={Neuroinformatics},
     year={2021},
