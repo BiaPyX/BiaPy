@@ -43,7 +43,7 @@ the foreground class (mitochondria in this case).
 Choose a template
 ~~~~~~~~~~~~~~~~~
 
-Refer to the code version `V1.0 <https://github.com/danifranco/EM_Image_Segmentation/releases/tag/v1.0>`_ in case you want to reproduce exact results of our paper. Once the code is cloned you can use any of the templates from `here <https://github.com/danifranco/EM_Image_Segmentation/tree/v1.0/templates>`_. 
+Refer to the code version `V1.0 <https://github.com/danifranco/EM_Image_Segmentation/releases/tag/v1.0>`_ in case you want to reproduce exact results of `Stable Deep Neural Network Architectures for Mitochondria Segmentation on Electron Microscopy Volumes <#citation>`_. Once the code is cloned you can use any of the templates from `here <https://github.com/danifranco/EM_Image_Segmentation/tree/v1.0/templates>`_. 
 
 Otherwise, to create the YAML file you can use the template `unet_2d.yaml <https://github.com/danifranco/EM_Image_Segmentation/blob/master/templates/unet_2d.yaml>`_ which is prepared for this tutorial.
                                                                                                                         
@@ -82,4 +82,21 @@ To evaluate the quality of the results in semantic segmentation:
   will be divided in: per patch, merging patches and full image depending on the options selected to True in
   ``TEST.STATS.*`` variable. 
 
+
+Citation
+~~~~~~~~
+
+This workflow was used to make the following work: ::
+
+    @Article{Franco-Barranco2021,
+             author={Franco-Barranco, Daniel and Muñoz-Barrutia, Arrate and Arganda-Carreras, Ignacio},
+             title={Stable Deep Neural Network Architectures for Mitochondria Segmentation on Electron Microscopy Volumes},
+             journal={Neuroinformatics},
+             year={2021},
+             month={Dec},
+             day={02},
+             issn={1559-0089},
+             doi={10.1007/s12021-021-09556-1},
+             url={https://doi.org/10.1007/s12021-021-09556-1}
+    }
 

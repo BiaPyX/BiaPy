@@ -154,3 +154,16 @@ To prepare ``.h5`` files from resulting instance predictions in ``.tif`` format 
 details in the challenge page. 
 
 
+Citation
+~~~~~~~~
+
+This workflow was used to make the following work: ::
+
+    @inproceedings{wei2020mitoem,
+                   title={MitoEM dataset: large-scale 3D mitochondria instance segmentation from EM images},
+                   author={Wei, Donglai and Lin, Zudi and Franco-Barranco, Daniel and Wendt, Nils and Liu, Xingyu and Yin, Wenjie and Huang, Xin and Gupta, Aarush and Jang, Won-Dong and Wang, Xueying and others},
+                   booktitle={International Conference on Medical Image Computing and Computer-Assisted Intervention},
+                   pages={66--76},
+                   year={2020},
+                   organization={Springer}
+        }
