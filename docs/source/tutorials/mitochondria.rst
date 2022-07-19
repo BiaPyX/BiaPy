@@ -43,13 +43,13 @@ the foreground class (mitochondria in this case).
 Choose a template
 ~~~~~~~~~~~~~~~~~
 
-Refer to the code version `V1.0 <https://github.com/danifranco/EM_Image_Segmentation/releases/tag/v1.0>`_ in case you want to reproduce exact results of `Stable Deep Neural Network Architectures for Mitochondria Segmentation on Electron Microscopy Volumes <#citation>`_. Once the code is cloned you can use any of the templates from `here <https://github.com/danifranco/EM_Image_Segmentation/tree/v1.0/templates>`_. 
+Refer to the code version `V1.0 <https://github.com/danifranco/BiaPy/releases/tag/v1.0>`_ in case you want to reproduce exact results of `Stable Deep Neural Network Architectures for Mitochondria Segmentation on Electron Microscopy Volumes <#citation>`_. Once the code is cloned you can use any of the templates from `here <https://github.com/danifranco/BiaPy/tree/v1.0/templates>`_. 
 
-Otherwise, to create the YAML file you can use the template `unet_2d.yaml <https://github.com/danifranco/EM_Image_Segmentation/blob/master/templates/unet_2d.yaml>`_ which is prepared for this tutorial.
+Otherwise, to create the YAML file you can use the template `unet_2d.yaml <https://github.com/danifranco/BiaPy/blob/master/templates/unet_2d.yaml>`_ which is prepared for this tutorial.
                                                                                                                         
 .. seealso::
                                                                                                                         
-   Adapt the configuration file to your specific case and see more configurable options available at `config.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/config/config.py>`_.
+   Adapt the configuration file to your specific case and see more configurable options available at `config.py <https://github.com/danifranco/BiaPy/blob/master/config/config.py>`_.
       
 
 Run                                                                                                                     

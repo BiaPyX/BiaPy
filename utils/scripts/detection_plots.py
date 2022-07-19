@@ -9,7 +9,7 @@ from skimage.feature import peak_local_max
 from skimage.measure import label
 from tqdm import tqdm
 
-code_dir = "/home/user/EM_Image_Segmentation"
+code_dir = "/home/user/BiaPy"
 pred_file="/home/user/file.tif"
 pred_csv_file="/home/user/file.csv"
 gt_csv_file="/home/user/gt.csv"

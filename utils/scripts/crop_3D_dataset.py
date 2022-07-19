@@ -4,7 +4,7 @@ import numpy as np
 from skimage.io import imread
 from tqdm import tqdm
 
-code_dir = "/home/user/EM_Image_Segmentation"
+code_dir = "/home/user/BiaPy"
 input_dir = "/home/user/datasets/x"
 output_dir = "/home/user/datasets/x_out"
 crop_shape = (64, 64, 64, 1)

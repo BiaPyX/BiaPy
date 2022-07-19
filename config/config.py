@@ -63,7 +63,7 @@ class Config:
         # watershed (MW) a few thresholds need to be set. There can be up to three channels, as explained above and
         # based on 'DATA.CHANNELS' value. Each threshold is related to one of these channels. See the details in
         # bcd_watershed() and bc_watershed() functions:
-        # https://github.com/danifranco/EM_Image_Segmentation/blob/a1c46e6b8afaf577794aff9c30b52748490f147d/data/post_processing/post_processing.py#L172
+        # https://github.com/danifranco/BiaPy/blob/a1c46e6b8afaf577794aff9c30b52748490f147d/data/post_processing/post_processing.py#L172
         #
         # This variables are only used when _C.PROBLEM.TYPE = 'INSTANCE_SEG
         # TH1 controls channel 'B' in the creation of the MW seeds

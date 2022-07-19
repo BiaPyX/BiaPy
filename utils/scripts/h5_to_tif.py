@@ -3,7 +3,7 @@ import os
 import h5py
 import numpy as np
 
-code_dir = "/home/user/EM_Image_Segmentation"
+code_dir = "/home/user/BiaPy"
 h5file = "/home/user/file.h5"
 out_dir = "/home/user/out"
 

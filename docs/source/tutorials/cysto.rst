@@ -43,17 +43,17 @@ To produce the cysto instances two main steps are done:
   and distances (right). Here a patch ``(64, 64, 64)`` is presented just for visualization but the process is done for
   each full resolution image.
 
-* These extra channels predicted by the network are used to create the final instance segmentation labels using a marked controlled watershed (MW). This process involve a few thresholds that may be adjusted depending each case: ``DATA.MW_TH1``, ``DATA.MW_TH2``, ``DATA.MW_TH3``, ``DATA.MW_TH4`` and ``DATA.MW_TH5``. Find their description in `config.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/config/config.py>`_.
+* These extra channels predicted by the network are used to create the final instance segmentation labels using a marked controlled watershed (MW). This process involve a few thresholds that may be adjusted depending each case: ``DATA.MW_TH1``, ``DATA.MW_TH2``, ``DATA.MW_TH3``, ``DATA.MW_TH4`` and ``DATA.MW_TH5``. Find their description in `config.py <https://github.com/danifranco/BiaPy/blob/master/config/config.py>`_.
 
 
 Configuration file
 ~~~~~~~~~~~~~~~~~~
 
-To create the YAML file you can use the template `resunet_3d_instances_bcd.yaml <https://github.com/danifranco/EM_Image_Segmentation/blob/master/templates/resunet_3d_instances_bcd.yaml>`_ which is prepared for this tutorial.
+To create the YAML file you can use the template `resunet_3d_instances_bcd.yaml <https://github.com/danifranco/BiaPy/blob/master/templates/resunet_3d_instances_bcd.yaml>`_ which is prepared for this tutorial.
 
 .. seealso::
 
-   Adapt the configuration file to your specific case and see more configurable options available at `config.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/config/config.py>`_.
+   Adapt the configuration file to your specific case and see more configurable options available at `config.py <https://github.com/danifranco/BiaPy/blob/master/config/config.py>`_.
 
 Run
 ~~~

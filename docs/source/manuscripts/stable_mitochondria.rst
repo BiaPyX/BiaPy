@@ -52,31 +52,31 @@ Prepare the data as described `here <../how_to_run/first_steps.html#step-1-data-
 Choose a template
 ~~~~~~~~~~~~~~~~~
 
-Refer to the code version `V1.0 <https://github.com/danifranco/EM_Image_Segmentation/releases/tag/v1.0>`_ in case you want to reproduce exact results of our paper. Once the code is cloned you can use any of the templates from `templates folder <https://github.com/danifranco/EM_Image_Segmentation/tree/v1.0/templates>`_. 
+Refer to the code version `V1.0 <https://github.com/danifranco/BiaPy/releases/tag/v1.0>`_ in case you want to reproduce exact results of our paper. Once the code is cloned you can use any of the templates from `templates folder <https://github.com/danifranco/BiaPy/tree/v1.0/templates>`_. 
 
 In case you are interested in reproducing one of the state-of-the-art works implemented in that work, you can use the template prepared on each case:
 
-    - Casser et al: [`Paper <https://www.researchgate.net/profile/Daniel-Haehn-2/publication/329705779_Fast_Mitochondria_Segmentation_for_Connectomics/links/5c1ab85b458515a4c7eb0569/Fast-Mitochondria-Segmentation-for-Connectomics.pdf>`_] ; [`Our code <../sota_implementations/casser_2018/casser.html>`_] ; [`Template <https://github.com/danifranco/EM_Image_Segmentation/tree/v1.0/sota_implementations/casser_2018/casser_template_V1.py>`_] ; [|cassercolablink|] 
-    - Cheng et al (2D): [`Paper <https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=8296349>`_] ; [`Our code <../sota_implementations/cheng_2017/cheng.html>`_] ; [`Template <https://github.com/danifranco/EM_Image_Segmentation/tree/v1.0/sota_implementations/cheng_2017/cheng_2D_template_V1.py>`_] ; [|chengcolablink|] 
-    - Cheng et al (3D): [`Paper <https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=8296349>`_] ; [`Our code <../sota_implementations/cheng_2017/cheng.html>`_] ; [`Template <https://github.com/danifranco/EM_Image_Segmentation/tree/v1.0/sota_implementations/cheng_2017/cheng_3D_template_V1.py>`_] ; [|cheng3dcolablink|] 
-    - Xiao et al: [`Paper <https://www.frontiersin.org/articles/10.3389/fnana.2018.00092/full>`_] ; [`Our code <../sota_implementations/xiao_2018/xiao.html>`_] ; [`Template <https://github.com/danifranco/EM_Image_Segmentation/tree/v1.0/sota_implementations/xiao_2018/xiao_template_V1.py>`_] ; [|xiaocolablink|] 
-    - Oztel et al: [`Paper <https://ieeexplore.ieee.org/document/8217827>`_] ; [`Our code <../sota_implementations/oztel_2017/oztel.html>`_] ; [`Template <https://github.com/danifranco/EM_Image_Segmentation/tree/v1.0/sota_implementations/oztel_2017/oztel_template_V1.py>`_] ; [|oztelcolablink|] 
+    - Casser et al: [`Paper <https://www.researchgate.net/profile/Daniel-Haehn-2/publication/329705779_Fast_Mitochondria_Segmentation_for_Connectomics/links/5c1ab85b458515a4c7eb0569/Fast-Mitochondria-Segmentation-for-Connectomics.pdf>`_] ; [`Our code <../sota_implementations/casser_2018/casser.html>`_] ; [`Template <https://github.com/danifranco/BiaPy/tree/v1.0/sota_implementations/casser_2018/casser_template_V1.py>`_] ; [|cassercolablink|] 
+    - Cheng et al (2D): [`Paper <https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=8296349>`_] ; [`Our code <../sota_implementations/cheng_2017/cheng.html>`_] ; [`Template <https://github.com/danifranco/BiaPy/tree/v1.0/sota_implementations/cheng_2017/cheng_2D_template_V1.py>`_] ; [|chengcolablink|] 
+    - Cheng et al (3D): [`Paper <https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=8296349>`_] ; [`Our code <../sota_implementations/cheng_2017/cheng.html>`_] ; [`Template <https://github.com/danifranco/BiaPy/tree/v1.0/sota_implementations/cheng_2017/cheng_3D_template_V1.py>`_] ; [|cheng3dcolablink|] 
+    - Xiao et al: [`Paper <https://www.frontiersin.org/articles/10.3389/fnana.2018.00092/full>`_] ; [`Our code <../sota_implementations/xiao_2018/xiao.html>`_] ; [`Template <https://github.com/danifranco/BiaPy/tree/v1.0/sota_implementations/xiao_2018/xiao_template_V1.py>`_] ; [|xiaocolablink|] 
+    - Oztel et al: [`Paper <https://ieeexplore.ieee.org/document/8217827>`_] ; [`Our code <../sota_implementations/oztel_2017/oztel.html>`_] ; [`Template <https://github.com/danifranco/BiaPy/tree/v1.0/sota_implementations/oztel_2017/oztel_template_V1.py>`_] ; [|oztelcolablink|] 
 
 
 .. |cassercolablink| image:: https://colab.research.google.com/assets/colab-badge.svg
-    :target: https://colab.research.google.com/github/danifranco/EM_Image_Segmentation/blob/master/templates/sota_implementations/Casser_workflow.ipynb
+    :target: https://colab.research.google.com/github/danifranco/BiaPy/blob/master/templates/sota_implementations/Casser_workflow.ipynb
 
 .. |chengcolablink| image:: https://colab.research.google.com/assets/colab-badge.svg
-    :target: https://colab.research.google.com/github/danifranco/EM_Image_Segmentation/blob/master/templates/sota_implementations/Cheng_2D_workflow.ipynb
+    :target: https://colab.research.google.com/github/danifranco/BiaPy/blob/master/templates/sota_implementations/Cheng_2D_workflow.ipynb
 
 .. |cheng3dcolablink| image:: https://colab.research.google.com/assets/colab-badge.svg
-    :target: https://colab.research.google.com/github/danifranco/EM_Image_Segmentation/blob/master/templates/sota_implementations/Cheng_3D_workflow.ipynb
+    :target: https://colab.research.google.com/github/danifranco/BiaPy/blob/master/templates/sota_implementations/Cheng_3D_workflow.ipynb
 
 .. |xiaocolablink| image:: https://colab.research.google.com/assets/colab-badge.svg
-    :target: https://colab.research.google.com/github/danifranco/EM_Image_Segmentation/blob/master/templates/sota_implementations/Xiao_workflow.ipynb
+    :target: https://colab.research.google.com/github/danifranco/BiaPy/blob/master/templates/sota_implementations/Xiao_workflow.ipynb
 
 .. |oztelcolablink| image:: https://colab.research.google.com/assets/colab-badge.svg
-    :target: https://colab.research.google.com/github/danifranco/EM_Image_Segmentation/blob/master/templates/sota_implementations/Oztel_workflow.ipynb
+    :target: https://colab.research.google.com/github/danifranco/BiaPy/blob/master/templates/sota_implementations/Oztel_workflow.ipynb
 
 Run
 ~~~

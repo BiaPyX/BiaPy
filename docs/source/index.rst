@@ -1,7 +1,7 @@
-Welcome to EM Image Segmentation's documentation!
-=================================================
+BiaPy: Bioimage analysis pipelines
+==================================
 
-This documentation tries to explain better the code of the project `EM Image Segmentation <https://github.com/danifranco/DeepLearning_EM>`_, which is used to make semantic segmentation for EM images. The code is based on Keras and TensorFlow as backend.
+This documentation explains how to use the code of the project `BiaPy <https://github.com/danifranco/BiaPy>`_, which contains different pipelines for semantic segmentation, instance segmentation, detection and classification. The code is based on Keras and TensorFlow as backend.
 
                                                                                 
 .. image:: img/seg.gif

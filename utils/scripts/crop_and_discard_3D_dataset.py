@@ -4,7 +4,7 @@ import numpy as np
 from skimage.io import imread
 from tqdm import tqdm
 
-code_dir = "/home/user/EM_Image_Segmentation"
+code_dir = "/home/user/BiaPy"
 input_dir = "/home/user/dataset/train"
 input_dir_x = os.path.join(input_dir, 'x')
 input_dir_y = os.path.join(input_dir, 'y')

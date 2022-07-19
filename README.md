@@ -1,12 +1,12 @@
-# EM image segmentation                                                                                                 
+# BiaPy: Bioimage analysis pipelines
                                                                                                                         
-This repository contains a complete workflow to perform semantic and instance segmentation of electron microscopy (EM) images. The code is based on Keras and TensorFlow as backend. 
+This repository contains different pipelines for semantic segmentation, instance segmentation, detection and classification. The code is based on Keras and TensorFlow as backend. 
                                                                                                                         
 To use the code please visit our [documentation site](https://em-image-segmentation.readthedocs.io/en/latest/).         
                                                                                                                         
 ### Semantic segmentation                                                                                               
                                                                                                                         
-![.](https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/img/seg.gif)                           
+![.](https://github.com/danifranco/BiaPy/blob/master/docs/source/img/seg.gif)                           
                                                                                                                         
 ### Instance segmentation                                                                                               
 
@@ -17,9 +17,9 @@ To use the code please visit our [documentation site](https://em-image-segmentat
      <td>Prediction</td>
   </tr>
   <tr>
-    <td><img src="https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/video/nucmm_z_volume.gif" width=280></td>
-    <td><img src="https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/video/nucmm_z_volume_mask.gif" width=280 ></td>
-    <td><img src="https://github.com/danifranco/EM_Image_Segmentation/blob/master/docs/source/video/nucmm_z_volume_mask_pred.gif" width=280 ></td>
+    <td><img src="https://github.com/danifranco/BiaPy/blob/master/docs/source/video/nucmm_z_volume.gif" width=280></td>
+    <td><img src="https://github.com/danifranco/BiaPy/blob/master/docs/source/video/nucmm_z_volume_mask.gif" width=280 ></td>
+    <td><img src="https://github.com/danifranco/BiaPy/blob/master/docs/source/video/nucmm_z_volume_mask_pred.gif" width=280 ></td>
   </tr>
  </table>
  

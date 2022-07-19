@@ -21,13 +21,15 @@ import datetime
 base_path = os.path.abspath(os.path.join("..", ".."))
 sys.path.insert(0, base_path)
 sys.path.insert(0, os.path.join(base_path, "sota_implementations", "cheng_2017"))
+print("PATH: {}".format(sys.path))
+
 
 
 # -- Project information -----------------------------------------------------
 
-project = u'EM Image Segmentation'
-copyright = u'%d, Daniel Franco' % (datetime.datetime.now().year,)
-author = u'Daniel Franco'
+project = u'BiaPy'
+copyright = u'%d, Daniel Franco-Barranco' % (datetime.datetime.now().year,)
+author = u'Daniel Franco-Barranco'
 
 
 # -- General configuration ---------------------------------------------------

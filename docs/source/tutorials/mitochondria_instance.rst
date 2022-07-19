@@ -43,7 +43,7 @@ instances are connected by thin microtubules, and (b) multiple instances can ent
 Data preparation                                                                                                        
 ~~~~~~~~~~~~~~~~                                                                                                        
                                                                                                                         
-The data directory tree should follow the structure described `First steps -> Step 1: Data preparation <../how_to_run/first_steps.html#step-1-data-preparation>`_. To adapt the ``.h5`` file format provided by MitoEM authors into ``.tif`` files you can use the script `h5_to_tif.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/utils/scripts/h5_to_tif.py>`_.
+The data directory tree should follow the structure described `First steps -> Step 1: Data preparation <../how_to_run/first_steps.html#step-1-data-preparation>`_. To adapt the ``.h5`` file format provided by MitoEM authors into ``.tif`` files you can use the script `h5_to_tif.py <https://github.com/danifranco/BiaPy/blob/master/utils/scripts/h5_to_tif.py>`_.
                                                                                                                         
                                                                                                                         
 Problem resolution                                                                                                      
@@ -61,17 +61,17 @@ To produce the mitochondria instances two main steps are done:
   Process of the new ``Y'`` data representation: from instance segmentation labels (left) to contour and binary
   segmentation (right).
 
-* These extra channels predicted by the network are used to create the final instance segmentation labels using a marked controlled watershed (MW). This process involve a few thresholds that may be adjusted depending each case: ``DATA.MW_TH1``, ``DATA.MW_TH2`` and ``DATA.MW_TH3``. Find their description in `config.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/config/config.py>`_.
+* These extra channels predicted by the network are used to create the final instance segmentation labels using a marked controlled watershed (MW). This process involve a few thresholds that may be adjusted depending each case: ``DATA.MW_TH1``, ``DATA.MW_TH2`` and ``DATA.MW_TH3``. Find their description in `config.py <https://github.com/danifranco/BiaPy/blob/master/config/config.py>`_.
 
 
 Configuration file
 ~~~~~~~~~~~~~~~~~~
 
-To create the YAML file you can use the template `unet_2d_MitoEM.yaml <https://github.com/danifranco/EM_Image_Segmentation/blob/master/templates/unet_2d_MitoEM.yaml>`_ which is prepared for this tutorial.
+To create the YAML file you can use the template `unet_2d_MitoEM.yaml <https://github.com/danifranco/BiaPy/blob/master/templates/unet_2d_MitoEM.yaml>`_ which is prepared for this tutorial.
 
 .. seealso::
 
-   Adapt the configuration file to your specific case and see more configurable options available at `config.py <https://github.com/danifranco/          EM_Image_Segmentation/blob/master/config/config.py>`_.
+   Adapt the configuration file to your specific case and see more configurable options available at `config.py <https://github.com/danifranco/          BiaPy/blob/master/config/config.py>`_.
 
 
 Run                                                                                                                     
@@ -87,11 +87,11 @@ it through bash shell as described in: `Bash Shell -> Step 2: Run the code <../h
    ``DATA.EXTRACT_RANDOM_PATCH`` to True. This option will decrease the performance but will save memory, as consist in
    loading each sample directly from the disk in each batch, instead of having it loaded in memory, and extracting a
    random patch of shape given by ``DATA.PATCH_SIZE``. Find more information about the variables in
-   `config.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/config/config.py>`_.
+   `config.py <https://github.com/danifranco/BiaPy/blob/master/config/config.py>`_.
 
    Another way to go can be to crop the dataset before training with ``DATA.PATCH_SIZE`` to avoid the ovearhead of
    extracting a random patch with ``DATA.EXTRACT_RANDOM_PATCH`` option. For this last recommendation you can use the
-   script `crop_2D_dataset.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/utils/scripts/crop_2D_dataset.py>`_
+   script `crop_2D_dataset.py <https://github.com/danifranco/BiaPy/blob/master/utils/scripts/crop_2D_dataset.py>`_
    to crop the dataset. 
 
   
@@ -149,7 +149,7 @@ MitoEM challenge submission
 
 There is a open challenge for MitoEM dataset: https://mitoem.grand-challenge.org/
 
-To prepare ``.h5`` files from resulting instance predictions in ``.tif`` format you can use the script `tif_to_h5.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/utils/scripts/tif_to_h5.py>`_. The instances of both Human and Rat tissue need to be provided 
+To prepare ``.h5`` files from resulting instance predictions in ``.tif`` format you can use the script `tif_to_h5.py <https://github.com/danifranco/BiaPy/blob/master/utils/scripts/tif_to_h5.py>`_. The instances of both Human and Rat tissue need to be provided 
 (files must be named as ``0_human_instance_seg_pred.h5`` and ``1_rat_instance_seg_pred.h5`` respectively). Find the full
 details in the challenge page. 
 
