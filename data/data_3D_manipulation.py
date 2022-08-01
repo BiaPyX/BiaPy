@@ -228,272 +228,100 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
         raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
     if vol_shape[2] > data.shape[0]:
         raise ValueError("'vol_shape[2]' {} greater than {}".format(vol_shape[2], data.shape[0]))
-    if vol_shape[0] > data.shape[1]:
-        raise ValueError("'vol_shape[0]' {} greater than {}".format(vol_shape[0], data.shape[1]))
-    if vol_shape[1] > data.shape[2]:
-        raise ValueError("'vol_shape[1]' {} greater than {}".format(vol_shape[1], data.shape[2]))
+    if vol_shape[1] > data.shape[1]:
+        raise ValueError("'vol_shape[1]' {} greater than {}".format(vol_shape[1], data.shape[1]))
+    if vol_shape[0] > data.shape[2]:
+        raise ValueError("'vol_shape[0]' {} greater than {}".format(vol_shape[0], data.shape[2]))
     if (overlap[0] >= 1 or overlap[0] < 0) or (overlap[1] >= 1 or overlap[1] < 0) or (overlap[2] >= 1 or overlap[2] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
+    for i,p in enumerate(padding):
+        if p >= vol_shape[i]//2:
+            raise ValueError("'Padding' can not be greater than the half of 'vol_shape'. Max value for this {} input shape is {}"
+                                .format(data.shape, [(vol_shape[2]//2)-1,(vol_shape[1]//2)-1,(vol_shape[0]//2)-1]))
 
-    padded_data = np.zeros((data.shape[0]+2*padding[2], data.shape[1]+2*padding[0],
-                            data.shape[2]+2*padding[1], data.shape[3]), dtype=data.dtype)
-    padded_data[padding[2]:padding[2]+data.shape[0],
-                padding[0]:padding[0]+data.shape[1],
-                padding[1]:padding[1]+data.shape[2],:] = data
+    padded_data = np.pad(data,((padding[2],padding[2]),(padding[1],padding[1]),(padding[0],padding[0]),(0,0)), 'reflect')
     if data_mask is not None:
-        padded_data_mask = np.zeros((data_mask.shape[0]+2*padding[2], data_mask.shape[1]+2*padding[0],
-                                     data_mask.shape[2]+2*padding[1], data_mask.shape[3]), dtype=data_mask.dtype)
-        padded_data_mask[padding[2]:padding[2]+data_mask.shape[0], padding[0]:padding[0]+data_mask.shape[1],
-                         padding[1]:padding[1]+data_mask.shape[2],:] = data_mask
+        padded_data_mask = np.pad(data_mask,((padding[2],padding[2]),(padding[1],padding[1]),(padding[0],padding[0]),(0,0)), 'reflect')
 
     if median_padding:
     	padded_data[0:padding[2], :, :, :] = np.median(data[0, :, :, :])
     	padded_data[padding[2]+data.shape[0]:2*padding[2]+data.shape[0], :, :, :] = np.median(data[-1, :, :, :])
-    	padded_data[:, 0:padding[0], :, :] = np.median(data[:, 0, :, :])
-    	padded_data[:, padding[0]+data.shape[1]:2*padding[0]+data.shape[0], :, :] = np.median(data[:, -1, :, :])
-    	padded_data[:, :, 0:padding[1], :] = np.median(data[:, :, 0, :])
-    	padded_data[ :, :, padding[1]+data.shape[2]:2*padding[1]+data.shape[2], :] = np.median(data[:, :, -1, :])
+    	padded_data[:, 0:padding[1], :, :] = np.median(data[:, 0, :, :])
+    	padded_data[:, padding[1]+data.shape[1]:2*padding[0]+data.shape[0], :, :] = np.median(data[:, -1, :, :])
+    	padded_data[:, :, 0:padding[0], :] = np.median(data[:, :, 0, :])
+    	padded_data[ :, :, padding[0]+data.shape[2]:2*padding[1]+data.shape[2], :] = np.median(data[:, :, -1, :])
 
     #Original vol shape (no padding)
-    vol_shape = tuple(vol_shape[i] for i in [2, 0, 1, 3])
+    vol_shape = tuple(vol_shape[i] for i in [2, 1, 0, 3])
+    padding = tuple(padding[i] for i in [2, 1, 0])
     padded_vol_shape = vol_shape
-    vol_shape = (vol_shape[0]-2*padding[2],vol_shape[1]-2*padding[0],vol_shape[2]-2*padding[1],vol_shape[3])
+    vol_shape = (vol_shape[0]-2*padding[0],vol_shape[1]-2*padding[1],vol_shape[2]-2*padding[2],vol_shape[3])
 
     # Calculate overlapping variables
-    overlap_x = 1 if overlap[0] == 0 else 1-overlap[0]
-    overlap_y = 1 if overlap[1] == 0 else 1-overlap[1]
     overlap_z = 1 if overlap[2] == 0 else 1-overlap[2]
-
-    # X
-    vols_per_x = math.ceil(data.shape[1]/(vol_shape[1]*overlap_x))
-    excess_x = int((vols_per_x*vol_shape[1])-((vols_per_x-1)*overlap[0]*vol_shape[1]))-data.shape[1]
-    ex = 0 if vols_per_x == 1 else int(excess_x/(vols_per_x-1))
-    step_x = int(vol_shape[1]*overlap_x)-ex
-    last_x = 0 if vols_per_x == 1 else excess_x%(vols_per_x-1)
-
-    # Y
-    vols_per_y = math.ceil(data.shape[2]/(vol_shape[2]*overlap_y))
-    excess_y = int((vols_per_y*vol_shape[2])-((vols_per_y-1)*overlap[1]*vol_shape[2]))-data.shape[2]
-    ex = 0 if vols_per_y == 1 else int(excess_y/(vols_per_y-1))
-    step_y = int(vol_shape[2]*overlap_y)-ex
-    last_y = 0 if vols_per_y == 1 else excess_y%(vols_per_y-1)
+    overlap_y = 1 if overlap[1] == 0 else 1-overlap[1] 
+    overlap_x = 1 if overlap[0] == 0 else 1-overlap[0]
 
     # Z
-    vols_per_z = math.ceil(data.shape[0]/(vol_shape[0]*overlap_z))
-    excess_z = int((vols_per_z*vol_shape[0])-((vols_per_z-1)*overlap[2]*vol_shape[0]))-data.shape[0]
-    ex = 0 if vols_per_z == 1 else int(excess_z/(vols_per_z-1))
-    step_z = int(vol_shape[0]*overlap_z)-ex
-    last_z = 0 if vols_per_z == 1 else excess_z%(vols_per_z-1)
+    vols_per_z = math.ceil(padded_data.shape[0]/(vol_shape[0]*overlap_z))
+    excess_z = (vols_per_z*vol_shape[0])-data.shape[0]
+    ex_per_patch_z = 0 if vols_per_z == 1 else int(excess_z/(vols_per_z-1))
+    step_z = vol_shape[0]-ex_per_patch_z
+    last_z = 0 if vols_per_z == 1 else (((vols_per_z-1)*step_z)+padded_vol_shape[0])-padded_data.shape[0]
+   
+    # Y
+    vols_per_y = math.ceil(padded_data.shape[1]/(vol_shape[1]*overlap_y))
+    excess_y = (vols_per_y*vol_shape[1])-data.shape[1]
+    ex_per_patch_y = 0 if vols_per_y == 1 else int(excess_y/(vols_per_y-1))
+    step_y = vol_shape[1]-ex_per_patch_y
+    last_y = 0 if vols_per_y == 1 else (((vols_per_y-1)*step_y)+padded_vol_shape[1])-padded_data.shape[1]
 
-    # Real overlap calculation for printing
-    real_ov_x = (vol_shape[1]-step_x)/vol_shape[1]
-    real_ov_y = (vol_shape[2]-step_y)/vol_shape[2]
+    # X
+    vols_per_x = math.ceil(padded_data.shape[2]/(vol_shape[2]*overlap_x))
+    excess_x = (vols_per_x*vol_shape[2])-data.shape[2]
+    ex_per_patch_x = 0 if vols_per_x == 1 else int(excess_x/(vols_per_x-1))
+    step_x = vol_shape[2]-ex_per_patch_x
+    last_x = 0 if vols_per_x == 1 else (((vols_per_x-1)*step_x)+padded_vol_shape[2])-padded_data.shape[2]
+
+    # Real overlap calculation for printing 
     real_ov_z = (vol_shape[0]-step_z)/vol_shape[0]
+    real_ov_y = (vol_shape[1]-step_y)/vol_shape[1]
+    real_ov_x = (vol_shape[2]-step_x)/vol_shape[2]
     if verbose:
         print("Real overlapping (%): {}".format((real_ov_x,real_ov_y,real_ov_z)))
-        print("Real overlapping (pixels): {}".format((vol_shape[1]*real_ov_x,
-              vol_shape[2]*real_ov_y,vol_shape[0]*real_ov_z)))
+        print("Real overlapping (pixels): {}".format((vol_shape[2]*real_ov_x,
+              vol_shape[1]*real_ov_y,vol_shape[0]*real_ov_z)))
         print("{} patches per (x,y,z) axis".format((vols_per_x,vols_per_y,vols_per_z)))
 
-    total_vol = vols_per_z*vols_per_x*vols_per_y
+    total_vol = vols_per_z*vols_per_y*vols_per_x
     cropped_data = np.zeros((total_vol,) + padded_vol_shape, dtype=data.dtype)
     if data_mask is not None:
         cropped_data_mask = np.zeros((total_vol,) + padded_vol_shape[:3]+(data_mask.shape[-1],), dtype=data_mask.dtype)
-
+    
     c = 0
     for z in range(vols_per_z):
-        for x in range(vols_per_x):
-            for y in range(vols_per_y):
-                d_x = 0 if (x*step_x+vol_shape[1]) < data.shape[1] else last_x
-                d_y = 0 if (y*step_y+vol_shape[2]) < data.shape[2] else last_y
+        for y in range(vols_per_y):
+            for x in range(vols_per_x):
                 d_z = 0 if (z*step_z+vol_shape[0]) < data.shape[0] else last_z
-
-                cropped_data[c] = padded_data[z*step_z-d_z:(z*step_z)+vol_shape[0]-d_z+2*padding[2],
-                                              x*step_x-d_x:x*step_x+vol_shape[1]-d_x+2*padding[0],
-                                              y*step_y-d_y:y*step_y+vol_shape[2]-d_y+2*padding[1]]
+                d_y = 0 if (y*step_y+vol_shape[1]) < data.shape[1] else last_y
+                d_x = 0 if (x*step_x+vol_shape[2]) < data.shape[2] else last_x
+                cropped_data[c] = padded_data[z*step_z-d_z:(z*step_z)+vol_shape[0]-d_z+2*padding[0],
+                                              y*step_y-d_y:y*step_y+vol_shape[1]-d_y+2*padding[1],
+                                              x*step_x-d_x:x*step_x+vol_shape[2]-d_x+2*padding[2]]
                 if data_mask is not None:
-                    cropped_data_mask[c] = padded_data_mask[z*step_z-d_z:(z*step_z)+vol_shape[0]-d_z+2*padding[2],
-                                                            x*step_x-d_x:x*step_x+vol_shape[1]-d_x+2*padding[0],
-                                                            y*step_y-d_y:y*step_y+vol_shape[2]-d_y+2*padding[1]]
+                    cropped_data_mask[c] = padded_data_mask[z*step_z-d_z:(z*step_z)+vol_shape[0]-d_z+2*padding[0],
+                                                            y*step_y-d_y:y*step_y+vol_shape[1]-d_y+2*padding[1],
+                                                            x*step_x-d_x:x*step_x+vol_shape[2]-d_x+2*padding[2]]
                 c += 1
 
-    cropped_data = cropped_data.transpose(0,2,3,1,4)
+    cropped_data = cropped_data.transpose(0,3,2,1,4)
 
     if verbose:
         print("**** New data shape is: {}".format(cropped_data.shape))
         print("### END 3D-OV-CROP ###")
 
     if data_mask is not None:
-        cropped_data_mask = cropped_data_mask.transpose(0,2,3,1,4)
-        return cropped_data, cropped_data_mask
-    else:
-        return cropped_data
-
-
-def crop_3D_data(data, vol_shape, data_mask=None, use_rest=False, verbose=True):
-    """Crop 3D data into smaller volumes without overlap. If there is no exact division between the data shape and
-       ``vol_shape`` in a specific dimension it will be discarded or zeros will be added if ``use_rest`` is True.
-
-       Parameters
-       ----------
-       data : Numpy 4D array
-           Data. E.g. ``(num_of_images, x, y, channels)``.
-
-       vol_shape : 4D int tuple
-           Shape of the volumes to create. E.g. ``(x, y, z, channels)``.
-
-       data_mask : Numpy 4D array, optional
-           Mask data. E.g. ``(num_of_images, x, y, channels)``.
-
-       use_rest : bool, optional
-           Controls how the rest data will be processed. When there is no exact division between the data shape and
-           ``vol_shape`` in a specific dimension, the remainder data is not enough to create another subvolume. If True,
-           that data will be used completing the rest of the subvolume with zeros. If ``False``, that remainder will be
-           dropped (notice that this option will make the data impossible to reconstruct 100% later on). See example 2
-           for more info.
-
-       verbose : bool, optional
-            To print information about the crop to be made.
-
-       Returns
-       -------
-       cropped_data : Numpy 5D array
-           data data separated in different subvolumes with the provided shape. E.g. ``(subvolume_number, ) + shape``.
-
-       cropped_data_mask : Numpy 5D array
-           data_mask data separated in different subvolumes with the provided shape. E.g. ``(subvolume_number, ) + shape``.
-
-       Examples
-       --------
-       ::
-
-           # EXAMPLE 1
-           # Crop into subvolumes a volume with shape (165, 1024, 765)
-
-           X_train = np.ones((165, 768, 1024, 1))
-           Y_train = np.ones((165, 768, 1024, 1))
-
-           X_train, Y_train = crop_3D(X_train, (80, 80, 80, 1), data_mask=Y_train)
-
-           # The function will print the shape of the generated arrays and the data discarded on each axis ``(x,y,z)``,
-           # as use_rest is False
-           #       [...]
-           #    Pixels dropped per dimension: (48,64,5)
-           #       [...]
-           #     **** New data shape is: (216, 80, 80, 80, 1)
-
-
-           # EXAMPLE 2
-           # As the first example but using all the data
-
-           X_train, Y_train = crop_3D(X_train, (80, 80, 80, 1), data_mask=Y_train, use_rest=True)
-
-           # The function will print the shape of the generated arrays. In this example:
-           #     **** New data shape is: (390, 80, 80, 80, 1)
-
-       A visual explanation of example 2:
-
-       .. image:: ../img/crop_3D.png
-           :width: 80%
-           :align: center
-
-
-       As you may noticed, as ``use_rest=True`` the last subvolume is filled with zeros (black) instead of been
-       discarded. Thus, more subvolumes have been created.
-
-       Adding zeros to all the axis when they do not have an exact division could not be the best approach in all cases.
-       In example 2, the amount of pixels along x and y axis are not to much, however, for the z axis, that amount is high
-       considering that we only have about 165 slices. To notify the user, the method also prints the number of zeros
-       added per each axis ``(x,y,z)`` as follows:
-
-       ::
-
-          X_train, Y_train = crop_3D(X_train, (80, 80, 80, 1), data_mask=Y_train, use_rest=True)
-          #       [...]
-          #     Zeros added per dimension: (32,16,75)
-          #       [...]
-          #     **** New data shape is: (390, 80, 80, 80, 1)
-    """
-
-    if verbose:
-        print("### 3D-CROP ###")
-        print("Cropping {} images into {} . . .".format(data.shape, vol_shape))
-
-    if len(vol_shape) != 4:
-        raise ValueError("'vol_shape' must be 4D int tuple")
-    if data.ndim != 4:
-        raise ValueError("data must be a 4D Numpy array")
-    if data_mask is not None:
-        if data_mask.ndim != 4:
-            raise ValueError("data_mask must be a 4D Numpy array")
-    if vol_shape[0] > data.shape[1]:
-        raise ValueError("'vol_shape[0]' {} greater than {}".format(vol_shape[0], data.shape[1]))
-    if vol_shape[1] > data.shape[2]:
-        raise ValueError("'vol_shape[1]' {} greater than {}".format(vol_shape[1], data.shape[2]))
-    if vol_shape[2] > data.shape[0]:
-        raise ValueError("'vol_shape[2]' {} greater than {}".format(vol_shape[2], data.shape[0]))
-
-    # Calculate crops per axis
-    vols_per_x = math.ceil(data.shape[1]/vol_shape[0])
-    vols_per_y = math.ceil(data.shape[2]/vol_shape[1])
-    vols_per_z = math.ceil(data.shape[0]/vol_shape[2])
-
-    _d_x = 1 if data.shape[1]%vol_shape[0] and not use_rest else 0
-    _d_y = 1 if data.shape[2]%vol_shape[1] and not use_rest else 0
-    _d_z = 1 if data.shape[0]%vol_shape[2] and not use_rest else 0
-
-    num_sub_volum = (vols_per_x-_d_x)*(vols_per_y-_d_y)*(vols_per_z-_d_z)
-
-    # Calculate the excess
-    last_x = vols_per_x*vol_shape[0]-data.shape[1]
-    last_y = vols_per_y*vol_shape[1]-data.shape[2]
-    last_z = vols_per_z*vol_shape[2]-data.shape[0]
-    if use_rest:
-        if verbose:
-            print("Zeros added per dimension: ({},{},{})".format(last_x,last_y,last_z))
-    else:
-        drop_x = 0 if last_x == 0 else vol_shape[0]-last_x
-        drop_y = 0 if last_y == 0 else vol_shape[1]-last_y
-        drop_z = 0 if last_z == 0 else vol_shape[2]-last_z
-        if verbose:
-            print("Pixels dropped per dimension: ({},{},{})".format(drop_x,drop_y,drop_z))
-
-    cropped_data = np.zeros((num_sub_volum, ) + vol_shape, dtype=data.dtype)
-    if data_mask is not None:
-        cropped_data_mask = np.zeros((num_sub_volum, ) + vol_shape[:3]+(data_mask.shape[-1],), dtype=data_mask.dtype)
-
-    if verbose:
-        print("{},{},{} patches per x,y,z axis".format((vols_per_x),(vols_per_y),(vols_per_z)))
-
-    # Reshape the data to generate needed 3D subvolumes
-    c = 0
-    for z in range(vols_per_z):
-        for x in range(vols_per_x):
-            for y in range(vols_per_y):
-                d_x = 0 if (((x+1)*vol_shape[0])) < data.shape[1] else last_x
-                d_y = 0 if (((y+1)*vol_shape[1])) < data.shape[2] else last_y
-                d_z = 0 if (((z+1)*vol_shape[2])) < data.shape[0] else last_z
-
-                if d_x != 0 and not use_rest: break
-                if d_y != 0 and not use_rest: break
-                if d_z != 0 and not use_rest: break
-
-                cropped_data[c,0:vol_shape[0]-d_x, 0:vol_shape[1]-d_y, 0:vol_shape[2]-d_z] = \
-                    data[(z*vol_shape[2]):((z+1)*vol_shape[2])-d_z,
-                         (x*vol_shape[0]):((x+1)*vol_shape[0])-d_x,
-                         (y*vol_shape[1]):((y+1)*vol_shape[1])-d_y].transpose(1,2,0,3)
-                if data_mask is not None:
-                    cropped_data_mask[c,0:vol_shape[0]-d_x, 0:vol_shape[1]-d_y, 0:vol_shape[2]-d_z] = \
-                        data_mask[(z*vol_shape[2]):((z+1)*vol_shape[2])-d_z,
-                                  (x*vol_shape[0]):((x+1)*vol_shape[0])-d_x,
-                                  (y*vol_shape[1]):((y+1)*vol_shape[1])-d_y].transpose(1,2,0,3)
-                c += 1
-
-    if verbose:
-        print("**** New data shape is: {}".format(cropped_data.shape))
-        print("### END 3D-CROP ###")
-
-    if data_mask is not None:
+        cropped_data_mask = cropped_data_mask.transpose(0,3,2,1,4)
         return cropped_data, cropped_data_mask
     else:
         return cropped_data
@@ -583,86 +411,90 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
         print("Minimum overlap selected: {}".format(overlap))
         print("Padding: {}".format(padding))
 
+    padding = tuple(padding[i] for i in [2, 1, 0])
+
     # Remove the padding
     data = data[:, padding[0]:data.shape[1]-padding[0],
                 padding[1]:data.shape[2]-padding[1],
                 padding[2]:data.shape[3]-padding[2], :]
 
-    merged_data = np.zeros((orig_vol_shape), dtype=data.dtype)
+    merged_data = np.zeros((orig_vol_shape), dtype=np.float32)
     if data_mask is not None:
         data_mask = data_mask[:, padding[0]:data_mask.shape[1]-padding[0],
                               padding[1]:data_mask.shape[2]-padding[1],
                               padding[2]:data_mask.shape[3]-padding[2], :]
-        merged_data_mask = np.zeros(orig_vol_shape[:3]+(data_mask.shape[-1],), dtype=data_mask.dtype)
+        merged_data_mask = np.zeros(orig_vol_shape[:3]+(data_mask.shape[-1],), dtype=np.float32)
 
     ov_map_counter = np.zeros((orig_vol_shape))
 
     # Calculate overlapping variables
-    overlap_x = 1 if overlap[0] == 0 else 1-overlap[0]
-    overlap_y = 1 if overlap[1] == 0 else 1-overlap[1]
     overlap_z = 1 if overlap[2] == 0 else 1-overlap[2]
+    overlap_y = 1 if overlap[1] == 0 else 1-overlap[1]
+    overlap_x = 1 if overlap[0] == 0 else 1-overlap[0]
 
-    # X
-    vols_per_x = math.ceil(orig_vol_shape[1]/(data.shape[1]*overlap_x))
-    excess_x = int((vols_per_x*data.shape[1])-((vols_per_x-1)*overlap[0]*data.shape[1]))-orig_vol_shape[1]
-    ex = 0 if vols_per_x == 1 else int(excess_x/(vols_per_x-1))
-    step_x = int(data.shape[1]*overlap_x)-ex
-    last_x = 0 if vols_per_x == 1 else excess_x%(vols_per_x-1)
-
-    # Y
-    vols_per_y = math.ceil(orig_vol_shape[2]/(data.shape[2]*overlap_y))
-    excess_y = int((vols_per_y*data.shape[2])-((vols_per_y-1)*overlap[1]*data.shape[2]))-orig_vol_shape[2]
-    ex = 0 if vols_per_y == 1 else int(excess_y/(vols_per_y-1))
-    step_y = int(data.shape[2]*overlap_y)-ex
-    last_y = 0 if vols_per_y == 1 else excess_y%(vols_per_y-1)
+    padded_vol_shape = [orig_vol_shape[0]+2*padding[0], orig_vol_shape[1]+2*padding[1], orig_vol_shape[2]+2*padding[2]]
 
     # Z
-    vols_per_z = math.ceil(orig_vol_shape[0]/(data.shape[3]*overlap_z))
-    excess_z = int((vols_per_z*data.shape[3])-((vols_per_z-1)*overlap[2]*data.shape[3]))-orig_vol_shape[0]
-    ex = 0 if vols_per_z == 1 else int(excess_z/(vols_per_z-1))
-    step_z = int(data.shape[3]*overlap_z)-ex
-    last_z = 0 if vols_per_z == 1 else excess_z%(vols_per_z-1)
+    vols_per_z = math.ceil(padded_vol_shape[0]/(data.shape[3]*overlap_z))
+    excess_z = (vols_per_z*data.shape[3])-orig_vol_shape[0]
+    ex_per_patch_z = 0 if vols_per_z == 1 else int(excess_z/(vols_per_z-1))
+    step_z = data.shape[3]-ex_per_patch_z
+    last_z = 0 if vols_per_z == 1 else (((vols_per_z-1)*step_z)+data.shape[3])-merged_data.shape[0]
+
+    # Y
+    vols_per_y = math.ceil(padded_vol_shape[1]/(data.shape[2]*overlap_y))
+    excess_y = (vols_per_y*data.shape[2])-orig_vol_shape[1]
+    ex_per_patch_y = 0 if vols_per_y == 1 else int(excess_y/(vols_per_y-1))
+    step_y = data.shape[2]-ex_per_patch_y
+    last_y = 0 if vols_per_y == 1 else (((vols_per_y-1)*step_y)+data.shape[2])-merged_data.shape[1]
+    
+    # X
+    vols_per_x = math.ceil(padded_vol_shape[2]/(data.shape[1]*overlap_x))
+    excess_x = (vols_per_x*data.shape[1])-orig_vol_shape[2]
+    ex_per_patch_x = 0 if vols_per_x == 1 else int(excess_x/(vols_per_x-1))
+    step_x = data.shape[1]-ex_per_patch_x
+    last_x = 0 if vols_per_x == 1 else (((vols_per_x-1)*step_x)+data.shape[1])-merged_data.shape[2]
 
     # Real overlap calculation for printing
-    real_ov_x = (data.shape[1]-step_x)/data.shape[1]
-    real_ov_y = (data.shape[2]-step_y)/data.shape[2]
     real_ov_z = (data.shape[3]-step_z)/data.shape[3]
+    real_ov_y = (data.shape[2]-step_y)/data.shape[2]
+    real_ov_x = (data.shape[1]-step_x)/data.shape[1]
+
     if verbose:
         print("Real overlapping (%): {}".format((real_ov_x,real_ov_y,real_ov_z)))
         print("Real overlapping (pixels): {}".format((data.shape[1]*real_ov_x, data.shape[2]*real_ov_y,data.shape[3]*real_ov_z)))
-
         print("{} patches per (x,y,z) axis".format((vols_per_x,vols_per_y,vols_per_z)))
 
     c = 0
     for z in range(vols_per_z):
-        for x in range(vols_per_x):
-            for y in range(vols_per_y):
-                d_x = 0 if (x*step_x+data.shape[1]) < orig_vol_shape[1] else last_x
-                d_y = 0 if (y*step_y+data.shape[2]) < orig_vol_shape[2] else last_y
+        for y in range(vols_per_y):
+            for x in range(vols_per_x):   
                 d_z = 0 if (z*step_z+data.shape[3]) < orig_vol_shape[0] else last_z
+                d_y = 0 if (y*step_y+data.shape[2]) < orig_vol_shape[1] else last_y
+                d_x = 0 if (x*step_x+data.shape[1]) < orig_vol_shape[2] else last_x
 
                 merged_data[z*step_z-d_z:(z*step_z)+data.shape[3]-d_z,
-                            x*step_x-d_x:x*step_x+data.shape[1]-d_x,
-                            y*step_y-d_y:y*step_y+data.shape[2]-d_y] += data[c].transpose(2,0,1,3)
+                            y*step_y-d_y:y*step_y+data.shape[2]-d_y,
+                            x*step_x-d_x:x*step_x+data.shape[1]-d_x] += data[c].transpose(2,1,0,3)
 
                 if data_mask is not None:
                     merged_data_mask[z*step_z-d_z:(z*step_z)+data.shape[3]-d_z,
-                                     x*step_x-d_x:x*step_x+data.shape[1]-d_x,
-                                     y*step_y-d_y:y*step_y+data.shape[2]-d_y] += data_mask[c].transpose(2,0,1,3)
+                                     y*step_y-d_y:y*step_y+data.shape[2]-d_y,
+                                     x*step_x-d_x:x*step_x+data.shape[1]-d_x] += data_mask[c].transpose(2,1,0,3)
 
                 ov_map_counter[z*step_z-d_z:(z*step_z)+data.shape[3]-d_z,
-                               x*step_x-d_x:x*step_x+data.shape[1]-d_x,
-                               y*step_y-d_y:y*step_y+data.shape[2]-d_y] += 1
+                               y*step_y-d_y:y*step_y+data.shape[2]-d_y,
+                               x*step_x-d_x:x*step_x+data.shape[1]-d_x] += 1
                 c += 1
 
-    merged_data = np.true_divide(merged_data, ov_map_counter)
+    merged_data = np.true_divide(merged_data, ov_map_counter).astype(data.dtype)
 
     if verbose:
         print("**** New data shape is: {}".format(merged_data.shape))
         print("### END MERGE-3D-OV-CROP ###")
 
     if data_mask is not None:
-        merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter)
+        merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter).astype(data_mask.dtype)
         return merged_data, merged_data_mask
     else:
         return merged_data

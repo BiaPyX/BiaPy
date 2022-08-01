@@ -327,6 +327,11 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError("data and data_mask shapes mismatch: {} vs {}".format(data.shape[:-1], data_mask.shape[:-1]))
 
+    for i,p in enumerate(padding):
+        if p >= crop_shape[i]//2:
+            raise ValueError("'Padding' can not be greater than the half of 'crop_shape'. Max value for this {} input shape is {}"
+                              .format(data.shape, [(crop_shape[0]//2)-1,(crop_shape[1]//2)-1]))
+
     if verbose:
         print("### OV-CROP ###")
         print("Cropping {} images into {} with overlapping. . ."\
@@ -337,14 +342,9 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
     if (overlap[0] >= 1 or overlap[0] < 0) and (overlap[1] >= 1 or overlap[1] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 
-    padded_data = np.zeros((data.shape[0], data.shape[1]+2*padding[0], data.shape[2]+2*padding[1], data.shape[3]))
-    padded_data[:, padding[0]:padding[0]+data.shape[1], padding[1]:padding[1]+data.shape[2], :] = data
-
+    padded_data = np.pad(data,((0,0),(padding[0],padding[0]),(padding[1],padding[1]),(0,0)), 'reflect')
     if data_mask is not None:
-        padded_data_mask = np.zeros((data_mask.shape[0], data_mask.shape[1]+2*padding[0],
-                                     data_mask.shape[2]+2*padding[1], data_mask.shape[3]))
-        padded_data_mask[:, padding[0]:padding[0]+data_mask.shape[1],
-                         padding[1]:padding[1]+data_mask.shape[2], :] = data_mask
+        padded_data_mask = np.pad(data_mask,((0,0),(padding[0],padding[0]),(padding[1],padding[1]),(0,0)), 'reflect')
 
     padded_crop_shape = crop_shape
     crop_shape = (crop_shape[0]-2*padding[0], crop_shape[1]-2*padding[1], crop_shape[2])
@@ -352,20 +352,20 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
     # Calculate overlapping variables
     overlap_x = 1 if overlap[0] == 0 else 1-overlap[0]
     overlap_y = 1 if overlap[1] == 0 else 1-overlap[1]
-
+    
     # X
-    crops_per_x = math.ceil(data.shape[1]/(crop_shape[0]*overlap_x))
-    excess_x = int((crops_per_x*crop_shape[0])-((crops_per_x-1)*overlap[0]*crop_shape[0]))-data.shape[1]
+    crops_per_x = math.ceil(padded_data.shape[1]/(crop_shape[0]*overlap_x))
+    excess_x = (crops_per_x*crop_shape[0])-data.shape[1]
     ex = 0 if crops_per_x == 1 else int(excess_x/(crops_per_x-1))
-    step_x = int(crop_shape[0]*overlap_x)-ex
-    last_x = 0 if crops_per_x == 1 else excess_x%(crops_per_x-1)
-
+    step_x = crop_shape[0]-ex
+    last_x = 0 if crops_per_x == 1 else (((crops_per_x-1)*step_x)+padded_crop_shape[0])-padded_data.shape[1] 
+    
     # Y
-    crops_per_y = math.ceil(data.shape[2]/(crop_shape[1]*overlap_y))
-    excess_y = int((crops_per_y*crop_shape[1])-((crops_per_y-1)*overlap[1]*crop_shape[1]))-data.shape[2]
+    crops_per_y = math.ceil(padded_data.shape[2]/(crop_shape[1]*overlap_y))
+    excess_y = (crops_per_y*crop_shape[1])-data.shape[2]
     ex = 0 if crops_per_y == 1 else int(excess_y/(crops_per_y-1))
-    step_y = int(crop_shape[1]*overlap_y)-ex
-    last_y = 0 if crops_per_y == 1 else excess_y%(crops_per_y-1)
+    step_y = crop_shape[1]-ex
+    last_y = 0 if crops_per_y == 1 else (((crops_per_y-1)*step_y)+padded_crop_shape[1])-padded_data.shape[2]
 
     # Real overlap calculation for printing
     real_ov_x = (crop_shape[0]-step_x)/crop_shape[0]
@@ -379,7 +379,7 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
     cropped_data = np.zeros((total_vol,) + padded_crop_shape, dtype=data.dtype)
     if data_mask is not None:
         cropped_data_mask = np.zeros((total_vol,)+padded_crop_shape[:2]+(data_mask.shape[-1],), dtype=data_mask.dtype)
-
+    
     c = 0
     for z in range(data.shape[0]):
         for x in range(crops_per_x):
@@ -537,6 +537,11 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError("data and data_mask shapes mismatch: {} vs {}".format(data.shape[:-1], data_mask.shape[:-1]))
 
+    for i,p in enumerate(padding):
+        if p >= data.shape[i+1]//2:
+            raise ValueError("'Padding' can not be greater than the half of 'data' shape. Max value for this {} input shape is {}"
+                                .format(data.shape, [(data.shape[1]//2)-1,(data.shape[2]//2)-1]))
+
     if verbose:
         print("### MERGE-OV-CROP ###")
         print("Merging {} images into {} with overlapping . . .".format(data.shape, original_shape))
@@ -549,9 +554,9 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
     # Remove the padding
     data = data[:, padding[0]:data.shape[1]-padding[0], padding[1]:data.shape[2]-padding[1], :]
 
-    merged_data = np.zeros((original_shape), dtype=data.dtype)
+    merged_data = np.zeros((original_shape), dtype=np.float32)
     if data_mask is not None:
-        merged_data_mask = np.zeros((original_shape), dtype=data_mask.dtype)
+        merged_data_mask = np.zeros((original_shape), dtype=np.float32)
         data_mask = data_mask[:, padding[0]:data_mask.shape[1]-padding[0], padding[1]:data_mask.shape[2]-padding[1], :]
 
     ov_map_counter = np.zeros(original_shape, dtype=np.int32)
@@ -561,21 +566,23 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
     # Calculate overlapping variables
     overlap_x = 1 if overlap[0] == 0 else 1-overlap[0]
     overlap_y = 1 if overlap[1] == 0 else 1-overlap[1]
+    
+    padded_data_shape = [original_shape[1]+2*padding[0], original_shape[2]+2*padding[1]]
 
     # X
-    crops_per_x = math.ceil(original_shape[1]/(data.shape[1]*overlap_x))
-    excess_x = int((crops_per_x*data.shape[1])-((crops_per_x-1)*overlap[0]*data.shape[1]))-original_shape[1]
+    crops_per_x = math.ceil(padded_data_shape[0]/(data.shape[1]*overlap_x))
+    excess_x = (crops_per_x*data.shape[1])-original_shape[1]
     ex = 0 if crops_per_x == 1 else int(excess_x/(crops_per_x-1))
-    step_x = int(data.shape[1]*overlap_x)-ex
-    last_x = 0 if crops_per_x == 1 else excess_x%(crops_per_x-1)
-
+    step_x = data.shape[1]-ex
+    last_x = 0 if crops_per_x == 1 else (((crops_per_x-1)*step_x)+data.shape[1])-merged_data.shape[1]
+    
     # Y
-    crops_per_y = math.ceil(original_shape[2]/(data.shape[2]*overlap_y))
-    excess_y = int((crops_per_y*data.shape[2])-((crops_per_y-1)*overlap[1]*data.shape[2]))-original_shape[2]
+    crops_per_y = math.ceil(padded_data_shape[1]/(data.shape[2]*overlap_y))
+    excess_y = (crops_per_y*data.shape[2])-original_shape[2]
     ex = 0 if crops_per_y == 1 else int(excess_y/(crops_per_y-1))
-    step_y = int(data.shape[2]*overlap_y)-ex
-    last_y = 0 if crops_per_y == 1 else excess_y%(crops_per_y-1)
-
+    step_y = data.shape[2]-ex
+    last_y = 0 if crops_per_y == 1 else (((crops_per_y-1)*step_y)+data.shape[2])-merged_data.shape[2]
+    
     # Real overlap calculation for printing
     real_ov_x = (data.shape[1]-step_x)/data.shape[1]
     real_ov_y = (data.shape[2]-step_y)/data.shape[2]
@@ -583,7 +590,7 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
         print("Real overlapping (%): {}".format((real_ov_x,real_ov_y)))
         print("Real overlapping (pixels): {}".format((data.shape[1]*real_ov_x, data.shape[2]*real_ov_y)))
         print("{} patches per (x,y) axis".format((crops_per_x,crops_per_y)))
-
+   
     c = 0
     for z in range(original_shape[0]):
         for x in range(crops_per_x):
@@ -605,10 +612,10 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
                     crop_grid[x*step_x-d_x:x*step_x+data.shape[1]-d_x, y*step_y+data.shape[2]-d_y-1] = 1
 
                 c += 1
-
-    merged_data = np.true_divide(merged_data, ov_map_counter)
+    
+    merged_data = np.true_divide(merged_data, ov_map_counter).astype(data.dtype)
     if data_mask is not None:
-        merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter)
+        merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter).astype(data_mask.dtype)
 
     # Save a copy of the merged data with the overlapped regions colored as: green when 2 crops overlap, yellow when
     # (2 < x < 6) and red when more than 6 overlaps are merged
