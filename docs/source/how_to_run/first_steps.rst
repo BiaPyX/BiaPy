@@ -1,9 +1,9 @@
 First steps
 -----------
 
-Clone the `repository <https://github.com/danifranco/EM_Image_Segmentation>`_: ::
+Clone the `repository <https://github.com/danifranco/BiaPy>`_: ::
 
-    git clone https://github.com/danifranco/EM_Image_Segmentation.git 
+    git clone https://github.com/danifranco/BiaPy.git 
 
 
 Step 1: Data preparation
@@ -44,7 +44,7 @@ In case you use other directory distribution ensure to configure ``DATA.TRAIN.PA
 Step 2: Choose a template
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Choose a template from `templates <https://github.com/danifranco/EM_Image_Segmentation/blob/master/templates>`_ directory and modify it for you specific case. Find `config.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/config/config.py>`_ all configurable variables and their description.
+Choose a template from `templates <https://github.com/danifranco/BiaPy/blob/master/templates>`_ directory and modify it for you specific case. Find `config.py <https://github.com/danifranco/BiaPy/blob/master/config/config.py>`_ all configurable variables and their description.
 
 Step 3: Run 
 ~~~~~~~~~~~

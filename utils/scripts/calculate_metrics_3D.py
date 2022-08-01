@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 from skimage.io import imread
 
-code_dir = "/home/user/EM_Image_Segmentation"
+code_dir = "/home/user/BiaPy"
 map_code_dir = "/home/user/mAP_3Dvolume"
 input_dir = "/home/user/input"
 gt_dir = "/home/user/input_gt"

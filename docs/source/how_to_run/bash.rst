@@ -6,14 +6,14 @@ Ensure to complete the previous steps described in `First steps <first_steps.htm
 #. Prepare environment 
 
 Set-up a development environment with all necessary dependencies creating directly a ``conda`` environment using the
-file located in `utils/env/environment.yml <https://github.com/danifranco/EM_Image_Segmentation/blob/master/utils/env/environment.yml>`_ ::
+file located in `utils/env/environment.yml <https://github.com/danifranco/BiaPy/blob/master/utils/env/environment.yml>`_ ::
     
     conda env create -f utils/env/environment.yml
 
 
 #. Run the code
 
-Using, for instance, `unet_2d.yaml <https://github.com/danifranco/EM_Image_Segmentation/tree/master/templates/unet_2d.yaml>`_ 
+Using, for instance, `unet_2d.yaml <https://github.com/danifranco/BiaPy/tree/master/templates/unet_2d.yaml>`_ 
 template file, the code can be run as follows:
 
 .. code-block:: bash
@@ -31,7 +31,7 @@ template file, the code can be run as follows:
     # Number of the GPU to run the job in (according to 'nvidia-smi' command)
     gpu_number=0                   
 
-    cd EM_Image_Segmentation
+    cd BiaPy
 
     # Load the environment
     conda activate EM_tools

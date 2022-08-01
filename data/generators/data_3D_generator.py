@@ -23,7 +23,7 @@ from data.data_3D_manipulation import random_3D_crop
 
 class VoxelDataGenerator(tf.keras.utils.Sequence):
     """Custom 3D ImageDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own
-       `augmentors.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/generators/augmentors.py>`_
+       `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
        transformations.
 
        Based on `microDL <https://github.com/czbiohub/microDL>`_ and

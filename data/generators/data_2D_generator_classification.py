@@ -17,7 +17,7 @@ from data.data_2D_manipulation import random_crop_classification
 
 class ClassImageDataGenerator(tf.keras.utils.Sequence):
     """Custom 2D ImageDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
-       and our own `augmentors.py <https://github.com/danifranco/EM_Image_Segmentation/blob/master/generators/augmentors.py>`_
+       and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
        transformations.
 
        Based on `microDL <https://github.com/czbiohub/microDL>`_ and

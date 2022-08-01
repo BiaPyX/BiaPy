@@ -30,6 +30,6 @@ RUN conda update -qy conda \
     && conda env create -f /tmp/environment.yml \
     && conda init bash \
     && rm /tmp/environment.yml
-COPY . /installations/EM_Image_Segmentation
+COPY . /installations/BiaPy
 
-ENTRYPOINT ["conda", "run", "-n", "EM_tools", "python3", "-u", "/installations/EM_Image_Segmentation/main.py"]
+ENTRYPOINT ["conda", "run", "-n", "EM_tools", "python3", "-u", "/installations/BiaPy/main.py"]

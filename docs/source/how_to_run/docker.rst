@@ -14,7 +14,7 @@ docker as follows:
     docker pull danifranco/em_image_segmentation
 
     # Option B)
-    cd EM_Image_Segmentation
+    cd BiaPy
     docker build -f utils/env/Dockerfile -t em_image_segmentation .
 
 #. Once you have the container, and selecting for example the template ``unet_2d.yaml``,  you can run it as follows:

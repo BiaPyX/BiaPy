@@ -4,7 +4,7 @@ import numpy as np
 from skimage.io import imread
 from tqdm import tqdm
 
-code_dir = "/data/EM_Image_Segmentation"
+code_dir = "/data/BiaPy"
 input_dir = "/data/datasets/channel1"
 input2_dir = "/data/datasets/channel2"
 output_dir = "/data/datasets/channel_merge"

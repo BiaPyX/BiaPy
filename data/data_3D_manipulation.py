@@ -109,7 +109,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
         raise NotImplementedError("If you arrived here means that your images are not all of the same shape, and you "
                                   "select DATA.EXTRACT_RANDOM_PATCH = True, so no crops are made to ensure all images "
                                   "have the same shape. Please, crop them into your DATA.PATCH_SIZE and run again (you "
-                                  "can use one of the script from here to crop: https://github.com/danifranco/EM_Image_Segmentation/tree/master/utils/scripts)")
+                                  "can use one of the script from here to crop: https://github.com/danifranco/BiaPy/tree/master/utils/scripts)")
 
     # Create validation data splitting the train
     if create_val:
