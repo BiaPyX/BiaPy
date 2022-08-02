@@ -447,8 +447,10 @@ class Config:
         # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
         # 'peak_local_max' of skimage.feature
         _C.TEST.DET_MIN_TH_TO_BE_PEAK = [0.2]
+        # The minimal allowed distance between points. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
+        _C.TEST.DET_MIN_DISTANCE = [10]
         # Maximum distance to not consider a point as a true positive. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
-        _C.TEST.DET_TOLERANCE = 10
+        _C.TEST.DET_TOLERANCE = [10]
         # Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value
         # on the axis with less resolution. Need to be provided in (x,y,z) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
         _C.TEST.DET_VOXEL_SIZE = (1,1,1)
