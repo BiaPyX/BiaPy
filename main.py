@@ -9,7 +9,7 @@ import tensorflow as tf
 from shutil import copyfile
 
 from utils.util import set_seed, limit_threads
-from engine.trainer import Trainer
+from engine.engine import Engine
 from config.config import Config
 
 
@@ -43,6 +43,9 @@ if __name__ == '__main__':
     head, tail = ntpath.split(args.config)
     cfg_filename = tail if tail else ntpath.basename(head)
     cfg_file = os.path.join(cfg_bck_dir,cfg_filename)
+
+    if not os.path.exists(args.config):
+        raise FileNotFoundError("Provided {} config file does not exist".format(args.config))
     copyfile(args.config, cfg_file)
 
     # Merge conf file with the default settings
@@ -136,13 +139,13 @@ if __name__ == '__main__':
     ##########################
     #       TRAIN/TEST       #
     ##########################
-    trainer = Trainer(cfg, job_identifier)
+    engine = Engine(cfg, job_identifier)
 
     if cfg.TRAIN.ENABLE:
-        trainer.train()
+        engine.train()
 
     if cfg.TEST.ENABLE:
-        trainer.test()
+        engine.test()
 
     print("FINISHED JOB {} !!".format(job_identifier))
 
