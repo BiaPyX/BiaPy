@@ -373,8 +373,9 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     self.ax_x = {}
                     for k, c in enumerate(axis):
                         self.ax_x[c] = k  
-                    del img_aux   
-                img = img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
+                    del img_aux  
+                if 'Z' in self.ax_x: 
+                    img = img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
             img = img.transpose((1,2,0,3))
             self.X_channels = img.shape[-1]
             self.z_size = img.shape[-2]
@@ -412,7 +413,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                             for k, c in enumerate(axis):
                                 self.ax_y[c] = k  
                             del img_aux   
-                        img = img.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
+                        if 'Z' in self.ax_y: 
+                            img = img.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
                 # Store wheter all channels of the gt are binary or not
                 # (e.g. distance transform channel)
                 if img.dtype is np.dtype(np.float32) or \
@@ -691,11 +693,13 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 if img.ndim == 3: 
                     img = np.expand_dims(img, -1)
                 elif img.ndim == 4 and self.ax_x is not None:
-                    img = img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
+                    if 'Z' in self.ax_x: 
+                        img = img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
                 if mask.ndim == 3: 
                     mask = np.expand_dims(mask, -1)
                 elif mask.ndim == 4 and self.ax_y is not None:
-                    mask = mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
+                    if 'Z' in self.ax_y: 
+                        mask = mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
                 img = img.transpose((1,2,0,3))
                 mask = mask.transpose((1,2,0,3))
                 # Ensure uint8
@@ -736,11 +740,13 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     if e_img.ndim == 3: 
                         e_img = np.expand_dims(e_img, -1)
                     elif e_img.ndim == 4 and self.ax_x is not None:
-                        e_img = e_img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
+                        if 'Z' in self.ax_x: 
+                            e_img = e_img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
                     if e_mask.ndim == 3: 
                         e_mask = np.expand_dims(e_mask, -1)
                     elif e_mask.ndim == 4 and self.ax_y is not None:
-                        e_mask = e_mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
+                        if 'Z' in self.ax_y: 
+                            e_mask = e_mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
                     e_img = e_img.transpose((1,2,0,3))
                     e_mask = e_mask.transpose((1,2,0,3))
                     # Ensure uint8
@@ -998,11 +1004,13 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 if img.ndim == 3: 
                     img = np.expand_dims(img, -1)
                 elif img.ndim == 4 and self.ax_x is not None:
-                    img = img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
+                    if 'Z' in self.ax_x: 
+                        img = img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
                 if mask.ndim == 3: 
                     mask = np.expand_dims(mask, -1)
                 elif mask.ndim == 4 and self.ax_y is not None:
-                    mask = mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
+                    if 'Z' in self.ax_y: 
+                        mask = mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
                 img = img.transpose((1,2,0,3))
                 mask = mask.transpose((1,2,0,3))
                 # Ensure uint8
@@ -1058,11 +1066,13 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     if e_img.ndim == 3: 
                         e_img = np.expand_dims(e_img, -1)
                     elif e_img.ndim == 4 and self.ax_x is not None:
-                        e_img = e_img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
+                        if 'Z' in self.ax_x: 
+                            e_img = e_img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
                     if e_mask.ndim == 3: 
                         e_mask = np.expand_dims(e_mask, -1)
                     elif e_mask.ndim == 4 and self.ax_y is not None:
-                        e_mask = e_mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
+                        if 'Z' in self.ax_y: 
+                            e_mask = e_mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
                     e_img = e_img.transpose((1,2,0,3))
                     e_mask = e_mask.transpose((1,2,0,3))
                     # Ensure uint8

@@ -1415,12 +1415,15 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
                     from PIL.TiffTags import TAGS
                     img_aux = Image.open(os.path.join(data_dir, id_))
                     meta_dict = {TAGS[key] : img_aux.tag[key] for key in img_aux.tag_v2}
+                    print(meta_dict)
                     axis = meta_dict['ImageDescription'][0].split('\n')[-2].split('=')[-1]
                     ax = {}
                     for k, c in enumerate(axis):
-                        ax[c] = k  
-                    del img_aux   
-                img = img.transpose((ax['Z'],ax['Y'],ax['X'],ax['C']))
+                        ax[c] = k 
+                    print(ax) 
+                    del img_aux 
+                if 'Z' in ax:
+                    img = img.transpose((ax['Z'],ax['Y'],ax['X'],ax['C']))
         img = np.squeeze(img)
 
         # Ensure uint8
@@ -1714,7 +1717,7 @@ def pad_and_reflect(img, crop_shape, verbose=False):
        Parameters
        ----------
        img : 3D/4D Numpy array
-           Image to pad. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+           Image to pad. E.g. ``(y, x, channels)`` or ``(z, y, x, c)``.
 
        crop_shape : Tuple of 3/4 ints, optional
            Shape of the subvolumes to create when cropping.  E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
@@ -1725,7 +1728,7 @@ def pad_and_reflect(img, crop_shape, verbose=False):
        Returns
        -------
        img : 3D/4D Numpy array
-           Image padded (if needed). E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+           Image padded (if needed). E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
     """
     if img.ndim == 4 and len(crop_shape) != 4:
         raise ValueError("'crop_shape' needs to have 4 values as the input array has 4 dims")
