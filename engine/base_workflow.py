@@ -149,7 +149,7 @@ class Base_Workflow(metaclass=ABCMeta):
             #####################
             if self.cfg.TEST.STATS.MERGE_PATCHES:
                 if self.cfg.DATA.TEST.LOAD_GT and self.cfg.DATA.CHANNELS != "Dv2":
-                    if pred.ndim == 3: _Y = _Y[0]
+                    _Y = _Y[0]
                     if self.cfg.LOSS.TYPE != 'MASKED_BCE':
                         _iou_per_image = jaccard_index_numpy((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
                         _ov_iou_per_image = voc_calculation((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
