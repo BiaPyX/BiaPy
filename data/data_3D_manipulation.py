@@ -242,7 +242,6 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
     padded_data = np.pad(data,((padding[2],padding[2]),(padding[1],padding[1]),(padding[0],padding[0]),(0,0)), 'reflect')
     if data_mask is not None:
         padded_data_mask = np.pad(data_mask,((padding[2],padding[2]),(padding[1],padding[1]),(padding[0],padding[0]),(0,0)), 'reflect')
-
     if median_padding:
     	padded_data[0:padding[2], :, :, :] = np.median(data[0, :, :, :])
     	padded_data[padding[2]+data.shape[0]:2*padding[2]+data.shape[0], :, :, :] = np.median(data[-1, :, :, :])
@@ -259,7 +258,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
 
     # Calculate overlapping variables
     overlap_z = 1 if overlap[2] == 0 else 1-overlap[2]
-    overlap_y = 1 if overlap[1] == 0 else 1-overlap[1] 
+    overlap_y = 1 if overlap[1] == 0 else 1-overlap[1]
     overlap_x = 1 if overlap[0] == 0 else 1-overlap[0]
 
     # Z
@@ -268,7 +267,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
     ex_per_patch_z = 0 if vols_per_z == 1 else int(excess_z/(vols_per_z-1))
     step_z = vol_shape[0]-ex_per_patch_z
     last_z = 0 if vols_per_z == 1 else (((vols_per_z-1)*step_z)+padded_vol_shape[0])-padded_data.shape[0]
-   
+
     # Y
     vols_per_y = math.ceil(padded_data.shape[1]/(vol_shape[1]*overlap_y))
     excess_y = (vols_per_y*vol_shape[1])-data.shape[1]
@@ -282,8 +281,8 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
     ex_per_patch_x = 0 if vols_per_x == 1 else int(excess_x/(vols_per_x-1))
     step_x = vol_shape[2]-ex_per_patch_x
     last_x = 0 if vols_per_x == 1 else (((vols_per_x-1)*step_x)+padded_vol_shape[2])-padded_data.shape[2]
-    
-    # Real overlap calculation for printing 
+
+    # Real overlap calculation for printing
     real_ov_z = (vol_shape[0]-step_z)/vol_shape[0]
     real_ov_y = (vol_shape[1]-step_y)/vol_shape[1]
     real_ov_x = (vol_shape[2]-step_x)/vol_shape[2]
@@ -297,7 +296,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
     cropped_data = np.zeros((total_vol,) + padded_vol_shape, dtype=data.dtype)
     if data_mask is not None:
         cropped_data_mask = np.zeros((total_vol,) + padded_vol_shape[:3]+(data_mask.shape[-1],), dtype=data_mask.dtype)
-    
+
     c = 0
     for z in range(vols_per_z):
         for y in range(vols_per_y):
@@ -430,7 +429,7 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
     overlap_y = 1 if overlap[1] == 0 else 1-overlap[1]
     overlap_x = 1 if overlap[0] == 0 else 1-overlap[0]
 
-    padded_vol_shape = [orig_vol_shape[0]+2*padding[0], orig_vol_shape[1]+2*padding[1], orig_vol_shape[2]+2*padding[2]]
+    padded_vol_shape = [orig_vol_shape[0]+2*padding[2], orig_vol_shape[1]+2*padding[1], orig_vol_shape[2]+2*padding[0]]
 
     # Z
     vols_per_z = math.ceil(padded_vol_shape[0]/(data.shape[3]*overlap_z))
@@ -445,14 +444,14 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
     ex_per_patch_y = 0 if vols_per_y == 1 else int(excess_y/(vols_per_y-1))
     step_y = data.shape[2]-ex_per_patch_y
     last_y = 0 if vols_per_y == 1 else (((vols_per_y-1)*step_y)+data.shape[2])-merged_data.shape[1]
-    
+
     # X
     vols_per_x = math.ceil(padded_vol_shape[2]/(data.shape[1]*overlap_x))
     excess_x = (vols_per_x*data.shape[1])-orig_vol_shape[2]
     ex_per_patch_x = 0 if vols_per_x == 1 else int(excess_x/(vols_per_x-1))
     step_x = data.shape[1]-ex_per_patch_x
     last_x = 0 if vols_per_x == 1 else (((vols_per_x-1)*step_x)+data.shape[1])-merged_data.shape[2]
-    
+
     # Real overlap calculation for printing
     real_ov_z = (data.shape[3]-step_z)/data.shape[3]
     real_ov_y = (data.shape[2]-step_y)/data.shape[2]
@@ -462,11 +461,11 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
         print("Real overlapping (%): {}".format((real_ov_x,real_ov_y,real_ov_z)))
         print("Real overlapping (pixels): {}".format((data.shape[1]*real_ov_x, data.shape[2]*real_ov_y,data.shape[3]*real_ov_z)))
         print("{} patches per (x,y,z) axis".format((vols_per_x,vols_per_y,vols_per_z)))
-        
+
     c = 0
     for z in range(vols_per_z):
         for y in range(vols_per_y):
-            for x in range(vols_per_x):   
+            for x in range(vols_per_x):
                 d_z = 0 if (z*step_z+data.shape[3]) < orig_vol_shape[0] else last_z
                 d_y = 0 if (y*step_y+data.shape[2]) < orig_vol_shape[1] else last_y
                 d_x = 0 if (x*step_x+data.shape[1]) < orig_vol_shape[2] else last_x
