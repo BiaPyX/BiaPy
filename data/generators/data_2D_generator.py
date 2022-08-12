@@ -4,17 +4,15 @@ import random
 import os
 from tqdm import tqdm
 from PIL import Image
-from PIL import ImageEnhance
 import imgaug as ia
 from skimage.io import imsave, imread
 from imgaug import augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 
-from utils.util import img_to_onehot_encoding
+from utils.util import img_to_onehot_encoding, normalize
 from data.data_2D_manipulation import random_crop
 from data.generators.augmentors import (cutout, cutblur, cutmix, cutnoise, misalignment, brightness, contrast,
                                         brightness_em, contrast_em, missing_parts, grayscale, shuffle_channels, GridMask)
-
 
 
 class ImageDataGenerator(tf.keras.utils.Sequence):
@@ -365,7 +363,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             raise ValueError("'data_paths' must contain the following paths: 1) data path ; 2) data masks path")
 
         if random_crops_in_DA and (shape[0] != shape[1]):
-            raise ValuError("When 'random_crops_in_DA' is selected the shape given must be square, e.g. (256, 256, 1)")
+            raise ValueError("When 'random_crops_in_DA' is selected the shape given must be square, e.g. (256, 256, 1)")
 
         if not in_memory and not random_crops_in_DA:
             print("WARNING: you are going to load samples from disk (as 'in_memory=False') and "

@@ -3,19 +3,15 @@ import numpy as np
 import tensorflow as tf
 import random
 import os
-import imageio
 import imgaug as ia
 from tqdm import tqdm
 from skimage.io import imread
-from scipy.ndimage import rotate
-from scipy.ndimage.interpolation import shift
 from PIL import Image
 from imgaug import augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from imgaug.augmentables.heatmaps import HeatmapsOnImage
-from imgaug import parameters as iap
 from skimage.io import imsave
-from utils.util import img_to_onehot_encoding
+from utils.util import img_to_onehot_encoding, normalize
 from data.generators.augmentors import (cutout, cutblur, cutmix, cutnoise, misalignment, brightness_em, contrast_em,
                                         brightness, contrast, missing_parts, shuffle_channels, grayscale, GridMask)
 from data.data_3D_manipulation import random_3D_crop

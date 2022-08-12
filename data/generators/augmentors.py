@@ -4,7 +4,6 @@ import math
 import numpy as np
 from PIL import Image
 from skimage.transform import resize
-from scipy.ndimage.interpolation import map_coordinates
 from skimage.draw import line
 from scipy.ndimage.measurements import label
 from scipy.ndimage.morphology import binary_dilation

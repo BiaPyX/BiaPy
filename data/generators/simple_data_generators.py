@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from skimage.io import imread
 
-from utils.util import img_to_onehot_encoding, normalize
+from utils.util import normalize
 
 
 class simple_data_generator(tf.keras.utils.Sequence):

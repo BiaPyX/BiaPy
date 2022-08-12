@@ -4,15 +4,11 @@ import random
 import os
 import cv2
 from tqdm import tqdm
-from PIL import Image
-from PIL import ImageEnhance
 import imgaug as ia
 from skimage.io import imsave, imread
 from imgaug import augmenters as iaa
-from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 
-from utils.util import img_to_onehot_encoding
-from data.data_2D_manipulation import random_crop_classification
+from utils.util import normalize
 
 
 class ClassImageDataGenerator(tf.keras.utils.Sequence):
