@@ -385,7 +385,15 @@ class Config:
         _C.MODEL.Z_DOWN = 1
         # Checkpoint: set to True to load previous training weigths (needed for inference or to make fine-tunning)
         _C.MODEL.LOAD_CHECKPOINT = False
-
+        
+        # UNETR
+        _C.MODEL.TOKEN_SIZE = 16
+        _C.MODEL.EMBED_DIM = 768
+        _C.MODEL.DEPTH = 12
+        _C.MODEL.MLP_HIDDEN_UNITS = [2048, 1024]
+        _C.MODEL.NUM_HEADS = 6
+        _C.MODEL.OUT_DIM = 1
+        
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss

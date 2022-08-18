@@ -22,7 +22,7 @@ def build_model(cfg, job_identifier):
 
     # Checks
     assert cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'nnunet', 'tiramisu', 'mnet',
-                                      'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0']
+                                      'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr']
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and cfg.MODEL.ARCHITECTURE != 'unet' and cfg.MODEL.ARCHITECTURE != 'resunet':
         raise ValueError("Not implemented pipeline option: instance segmentation models adapted are 'unet' or 'resunet'")
 
@@ -88,6 +88,14 @@ def build_model(cfg, job_identifier):
                 model = MNet((None, None, cfg.DATA.PATCH_SIZE[-1]))
             elif cfg.MODEL.ARCHITECTURE == 'multiresunet':
                 model = MultiResUnet(None, None, cfg.DATA.PATCH_SIZE[-1])
+            elif cfg.MODEL.ARCHITECTURE == 'unetr':
+                num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.TOKEN_SIZE)**2
+                args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.TOKEN_SIZE, num_patches=num_patches,
+                    projection_dim=cfg.MODEL.EMBED_DIM, transformer_layers=cfg.MODEL.DEPTH, num_heads=cfg.MODEL.NUM_HEADS, 
+                    transformer_units=cfg.MODEL.MLP_HIDDEN_UNITS, data_augmentation = None,
+                    num_filters = 16, num_classes=cfg.MODEL.OUT_DIM, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
+                    ViT_hidd_mult = 3, batch_norm = True, dropout=cfg.MODEL.DROPOUT_VALUES)
+                model = UNETR_2D(**args)
 
     # Check the network created
     model.summary(line_length=150)
