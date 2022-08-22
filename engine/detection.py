@@ -19,7 +19,7 @@ class Detection(Base_Workflow):
         self.stats['d_precision'] = 0
         self.stats['d_recall'] = 0
         self.stats['d_f1'] = 0
-    
+
         self.stats['d_precision_per_crop'] = 0
         self.stats['d_recall_per_crop'] = 0
         self.stats['d_f1_per_crop'] = 0
@@ -29,8 +29,8 @@ class Detection(Base_Workflow):
             print("Capturing the local maxima ")
             all_channel_coord = []
             for channel in range(pred.shape[-1]):
-                if len(self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK) == 1: 
-                    min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[0] 
+                if len(self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK) == 1:
+                    min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[0]
                 else:
                     min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[channel]
                 if len(self.cfg.TEST.DET_MIN_DISTANCE) == 1:
@@ -40,13 +40,13 @@ class Detection(Base_Workflow):
                 pred_coordinates = peak_local_max(pred[...,channel], threshold_abs=min_th_peak, min_distance=min_distance,
                                                   exclude_border=False)
                 all_channel_coord.append(pred_coordinates)
-            
+
             # Create a file that represent the local maxima
             points_pred = np.zeros((pred.shape[:-1] + (len(all_channel_coord),)), dtype=np.uint8)
             for n, pred_coordinates in enumerate(all_channel_coord):
                 for coord in pred_coordinates:
                         z,x,y = coord
-                        points_pred[z,x,y,n] = n
+                        points_pred[z,x,y,n] = 1
                 self.cell_count_lines.append([filenames, len(pred_coordinates)])
 
             if self.cfg.PROBLEM.NDIM == '3D':
@@ -64,7 +64,7 @@ class Detection(Base_Workflow):
             save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                         filenames, verbose=self.cfg.TEST.VERBOSE)
             del points_pred
-                                
+
             all_channel_d_metrics = [0,0,0]
             for ch, pred_coordinates in enumerate(all_channel_coord):
                 # Save coords in csv file
@@ -75,7 +75,7 @@ class Detection(Base_Workflow):
                     for nr in range(len(pred_coordinates)):
                         csvwriter.writerow([nr+1] + pred_coordinates[nr].tolist())
 
-                # Calculate detection metrics 
+                # Calculate detection metrics
                 if self.cfg.DATA.TEST.LOAD_GT:
                     exclusion_mask = Y[...,ch] > 0
                     bin_Y = Y[...,ch] * exclusion_mask.astype( float )
@@ -92,7 +92,7 @@ class Detection(Base_Workflow):
                     print("Detection (class "+str(ch+1)+")")
                     d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
                                                   voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
-                    print("Detection metrics: {}".format(d_metrics))  
+                    print("Detection metrics: {}".format(d_metrics))
                     all_channel_d_metrics[0] += d_metrics[1]
                     all_channel_d_metrics[1] += d_metrics[3]
                     all_channel_d_metrics[2] += d_metrics[5]
@@ -140,14 +140,14 @@ class Detection(Base_Workflow):
     def print_stats(self, image_counter):
         super().print_stats(image_counter)
 
-        if self.cfg.DATA.TEST.LOAD_GT: 
+        if self.cfg.DATA.TEST.LOAD_GT:
             if self.cfg.TEST.STATS.PER_PATCH:
                 print("Detection - Test Precision (merge patches): {}".format(self.stats['d_precision_per_crop']))
                 print("Detection - Test Recall (merge patches): {}".format(self.stats['d_recall_per_crop']))
                 print("Detection - Test F1 (merge patches): {}".format(self.stats['d_f1_per_crop']))
-            if self.cfg.TEST.STATS.FULL_IMG:    
+            if self.cfg.TEST.STATS.FULL_IMG:
                 print("Detection - Test Precision (per image): {}".format(self.stats['d_precision']))
                 print("Detection - Test Recall (per image): {}".format(self.stats['d_recall']))
                 print("Detection - Test F1 (per image): {}".format(self.stats['d_f1']))
-                
+
         super().print_post_processing_stats()

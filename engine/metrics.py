@@ -5,7 +5,6 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.keras import backend as K
 from skimage import measure
-from distutils import dir_util
 from PIL import Image
 from tensorflow.keras import losses
 from scipy.spatial import distance_matrix
