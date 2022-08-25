@@ -2,7 +2,7 @@ import os
 import csv
 import numpy as np
 from skimage.feature import peak_local_max
-from scipy.ndimage.morphology import binary_dilation
+from scipy.ndimage.morphology import grey_dilation
 from skimage.measure import label, regionprops_table
 
 from utils.util import save_tif
@@ -42,27 +42,21 @@ class Detection(Base_Workflow):
                 all_channel_coord.append(pred_coordinates)
 
             # Create a file that represent the local maxima
-            points_pred = np.zeros((pred.shape[:-1] + (len(all_channel_coord),)), dtype=np.uint8)
+            points_pred = np.zeros((pred.shape[:-1] + (1,)), dtype=np.uint8)
             for n, pred_coordinates in enumerate(all_channel_coord):
                 for coord in pred_coordinates:
                         z,x,y = coord
-                        points_pred[z,x,y,n] = 1
+                        points_pred[z,x,y,0] = n+1
                 self.cell_count_lines.append([filenames, len(pred_coordinates)])
 
             if self.cfg.PROBLEM.NDIM == '3D':
                 for z_index in range(len(points_pred)):
-                    for ch in range(points_pred.shape[-1]):
-                        points_pred[z_index,...,ch] = binary_dilation(points_pred[z_index,...,ch], iterations=2)
+                    points_pred[z_index] = grey_dilation(points_pred[z_index], size=(3,3,1))
             else:
-                for ch in range(points_pred.shape[-1]):
-                    points_pred[...,ch] = binary_dilation(points_pred[...,ch], iterations=2)
-
-            # Reduce image to only 1 channel
-            if points_pred.shape[-1] > 1:
-                points_pred = np.expand_dims(np.argmax(points_pred, axis=-1), -1)
+                points_pred = grey_dilation(points_pred, size=(3,3))
 
             save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        filenames, verbose=self.cfg.TEST.VERBOSE)
+                     filenames, verbose=self.cfg.TEST.VERBOSE)
             del points_pred
 
             all_channel_d_metrics = [0,0,0]
