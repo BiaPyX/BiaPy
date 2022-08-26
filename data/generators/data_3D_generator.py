@@ -705,7 +705,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     else:
                         img = img.astype(np.uint8)
 
-            # Apply ramdom crops if it is selected
+            # Apply random crops if it is selected
             if self.random_crops_in_DA:
                 # Capture probability map
                 if self.prob_map is not None:
@@ -1016,7 +1016,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     else:
                         img = img.astype(np.uint8)
 
-            # Apply ramdom crops if it is selected
+            # Apply random crops if it is selected
             if self.random_crops_in_DA:
                 # Capture probability map
                 if self.prob_map is not None:
@@ -1085,20 +1085,20 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             if save_to_dir:
                 os.makedirs(out_dir, exist_ok=True)
                 # Original image/mask
-                f = os.path.join(out_dir, "orig_x_"+str(pos)+"_"+str(i)+"_"+self.trans_made+'.tiff')
+                f = os.path.join(out_dir, str(i)+"_orig_x_"+str(pos)+"_"+self.trans_made+'.tiff')
                 if draw_grid: self.__draw_grid(o_x)
                 aux = np.expand_dims((np.transpose(o_x, (2,3,0,1))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-                f = os.path.join(out_dir, "orig_y_"+str(pos)+"_"+str(i)+"_"+self.trans_made+'.tiff')
+                f = os.path.join(out_dir, str(i)+"_orig_y_"+str(pos)+"_"+self.trans_made+'.tiff')
                 if draw_grid: self.__draw_grid(o_y)
                 aux = np.expand_dims((np.transpose(o_y, (2,3,0,1))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                 # Transformed
-                f = os.path.join(out_dir, "x_aug_"+str(pos)+"_"+str(i)+"_"+self.trans_made+'.tiff')
+                f = os.path.join(out_dir, str(i)+"_x_aug_"+str(pos)+"_"+self.trans_made+'.tiff')
                 aux = np.expand_dims((np.transpose(sample_x[i], (2,3,0,1))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                 # Mask
-                f = os.path.join(out_dir, "y_aug_"+str(pos)+"_"+str(i)+"_"+self.trans_made+'.tiff')
+                f = os.path.join(out_dir, str(i)+"_y_aug_"+str(pos)+"_"+self.trans_made+'.tiff')
                 aux = np.expand_dims((np.transpose(sample_y[i], (2,3,0,1))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 

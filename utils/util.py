@@ -1,22 +1,20 @@
 import os
 import math
 import numpy as np
-import time
 import random
 import matplotlib
 import matplotlib.pyplot as plt
 import scipy.ndimage
 import tensorflow as tf
 import copy
-from PIL import ImageEnhance, Image
+from PIL import Image
 from tqdm import tqdm
 from skimage.io import imsave, imread
 from skimage import measure
-from skimage.transform import resize
 from skimage.segmentation import clear_border, find_boundaries
 from collections import namedtuple
 
-from engine.metrics import jaccard_index, jaccard_index_numpy, voc_calculation, DET_calculation
+from engine.metrics import jaccard_index_numpy, voc_calculation, DET_calculation
 from utils.matching import _safe_divide, precision, recall, accuracy, f1
 
 matplotlib.use('pdf')
@@ -106,7 +104,7 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
     plt.savefig(os.path.join(chartOutDir, job_id + '_loss.png'))
     plt.clf()
 
-    # Jaccard index
+    # Metric
     plt.plot(results.history[metric])
     plt.plot(results.history['val_' + metric])
     plt.title('Model JOBID=' + job_id + " " + metric)
@@ -1792,7 +1790,6 @@ def wrapper_matching_dataset_lazy(stats_all, thresh, criterion='iou', by_image=F
 
     # normalize/compute 'precision', 'recall', 'accuracy', 'f1'
     for thr,acc in zip(thresh,accumulate):
-        set(acc.keys()) == expected_keys or _raise(ValueError("unexpected keys"))
         acc['criterion'] = criterion
         acc['thresh'] = thr
         acc['by_image'] = bool(by_image)

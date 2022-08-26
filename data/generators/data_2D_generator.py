@@ -624,7 +624,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 else:
                     if mask.shape[0] == 1 or mask.shape[0] == 3: mask = mask.transpose((1,2,0))
 
-            # Apply ramdom crops if it is selected
+            # Apply random crops if it is selected
             if self.random_crops_in_DA:
                 # Capture probability map
                 if self.prob_map is not None:
@@ -972,7 +972,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 else:
                     if mask.shape[0] == 1 or mask.shape[0] == 3: mask = mask.transpose((1,2,0))
 
-            # Apply ramdom crops if it is selected
+            # Apply random crops if it is selected
             if self.random_crops_in_DA:
                 # Capture probability map
                 if self.prob_map is not None:
@@ -1035,18 +1035,18 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     self.__draw_grid(o_x)
                     self.__draw_grid(o_y)
 
-                f = os.path.join(out_dir,str(pos)+'_orig_x'+self.trans_made+".tif")
+                f = os.path.join(out_dir,str(i)+"_"+str(pos)+'_orig_x'+self.trans_made+".tif")
                 aux = np.expand_dims(np.expand_dims(o_x.transpose((2,0,1)), -1), 0).astype(np.float32)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-                f = os.path.join(out_dir,str(pos)+'_orig_y'+self.trans_made+".tif")
+                f = os.path.join(out_dir,str(i)+"_"+str(pos)+'_orig_y'+self.trans_made+".tif")
                 aux = np.expand_dims(np.expand_dims(o_y.transpose((2,0,1)), -1), 0).astype(np.float32)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
                 # Save transformed images
-                f = os.path.join(out_dir, str(pos)+p+'x'+self.trans_made+".tif")
+                f = os.path.join(out_dir,str(i)+"_"+str(pos)+p+'x'+self.trans_made+".tif")
                 aux = np.expand_dims(np.expand_dims(batch_x[i].transpose((2,0,1)), -1), 0).astype(np.float32)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-                f = os.path.join(out_dir, str(pos)+p+'y'+self.trans_made+".tif")
+                f = os.path.join(out_dir,str(i)+"_"+str(pos)+p+'y'+self.trans_made+".tif")
                 aux = np.expand_dims(np.expand_dims(batch_y[i].transpose((2,0,1)), -1), 0).astype(np.float32)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
