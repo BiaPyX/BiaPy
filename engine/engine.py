@@ -12,6 +12,7 @@ from engine.semantic_seg import Semantic_Segmentation
 from engine.instance_seg import prepare_instance_data, Instance_Segmentation
 from engine.detection import Detection
 from engine.classification import Classification
+from engine.super_resolution import Super_resolution
 
 class Engine(object):
 
@@ -61,6 +62,8 @@ class Engine(object):
                 self.metric = "jaccard_index_instances"
         elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
             self.metric = "accuracy"
+        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+            self.metric = "PSNR"
         else:
             raise ValueError("Undefined 'PROBLEM.TYPE' {}".format(cfg.PROBLEM.TYPE))
 
@@ -80,7 +83,7 @@ class Engine(object):
         ### TRAIN ###
         #############
         if cfg.TRAIN.ENABLE:
-            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']:
+            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'SUPER_RESOLUTION']:
                 if cfg.DATA.TRAIN.IN_MEMORY:
                     if cfg.PROBLEM.NDIM == '2D':
                         objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
@@ -143,7 +146,7 @@ class Engine(object):
         ### TEST ###
         ############
         if cfg.TEST.ENABLE:
-            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']:
+            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'SUPER_RESOLUTION']:
                 # Path comprobations
                 if not os.path.exists(cfg.DATA.TEST.PATH):
                     raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
@@ -234,6 +237,8 @@ class Engine(object):
             workflow = Detection(self.cfg, self.model, post_processing)
         elif self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
             workflow = Classification(self.cfg, self.model, post_processing)
+        elif self.cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+            workflow = Super_resolution(self.cfg, self.model, post_processing)
         else:
             raise ValueError("Undefined 'PROBLEM.TYPE' {}".format(self.cfg.PROBLEM.TYPE))
 

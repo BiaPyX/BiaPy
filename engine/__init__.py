@@ -5,7 +5,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 from utils.callbacks import ModelCheckpoint, TimeHistory
 from engine.metrics import (jaccard_index, jaccard_index_softmax, IoU_instances,
                             instance_segmentation_loss, weighted_bce_dice_loss,
-                            masked_bce_loss, masked_jaccard_index)
+                            masked_bce_loss, masked_jaccard_index, PSNR)
 
 
 def prepare_optimizer(cfg, model):
@@ -61,7 +61,8 @@ def prepare_optimizer(cfg, model):
         model.compile(optimizer=opt, loss=weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33), metrics=[jaccard_index])
     elif cfg.LOSS.TYPE == "W_CE_DICE" and cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         raise ValueError("Not implemented pipeline option: LOSS.TYPE == W_CE_DICE and INSTANCE_SEG")
-
+    elif cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
+        model.compile(optimizer=opt, loss="mae", metrics=[PSNR])
 
 def build_callbacks(cfg):
     """Create training and validation generators.

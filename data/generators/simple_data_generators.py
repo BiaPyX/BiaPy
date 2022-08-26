@@ -45,7 +45,7 @@ class simple_data_generator(tf.keras.utils.Sequence):
     """
 
     def __init__(self, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, dims='2D', batch_size=1, seed=42,
-                 shuffle_each_epoch=False, instance_problem=False):
+                 shuffle_each_epoch=False, instance_problem=False, do_normalization=True):
 
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
@@ -84,7 +84,10 @@ class simple_data_generator(tf.keras.utils.Sequence):
         else:
             self.len = len(X)
             img = X[0]
-        self.div_X_on_load = True if np.max(img) > 10 else False
+        if np.max(img) > 100 and do_normalization:
+            self.div_X_on_load = True  
+        else:
+            self.div_X_on_load = False
         self.o_indexes = np.arange(self.len)
         if provide_Y:
             if Y is None:
@@ -94,7 +97,10 @@ class simple_data_generator(tf.keras.utils.Sequence):
                     mask = imread(os.path.join(dm_path, self.data_mask_path[0]))
             else:
                 mask = Y[0]
-            self.div_Y_on_load = True if (np.max(mask) > 10 and not instance_problem) else False
+        if np.max(mask) > 100 and do_normalization and not instance_problem:
+            self.div_Y_on_load = True 
+        else:
+            self.div_Y_on_load = False
         self.on_epoch_end()
 
     def __len__(self):

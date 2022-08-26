@@ -668,3 +668,7 @@ def masked_jaccard_index(y_true, y_pred, t=0.5, mask_value=2.0):
 
     return jac
 
+def PSNR(super_resolution, high_resolution):
+    """Compute the peak signal-to-noise ratio, measures quality of image."""
+    psnr_value = tf.image.psnr(high_resolution, super_resolution, max_val=255)[0]
+    return psnr_value

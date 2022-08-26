@@ -77,7 +77,7 @@ if __name__ == '__main__':
     set_seed(cfg.SYSTEM.SEED)
 
     assert cfg.PROBLEM.NDIM in ['2D', '3D']
-    assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION']
+    assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'SUPER_RESOLUTION']
 
     count = 2 if cfg.PROBLEM.NDIM == '2D' else 3
     if len(cfg.DATA.TRAIN.OVERLAP) != count:
@@ -126,6 +126,11 @@ if __name__ == '__main__':
         else:
             if cfg.MODEL.N_CLASSES > 1:
                 raise ValueError("Not implemented pipeline option")
+    elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+        if not cfg.DATA.EXTRACT_RANDOM_PATCH:
+            raise ValueError("'DATA.EXTRACT_RANDOM_PATCH' need to be True for 'SUPER_RESOLUTION'")
+        if cfg.AUGMENTOR.RANDOM_CROP_SCALE == 1:
+            raise ValueError("Resolution scale must be provided with 'AUGMENTOR.RANDOM_CROP_SCALE' variable")
 
     if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.CROSS_VAL and cfg.DATA.VAL.SPLIT_TRAIN <= 0:
         raise ValueError("'DATA.VAL.SPLIT_TRAIN' needs to be > 0 when 'DATA.VAL.FROM_TRAIN' == True")

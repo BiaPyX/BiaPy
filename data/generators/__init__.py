@@ -4,6 +4,7 @@ from tqdm import tqdm
 
 from utils.util import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif, check_value
 from data.generators.data_2D_generator import ImageDataGenerator
+from data.generators.data_2D_generator_img_pair import PairImageDataGenerator
 from data.generators.data_2D_generator_classification import ClassImageDataGenerator
 from data.generators.data_3D_generator import VoxelDataGenerator
 from data.generators.simple_data_generators import simple_data_generator
@@ -67,7 +68,12 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
                              .format(cfg.AUGMENTOR.GRID_ROTATE))
 
     if cfg.PROBLEM.NDIM == '2D':
-        f_name = ImageDataGenerator if cfg.PROBLEM.TYPE != 'CLASSIFICATION' else ClassImageDataGenerator
+        if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+            f_name = ClassImageDataGenerator
+        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+            f_name = PairImageDataGenerator
+        else:
+            f_name = ImageDataGenerator 
     else:
         f_name = VoxelDataGenerator
 
@@ -107,6 +113,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             extra_data_factor=cfg.DATA.TRAIN.REPLICATE)
         if cfg.PROBLEM.NDIM == '3D':
             dic['zflip'] = cfg.AUGMENTOR.ZFLIP
+
+        if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+            dic['random_crop_scale']=cfg.AUGMENTOR.RANDOM_CROP_SCALE
     else:
         r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' else None
         dic = dict(X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, n_classes=cfg.MODEL.N_CLASSES,
@@ -128,10 +137,13 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
 
     print("Initializing val data generator . . .")
     if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-        val_generator = f_name(X=X_val, Y=Y_val, batch_size=cfg.TRAIN.BATCH_SIZE,
+        dic = dict(X=X_val, Y=Y_val, batch_size=cfg.TRAIN.BATCH_SIZE,
             shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, in_memory=cfg.DATA.VAL.IN_MEMORY,
             data_paths=[cfg.DATA.VAL.PATH, cfg.DATA.VAL.MASK_PATH], da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, seed=cfg.SYSTEM.SEED)
+        if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+            dic['random_crop_scale'] = cfg.AUGMENTOR.RANDOM_CROP_SCALE
+        val_generator = f_name(**dic)
     else:
         val_generator = f_name(X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, n_classes=cfg.MODEL.N_CLASSES, in_memory=cfg.DATA.VAL.IN_MEMORY,
             batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED, shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, da=False)
@@ -171,9 +183,12 @@ def create_test_augmentor(cfg, X_test, Y_test):
             n_classes=cfg.MODEL.N_CLASSES, in_memory=cfg.DATA.VAL.IN_MEMORY, batch_size=X_test.shape[0],
             seed=cfg.SYSTEM.SEED, shuffle_each_epoch=False, da=False)
     else:
-        test_generator = simple_data_generator(X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=cfg.DATA.TEST.LOAD_GT, Y=Y_test,
+        dic = dict(X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=cfg.DATA.TEST.LOAD_GT, Y=Y_test,
             dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, dims=cfg.PROBLEM.NDIM, seed=cfg.SYSTEM.SEED,
             instance_problem=cfg.PROBLEM.TYPE)
+        if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+            dic['do_normalization']=False
+        test_generator = simple_data_generator(**dic)
     return test_generator
 
 

@@ -554,12 +554,12 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 
     # Remove the padding
-    data = data[:, padding[0]:data.shape[1]-padding[0], padding[1]:data.shape[2]-padding[1], :]
+    data = data[:, padding[0]:data.shape[1]-padding[0], padding[1]:data.shape[2]-padding[1]]
 
     merged_data = np.zeros((original_shape), dtype=np.float32)
     if data_mask is not None:
         merged_data_mask = np.zeros((original_shape), dtype=np.float32)
-        data_mask = data_mask[:, padding[0]:data_mask.shape[1]-padding[0], padding[1]:data_mask.shape[2]-padding[1], :]
+        data_mask = data_mask[:, padding[0]:data_mask.shape[1]-padding[0], padding[1]:data_mask.shape[2]-padding[1]]
 
     ov_map_counter = np.zeros(original_shape, dtype=np.int32)
     if out_dir is not None:
@@ -802,8 +802,7 @@ def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=F
         img = image
 
     height, width = img.shape[0], img.shape[1]
-    dy, dx = random_crop_size
-    dy2, dx2 = dy//scale, dx//scale
+    dy, dx = random_crop_size[0]//scale, random_crop_size[1]//scale
     if val == True:
         x = 0
         y = 0
@@ -844,12 +843,12 @@ def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=F
             y = np.random.randint(0, height - dy + 1)
 
     if draw_prob_map_points == True:
-        return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :], ox, oy, x, y
+        return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], ox, oy, x, y
     else:
         if weight_map is not None:
-            return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy2), x:(x+dx2), :], weight_map[y:(y+dy), x:(x+dx), :]
+            return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], weight_map[y:(y+dy), x:(x+dx)]
         else:
-            return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy2), x:(x+dx2), :]
+            return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale]
 
 
 def random_crop_classification(image, random_crop_size, val=False, draw_prob_map_points=False, weight_map=None):
@@ -913,12 +912,12 @@ def random_crop_classification(image, random_crop_size, val=False, draw_prob_map
         y = np.random.randint(0, height - dy + 1)
 
     if draw_prob_map_points == True:
-        return img[y:(y+dy), x:(x+dx), :], ox, oy, x, y
+        return img[y:(y+dy), x:(x+dx)], ox, oy, x, y
     else:
         if weight_map is not None:
-            return img[y:(y+dy), x:(x+dx), :], weight_map[y:(y+dy), x:(x+dx), :]
+            return img[y:(y+dy), x:(x+dx)], weight_map[y:(y+dy), x:(x+dx)]
         else:
-            return img[y:(y+dy), x:(x+dx), :]
+            return img[y:(y+dy), x:(x+dx)]
 
 
 def load_data_classification(cfg, test=False):

@@ -22,7 +22,7 @@ def build_model(cfg, job_identifier):
 
     # Checks
     assert cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'nnunet', 'tiramisu', 'mnet',
-                                      'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr']
+                                      'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr']
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and cfg.MODEL.ARCHITECTURE != 'unet' and cfg.MODEL.ARCHITECTURE != 'resunet':
         raise ValueError("Not implemented pipeline option: instance segmentation models adapted are 'unet' or 'resunet'")
 
@@ -96,6 +96,8 @@ def build_model(cfg, job_identifier):
                     num_filters = 16, num_classes=cfg.MODEL.OUT_DIM, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
                     ViT_hidd_mult = 3, batch_norm = True, dropout=cfg.MODEL.DROPOUT_VALUES)
                 model = UNETR_2D(**args)
+            elif cfg.MODEL.ARCHITECTURE == 'edsr':
+                model = EDSR(num_filters=64, num_of_residual_blocks=16)
 
     # Check the network created
     model.summary(line_length=150)

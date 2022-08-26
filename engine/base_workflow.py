@@ -229,7 +229,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             self.after_full_image(pred, Y, filenames)
 
-    def get_stats(self, image_counter):
+    def normalize_stats(self, image_counter):
         # Per crop
         self.stats['loss_per_crop'] = self.stats['loss_per_crop'] / self.stats['patch_counter'] 
         self.stats['iou_per_crop'] = self.stats['iou_per_crop'] / self.stats['patch_counter'] 
@@ -242,16 +242,13 @@ class Base_Workflow(metaclass=ABCMeta):
         self.stats['iou'] = self.stats['iou'] / image_counter
         self.stats['loss'] = self.stats['loss'] / image_counter
         self.stats['ov_iou'] = self.stats['ov_iou'] / image_counter
-
-        self.normalize_stats(image_counter)
-
-    def normalize_stats(self, image_counter):
+        
         if self.post_processing and self.cfg.PROBLEM.NDIM == '3D':
             self.stats['iou_post'] = self.stats['iou_post'] / image_counter
             self.stats['ov_iou_post'] = self.stats['ov_iou_post'] / image_counter
 
     def print_stats(self, image_counter):
-        self.get_stats(image_counter)
+        self.normalize_stats(image_counter)
         if self.cfg.DATA.TEST.LOAD_GT:
             if self.cfg.TEST.STATS.PER_PATCH:
                 print("Loss (per patch): {}".format(self.stats['loss_per_crop']))

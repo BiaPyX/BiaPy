@@ -26,7 +26,7 @@ class Config:
         # Problem specification
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.PROBLEM = CN()
-        # Possible options: 'CLASSIFICATION', 'SEMANTIC_SEG' and 'INSTANCE_SEG'
+        # Possible options: 'CLASSIFICATION', 'SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION' and 'SUPER_RESOLUTION'
         _C.PROBLEM.TYPE = 'SEMANTIC_SEG'
         # Possible options: '2D' and '3D'
         _C.PROBLEM.NDIM = '2D'
@@ -352,7 +352,8 @@ class Config:
         _C.AUGMENTOR.GRID_ROTATE = 1
         # Whether to invert the mask
         _C.AUGMENTOR.GRID_INVERT = False
-
+        # Whether to scale the second random crop done. Used in SUPER_RESOLUTION and when 'DATA.EXTRACT_RANDOM_PATCH'=True
+        _C.AUGMENTOR.RANDOM_CROP_SCALE = 1
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Model definition
