@@ -7,7 +7,7 @@ from tqdm import tqdm
 from skimage.io import imread
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from PIL import Image
-from utils.util import load_data_from_dir, foreground_percentage
+from utils.util import load_data_from_dir, normalize
 from skimage.io import imsave
 
 
@@ -209,7 +209,7 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
             print("{} Cropping the extra dataset . . .".format(i))
             if crop_shape != e_X_train.shape[1:]:
                 e_X_train, e_Y_train = crop_data_with_overlap(e_X_train, crop_shape, data_mask=e_Y_train,
-                                                              overlap=overlap, padding=padding, verbose=False)
+                                                              overlap=ov, padding=padding, verbose=False)
 
             if num_crops_per_dataset != 0:
                 e_X_train = e_X_train[:num_crops_per_dataset]
@@ -219,14 +219,16 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
             X_train = np.vstack((X_train, e_X_train))
             Y_train = np.vstack((Y_train, e_Y_train))
 
+    s = X_train.shape if not random_crops_in_DA else X_train[0].shape
     if create_val:
-        print("*** Loaded train data shape is: {}".format(X_train.shape))
-        print("*** Loaded validation data shape is: {}".format(X_val.shape))
+        sv = X_val.shape if not random_crops_in_DA else X_val[0].shape
+        print("*** Loaded train data shape is: {}".format(s))
+        print("*** Loaded validation data shape is: {}".format(sv))
         print("### END LOAD ###")
 
         return X_train, Y_train, X_val, Y_val, t_filenames
     else:
-        print("*** Loaded train data shape is: {}".format(X_train.shape))
+        print("*** Loaded train data shape is: {}".format(s))
         print("### END LOAD ###")
 
         return X_train, Y_train, t_filenames
@@ -742,7 +744,8 @@ def check_crops(data, original_shape, ov, num_examples=1, include_crops=True, ou
     print("### END CHECK-CROP ###")
 
 
-def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=False, img_prob=None, weight_map=None):
+def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=False, img_prob=None, weight_map=None,
+                scale=1):
     """Random crop.
 
        Parameters
@@ -768,6 +771,9 @@ def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=F
 
        weight_map : bool, optional
            Weight map of the given image. E.g. ``(x, y, channels)``.
+
+       scale : int, optional
+           Scale factor the second image given. 
 
        Returns
        -------
@@ -797,6 +803,7 @@ def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=F
 
     height, width = img.shape[0], img.shape[1]
     dy, dx = random_crop_size
+    dy2, dx2 = dy//scale, dx//scale
     if val == True:
         x = 0
         y = 0
@@ -840,9 +847,9 @@ def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=F
         return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :], ox, oy, x, y
     else:
         if weight_map is not None:
-            return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :], weight_map[y:(y+dy), x:(x+dx), :]
+            return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy2), x:(x+dx2), :], weight_map[y:(y+dy), x:(x+dx), :]
         else:
-            return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy), x:(x+dx), :]
+            return img[y:(y+dy), x:(x+dx), :], mask[y:(y+dy2), x:(x+dx2), :]
 
 
 def random_crop_classification(image, random_crop_size, val=False, draw_prob_map_points=False, weight_map=None):
