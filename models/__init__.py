@@ -97,7 +97,7 @@ def build_model(cfg, job_identifier):
                     ViT_hidd_mult = 3, batch_norm = True, dropout=cfg.MODEL.DROPOUT_VALUES)
                 model = UNETR_2D(**args)
             elif cfg.MODEL.ARCHITECTURE == 'edsr':
-                model = EDSR(num_filters=64, num_of_residual_blocks=16)
+                model = EDSR(num_filters=64, num_of_residual_blocks=16, num_channels=cfg.DATA.PATCH_SIZE[-1])
 
     # Check the network created
     model.summary(line_length=150)

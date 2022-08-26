@@ -58,9 +58,9 @@ def Upsampling(inputs, factor=2, **kwargs):
     return x
 
 
-def EDSR(num_filters, num_of_residual_blocks):
+def EDSR(num_filters, num_of_residual_blocks, num_channels):
     # Flexible Inputs to input_layer
-    input_layer = layers.Input(shape=(24, 24, 3))
+    input_layer = layers.Input(shape=(None, None, num_channels))
     # Scaling Pixel Values
     #x = layers.Rescaling(scale=1.0 / 255)(input_layer)
     x = layers.experimental.preprocessing.Rescaling(scale=1.0 / 255)(input_layer)
@@ -74,7 +74,7 @@ def EDSR(num_filters, num_of_residual_blocks):
     x = layers.Add()([x, x_new])
 
     x = Upsampling(x)
-    x = layers.Conv2D(3, 3, padding="same")(x)
+    x = layers.Conv2D(num_channels, 3, padding="same")(x)
     #output_layer = layers.Rescaling(scale=255)(x)
     output_layer = layers.experimental.preprocessing.Rescaling(scale=255)(x)
     return EDSRModel(input_layer, output_layer)

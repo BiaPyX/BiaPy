@@ -355,8 +355,6 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
             if type(X) != list:
                 if X.ndim != 4 or Y.ndim != 4:
                     raise ValueError("X and Y must be a 4D Numpy array")
-                if X.shape[:3] != Y.shape[:3]:
-                    raise ValueError("The shape of X and Y must be the same. {} != {}".format(X.shape[:3], Y.shape[:3]))
             else:
                 if X[0].ndim != 4 or Y[0].ndim != 4:
                     raise ValueError("X[0] and Y[0] must be a 4D Numpy array")
