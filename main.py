@@ -104,7 +104,8 @@ if __name__ == '__main__':
             raise ValueError("'DATA.EXTRACT_RANDOM_PATCH' need to be True for 'SUPER_RESOLUTION'")
         if cfg.AUGMENTOR.RANDOM_CROP_SCALE == 1:
             raise ValueError("Resolution scale must be provided with 'AUGMENTOR.RANDOM_CROP_SCALE' variable")
-
+        if cfg.PROBLEM.NDIM == '3D':
+            raise NotImplementedError
     if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.CROSS_VAL and cfg.DATA.VAL.SPLIT_TRAIN <= 0:
         raise ValueError("'DATA.VAL.SPLIT_TRAIN' needs to be > 0 when 'DATA.VAL.FROM_TRAIN' == True")
     if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.TRAIN.IN_MEMORY:

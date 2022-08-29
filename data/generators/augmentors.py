@@ -330,7 +330,7 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
         _scale = random.uniform(scale[0], scale[1])*max_value
         noise = np.random.normal(loc=0, scale=_scale, size=(y_size, x_size))
         out[cy:cy+y_size, cx:cx+x_size, :] += np.stack((noise,)*out.shape[-1], axis=-1).astype(np.int16)
-    return np.clip(out, 0, max_value).astype(np.uint8)
+    return np.clip(out, 0, max_value)
 
 
 def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1"):
@@ -484,12 +484,12 @@ def random_rotate_matrix(height, displacement):
     M = cv2.getRotationMatrix2D((height/2, height/2), rand_angle, 1)
     return M
 
-def brightness(img, brightness_factor=(0,0),  mode='2D'):
-    """Randomly adjust brightness between a range. The input image will be divided by ``255``.
+def brightness(image, brightness_factor=(0,0),  mode='2D'):
+    """Randomly adjust brightness between a range.
 
        Parameters
        ----------
-       img : 3D Numpy array
+       image : 3D Numpy array
            Image to transform. E.g. ``(y, x, channels)``.
 
        brightness_factor : tuple of 2 floats, optional
@@ -526,12 +526,10 @@ def brightness(img, brightness_factor=(0,0),  mode='2D'):
        The grid is painted for visualization purposes.
     """
 
-    image = img/255
-
     if brightness_factor[0] == 0 and brightness_factor[1] == 0: return image
 
     # Force mode if 2D
-    if img.ndim == 3: mode == '3D'
+    if image.ndim == 3: mode == '3D'
 
     if mode == '2D':
         b_factor = np.random.uniform(brightness_factor[0], brightness_factor[1], image.shape[-1]*3)
@@ -543,14 +541,14 @@ def brightness(img, brightness_factor=(0,0),  mode='2D'):
         image += b_factor
         image = np.clip(image, 0, 1)
 
-    return (image*255).astype(np.uint8)
+    return image
 
-def contrast(img, contrast_factor=(0,0), mode='2D'):
-    """Contrast augmentation. The input image will be divided by ``255``.
+def contrast(image, contrast_factor=(0,0), mode='2D'):
+    """Contrast augmentation.
 
        Parameters
        ----------
-       img : 3D Numpy array
+       image : 3D Numpy array
            Image to transform. E.g. ``(y, x, channels)``.
 
        contrast_factor : tuple of 2 floats, optional
@@ -587,12 +585,10 @@ def contrast(img, contrast_factor=(0,0), mode='2D'):
        The grid is painted for visualization purposes.
     """
 
-    image = img/255
-
     if contrast_factor[0] == 0 and contrast_factor[1] == 0: return image
 
     # Force mode if 2D
-    if img.ndim == 3: mode == '3D'
+    if image.ndim == 3: mode == '3D'
 
     if mode == '2D':
         c_factor = np.random.uniform(contrast_factor[0], contrast_factor[1], image.shape[-1]*3)
@@ -604,19 +600,18 @@ def contrast(img, contrast_factor=(0,0), mode='2D'):
         image *= 1 + c_factor
         image = np.clip(image, 0, 1)
 
-    return (image*255).astype(np.uint8)
+    return image
 
 
-def brightness_em(img, brightness_factor=(0,0),  mode='2D', invert=False, invert_p=0):
-    """Randomly adjust brightness, randomly invert the color space and apply gamma correction. The input image will be
-       divided by ``255``.
+def brightness_em(image, brightness_factor=(0,0),  mode='2D', invert=False, invert_p=0):
+    """Randomly adjust brightness, randomly invert the color space and apply gamma correction. 
 
        Implementation based on `PyTorch Connectomics' grayscale.py
        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
 
        Parameters
        ----------
-       img : 3D Numpy array
+       image : 3D Numpy array
            Image to transform. E.g. ``(y, x, channels)``.
 
        brightness_factor : tuple of 2 floats, optional
@@ -659,8 +654,6 @@ def brightness_em(img, brightness_factor=(0,0),  mode='2D', invert=False, invert
        The grid is painted for visualization purposes.
     """
 
-    image = img/255
-
     if brightness_factor[0] == 0 and brightness_factor[1] == 0: return image
 
     # Force mode if 2D
@@ -684,19 +677,18 @@ def brightness_em(img, brightness_factor=(0,0),  mode='2D', invert=False, invert
         image = 1.0-image
         image = np.clip(image, 0, 1)
 
-    return (image*255).astype(np.uint8)
+    return image
 
 
-def contrast_em(img, contrast_factor=(0,0), mode='2D', invert=False, invert_p=0):
-    """Contrast augmentation. Randomly invert the color space and apply gamma correction. The input image will be
-       divided by ``255``.
+def contrast_em(image, contrast_factor=(0,0), mode='2D', invert=False, invert_p=0):
+    """Contrast augmentation. Randomly invert the color space and apply gamma correction. 
 
        Implementation based on `PyTorch Connectomics' grayscale.py
        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
 
        Parameters
        ----------
-       img : 3D Numpy array
+       image : 3D Numpy array
            Image to transform. E.g. ``(y, x, channels)``.
 
        contrast_factor : tuple of 2 floats, optional
@@ -738,13 +730,10 @@ def contrast_em(img, contrast_factor=(0,0), mode='2D', invert=False, invert_p=0)
 
        The grid is painted for visualization purposes.
     """
-
-    image = img/255
-
     if contrast_factor[0] == 0 and contrast_factor[1] == 0: return image
 
     # Force mode if 2D
-    if img.ndim == 3: mode == '3D'
+    if image.ndim == 3: mode == '3D'
 
     c_factor = random.uniform(contrast_factor[0], contrast_factor[1])
     if mode == '2D':
@@ -764,7 +753,7 @@ def contrast_em(img, contrast_factor=(0,0), mode='2D', invert=False, invert_p=0)
         image = 1.0-image
         image = np.clip(image, 0, 1)
 
-    return (image*255).astype(np.uint8)
+    return image
 
 
 def missing_parts(img, iterations=(30,40)):

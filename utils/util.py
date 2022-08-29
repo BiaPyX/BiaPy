@@ -1044,7 +1044,9 @@ def check_masks(path, n_classes=2):
         if len(values) > n_classes :
             raise ValueError("Error: given masks are not binary. Please correct the images before training. "
                              "(image: {})\nValues: {}".format(os.path.join(path, ids[i]), values))
-
+        if not (values == range(len(values))).all() and len(values) > 2:
+            raise ValueError("Mask values need to be consecutive. E.g. [0,1,2,3...]. Provided: {}"
+                .format(values))
 
 def img_to_onehot_encoding(img, num_classes=2):
     """Converts image given into one-hot encode format.
@@ -1832,6 +1834,34 @@ def wrapper_matching_segCompare(stats_all):
 
 def normalize(x, x_min, x_max, out_min=0, out_max=255, out_type=np.uint8):
     return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)
+
+def ensure_2D_dims_and_datatype(img, is_mask=False, div=False):
+    if img.ndim == 2:
+        img = np.expand_dims(img, -1)
+    else:
+        if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
+
+    # Ensure uint8 range values
+    if not is_mask:
+        if img.dtype == np.uint16:
+            img = normalize(img, 0, 65535) if np.max(img) > 255 else img.astype(np.uint8)
+
+    if div: img = img/255
+    if not is_mask: img = img.astype(np.float32)
+    return img
+
+def ensure_3D_dims_and_datatype(img, ax=None, is_mask=False):
+    if img.ndim == 3: 
+        img = np.expand_dims(img, -1)
+    elif img.ndim == 4 and ax is not None:
+        if 'Z' in ax: 
+            img = img.transpose((ax['Z'],ax['Y'],ax['X'],ax['C']))
+
+    # Ensure uint8 range values
+    if not is_mask:
+        if img.dtype == np.uint16:
+            img = normalize(img, 0, 65535) if np.max(img) > 255 else img.astype(np.uint8)
+    return img
 
 def check_value(value, range=(0,1)):
     """Checks if a value is within a range """

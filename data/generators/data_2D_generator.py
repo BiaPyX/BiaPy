@@ -9,7 +9,7 @@ from skimage.io import imsave, imread
 from imgaug import augmenters as iaa
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 
-from utils.util import img_to_onehot_encoding, normalize
+from utils.util import img_to_onehot_encoding, ensure_2D_dims_and_datatype
 from data.data_2D_manipulation import random_crop
 from data.generators.augmentors import (cutout, cutblur, cutmix, cutnoise, misalignment, brightness, contrast,
                                         brightness_em, contrast_em, missing_parts, grayscale, shuffle_channels, GridMask)
@@ -388,39 +388,24 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             self.data_mask_path = sorted(next(os.walk(data_paths[1]))[2])
             self.len = len(self.data_paths)
 
+            self.div_X_on_load = False # required since __load_sample uses it
+            self.div_Y_on_load = False # required since __load_sample uses it
+            
             # Check if a division is required
-            if self.data_paths[0].endswith('.npy'):
-                img = np.load(os.path.join(data_paths[0], self.data_paths[0]))
-            else:
-                img = imread(os.path.join(data_paths[0], self.data_paths[0]))
-            if img.ndim == 2:
-                img = np.expand_dims(img, -1)
-            else:
-                if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
+            img, _ = self.__load_sample(0)
             self.X_channels = img.shape[-1]
-            # Ensure uint8
-            if img.dtype == np.uint16:
-                if np.max(img) > 255:
-                    img = normalize(img, 0, 65535)
-                else:
-                    img = img.astype(np.uint8)
-
             self.div_X_on_load = True if np.max(img) > 100 else False
             self.shape = shape if random_crops_in_DA else img.shape
-            # Loop over a few masks to ensure foreground class is present
-            self.div_Y_on_load = False
-            for i in range(min(10,len(self.data_mask_path))):
-                if self.data_mask_path[i].endswith('.npy'):
-                    img = np.load(os.path.join(data_paths[1], self.data_mask_path[i]))
-                else:
-                    img = imread(os.path.join(data_paths[1], self.data_mask_path[i]))
-                if np.max(img) > 100: self.div_Y_on_load = True
-            if img.ndim == 2:
-                img = np.expand_dims(img, -1)
-            else:
-                img = img.transpose((1,2,0))
-            self.channels = img.shape[-1]
             del img
+
+            # Loop over a few masks to ensure foreground class is present
+            for i in range(min(10,len(self.data_mask_path))):
+                _, mask = self.__load_sample(i)
+                if np.max(mask) > 100: 
+                    self.div_Y_on_load = True
+                    break
+            self.channels = mask.shape[-1]
+            del mask
         else:
             self.X = X.astype(np.uint8)
             self.Y = Y.astype(np.uint8)
@@ -565,11 +550,9 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         ia.seed(seed)
         self.on_epoch_end()
 
-
     def __len__(self):
         """Defines the number of batches per epoch."""
         return int(np.ceil((self.len*self.extra_data_factor)/self.batch_size))
-
 
     def __getitem__(self, index):
         """Generation of one batch data.
@@ -591,39 +574,13 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
 
-        batch_x = np.zeros((len(indexes), *self.shape), dtype=np.uint8)
+        batch_x = np.zeros((len(indexes), *self.shape), dtype=np.float32)
         batch_y = np.zeros((len(indexes), *self.shape[:2])+(self.channels,), dtype=np.uint8)
 
         for i, j in zip(range(len(indexes)), indexes):
 
-            # Choose the data source
-            if self.in_memory:
-                img = self.X[j]
-                mask = self.Y[j]
-            else:
-                if self.data_paths[j].endswith('.npy'):
-                    img = np.load(os.path.join(self.paths[0], self.data_paths[j]))
-                    mask = np.load(os.path.join(self.paths[1], self.data_mask_path[j]))
-                else:
-                    img = imread(os.path.join(self.paths[0], self.data_paths[j]))
-                    mask = imread(os.path.join(self.paths[1], self.data_mask_path[j]))
-                if img.ndim == 2:
-                    img = np.expand_dims(img, -1)
-                else:
-                    if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
-
-                # Ensure uint8
-                if img.dtype == np.uint16:
-                    if np.max(img) > 255:
-                        img = normalize(img, 0, 65535)
-                    else:
-                        img = img.astype(np.uint8)
-
-                if mask.ndim == 2:
-                    mask = np.expand_dims(mask, -1)
-                else:
-                    if mask.shape[0] == 1 or mask.shape[0] == 3: mask = mask.transpose((1,2,0))
-
+            img, mask = self.__load_sample(j)
+ 
             # Apply random crops if it is selected
             if self.random_crops_in_DA:
                 # Capture probability map
@@ -641,39 +598,12 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
             # Apply transformations
             if self.da:
-                extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
-                if self.in_memory:
-                    e_img = self.X[extra_img]
-                    e_mask = self.Y[extra_img]
-                else:
-                    if self.data_paths[extra_img].endswith('.npy'):
-                        e_img = np.load(os.path.join(self.paths[0], self.data_paths[extra_img]))
-                        e_mask = np.load(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
-                    else:
-                        e_img = imread(os.path.join(self.paths[0], self.data_paths[extra_img]))
-                        e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
-                    if e_img.ndim == 2:
-                        e_img = np.expand_dims(e_img, -1)
-                    else:
-                        if e_img.shape[0] == 1 or e_img.shape[0] == 3: e_img = e_img.transpose((1,2,0))
-
-                    # Ensure uint8
-                    if e_img.dtype == np.uint16:
-                        if np.max(e_img) > 255:
-                            e_img = normalize(e_img, 0, 65535)
-                        else:
-                            e_img = e_img.astype(np.uint8)
-
-                    if e_mask.ndim == 2:
-                        e_mask = np.expand_dims(e_mask, -1)
-                    else:
-                        if e_mask.shape[0] == 1 or e_mask.shape[0] == 3: e_mask = e_mask.transpose((1,2,0))
+                e_img, e_mask = None, None
+                if self.cutmix:
+                    extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
+                    e_img, e_mask = self.__load_sample(extra_img)
 
                 batch_x[i], batch_y[i] = self.apply_transform(batch_x[i], batch_y[i], e_im=e_img, e_mask=e_mask)
-
-        # Divide the values
-        if self.div_X_on_load: batch_x = batch_x/255
-        if self.div_Y_on_load: batch_y = batch_y/255
 
         # One-hot enconde
         if self.n_classes > 1 and (self.n_classes != self.channels):
@@ -689,6 +619,27 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         else:
             return ([batch_x], [batch_y]*self.out_number)
 
+    def __load_sample(self, idx):
+        """Load one data sample given its corresponding index."""
+
+        # Choose the data source
+        if self.in_memory:
+            img = self.X[idx]
+            mask = self.Y[idx]
+
+            if self.div_X_on_load: img = img/255
+            if self.div_Y_on_load: mask = mask/255
+        else:
+            if self.data_paths[idx].endswith('.npy'):
+                img = np.load(os.path.join(self.paths[0], self.data_paths[idx]))
+                mask = np.load(os.path.join(self.paths[1], self.data_mask_path[idx]))
+            else:
+                img = imread(os.path.join(self.paths[0], self.data_paths[idx]))
+                mask = imread(os.path.join(self.paths[1], self.data_mask_path[idx]))
+
+            img = ensure_2D_dims_and_datatype(img, div=self.div_X_on_load)
+            mask = ensure_2D_dims_and_datatype(mask, is_mask=True, div=self.div_Y_on_load)
+        return img, mask
 
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
@@ -696,7 +647,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         self.indexes = self.o_indexes
         if self.shuffle:
             random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
-
 
     def apply_transform(self, image, mask, e_im=None, e_mask=None):
         """Transform the input image and its mask at the same time with one of the selected choices based on a
@@ -786,7 +736,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
         return image, mask
 
-
     def __draw_grid(self, im, grid_width=50):
         """Draw grid of the specified size on an image.
 
@@ -804,7 +753,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             im[i] = v
         for j in range(0, im.shape[1], grid_width):
             im[:, j] = v
-
 
     def get_transformed_samples(self, num_examples, save_to_dir=False, out_dir='aug', train=True,
                                 random_images=True, draw_grid=True):
@@ -926,7 +874,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             num_examples = self.len
             print("WARNING: More samples requested than the ones available. 'num_examples' fixed to {}".format(num_examples))
 
-        batch_x = np.zeros((num_examples, *self.shape), dtype=np.uint8)
+        batch_x = np.zeros((num_examples, *self.shape), dtype=np.float32)
         batch_y = np.zeros((num_examples, *self.shape[:2])+(self.channels,), dtype=np.uint8)
 
         if save_to_dir:
@@ -940,33 +888,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             else:
                 pos = i
 
-            # Take the data samples
-            if self.in_memory:
-                img = self.X[pos]
-                mask = self.Y[pos]
-            else:
-                if self.data_paths[pos].endswith('.npy'):
-                    img = np.load(os.path.join(self.paths[0], self.data_paths[pos]))
-                    mask = np.load(os.path.join(self.paths[1], self.data_mask_path[pos]))
-                else:
-                    img = imread(os.path.join(self.paths[0], self.data_paths[pos]))
-                    mask = imread(os.path.join(self.paths[1], self.data_mask_path[pos]))
-                if img.ndim == 2:
-                    img = np.expand_dims(img, -1)
-                else:
-                    if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
-
-                # Ensure uint8
-                if img.dtype == np.uint16:
-                    if np.max(img) > 255:
-                        img = normalize(img, 0, 65535)
-                    else:
-                        img = img.astype(np.uint8)
-
-                if mask.ndim == 2:
-                    mask = np.expand_dims(mask, -1)
-                else:
-                    if mask.shape[0] == 1 or mask.shape[0] == 3: mask = mask.transpose((1,2,0))
+            img, mask = self.__load_sample(pos)
 
             # Apply random crops if it is selected
             if self.random_crops_in_DA:
@@ -994,33 +916,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                     self.__draw_grid(batch_x[i])
                     self.__draw_grid(batch_y[i])
 
-                extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
-                if self.in_memory:
-                    e_img = self.X[extra_img]
-                    e_mask = self.Y[extra_img]
-                else:
-                    if self.data_paths[extra_img].endswith('.npy'):
-                        img = np.load(os.path.join(self.paths[0], self.data_paths[extra_img]))
-                        mask = np.load(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
-                    else:
-                        e_img = imread(os.path.join(self.paths[0], self.data_paths[extra_img]))
-                        e_mask = imread(os.path.join(self.paths[1], self.data_mask_path[extra_img]))
-                    if e_img.ndim == 2:
-                        e_img = np.expand_dims(e_img, -1)
-                    else:
-                        if e_img.shape[0] == 1 or e_img.shape[0] == 3: e_img = e_img.transpose((1,2,0))
-
-                    # Ensure uint8
-                    if e_img.dtype == np.uint16:
-                        if np.max(e_img) > 255:
-                            e_img = normalize(e_img, 0, 65535)
-                        else:
-                            e_img = e_img.astype(np.uint8)
-
-                    if e_mask.ndim == 2:
-                        e_mask = np.expand_dims(e_mask, -1)
-                    else:
-                        if e_mask.shape[0] == 1 or e_mask.shape[0] == 3: e_mask = e_mask.transpose((1,2,0))
+                e_img, e_mask = None, None
+                if self.cutmix:
+                    extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
+                    e_img, e_mask = self.__load_sample(extra_img)
 
                 batch_x[i], batch_y[i] = self.apply_transform(
                     batch_x[i], batch_y[i], e_im=e_img, e_mask=e_mask)
@@ -1049,24 +948,13 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 # Save the original images with a point that represents the selected coordinates to be the center of
                 # the crop
                 if self.random_crops_in_DA and self.prob_map is not None:
-                    if self.in_memory:
-                        img = self.X[pos]
-                    else:
-                        if self.data_paths[pos].endswith('.npy'):
-                            img = np.load(os.path.join(self.paths[0], self.data_paths[pos]))
-                        else:
-                            img = imread(os.path.join(self.paths[0], self.data_paths[pos]))
-                        if img.ndim == 2:
-                            img = np.expand_dims(img, -1)
-                        else:
-                            img = img.transpose((1,2,0))
+                    img, mask = self.__load_sample(pos)
 
-                        # Ensure uint8
-                        if img.dtype == np.uint16:
-                            if np.max(img) > 255:
-                                img = normalize(img, 0, 65535)
-                            else:
-                                img = img.astype(np.uint8)
+                    # Undo normalization
+                    if self.div_X_on_load: img = img*255
+                    if self.div_Y_on_load: mask = mask*255
+                    
+                    img, mask = img.astype(np.uint8), mask.astype(np.uint8)
 
                     if self.shape[-1] == 1:
                         im = Image.fromarray(np.repeat(img, 3, axis=2), 'RGB')
@@ -1092,18 +980,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
 
                     im.save(os.path.join(out_dir, str(i)+"_"+str(pos)+'_mark_x'+self.trans_made+'.png'))
 
-                    if self.in_memory:
-                        mask = self.Y[pos]
-                    else:
-                        if self.data_paths[pos].endswith('.npy'):
-                            mask = np.load(os.path.join(self.paths[1], self.data_mask_path[pos]))
-                        else:
-                            mask = imread(os.path.join(self.paths[1], self.data_mask_path[pos]))
-                        if mask.ndim == 2:
-                            mask = np.expand_dims(mask, -1)
-                        else:
-                            mask = mask.transpose((1,2,0))
-                        if np.max(mask) < 100: mask = mask
                     if mask.shape[-1] == 1:
                         m = Image.fromarray(np.repeat(mask, 3, axis=2), 'RGB')
                     else:

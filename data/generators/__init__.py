@@ -183,9 +183,10 @@ def create_test_augmentor(cfg, X_test, Y_test):
             n_classes=cfg.MODEL.N_CLASSES, in_memory=cfg.DATA.VAL.IN_MEMORY, batch_size=X_test.shape[0],
             seed=cfg.SYSTEM.SEED, shuffle_each_epoch=False, da=False)
     else:
+        instance_problem = True if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else False
         dic = dict(X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=cfg.DATA.TEST.LOAD_GT, Y=Y_test,
             dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, dims=cfg.PROBLEM.NDIM, seed=cfg.SYSTEM.SEED,
-            instance_problem=cfg.PROBLEM.TYPE)
+            instance_problem=instance_problem)
         if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             dic['do_normalization']=False
         test_generator = simple_data_generator(**dic)

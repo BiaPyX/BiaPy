@@ -67,13 +67,39 @@ class simple_data_generator(tf.keras.utils.Sequence):
         self.batch_size = batch_size
         self.total_batches_seen = 0
         self.data_3d = True if dims == '3D' else False
+
+        self.div_X_on_load = False # required since __load_sample uses it
+        self.div_Y_on_load = False # required since __load_sample uses it
+
         # Check if a division is required
+        img, mask = self.__load_sample(0)
         if X is None:
             self.len = len(self.data_path)
-            if self.data_path[0].endswith('.npy'):
-                img = np.load(os.path.join(d_path, self.data_path[0]))
+        else:
+            self.len = len(X)
+        self.o_indexes = np.arange(self.len)
+        self.div_X_on_load = True if (np.max(img) > 100 and do_normalization) else False
+        self.div_Y_on_load = True if (np.max(mask) > 100 and do_normalization and not instance_problem) else False
+        self.on_epoch_end()
+
+
+    def __load_sample(self, idx):
+        """Load one data sample given its corresponding index."""
+
+        mask = None
+        # Choose the data source
+        if self.X is None:
+            if self.data_paths[idx].endswith('.npy'):
+                img = np.load(os.path.join(self.paths[0], self.data_paths[idx]))
+                if self.provide_Y:
+                    mask = np.load(os.path.join(self.paths[1], self.data_mask_path[idx]))
             else:
-                img = imread(os.path.join(d_path, self.data_path[0]))
+                img = imread(os.path.join(self.paths[0], self.data_paths[idx]))
+                if self.provide_Y:
+                    mask = imread(os.path.join(self.paths[1], self.data_mask_path[idx]))
+            img = np.squeeze(img)
+            if self.provide_Y:
+                mask = np.squeeze(mask) 
 
             # Ensure uint8
             if img.dtype == np.uint16:
@@ -82,26 +108,31 @@ class simple_data_generator(tf.keras.utils.Sequence):
                 else:
                     img = img.astype(np.uint8)
         else:
-            self.len = len(X)
-            img = X[0]
-        if np.max(img) > 100 and do_normalization:
-            self.div_X_on_load = True  
-        else:
-            self.div_X_on_load = False
-        self.o_indexes = np.arange(self.len)
-        if provide_Y:
-            if Y is None:
-                if self.data_mask_path[0].endswith('.npy'):
-                    mask = np.load(os.path.join(dm_path, self.data_mask_path[0]))
-                else:
-                    mask = imread(os.path.join(dm_path, self.data_mask_path[0]))
+            img = self.X[idx]
+            img = np.squeeze(img)
+
+            if self.data_3d:
+                if img.ndim == 3: img = np.expand_dims(img, -1)
             else:
-                mask = Y[0]
-        if np.max(mask) > 100 and do_normalization and not instance_problem:
-            self.div_Y_on_load = True 
-        else:
-            self.div_Y_on_load = False
-        self.on_epoch_end()
+                if img.ndim == 2: img = np.expand_dims(img, -1)
+
+            if self.provide_Y:
+                mask = self.Y[idx]
+                mask = np.squeeze(mask)
+
+                if self.data_3d:
+                    if mask.ndim == 3: mask = np.expand_dims(mask, -1)
+                else:
+                    if mask.ndim == 2: mask = np.expand_dims(mask, -1)
+        
+        if self.div_X_on_load: img = img/255
+        img = np.expand_dims(img, 0)
+        if self.provide_Y:
+            if self.div_Y_on_load: mask = mask/255
+            mask = np.expand_dims(mask, 0)
+
+        return img, mask
+
 
     def __len__(self):
         """Defines the length of the generator"""
@@ -130,63 +161,7 @@ class simple_data_generator(tf.keras.utils.Sequence):
         if self.provide_Y: batch_y = []
 
         for i, j in zip(range(len(indexes)), indexes):
-            # X
-            if self.X is None:
-                if self.data_path[0].endswith('.npy'):
-                    img = np.load(os.path.join(self.d_path, self.data_path[j]))
-                else:
-                    img = imread(os.path.join(self.d_path, self.data_path[j]))
-                img = np.squeeze(img)
-
-                if self.data_3d:
-                    if img.ndim == 3: img = np.expand_dims(img, -1)
-                else:
-                    if img.ndim == 2:
-                        img = np.expand_dims(img, -1)
-                    else:
-                        if img.shape[0] <= 3: img = img.transpose((1,2,0))
-
-                # Ensure uint8
-                if img.dtype == np.uint16:
-                    if np.max(img) > 255:
-                        img = normalize(img, 0, 65535)
-                    else:
-                        img = img.astype(np.uint8)
-            else:
-                img = self.X[j]
-                img = np.squeeze(img)
-
-                if self.data_3d:
-                    if img.ndim == 3: img = np.expand_dims(img, -1)
-                else:
-                    if img.ndim == 2: img = np.expand_dims(img, -1)
-            img = np.expand_dims(img, 0)
-
-            # Y
-            if self.provide_Y:
-                if self.Y is None:
-                    if self.data_mask_path[0].endswith('.npy'):
-                        mask = np.load(os.path.join(self.dm_path, self.data_mask_path[j]))
-                    else:
-                        mask = imread(os.path.join(self.dm_path, self.data_mask_path[j]))
-                    mask = np.squeeze(mask)
-
-                    if self.data_3d:
-                        if mask.ndim == 3: mask = np.expand_dims(mask, -1)
-                    else:
-                        if mask.ndim == 2:
-                            mask = np.expand_dims(mask, -1)
-                        else:
-                            if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
-                else:
-                    mask = self.Y[j]
-                    mask = np.squeeze(mask)
-
-                    if self.data_3d:
-                        if mask.ndim == 3: mask = np.expand_dims(mask, -1)
-                    else:
-                        if mask.ndim == 2: mask = np.expand_dims(mask, -1)
-                mask = np.expand_dims(mask, 0)
+            img, mask = self.__load_sample(j)
 
             batch_x.append(img)
             if self.provide_Y: batch_y.append(mask)
@@ -194,13 +169,8 @@ class simple_data_generator(tf.keras.utils.Sequence):
         batch_x = np.concatenate(batch_x)
         if self.provide_Y: batch_y = np.concatenate(batch_y)
 
-        # Divide the values
-        if self.div_X_on_load: batch_x = batch_x/255
-        if self.provide_Y:
-            if self.div_Y_on_load: batch_y = batch_y/255
-
         self.total_batches_seen += 1
-
+        
         if self.provide_Y:
             return batch_x, batch_y
         else:

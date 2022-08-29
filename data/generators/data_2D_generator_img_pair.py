@@ -390,36 +390,28 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
             self.data_imgB_paths = sorted(next(os.walk(data_paths[1]))[2])
             self.len = len(self.data_imgA_paths)
 
-            # Check if a division is required
             if self.data_imgA_paths[0].endswith('.npy'):
-                img = np.load(os.path.join(data_paths[0], self.data_imgA_paths[0]))
+                imgA = np.load(os.path.join(data_paths[0], self.data_imgA_paths[0]))
             else:
-                img = imread(os.path.join(data_paths[0], self.data_imgA_paths[0]))
-            if img.ndim == 2:
-                img = np.expand_dims(img, -1)
+                imgA = imread(os.path.join(data_paths[0], self.data_imgA_paths[0]))
+            if imgA.ndim == 2:
+                imgA = np.expand_dims(imgA, -1)
             else:
-                if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
-            # Ensure uint8
-            if img.dtype == np.uint16:
-                if np.max(img) > 255:
-                    img = normalize(img, 0, 65535)
-                else:
-                    img = img.astype(np.uint8)
+                if imgA.shape[0] == 1 or imgA.shape[0] == 3: imgA = imgA.transpose((1,2,0))
+            self.shape_imgA = shape if random_crops_in_DA else imgA.shape
+            del imgA
 
-            self.shape_imgA = shape if random_crops_in_DA else img.shape
-            # Loop over a few images to ensure foreground class is present
-            for i in range(min(10,len(self.data_imgB_paths))):
-                if self.data_imgB_paths[i].endswith('.npy'):
-                    img = np.load(os.path.join(data_paths[1], self.data_imgB_paths[i]))
-                else:
-                    img = imread(os.path.join(data_paths[1], self.data_imgB_paths[i]))
-            if img.ndim == 2:
-                img = np.expand_dims(img, -1)
+            if self.data_imgB_paths[i].endswith('.npy'):
+                imgB = np.load(os.path.join(data_paths[1], self.data_imgB_paths[0]))
             else:
-                img = img.transpose((1,2,0))
-            self.channels = img.shape[-1]
-            self.shape_imgB = (shape[0]*random_crop_scale, shape[1]*random_crop_scale, shape[2]) if random_crops_in_DA else img.shape
-            del img
+                imgB = imread(os.path.join(data_paths[1], self.data_imgB_paths[0]))
+            if imgB.ndim == 2:
+                imgB = np.expand_dims(imgB, -1)
+            else:
+                imgB = imgB.transpose((1,2,0))
+            self.channels = imgB.shape[-1]
+            self.shape_imgB = (shape[0]*random_crop_scale, shape[1]*random_crop_scale, shape[2]) if random_crops_in_DA else imgB.shape
+            del imgB
         else:
             if type(X) != list:
                 self.X = X.astype(np.uint8) 
@@ -576,11 +568,9 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
         ia.seed(seed)
         self.on_epoch_end()
 
-
     def __len__(self):
         """Defines the number of batches per epoch."""
         return int(np.ceil((self.len*self.extra_data_factor)/self.batch_size))
-
 
     def __getitem__(self, index):
         """Generation of one batch data.
@@ -606,47 +596,8 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
         batch_y = np.zeros((len(indexes), *self.shape_imgB), dtype=np.uint8)
 
         for i, j in zip(range(len(indexes)), indexes):
-
-            # Choose the data source
-            if self.in_memory:
-                imgA = self.X[j]
-                imgB = self.Y[j]
-                if imgA.ndim == 4: 
-                    imgA = imgA[0]
-                if imgB.ndim == 4: 
-                    imgB = imgB[0]
-            else:
-                if self.data_imgA_paths[j].endswith('.npy'):
-                    imgA = np.load(os.path.join(self.paths[0], self.data_imgA_paths[j]))
-                    imgB = np.load(os.path.join(self.paths[1], self.data_imgB_paths[j]))
-                else:
-                    imgA = imread(os.path.join(self.paths[0], self.data_imgA_paths[j]))
-                    imgB = imread(os.path.join(self.paths[1], self.data_imgB_paths[j]))
-                if imgA.ndim == 2:
-                    imgA = np.expand_dims(imgA, -1)
-                elif imgA.ndim == 4: 
-                    imgA = imgA[0]
-                elif imgA.ndim == 3:
-                    if imgA.shape[0] == 1 or imgA.shape[0] == 3: imgA = imgA.transpose((1,2,0))
-                if imgB.ndim == 2:
-                    imgB = np.expand_dims(imgB, -1)
-                elif imgB.ndim == 4: 
-                    imgB = imgB[0]
-                elif imgB.ndim == 3:
-                    if imgB.shape[0] == 1 or imgB.shape[0] == 3: imgB = imgB.transpose((1,2,0))
-
-                # Ensure uint8
-                if imgA.dtype == np.uint16:
-                    if np.max(imgA) > 255:
-                        imgA = normalize(imgA, 0, 65535)
-                    else:
-                        imgA = imgA.astype(np.uint8)
-
-                if imgB.dtype == np.uint16:
-                    if np.max(imgB) > 255:
-                        imgB = normalize(imgB, 0, 65535)
-                    else:
-                        imgB = imgB.astype(np.uint8)
+            
+            imgA, imgB = self.__load_sample(j)
 
             # Apply random crops if it is selected
             if self.random_crops_in_DA:
@@ -666,43 +617,12 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
 
             # Apply transformations
             if self.da:
-                extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
-                if self.in_memory:
-                    e_imgA = self.X[extra_img]
-                    e_imgB = self.Y[extra_img]
-                    if e_imgA.ndim == 4: 
-                        e_imgA = e_imgA[0]
-                    if e_imgB.ndim == 4: 
-                        e_imgB = e_imgB[0]
-                else:
-                    if self.data_imgA_paths[extra_img].endswith('.npy'):
-                        e_imgA = np.load(os.path.join(self.paths[0], self.data_imgA_paths[extra_img]))
-                        e_imgB = np.load(os.path.join(self.paths[1], self.data_imgB_paths[extra_img]))
-                    else:
-                        e_imgA = imread(os.path.join(self.paths[0], self.data_imgA_paths[extra_img]))
-                        e_imgB = imread(os.path.join(self.paths[1], self.data_imgB_paths[extra_img]))
-                    if e_imgA.ndim == 2:
-                        e_imgA = np.expand_dims(e_imgA, -1)
-                    else:
-                        if e_imgA.shape[0] == 1 or e_imgA.shape[0] == 3: e_imgA = e_imgA.transpose((1,2,0))
-
-                    # Ensure uint8
-                    if e_imgA.dtype == np.uint16:
-                        if np.max(e_imgA) > 255:
-                            e_imgA = normalize(e_imgA, 0, 65535)
-                        else:
-                            e_imgA = e_imgA.astype(np.uint8)
-
-                    if e_imgB.ndim == 2:
-                        e_imgB = np.expand_dims(e_imgB, -1)
-                    else:
-                        if e_imgB.shape[0] == 1 or e_imgB.shape[0] == 3: e_imgB = e_imgB.transpose((1,2,0))
+                e_imgA, e_imgB = None, None
+                if self.cutmix:
+                    extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
+                    e_imgA, e_imgB = self.__load_sample(extra_img)
 
                 batch_x[i], batch_y[i] = self.apply_transform(batch_x[i], batch_y[i], e_imgA=e_imgA, e_imgB=e_imgB)
-
-        # Divide the values
-        #if self.div_X_on_load: batch_x = batch_x/255
-        #if self.div_Y_on_load: batch_y = batch_y/255
 
         self.total_batches_seen += 1
 
@@ -711,7 +631,6 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
         else:
             return ([batch_x], [batch_y]*self.out_number)
 
-
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
         ia.seed(self.seed + self.total_batches_seen)
@@ -719,7 +638,53 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
         if self.shuffle:
             random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
 
+    def __load_sample(self, idx):
+        """Load one data sample given its corresponding index."""
 
+        # Choose the data source
+        if self.in_memory:
+            imgA = self.X[idx]
+            imgB = self.Y[idx]
+            if imgA.ndim == 4: 
+                imgA = imgA[0]
+            if imgB.ndim == 4: 
+                imgB = imgB[0]
+        else:
+            if self.data_paths[idx].endswith('.npy'):
+                imgA = np.load(os.path.join(self.paths[0], self.data_imgA_paths[idx]))
+                imgB = np.load(os.path.join(self.paths[1], self.data_imgB_paths[idx]))
+            else:
+                imgA = imread(os.path.join(self.paths[0], self.data_imgA_paths[idx]))
+                imgB = imread(os.path.join(self.paths[1], self.data_imgB_paths[idx]))
+
+            if imgA.ndim == 2:
+                imgA = np.expand_dims(imgA, -1)
+            elif imgA.ndim == 4: 
+                imgA = imgA[0]
+            elif imgA.ndim == 3:
+                if imgA.shape[0] == 1 or imgA.shape[0] == 3: imgA = imgA.transpose((1,2,0))
+            if imgB.ndim == 2:
+                imgB = np.expand_dims(imgB, -1)
+            elif imgB.ndim == 4: 
+                imgB = imgB[0]
+            elif imgB.ndim == 3:
+                if imgB.shape[0] == 1 or imgB.shape[0] == 3: imgB = imgB.transpose((1,2,0))
+            
+            # Ensure uint8
+            if imgA.dtype == np.uint16:
+                if np.max(imgA) > 255:
+                    imgA = normalize(imgA, 0, 65535)
+                else:
+                    imgA = imgA.astype(np.uint8)
+
+            if imgB.dtype == np.uint16:
+                if np.max(imgB) > 255:
+                    imgB = normalize(imgB, 0, 65535)
+                else:
+                    imgB = imgB.astype(np.uint8)
+
+        return imgA, imgB       
+                
     def apply_transform(self, imgA, imgB, e_imgA=None, e_imgB=None):
         """Transform the input imgA and its imgB at the same time
 
@@ -806,7 +771,6 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
         imgB = augseq_det.augment_image(imgB)
         return imgA, imgB
 
-
     def __draw_grid(self, im, grid_width=50):
         """Draw grid of the specified size on an image.
 
@@ -824,7 +788,6 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
             im[i] = v
         for j in range(0, im.shape[1], grid_width):
             im[:, j] = v
-
 
     def get_transformed_samples(self, num_examples, save_to_dir=False, out_dir='aug', save_prefix=None, train=True,
                                 random_images=True, draw_grid=True):
@@ -885,46 +848,7 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
             else:
                 pos = i
 
-            # Take the data samples
-            if self.in_memory:
-                imgA = self.X[pos]
-                imgB = self.Y[pos]
-                if imgA.ndim == 4: 
-                    imgA = imgA[0]
-                if imgB.ndim == 4: 
-                    imgB = imgB[0]
-            else:
-                if self.data_imgA_paths[pos].endswith('.npy'):
-                    imgA = np.load(os.path.join(self.paths[0], self.data_imgA_paths[pos]))
-                    imgB = np.load(os.path.join(self.paths[1], self.data_imgB_paths[pos]))
-                else:
-                    imgA = imread(os.path.join(self.paths[0], self.data_imgA_paths[pos]))
-                    imgB = imread(os.path.join(self.paths[1], self.data_imgB_paths[pos]))
-                if imgA.ndim == 2:
-                    imgA = np.expand_dims(imgA, -1)
-                elif imgA.ndim == 4: 
-                    imgA = imgA[0]
-                elif imgA.ndim == 3: 
-                    if imgA.shape[0] == 1 or imgA.shape[0] == 3: imgA = imgA.transpose((1,2,0))
-                # Ensure uint8
-                if imgA.dtype == np.uint16:
-                    if np.max(imgA) > 255:
-                        imgA = normalize(imgA, 0, 65535)
-                    else:
-                        imgA = imgA.astype(np.uint8)
-
-                if imgB.ndim == 2:
-                    imgB = np.expand_dims(imgB, -1)
-                elif imgB.ndim == 4: 
-                    imgB = imgB[0]
-                elif imgB.ndim == 3:
-                    if imgB.shape[0] == 1 or imgB.shape[0] == 3: imgB = imgB.transpose((1,2,0))
-                # Ensure uint8
-                if imgB.dtype == np.uint16:
-                    if np.max(imgB) > 255:
-                        imgB = normalize(imgB, 0, 65535)
-                    else:
-                        imgB = imgB.astype(np.uint8)
+            imgA, imgB = self.__load_sample(pos)
                 
             # Apply random crops if it is selected
             if self.random_crops_in_DA:
@@ -952,37 +876,10 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
                     self.__draw_grid(batch_x[i])
                     self.__draw_grid(batch_y[i])
 
-                extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
-                if self.in_memory:
-                    e_imgA = self.X[extra_img]
-                    e_imgB = self.Y[extra_img]
-                    if e_imgA.ndim == 4: 
-                        e_imgA = e_imgA[0]
-                    if e_imgB.ndim == 4: 
-                        e_imgB = e_imgB[0]
-                else:
-                    if self.data_imgA_paths[extra_img].endswith('.npy'):
-                        imgA = np.load(os.path.join(self.paths[0], self.data_imgA_paths[extra_img]))
-                        imgB = np.load(os.path.join(self.paths[1], self.data_imgB_paths[extra_img]))
-                    else:
-                        e_imgA = imread(os.path.join(self.paths[0], self.data_imgA_paths[extra_img]))
-                        e_imgB = imread(os.path.join(self.paths[1], self.data_imgB_paths[extra_img]))
-                    if e_imgA.ndim == 2:
-                        e_imgA = np.expand_dims(e_imgA, -1)
-                    else:
-                        if e_imgA.shape[0] == 1 or e_imgA.shape[0] == 3: e_imgA = e_imgA.transpose((1,2,0))
-
-                    # Ensure uint8
-                    if e_imgA.dtype == np.uint16:
-                        if np.max(e_imgA) > 255:
-                            e_imgA = normalize(e_imgA, 0, 65535)
-                        else:
-                            e_imgA = e_imgA.astype(np.uint8)
-
-                    if e_imgB.ndim == 2:
-                        e_imgB = np.expand_dims(e_imgB, -1)
-                    else:
-                        if e_imgB.shape[0] == 1 or e_imgB.shape[0] == 3: e_imgB = e_imgB.transpose((1,2,0))
+                e_imgA, e_imgB = None, None
+                if self.cutmix:
+                    extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
+                    e_imgA, e_imgB = self.__load_sample(extra_img)
 
                 batch_x[i], batch_y[i] = self.apply_transform(
                     batch_x[i], batch_y[i], e_imgA=e_imgA, e_imgB=e_imgB)
