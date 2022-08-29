@@ -3,7 +3,6 @@ import sys
 import argparse
 import datetime
 import ntpath
-import numpy as np
 import tensorflow as tf
 
 from shutil import copyfile
@@ -78,32 +77,6 @@ if __name__ == '__main__':
 
     assert cfg.PROBLEM.NDIM in ['2D', '3D']
     assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'SUPER_RESOLUTION']
-
-    count = 2 if cfg.PROBLEM.NDIM == '2D' else 3
-    if len(cfg.DATA.TRAIN.OVERLAP) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.OVERLAP tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TRAIN.OVERLAP))
-    if len(cfg.DATA.TRAIN.PADDING) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.PADDING tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TRAIN.PADDING))
-    if len(cfg.DATA.TEST.OVERLAP) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.OVERLAP tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TEST.OVERLAP))
-    if len(cfg.DATA.TEST.PADDING) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.PADDING tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TEST.PADDING))
-    if len(cfg.DATA.PATCH_SIZE) != count+1:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count+1, cfg.DATA.PATCH_SIZE))
-    if len(cfg.DATA.TRAIN.RESOLUTION) != 1 and len(cfg.DATA.TRAIN.RESOLUTION) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.RESOLUTION tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TRAIN.RESOLUTION))
-    if len(cfg.DATA.VAL.RESOLUTION) != 1 and len(cfg.DATA.VAL.RESOLUTION) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.RESOLUTION tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.VAL.RESOLUTION))
-    if len(cfg.DATA.TEST.RESOLUTION) != 1 and len(cfg.DATA.TEST.RESOLUTION) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.RESOLUTION tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TEST.RESOLUTION))
 
     if not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.FULL_IMG:
         raise ValueError("One between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.FULL_IMG' need to be True")

@@ -14,10 +14,10 @@ def apply_post_processing(cfg, data, Y=None):
            Configuration.                                                                                         
                                                                                                                         
        data : 4D Numpy array                                                                                               
-           Data to apply post_proccessing. E.g. ``(num_of_images, x, y, channels)``.                                                              
+           Data to apply post_proccessing. E.g. ``(num_of_images, y, x, channels)``.                                                              
                                                                                                                         
        Y : 4D Numpy array, optional                                                                                               
-           Data GT to calculate the metrics. E.g. ``(num_of_images, x, y, channels)``. 
+           Data GT to calculate the metrics. E.g. ``(num_of_images, y, x, channels)``. 
                                                                                                                         
        Returns                                                                                                          
        -------                                                                                                          
@@ -30,8 +30,8 @@ def apply_post_processing(cfg, data, Y=None):
 
     print("Applying post-processing . . .")
 
-    if cfg.TEST.POST_PROCESSING.BLENDING:
-        ens_zfil_preds_test = calculate_z_filtering(data)
+    # if cfg.TEST.POST_PROCESSING.BLENDING:
+    #     data = calculate_z_filtering(data)
 
     if cfg.TEST.POST_PROCESSING.YZ_FILTERING:
         data = calculate_z_filtering(data, cfg.TEST.POST_PROCESSING.YZ_FILTERING_SIZE)

@@ -3,6 +3,7 @@ import numpy as np
 from tqdm import tqdm
 
 from utils.util import check_masks, create_plots, load_data_from_dir, load_3d_images_from_dir
+from data import data_checks
 from data.data_2D_manipulation import load_and_prepare_2D_train_data, load_data_classification
 from data.data_3D_manipulation import load_and_prepare_3D_data
 from data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
@@ -70,6 +71,9 @@ class Engine(object):
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             train_filenames = prepare_instance_data(cfg)
             self.train_filenames = train_filenames
+
+        # Adjust overlap and padding for the problem type
+        data_checks(cfg)
 
         # From now on, no modification of the cfg will be allowed
         cfg.freeze()
@@ -269,10 +273,6 @@ class Engine(object):
                     else:
                         _X = np.expand_dims(X[j],0)
                         _Y = np.expand_dims(Y[j],0) if self.cfg.DATA.TEST.LOAD_GT else None
-                    if self.cfg.PROBLEM.NDIM == '3D':
-                        # Convert to (num_images, z, y, x, c)
-                        _X = _X.transpose((0,3,1,2,4))
-                        if self.cfg.DATA.TEST.LOAD_GT: _Y = _Y.transpose((0,3,1,2,4))
                 else:
                     _X = np.expand_dims(X[j], 0)
                     _Y = np.expand_dims(Y[j], 0)    

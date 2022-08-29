@@ -1,6 +1,5 @@
-import tensorflow as tf
 from tensorflow.keras import Model, Input
-from tensorflow.keras.layers import (Dropout, Lambda, SpatialDropout3D, Conv3D, Conv3DTranspose, MaxPooling3D,
+from tensorflow.keras.layers import (Dropout, SpatialDropout3D, Conv3D, Conv3DTranspose, MaxPooling3D,
                                      Concatenate, Add, BatchNormalization, ELU, ZeroPadding3D)
 
 
@@ -11,7 +10,7 @@ def ResUNet_3D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
        Parameters
        ----------
        image_shape : 4D tuple
-           Dimensions of the input image. E.g. ``(x, y, z, channels)``
+           Dimensions of the input image. E.g. ``(z, y, x, channels)``
 
        activation : str, optional
            Keras available activation type.
@@ -125,10 +124,10 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values, 
     if depth > 0:
         r = residual_block(x, f_maps[depth], filter_size, activation, k_init, drop_values[depth], spatial_dropout,
                            batch_norm, first_block)
-        x = MaxPooling3D((2, 2, z_down)) (r)
+        x = MaxPooling3D((z_down, 2, 2)) (r)
         x = level_block(x, depth-1, f_maps, filter_size, activation, k_init, drop_values, spatial_dropout, batch_norm,
                         False, z_down)
-        x = Conv3DTranspose(f_maps[depth], (2, 2, 2), strides=(2, 2, z_down), padding='same') (x)
+        x = Conv3DTranspose(f_maps[depth], (2, 2, 2), strides=(z_down, 2, 2), padding='same') (x)
 
         # Adjust shape introducing zero padding to allow the concatenation
         a = x.shape[3]

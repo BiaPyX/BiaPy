@@ -243,13 +243,13 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
        Parameters
        ----------
        data : 4D Numpy array
-           Data to crop. E.g. ``(num_of_images, x, y, channels)``.
+           Data to crop. E.g. ``(num_of_images, y, x, channels)``.
 
        crop_shape : 3 int tuple
            Shape of the crops to create. E.g. ``(x, y, channels)``.
 
        data_mask : 4D Numpy array, optional
-           Data mask to crop. E.g. ``(num_of_images, x, y, channels)``.
+           Data mask to crop. E.g. ``(num_of_images, y, x, channels)``.
 
        overlap : Tuple of 2 floats, optional
            Amount of minimum overlap on x and y dimensions. The values must be on range ``[0, 1)``, that is, ``0%`` or
@@ -264,10 +264,10 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
        Returns
        -------
        cropped_data : 4D Numpy array
-           Cropped image data. E.g. ``(num_of_images, x, y, channels)``.
+           Cropped image data. E.g. ``(num_of_images, y, x, channels)``.
 
        cropped_data_mask : 4D Numpy array, optional
-           Cropped image data masks. E.g. ``(num_of_images, x, y, channels)``.
+           Cropped image data masks. E.g. ``(num_of_images, y, x, channels)``.
 
        Examples
        --------
@@ -344,61 +344,59 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
     if (overlap[0] >= 1 or overlap[0] < 0) and (overlap[1] >= 1 or overlap[1] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 
-    padded_data = np.pad(data,((0,0),(padding[0],padding[0]),(padding[1],padding[1]),(0,0)), 'reflect')
+    padded_data = np.pad(data,((0,0),(padding[1],padding[1]),(padding[0],padding[0]),(0,0)), 'reflect')
     if data_mask is not None:
-        padded_data_mask = np.pad(data_mask,((0,0),(padding[0],padding[0]),(padding[1],padding[1]),(0,0)), 'reflect')
+        padded_data_mask = np.pad(data_mask,((0,0),(padding[1],padding[1]),(padding[0],padding[0]),(0,0)), 'reflect')
 
-    padded_crop_shape = crop_shape
-    crop_shape = (crop_shape[0]-2*padding[0], crop_shape[1]-2*padding[1], crop_shape[2])
+    crop_shape = tuple(crop_shape[i] for i in [1, 0, 2])
+    padding = tuple(padding[i] for i in [1, 0])
 
     # Calculate overlapping variables
     overlap_x = 1 if overlap[0] == 0 else 1-overlap[0]
     overlap_y = 1 if overlap[1] == 0 else 1-overlap[1]
-    
-    # X
-    crops_per_x = math.ceil(padded_data.shape[1]/(crop_shape[0]*overlap_x))
-    excess_x = (crops_per_x*crop_shape[0])-data.shape[1]
-    ex = 0 if crops_per_x == 1 else int(excess_x/(crops_per_x-1))
-    step_x = crop_shape[0]-ex
-    last_x = 0 if crops_per_x == 1 else (((crops_per_x-1)*step_x)+padded_crop_shape[0])-padded_data.shape[1] 
-    
+
     # Y
-    crops_per_y = math.ceil(padded_data.shape[2]/(crop_shape[1]*overlap_y))
-    excess_y = (crops_per_y*crop_shape[1])-data.shape[2]
-    ex = 0 if crops_per_y == 1 else int(excess_y/(crops_per_y-1))
-    step_y = crop_shape[1]-ex
-    last_y = 0 if crops_per_y == 1 else (((crops_per_y-1)*step_y)+padded_crop_shape[1])-padded_data.shape[2]
+    step_y = int((crop_shape[0]-padding[0]*2)*overlap_y)
+    crops_per_y = math.ceil(data.shape[1]/step_y)
+    last_y = 0 if crops_per_y == 1 else (((crops_per_y-1)*step_y)+crop_shape[0])-padded_data.shape[1] 
+     
+    # X
+    step_x = int((crop_shape[1]-padding[1]*2)*overlap_x)
+    crops_per_x = math.ceil(data.shape[2]/step_x)
+    last_x = 0 if crops_per_x == 1 else (((crops_per_x-1)*step_x)+crop_shape[1])-padded_data.shape[2] 
 
     # Real overlap calculation for printing
-    real_ov_x = (crop_shape[0]-step_x)/crop_shape[0]
-    real_ov_y = (crop_shape[1]-step_y)/crop_shape[1]
+    real_ov_y = ((crop_shape[0]-padding[0]*2)-step_y)/(crop_shape[0]-padding[0]*2)
+    real_ov_x = ((crop_shape[1]-padding[1]*2)-step_x)/(crop_shape[1]-padding[1]*2)
+    
     if verbose:
-        print("Real overlapping (%): {}".format((real_ov_x,real_ov_y)))
-        print("Real overlapping (pixels): {}".format((crop_shape[0]*real_ov_x, crop_shape[1]*real_ov_y)))
-        print("{} patches per (x,y) axis".format((crops_per_x,crops_per_y)))
+        print("Real overlapping (%): {}".format(real_ov_x,real_ov_y))
+        print("Real overlapping (pixels): {}".format((crop_shape[1]-padding[1]*2)*real_ov_x, 
+            (crop_shape[0]-padding[0]*2)*real_ov_y))
+        print("{} patches per (x,y) axis".format(crops_per_x,crops_per_y))
 
     total_vol = data.shape[0]*(crops_per_x)*(crops_per_y)
-    cropped_data = np.zeros((total_vol,) + padded_crop_shape, dtype=data.dtype)
+    cropped_data = np.zeros((total_vol,) + crop_shape, dtype=data.dtype)
     if data_mask is not None:
-        cropped_data_mask = np.zeros((total_vol,)+padded_crop_shape[:2]+(data_mask.shape[-1],), dtype=data_mask.dtype)
+        cropped_data_mask = np.zeros((total_vol,)+crop_shape[:2]+(data_mask.shape[-1],), dtype=data_mask.dtype)
     
     c = 0
     for z in range(data.shape[0]):
-        for x in range(crops_per_x):
-            for y in range(crops_per_y):
-                d_x = 0 if (x*step_x+crop_shape[0]) < data.shape[1] else last_x
-                d_y = 0 if (y*step_y+crop_shape[1]) < data.shape[2] else last_y
+        for y in range(crops_per_y):
+            for x in range(crops_per_x): 
+                d_y = 0 if (y*step_y+crop_shape[1]) < padded_data.shape[1] else last_y
+                d_x = 0 if (x*step_x+crop_shape[0]) < padded_data.shape[2] else last_x
 
                 cropped_data[c] = \
                     padded_data[z,
-                                x*step_x-d_x:x*step_x+crop_shape[0]-d_x+2*padding[0],
-                                y*step_y-d_y:y*step_y+crop_shape[1]-d_y+2*padding[1]]
+                                y*step_y-d_y:y*step_y+crop_shape[1]-d_y,
+                                x*step_x-d_x:x*step_x+crop_shape[0]-d_x]
 
                 if data_mask is not None:
                     cropped_data_mask[c] = \
                         padded_data_mask[z,
-                                         x*step_x-d_x:x*step_x+crop_shape[0]-d_x+2*padding[0],
-                                         y*step_y-d_y:y*step_y+crop_shape[1]-d_y+2*padding[1]]
+                                         y*step_y-d_y:y*step_y+crop_shape[1]-d_y,
+                                         x*step_x-d_x:x*step_x+crop_shape[0]-d_x]
                 c += 1
 
     if verbose:
@@ -420,21 +418,21 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
        Parameters
        ----------
        data : 4D Numpy array
-           Data to merge. E.g. ``(num_of_images, x, y, channels)``.
+           Data to merge. E.g. ``(num_of_images, y, x, channels)``.
 
        original_shape : 4D int tuple
-           Shape of the original data. E.g. ``(num_of_images, x, y, channels)``
+           Shape of the original data. E.g. ``(num_of_images, y, x, channels)``
 
        data_mask : 4D Numpy array, optional
-           Data mask to merge. E.g. ``(num_of_images, x, y, channels)``.
+           Data mask to merge. E.g. ``(num_of_images, y, x, channels)``.
 
        overlap : Tuple of 2 floats, optional
-           Amount of minimum overlap on x, y and z dimensions. Should be the same as used in
+           Amount of minimum overlap on x and y dimensions. Should be the same as used in
            :func:`~crop_data_with_overlap`. The values must be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of
-           overlap. E. g. ``(x, y)``.
+           overlap. E. g. ``(y, x)``.
 
        padding : tuple of ints, optional
-           Size of padding to be added on each axis ``(x, y)``. E.g. ``(24, 24)``.
+           Size of padding to be added on each axis ``(y, x)``. E.g. ``(24, 24)``.
 
        verbose : bool, optional
             To print information about the crop to be made.
@@ -450,10 +448,10 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
        Returns
        -------
        merged_data : 4D Numpy array
-           Merged image data. E.g. ``(num_of_images, x, y, channels)``.
+           Merged image data. E.g. ``(num_of_images, y, x, channels)``.
 
        merged_data_mask : 4D Numpy array, optional
-           Merged image data mask. E.g. ``(num_of_images, x, y, channels)``.
+           Merged image data mask. E.g. ``(num_of_images, y, x, channels)``.
 
        Examples
        --------
@@ -553,7 +551,10 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
     if (overlap[0] >= 1 or overlap[0] < 0) and (overlap[1] >= 1 or overlap[1] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 
+    padding = tuple(padding[i] for i in [1, 0])
+    
     # Remove the padding
+    pad_input_shape = data.shape
     data = data[:, padding[0]:data.shape[1]-padding[0], padding[1]:data.shape[2]-padding[1]]
 
     merged_data = np.zeros((original_shape), dtype=np.float32)
@@ -571,47 +572,44 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
     
     padded_data_shape = [original_shape[1]+2*padding[0], original_shape[2]+2*padding[1]]
 
-    # X
-    crops_per_x = math.ceil(padded_data_shape[0]/(data.shape[1]*overlap_x))
-    excess_x = (crops_per_x*data.shape[1])-original_shape[1]
-    ex = 0 if crops_per_x == 1 else int(excess_x/(crops_per_x-1))
-    step_x = data.shape[1]-ex
-    last_x = 0 if crops_per_x == 1 else (((crops_per_x-1)*step_x)+data.shape[1])-merged_data.shape[1]
-    
     # Y
-    crops_per_y = math.ceil(padded_data_shape[1]/(data.shape[2]*overlap_y))
-    excess_y = (crops_per_y*data.shape[2])-original_shape[2]
-    ex = 0 if crops_per_y == 1 else int(excess_y/(crops_per_y-1))
-    step_y = data.shape[2]-ex
-    last_y = 0 if crops_per_y == 1 else (((crops_per_y-1)*step_y)+data.shape[2])-merged_data.shape[2]
-    
+    step_y = int((pad_input_shape[1]-padding[0]*2)*overlap_y)
+    crops_per_y = math.ceil(original_shape[1]/step_y)
+    last_y = 0 if crops_per_y == 1 else (((crops_per_y-1)*step_y)+pad_input_shape[1])-padded_data_shape[0]
+
+    # X
+    step_x = int((pad_input_shape[2]-padding[1]*2)*overlap_x)
+    crops_per_x = math.ceil(original_shape[2]/step_x)
+    last_x = 0 if crops_per_x == 1 else (((crops_per_x-1)*step_x)+pad_input_shape[2])-padded_data_shape[1]
+
     # Real overlap calculation for printing
-    real_ov_x = (data.shape[1]-step_x)/data.shape[1]
-    real_ov_y = (data.shape[2]-step_y)/data.shape[2]
+    real_ov_y = ((pad_input_shape[1]-padding[0]*2)-step_y)/(pad_input_shape[1]-padding[0]*2)
+    real_ov_x = ((pad_input_shape[2]-padding[1]*2)-step_x)/(pad_input_shape[2]-padding[1]*2)
     if verbose:
         print("Real overlapping (%): {}".format((real_ov_x,real_ov_y)))
-        print("Real overlapping (pixels): {}".format((data.shape[1]*real_ov_x, data.shape[2]*real_ov_y)))
+        print("Real overlapping (pixels): {}".format(((pad_input_shape[2]-padding[1]*2)*real_ov_x, 
+            (pad_input_shape[1]-padding[0]*2)*real_ov_y)))
         print("{} patches per (x,y) axis".format((crops_per_x,crops_per_y)))
-   
+
     c = 0
     for z in range(original_shape[0]):
-        for x in range(crops_per_x):
-            for y in range(crops_per_y):
-                d_x = 0 if (x*step_x+data.shape[1]) < original_shape[1] else last_x
-                d_y = 0 if (y*step_y+data.shape[2]) < original_shape[2] else last_y
+        for y in range(crops_per_y):
+            for x in range(crops_per_x):
+                d_y = 0 if (y*step_y+data.shape[1]) < original_shape[1] else last_y
+                d_x = 0 if (x*step_x+data.shape[2]) < original_shape[2] else last_x
 
-                merged_data[z, x*step_x-d_x:x*step_x+data.shape[1]-d_x, y*step_y-d_y:y*step_y+data.shape[2]-d_y] += data[c]
+                merged_data[z,y*step_y-d_y:y*step_y+data.shape[1]-d_y, x*step_x-d_x:x*step_x+data.shape[2]-d_x] += data[c]
 
                 if data_mask is not None:
-                    merged_data_mask[z, x*step_x-d_x:x*step_x+data.shape[1]-d_x, y*step_y-d_y:y*step_y+data.shape[2]-d_y] += data_mask[c]
+                    merged_data_mask[z, y*step_y-d_y:y*step_y+data.shape[1]-d_y, x*step_x-d_x:x*step_x+data.shape[2]-d_x] += data_mask[c]
 
-                ov_map_counter[z, x*step_x-d_x:x*step_x+data.shape[1]-d_x, y*step_y-d_y:y*step_y+data.shape[2]-d_y] += 1
+                ov_map_counter[z, y*step_y-d_y:y*step_y+data.shape[1]-d_y, x*step_x-d_x:x*step_x+data.shape[2]-d_x] += 1
 
                 if z == 0 and out_dir is not None:
-                    crop_grid[x*step_x-d_x, y*step_y-d_y:y*step_y+data.shape[2]-d_y] = 1
-                    crop_grid[x*step_x+data.shape[1]-d_x-1, y*step_y-d_y:y*step_y+data.shape[2]-d_y] = 1
-                    crop_grid[x*step_x-d_x:x*step_x+data.shape[1]-d_x, y*step_y-d_y] = 1
-                    crop_grid[x*step_x-d_x:x*step_x+data.shape[1]-d_x, y*step_y+data.shape[2]-d_y-1] = 1
+                    crop_grid[y*step_y-d_y:y*step_y+data.shape[1]-d_y, x*step_x-d_x] = 1
+                    crop_grid[y*step_y-d_y:y*step_y+data.shape[1]-d_y, x*step_x+data.shape[2]-d_x-1] = 1
+                    crop_grid[y*step_y-d_y, x*step_x-d_x:x*step_x+data.shape[2]-d_x] = 1
+                    crop_grid[y*step_y+data.shape[1]-d_y-1, x*step_x-d_x:x*step_x+data.shape[2]-d_x] = 1
 
                 c += 1
     
@@ -671,14 +669,14 @@ def check_crops(data, original_shape, ov, num_examples=1, include_crops=True, ou
        Parameters
        ----------
        data : 4D Numpy array
-           Data to crop. E.g. ``(num_of_images, x, y, channels)``.
+           Data to crop. E.g. ``(num_of_images, y, x, channels)``.
 
        original_shape : Tuple of 4 ints
-           Shape of the original data. E.g. ``(num_of_images, x, y, channels)``.
+           Shape of the original data. E.g. ``(num_of_images, y, x, channels)``.
 
        ov : Tuple of 2 floats, optional
            Amount of minimum overlap on x and y dimensions. The values must be on range ``[0, 1)``, that is, ``0%`` or
-           ``99%`` of overlap. E. g. ``(x, y)``.
+           ``99%`` of overlap. E. g. ``(y, x)``.
 
        num_examples : int, optional
            Number of examples to create.
@@ -751,10 +749,10 @@ def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=F
        Parameters
        ----------
        image : Numpy 3D array
-           Image. E.g. ``(x, y, channels)``.
+           Image. E.g. ``(y, x, channels)``.
 
        mask : Numpy 3D array
-           Image mask. E.g. ``(x, y, channels)``.
+           Image mask. E.g. ``(y, x, channels)``.
 
        random_crop_size : 2 int tuple
            Size of the crop. E.g. ``(height, width)``.
@@ -767,10 +765,10 @@ def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=F
            To return the pixel chosen to be the center of the crop.
 
        img_prob : Numpy 3D array, optional
-           Probability of each pixel to be chosen as the center of the crop. E. .g. ``(x, y, channels)``.
+           Probability of each pixel to be chosen as the center of the crop. E. .g. ``(y, x, channels)``.
 
        weight_map : bool, optional
-           Weight map of the given image. E.g. ``(x, y, channels)``.
+           Weight map of the given image. E.g. ``(y, x, channels)``.
 
        scale : int, optional
            Scale factor the second image given. 
@@ -778,10 +776,10 @@ def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=F
        Returns
        -------
        img : 2D Numpy array
-           Crop of the given image. E.g. ``(x, y)``.
+           Crop of the given image. E.g. ``(y, x)``.
 
        weight_map : 2D Numpy array, optional
-           Crop of the given image's weigth map. E.g. ``(x, y)``.
+           Crop of the given image's weigth map. E.g. ``(y, x)``.
 
        ox : int, optional
            X coordinate in the complete image of the chose central pixel to make the crop.
@@ -843,7 +841,7 @@ def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=F
             y = np.random.randint(0, height - dy + 1)
 
     if draw_prob_map_points == True:
-        return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], ox, oy, x, y
+        return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], oy, ox, y, x
     else:
         if weight_map is not None:
             return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], weight_map[y:(y+dy), x:(x+dx)]

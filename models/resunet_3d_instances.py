@@ -1,7 +1,6 @@
-import tensorflow as tf
 from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import (Dropout, Conv3D, Conv3DTranspose, MaxPooling3D, Concatenate, Add,
-                                     BatchNormalization, ELU, ZeroPadding3D)
+                                     BatchNormalization, ELU, ZeroPadding3D, SpatialDropout2D)
 
 
 def ResUNet_3D(image_shape, activation='elu', k_init='he_normal', drop_values=[0.1,0.1,0.1,0.1,0.1], batch_norm=False,
@@ -144,10 +143,10 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values, 
     if depth > 0:
         r = residual_block(x, f_maps[depth], filter_size, activation, k_init, drop_values[depth], spatial_dropout,
                            batch_norm, first_block)
-        x = MaxPooling3D((2, 2, z_down)) (r)
+        x = MaxPooling3D((z_down, 2, 2)) (r)
         x = level_block(x, depth-1, f_maps, filter_size, activation, k_init, drop_values, spatial_dropout, batch_norm,
                         False, z_down)
-        x = Conv3DTranspose(f_maps[depth], (2, 2, 2), strides=(2, 2, z_down), padding='same') (x)
+        x = Conv3DTranspose(f_maps[depth], (2, 2, 2), strides=(z_down, 2, 2), padding='same') (x)
 
         # Adjust shape introducing zero padding to allow the concatenation
         a = x.shape[3]

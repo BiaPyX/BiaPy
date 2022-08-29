@@ -1,5 +1,3 @@
-import os
-import numpy as np
 from tqdm import tqdm
 
 from utils.util import load_data_from_dir, load_3d_images_from_dir, labels_into_bcd, save_npy_files
@@ -33,24 +31,13 @@ def create_instance_channels(cfg, data_type='train'):
         for i in tqdm(range(len(Y))):
             Y[i] = labels_into_bcd(Y[i], mode=cfg.DATA.CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
                           fb_mode=cfg.DATA.CONTOUR_MODE)
-            if cfg.PROBLEM.NDIM == '3D':
-                Y[i] = Y[i].transpose((0,3,1,2,4))
     else:
         Y = labels_into_bcd(Y, mode=cfg.DATA.CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
                    fb_mode=cfg.DATA.CONTOUR_MODE)
-        if cfg.PROBLEM.NDIM == '3D':
-            Y = Y.transpose((0,3,1,2,4))
     save_npy_files(Y, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, filenames=filenames,
                    verbose=cfg.TEST.VERBOSE)
-
     X, _, _, filenames = f_name(getattr(cfg.DATA, tag).PATH, return_filenames=True)
     print("Creating X_{} channels . . .".format(data_type))
-    if cfg.PROBLEM.NDIM == '3D':
-        if isinstance(X, list):
-            for i in tqdm(range(len(X))):
-                X[i] = X[i].transpose((0,3,1,2,4))
-        else:
-            X = X.transpose((0,3,1,2,4))
     save_npy_files(X, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_DIR, filenames=filenames,
                    verbose=cfg.TEST.VERBOSE)
     return filenames
@@ -74,23 +61,60 @@ def create_test_instance_channels(cfg):
             for i in tqdm(range(len(Y_test))):
                 Y_test[i] = labels_into_bcd(Y_test[i], mode=cfg.DATA.CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
                                             fb_mode=cfg.DATA.CONTOUR_MODE)
-                if cfg.PROBLEM.NDIM == '3D':
-                    Y_test[i] = Y_test[i].transpose((0,3,1,2,4))
         else:
             Y_test = labels_into_bcd(Y_test, mode=cfg.DATA.CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
                                      fb_mode=cfg.DATA.CONTOUR_MODE)
-            if cfg.PROBLEM.NDIM == '3D':
-                Y_test = Y_test.transpose((0,3,1,2,4))
         save_npy_files(Y_test, data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR, filenames=test_filenames,
                        verbose=cfg.TEST.VERBOSE)
 
     print("Creating X_test channels . . .")
     X_test, _, _, test_filenames = f_name(cfg.DATA.TEST.PATH, return_filenames=True)
-    if cfg.PROBLEM.NDIM == '3D':
-        if isinstance(X_test, list):
-            for i in tqdm(range(len(X_test))):
-                X_test[i] = X_test[i].transpose((0,3,1,2,4))
-        else:
-            X_test = X_test.transpose((0,3,1,2,4))
     save_npy_files(X_test, data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_DIR, filenames=test_filenames,
                    verbose=cfg.TEST.VERBOSE)
+
+
+def data_checks(cfg):
+    """Checks data variables so no error is thrown if the user forgets setting some variables. 
+    """
+    opts = []
+    if cfg.PROBLEM.NDIM == '3D':
+        if cfg.DATA.TRAIN.OVERLAP == (0,0):
+            opts.extend(['DATA.TRAIN.OVERLAP', (0,0,0)])
+        if cfg.DATA.TRAIN.PADDING == (0,0):
+            opts.extend(['DATA.TRAIN.PADDING', (0,0,0)])
+        if cfg.DATA.VAL.OVERLAP == (0,0):
+            opts.extend(['DATA.VAL.OVERLAP', (0,0,0)])
+        if cfg.DATA.VAL.PADDING == (0,0):
+            opts.extend(['DATA.VAL.PADDING', (0,0,0)])
+        if cfg.DATA.TEST.OVERLAP == (0,0):
+            opts.extend(['DATA.TEST.OVERLAP', (0,0,0)])
+        if cfg.DATA.TEST.PADDING == (0,0):
+            opts.extend(['DATA.TEST.PADDING', (0,0,0)])
+    if len(opts) > 0:
+        cfg.merge_from_list(opts)
+
+    count = 2 if cfg.PROBLEM.NDIM == '2D' else 3
+    if len(cfg.DATA.TRAIN.OVERLAP) != count:
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.OVERLAP tuple must be lenght {}, given {}."
+                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TRAIN.OVERLAP))
+    if len(cfg.DATA.TRAIN.PADDING) != count:
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.PADDING tuple must be lenght {}, given {}."
+                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TRAIN.PADDING))
+    if len(cfg.DATA.TEST.OVERLAP) != count:
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.OVERLAP tuple must be lenght {}, given {}."
+                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TEST.OVERLAP))
+    if len(cfg.DATA.TEST.PADDING) != count:
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.PADDING tuple must be lenght {}, given {}."
+                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TEST.PADDING))
+    if len(cfg.DATA.PATCH_SIZE) != count+1:
+        raise ValueError("When PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be lenght {}, given {}."
+                         .format(cfg.PROBLEM.NDIM, count+1, cfg.DATA.PATCH_SIZE))
+    if len(cfg.DATA.TRAIN.RESOLUTION) != 1 and len(cfg.DATA.TRAIN.RESOLUTION) != count:
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.RESOLUTION tuple must be lenght {}, given {}."
+                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TRAIN.RESOLUTION))
+    if len(cfg.DATA.VAL.RESOLUTION) != 1 and len(cfg.DATA.VAL.RESOLUTION) != count:
+        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.RESOLUTION tuple must be lenght {}, given {}."
+                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.VAL.RESOLUTION))
+    if len(cfg.DATA.TEST.RESOLUTION) != 1 and len(cfg.DATA.TEST.RESOLUTION) != count:
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.RESOLUTION tuple must be lenght {}, given {}."
+                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TEST.RESOLUTION))

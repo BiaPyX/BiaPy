@@ -26,10 +26,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
        Parameters
        ----------
        X : 4D Numpy array
-           Data. E.g. ``(num_of_images, x, y, channels)``.
+           Data. E.g. ``(num_of_images, y, x, channels)``.
 
        Y : 4D Numpy array
-           Mask data. E.g. ``(num_of_images, x, y, 1)``.
+           Mask data. E.g. ``(num_of_images, y, x, 1)``.
 
        batch_size : int, optional
            Size of the batches.
@@ -266,7 +266,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            Shape of the desired images when using 'random_crops_in_DA'.
 
        resolution : 2D tuple of floats, optional
-           Resolution of the given data ``(x,y)``. E.g. ``(8,8)``.
+           Resolution of the given data ``(y,x)``. E.g. ``(8,8)``.
 
        prob_map : 4D Numpy array or str, optional
            If it is an array, it should represent the probability map used to make random crops when
@@ -550,7 +550,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             self.trans_made += '_drop'+str(drop_range)
 
         if grayscale: self.trans_made += '_gray'
-        if gridmask: self.trans_made += '_gridmask'+str(self.grid_ratio)+str(self.grid_d_range)+str(self.grid_rotate)+str(self.grid_invert)
+        if gridmask: self.trans_made += '_gridmask'+str(self.grid_ratio)+'+'+str(self.grid_d_range)+'+'+str(self.grid_rotate)+'+'+str(self.grid_invert)
         if channel_shuffle: self.trans_made += '_chshuffle'
         if cutout: self.trans_made += '_cout'+str(cout_nb_iterations)+'+'+str(cout_size)+'+'+str(cout_cval)+'+'+str(cout_apply_to_mask)
         if cutblur: self.trans_made += '_cblur'+str(cblur_size)+'+'+str(cblur_down_range)+'+'+str(cblur_inside)
@@ -582,10 +582,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            Returns
            -------
            batch_x : 4D Numpy array
-               Corresponding X elements of the batch. E.g. ``(batch_size, x, y, channels)``.
+               Corresponding X elements of the batch. E.g. ``(batch_size, y, x, channels)``.
 
            batch_y : 4D Numpy array
-               Corresponding Y elements of the batch. E.g. ``(batch_size, x, y, channels)``.
+               Corresponding Y elements of the batch. E.g. ``(batch_size, y, x, channels)``.
         """
 
         # Generate indexes of the batch
@@ -705,24 +705,24 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            Parameters
            ----------
            image : 3D Numpy array
-               Image to transform. E.g. ``(x, y, channels)``.
+               Image to transform. E.g. ``(y, x, channels)``.
 
            mask : 3D Numpy array
-               Mask to transform. E.g. ``(x, y, channels)``.
+               Mask to transform. E.g. ``(y, x, channels)``.
 
            e_img : D Numpy array
-               Extra image to help transforming ``image``. E.g. ``(x, y, channels)``.
+               Extra image to help transforming ``image``. E.g. ``(y, x, channels)``.
 
            e_mask : 4D Numpy array
-               Extra mask to help transforming ``mask``. E.g. ``(x, y, channels)``.
+               Extra mask to help transforming ``mask``. E.g. ``(y, x, channels)``.
 
            Returns
            -------
            trans_image : 3D Numpy array
-               Transformed image. E.g. ``(x, y, channels)``.
+               Transformed image. E.g. ``(y, x, channels)``.
 
            trans_mask : 3D Numpy array
-               Transformed image mask. E.g. ``(x, y, channels)``.
+               Transformed image mask. E.g. ``(y, x, channels)``.
         """
 
         # Apply cutout
@@ -793,7 +793,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            Parameters
            ----------
            im : 3D Numpy array
-               Image to be modified. E. g. ``(x, y, channels)``
+               Image to be modified. E. g. ``(y, x, channels)``
 
            grid_width : int, optional
                Grid's width.
@@ -806,7 +806,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
             im[:, j] = v
 
 
-    def get_transformed_samples(self, num_examples, save_to_dir=False, out_dir='aug', save_prefix=None, train=True,
+    def get_transformed_samples(self, num_examples, save_to_dir=False, out_dir='aug', train=True,
                                 random_images=True, draw_grid=True):
         """Apply selected transformations to a defined number of images from the dataset.
 
@@ -823,9 +823,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                Name of the folder where the examples will be stored. If any provided the examples will be generated
                under a folder ``aug``.
 
-           save_prefix : str, optional
-               Prefix to add to the generated examples' name.
-
            train : bool, optional
                To avoid drawing a grid on the generated images. This should be set when the samples will be used for
                training.
@@ -840,10 +837,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
            Returns
            -------
            batch_x : 4D Numpy array
-               Batch of data. E.g. ``(num_examples, x, y, channels)``.
+               Batch of data. E.g. ``(num_examples, y, x, channels)``.
 
            batch_y : 4D Numpy array
-               Batch of data mask. E.g. ``(num_examples, x, y, channels)``.
+               Batch of data mask. E.g. ``(num_examples, y, x, channels)``.
 
 
            Examples
@@ -933,7 +930,6 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
         batch_y = np.zeros((num_examples, *self.shape[:2])+(self.channels,), dtype=np.uint8)
 
         if save_to_dir:
-            p = '_' if save_prefix is None else str(save_prefix)
             os.makedirs(out_dir, exist_ok=True)
 
         # Generate the examples
@@ -983,8 +979,8 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 else:
                     img_prob = None
 
-                batch_x[i], batch_y[i], ox, oy,\
-                s_x, s_y = random_crop(img, mask, self.shape[:2], self.val, img_prob=img_prob, draw_prob_map_points=True)
+                batch_x[i], batch_y[i], oy, ox,\
+                s_y, s_x = random_crop(img, mask, self.shape[:2], self.val, img_prob=img_prob, draw_prob_map_points=True)
             else:
                 batch_x[i], batch_y[i] = img, mask
 
@@ -1043,10 +1039,10 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
                 # Save transformed images
-                f = os.path.join(out_dir,str(i)+"_"+str(pos)+p+'x'+self.trans_made+".tif")
+                f = os.path.join(out_dir,str(i)+"_"+str(pos)+'_x'+self.trans_made+".tif")
                 aux = np.expand_dims(np.expand_dims(batch_x[i].transpose((2,0,1)), -1), 0).astype(np.float32)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-                f = os.path.join(out_dir,str(i)+"_"+str(pos)+p+'y'+self.trans_made+".tif")
+                f = os.path.join(out_dir,str(i)+"_"+str(pos)+'_y'+self.trans_made+".tif")
                 aux = np.expand_dims(np.expand_dims(batch_y[i].transpose((2,0,1)), -1), 0).astype(np.float32)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
@@ -1094,7 +1090,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                         px[s_x, col] = (0, 0, 255)
                         px[s_x+self.shape[0]-1, col] = (0, 0, 255)
 
-                    im.save(os.path.join(out_dir, str(pos)+p+'mark_x'+self.trans_made+'.png'))
+                    im.save(os.path.join(out_dir, str(i)+"_"+str(pos)+'_mark_x'+self.trans_made+'.png'))
 
                     if self.in_memory:
                         mask = self.Y[pos]
@@ -1129,7 +1125,7 @@ class ImageDataGenerator(tf.keras.utils.Sequence):
                         px[s_x, col] = (0, 0, 255)
                         px[s_x+self.shape[0]-1, col] = (0, 0, 255)
 
-                    m.save(os.path.join(out_dir, str(pos)+p+'mark_y'+self.trans_made+'.png'))
+                    m.save(os.path.join(out_dir, str(i)+"_"+str(pos)+'_mark_y'+self.trans_made+'.png'))
 
         print("### END TR-SAMPLES ###")
         return batch_x, batch_y

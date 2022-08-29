@@ -19,16 +19,16 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
            Configuration.
 
        X_train : 4D Numpy array
-           Training data. E.g. ``(num_of_images, x, y, channels)``.
+           Training data. E.g. ``(num_of_images, y, x, channels)``.
 
        Y_train : 4D Numpy array
-           Training data mask. E.g. ``(num_of_images, x, y, 1)``.
+           Training data mask. E.g. ``(num_of_images, y, x, 1)``.
 
        X_val : 4D Numpy array
-           Validation data mask. E.g. ``(num_of_images, x, y, channels)``.
+           Validation data mask. E.g. ``(num_of_images, y, x, channels)``.
 
        Y_val : 4D Numpy array
-           Validation data mask. E.g. ``(num_of_images, x, y, 1)``.
+           Validation data mask. E.g. ``(num_of_images, y, x, 1)``.
 
        Returns
        -------
@@ -168,10 +168,10 @@ def create_test_augmentor(cfg, X_test, Y_test):
            Configuration.
 
        X_test : 4D Numpy array
-           Test data. E.g. ``(num_of_images, x, y, channels)``.
+           Test data. E.g. ``(num_of_images, y, x, channels)``.
 
        Y_test : 4D Numpy array
-           Test data mask. E.g. ``(num_of_images, x, y, 1)``.
+           Test data mask. E.g. ``(num_of_images, y, x, 1)``.
 
        Returns
        -------
@@ -219,7 +219,7 @@ def check_generator_consistence(gen, data_out_dir, mask_out_dir, filenames=None)
 
         X_test, Y_test = batch
         for j in tqdm(range(X_test.shape[0]), leave=False):
-            fil = filenames[(i*X.shape[0])+j:(i*X.shape[0])+j+1] if filenames is not None else [str(count)+".tif"]
+            fil = filenames[(i*X_test.shape[0])+j:(i*X_test.shape[0])+j+1] if filenames is not None else [str(count)+".tif"]
             save_tif(np.expand_dims(X_test[j],0), data_out_dir, fil, verbose=False)
             save_tif(np.expand_dims(Y_test[j],0), mask_out_dir, fil, verbose=False)
             count += 1

@@ -57,9 +57,8 @@ class Super_resolution(Base_Workflow):
             if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
             f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
             pad = tuple(p*self.cfg.AUGMENTOR.RANDOM_CROP_SCALE for p in self.cfg.DATA.TEST.PADDING)
-            ov = tuple(o*self.cfg.AUGMENTOR.RANDOM_CROP_SCALE for o in self.cfg.DATA.TEST.OVERLAP) 
             pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=pad, 
-                          overlap=ov, verbose=self.cfg.TEST.VERBOSE)
+                          overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
         else:
             pred = pred[0]
 

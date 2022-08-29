@@ -1,6 +1,5 @@
-import tensorflow as tf
 from tensorflow.keras import Model, Input
-from tensorflow.keras.layers import (Dropout, Lambda, SpatialDropout2D, Conv2D, Conv2DTranspose, MaxPooling2D,
+from tensorflow.keras.layers import (Dropout, SpatialDropout2D, Conv2D, Conv2DTranspose, MaxPooling2D,
                                      Concatenate, Add, BatchNormalization, ELU)
 
 
@@ -11,7 +10,7 @@ def ResUNet_2D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
        Parameters
        ----------
        image_shape : 3D tuple
-           Dimensions of the input image. E.g. ``(x, y, channels)``
+           Dimensions of the input image. E.g. ``(y, x, channels)``
 
        activation : str, optional
            Keras available activation type.

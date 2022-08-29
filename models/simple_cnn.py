@@ -1,4 +1,3 @@
-import tensorflow as tf
 from tensorflow.keras import Input, Model
 from tensorflow.keras.layers import Conv2D, Dropout, BatchNormalization, Flatten, Dense
 

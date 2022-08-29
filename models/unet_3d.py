@@ -1,7 +1,6 @@
-import tensorflow as tf
 from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import (Dropout, SpatialDropout3D, Conv3D, Conv3DTranspose, MaxPooling3D, concatenate,
-                                     ELU, BatchNormalization, Activation, ZeroPadding3D)
+                                     BatchNormalization, Activation)
 
 
 def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
@@ -11,7 +10,7 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
        Parameters
        ----------
        image_shape : 4D tuple
-           Dimensions of the input image. E.g. ``(x, y, z, channels)``
+           Dimensions of the input image. E.g. ``(z, y, x, channels)``
 
        activation : str, optional
            Keras available activation type.
@@ -82,7 +81,7 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
 
         l.append(x)
 
-        x = MaxPooling3D((2, 2, z_down))(x)
+        x = MaxPooling3D((z_down, 2, 2))(x)
 
     # BOTTLENECK
     x = Conv3D(feature_maps[depth], (3, 3, 3), activation=None, kernel_initializer=k_init, padding='same')(x)
@@ -100,7 +99,7 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
 
     # DECODER
     for i in range(depth-1, -1, -1):
-        x = Conv3DTranspose(feature_maps[i], (2, 2, 2), strides=(2, 2, z_down), padding='same') (x)
+        x = Conv3DTranspose(feature_maps[i], (2, 2, 2), strides=(z_down, 2, 2), padding='same') (x)
         x = concatenate([x, l[i]])
 
         x = Conv3D(feature_maps[i], (3, 3, 3), activation=None, kernel_initializer=k_init, padding='same') (x)

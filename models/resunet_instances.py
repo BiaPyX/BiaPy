@@ -1,6 +1,5 @@
-import tensorflow as tf
 from tensorflow.keras import Model, Input
-from tensorflow.keras.layers import (Dropout, Lambda, SpatialDropout2D, Conv2D, Conv2DTranspose, MaxPooling2D,
+from tensorflow.keras.layers import (Dropout, SpatialDropout2D, Conv2D, Conv2DTranspose, MaxPooling2D,
                                      Concatenate, Add, BatchNormalization, ELU)
 
 

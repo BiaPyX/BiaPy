@@ -1,8 +1,7 @@
-import tensorflow as tf
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import (Dropout, SpatialDropout3D, Conv3D, Conv3DTranspose, MaxPooling3D, concatenate,
-                                     ELU, BatchNormalization, Activation, ZeroPadding3D, GlobalAveragePooling3D,
-                                     Reshape, Dense, multiply, Permute)
+                                     BatchNormalization, Activation, GlobalAveragePooling3D, Reshape, Dense, multiply, 
+                                     Permute)
 from tensorflow.keras import Model, Input
 
 

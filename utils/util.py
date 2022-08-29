@@ -256,7 +256,7 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
        ----------
        X : 4D/5D numpy array
            Data to save as images. The first dimension must be the number of images. E.g.
-           ``(num_of_images, x, y, channels)`` or ``(num_of_images, z, x, y, channels)``.
+           ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
 
        data_dir : str, optional
            Path to store X images.
@@ -298,11 +298,11 @@ def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discar
        ----------
        X : 4D/5D numpy array
            Data to save as images. The first dimension must be the number of images. E.g.
-           ``(num_of_images, x, y, channels)`` or ``(num_of_images, z, x, y, channels)``.
+           ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
 
        Y : 4D/5D numpy array
            Data mask to save. The first dimension must be the number of images. E.g.
-           ``(num_of_images, x, y, channels)`` or ``(num_of_images, z, x, y, channels)``.
+           ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
 
        data_dir : str, optional
            Path to store X images.
@@ -1344,8 +1344,8 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
        Returns
        -------
        data : 5D Numpy array or list of 4D Numpy arrays
-           Data loaded. E.g. ``(num_of_images, x, y, z, channels)`` if all files have same shape, otherwise a list of
-           ``(1, x, y, z, channels)`` arrays will be returned.
+           Data loaded. E.g. ``(num_of_images, z, y, x, channels)`` if all files have same shape, otherwise a list of
+           ``(1, z, y, x, channels)`` arrays will be returned.
 
        data_shape : List of tuples
            Shapes of all 3D images readed. Useful to reconstruct the original images together with ``crop_shape``.
@@ -1382,7 +1382,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
 
            # The function will print the shape of the created array which its size is the concatenation in 0 axis of all
            # subvolumes created for each 3D image in the given path. For example:
-           #     *** Loaded data shape is (350, 256, 256, 40, 1)
+           #     *** Loaded data shape is (350, 40, 256, 256, 1)
            # Notice height, width and depth swap as skimage.io imread function is used to load images.
     """
     if crop and crop_shape is None:
@@ -1424,6 +1424,9 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
                     img = img.transpose((ax['Z'],ax['Y'],ax['X'],ax['C']))
         img = np.squeeze(img)
 
+        if img.ndim < 3:
+            raise ValueError("Read image seems to be 2D: {}. Path: {}".format(img.shape, os.path.join(data_dir, id_)))
+
         # Ensure uint8
         if img.dtype == np.uint16:
             if np.max(img) > 255:
@@ -1440,9 +1443,8 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
             img = crop_3D_data_with_overlap(img, crop_shape[:3]+(img.shape[-1],), overlap=overlap, padding=padding,
                                             median_padding=median_padding, verbose=verbose)
         else:
-            img = np.transpose(img, (1,2,0,3))
             img = np.expand_dims(img, axis=0)
-
+        
         c_shape.append(img.shape)
         data.append(img)
 
@@ -1472,7 +1474,7 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
        Parameters
        ----------
        data_mask : 5D Numpy array
-           Data mask to create the new array from. It is expected to have just one channel. E.g. ``(10, 1000, 1000, 200, 1)``
+           Data mask to create the new array from. It is expected to have just one channel. E.g. ``(10, 200, 1000, 1000, 1)``
 
        mode : str, optional
            Operation mode. Possible values: ``BC`` and ``BCD``.  ``BC`` corresponds to use binary segmentation+contour.
@@ -1488,7 +1490,7 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
        Returns
        -------
        new_mask : 5D Numpy array
-           5D array with 3 channels instead of one. E.g. ``(10, 1000, 1000, 200, 3)``
+           5D array with 3 channels instead of one. E.g. ``(10, 200, 1000, 1000, 3)``
     """
 
     assert mode in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2']

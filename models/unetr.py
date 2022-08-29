@@ -7,8 +7,6 @@ from tensorflow.keras.layers import (Dropout, Conv2D, Conv2DTranspose, concatena
                                      BatchNormalization, Activation, Reshape)
 
 
-# Transformer utilities
-
 class Patches(layers.Layer):
     # It takes a batch of images and returns a batch of patches
     def __init__(self, patch_size):

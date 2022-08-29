@@ -140,7 +140,6 @@ class simple_data_generator(tf.keras.utils.Sequence):
 
                 if self.data_3d:
                     if img.ndim == 3: img = np.expand_dims(img, -1)
-                    img = img.transpose((1,2,0,3)) # When 3D images transpose it to (x,y,z,c)
                 else:
                     if img.ndim == 2:
                         img = np.expand_dims(img, -1)
@@ -174,7 +173,6 @@ class simple_data_generator(tf.keras.utils.Sequence):
 
                     if self.data_3d:
                         if mask.ndim == 3: mask = np.expand_dims(mask, -1)
-                        mask = mask.transpose((1,2,0,3)) # When 3D images transpose it to (x,y,z,c)
                     else:
                         if mask.ndim == 2:
                             mask = np.expand_dims(mask, -1)

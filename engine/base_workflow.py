@@ -49,7 +49,6 @@ class Base_Workflow(metaclass=ABCMeta):
             _Y = Y.copy() if self.cfg.DATA.TEST.LOAD_GT else None
             # Reflect data to complete the needed shape  
             if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
-                print()
                 reflected_orig_shape = _X.shape
                 _X = np.expand_dims(pad_and_reflect(_X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
                 if self.cfg.DATA.TEST.LOAD_GT:
@@ -149,7 +148,7 @@ class Base_Workflow(metaclass=ABCMeta):
             #####################
             if self.cfg.TEST.STATS.MERGE_PATCHES:
                 if self.cfg.DATA.TEST.LOAD_GT and self.cfg.DATA.CHANNELS != "Dv2":
-                    _Y = _Y[0]
+                    if _Y.ndim > pred.ndim: _Y = _Y[0]
                     if self.cfg.LOSS.TYPE != 'MASKED_BCE':
                         _iou_per_image = jaccard_index_numpy((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
                         _ov_iou_per_image = voc_calculation((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),

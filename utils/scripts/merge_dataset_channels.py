@@ -14,7 +14,6 @@ padding = (0, 0, 0)
 median_padding = False
 
 sys.path.insert(0, code_dir)
-from data.data_3D_manipulation import crop_3D_data_with_overlap
 from utils.util import save_tif
 ids = sorted(next(os.walk(input_dir))[2])
 ids2 = sorted(next(os.walk(input2_dir))[2])

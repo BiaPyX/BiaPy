@@ -45,8 +45,8 @@ class Detection(Base_Workflow):
             points_pred = np.zeros((pred.shape[:-1] + (1,)), dtype=np.uint8)
             for n, pred_coordinates in enumerate(all_channel_coord):
                 for coord in pred_coordinates:
-                        z,x,y = coord
-                        points_pred[z,x,y,0] = n+1
+                        z,y,x = coord
+                        points_pred[z,y,x,0] = n+1
                 self.cell_count_lines.append([filenames, len(pred_coordinates)])
 
             if self.cfg.PROBLEM.NDIM == '3D':

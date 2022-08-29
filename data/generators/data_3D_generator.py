@@ -28,10 +28,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
        Parameters
        ----------
        X : Numpy 5D array
-           Data. E.g. ``(num_of_images, x, y, z, channels)``.
+           Data. E.g. ``(num_of_images, z, y, x, channels)``.
 
        Y : Numpy 5D array
-           Mask data. E.g. ``(num_of_images, x, y, z, channels)``.
+           Mask data. E.g. ``(num_of_images, z, y, x, channels)``.
 
        in_memory : bool, optional
            If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will be loaded directly from disk using
@@ -46,7 +46,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            subvolumes are prepared.
 
        shape : 4D tuple of ints, optional
-           Shape of the subvolume to be extracted randomly from the data. E. g. ``(x, y, z, channels)``.
+           Shape of the subvolume to be extracted randomly from the data. E. g. ``(z, y, x, channels)``.
 
        resolution : 3D tuple of floats, optional
            Resolution of the given data ``(x,y,z)``. E.g. ``(8,8,30)``.
@@ -372,9 +372,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     del img_aux  
                 if 'Z' in self.ax_x: 
                     img = img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
-            img = img.transpose((1,2,0,3))
             self.X_channels = img.shape[-1]
-            self.z_size = img.shape[-2]
+            self.z_size = shape[0] if random_crops_in_DA else img.shape[0]
             # Ensure uint8
             if img.dtype == np.uint16:
                 if np.max(img) > 255:
@@ -476,10 +475,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
 
             self.channels = Y.shape[-1]
             self.X_channels = X.shape[-1]
-            self.z_size = X.shape[-2]
+            self.z_size = shape[0] if random_crops_in_DA else X.shape[1]
             self.len = len(self.X)
             self.shape = shape if random_crops_in_DA else X.shape[1:]
-
+        
         self.prob_map = None
         if random_crops_in_DA and prob_map is not None:
             if isinstance(prob_map, str):
@@ -530,8 +529,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
         self.grid_d_range = grid_d_range
         self.grid_rotate = grid_rotate
         self.grid_invert = grid_invert
-        self.grid_d_size = (self.shape[0]*grid_d_range[0], self.shape[1]*grid_d_range[1],\
-                            self.shape[2]*grid_d_range[0], self.shape[2]*grid_d_range[1])
+        self.grid_d_size = (self.shape[1]*grid_d_range[0], self.shape[2]*grid_d_range[1],\
+                            self.shape[0]*grid_d_range[0], self.shape[0]*grid_d_range[1])
         self.val = val
         self.batch_size = batch_size
         self.o_indexes = np.arange(self.len)
@@ -606,7 +605,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             self.trans_made += '_drop'+str(drop_range)
         if grayscale: self.trans_made += '_gray'
         if channel_shuffle: self.trans_made += '_chshuffle'
-        if gridmask: self.trans_made += '_gridmask'+str(self.grid_ratio)+str(self.grid_d_range)+str(self.grid_rotate)+str(self.grid_invert)
+        if gridmask: self.trans_made += '_gridmask'+str(self.grid_ratio)+'+'+str(self.grid_d_range)+'+'+str(self.grid_rotate)+'+'+str(self.grid_invert)
         if cutout: self.trans_made += '_cout'+str(cout_nb_iterations)+'+'+str(cout_size)+'+'+str(cout_cval)+'+'+str(cout_apply_to_mask)
         if cutblur: self.trans_made += '_cblur'+str(cblur_size)+'+'+str(cblur_down_range)+'+'+str(cblur_inside)
         if cutmix: self.trans_made += '_cmix'+str(cmix_size)
@@ -632,24 +631,24 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            Parameters
            ----------
            im : 4D Numpy array
-               Image to be modified. E. g. ``(x, y, z, channels)``
+               Image to be modified. E. g. ``(z, y, x, channels)``
 
            grid_width : int, optional
                Grid's width.
         """
         v = 1 if int(np.max(im)) == 0 else int(np.max(im))
 
-        for k in range(0, im.shape[2]):
-            for i in range(0, im.shape[0], grid_width):
+        for k in range(0, im.shape[0]):
+            for i in range(0, im.shape[2], grid_width):
                 if im.shape[-1] == 1:
-                    im[i,:,k] = v
+                    im[k,:,i] = v
                 else:
-                    im[i,:,k] = [v]*im.shape[-1]
+                    im[k,:,i] = [v]*im.shape[-1]
             for j in range(0, im.shape[1], grid_width):
                 if im.shape[-1] == 1:
-                    im[:,j,k] = v
+                    im[k,j] = v
                 else:
-                    im[:,j,k] = [v]*im.shape[-1]
+                    im[k,j] = [v]*im.shape[-1]
 
 
     def __getitem__(self, index):
@@ -663,10 +662,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            Returns
            -------
            batch_x : 5D Numpy array
-               Corresponding X elements of the batch. E.g. ``(batch_size_value, x, y, z, channels)``.
+               Corresponding X elements of the batch. E.g. ``(batch_size_value, z, y, x, channels)``.
 
            batch_y : 5D Numpy array
-               Corresponding Y elements of the batch. E.g. ``(batch_size_value, x, y, z, channels)``.
+               Corresponding Y elements of the batch. E.g. ``(batch_size_value, z, y, x, channels)``.
         """
 
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
@@ -696,8 +695,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 elif mask.ndim == 4 and self.ax_y is not None:
                     if 'Z' in self.ax_y: 
                         mask = mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
-                img = img.transpose((1,2,0,3))
-                mask = mask.transpose((1,2,0,3))
                 # Ensure uint8
                 if img.dtype == np.uint16:
                     if np.max(img) > 255:
@@ -743,8 +740,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     elif e_mask.ndim == 4 and self.ax_y is not None:
                         if 'Z' in self.ax_y: 
                             e_mask = e_mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
-                    e_img = e_img.transpose((1,2,0,3))
-                    e_mask = e_mask.transpose((1,2,0,3))
                     # Ensure uint8
                     if e_img.dtype == np.uint16:
                         if np.max(e_img) > 255:
@@ -798,25 +793,30 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            Parameters
            ----------
            image : 4D Numpy array
-               Image to transform. E.g. ``(x, y, z, channels)``.
+               Image to transform. E.g. ``(z, y, x, channels)``.
 
            mask : 4D Numpy array
-               Mask to transform. E.g. ``(x, y, z, channels)``.
+               Mask to transform. E.g. ``(z, y, x, channels)``.
 
            e_img : 4D Numpy array
-               Extra image to help transforming ``image``. E.g. ``(x, y, z, channels)``.
+               Extra image to help transforming ``image``. E.g. ``(z, y, x, channels)``.
 
            e_mask : 4D Numpy array
-               Extra mask to help transforming ``mask``. E.g. ``(x, y, z, channels)``.
+               Extra mask to help transforming ``mask``. E.g. ``(z, y, x, channels)``.
 
            Returns
            -------
            image : 4D Numpy array
-               Transformed image. E.g. ``(x, y, z, channels)``.
+               Transformed image. E.g. ``(z, y, x, channels)``.
 
            mask : 4D Numpy array
-               Transformed image mask. E.g. ``(x, y, z, channels)``.
+               Transformed image mask. E.g. ``(z, y, x, channels)``.
         """
+
+        # Transpose them so we can merge the z and c channels easily. 
+        # z, y, x, c --> x, y, z, c
+        image = image.transpose((2,1,0,3))
+        mask = mask.transpose((2,1,0,3))
 
         # Apply flips in z as imgaug can not do it
         if self.zflip and random.uniform(0, 1) < self.da_prob:
@@ -933,8 +933,7 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
             else:
                 mask = heat
 
-        return image, mask
-
+        return image.transpose((2,1,0,3)), mask.transpose((2,1,0,3))
 
     def get_transformed_samples(self, num_examples, random_images=True, save_to_dir=True, out_dir='aug_3d', train=False,
                                 draw_grid=True):
@@ -965,10 +964,10 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
            Returns
            -------
            sample_x : List of 4D Numpy array
-               Transformed images. E.g. list of ``(x, y, z, channels)``.
+               Transformed images. E.g. list of ``(z, y, x, channels)``.
 
            sample_y : List of 4D Numpy array
-               Transformed image mask. E.g. list of ``(x, y, z, channels)``.
+               Transformed image mask. E.g. list of ``(z, y, x, channels)``.
         """
 
         if random_images == False and num_examples > self.len:
@@ -1007,8 +1006,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 elif mask.ndim == 4 and self.ax_y is not None:
                     if 'Z' in self.ax_y: 
                         mask = mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
-                img = img.transpose((1,2,0,3))
-                mask = mask.transpose((1,2,0,3))
                 # Ensure uint8
                 if img.dtype == np.uint16:
                     if np.max(img) > 255:
@@ -1026,8 +1023,8 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                         img_prob = self.prob_map[pos]
                 else:
                     img_prob = None
-                vol, vol_mask, ox, oy, oz,\
-                s_x, s_y, s_z = random_3D_crop(img, mask, self.shape[:3], self.val, vol_prob=img_prob,
+                vol, vol_mask, oz, oy, ox,\
+                s_z, s_y, s_x = random_3D_crop(img, mask, self.shape[:3], self.val, vol_prob=img_prob,
                                                draw_prob_map_points=True)
                 sample_x.append(vol)
                 sample_y.append(vol_mask)
@@ -1069,8 +1066,6 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                     elif e_mask.ndim == 4 and self.ax_y is not None:
                         if 'Z' in self.ax_y: 
                             e_mask = e_mask.transpose((self.ax_y['Z'],self.ax_y['Y'],self.ax_y['X'],self.ax_y['C']))
-                    e_img = e_img.transpose((1,2,0,3))
-                    e_mask = e_mask.transpose((1,2,0,3))
                     # Ensure uint8
                     if e_img.dtype == np.uint16:
                         if np.max(e_img) > 255:
@@ -1087,19 +1082,19 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 # Original image/mask
                 f = os.path.join(out_dir, str(i)+"_orig_x_"+str(pos)+"_"+self.trans_made+'.tiff')
                 if draw_grid: self.__draw_grid(o_x)
-                aux = np.expand_dims((np.transpose(o_x, (2,3,0,1))).astype(np.float32), -1)
+                aux = np.expand_dims((np.transpose(o_x, (0,3,1,2))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                 f = os.path.join(out_dir, str(i)+"_orig_y_"+str(pos)+"_"+self.trans_made+'.tiff')
                 if draw_grid: self.__draw_grid(o_y)
-                aux = np.expand_dims((np.transpose(o_y, (2,3,0,1))).astype(np.float32), -1)
+                aux = np.expand_dims((np.transpose(o_y, (0,3,1,2))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                 # Transformed
                 f = os.path.join(out_dir, str(i)+"_x_aug_"+str(pos)+"_"+self.trans_made+'.tiff')
-                aux = np.expand_dims((np.transpose(sample_x[i], (2,3,0,1))).astype(np.float32), -1)
+                aux = np.expand_dims((np.transpose(sample_x[i], (0,3,1,2))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                 # Mask
                 f = os.path.join(out_dir, str(i)+"_y_aug_"+str(pos)+"_"+self.trans_made+'.tiff')
-                aux = np.expand_dims((np.transpose(sample_y[i], (2,3,0,1))).astype(np.float32), -1)
+                aux = np.expand_dims((np.transpose(sample_y[i], (0,3,1,2))).astype(np.float32), -1)
                 imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
                 # Save the original images with a red point and a blue square that represents the point selected with
@@ -1107,51 +1102,52 @@ class VoxelDataGenerator(tf.keras.utils.Sequence):
                 if self.random_crops_in_DA and self.prob_map is not None and i == 0:
                     os.makedirs(out_dir, exist_ok=True)
 
-                    print("The selected point of the random crop was [{},{},{}]".format(ox,oy,oz))
+                    print("The selected point of the random crop was [{},{},{}]".format(oz,oy,ox))
 
                     aux = (o_x2).astype(np.uint8)
                     if aux.shape[-1] == 1: aux = np.repeat(aux, 3, axis=3)
                     auxm = (o_y2).astype(np.uint8)
                     if auxm.shape[-1] == 1: auxm = np.repeat(auxm, 3, axis=3)
 
-                    print(aux.shape)
-                    for s in range(aux.shape[2]):
-                        if s >= s_z and s < s_z+self.shape[2]:
-                            im = Image.fromarray(aux[:,:,s,0])
+                    for s in range(aux.shape[0]):
+                        if s >= s_z and s < s_z+self.shape[0]:
+                            im = Image.fromarray(aux[s,...,0])
                             im = im.convert('RGB')
                             px = im.load()
-                            m = Image.fromarray(auxm[:,:,s,0])
+                            m = Image.fromarray(auxm[s,...,0])
                             m = m.convert('RGB')
                             py = m.load()
-                            # Paint a blue square that represents the crop made
-                            for col in range(s_x, s_x+self.shape[0]):
-                                px[s_y, col] = (0, 0, 255)
-                                px[s_y+self.shape[0]-1, col] = (0, 0, 255)
-                                py[s_y, col] = (0, 0, 255)
-                                py[s_y+self.shape[0]-1, col] = (0, 0, 255)
-                            for row in range(s_y, s_y+self.shape[1]):
-                                px[row, s_x] = (0, 0, 255)
-                                px[row, s_x+self.shape[1]-1] = (0, 0, 255)
-                                py[row, s_x] = (0, 0, 255)
-                                py[row, s_x+self.shape[1]-1] = (0, 0, 255)
+
+                            # Paint a blue square that represents the crop made. 
+                            # Here the axis are x, y and not y, x (numpy)
+                            for row in range(s_x, s_x+self.shape[2]):
+                                px[row, s_y] = (0, 0, 255)
+                                px[row, s_y+self.shape[1]-1] = (0, 0, 255)
+                                py[row, s_y] = (0, 0, 255)
+                                py[row, s_y+self.shape[1]-1] = (0, 0, 255)
+                            for col in range(s_y, s_y+self.shape[1]):
+                                px[s_x, col] = (0, 0, 255)
+                                px[s_x+self.shape[2]-1, col] = (0, 0, 255)
+                                py[s_x, col] = (0, 0, 255)
+                                py[s_x+self.shape[2]-1, col] = (0, 0, 255)
 
                             # Paint the selected point in red
                             if s == oz:
                                 p_size=6
-                                for row in range(oy-p_size,oy+p_size):
-                                    for col in range(ox-p_size,ox+p_size):
-                                        if col >= 0 and col < img.shape[0] and row >= 0 and row < img.shape[1]:
+                                for row in range(ox-p_size,ox+p_size):
+                                    for col in range(oy-p_size,oy+p_size):
+                                        if col >= 0 and col < img.shape[1] and row >= 0 and row < img.shape[2]:
                                             px[row, col] = (255, 0, 0)
                                             py[row, col] = (255, 0, 0)
 
-                            aux[:,:,s,:] = im
-                            auxm[:,:,s,:] = m
+                            aux[s] = im
+                            auxm[s] = m
 
-                    aux = np.expand_dims((np.transpose(aux, (2,3,0,1))).astype(np.float32), -1)
-                    f = os.path.join(out_dir, "extract_example_"+str(pos)+"_"+"_mark_x_"+self.trans_made+'.tiff')
+                    aux = np.expand_dims((np.transpose(aux, (0,3,1,2))).astype(np.float32), -1)
+                    f = os.path.join(out_dir, "extract_example_"+str(pos)+"_mark_x_"+self.trans_made+'.tiff')
                     imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-                    auxm = np.expand_dims((np.transpose(auxm, (2,3,0,1))).astype(np.float32), -1)
-                    f = os.path.join(out_dir, "extract_example_"+str(pos)+"_"+"_mark_y_"+self.trans_made+'.tiff')
+                    auxm = np.expand_dims((np.transpose(auxm, (0,3,1,2))).astype(np.float32), -1)
+                    f = os.path.join(out_dir, "extract_example_"+str(pos)+"_mark_y_"+self.trans_made+'.tiff')
                     imsave(f, auxm, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
                     del o_x2, o_y2
 

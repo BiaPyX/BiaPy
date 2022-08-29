@@ -29,8 +29,6 @@ for n, id_ in tqdm(enumerate(ids), total=len(ids)):
     else:
         img = np.expand_dims(img, axis=0)
 
-    img = np.transpose(img, (0,3,1,2,4))
-
     filenames = []
     d = len(str(len(img)))
     for k in range(img.shape[0]):

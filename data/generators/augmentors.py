@@ -16,10 +16,10 @@ def cutout(img, mask, channels, z_size, nb_iterations=(1,3), size=(0.2,0.4), cva
        Parameters
        ----------
        img : 3D Numpy array
-           Image to transform. E.g. ``(x, y, channels)``.
+           Image to transform. E.g. ``(y, x, channels)``.
 
        mask : 3D Numpy array
-           Mask to transform. E.g. ``(x, y, channels)``.
+           Mask to transform. E.g. ``(y, x, channels)``.
 
        channels : int
            Size of channel dimension. Used for 3D images as the channels have been merged with the z axis.
@@ -46,10 +46,10 @@ def cutout(img, mask, channels, z_size, nb_iterations=(1,3), size=(0.2,0.4), cva
        Returns
        -------
        out : 3D Numpy array
-           Transformed image. E.g. ``(x, y, channels)``.
+           Transformed image. E.g. ``(y, x, channels)``.
 
        mask : 3D Numpy array
-           Transformed mask. E.g. ``(x, y, channels)``.
+           Transformed mask. E.g. ``(y, x, channels)``.
 
        Example
        -------
@@ -111,7 +111,7 @@ def cutblur(img, size=(0.2,0.4), down_ratio_range=(2,8), only_inside=True):
        Parameters
        ----------
        img : 3D Numpy array
-           Image to transform. E.g. ``(x, y, channels)``.
+           Image to transform. E.g. ``(y, x, channels)``.
 
        size : float, optional
            Size of the region to transform.
@@ -127,7 +127,7 @@ def cutblur(img, size=(0.2,0.4), down_ratio_range=(2,8), only_inside=True):
        Returns
        -------
        out : 3D Numpy array
-           Transformed image. E.g. ``(x, y, channels)``.
+           Transformed image. E.g. ``(y, x, channels)``.
 
        Example
        -------
@@ -201,16 +201,16 @@ def cutmix(im1, im2, mask1, mask2, size=(0.2,0.4)):
        Parameters
        ----------
        im1 : 3D Numpy array
-           Image to transform. E.g. ``(x, y, channels)``.
+           Image to transform. E.g. ``(y, x, channels)``.
 
        im2 : 3D Numpy array
-           Image to paste into the region of ``im1``. E.g. ``(x, y, channels)``.
+           Image to paste into the region of ``im1``. E.g. ``(y, x, channels)``.
 
        mask1 : 3D Numpy array
-           Mask to transform (belongs to ``im1``). E.g. ``(x, y, channels)``.
+           Mask to transform (belongs to ``im1``). E.g. ``(y, x, channels)``.
 
        mask2 : 3D Numpy array
-           Mask to paste into the region of ``mask1``. E.g. ``(x, y, channels)``.
+           Mask to paste into the region of ``mask1``. E.g. ``(y, x, channels)``.
 
        size : tuple of floats, optional
            Range to choose the size of the areas to transform. E.g. ``(0.2, 0.4)``.
@@ -218,10 +218,10 @@ def cutmix(im1, im2, mask1, mask2, size=(0.2,0.4)):
        Returns
        -------
        out : 3D Numpy array
-           Transformed image. E.g. ``(x, y, channels)``.
+           Transformed image. E.g. ``(y, x, channels)``.
 
        m_out : 3D Numpy array
-           Transformed mask. E.g. ``(x, y, channels)``.
+           Transformed mask. E.g. ``(y, x, channels)``.
 
        Example
        -------
@@ -275,7 +275,7 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
        Parameters
        ----------
        img : 3D Numpy array
-           Image to transform. E.g. ``(x, y, channels)``.
+           Image to transform. E.g. ``(y, x, channels)``.
 
        scale : tuple of floats, optional
            Scale of the random noise. E.g. ``(0.1, 0.2)``.
@@ -289,7 +289,7 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
        Returns
        -------
        out : 3D Numpy array
-           Transformed image. E.g. ``(x, y, channels)``.
+           Transformed image. E.g. ``(y, x, channels)``.
 
        Example
        -------
@@ -342,10 +342,10 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1")
        Parameters
        ----------
        img : 3D Numpy array
-           Image to transform. E.g. ``(x, y, channels)``.
+           Image to transform. E.g. ``(y, x, channels)``.
 
        mask : 3D Numpy array
-           Mask to transform. E.g. ``(x, y, channels)``
+           Mask to transform. E.g. ``(y, x, channels)``
 
        displacement : int, optional
            Maximum pixel displacement in ``xy``-plane.
@@ -356,10 +356,10 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1")
        Returns
        -------
        out : 3D Numpy array
-           Transformed image. E.g. ``(x, y, channels)``.
+           Transformed image. E.g. ``(y, x, channels)``.
 
        m_out : 3D Numpy array
-           Transformed mask. E.g. ``(x, y, channels)``.
+           Transformed mask. E.g. ``(y, x, channels)``.
 
        Example
        -------
@@ -489,8 +489,8 @@ def brightness(img, brightness_factor=(0,0),  mode='2D'):
 
        Parameters
        ----------
-       img : 3D/4D Numpy array
-           Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+       img : 3D Numpy array
+           Image to transform. E.g. ``(y, x, channels)``.
 
        brightness_factor : tuple of 2 floats, optional
            Range of brightness' intensity. E.g. ``(0.1, 0.3)``.
@@ -501,7 +501,7 @@ def brightness(img, brightness_factor=(0,0),  mode='2D'):
        Returns
        -------
        image : 3D Numpy array
-           Transformed image. E.g. ``(x, y, channels)``.
+           Transformed image. E.g. ``(y, x, channels)``.
 
        Example
        -------
@@ -550,8 +550,8 @@ def contrast(img, contrast_factor=(0,0), mode='2D'):
 
        Parameters
        ----------
-       img : 3D/4D Numpy array
-           Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+       img : 3D Numpy array
+           Image to transform. E.g. ``(y, x, channels)``.
 
        contrast_factor : tuple of 2 floats, optional
            Range of contrast's intensity. E.g. ``(0.1, 0.3)``.
@@ -562,7 +562,7 @@ def contrast(img, contrast_factor=(0,0), mode='2D'):
        Returns
        -------
        image : 3D Numpy array
-           Transformed image. E.g. ``(x, y, channels)``.
+           Transformed image. E.g. ``(y, x, channels)``.
 
        Example
        -------
@@ -616,8 +616,8 @@ def brightness_em(img, brightness_factor=(0,0),  mode='2D', invert=False, invert
 
        Parameters
        ----------
-       img : 3D/4D Numpy array
-           Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+       img : 3D Numpy array
+           Image to transform. E.g. ``(y, x, channels)``.
 
        brightness_factor : tuple of 2 floats, optional
            Range of brightness' intensity. E.g. ``(0.1, 0.3)``.
@@ -634,7 +634,7 @@ def brightness_em(img, brightness_factor=(0,0),  mode='2D', invert=False, invert
        Returns
        -------
        image : 3D Numpy array
-           Transformed image. E.g. ``(x, y, channels)``.
+           Transformed image. E.g. ``(y, x, channels)``.
 
        Example
        -------
@@ -696,8 +696,8 @@ def contrast_em(img, contrast_factor=(0,0), mode='2D', invert=False, invert_p=0)
 
        Parameters
        ----------
-       img : 3D/4D Numpy array
-           Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+       img : 3D Numpy array
+           Image to transform. E.g. ``(y, x, channels)``.
 
        contrast_factor : tuple of 2 floats, optional
            Range of contrast's intensity. E.g. ``(0.1, 0.3)``.
@@ -714,7 +714,7 @@ def contrast_em(img, contrast_factor=(0,0), mode='2D', invert=False, invert_p=0)
        Returns
        -------
        image : 3D Numpy array
-           Transformed image. E.g. ``(x, y, channels)``.
+           Transformed image. E.g. ``(y, x, channels)``.
 
        Example
        -------
@@ -776,7 +776,7 @@ def missing_parts(img, iterations=(30,40)):
        Parameters
        ----------
        img : 3D Numpy array
-           Image to transform. E.g. ``(x, y, channels)``.
+           Image to transform. E.g. ``(y, x, channels)``.
 
        iterations : tuple of 2 ints, optional
            Iterations to dilate the missing line with. E.g. ``(30, 40)``.
@@ -784,7 +784,7 @@ def missing_parts(img, iterations=(30,40)):
        Returns
        -------
        out : 3D Numpy array
-           Transformed image. E.g. ``(x, y, channels)``.
+           Transformed image. E.g. ``(y, x, channels)``.
 
        Example
        -------
@@ -859,15 +859,10 @@ def _prepare_deform_slice(slice_shape, iterations):
     normal_vector[0] = - line_vector[1]
     normal_vector[1] = line_vector[0]
 
-    # make meshgrid
-    x, y = np.meshgrid(np.arange(shape[1]), np.arange(shape[0]))
-
     # find the 2 components where coordinates are bigger / smaller than the line
     # to apply normal vector in the correct direction
     components, n_components = label(np.logical_not(line_mask).view('uint8'))
     assert n_components == 2, "%i" % n_components
-    neg_val = components[0, 0] if fixed_x else components[-1, -1]
-    pos_val = components[-1, -1] if fixed_x else components[0, 0]
 
     # dilate the line mask
     line_mask = binary_dilation(line_mask, iterations=iterations)
@@ -881,12 +876,12 @@ def shuffle_channels(img):
        Parameters
        ----------
        img : 3D/4D Numpy array
-           Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+           Image to transform. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
        Returns
        -------
        out : 3D/4D Numpy array
-           Transformed image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+           Transformed image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
        Example
        -------
@@ -906,10 +901,8 @@ def shuffle_channels(img):
         raise ValueError("Image is supposed to be 3 or 4 dimensions but provided {} image shape instead".format(img.shape))
 
     new_channel_order = np.random.permutation(img.shape[-1])
-    if img.ndim == 3:
-        out = img[:,:,new_channel_order]
-    else:
-        out = img[:,:,:,new_channel_order]
+    out = img[...,new_channel_order]
+
     return out
 
 
@@ -919,12 +912,12 @@ def grayscale(img):
        Parameters
        ----------
        img : 3D/4D Numpy array
-           Image to transform. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+           Image to transform. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
        Returns
        -------
        out : 3D/4D Numpy array
-           Transformed image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+           Transformed image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
        Example
        -------
@@ -953,7 +946,7 @@ def GridMask(img, channels, z_size, ratio=0.6, d_range=(30,60), rotate=1, invert
        Parameters
        ----------
        img : 3D Numpy array
-           Image to transform. E.g. ``(x, y, channels)``.
+           Image to transform. E.g. ``(y, x, channels)``.
 
        channels : int
            Size of channel dimension. Used for 3D images as the channels have been merged with the z axis.
@@ -977,7 +970,7 @@ def GridMask(img, channels, z_size, ratio=0.6, d_range=(30,60), rotate=1, invert
        Returns
        -------
        out : 3D Numpy array
-           Transformed image. E.g. ``(x, y, channels)``.
+           Transformed image. E.g. ``(y, x, channels)``.
 
        Example
        -------
@@ -1029,7 +1022,6 @@ def GridMask(img, channels, z_size, ratio=0.6, d_range=(30,60), rotate=1, invert
     mask = mask[(hh-h)//2:(hh-h)//2+h, (hh-w)//2:(hh-w)//2+w]
 
     if not invert: mask = 1-mask
-
     if z_size != -1:
         _z_size = np.random.randint(d_range[2], d_range[3])
         cz = np.random.randint(0, z_size-_z_size)

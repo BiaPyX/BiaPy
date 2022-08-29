@@ -24,10 +24,10 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
        Parameters
        ----------
        X : 4D Numpy array
-           Data. E.g. ``(num_of_images, x, y, channels)``.
+           Data. E.g. ``(num_of_images, y, x, channels)``.
 
        Y : 4D Numpy array
-           Mask data. E.g. ``(num_of_images, x, y, 1)``.
+           Mask data. E.g. ``(num_of_images, y, x, 1)``.
 
        batch_size : int, optional
            Size of the batches.
@@ -267,7 +267,7 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
            Shape of the desired images when using 'random_crops_in_DA'.
 
        resolution : 2D tuple of floats, optional
-           Resolution of the given data ``(x,y)``. E.g. ``(8,8)``.
+           Resolution of the given data ``(y,x)``. E.g. ``(8,8)``.
 
        prob_map : 4D Numpy array or str, optional
            If it is an array, it should represent the probability map used to make random crops when
@@ -593,10 +593,10 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
            Returns
            -------
            batch_x : 4D Numpy array
-               Corresponding X elements of the batch. E.g. ``(batch_size, x, y, channels)``.
+               Corresponding X elements of the batch. E.g. ``(batch_size, y, x, channels)``.
 
            batch_y : 4D Numpy array
-               Corresponding Y elements of the batch. E.g. ``(batch_size, x, y, channels)``.
+               Corresponding Y elements of the batch. E.g. ``(batch_size, y, x, channels)``.
         """
 
         # Generate indexes of the batch
@@ -726,24 +726,24 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
            Parameters
            ----------
            imgA : 3D Numpy array
-               Image to transform. E.g. ``(x, y, channels)``.
+               Image to transform. E.g. ``(y, x, channels)``.
 
            imgB : 3D Numpy array
-               Mask to transform. E.g. ``(x, y, channels)``.
+               Mask to transform. E.g. ``(y, x, channels)``.
 
            e_imgA : D Numpy array
-               Extra image to help transforming ``imgA``. E.g. ``(x, y, channels)``.
+               Extra image to help transforming ``imgA``. E.g. ``(y, x, channels)``.
 
            e_imgB : 4D Numpy array
-               Extra imgB to help transforming ``imgB``. E.g. ``(x, y, channels)``.
+               Extra imgB to help transforming ``imgB``. E.g. ``(y, x, channels)``.
 
            Returns
            -------
            trans_image : 3D Numpy array
-               Transformed image. E.g. ``(x, y, channels)``.
+               Transformed image. E.g. ``(y, x, channels)``.
 
            trans_imgB : 3D Numpy array
-               Transformed image imgB. E.g. ``(x, y, channels)``.
+               Transformed image imgB. E.g. ``(y, x, channels)``.
         """
 
         # Apply cutout
@@ -813,7 +813,7 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
            Parameters
            ----------
            im : 3D Numpy array
-               Image to be modified. E. g. ``(x, y, channels)``
+               Image to be modified. E. g. ``(y, x, channels)``
 
            grid_width : int, optional
                Grid's width.
@@ -860,10 +860,10 @@ class PairImageDataGenerator(tf.keras.utils.Sequence):
            Returns
            -------
            batch_x : 4D Numpy array
-               Batch of imageA. E.g. ``(num_examples, x, y, channels)``.
+               Batch of imageA. E.g. ``(num_examples, y, x, channels)``.
 
            batch_y : 4D Numpy array
-               Batch of imageB. E.g. ``(num_examples, x, y, channels)``.
+               Batch of imageB. E.g. ``(num_examples, y, x, channels)``.
         """
 
         if random_images == False and num_examples > self.len:

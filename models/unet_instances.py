@@ -1,6 +1,5 @@
-import tensorflow as tf
 from tensorflow.keras.layers import (Dropout, SpatialDropout2D, Conv2D, Conv2DTranspose, MaxPooling2D, concatenate,
-                                     ELU, BatchNormalization, Activation, ZeroPadding2D)
+                                     BatchNormalization, Activation)
 from tensorflow.keras import Model, Input
 
 
@@ -122,11 +121,11 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
     elif output_channels in ["BCD", "BCDv2"]:
         seg = Conv2D(2, (2, 2), activation="sigmoid", padding='same') (x)
         dis = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
-        outputs = Concatenate()([seg, dis])
+        outputs = concatenate([seg, dis])
     elif output_channels == "BDv2":
         seg = Conv2D(1, (2, 2), activation="sigmoid", padding='same') (x)
         dis = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
-        outputs = Concatenate()([seg, dis])
+        outputs = concatenate([seg, dis])
     else: # Dv2
         outputs = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
 

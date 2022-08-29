@@ -71,7 +71,7 @@ def _pad_img(img, window_size, subdivisions):
     """
     Add borders to img for a "valid" border pattern according to "window_size" and
     "subdivisions".
-    Image is an np array of shape (x, y, nb_channels).
+    Image is an np array of shape (y, x, nb_channels).
     """
     aug = int(round(window_size * (1 - 1.0/subdivisions)))
     more_borders = ((aug, aug), (aug, aug), (0, 0))
@@ -90,7 +90,7 @@ def _pad_img(img, window_size, subdivisions):
 def _unpad_img(padded_img, window_size, subdivisions):
     """
     Undo what's done in the `_pad_img` function.
-    Image is an np array of shape (x, y, nb_channels).
+    Image is an np array of shape (y, x, nb_channels).
     """
     aug = int(round(window_size * (1 - 1.0/subdivisions)))
     ret = padded_img[
@@ -104,7 +104,7 @@ def _unpad_img(padded_img, window_size, subdivisions):
 
 def _rotate_mirror_do(im):
     """
-    Duplicate an np array (image) of shape (x, y, nb_channels) 8 times, in order
+    Duplicate an np array (image) of shape (y, x, nb_channels) 8 times, in order
     to have all the possible rotations and mirrors of that image that fits the
     possible 90 degrees rotations.
 
@@ -126,7 +126,7 @@ def _rotate_mirror_do(im):
 
 def _rotate_mirror_undo(im_mirrs):
     """
-    merges a list of 8 np arrays (images) of shape (x, y, nb_channels) generated
+    merges a list of 8 np arrays (images) of shape (y, x, nb_channels) generated
     from the `_rotate_mirror_do` function. Each images might have changed and
     merging them implies to rotated them back in order and average things out.
 

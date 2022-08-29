@@ -4,13 +4,12 @@ import math
 import statistics
 import sys
 import numpy as np
-from skimage import measure
 from tqdm import tqdm
 from scipy import ndimage as ndi
 from skimage import morphology
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import watershed
-from skimage.filters import rank, threshold_otsu, gaussian
+from skimage.filters import rank, threshold_otsu
 from scipy.ndimage import rotate
 from skimage.measure import label
 from skimage.io import imsave, imread
@@ -22,7 +21,7 @@ from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
 
 from engine.metrics import jaccard_index_numpy
-from utils.util import save_tif, apply_binary_mask, pad_and_reflect
+from utils.util import apply_binary_mask, pad_and_reflect, normalize
 from data.data_3D_manipulation import crop_3D_data_with_overlap
 
 
@@ -34,10 +33,10 @@ def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
        Parameters
        ----------
        X : 4D Numpy array
-           Original data to guide the watershed. E.g. ``(img_number, x, y, channels)``.
+           Original data to guide the watershed. E.g. ``(img_number, y, x, channels)``.
 
        Y_pred : 4D Numpy array
-           Predicted data to refine the boundaries. E.g. ``(img_number, x, y, channels)``.
+           Predicted data to refine the boundaries. E.g. ``(img_number, y, x, channels)``.
 
        erode : bool, optional
            To extract the sure foreground eroding the artifacts instead of doing with distanceTransform.
@@ -48,7 +47,7 @@ def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
        Returns
        -------
        Array : 4D Numpy array
-           Refined boundaries of the predictions. E.g. ``(img_number, x, y, channels)``.
+           Refined boundaries of the predictions. E.g. ``(img_number, y, x, channels)``.
 
        Examples
        --------
@@ -134,10 +133,10 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
        Parameters
        ----------
        X : 4D Numpy array
-           Original data to guide the watershed. E.g. ``(img_number, x, y, channels)``.
+           Original data to guide the watershed. E.g. ``(img_number, y, x, channels)``.
 
        Y_pred : 4D Numpy array
-           Predicted data to refine the boundaries. E.g. ``(img_number, x, y, channels)``.
+           Predicted data to refine the boundaries. E.g. ``(img_number, y, x, channels)``.
 
        save_marks_dir : str, optional
            Directory to save the markers used to make the watershed. Useful for debugging.
@@ -145,7 +144,7 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
        Returns
        -------
        Array : 4D Numpy array
-           Refined boundaries of the predictions. E.g. ``(img_number, x, y, channels)``.
+           Refined boundaries of the predictions. E.g. ``(img_number, y, x, channels)``.
     """
 
     if save_marks_dir is not None:
@@ -386,7 +385,7 @@ def calculate_z_filtering(data, mf_size=5):
        Parameters
        ----------
        data : 4D Numpy array
-           Data to apply the filter to. E.g. ``(num_of_images, x, y, channels)``.
+           Data to apply the filter to. E.g. ``(num_of_images, y, x, channels)``.
 
        mf_size : int, optional
            Size of the median filter. Must be an odd number.
@@ -394,7 +393,7 @@ def calculate_z_filtering(data, mf_size=5):
        Returns
        -------
        Array : 4D Numpy array
-           Z filtered data. E.g. ``(num_of_images, x, y, channels)``.
+           Z filtered data. E.g. ``(num_of_images, y, x, channels)``.
     """
 
     out_data = np.copy(data)
@@ -403,11 +402,11 @@ def calculate_z_filtering(data, mf_size=5):
     if mf_size % 2 == 0:
        mf_size += 1
 
-    for i in range(data.shape[2]):
-        sl = (data[:, :, i]).astype(np.float32)
+    for i in range(data.shape[0]):
+        sl = (data[i]).astype(np.float32)
         sl = cv2.medianBlur(sl, mf_size)
         sl = np.expand_dims(sl,-1) if sl.ndim == 2 else sl
-        out_data[:, :, i] = sl
+        out_data[i] = sl
 
     return out_data
 
@@ -418,7 +417,7 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=1):
        Parameters
        ----------
        o_img : 3D Numpy array
-           Input image. E.g. ``(x, y, channels)``.
+           Input image. E.g. ``(y, x, channels)``.
 
        pred_func : function
            Function to make predictions.
@@ -432,7 +431,7 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=1):
        Returns
        -------
        out : 3D Numpy array
-           Output image ensembled. E.g. ``(x, y, channels)``.
+           Output image ensembled. E.g. ``(y, x, channels)``.
 
        Examples
        --------
@@ -1149,10 +1148,10 @@ def voronoi_on_mask(data, mask, save_dir, filenames, th=0.3, thres_small=128, ve
        Parameters
        ----------
        data : 4D Numpy array
-           Data to apply Voronoi. ``(num_of_images, z, x, y)`` e.g. ``(1, 397, 1450, 2000)``
+           Data to apply Voronoi. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
 
        mask : 5D Numpy array
-           Data mask to determine which points need to be proccessed. ``(num_of_images, z, x, y, channels)`` e.g.
+           Data mask to determine which points need to be proccessed. ``(num_of_images, z, y, x, channels)`` e.g.
            ``(1, 397, 1450, 2000, 3)``.
 
        save_dir :  str, optional
@@ -1173,7 +1172,7 @@ def voronoi_on_mask(data, mask, save_dir, filenames, th=0.3, thres_small=128, ve
        Returns
        -------
        data : 4D Numpy array
-           Image with Voronoi applied. ``(num_of_images, z, x, y)`` e.g. ``(1, 397, 1450, 2000)``
+           Image with Voronoi applied. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
 
     """
     if data.ndim != 4:
@@ -1238,10 +1237,10 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
        Parameters
        ----------
        data : 4D Numpy array
-           Data to apply Voronoi. ``(num_of_images, z, x, y)`` e.g. ``(1, 397, 1450, 2000)``
+           Data to apply Voronoi. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
 
        mask : 5D Numpy array
-           Data mask to determine which points need to be proccessed. ``(num_of_images, z, x, y, channels)`` e.g.
+           Data mask to determine which points need to be proccessed. ``(num_of_images, z, y, x, channels)`` e.g.
            ``(1, 397, 1450, 2000, 3)``.
 
        save_dir :  str, optional
@@ -1262,7 +1261,7 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
        Returns
        -------
        data : 4D Numpy array
-           Image with Voronoi applied. ``(num_of_images, z, x, y)`` e.g. ``(1, 397, 1450, 2000)``
+           Image with Voronoi applied. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
     """
 
     if data.ndim != 4:

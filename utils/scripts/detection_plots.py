@@ -1,12 +1,9 @@
-import os
 import csv
 import sys
 import numpy as np
 from skimage.io import imread
 from tqdm import tqdm
-from scipy.ndimage.morphology import binary_erosion, binary_dilation
 from skimage.feature import peak_local_max
-from skimage.measure import label
 from tqdm import tqdm
 
 code_dir = "/home/user/BiaPy"

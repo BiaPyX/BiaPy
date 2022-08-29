@@ -1,9 +1,6 @@
-import tensorflow as tf
-from tensorflow.keras import backend as K
 from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import (Dropout, SpatialDropout2D, Conv2D, Conv2DTranspose, MaxPooling2D, concatenate,
-                                     ELU, BatchNormalization, Activation, ZeroPadding2D, multiply, Lambda, UpSampling2D,
-                                     Add, Multiply)
+                                     BatchNormalization, Activation, Add, Multiply)
 
 
 def Attention_U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],

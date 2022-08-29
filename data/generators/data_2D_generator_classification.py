@@ -22,10 +22,10 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
        Parameters
        ----------
        X : 4D Numpy array
-           Data. E.g. ``(num_of_images, x, y, channels)``.
+           Data. E.g. ``(num_of_images, y, x, channels)``.
 
        Y : 4D Numpy array
-           Mask data. E.g. ``(num_of_images, x, y, 1)``.
+           Mask data. E.g. ``(num_of_images, y, x, 1)``.
 
        data_path : List of str, optional
           If ``in_memory`` is ``True`` this should contain the path to load images.
@@ -263,7 +263,7 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
            Returns
            -------
            batch_x : 4D Numpy array
-               Corresponding X elements of the batch. E.g. ``(batch_size, x, y, channels)``.
+               Corresponding X elements of the batch. E.g. ``(batch_size, y, x, channels)``.
 
            batch_y : List of ints
                Corresponding classes of X. E.g. ``(batch_size)``.
@@ -353,15 +353,15 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
            Parameters
            ----------
            image : 3D Numpy array
-               Image to transform. E.g. ``(x, y, channels)``.
+               Image to transform. E.g. ``(y, x, channels)``.
 
            e_img : D Numpy array
-               Extra image to help transforming ``image``. E.g. ``(x, y, channels)``.
+               Extra image to help transforming ``image``. E.g. ``(y, x, channels)``.
 
            Returns
            -------
            trans_image : 3D Numpy array
-               Transformed image. E.g. ``(x, y, channels)``.
+               Transformed image. E.g. ``(y, x, channels)``.
         """
 
         # Apply transformations to the image
@@ -374,7 +374,7 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
            Parameters
            ----------
            im : 3D Numpy array
-               Image to be modified. E. g. ``(x, y, channels)``
+               Image to be modified. E. g. ``(y, x, channels)``
 
            grid_width : int, optional
                Grid's width.
@@ -418,7 +418,7 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
            Returns
            -------
            batch_x : 4D Numpy array
-               Batch of data. E.g. ``(num_examples, x, y, channels)``.
+               Batch of data. E.g. ``(num_examples, y, x, channels)``.
 
            batch_y : 4D Numpy array
                Corresponding classes of X. E.g. ``(batch_size)``.

@@ -1,6 +1,4 @@
-import tensorflow as tf
-from tensorflow.keras.layers import (Dropout, SpatialDropout3D, Conv3D, Conv3DTranspose, MaxPooling3D, concatenate,
-                                     ELU, BatchNormalization, Activation, ZeroPadding3D)
+from tensorflow.keras.layers import (Conv3D, Conv3DTranspose, MaxPooling3D, concatenate, BatchNormalization, Activation)
 from tensorflow.keras import Model, Input
 
 
@@ -91,6 +89,6 @@ def Vanilla_U_Net_3D(image_shape, activation='relu', feature_maps=[32, 64, 128, 
     outputs = Conv3D(n_classes, (1, 1, 1), activation='sigmoid') (x)
     
     # Loss type 
-    model = Model(inputs=[inputs, weights], outputs=[outputs]) 
+    model = Model(inputs=[inputs], outputs=[outputs]) 
     
     return model

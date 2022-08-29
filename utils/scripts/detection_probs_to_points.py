@@ -2,7 +2,6 @@ from scipy.spatial import cKDTree
 import argparse
 import pandas as pd
 from skimage.io import imread
-import numpy as np
 from skimage.feature import peak_local_max
 import time
 
