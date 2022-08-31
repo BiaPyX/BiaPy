@@ -220,10 +220,14 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
             Y_train = np.vstack((Y_train, e_Y_train))
 
     s = X_train.shape if not random_crops_in_DA else X_train[0].shape
+    sm = Y_train.shape if not random_crops_in_DA else Y_train[0].shape
     if create_val:
         sv = X_val.shape if not random_crops_in_DA else X_val[0].shape
+        svm = Y_val.shape if not random_crops_in_DA else Y_val[0].shape
         print("*** Loaded train data shape is: {}".format(s))
+        print("*** Loaded train mask shape is: {}".format(sm))
         print("*** Loaded validation data shape is: {}".format(sv))
+        print("*** Loaded validation mask shape is: {}".format(svm))
         print("### END LOAD ###")
 
         return X_train, Y_train, X_val, Y_val, t_filenames
@@ -358,20 +362,20 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
     # Y
     step_y = int((crop_shape[0]-padding[0]*2)*overlap_y)
     crops_per_y = math.ceil(data.shape[1]/step_y)
-    last_y = 0 if crops_per_y == 1 else (((crops_per_y-1)*step_y)+crop_shape[0])-padded_data.shape[1] 
-     
+    last_y = 0 if crops_per_y == 1 else (((crops_per_y-1)*step_y)+crop_shape[0])-padded_data.shape[1]
+
     # X
     step_x = int((crop_shape[1]-padding[1]*2)*overlap_x)
     crops_per_x = math.ceil(data.shape[2]/step_x)
-    last_x = 0 if crops_per_x == 1 else (((crops_per_x-1)*step_x)+crop_shape[1])-padded_data.shape[2] 
+    last_x = 0 if crops_per_x == 1 else (((crops_per_x-1)*step_x)+crop_shape[1])-padded_data.shape[2]
 
     # Real overlap calculation for printing
     real_ov_y = ((crop_shape[0]-padding[0]*2)-step_y)/(crop_shape[0]-padding[0]*2)
     real_ov_x = ((crop_shape[1]-padding[1]*2)-step_x)/(crop_shape[1]-padding[1]*2)
-    
+
     if verbose:
         print("Real overlapping (%): {}".format(real_ov_x,real_ov_y))
-        print("Real overlapping (pixels): {}".format((crop_shape[1]-padding[1]*2)*real_ov_x, 
+        print("Real overlapping (pixels): {}".format((crop_shape[1]-padding[1]*2)*real_ov_x,
             (crop_shape[0]-padding[0]*2)*real_ov_y))
         print("{} patches per (x,y) axis".format(crops_per_x,crops_per_y))
 
@@ -379,11 +383,11 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
     cropped_data = np.zeros((total_vol,) + crop_shape, dtype=data.dtype)
     if data_mask is not None:
         cropped_data_mask = np.zeros((total_vol,)+crop_shape[:2]+(data_mask.shape[-1],), dtype=data_mask.dtype)
-    
+
     c = 0
     for z in range(data.shape[0]):
         for y in range(crops_per_y):
-            for x in range(crops_per_x): 
+            for x in range(crops_per_x):
                 d_y = 0 if (y*step_y+crop_shape[1]) < padded_data.shape[1] else last_y
                 d_x = 0 if (x*step_x+crop_shape[0]) < padded_data.shape[2] else last_x
 
@@ -552,7 +556,7 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 
     padding = tuple(padding[i] for i in [1, 0])
-    
+
     # Remove the padding
     pad_input_shape = data.shape
     data = data[:, padding[0]:data.shape[1]-padding[0], padding[1]:data.shape[2]-padding[1]]
@@ -569,7 +573,7 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
     # Calculate overlapping variables
     overlap_x = 1 if overlap[0] == 0 else 1-overlap[0]
     overlap_y = 1 if overlap[1] == 0 else 1-overlap[1]
-    
+
     padded_data_shape = [original_shape[1]+2*padding[0], original_shape[2]+2*padding[1]]
 
     # Y
@@ -587,7 +591,7 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
     real_ov_x = ((pad_input_shape[2]-padding[1]*2)-step_x)/(pad_input_shape[2]-padding[1]*2)
     if verbose:
         print("Real overlapping (%): {}".format((real_ov_x,real_ov_y)))
-        print("Real overlapping (pixels): {}".format(((pad_input_shape[2]-padding[1]*2)*real_ov_x, 
+        print("Real overlapping (pixels): {}".format(((pad_input_shape[2]-padding[1]*2)*real_ov_x,
             (pad_input_shape[1]-padding[0]*2)*real_ov_y)))
         print("{} patches per (x,y) axis".format((crops_per_x,crops_per_y)))
 
@@ -612,7 +616,7 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
                     crop_grid[y*step_y+data.shape[1]-d_y-1, x*step_x-d_x:x*step_x+data.shape[2]-d_x] = 1
 
                 c += 1
-    
+
     merged_data = np.true_divide(merged_data, ov_map_counter).astype(data.dtype)
     if data_mask is not None:
         merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter).astype(data_mask.dtype)
@@ -771,7 +775,7 @@ def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=F
            Weight map of the given image. E.g. ``(y, x, channels)``.
 
        scale : int, optional
-           Scale factor the second image given. 
+           Scale factor the second image given.
 
        Returns
        -------
