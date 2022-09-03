@@ -38,35 +38,17 @@ class Engine(object):
                 if cfg.LOSS.TYPE == 'MASKED_BCE':
                     check_masks(cfg.DATA.TRAIN.MASK_PATH, n_classes=3)
                 else:
-                    check_masks(cfg.DATA.TRAIN.MASK_PATH)
+                    check_masks(cfg.DATA.TRAIN.MASK_PATH, n_classes=cfg.MODEL.N_CLASSES+1)
                 if not cfg.DATA.VAL.FROM_TRAIN:
                     if cfg.LOSS.TYPE == 'MASKED_BCE':
                         check_masks(cfg.DATA.VAL.MASK_PATH, n_classes=3)
                     else:
-                        check_masks(cfg.DATA.VAL.MASK_PATH)
+                        check_masks(cfg.DATA.VAL.MASK_PATH, n_classes=cfg.MODEL.N_CLASSES+1)
             if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT and cfg.DATA.TEST.CHECK_DATA:
                 if cfg.LOSS.TYPE == 'MASKED_BCE':
                     check_masks(cfg.DATA.TEST.MASK_PATH, n_classes=3)
                 else:
-                    check_masks(cfg.DATA.TEST.MASK_PATH)
-
-            # Adjust the metric used accordingly to the number of classes. This code is planned to be used in a binary
-            # classification problem, so the function 'jaccard_index_softmax' will only calculate the IoU for the
-            # foreground class (channel 1)
-            self.metric = "jaccard_index_softmax" if cfg.MODEL.N_CLASSES > 1 else "jaccard_index"
-            if cfg.LOSS.TYPE == 'MASKED_BCE':
-                self.metric = "masked_jaccard_index"
-        elif cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-            if  cfg.DATA.CHANNELS == 'Dv2':
-                self.metric = "mse"
-            else:
-                self.metric = "jaccard_index_instances"
-        elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-            self.metric = "accuracy"
-        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-            self.metric = "PSNR"
-        else:
-            raise ValueError("Undefined 'PROBLEM.TYPE' {}".format(cfg.PROBLEM.TYPE))
+                    check_masks(cfg.DATA.TEST.MASK_PATH, n_classes=cfg.MODEL.N_CLASSES+1)
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             train_filenames = prepare_instance_data(cfg)
@@ -201,7 +183,7 @@ class Engine(object):
               "#  BUILD MODEL  #\n"
               "#################\n")
         self.model = build_model(cfg, self.job_identifier)
-        prepare_optimizer(cfg, self.model)
+        self.metric = prepare_optimizer(cfg, self.model)
 
 
     def train(self):

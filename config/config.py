@@ -379,12 +379,8 @@ class Config:
         _C.MODEL.KERNEL_INIT = 'he_normal'
         # Activation function to use
         _C.MODEL.ACTIVATION = 'elu'
-        # Number of classes. If the value > 1 a categorical problem is assumed so softmax/argmax functions may be used.
+        # Number of classes without counting the background class (that should be using 0 label)
         _C.MODEL.N_CLASSES = 1
-        # Number of output channels. This is not the same as '_C.MODEL.N_CLASSES' because here a categorical problem is
-        # not considerer. It defines just a model with more than one output. Can only be used with
-        # '_C.MODEL.ARCHITECTURE' in ['unet', 'resunet', 'seunet', 'attention_unet'] and with '_C.MODEL.N_CLASSES' = 1
-        _C.MODEL.OUT_CHANNELS = 1
         # Downsampling to be made in Z. This value will be the third integer of the MaxPooling operation. When facing
         # anysotropic datasets set it to get better performance
         _C.MODEL.Z_DOWN = 1
@@ -398,7 +394,7 @@ class Config:
         _C.MODEL.MLP_HIDDEN_UNITS = [2048, 1024]
         _C.MODEL.NUM_HEADS = 6
         _C.MODEL.OUT_DIM = 1
-        
+        _C.MODEL.LAST_ACTIVATION = 'sigmoid' # Options 'sigmoid' or 'softmax'
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss

@@ -109,16 +109,20 @@ class Base_Workflow(metaclass=ABCMeta):
                     else:
                         p = ensemble16_3d_predictions(X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                                 pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
-                    pred.append(np.expand_dims(p, 0))
+                    pred.append(p)
             else:
                 l = int(math.ceil(X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
                 for k in tqdm(range(l), leave=False):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < X.shape[0] else X.shape[0]
                     p = self.model.predict(X[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
-                    pred.append(p)
+                    pred.append(p[0])
+
+            # Delete X as in 3D there is no full image 
+            if self.cfg.PROBLEM.NDIM == '3D': 
+                del X, p
 
             # Reconstruct the predictions
-            pred = np.concatenate(pred)
+            pred = np.array(pred)
             if original_data_shape[1:] != t_patch_size:
                 if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
                 f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap

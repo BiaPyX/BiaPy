@@ -4,7 +4,8 @@ from tensorflow.keras.layers import (Dropout, SpatialDropout3D, Conv3D, Conv3DTr
 
 
 def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
-                       spatial_dropout=False, batch_norm=False, k_init='he_normal', z_down=2, n_classes=1):
+                       spatial_dropout=False, batch_norm=False, k_init='he_normal', z_down=2, n_classes=1, 
+                       last_act='sigmoid'):
     """Create 3D U-Net with Attention blocks.
 
        Based on `Attention U-Net: Learning Where to Look for the Pancreas <https://arxiv.org/abs/1804.03999>`_.
@@ -37,6 +38,9 @@ def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128,
 
        n_classes: int, optional
            Number of classes.
+
+       last_act : str, optional
+           Name of the last activation layer.
 
        Returns
        -------
@@ -130,7 +134,7 @@ def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128,
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
 
-    outputs = Conv3D(n_classes, (1, 1, 1), activation='sigmoid') (x)
+    outputs = Conv3D(n_classes, (1, 1, 1), activation=last_act) (x)
 
     model = Model(inputs=[inputs], outputs=[outputs])
 

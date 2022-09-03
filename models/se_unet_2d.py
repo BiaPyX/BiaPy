@@ -6,7 +6,7 @@ from tensorflow.keras import Model, Input
 
 
 def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256], drop_values=[0.1,0.1,0.2,0.2,0.3],
-                spatial_dropout=False, batch_norm=False, k_init='he_normal', n_classes=1):
+                spatial_dropout=False, batch_norm=False, k_init='he_normal', n_classes=1, last_act='sigmoid'):
     """Create 2D U-Net with squeeze-excite blocks.
         
        Reference `Squeeze and Excitation Networks <https://arxiv.org/abs/1709.01507>`_.
@@ -37,7 +37,10 @@ def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 25
                                                                            
        n_classes: int, optional
            Number of classes.
-                                                                           
+
+       last_act : str, optional
+           Name of the last activation layer.
+
        Returns
        -------                                                                 
        model : Keras model
@@ -116,7 +119,7 @@ def SE_U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 25
         x = Activation(activation) (x)
         x = squeeze_excite_block(x)
 
-    outputs = Conv2D(n_classes, (1, 1), activation='sigmoid') (x)
+    outputs = Conv2D(n_classes, (1, 1), activation=last_act) (x)
     
     model = Model(inputs=[inputs], outputs=[outputs])
 

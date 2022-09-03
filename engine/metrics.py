@@ -98,6 +98,7 @@ def jaccard_index(y_true, y_pred, t=0.5):
        jac : Tensor
            Jaccard index value
     """
+
     y_pred_ = tf.cast(y_pred > t, dtype=tf.int32)
     y_true = tf.cast(y_true, dtype=tf.int32)
 
@@ -110,43 +111,9 @@ def jaccard_index(y_true, y_pred, t=0.5):
     return jac
 
 
-def jaccard_index_without_background(y_true, y_pred, t=0.5):
-    """Define Jaccard index.
-
-       Parameters
-       ----------
-       y_true : Tensor
-           Ground truth masks.
-
-       y_pred : Tensor
-           Predicted masks.
-
-       t : float, optional
-           Threshold to be applied.
-
-       Returns
-       -------
-       jac : Tensor
-           Jaccard index value
-    """
-
-    if y_true.ndim != y_pred.ndim:
-        raise ValueError("Dimension mismatch: {} and {} provided".format(y_true.shape, y_pred.shape))
-
-    _y_pred = tf.cast(y_pred[...,1:] > t, dtype=tf.int32)
-    _y_true = tf.cast(y_true[...,1:], dtype=tf.int32)
-
-    TP = tf.math.count_nonzero(_y_pred * _y_true)
-    FP = tf.math.count_nonzero(_y_pred * (_y_true - 1))
-    FN = tf.math.count_nonzero((_y_pred - 1) * _y_true)
-
-    jac = tf.cond(tf.greater((TP + FP + FN), 0), lambda: TP / (TP + FP + FN), lambda: K.cast(0.000, dtype='float64'))
-
-    return jac
-
-
 def jaccard_index_softmax(y_true, y_pred, t=0.5):
-    """Define Jaccard index.
+    """Define Jaccard index. Assumes that the 0 channel is background so does not 
+       compute the IoU on it. 
 
        Parameters
        ----------
@@ -171,13 +138,17 @@ def jaccard_index_softmax(y_true, y_pred, t=0.5):
     y_true_ = tf.cast(y_true, dtype=tf.int32)
     y_true_ = tf.math.argmax(y_true_, axis=-1)
 
-    TP = tf.math.count_nonzero(y_pred_ * y_true_)
-    FP = tf.math.count_nonzero(y_pred_ * (y_true_ - 1))
-    FN = tf.math.count_nonzero((y_pred_ - 1) * y_true_)
+    tot_jac = K.cast(0.000, dtype='float64')
+    for i in range(0,y_pred.shape[-1]):
+        y_pred_[y_pred_== (i+1)] = 1
+        y_true_[y_true_== (i+1)] = 1
+        TP = tf.math.count_nonzero(y_pred_ * y_true_)
+        FP = tf.math.count_nonzero(y_pred_ * (y_true_ - 1))
+        FN = tf.math.count_nonzero((y_pred_ - 1) * y_true_)
 
-    jac = tf.cond(tf.greater((TP + FP + FN), 0), lambda: TP / (TP + FP + FN), lambda: K.cast(0.000, dtype='float64'))
+    tot_jac += tf.cond(tf.greater((TP + FP + FN), 0), lambda: TP / (TP + FP + FN), lambda: K.cast(0.000, dtype='float64'))
 
-    return jac
+    return tot_jac/(y_pred.shape[-1]-1)
 
 
 def IoU_instances(t=0.5, binary_channels=2):

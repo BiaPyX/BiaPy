@@ -26,13 +26,12 @@ def build_model(cfg, job_identifier):
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and cfg.MODEL.ARCHITECTURE != 'unet' and cfg.MODEL.ARCHITECTURE != 'resunet':
         raise ValueError("Not implemented pipeline option: instance segmentation models adapted are 'unet' or 'resunet'")
 
-    if cfg.MODEL.OUT_CHANNELS > 1 and cfg.MODEL.N_CLASSES > 1:
-        raise ValueError("Only one between 'OUT_CHANNELS' and 'N_CLASSES' can be > 1. Please read the difference in "
-                         "config.py file")
-
-    if cfg.MODEL.OUT_CHANNELS > 1 and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
-        raise ValueError("'OUT_CHANNELS' > 1 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'seunet', 'attention_unet']")
-
+    if cfg.MODEL.N_CLASSES > 1 and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
+        raise ValueError("'MODEL.N_CLASSES' > 1 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'seunet', 'attention_unet']")
+    
+    if cfg.MODEL.LAST_ACTIVATION not in ['softmax', 'sigmoid']:
+        raise ValueError("'MODEL.LAST_ACTIVATION' need to be in ['softmax','sigmoid']. Provided {}".format(cfg.MODEL.LAST_ACTIVATION))
+    
     # Import the model
     if cfg.MODEL.ARCHITECTURE in ['fcn32', 'fcn8']:
         modelname = 'fcn_vgg'
@@ -49,7 +48,7 @@ def build_model(cfg, job_identifier):
     if cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'seunet', 'attention_unet']:
         args = dict(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION, feature_maps=cfg.MODEL.FEATURE_MAPS,
                 drop_values=cfg.MODEL.DROPOUT_VALUES, spatial_dropout=cfg.MODEL.SPATIAL_DROPOUT,
-                batch_norm=cfg.MODEL.BATCH_NORMALIZATION, k_init=cfg.MODEL.KERNEL_INIT)
+                batch_norm=cfg.MODEL.BATCH_NORMALIZATION, k_init=cfg.MODEL.KERNEL_INIT, last_act=cfg.MODEL.LAST_ACTIVATION)
         if cfg.MODEL.ARCHITECTURE == 'unet':
             f_name = U_Net_3D if cfg.PROBLEM.NDIM == '3D' else U_Net_2D
         elif cfg.MODEL.ARCHITECTURE == 'resunet':
@@ -62,7 +61,7 @@ def build_model(cfg, job_identifier):
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             args['output_channels'] = cfg.DATA.CHANNELS
         else:
-            args['n_classes'] = cfg.MODEL.N_CLASSES if cfg.MODEL.OUT_CHANNELS == 1 else cfg.MODEL.OUT_CHANNELS
+            args['n_classes'] = cfg.MODEL.N_CLASSES
         if cfg.PROBLEM.NDIM == '3D':
             args['z_down'] = cfg.MODEL.Z_DOWN
 

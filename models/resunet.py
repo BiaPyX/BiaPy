@@ -4,7 +4,7 @@ from tensorflow.keras.layers import (Dropout, SpatialDropout2D, Conv2D, Conv2DTr
 
 
 def ResUNet_2D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], drop_values=[0.1,0.1,0.1,0.1,0.1],
-               spatial_dropout=False, batch_norm=False, k_init='he_normal', n_classes=1):
+               spatial_dropout=False, batch_norm=False, k_init='he_normal', n_classes=1, last_act='sigmoid'):
     """Create 2D Residual_U-Net.
 
        Parameters
@@ -33,6 +33,9 @@ def ResUNet_2D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
        n_classes: int, optional
            Number of classes.
 
+       last_act : str, optional
+           Name of the last activation layer.
+           
        Returns
        -------
        model : Keras model
@@ -65,7 +68,7 @@ def ResUNet_2D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
 
     x = level_block(inputs, depth, fm, 3, activation, k_init, drop_values, spatial_dropout, batch_norm, True)
 
-    outputs = Conv2D(n_classes, (1, 1), activation='sigmoid') (x)
+    outputs = Conv2D(n_classes, (1, 1), activation=last_act) (x)
 
     model = Model(inputs=[inputs], outputs=[outputs])
 

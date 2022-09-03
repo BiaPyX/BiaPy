@@ -1042,8 +1042,10 @@ def check_masks(path, n_classes=2):
         img = imread(os.path.join(path, ids[i]))
         values, _ = np.unique(img, return_counts=True)
         if len(values) > n_classes :
-            raise ValueError("Error: given masks are not binary. Please correct the images before training. "
-                             "(image: {})\nValues: {}".format(os.path.join(path, ids[i]), values))
+            raise ValueError("Error: given mask ({}) has more classes than specified in 'MODEL.N_CLASSES'."
+                             "That variable value need to be set without counting with background class. " 
+                             " E.g. if mask has [0,1,2] 'MODEL.N_CLASSES' should be 2.\n"
+                             "Values found: {}".format(os.path.join(path, ids[i]), values))
         if not (values == range(len(values))).all() and len(values) > 2:
             raise ValueError("Mask values need to be consecutive. E.g. [0,1,2,3...]. Provided: {}"
                 .format(values))
@@ -1415,12 +1417,10 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
                     from PIL.TiffTags import TAGS
                     img_aux = Image.open(os.path.join(data_dir, id_))
                     meta_dict = {TAGS[key] : img_aux.tag[key] for key in img_aux.tag_v2}
-                    print(meta_dict)
                     axis = meta_dict['ImageDescription'][0].split('\n')[-2].split('=')[-1]
                     ax = {}
                     for k, c in enumerate(axis):
                         ax[c] = k 
-                    print(ax) 
                     del img_aux 
                 if 'Z' in ax:
                     img = img.transpose((ax['Z'],ax['Y'],ax['X'],ax['C']))
@@ -1625,7 +1625,7 @@ def save_npy_files(X, data_dir=None, filenames=None, verbose=True):
        ----------
        X : 4D/5D numpy array
            Data to save as images. The first dimension must be the number of images. E.g.
-           ``(num_of_images, x, y, channels)`` or ``(num_of_images, z, x, y, channels)``.
+           ``(num_of_images, x, y, channels)`` or ``(num_of_images, z, y, x, channels)``.
 
        data_dir : str, optional
            Path to store X images.

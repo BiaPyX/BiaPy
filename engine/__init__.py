@@ -1,3 +1,4 @@
+from multiprocessing.sharedctypes import Value
 import os
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping
@@ -30,39 +31,60 @@ def prepare_optimizer(cfg, model):
         opt = tf.keras.optimizers.Adam(lr=cfg.TRAIN.LR, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
 
     # Compile the model
+    metric_name = ''
     if cfg.PROBLEM.TYPE == "CLASSIFICATION":
-        model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=["accuracy"])
+        metric_name = "accuracy"
+        model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=[metric_name])
     elif cfg.LOSS.TYPE == "CE" and cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", 'DETECTION']:
-        if cfg.MODEL.N_CLASSES > 1:
-            model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index_softmax])
-        else:
-            model.compile(optimizer=opt, loss='binary_crossentropy', metrics=[jaccard_index])
+        if cfg.MODEL.N_CLASSES == 0:
+            raise ValueError("'MODEL.N_CLASSES' can not be 0")
+        elif cfg.MODEL.N_CLASSES == 1 or cfg.MODEL.N_CLASSES == 2: # Binary case
+            fname = jaccard_index
+            loss_name = 'binary_crossentropy'
+        else: # Multiclass
+            # Use softmax jaccard if it is not going to be done in the last layer of the model
+            if cfg.MODEL.LAST_ACTIVATION != 'softmax':
+                fname = jaccard_index_softmax  
+                loss_name = 'categorical_crossentropy'
+                metric_name = "jaccard_index_softmax"
+            else:
+                fname = jaccard_index
+                metric_name = "jaccard_index"
+                loss_name = 'sparse_categorical_crossentropy'
+
+        model.compile(optimizer=opt, loss=loss_name, metrics=[fname])
     elif cfg.LOSS.TYPE == "MASKED_BCE" and cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", 'DETECTION']:
         if cfg.MODEL.N_CLASSES > 1:
             raise ValueError("Not implemented pipeline option: N_CLASSES > 1 and MASKED_BCE")
         else:
+            metric_name = "masked_jaccard_index"
             model.compile(optimizer=opt, loss=masked_bce_loss, metrics=[masked_jaccard_index])
     elif cfg.LOSS.TYPE == "CE" and cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         if cfg.MODEL.N_CLASSES > 1:
             raise ValueError("Not implemented pipeline option: N_CLASSES > 1 and INSTANCE_SEG")
         else:
             if cfg.DATA.CHANNELS == "Dv2":
+                metric_name = "mse"
                 model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
-                                metrics=["mse"])
+                                metrics=[metric_name])
             else:
                 if len(cfg.DATA.CHANNEL_WEIGHTS) != len(str(cfg.DATA.CHANNELS)):
                     raise ValueError("'DATA.CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'DATA.CHANNELS'. "
                                     "E.g. 'DATA.CHANNELS'='BC' 'DATA.CHANNEL_WEIGHTS'=[1,0.5]. "
                                     "'DATA.CHANNELS'='BCD' 'DATA.CHANNEL_WEIGHTS'=[0.5,0.5,1]")
                 bin_channels = 2 if cfg.DATA.CHANNELS in ["BCD", "BCDv2", "BC", "BCM"] else 1
+                metric_name = "jaccard_index_instances"
                 model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
                               metrics=[IoU_instances(binary_channels=bin_channels)])
     elif cfg.LOSS.TYPE == "W_CE_DICE" and cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "DETECTION"]:
         model.compile(optimizer=opt, loss=weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33), metrics=[jaccard_index])
+        metric_name = "jaccard_index"
     elif cfg.LOSS.TYPE == "W_CE_DICE" and cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         raise ValueError("Not implemented pipeline option: LOSS.TYPE == W_CE_DICE and INSTANCE_SEG")
     elif cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
         model.compile(optimizer=opt, loss="mae", metrics=[PSNR])
+        metric_name = "PSNR"
+    return metric_name
 
 def build_callbacks(cfg):
     """Create training and validation generators.

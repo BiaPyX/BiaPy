@@ -4,7 +4,8 @@ from tensorflow.keras.layers import (Dropout, SpatialDropout3D, Conv3D, Conv3DTr
 
 
 def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
-             spatial_dropout=False, batch_norm=False, k_init='he_normal', z_down=2, n_classes=1):
+             spatial_dropout=False, batch_norm=False, k_init='he_normal', z_down=2, n_classes=1, 
+             last_act='sigmoid'):
     """Create 3D U-Net.
 
        Parameters
@@ -35,6 +36,9 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
 
        n_classes: int, optional
            Number of classes.
+
+       last_act : str, optional
+           Name of the last activation layer.
 
        Returns
        -------
@@ -115,7 +119,7 @@ def U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
 
-    outputs = Conv3D(n_classes, (1, 1, 1), activation='sigmoid') (x)
+    outputs = Conv3D(n_classes, (1, 1, 1), activation=last_act) (x)
 
     model = Model(inputs=[inputs], outputs=[outputs])
 

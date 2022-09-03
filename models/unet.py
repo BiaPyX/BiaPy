@@ -5,7 +5,7 @@ from tensorflow.keras.layers import (Dropout, SpatialDropout2D, Conv2D, Conv2DTr
 
 
 def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256], drop_values=[0.1,0.1,0.2,0.2,0.3],
-             spatial_dropout=False, batch_norm=False, k_init='he_normal', n_classes=1):
+             spatial_dropout=False, batch_norm=False, k_init='he_normal', n_classes=1, last_act='sigmoid'):
     """Create 2D U-Net.
 
        Parameters
@@ -34,6 +34,9 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
 
        n_classes: int, optional
            Number of classes.
+
+       last_act : str, optional
+           Name of the last activation layer.
 
        Returns
        -------
@@ -109,7 +112,7 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
 
-    outputs = Conv2D(n_classes, (1, 1), activation='sigmoid') (x)
+    outputs = Conv2D(n_classes, (1, 1), activation=last_act) (x)
 
     model = Model(inputs=[inputs], outputs=[outputs])
 
