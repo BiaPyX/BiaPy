@@ -34,7 +34,7 @@ class Engine(object):
             print("###################\n"
                   "#  SANITY CHECKS  #\n"
                   "###################\n")
-            if cfg.TRAIN.ENABLE:
+            if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
                 if cfg.LOSS.TYPE == 'MASKED_BCE':
                     check_masks(cfg.DATA.TRAIN.MASK_PATH, n_classes=3)
                 else:
@@ -44,7 +44,7 @@ class Engine(object):
                         check_masks(cfg.DATA.VAL.MASK_PATH, n_classes=3)
                     else:
                         check_masks(cfg.DATA.VAL.MASK_PATH)
-            if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT:
+            if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT and cfg.DATA.TEST.CHECK_DATA:
                 if cfg.LOSS.TYPE == 'MASKED_BCE':
                     check_masks(cfg.DATA.TEST.MASK_PATH, n_classes=3)
                 else:
@@ -224,7 +224,7 @@ class Engine(object):
 
         print("Loading model weights from h5_file: {}".format(self.cfg.PATHS.CHECKPOINT_FILE))
         self.model.load_weights(self.cfg.PATHS.CHECKPOINT_FILE)
-        
+
         image_counter = 0
         if self.cfg.TEST.POST_PROCESSING.BLENDING or self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or \
            self.cfg.TEST.POST_PROCESSING.Z_FILTERING:
@@ -251,7 +251,7 @@ class Engine(object):
               "###############\n")
         print("Making predictions on test data . . .")
 
-        # Process all the images 
+        # Process all the images
         it = iter(self.test_generator)
         for i in tqdm(range(len(self.test_generator))):
             batch = next(it)
@@ -269,13 +269,20 @@ class Engine(object):
                 if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                     if type(X) is tuple:
                         _X = X[j]
+                        
                         _Y = Y[j] if self.cfg.DATA.TEST.LOAD_GT else None
                     else:
                         _X = np.expand_dims(X[j],0)
                         _Y = np.expand_dims(Y[j],0) if self.cfg.DATA.TEST.LOAD_GT else None
                 else:
                     _X = np.expand_dims(X[j], 0)
-                    _Y = np.expand_dims(Y[j], 0)    
+                    _Y = np.expand_dims(Y[j], 0)
+
+                # Save memory if possible
+                if l_X == 1: 
+                    del X
+                    if self.cfg.DATA.TEST.LOAD_GT:
+                        del Y
 
                 # Process each image separately
                 workflow.process_sample(_X, _Y, self.test_filenames[(i*l_X)+j:(i*l_X)+j+1])
@@ -300,4 +307,4 @@ class Engine(object):
 
         workflow.print_stats(image_counter)
 
-        
+

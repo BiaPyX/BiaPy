@@ -126,10 +126,10 @@ class simple_data_generator(tf.keras.utils.Sequence):
                     if mask.ndim == 2: mask = np.expand_dims(mask, -1)
         
         if self.div_X_on_load: img = img/255
-        img = np.expand_dims(img, 0)
+        img = np.expand_dims(img, 0).astype(np.float32)
         if self.provide_Y:
             if self.div_Y_on_load: mask = mask/255
-            mask = np.expand_dims(mask, 0)
+            mask = np.expand_dims(mask, 0).astype(np.uint8)
 
         return img, mask
 

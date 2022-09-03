@@ -91,6 +91,8 @@ class Config:
 
         # Train
         _C.DATA.TRAIN = CN()
+        # Whether to check if the data mask contains correct values, e.g. same classes as defined
+        _C.DATA.TRAIN.CHECK_DATA = True
         _C.DATA.TRAIN.IN_MEMORY = True
         _C.DATA.TRAIN.PATH = os.path.join(_C.DATA.ROOT_DIR, 'train', 'x')
         _C.DATA.TRAIN.MASK_PATH = os.path.join(_C.DATA.ROOT_DIR, 'train', 'y')
@@ -115,6 +117,8 @@ class Config:
 
         # Test
         _C.DATA.TEST = CN()
+        # Whether to check if the data mask contains correct values, e.g. same classes as defined
+        _C.DATA.TEST.CHECK_DATA = True
         _C.DATA.TEST.IN_MEMORY = False
         # Wheter to load ground truth (GT)
         _C.DATA.TEST.LOAD_GT = False
@@ -434,6 +438,8 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.TEST = CN()
         _C.TEST.ENABLE = False
+        # Tries to reduce the memory footprint by separating crop/merge operations (it is slower). 
+        _C.TEST.REDUCE_MEMORY = False
         # Enable verbosity
         _C.TEST.VERBOSE = True
         # Make test-time augmentation. Infer over 8 possible rotations for 2D img and 16 when 3D

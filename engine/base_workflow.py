@@ -1,6 +1,6 @@
 import math
 import numpy as np
-from tqdm import tqdm 
+from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
 
 from utils.util import pad_and_reflect, apply_binary_mask, save_tif, check_downsample_division
@@ -29,7 +29,7 @@ class Base_Workflow(metaclass=ABCMeta):
         # Merging the image
         self.stats['iou_per_image'] = 0
         self.stats['ov_iou_per_image'] = 0
-        
+
         # Full image
         self.stats['loss'] = 0
         self.stats['iou'] = 0
@@ -38,75 +38,83 @@ class Base_Workflow(metaclass=ABCMeta):
         # Post processing
         self.stats['iou_post'] = 0
         self.stats['ov_iou_post'] = 0
-        
 
-    def process_sample(self, X, Y, filenames): 
+
+    def process_sample(self, X, Y, filenames):
         #################
         ### PER PATCH ###
         #################
         if self.cfg.TEST.STATS.PER_PATCH:
-            _X = X.copy()
-            _Y = Y.copy() if self.cfg.DATA.TEST.LOAD_GT else None
-            # Reflect data to complete the needed shape  
+            # Reflect data to complete the needed shape
             if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
-                reflected_orig_shape = _X.shape
-                _X = np.expand_dims(pad_and_reflect(_X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+                reflected_orig_shape = X.shape
+                X = np.expand_dims(pad_and_reflect(X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
                 if self.cfg.DATA.TEST.LOAD_GT:
-                    _Y = np.expand_dims(pad_and_reflect(_Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+                    Y = np.expand_dims(pad_and_reflect(Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
 
-            original_data_shape = _X.shape 
-           
+            original_data_shape = X.shape
+
             # Crop if necessary
             if self.cfg.PROBLEM.NDIM == '2D':
                 t_patch_size = self.cfg.DATA.PATCH_SIZE
             else:
                 t_patch_size = tuple(self.cfg.DATA.PATCH_SIZE[i] for i in [2, 1, 0, 3])
-            if _X.shape[1:] != t_patch_size:
+            if X.shape[1:] != t_patch_size:
                 if self.cfg.PROBLEM.NDIM == '2D':
-                    obj = crop_data_with_overlap(_X, self.cfg.DATA.PATCH_SIZE, data_mask=_Y,
+                    obj = crop_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, data_mask=Y,
                         overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
                         verbose=self.cfg.TEST.VERBOSE)
                     if self.cfg.DATA.TEST.LOAD_GT:
-                        _X, _Y = obj
+                        X, Y = obj
                     else:
-                        _X = obj
+                        X = obj
+                    del obj
                 else:
-                    if self.cfg.DATA.TEST.LOAD_GT: _Y = _Y[0]
-                    obj = crop_3D_data_with_overlap(_X[0], self.cfg.DATA.PATCH_SIZE, data_mask=_Y,
-                        overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
-                        verbose=self.cfg.TEST.VERBOSE, median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
-                    if self.cfg.DATA.TEST.LOAD_GT:
-                        _X, _Y = obj
+                    if self.cfg.DATA.TEST.LOAD_GT: Y = Y[0]
+                    if self.cfg.TEST.REDUCE_MEMORY:
+                        X = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE,
+                            overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
+                            verbose=self.cfg.TEST.VERBOSE, median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                        Y = crop_3D_data_with_overlap(Y, self.cfg.DATA.PATCH_SIZE,
+                            overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
+                            verbose=self.cfg.TEST.VERBOSE, median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
                     else:
-                        _X = obj
+                        obj = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, data_mask=Y,
+                            overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
+                            verbose=self.cfg.TEST.VERBOSE, median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                        if self.cfg.DATA.TEST.LOAD_GT:
+                            X, Y = obj
+                        else:
+                            X = obj
+                        del obj
 
             # Evaluate each patch
             if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
-                l = int(math.ceil(_X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
+                l = int(math.ceil(X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
                 for k in tqdm(range(l), leave=False):
-                    top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < _X.shape[0] else _X.shape[0]
+                    top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < X.shape[0] else X.shape[0]
                     score = self.model.evaluate(
-                        _X[k*self.cfg.TRAIN.BATCH_SIZE:top], _Y[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
+                        X[k*self.cfg.TRAIN.BATCH_SIZE:top], Y[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
                     self.stats['loss_per_crop'] += score[0]
                     self.stats['iou_per_crop'] += score[1]
-            self.stats['patch_counter'] += _X.shape[0]
+            self.stats['patch_counter'] += X.shape[0]
 
             # Predict each patch
             pred = []
             if self.cfg.TEST.AUGMENTATION:
-                for k in tqdm(range(_X.shape[0]), leave=False):
+                for k in tqdm(range(X.shape[0]), leave=False):
                     if self.cfg.PROBLEM.NDIM == '2D':
-                        p = ensemble8_2d_predictions(_X[k], n_classes=self.cfg.MODEL.N_CLASSES,
+                        p = ensemble8_2d_predictions(X[k], n_classes=self.cfg.MODEL.N_CLASSES,
                                 pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
                     else:
-                        p = ensemble16_3d_predictions(_X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                        p = ensemble16_3d_predictions(X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                                 pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
                     pred.append(np.expand_dims(p, 0))
             else:
-                l = int(math.ceil(_X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
+                l = int(math.ceil(X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
                 for k in tqdm(range(l), leave=False):
-                    top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < _X.shape[0] else _X.shape[0]
-                    p = self.model.predict(_X[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
+                    top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < X.shape[0] else X.shape[0]
+                    p = self.model.predict(X[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
                     pred.append(p)
 
             # Reconstruct the predictions
@@ -114,25 +122,33 @@ class Base_Workflow(metaclass=ABCMeta):
             if original_data_shape[1:] != t_patch_size:
                 if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
                 f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
-                obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=_Y,
-                                padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
-                                verbose=self.cfg.TEST.VERBOSE)
-                if self.cfg.DATA.TEST.LOAD_GT:
-                    pred, _Y = obj
+
+                if self.cfg.TEST.REDUCE_MEMORY:
+                    pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
+                        overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
+                    Y = f_name(Y, original_data_shape[:-1]+(Y.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
+                        overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
                 else:
-                    pred = obj
+                    obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=_Y,
+                        padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
+                        verbose=self.cfg.TEST.VERBOSE)
+                    if self.cfg.DATA.TEST.LOAD_GT:
+                        pred, _Y = obj
+                    else:
+                        pred = obj
+                    del obj
             else:
                 pred = pred[0]
 
             if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE and self.cfg.PROBLEM.NDIM == '3D':
                 pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
-                if _Y is not None:
-                    _Y = _Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                if Y is not None:
+                    Y = Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
 
             # Argmax if needed
             if self.cfg.MODEL.N_CLASSES > 1 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
                 pred = np.expand_dims(np.argmax(pred,-1), -1)
-                if self.cfg.DATA.TEST.LOAD_GT: _Y = np.expand_dims(np.argmax(_Y,-1), -1)
+                if self.cfg.DATA.TEST.LOAD_GT: Y = np.expand_dims(np.argmax(Y,-1), -1)
 
             # Apply mask
             if self.cfg.TEST.APPLY_MASK:
@@ -148,16 +164,16 @@ class Base_Workflow(metaclass=ABCMeta):
             #####################
             if self.cfg.TEST.STATS.MERGE_PATCHES:
                 if self.cfg.DATA.TEST.LOAD_GT and self.cfg.DATA.CHANNELS != "Dv2":
-                    if _Y.ndim > pred.ndim: _Y = _Y[0]
+                    if Y.ndim > pred.ndim: Y = Y[0]
                     if self.cfg.LOSS.TYPE != 'MASKED_BCE':
-                        _iou_per_image = jaccard_index_numpy((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
-                        _ov_iou_per_image = voc_calculation((_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
+                        _iou_per_image = jaccard_index_numpy((Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
+                        _ov_iou_per_image = voc_calculation((Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
                                                         _iou_per_image)
                     else:
-                        exclusion_mask = _Y < 2
-                        bin_Y = _Y * exclusion_mask.astype( float )
-                        _iou_per_image = jaccard_index_numpy((bin_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
-                        _ov_iou_per_image = voc_calculation((bin_Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
+                        exclusion_mask = Y < 2
+                        binY = Y * exclusion_mask.astype( float )
+                        _iou_per_image = jaccard_index_numpy((binY>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
+                        _ov_iou_per_image = voc_calculation((binY>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
                                                         _iou_per_image)
                     self.stats['iou_per_image'] += _iou_per_image
                     self.stats['ov_iou_per_image'] += _ov_iou_per_image
@@ -166,7 +182,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 ### POST-PROCESSING (3D) ###
                 ############################
                 if self.post_processing and self.cfg.PROBLEM.NDIM == '3D':
-                    _iou_post, _ov_iou_post = apply_post_processing(self.cfg, pred, _Y)
+                    _iou_post, _ov_iou_post = apply_post_processing(self.cfg, pred, Y)
                     self.stats['iou_post'] += _iou_post
                     self.stats['ov_iou_post'] += _ov_iou_post
                     if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
@@ -176,7 +192,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, filenames,
                                     verbose=self.cfg.TEST.VERBOSE)
 
-            self.after_merge_patches(pred, _Y, filenames)
+            self.after_merge_patches(pred, Y, filenames)
 
 
         ##################
@@ -230,8 +246,8 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def normalize_stats(self, image_counter):
         # Per crop
-        self.stats['loss_per_crop'] = self.stats['loss_per_crop'] / self.stats['patch_counter'] 
-        self.stats['iou_per_crop'] = self.stats['iou_per_crop'] / self.stats['patch_counter'] 
+        self.stats['loss_per_crop'] = self.stats['loss_per_crop'] / self.stats['patch_counter']
+        self.stats['iou_per_crop'] = self.stats['iou_per_crop'] / self.stats['patch_counter']
 
         # Merge patches
         self.stats['iou_per_image'] = self.stats['iou_per_image'] / image_counter
@@ -241,7 +257,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.stats['iou'] = self.stats['iou'] / image_counter
         self.stats['loss'] = self.stats['loss'] / image_counter
         self.stats['ov_iou'] = self.stats['ov_iou'] / image_counter
-        
+
         if self.post_processing and self.cfg.PROBLEM.NDIM == '3D':
             self.stats['iou_post'] = self.stats['iou_post'] / image_counter
             self.stats['ov_iou_post'] = self.stats['ov_iou_post'] / image_counter
@@ -269,7 +285,7 @@ class Base_Workflow(metaclass=ABCMeta):
             print("Test Overall IoU (post-processing): {}".format(self.stats['ov_iou_post']))
             print(" ")
 
-    
+
     @abstractmethod
     def after_merge_patches(self, pred, Y, filenames):
         raise NotImplementedError
