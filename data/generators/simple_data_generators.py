@@ -112,24 +112,23 @@ class simple_data_generator(tf.keras.utils.Sequence):
             img = self.X[idx]
             img = np.squeeze(img)
 
-            if self.data_3d:
-                if img.ndim == 3: img = np.expand_dims(img, -1)
-            else:
-                if img.ndim == 2: img = np.expand_dims(img, -1)
-
             if self.provide_Y:
                 mask = self.Y[idx]
                 mask = np.squeeze(mask)
 
-                if self.data_3d:
-                    if mask.ndim == 3: mask = np.expand_dims(mask, -1)
-                else:
-                    if mask.ndim == 2: mask = np.expand_dims(mask, -1)
-        
+        if self.data_3d:
+            if img.ndim == 3: img = np.expand_dims(img, -1)
+        else:
+            if img.ndim == 2: img = np.expand_dims(img, -1)     
         if self.div_X_on_load: img = img/255
         img = np.expand_dims(img, 0).astype(np.float32)
+
         if self.provide_Y:
             if self.div_Y_on_load: mask = mask/255
+            if self.data_3d:
+                if mask.ndim == 3: mask = np.expand_dims(mask, -1)
+            else:
+                if mask.ndim == 2: mask = np.expand_dims(mask, -1)
             mask = np.expand_dims(mask, 0).astype(np.uint8)
 
         return img, mask

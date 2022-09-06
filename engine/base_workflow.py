@@ -53,13 +53,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     Y = np.expand_dims(pad_and_reflect(Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
 
             original_data_shape = X.shape
-
+            
             # Crop if necessary
-            if self.cfg.PROBLEM.NDIM == '2D':
-                t_patch_size = self.cfg.DATA.PATCH_SIZE
-            else:
-                t_patch_size = tuple(self.cfg.DATA.PATCH_SIZE[i] for i in [2, 1, 0, 3])
-            if X.shape[1:] != t_patch_size:
+            if X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
                 if self.cfg.PROBLEM.NDIM == '2D':
                     obj = crop_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, data_mask=Y,
                         overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
@@ -87,7 +83,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         else:
                             X = obj
                         del obj
-
+            
             # Evaluate each patch
             if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
                 l = int(math.ceil(X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
@@ -106,6 +102,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.cfg.PROBLEM.NDIM == '2D':
                         p = ensemble8_2d_predictions(X[k], n_classes=self.cfg.MODEL.N_CLASSES,
                                 pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
+                        p = np.expand_dims(p, 0)
                     else:
                         p = ensemble16_3d_predictions(X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                                 pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
@@ -115,15 +112,15 @@ class Base_Workflow(metaclass=ABCMeta):
                 for k in tqdm(range(l), leave=False):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < X.shape[0] else X.shape[0]
                     p = self.model.predict(X[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
-                    pred.append(p[0])
+                    pred.append(p)
 
             # Delete X as in 3D there is no full image 
             if self.cfg.PROBLEM.NDIM == '3D': 
                 del X, p
 
             # Reconstruct the predictions
-            pred = np.array(pred)
-            if original_data_shape[1:] != t_patch_size:
+            pred = np.concatenate(pred)
+            if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
                 if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
                 f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
 
@@ -133,11 +130,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     Y = f_name(Y, original_data_shape[:-1]+(Y.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
                         overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
                 else:
-                    obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=_Y,
+                    obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=Y,
                         padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
                         verbose=self.cfg.TEST.VERBOSE)
                     if self.cfg.DATA.TEST.LOAD_GT:
-                        pred, _Y = obj
+                        pred, Y = obj
                     else:
                         pred = obj
                     del obj

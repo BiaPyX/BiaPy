@@ -14,6 +14,7 @@ from engine.instance_seg import prepare_instance_data, Instance_Segmentation
 from engine.detection import Detection
 from engine.classification import Classification
 from engine.super_resolution import Super_resolution
+from engine.denoising import Denoising
 
 class Engine(object):
 
@@ -69,7 +70,7 @@ class Engine(object):
         ### TRAIN ###
         #############
         if cfg.TRAIN.ENABLE:
-            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'SUPER_RESOLUTION']:
+            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION']:
                 if cfg.DATA.TRAIN.IN_MEMORY:
                     if cfg.PROBLEM.NDIM == '2D':
                         objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
@@ -132,7 +133,7 @@ class Engine(object):
         ### TEST ###
         ############
         if cfg.TEST.ENABLE:
-            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'SUPER_RESOLUTION']:
+            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION']:
                 # Path comprobations
                 if not os.path.exists(cfg.DATA.TEST.PATH):
                     raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
@@ -225,6 +226,8 @@ class Engine(object):
             workflow = Classification(self.cfg, self.model, post_processing)
         elif self.cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             workflow = Super_resolution(self.cfg, self.model, post_processing)
+        elif self.cfg.PROBLEM.TYPE == 'DENOISING':
+            workflow = Denoising(self.cfg, self.model, post_processing)
         else:
             raise ValueError("Undefined 'PROBLEM.TYPE' {}".format(self.cfg.PROBLEM.TYPE))
 
@@ -263,8 +266,6 @@ class Engine(object):
                 # Save memory if possible
                 if l_X == 1: 
                     del X
-                    if self.cfg.DATA.TEST.LOAD_GT:
-                        del Y
 
                 # Process each image separately
                 workflow.process_sample(_X, _Y, self.test_filenames[(i*l_X)+j:(i*l_X)+j+1])

@@ -123,10 +123,10 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin
        Parameters
        ----------
        preds_test : 4D Numpy array
-           Predictions made by the model. E.g. ``(num_of_images, x, y, channels)``.
+           Predictions made by the model. E.g. ``(num_of_images, y, x, channels)``.
 
        Y_test : 4D Numpy array
-           Ground truth of the data. E.g. ``(num_of_images, x, y, channels)``.
+           Ground truth of the data. E.g. ``(num_of_images, y, x, channels)``.
 
        det_eval_ge_path : str
            Path where the ground truth is stored for the DET calculation.
@@ -360,13 +360,13 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
        Parameters
        ----------
        X : 4D numpy array, optional
-           Data to save as images. The first dimension must be the number of images. E.g. ``(num_of_images, x, y, channels)``.
+           Data to save as images. The first dimension must be the number of images. E.g. ``(num_of_images, y, x, channels)``.
 
        data_dir : str, optional
            Path to store X images.
 
        Y : 4D numpy array, optional
-           Masks to save as images. The first dimension must be the number of images. E.g. ``(num_of_images, x, y, channels)``.
+           Masks to save as images. The first dimension must be the number of images. E.g. ``(num_of_images, y, x, channels)``.
 
        scale_mask : bool, optional
            To allow mask be multiplied by 255.
@@ -481,7 +481,7 @@ def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
        ----------
 
        label : 3D numpy array
-          Corresponds to a label image. E.g. ``(x, y, channels)``.
+          Corresponds to a label image. E.g. ``(y, x, channels)``.
 
        binary : bool, optional
           Corresponds to whether or not the labels are binary.
@@ -585,7 +585,7 @@ def do_save_wm(labels, path, binary = True, w0 = 10, sigma = 5):
        Parameters
        ----------
        labels : 4D numpy array
-           Corresponds to given label images. E.g. ``(num_of_images, x, y, channels)``.
+           Corresponds to given label images. E.g. ``(num_of_images, y, x, channels)``.
 
        path : str
            Refers to the path where the weight maps should be saved.
@@ -663,10 +663,10 @@ def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, th=0.8):
        Parameters
        ----------
        data : 4D numpy array
-           Data to save as images. The first dimension must be the number of images. E. g.``(num_of_images, x, y, channels)``.
+           Data to save as images. The first dimension must be the number of images. E. g.``(num_of_images, y, x, channels)``.
 
        data_mask : 4D numpy array
-           Data mask to save as images.  The first dimension must be the number of images. E. g. ``(num_of_images, x, y, channels)``.
+           Data mask to save as images.  The first dimension must be the number of images. E. g. ``(num_of_images, y, x, channels)``.
 
        out_dir : str
            Path to save the images.
@@ -788,7 +788,7 @@ def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
        Parameters
        ----------
        Y : 4D Numpy array
-           Data to calculate the probability map from. E. g. ``(num_of_images, x, y, channel)``
+           Data to calculate the probability map from. E. g. ``(num_of_images, y, x, channel)``
 
        Y_path : str, optional
            Path to load the data from in case ``Y=None``.
@@ -907,7 +907,7 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
        Parameters
        ----------
        Y : 5D Numpy array
-           Data to calculate the probability map from. E. g. ``(num_subvolumes, x, y, z, channel)``
+           Data to calculate the probability map from. E. g. ``(num_subvolumes, z, y, x, channel)``
 
        Y_path : str, optional
            Path to load the data from in case ``Y=None``.
@@ -972,9 +972,9 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
             _map = prob_map[i].copy().astype(np.float64)
 
         for k in range(channels):
-            for j in range(_map.shape[2]):
+            for j in range(_map.shape[0]):
                 # Remove artifacts connected to image border
-                _map[:,:,j,k] = clear_border(_map[:,:,j,k])
+                _map[j,:,:,k] = clear_border(_map[j,:,:,k])
             foreground_pixels = (_map[:,:,:,k] == v).sum()
             background_pixels = (_map[:,:,:,k] == 0).sum()
 
@@ -1058,7 +1058,7 @@ def img_to_onehot_encoding(img, num_classes=2):
        Parameters
        ----------
        img : Numpy 3D/4D array
-           Image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+           Image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
        num_classes : int, optional
            Number of classes to distinguish.
@@ -1066,7 +1066,7 @@ def img_to_onehot_encoding(img, num_classes=2):
        Returns
        -------
        one_hot_labels : Numpy 3D/4D array
-           Data one-hot encoded. E.g. ``(x, y, num_classes)`` or ``(x, y, z, num_classes)``.
+           Data one-hot encoded. E.g. ``(y, x, num_classes)`` or ``(z, y, x, num_classes)``.
     """
 
     if img.ndim == 4:
@@ -1093,12 +1093,12 @@ def onehot_encoding_to_img(encoded_image):
        Parameters
        ----------
        encoded_image : Numpy 3D/4D array
-           Image. E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+           Image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
        Returns
        -------
        img : Numpy 3D/4D array
-           Data one-hot encoded. E.g. ``(x, y, z, num_classes)``.
+           Data one-hot encoded. E.g. ``(z, y, x, num_classes)``.
     """
 
     if encoded_image.ndim == 4:
@@ -1126,14 +1126,14 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
            Crop each image into desired shape pointed by ``crop_shape``.
 
        crop_shape : Tuple of 3 ints, optional
-           Shape of the crop to be made. E.g. ``(x, y, channels)``.
+           Shape of the crop to be made. E.g. ``(y, x, channels)``.
 
        overlap : Tuple of 2 floats, optional
            Amount of minimum overlap on x and y dimensions. The values must  be on range ``[0, 1)``, that is, ``0%`` or
-           ``99%`` of overlap. E. g. ``(x, y)``.
+           ``99%`` of overlap. E. g. ``(y, x)``.
 
        padding : Tuple of 2 ints, optional
-           Size of padding to be added on each axis ``(x, y)``. E.g. ``(24, 24)``.
+           Size of padding to be added on each axis ``(y, x)``. E.g. ``(24, 24)``.
 
        return_filenames : bool, optional
            Return a list with the loaded filenames. Useful when you need to save them afterwards with the same names as
@@ -1255,7 +1255,7 @@ def load_ct_data_from_dir(data_dir, shape=None):
        shape : 3D int tuple, optional
            Shape of the data to load. If is not provided the shape is calculated automatically looping over all data
            files and it will be  the maximum value found per axis. So, given the value the process should be faster.
-           E.g. ``(x, y, channels)``.
+           E.g. ``(y, x, channels)``.
 
        Returns
        -------
@@ -1322,17 +1322,17 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
            Crop each 3D image when readed.
 
        crop_shape : Tuple of 4 ints, optional
-           Shape of the subvolumes to create when cropping.  E.g. ``(x, y, z, channels)``.
+           Shape of the subvolumes to create when cropping.  E.g. ``(z, y, x, channels)``.
 
        verbose : bool, optional
            Wheter to enable verbosity.
 
        overlap : Tuple of 3 floats, optional
-           Amount of minimum overlap on x, y and z dimensions. The values must be on range ``[0, 1)``, that is, ``0%``
-           or ``99%`` of overlap. E.g. ``(x, y, z)``.
+           Amount of minimum overlap on z, y and x dimensions. The values must be on range ``[0, 1)``, that is, ``0%``
+           or ``99%`` of overlap. E.g. ``(z, y, x)``.
 
        padding : Tuple of 3 ints, optional
-           Size of padding to be added on each axis ``(x, y, z)``. E.g. ``(24, 24, 24)``.
+           Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
 
        median_padding : bool, optional
            If ``True`` the padding value is the median value. If ``False``, the added values are zeroes.
@@ -1625,7 +1625,7 @@ def save_npy_files(X, data_dir=None, filenames=None, verbose=True):
        ----------
        X : 4D/5D numpy array
            Data to save as images. The first dimension must be the number of images. E.g.
-           ``(num_of_images, x, y, channels)`` or ``(num_of_images, z, y, x, channels)``.
+           ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
 
        data_dir : str, optional
            Path to store X images.
@@ -1664,7 +1664,7 @@ def apply_binary_mask(X, bin_mask_dir):
        Parameters
        ----------
        X : 4D Numpy array
-           Data to apply the mask. E.g. ``(vol_number, x, y, channels)``
+           Data to apply the mask. E.g. ``(vol_number, y, x, channels)``
 
        bin_mask_dir : str, optional
            Directory where the binary mask are located.
@@ -1672,7 +1672,7 @@ def apply_binary_mask(X, bin_mask_dir):
        Returns
        -------
        X : 4D Numpy array
-           Data with the mask applied. E.g. ``(vol_number, x, y, channels)``.
+           Data with the mask applied. E.g. ``(vol_number, y, x, channels)``.
     """
 
     if X.ndim != 4:
@@ -1722,7 +1722,7 @@ def pad_and_reflect(img, crop_shape, verbose=False):
            Image to pad. E.g. ``(y, x, channels)`` or ``(z, y, x, c)``.
 
        crop_shape : Tuple of 3/4 ints, optional
-           Shape of the subvolumes to create when cropping.  E.g. ``(x, y, channels)`` or ``(x, y, z, channels)``.
+           Shape of the subvolumes to create when cropping.  E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
        verbose : bool, optional
            Wheter to output information.
@@ -1738,32 +1738,32 @@ def pad_and_reflect(img, crop_shape, verbose=False):
         raise ValueError("'crop_shape' needs to have 3 values as the input array has 3 dims")
 
     if img.ndim == 4:
-        if img.shape[0] < crop_shape[2]:
-            diff = crop_shape[2]-img.shape[0]
+        if img.shape[0] < crop_shape[0]:
+            diff = crop_shape[0]-img.shape[0]
             o_shape = img.shape
             img = np.pad(img, ((diff,0),(0,0),(0,0),(0,0)), 'reflect')
             if verbose: print("Reflected from {} to {}".format(o_shape, img.shape))
 
-        if img.shape[1] < crop_shape[0]:
-            diff = crop_shape[0]-img.shape[1]
+        if img.shape[1] < crop_shape[1]:
+            diff = crop_shape[1]-img.shape[1]
             o_shape = img.shape
             img = np.pad(img, ((0,0),(diff,0),(0,0),(0,0)), 'reflect')
             if verbose: print("Reflected from {} to {}".format(o_shape, img.shape))
 
-        if img.shape[2] < crop_shape[1]:
-            diff = crop_shape[1]-img.shape[2]
+        if img.shape[2] < crop_shape[2]:
+            diff = crop_shape[2]-img.shape[2]
             o_shape = img.shape
             img = np.pad(img, ((0,0),(0,0),(diff,0),(0,0)), 'reflect')
             if verbose: print("Reflected from {} to {}".format(o_shape, img.shape))
     else:
-        if img.shape[0] < crop_shape[1]:
-            diff = crop_shape[1]-img.shape[0]
+        if img.shape[0] < crop_shape[0]:
+            diff = crop_shape[0]-img.shape[0]
             o_shape = img.shape
             img = np.pad(img, ((diff,0),(0,0),(0,0)), 'reflect')
             if verbose: print("Reflected from {} to {}".format(o_shape, img.shape))
 
-        if img.shape[1] < crop_shape[0]:
-            diff = crop_shape[0]-img.shape[1]
+        if img.shape[1] < crop_shape[1]:
+            diff = crop_shape[1]-img.shape[1]
             o_shape = img.shape
             img = np.pad(img, ((0,0),(diff,0),(0,0)), 'reflect')
             if verbose: print("Reflected from {} to {}".format(o_shape, img.shape))
@@ -1832,7 +1832,7 @@ def wrapper_matching_segCompare(stats_all):
         accumulated_values[key] = accumulated_values[key]/len(stats_all)
     return accumulated_values
 
-def normalize(x, x_min, x_max, out_min=0, out_max=255, out_type=np.uint8):
+def normalize(x, x_min, x_max, out_min=0, out_max=255, out_type=np.float32):
     return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)
 
 def ensure_2D_dims_and_datatype(img, is_mask=False, div=False):
