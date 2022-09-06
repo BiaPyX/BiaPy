@@ -2,7 +2,7 @@
                                                                                                                         
 This repository contains different pipelines for semantic segmentation, instance segmentation, detection and classification. The code is based on Keras and TensorFlow as backend. 
                                                                                                                         
-To use the code please visit our [documentation site](https://em-image-segmentation.readthedocs.io/en/latest/).         
+To use the code please visit our [documentation site](https://biapy.readthedocs.io/en/latest/).         
                                                                                                                         
 ### Semantic segmentation                                                                                               
                                                                                                                         
