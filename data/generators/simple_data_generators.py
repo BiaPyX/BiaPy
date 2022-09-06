@@ -79,7 +79,8 @@ class simple_data_generator(tf.keras.utils.Sequence):
             self.len = len(X)
         self.o_indexes = np.arange(self.len)
         self.div_X_on_load = True if (np.max(img) > 100 and do_normalization) else False
-        self.div_Y_on_load = True if (np.max(mask) > 100 and do_normalization and not instance_problem) else False
+        if mask is not None:
+            self.div_Y_on_load = True if (np.max(mask) > 100 and do_normalization and not instance_problem) else False
         self.on_epoch_end()
 
 
@@ -89,14 +90,14 @@ class simple_data_generator(tf.keras.utils.Sequence):
         mask = None
         # Choose the data source
         if self.X is None:
-            if self.data_paths[idx].endswith('.npy'):
-                img = np.load(os.path.join(self.paths[0], self.data_paths[idx]))
+            if self.d_path[idx].endswith('.npy'):
+                img = np.load(os.path.join(self.d_path, self.data_path[idx]))
                 if self.provide_Y:
-                    mask = np.load(os.path.join(self.paths[1], self.data_mask_path[idx]))
+                    mask = np.load(os.path.join(self.dm_path, self.data_mask_path[idx]))
             else:
-                img = imread(os.path.join(self.paths[0], self.data_paths[idx]))
+                img = imread(os.path.join(self.d_path, self.data_path[idx]))
                 if self.provide_Y:
-                    mask = imread(os.path.join(self.paths[1], self.data_mask_path[idx]))
+                    mask = imread(os.path.join(self.dm_path, self.data_mask_path[idx]))
             img = np.squeeze(img)
             if self.provide_Y:
                 mask = np.squeeze(mask) 
