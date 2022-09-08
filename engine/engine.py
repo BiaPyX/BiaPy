@@ -72,18 +72,20 @@ class Engine(object):
         if cfg.TRAIN.ENABLE:
             if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION']:
                 if cfg.DATA.TRAIN.IN_MEMORY:
+                    norm = True if cfg.DATA.NORMALIZATION.TYPE == 'div' else False
                     if cfg.PROBLEM.NDIM == '2D':
                         objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
                             val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
                             ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, check_crop=cfg.DATA.TRAIN.CHECK_CROP,
-                            check_crop_path=cfg.PATHS.CROP_CHECKS, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                            check_crop_path=cfg.PATHS.CROP_CHECKS, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
+                            normalize=norm)
                     else:
                         objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
                             val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
                             ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING,
-                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE, normalize=norm)
 
                     if cfg.DATA.VAL.FROM_TRAIN:
                         X_train, Y_train, X_val, Y_val, self.train_filenames = objs
@@ -241,9 +243,10 @@ class Engine(object):
         for i in tqdm(range(len(self.test_generator))):
             batch = next(it)
             if self.cfg.DATA.TEST.LOAD_GT:
-                X, Y = batch
+                X, X_norm, Y, Y_norm = batch
             else:
-                X, Y = batch, None
+                X, X_norm = batch
+                Y, Y_norm = None, None
             del batch
 
             # Process all the images in the batch
@@ -268,7 +271,7 @@ class Engine(object):
                     del X
 
                 # Process each image separately
-                workflow.process_sample(_X, _Y, self.test_filenames[(i*l_X)+j:(i*l_X)+j+1])
+                workflow.process_sample(_X, _Y, self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], norm=(X_norm, Y_norm))
 
                 image_counter += 1
         del _X, _Y

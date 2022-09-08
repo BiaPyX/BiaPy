@@ -13,7 +13,7 @@ from skimage.io import imsave
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True, e_d_data=[],
     e_d_mask=[], e_d_data_dim=[], num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, ov=(0,0),
-    padding=(0,0), check_crop=True, check_crop_path="check_crop", reflect_to_complete_shape=False):
+    padding=(0,0), check_crop=True, check_crop_path="check_crop", reflect_to_complete_shape=False, normalize=True):
     """Load train and validation images from the given paths to create 2D data.
 
        Parameters
@@ -72,6 +72,9 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
            Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
            'reflect'.
 
+       normalize : bool, optional
+           Whether to normalize the values if np.uint16 dtype file is loaded.
+           
        Returns
        -------
        X_train : 4D Numpy array
@@ -150,11 +153,13 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
     print("0) Loading train images . . .")
     X_train, orig_train_shape, _, _ = load_data_from_dir(train_path, crop=crop, crop_shape=crop_shape, overlap=ov,
                                                          padding=padding, return_filenames=True,
-                                                         reflect_to_complete_shape=reflect_to_complete_shape)
+                                                         reflect_to_complete_shape=reflect_to_complete_shape,
+                                                         normalize=normalize)
     print("1) Loading train masks . . .")
     Y_train, _, _, t_filenames = load_data_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
                                                     padding=padding, return_filenames=True,
-                                                    reflect_to_complete_shape=reflect_to_complete_shape)
+                                                    reflect_to_complete_shape=reflect_to_complete_shape,
+                                                    normalize=False)
 
     if num_crops_per_dataset != 0:
         X_train = X_train[:num_crops_per_dataset]

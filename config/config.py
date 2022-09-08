@@ -26,11 +26,15 @@ class Config:
         # Problem specification
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.PROBLEM = CN()
-        # Possible options: 'CLASSIFICATION', 'SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION' and 'SUPER_RESOLUTION'
+        # Possible options: 'CLASSIFICATION', 'SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING' and 'SUPER_RESOLUTION'
         _C.PROBLEM.TYPE = 'SEMANTIC_SEG'
         # Possible options: '2D' and '3D'
         _C.PROBLEM.NDIM = '2D'
 
+        _C.PROBLEM.DENOISING = CN()
+        _C.PROBLEM.DENOISING.N2V_PERC_PIX = 0.198
+        _C.PROBLEM.DENOISING.N2V_MANIPULATOR = 'uniform_withCP'
+        _C.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS = 5
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Dataset
@@ -88,6 +92,15 @@ class Config:
 
         # Wheter to reshape de dimensions that does not satisfy the pathc shape selected by padding it with reflect.
         _C.DATA.REFLECT_TO_COMPLETE_SHAPE = False
+
+        _C.DATA.NORMALIZATION = CN()
+        # Normalization type to use. Possible options:
+        #   'div' to divide values from 0/255 (or 0/65535 if uint16) in [0,1] range
+        #   'custom' to use DATA.NORMALIZATION.CUSTOM_MEAN and DATA.NORMALIZATION.CUSTOM_STD to normalize
+        #   '' if no normalization to be applied 
+        _C.DATA.NORMALIZATION.TYPE = 'div'
+        _C.DATA.NORMALIZATION.CUSTOM_MEAN = -1.0
+        _C.DATA.NORMALIZATION.CUSTOM_STD = -1.0
 
         # Train
         _C.DATA.TRAIN = CN()
@@ -367,8 +380,6 @@ class Config:
         _C.MODEL.ARCHITECTURE = 'unet'
         # Number of feature maps on each level of the network.
         _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]
-        # Depth of the network. Only used when MODEL.ARCHITECTURE = 'tiramisu'. For the rest options it is inferred.
-        _C.MODEL.DEPTH = 3
         # To activate the Spatial Dropout instead of use the "normal" dropout layer
         _C.MODEL.SPATIAL_DROPOUT = False
         # Values to make the dropout with. Set to 0 to prevent dropout
@@ -377,8 +388,16 @@ class Config:
         _C.MODEL.BATCH_NORMALIZATION = False
         # Kernel type to use on convolution layers
         _C.MODEL.KERNEL_INIT = 'he_normal'
-        # Activation function to use
+        # Kernel size
+        _C.MODEL.KERNEL_SIZE = 3
+        # Wheter to reduce decoder's feature maps
+        _C.MODEL.REDUCED_DECODER = False
+        # Upsampling layer to use in the model
+        _C.MODEL.UPSAMPLE_LAYER = "convtranspose"
+        # Activation function to use along the model
         _C.MODEL.ACTIVATION = 'elu'
+        # Las activation to use. Options 'sigmoid', 'softmax' or 'linear'
+        _C.MODEL.LAST_ACTIVATION = 'sigmoid' 
         # Number of classes without counting the background class (that should be using 0 label)
         _C.MODEL.N_CLASSES = 1
         # Downsampling to be made in Z. This value will be the third integer of the MaxPooling operation. When facing
@@ -386,7 +405,11 @@ class Config:
         _C.MODEL.Z_DOWN = 1
         # Checkpoint: set to True to load previous training weigths (needed for inference or to make fine-tunning)
         _C.MODEL.LOAD_CHECKPOINT = False
-        
+
+        # TIRAMISU
+        # Depth of the network. Only used when MODEL.ARCHITECTURE = 'tiramisu'. For the rest options it is inferred.
+        _C.MODEL.TIRAMISU_DEPTH = 3
+
         # UNETR
         _C.MODEL.TOKEN_SIZE = 16
         _C.MODEL.EMBED_DIM = 768
@@ -394,7 +417,7 @@ class Config:
         _C.MODEL.MLP_HIDDEN_UNITS = [2048, 1024]
         _C.MODEL.NUM_HEADS = 6
         _C.MODEL.OUT_DIM = 1
-        _C.MODEL.LAST_ACTIVATION = 'sigmoid' # Options 'sigmoid' or 'softmax'
+        
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss
@@ -536,6 +559,8 @@ class Config:
         _C.PATHS.WATERSHED_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'watershed')
         # To store h5 files needed for the mAP calculation
         _C.PATHS.MAP_H5_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'mAP_h5_files')
+        _C.PATHS.MEAN_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_mean_info.npy')
+        _C.PATHS.STD_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_std_info.npy')
 
         self._C = _C
 

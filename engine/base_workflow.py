@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
 
-from utils.util import pad_and_reflect, apply_binary_mask, save_tif, check_downsample_division
+from utils.util import pad_and_reflect, apply_binary_mask, save_tif, check_downsample_division, denormalize
 from data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap
 from data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
 from data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
@@ -40,7 +40,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.stats['ov_iou_post'] = 0
 
 
-    def process_sample(self, X, Y, filenames):
+    def process_sample(self, X, Y, filenames, norm):
         #################
         ### PER PATCH ###
         #################
@@ -56,10 +56,13 @@ class Base_Workflow(metaclass=ABCMeta):
             
             # Crop if necessary
             if X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+                # Copy X to be used later in full image 
+                if self.cfg.PROBLEM.NDIM != '3D': 
+                    X_original = X.copy()
+
                 if self.cfg.PROBLEM.NDIM == '2D':
-                    obj = crop_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, data_mask=Y,
-                        overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
-                        verbose=self.cfg.TEST.VERBOSE)
+                    obj = crop_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                        padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
                     if self.cfg.DATA.TEST.LOAD_GT:
                         X, Y = obj
                     else:
@@ -68,16 +71,16 @@ class Base_Workflow(metaclass=ABCMeta):
                 else:
                     if self.cfg.DATA.TEST.LOAD_GT: Y = Y[0]
                     if self.cfg.TEST.REDUCE_MEMORY:
-                        X = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE,
-                            overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
-                            verbose=self.cfg.TEST.VERBOSE, median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
-                        Y = crop_3D_data_with_overlap(Y, self.cfg.DATA.PATCH_SIZE,
-                            overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
-                            verbose=self.cfg.TEST.VERBOSE, median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                        X = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                            padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
+                            median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                        Y = crop_3D_data_with_overlap(Y, self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                            padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
+                            median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
                     else:
-                        obj = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, data_mask=Y,
-                            overlap=self.cfg.DATA.TEST.OVERLAP, padding=self.cfg.DATA.TEST.PADDING,
-                            verbose=self.cfg.TEST.VERBOSE, median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                        obj = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                            padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
+                            median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
                         if self.cfg.DATA.TEST.LOAD_GT:
                             X, Y = obj
                         else:
@@ -138,6 +141,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     else:
                         pred = obj
                     del obj
+                if self.cfg.PROBLEM.NDIM != '3D': 
+                    X = X_original.copy()
+                    del X_original
             else:
                 pred = pred[0]
 
@@ -155,14 +161,22 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.TEST.APPLY_MASK:
                 pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
+            # Undo normalization
+            if self.cfg.PROBLEM.TYPE == "DENOISING":
+                x_norm = norm[0]
+                if x_norm['type'] == 'div':
+                    pred = pred*255
+                else:
+                    pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
+                
             # Save image
             if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
                 save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
 
 
-            #####################
-            ### MERGE PATCHES ###
-            #####################
+            #########################
+            ### MERGE PATCH STATS ###
+            #########################
             if self.cfg.TEST.STATS.MERGE_PATCHES:
                 if self.cfg.DATA.TEST.LOAD_GT and self.cfg.DATA.CHANNELS != "Dv2":
                     if Y.ndim > pred.ndim: Y = Y[0]

@@ -6,7 +6,7 @@ from utils.util import load_3d_images_from_dir
 
 def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True,
                              crop_shape=(80, 80, 80, 1), random_crops_in_DA=False, ov=(0,0,0), padding=(0,0,0),
-                             reflect_to_complete_shape=False):
+                             reflect_to_complete_shape=False, normalize=True):
     """Load train and validation images from the given paths to create 3D data.
 
        Parameters
@@ -43,6 +43,9 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
        reflect_to_complete_shape : bool, optional
            Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
            'reflect'.
+           
+       normalize : bool, optional
+           Whether to normalize the values if np.uint16 dtype file is loaded.
 
        Returns
        -------
@@ -97,11 +100,12 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
 
     print("0) Loading train images . . .")
     X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, crop=crop, crop_shape=crop_shape,
-        overlap=ov, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape)
+        overlap=ov, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape,
+        normalize=normalize)
 
     print("1) Loading train masks . . .")
     Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
-        reflect_to_complete_shape=reflect_to_complete_shape)
+        reflect_to_complete_shape=reflect_to_complete_shape, normalize=False)
 
     if isinstance(X_train, list):
         raise NotImplementedError("If you arrived here means that your images are not all of the same shape, and you "

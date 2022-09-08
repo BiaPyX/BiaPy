@@ -1,10 +1,11 @@
 from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import (Dropout, SpatialDropout2D, Conv2D, Conv2DTranspose, MaxPooling2D,
-                                     Concatenate, Add, BatchNormalization, ELU)
+                                     Concatenate, Add, BatchNormalization, ELU, Activation, UpSampling2D)
 
 
 def ResUNet_2D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], drop_values=[0.1,0.1,0.1,0.1,0.1],
-               spatial_dropout=False, batch_norm=False, k_init='he_normal', n_classes=1, last_act='sigmoid'):
+               spatial_dropout=False, batch_norm=False, k_init='he_normal', k_size=3, reduced_decoder=False,
+               upsample_layer="convtranspose", n_classes=1, last_act='sigmoid'):
     """Create 2D Residual_U-Net.
 
        Parameters
@@ -30,6 +31,17 @@ def ResUNet_2D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
        k_init : str, optional
            Kernel initialization for convolutional layers.
 
+       k_size : int, optional
+           Kernel size.
+
+       reduced_decoder : bool, optional
+           Reduce the feature maps of the decoder using the first feature size in ``feature_maps``. 
+           E.g. if ``feature_maps=[32,64,128]`` in feature used in the decoder convolutions will 
+           be ``32`` always.
+
+       upsample_layer : str, optional
+           Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
+            
        n_classes: int, optional
            Number of classes.
 
@@ -66,7 +78,8 @@ def ResUNet_2D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
     dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)
     inputs = Input(dinamic_dim)
 
-    x = level_block(inputs, depth, fm, 3, activation, k_init, drop_values, spatial_dropout, batch_norm, True)
+    x = level_block(inputs, depth, fm, k_size, activation, k_init, drop_values, spatial_dropout, batch_norm, True,
+        reduced_decoder, upsample_layer)
 
     outputs = Conv2D(n_classes, (1, 1), activation=last_act) (x)
 
@@ -75,7 +88,8 @@ def ResUNet_2D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
     return model
 
 
-def level_block(x, depth, f_maps, f_size, activation, k_init, drop_values, spatial_dropout, batch_norm, first_block):
+def level_block(x, depth, f_maps, f_size, activation, k_init, drop_values, spatial_dropout, batch_norm, first_block, 
+                reduced_decoder, upsample_layer):
     """Produces a level of the network. It calls itself recursively.
 
        Parameters
@@ -112,6 +126,14 @@ def level_block(x, depth, f_maps, f_size, activation, k_init, drop_values, spati
            layers (more info of Full Pre-Activation in `Identity Mappings in Deep Residual Networks
            <https://arxiv.org/pdf/1603.05027.pdf>`_).
 
+       reduced_decoder : bool, optional
+           Reduce the feature maps of the decoder using the first feature size in ``feature_maps``. 
+           E.g. if ``feature_maps=[32,64,128]`` in feature used in the decoder convolutions will 
+           be ``32`` always.
+
+       upsample_layer : str, optional
+           Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
+            
        Returns
        -------
        x : Keras layer
@@ -122,12 +144,18 @@ def level_block(x, depth, f_maps, f_size, activation, k_init, drop_values, spati
         r = residual_block(x, f_maps[depth], f_size, activation, k_init, drop_values[depth], spatial_dropout,
                            batch_norm, first_block)
         x = MaxPooling2D((2, 2)) (r)
-        x = level_block(x, depth-1, f_maps, f_size, activation, k_init, drop_values, spatial_dropout, batch_norm, False)
-        x = Conv2DTranspose(f_maps[depth], (2, 2), strides=(2, 2), padding='same') (x)
+        x = level_block(x, depth-1, f_maps, f_size, activation, k_init, drop_values, spatial_dropout, batch_norm, False,
+            reduced_decoder, upsample_layer)
+        d = 0 if reduced_decoder else depth
+        if upsample_layer == "convtranspose":
+            x = Conv2DTranspose(f_maps[d], (2, 2), strides=(2, 2), padding='same') (x)
+        else:
+            x = UpSampling2D() (x)
         x = Concatenate()([r, x])
-        x = residual_block(x, f_maps[depth], f_size, activation, k_init, drop_values[depth], spatial_dropout, batch_norm, False)
+        x = residual_block(x, f_maps[d], f_size, activation, k_init, drop_values[depth], spatial_dropout, batch_norm, False)
     else:
-        x = residual_block(x, f_maps[depth], f_size, activation, k_init, drop_values[depth], spatial_dropout, batch_norm, False)
+        d = depth-1 if reduced_decoder else depth
+        x = residual_block(x, f_maps[d], f_size, activation, k_init, drop_values[depth], spatial_dropout, batch_norm, False)
     return x
 
 
@@ -181,7 +209,8 @@ def residual_block(x, f_maps, f_size, activation='elu', k_init='he_normal', drop
         x = BatchNormalization()(x) if bn else x
         if activation == 'elu':
             x = ELU(alpha=1.0) (x)
-
+        else:
+            x = Activation(activation) (x)
     x = Conv2D(f_maps, f_size, activation=None, kernel_initializer=k_init, padding='same') (x)
 
     if drop_value > 0:
@@ -192,7 +221,8 @@ def residual_block(x, f_maps, f_size, activation='elu', k_init='he_normal', drop
     x = BatchNormalization()(x) if bn else x
     if activation == 'elu':
         x = ELU(alpha=1.0) (x)
-
+    else:
+        x = Activation(activation) (x)
     x = Conv2D(f_maps, f_size, activation=None, kernel_initializer=k_init, padding='same') (x)
     x = BatchNormalization()(x) if bn else x
 

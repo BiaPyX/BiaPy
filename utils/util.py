@@ -1114,7 +1114,7 @@ def onehot_encoding_to_img(encoded_image):
 
 
 def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), padding=(0,0), return_filenames=False,
-                       reflect_to_complete_shape=False):
+                       reflect_to_complete_shape=False, normalize=True):
     """Load data from a directory. If ``crop=False`` all the data is suposed to have the same shape.
 
        Parameters
@@ -1143,6 +1143,9 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
            Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
            'reflect'.
 
+       normalize : bool, optional
+           Whether to normalize the values if np.uint16 dtype file is loaded.
+           
        Returns
        -------
        data : 4D Numpy array or list of 3D Numpy arrays
@@ -1211,7 +1214,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=False)
 
         # Ensure uint8
-        if img.dtype == np.uint16:
+        if img.dtype == np.uint16 and normalize:
             if np.max(img) > 255:
                 img = normalize(img, 0, 65535)
             else:
@@ -1310,7 +1313,8 @@ def load_ct_data_from_dir(data_dir, shape=None):
 
 
 def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False, overlap=(0,0,0), padding=(0,0,0),
-                            median_padding=False, reflect_to_complete_shape=False, return_filenames=False):
+                            median_padding=False, reflect_to_complete_shape=False, return_filenames=False, 
+                            normalize=True):
     """Load data from a directory.
 
        Parameters
@@ -1344,6 +1348,9 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
        return_filenames : bool, optional
            Return a list with the loaded filenames. Useful when you need to save them afterwards with the same names as
            the original ones.
+
+       normalize : bool, optional
+           Whether to normalize the values if np.uint16 dtype file is loaded.
 
        Returns
        -------
@@ -1430,7 +1437,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
             raise ValueError("Read image seems to be 2D: {}. Path: {}".format(img.shape, os.path.join(data_dir, id_)))
 
         # Ensure uint8
-        if img.dtype == np.uint16:
+        if img.dtype == np.uint16 and normalize:
             if np.max(img) > 255:
                 img = normalize(img, 0, 65535)
             else:
@@ -1835,19 +1842,24 @@ def wrapper_matching_segCompare(stats_all):
 def normalize(x, x_min, x_max, out_min=0, out_max=255, out_type=np.float32):
     return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)
 
-def ensure_2D_dims_and_datatype(img, is_mask=False, div=False):
+def ensure_2D_dims_and_datatype(img, norm_dict, is_mask=False):
     if img.ndim == 2:
         img = np.expand_dims(img, -1)
     else:
         if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
 
-    # Ensure uint8 range values
-    if not is_mask:
-        if img.dtype == np.uint16:
-            img = normalize(img, 0, 65535) if np.max(img) > 255 else img.astype(np.uint8)
+    if norm_dict['type'] == 'div':
+        # Ensure uint8 range values
+        if not is_mask:
+            if img.dtype == np.uint16:
+                img = normalize(img, 0, 65535) if np.max(img) > 255 else img.astype(np.uint8)
+        if 'div' in norm_dict:
+            img = img/255
+    elif norm_dict['type'] == 'custom':
+        img = normalize(img, norm_dict['mean'], norm_dict['std'])
 
-    if div: img = img/255
-    if not is_mask: img = img.astype(np.float32)
+    if not is_mask: 
+        img = img.astype(np.float32)
     return img
 
 def ensure_3D_dims_and_datatype(img, ax=None, is_mask=False):
@@ -1868,3 +1880,9 @@ def check_value(value, range=(0,1)):
     if range[0] <= value <= range[1]:
         return True
     return False
+
+def normalize(data, means, stds):
+    return (data - means) / stds
+
+def denormalize(data, means, stds):
+    return (data * stds) + means

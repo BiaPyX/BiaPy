@@ -14,7 +14,7 @@ class Super_resolution(Base_Workflow):
         super().__init__(cfg, model, post_processing)
         self.stats['psnr_per_image'] = 0
 
-    def process_sample(self, X, Y, filenames): 
+    def process_sample(self, X, Y, filenames, norm): 
         _X = X.copy()
         _Y = Y.copy() if self.cfg.DATA.TEST.LOAD_GT else None
 

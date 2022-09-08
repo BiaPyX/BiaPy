@@ -66,13 +66,33 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
         if not check_value(cfg.AUGMENTOR.GRID_ROTATE):
              raise ValueError("cfg.AUGMENTOR.GRID_ROTATE need to be in [0, 1] range. Provided {}"
                              .format(cfg.AUGMENTOR.GRID_ROTATE))
+    # Normalization checks
+    custom_mean, custom_std = None, None
+    if cfg.DATA.NORMALIZATION.TYPE == 'custom':
+        if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
+            print("Train/Val normalization: trying to load mean and std from {}".format(cfg.PATHS.MEAN_INFO_FILE))
+            print("Train/Val normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
+            if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
+                if not cfg.DATA.TRAIN.IN_MEMORY:
+                    raise ValueError("If no 'DATA.NORMALIZATION.CUSTOM_MEAN' and 'DATA.NORMALIZATION.CUSTOM_STD' were provided "
+                        "when DATA.NORMALIZATION.TYPE == 'custom', DATA.TRAIN.IN_MEMORY need to be True")
+                print("Train/Val normalization: mean and/or std files not found. Calculating it for the first time")
+                custom_mean = np.mean(X_train)
+                custom_std = np.std(X_train)
+                np.save(cfg.PATHS.MEAN_INFO_FILE, custom_mean)
+                np.save(cfg.PATHS.STD_INFO_FILE, custom_std)
+            else:
+                custom_mean = np.load(cfg.PATHS.MEAN_INFO_FILE)
+                custom_std = np.load(cfg.PATHS.STD_INFO_FILE)
+                print("Train/Val normalization values loaded!")
+        print("Train/Val normalization: using mean {} and std: {}".format(custom_mean, custom_std))
 
     if cfg.PROBLEM.NDIM == '2D':
         if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
             f_name = ClassImageDataGenerator
         elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             f_name = PairImageDataGenerator
-        else:
+        else: # Semantic/Instance seg/Denoising
             f_name = ImageDataGenerator 
     else:
         f_name = VoxelDataGenerator
@@ -110,12 +130,17 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             grid_ratio=cfg.AUGMENTOR.GRID_RATIO, grid_d_range=cfg.AUGMENTOR.GRID_D_RANGE, grid_rotate=cfg.AUGMENTOR.GRID_ROTATE,
             grid_invert=cfg.AUGMENTOR.GRID_INVERT, shape=cfg.DATA.PATCH_SIZE, resolution=cfg.DATA.TRAIN.RESOLUTION,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, prob_map=prob_map, n_classes=cfg.MODEL.N_CLASSES,
-            extra_data_factor=cfg.DATA.TRAIN.REPLICATE)
+            extra_data_factor=cfg.DATA.TRAIN.REPLICATE, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
         if cfg.PROBLEM.NDIM == '3D':
             dic['zflip'] = cfg.AUGMENTOR.ZFLIP
 
         if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-            dic['random_crop_scale']=cfg.AUGMENTOR.RANDOM_CROP_SCALE
+            dic['random_crop_scale'] = cfg.AUGMENTOR.RANDOM_CROP_SCALE
+        if cfg.PROBLEM.TYPE == 'DENOISING':
+            dic['n2v']=True
+            dic['n2v_perc_pix'] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
+            dic['n2v_manipulator'] = cfg.PROBLEM.DENOISING.N2V_MANIPULATOR
+            dic['n2v_neighborhood_radius'] = cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
     else:
         r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' else None
         dic = dict(X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, n_classes=cfg.MODEL.N_CLASSES,
@@ -140,9 +165,15 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
         dic = dict(X=X_val, Y=Y_val, batch_size=cfg.TRAIN.BATCH_SIZE,
             shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, in_memory=cfg.DATA.VAL.IN_MEMORY,
             data_paths=[cfg.DATA.VAL.PATH, cfg.DATA.VAL.MASK_PATH], da=False, shape=cfg.DATA.PATCH_SIZE,
-            random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, seed=cfg.SYSTEM.SEED)
+            random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
+            seed=cfg.SYSTEM.SEED, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
         if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             dic['random_crop_scale'] = cfg.AUGMENTOR.RANDOM_CROP_SCALE
+        if cfg.PROBLEM.TYPE == 'DENOISING':
+            dic['n2v'] = True
+            dic['n2v_perc_pix'] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
+            dic['n2v_manipulator'] = cfg.PROBLEM.DENOISING.N2V_MANIPULATOR
+            dic['n2v_neighborhood_radius'] = cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
         val_generator = f_name(**dic)
     else:
         val_generator = f_name(X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, n_classes=cfg.MODEL.N_CLASSES, in_memory=cfg.DATA.VAL.IN_MEMORY,
@@ -178,6 +209,18 @@ def create_test_augmentor(cfg, X_test, Y_test):
        test_generator : simple_data_generator
            Test data generator.
     """
+    custom_mean, custom_std = None, None
+    if cfg.DATA.NORMALIZATION.TYPE == 'custom':
+        if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
+            print("Test normalization: trying to load mean and std from {}".format(cfg.PATHS.MEAN_INFO_FILE))
+            print("Test normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
+            if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
+                raise FileNotFoundError("Not mean/std files found in {} and "
+                    .format(cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE))
+            custom_mean = np.load(cfg.PATHS.MEAN_INFO_FILE)
+            custom_std = np.load(cfg.PATHS.STD_INFO_FILE)
+            print("Test normalization: using mean {} and std: {}".format(custom_mean, custom_std))
+
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
         test_generator = ClassImageDataGenerator(X=X_test, Y=Y_test, data_path=cfg.DATA.TEST.PATH,
             n_classes=cfg.MODEL.N_CLASSES, in_memory=cfg.DATA.VAL.IN_MEMORY, batch_size=X_test.shape[0],
@@ -186,7 +229,7 @@ def create_test_augmentor(cfg, X_test, Y_test):
         instance_problem = True if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else False
         dic = dict(X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=cfg.DATA.TEST.LOAD_GT, Y=Y_test,
             dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, dims=cfg.PROBLEM.NDIM, seed=cfg.SYSTEM.SEED,
-            instance_problem=instance_problem)
+            instance_problem=instance_problem, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
         if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             dic['do_normalization']=False
         test_generator = simple_data_generator(**dic)

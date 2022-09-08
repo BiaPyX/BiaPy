@@ -6,7 +6,8 @@ from tensorflow.keras.callbacks import EarlyStopping
 from utils.callbacks import ModelCheckpoint, TimeHistory
 from engine.metrics import (jaccard_index, jaccard_index_softmax, IoU_instances,
                             instance_segmentation_loss, weighted_bce_dice_loss,
-                            masked_bce_loss, masked_jaccard_index, PSNR)
+                            masked_bce_loss, masked_jaccard_index, PSNR, 
+                            n2v_loss_mse)
 
 
 def prepare_optimizer(cfg, model):
@@ -84,6 +85,9 @@ def prepare_optimizer(cfg, model):
     elif cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
         model.compile(optimizer=opt, loss="mae", metrics=[PSNR])
         metric_name = "PSNR"
+    elif cfg.PROBLEM.TYPE == "DENOISING":
+        model.compile(optimizer=opt, loss=n2v_loss_mse(), metrics=[n2v_loss_mse()])
+        metric_name = "n2v_mse"
     return metric_name
 
 def build_callbacks(cfg):

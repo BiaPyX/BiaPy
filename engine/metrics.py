@@ -643,3 +643,14 @@ def PSNR(super_resolution, high_resolution):
     """Compute the peak signal-to-noise ratio, measures quality of image."""
     psnr_value = tf.image.psnr(high_resolution, super_resolution, max_val=255)[0]
     return psnr_value
+
+def n2v_loss_mse():
+    def n2v_mse(y_true, y_pred):
+        target, mask = tf.split(y_true, 2, axis=len(y_true.shape)-1)
+        mask = tf.cast(mask, dtype=tf.float32)
+        target = tf.cast(target, dtype=tf.float32)
+        loss = tf.reduce_sum(K.square(target - y_pred*mask)) / tf.reduce_sum(mask)
+        return loss
+
+    return n2v_mse
+

@@ -76,7 +76,7 @@ if __name__ == '__main__':
     set_seed(cfg.SYSTEM.SEED)
 
     assert cfg.PROBLEM.NDIM in ['2D', '3D']
-    assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'SUPER_RESOLUTION']
+    assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION']
 
     if not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.FULL_IMG:
         raise ValueError("One between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.FULL_IMG' need to be True")
@@ -90,7 +90,7 @@ if __name__ == '__main__':
                          "1) git checkout grand-challenge ")
 
     if cfg.PROBLEM.NDIM == '3D' and cfg.TEST.STATS.FULL_IMG:
-        print("WARNING: cfg.TEST.STATS.FULL_IMG == True while using PROBLEM.NDIM == '3D'. As 3D images are usually 'huge'"
+        print("WARNING: TEST.STATS.FULL_IMG == True while using PROBLEM.NDIM == '3D'. As 3D images are usually 'huge'"
               ", full image statistics will be disabled to avoid GPU memory overflow")
 
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
@@ -99,19 +99,24 @@ if __name__ == '__main__':
         else:
             if cfg.MODEL.N_CLASSES > 1:
                 raise ValueError("Not implemented pipeline option")
-    elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+    elif cfg.PROBLEM.TYPE in ['SUPER_RESOLUTION']:
         if not cfg.DATA.EXTRACT_RANDOM_PATCH:
             raise ValueError("'DATA.EXTRACT_RANDOM_PATCH' need to be True for 'SUPER_RESOLUTION'")
         if cfg.AUGMENTOR.RANDOM_CROP_SCALE == 1:
             raise ValueError("Resolution scale must be provided with 'AUGMENTOR.RANDOM_CROP_SCALE' variable")
         if cfg.PROBLEM.NDIM == '3D':
             raise NotImplementedError
+    elif cfg.PROBLEM.TYPE in ['DENOISING']:
+        if cfg.DATA.TEST.IN_MEMORY:
+            raise ValueError("DATA.TEST.IN_MEMORY==True not supported in DENOISING. Please change it to False")
+        if cfg.DATA.TEST.LOAD_GT:
+            raise NotImplementedError
     if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.CROSS_VAL and cfg.DATA.VAL.SPLIT_TRAIN <= 0:
         raise ValueError("'DATA.VAL.SPLIT_TRAIN' needs to be > 0 when 'DATA.VAL.FROM_TRAIN' == True")
     if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.TRAIN.IN_MEMORY:
         raise ValueError("Validation can be extracted from train while 'DATA.TRAIN.IN_MEMORY' == False. Please set"
                          "'DATA.VAL.FROM_TRAIN' to False")
-
+                         
 
     ##########################
     #       TRAIN/TEST       #
