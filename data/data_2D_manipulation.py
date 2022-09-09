@@ -151,15 +151,18 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
     create_val = True if val_split > 0 else False
 
     print("0) Loading train images . . .")
-    X_train, orig_train_shape, _, _ = load_data_from_dir(train_path, crop=crop, crop_shape=crop_shape, overlap=ov,
+    X_train, orig_train_shape, _, t_filenames = load_data_from_dir(train_path, crop=crop, crop_shape=crop_shape, overlap=ov,
                                                          padding=padding, return_filenames=True,
                                                          reflect_to_complete_shape=reflect_to_complete_shape,
                                                          normalize=normalize)
-    print("1) Loading train masks . . .")
-    Y_train, _, _, t_filenames = load_data_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
-                                                    padding=padding, return_filenames=True,
-                                                    reflect_to_complete_shape=reflect_to_complete_shape,
-                                                    normalize=False)
+    if train_mask_path is not None:                                            
+        print("1) Loading train masks . . .")
+        Y_train, _, _, _ = load_data_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
+                                                        padding=padding, return_filenames=True,
+                                                        reflect_to_complete_shape=reflect_to_complete_shape,
+                                                        normalize=False)
+    else:
+        Y_train = np.zeros(X_train.shape, dtype=np.uint8) # Fake mask val
 
     if num_crops_per_dataset != 0:
         X_train = X_train[:num_crops_per_dataset]

@@ -73,15 +73,16 @@ class Engine(object):
             if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION']:
                 if cfg.DATA.TRAIN.IN_MEMORY:
                     norm = True if cfg.DATA.NORMALIZATION.TYPE == 'div' else False
+                    mask_path = cfg.DATA.TRAIN.MASK_PATH if cfg.PROBLEM.TYPE != 'DENOISING' else None
                     if cfg.PROBLEM.NDIM == '2D':
-                        objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
+                        objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, mask_path,
                             val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
                             ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, check_crop=cfg.DATA.TRAIN.CHECK_CROP,
                             check_crop_path=cfg.PATHS.CROP_CHECKS, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
                             normalize=norm)
                     else:
-                        objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
+                        objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, mask_path,
                             val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
                             ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING,
@@ -95,7 +96,7 @@ class Engine(object):
                 else:
                     if not os.path.exists(cfg.DATA.TRAIN.PATH):
                         raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
-                    if not os.path.exists(cfg.DATA.TRAIN.MASK_PATH):
+                    if not os.path.exists(cfg.DATA.TRAIN.MASK_PATH) and cfg.PROBLEM.TYPE != 'DENOISING':
                         raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.MASK_PATH))
                     X_train, Y_train = None, None
 
@@ -108,9 +109,12 @@ class Engine(object):
                         X_val, _, _ = f_name(cfg.DATA.VAL.PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
                                              overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
                                              reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
-                        Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
-                                             overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
-                                             reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                        if cfg.PROBLEM.TYPE != 'DENOISING':
+                            Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
+                                                overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
+                                                reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                        else:
+                            Y_val = np.zeros(X_val.shape, dtype=np.uint8) # Fake mask val
                     else:
                         if not os.path.exists(cfg.DATA.VAL.PATH):
                             raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
