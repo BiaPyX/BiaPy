@@ -1,14 +1,104 @@
+import math
 import numpy as np
 import numpy.ma as ma
 from tqdm import tqdm
 
+from data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap
+from data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
+from data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
 from engine.base_workflow import Base_Workflow
+from utils.util import denormalize, save_tif
 
 class Denoising(Base_Workflow):
     def __init__(self, cfg, model, post_processing=False):
         super().__init__(cfg, model, post_processing)
-        self.stats['psnr_per_image'] = 0
-        
+    
+    def process_sample(self, X, Y, filenames, norm): 
+        original_data_shape = X.shape
+    
+        # Crop if necessary
+        if X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+            if self.cfg.PROBLEM.NDIM == '2D':
+                obj = crop_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                    padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
+                if self.cfg.DATA.TEST.LOAD_GT:
+                    X, Y = obj
+                else:
+                    X = obj
+                del obj
+            else:
+                if self.cfg.DATA.TEST.LOAD_GT: Y = Y[0]
+                if self.cfg.TEST.REDUCE_MEMORY:
+                    X = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                        padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
+                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                    Y = crop_3D_data_with_overlap(Y, self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                        padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
+                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                else:
+                    obj = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                        padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
+                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                    if self.cfg.DATA.TEST.LOAD_GT:
+                        X, Y = obj
+                    else:
+                        X = obj
+                    del obj
+
+        # Predict each patch
+        pred = []
+        if self.cfg.TEST.AUGMENTATION:
+            for k in tqdm(range(X.shape[0]), leave=False):
+                if self.cfg.PROBLEM.NDIM == '2D':
+                    p = ensemble8_2d_predictions(X[k], n_classes=self.cfg.MODEL.N_CLASSES,
+                            pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
+                else:
+                    p = ensemble16_3d_predictions(X[k], batch_size_value=1,
+                            pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
+                pred.append(p)
+        else:
+            l = int(math.ceil(X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
+            for k in tqdm(range(l), leave=False):
+                top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < X.shape[0] else X.shape[0]
+                p = self.model.predict(X[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
+                pred.append(p)
+        del X, p
+
+        # Reconstruct the predictions
+        pred = np.concatenate(pred)
+        if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+            if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
+            f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
+
+            if self.cfg.TEST.REDUCE_MEMORY:
+                pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
+                    overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
+                Y = f_name(Y, original_data_shape[:-1]+(Y.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
+                    overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
+            else:
+                obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=Y,
+                    padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
+                    verbose=self.cfg.TEST.VERBOSE)
+                if self.cfg.DATA.TEST.LOAD_GT:
+                    pred, Y = obj
+                else:
+                    pred = obj
+                del obj
+        else:
+            pred = pred[0]
+
+        # Undo normalization
+        if self.cfg.PROBLEM.TYPE == "DENOISING":
+            x_norm = norm[0]
+            if x_norm['type'] == 'div':
+                pred = pred*255
+            else:
+                pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
+            
+        # Save image
+        if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+            save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
+
     def after_merge_patches(self, pred, Y, filenames):
         pass
 
@@ -19,14 +109,11 @@ class Denoising(Base_Workflow):
         super().after_all_images(None)
 
     def normalize_stats(self, image_counter):
-        self.stats['psnr_per_image'] = self.stats['psnr_per_image'] / image_counter
+        return
 
     def print_stats(self, image_counter):
         self.normalize_stats(image_counter)
 
-        if self.cfg.DATA.TEST.LOAD_GT:
-            print("Test PSNR (merge patches): {}".format(self.stats['psnr_per_image']))
-            print(" ")
 
             
 ####################################
@@ -190,12 +277,12 @@ def pm_identity(local_sub_patch_radius):
 
 
 def get_stratified_coords2D(coord_gen, box_size, shape):
-    box_count_y = int(np.ceil(shape[0] / box_size))
-    box_count_x = int(np.ceil(shape[1] / box_size))
+    box_count_Y = int(np.ceil(shape[0] / box_size))
+    box_count_X = int(np.ceil(shape[1] / box_size))
     x_coords = []
     y_coords = []
-    for i in range(box_count_y):
-        for j in range(box_count_x):
+    for i in range(box_count_Y):
+        for j in range(box_count_X):
             y, x = next(coord_gen)
             y = int(i * box_size + y)
             x = int(j * box_size + x)
@@ -206,14 +293,14 @@ def get_stratified_coords2D(coord_gen, box_size, shape):
 
 def get_stratified_coords3D(coord_gen, box_size, shape):
         box_count_z = int(np.ceil(shape[0] / box_size))
-        box_count_y = int(np.ceil(shape[1] / box_size))
-        box_count_x = int(np.ceil(shape[2] / box_size))
+        box_count_Y = int(np.ceil(shape[1] / box_size))
+        box_count_X = int(np.ceil(shape[2] / box_size))
         x_coords = []
         y_coords = []
         z_coords = []
         for i in range(box_count_z):
-            for j in range(box_count_y):
-                for k in range(box_count_x):
+            for j in range(box_count_Y):
+                for k in range(box_count_X):
                     z, y, x = next(coord_gen)
                     z = int(i * box_size + z)
                     y = int(j * box_size + y)
@@ -251,7 +338,30 @@ def apply_structN2Vmask(patch, coords, mask):
     mix = mix.clip(min=np.zeros(ndim),max=np.array(patch.shape)-1).astype(np.uint)
     ## replace neighbouring pixels with random values from flat dist
     patch[tuple(mix.T)] = np.random.rand(mix.shape[0])*4 - 2
-    
+
+def apply_structN2Vmask3D(patch, coords, mask):
+    """
+    each point in coords corresponds to the center of the mask.
+    then for point in the mask with value=1 we assign a random value
+    """
+    z_coords = coords[0]
+    coords = coords[1:]
+    for z in z_coords:
+        coords = np.array(coords).astype(np.int)
+        ndim = mask.ndim
+        center = np.array(mask.shape)//2
+        ## leave the center value alone
+        mask[tuple(center.T)] = 0
+        ## displacements from center
+        dx = np.indices(mask.shape)[:,mask==1] - center[:,None]
+        ## combine all coords (ndim, npts,) with all displacements (ncoords,ndim,)
+        mix = (dx.T[...,None] + coords[None])
+        mix = mix.transpose([1,0,2]).reshape([ndim,-1]).T
+        ## stay within patch boundary
+        mix = mix.clip(min=np.zeros(ndim),max=np.array(patch.shape[1:])-1).astype(np.uint)
+        ## replace neighbouring pixels with random values from flat dist
+        patch[z][tuple(mix.T)] = np.random.rand(mix.shape[0])*4 - 2
+
 def manipulate_val_data(X_val, Y_val, perc_pix=0.198, shape=(64, 64), value_manipulation=pm_uniform_withCP(5)):
     dims = len(shape)
     if dims == 2:

@@ -90,7 +90,7 @@ class simple_data_generator(tf.keras.utils.Sequence):
         if mask is not None:
             self.Y_norm = {}
             self.Y_norm['type'] = 'div'
-            if (np.max(mask) > 100 and do_normalization and not instance_problem):
+            if (np.max(mask) > 250 and do_normalization and not instance_problem):
                 self.Y_norm['div'] = 1   
 
         self.on_epoch_end()

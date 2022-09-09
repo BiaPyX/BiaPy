@@ -1145,7 +1145,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
 
        normalize : bool, optional
            Whether to normalize the values if np.uint16 dtype file is loaded.
-           
+
        Returns
        -------
        data : 4D Numpy array or list of 3D Numpy arrays
@@ -1197,6 +1197,9 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
     c_shape = []
     if return_filenames: filenames = []
 
+    if len(ids) == 0:
+        raise ValueError("No images found in dir {}".format(data_dir))
+
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         if id_.endswith('.npy'):
             img = np.load(os.path.join(data_dir, id_))
@@ -1216,7 +1219,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
         # Ensure uint8
         if img.dtype == np.uint16 and normalize:
             if np.max(img) > 255:
-                img = normalize(img, 0, 65535)
+                img = reduce_dtype(img, 0, 65535)
             else:
                 img = img.astype(np.uint8)
 
@@ -1402,6 +1405,9 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
 
+    if len(ids) == 0:
+        raise ValueError("No images found in dir {}".format(data_dir))
+
     if crop:
         from data.data_3D_manipulation import crop_3D_data_with_overlap
 
@@ -1439,7 +1445,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
         # Ensure uint8
         if img.dtype == np.uint16 and normalize:
             if np.max(img) > 255:
-                img = normalize(img, 0, 65535)
+                img = reduce_dtype(img, 0, 65535)
             else:
                 img = img.astype(np.uint8)
 
@@ -1839,41 +1845,8 @@ def wrapper_matching_segCompare(stats_all):
         accumulated_values[key] = accumulated_values[key]/len(stats_all)
     return accumulated_values
 
-def normalize(x, x_min, x_max, out_min=0, out_max=255, out_type=np.float32):
+def reduce_dtype(x, x_min, x_max, out_min=0, out_max=255, out_type=np.float32):
     return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)
-
-def ensure_2D_dims_and_datatype(img, norm_dict, is_mask=False):
-    if img.ndim == 2:
-        img = np.expand_dims(img, -1)
-    else:
-        if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
-
-    if norm_dict['type'] == 'div':
-        # Ensure uint8 range values
-        if not is_mask:
-            if img.dtype == np.uint16:
-                img = normalize(img, 0, 65535) if np.max(img) > 255 else img.astype(np.uint8)
-        if 'div' in norm_dict:
-            img = img/255
-    elif norm_dict['type'] == 'custom':
-        img = normalize(img, norm_dict['mean'], norm_dict['std'])
-
-    if not is_mask: 
-        img = img.astype(np.float32)
-    return img
-
-def ensure_3D_dims_and_datatype(img, ax=None, is_mask=False):
-    if img.ndim == 3: 
-        img = np.expand_dims(img, -1)
-    elif img.ndim == 4 and ax is not None:
-        if 'Z' in ax: 
-            img = img.transpose((ax['Z'],ax['Y'],ax['X'],ax['C']))
-
-    # Ensure uint8 range values
-    if not is_mask:
-        if img.dtype == np.uint16:
-            img = normalize(img, 0, 65535) if np.max(img) > 255 else img.astype(np.uint8)
-    return img
 
 def check_value(value, range=(0,1)):
     """Checks if a value is within a range """

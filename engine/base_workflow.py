@@ -161,14 +161,6 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.TEST.APPLY_MASK:
                 pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
-            # Undo normalization
-            if self.cfg.PROBLEM.TYPE == "DENOISING":
-                x_norm = norm[0]
-                if x_norm['type'] == 'div':
-                    pred = pred*255
-                else:
-                    pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
-                
             # Save image
             if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
                 save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)

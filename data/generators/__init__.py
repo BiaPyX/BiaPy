@@ -79,6 +79,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
                 print("Train/Val normalization: mean and/or std files not found. Calculating it for the first time")
                 custom_mean = np.mean(X_train)
                 custom_std = np.std(X_train)
+                os.makedirs(os.path.dirname(cfg.PATHS.MEAN_INFO_FILE), exist_ok=True)
                 np.save(cfg.PATHS.MEAN_INFO_FILE, custom_mean)
                 np.save(cfg.PATHS.STD_INFO_FILE, custom_std)
             else:
@@ -97,8 +98,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
     else:
         f_name = VoxelDataGenerator
 
+    ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-        dic = dict(X=X_train, Y=Y_train, batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED,
+        dic = dict(ndim=ndim, X=X_train, Y=Y_train, batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED,
             shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_TRAIN_DATA_EACH_EPOCH, in_memory=cfg.DATA.TRAIN.IN_MEMORY,
             data_paths=[cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH], da=cfg.AUGMENTOR.ENABLE,
             da_prob=cfg.AUGMENTOR.DA_PROB, rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT,
@@ -141,6 +143,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             dic['n2v_perc_pix'] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
             dic['n2v_manipulator'] = cfg.PROBLEM.DENOISING.N2V_MANIPULATOR
             dic['n2v_neighborhood_radius'] = cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
+            dic['n2v_structMask'] = np.array([[0,1,1,1,1,1,1,1,1,1,0]]) if cfg.PROBLEM.DENOISING.N2V_STRUCTMASK else None
     else:
         r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' else None
         dic = dict(X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, n_classes=cfg.MODEL.N_CLASSES,
@@ -162,7 +165,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
 
     print("Initializing val data generator . . .")
     if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-        dic = dict(X=X_val, Y=Y_val, batch_size=cfg.TRAIN.BATCH_SIZE,
+        dic = dict(ndim=ndim, X=X_val, Y=Y_val, batch_size=cfg.TRAIN.BATCH_SIZE,
             shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, in_memory=cfg.DATA.VAL.IN_MEMORY,
             data_paths=[cfg.DATA.VAL.PATH, cfg.DATA.VAL.MASK_PATH], da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
@@ -215,7 +218,7 @@ def create_test_augmentor(cfg, X_test, Y_test):
             print("Test normalization: trying to load mean and std from {}".format(cfg.PATHS.MEAN_INFO_FILE))
             print("Test normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
             if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
-                raise FileNotFoundError("Not mean/std files found in {} and "
+                raise FileNotFoundError("Not mean/std files found in {} and {}"
                     .format(cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE))
             custom_mean = np.load(cfg.PATHS.MEAN_INFO_FILE)
             custom_std = np.load(cfg.PATHS.STD_INFO_FILE)
