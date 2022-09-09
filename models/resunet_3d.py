@@ -4,7 +4,7 @@ from tensorflow.keras.layers import (Dropout, SpatialDropout3D, Conv3D, Conv3DTr
 
 
 def ResUNet_3D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], drop_values=[0.1,0.1,0.1,0.1,0.1],
-               spatial_dropout=False, batch_norm=False, z_down=2, k_init='he_normal', k_size=3, reduced_decoder=False,
+               spatial_dropout=False, batch_norm=False, z_down=2, k_init='he_normal', k_size=3, 
                upsample_layer="convtranspose", n_classes=1, last_act='sigmoid'):
     """Create 3D Residual_U-Net.
 
@@ -37,11 +37,6 @@ def ResUNet_3D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
        k_size : int, optional
            Kernel size.
            
-       reduced_decoder : bool, optional
-           Reduce the feature maps of the decoder using the first feature size in ``feature_maps``. 
-           E.g. if ``feature_maps=[32,64,128]`` in feature used in the decoder convolutions will 
-           be ``32`` always.
-
        upsample_layer : str, optional
            Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
                       
@@ -81,7 +76,7 @@ def ResUNet_3D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
     inputs = Input(image_shape)
 
     x = level_block(inputs, depth, fm, k_size, activation, k_init, drop_values, spatial_dropout, batch_norm, True, z_down, 
-        reduced_decoder, upsample_layer)
+        upsample_layer)
 
     outputs = Conv3D(n_classes, (1, 1, 1), activation=last_act) (x)
 
@@ -91,7 +86,7 @@ def ResUNet_3D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
 
 
 def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values, spatial_dropout, batch_norm, first_block,
-                z_down, reduced_decoder, upsample_layer):
+                z_down, upsample_layer):
     """Produces a level of the network. It calls itself recursively.
 
        Parameters
@@ -131,11 +126,6 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values, 
        z_down : int, optional
            Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
 
-       reduced_decoder : bool, optional
-           Reduce the feature maps of the decoder using the first feature size in ``feature_maps``. 
-           E.g. if ``feature_maps=[32,64,128]`` in feature used in the decoder convolutions will 
-           be ``32`` always.
-
        upsample_layer : str, optional
            Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
             
@@ -150,12 +140,11 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values, 
                            batch_norm, first_block)
         x = MaxPooling3D((z_down, 2, 2)) (r)
         x = level_block(x, depth-1, f_maps, filter_size, activation, k_init, drop_values, spatial_dropout, batch_norm,
-                        False, z_down, reduced_decoder, upsample_layer)
-        d = 0 if reduced_decoder else depth
+                        False, z_down, upsample_layer)
         if upsample_layer == "convtranspose":
-            x = Conv3DTranspose(f_maps[d], (2, 2, 2), strides=(z_down, 2, 2), padding='same') (x)
+            x = Conv3DTranspose(f_maps[depth], (2, 2, 2), strides=(z_down, 2, 2), padding='same') (x)
         else:
-            x = UpSampling3D() (x)
+            x = UpSampling3D(size=(z_down, 2, 2)) (x)
         # Adjust shape introducing zero padding to allow the concatenation
         a = x.shape[3]
         b = r.shape[3]
@@ -166,11 +155,10 @@ def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values, 
             x = ZeroPadding3D(padding=((0,0), (0,0), (abs(s),0))) (x)
         x = Concatenate()([x, r])
 
-        x = residual_block(x, f_maps[d], filter_size, activation, k_init, drop_values[depth], spatial_dropout,
+        x = residual_block(x, f_maps[depth], filter_size, activation, k_init, drop_values[depth], spatial_dropout,
                            batch_norm, False)
     else:
-        d = depth-1 if reduced_decoder else depth
-        x = residual_block(x, f_maps[d], filter_size, activation, k_init, drop_values[depth], spatial_dropout,
+        x = residual_block(x, f_maps[depth], filter_size, activation, k_init, drop_values[depth], spatial_dropout,
                            batch_norm, False)
     return x
 

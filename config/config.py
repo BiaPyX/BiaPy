@@ -35,6 +35,7 @@ class Config:
         _C.PROBLEM.DENOISING.N2V_PERC_PIX = 0.198
         _C.PROBLEM.DENOISING.N2V_MANIPULATOR = 'uniform_withCP'
         _C.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS = 5
+        _C.PROBLEM.DENOISING.N2V_STRUCTMASK = False
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Dataset
@@ -390,8 +391,6 @@ class Config:
         _C.MODEL.KERNEL_INIT = 'he_normal'
         # Kernel size
         _C.MODEL.KERNEL_SIZE = 3
-        # Wheter to reduce decoder's feature maps
-        _C.MODEL.REDUCED_DECODER = False
         # Upsampling layer to use in the model
         _C.MODEL.UPSAMPLE_LAYER = "convtranspose"
         # Activation function to use along the model

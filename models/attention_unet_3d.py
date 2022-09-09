@@ -4,7 +4,7 @@ from tensorflow.keras.layers import (Dropout, SpatialDropout3D, Conv3D, Conv3DTr
 
 
 def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
-                       spatial_dropout=False, batch_norm=False, k_init='he_normal', k_size=3, reduced_decoder=False,
+                       spatial_dropout=False, batch_norm=False, k_init='he_normal', k_size=3,
                        upsample_layer="convtranspose", z_down=2, n_classes=1, last_act='sigmoid'):
     """Create 3D U-Net with Attention blocks.
 
@@ -35,11 +35,6 @@ def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128,
 
        k_size : int, optional
            Kernel size.
-           
-       reduced_decoder : bool, optional
-           Reduce the feature maps of the decoder using the first feature size in ``feature_maps``. 
-           E.g. if ``feature_maps=[32,64,128]`` in feature used in the decoder convolutions will 
-           be ``32`` always.
 
        upsample_layer : str, optional
            Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
@@ -122,21 +117,19 @@ def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128,
         x = SpatialDropout3D(drop_values[depth]) (x)
     elif drop_values[depth] > 0 and not spatial_dropout:
         x = Dropout(drop_values[depth]) (x)
-    d = depth-1 if reduced_decoder else depth
-    x = Conv3D(feature_maps[d], k_size, activation=None, kernel_initializer=k_init, padding='same') (x)
+    x = Conv3D(feature_maps[depth], k_size, activation=None, kernel_initializer=k_init, padding='same') (x)
     x = BatchNormalization() (x) if batch_norm else x
     x = Activation(activation) (x)
 
     # DECODER
     for i in range(depth-1, -1, -1):
-        d = 0 if reduced_decoder else i
         if upsample_layer == "convtranspose":
-            x = Conv3DTranspose(feature_maps[d], (2, 2, 2), strides=(z_down, 2, 2), padding='same') (x)
+            x = Conv3DTranspose(feature_maps[i], (2, 2, 2), strides=(z_down, 2, 2), padding='same') (x)
         else:
-            x = UpSampling3D() (x)
-        attn = AttentionBlock(x, l[i], feature_maps[d], batch_norm)
+            x = UpSampling3D(size=(z_down, 2, 2)) (x)
+        attn = AttentionBlock(x, l[i], feature_maps[i], batch_norm)
         x = concatenate([x, attn])
-        x = Conv3D(feature_maps[d], k_size, activation=None, kernel_initializer=k_init, padding='same') (x)
+        x = Conv3D(feature_maps[i], k_size, activation=None, kernel_initializer=k_init, padding='same') (x)
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
 
@@ -145,7 +138,7 @@ def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128,
         elif drop_values[i] > 0 and not spatial_dropout:
             x = Dropout(drop_values[i]) (x)
 
-        x = Conv3D(feature_maps[d], k_size, activation=None, kernel_initializer=k_init, padding='same') (x)
+        x = Conv3D(feature_maps[i], k_size, activation=None, kernel_initializer=k_init, padding='same') (x)
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
 

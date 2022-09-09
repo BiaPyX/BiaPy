@@ -55,8 +55,7 @@ def build_model(cfg, job_identifier):
         args = dict(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION, feature_maps=cfg.MODEL.FEATURE_MAPS,
                 drop_values=cfg.MODEL.DROPOUT_VALUES, spatial_dropout=cfg.MODEL.SPATIAL_DROPOUT,
                 batch_norm=cfg.MODEL.BATCH_NORMALIZATION, k_init=cfg.MODEL.KERNEL_INIT, k_size=cfg.MODEL.KERNEL_SIZE,
-                reduced_decoder=cfg.MODEL.REDUCED_DECODER, upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, 
-                last_act=cfg.MODEL.LAST_ACTIVATION)
+                upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, last_act=cfg.MODEL.LAST_ACTIVATION)
         if cfg.MODEL.ARCHITECTURE == 'unet':
             f_name = U_Net_3D if cfg.PROBLEM.NDIM == '3D' else U_Net_2D
         elif cfg.MODEL.ARCHITECTURE == 'resunet':
