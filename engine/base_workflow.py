@@ -105,10 +105,10 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.cfg.PROBLEM.NDIM == '2D':
                         p = ensemble8_2d_predictions(X[k], n_classes=self.cfg.MODEL.N_CLASSES,
                                 pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
-                        p = np.expand_dims(p, 0)
                     else:
                         p = ensemble16_3d_predictions(X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                                 pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
+                    p = np.expand_dims(p, 0)
                     pred.append(p)
             else:
                 l = int(math.ceil(X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))

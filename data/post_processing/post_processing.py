@@ -548,7 +548,7 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
        Parameters
        ----------
        o_img : 4D Numpy array
-           Input image. E.g. ``(x, y, z, channels)``.
+           Input image. E.g. ``(z, y, x, channels)``.
 
        pred_func : function
            Function to make predictions.
@@ -562,7 +562,7 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
        Returns
        -------
        out : 4D Numpy array
-           Output image ensembled. E.g. ``(x, y, z, channels)``.
+           Output image ensembled. E.g. ``(z, y, x, channels)``.
 
        Examples
        --------
@@ -590,33 +590,32 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
         _vol = vol[...,channel]
 
         # Convert into square image to make the rotations properly
-        pad_to_square = _vol.shape[0] - _vol.shape[1]
-
+        pad_to_square = _vol.shape[2] - _vol.shape[1]
         if pad_to_square < 0:
-            volume = np.pad(_vol, [(abs(pad_to_square),0), (0,0), (0,0)], 'reflect')
+            volume = np.pad(_vol, [(0,0), (0,0), (abs(pad_to_square),0)], 'reflect')
         else:
             volume = np.pad(_vol, [(0,0), (pad_to_square,0), (0,0)], 'reflect')
 
         # Make 16 different combinations of the volume
         aug_vols.append(volume)
-        aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=90, reshape=False))
-        aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=180, reshape=False))
-        aug_vols.append(rotate(volume, mode='reflect', axes=(0, 1), angle=270, reshape=False))
+        aug_vols.append(rotate(volume, mode='reflect', axes=(2, 1), angle=90, reshape=False))
+        aug_vols.append(rotate(volume, mode='reflect', axes=(2, 1), angle=180, reshape=False))
+        aug_vols.append(rotate(volume, mode='reflect', axes=(2, 1), angle=270, reshape=False))
         volume_aux = np.flip(volume, 0)
         aug_vols.append(volume_aux)
-        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
-        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
-        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(2, 1), angle=90, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(2, 1), angle=180, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(2, 1), angle=270, reshape=False))
         volume_aux = np.flip(volume, 1)
         aug_vols.append(volume_aux)
-        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
-        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
-        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(2, 1), angle=90, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(2, 1), angle=180, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(2, 1), angle=270, reshape=False))
         volume_aux = np.flip(volume, 2)
         aug_vols.append(volume_aux)
-        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=90, reshape=False))
-        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=180, reshape=False))
-        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(0, 1), angle=270, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(2, 1), angle=90, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(2, 1), angle=180, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode='reflect', axes=(2, 1), angle=270, reshape=False))
         aug_vols = np.array(aug_vols)
 
         # Add the last channel again
@@ -641,6 +640,8 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
         if n_classes > 1:
             r_aux = np.expand_dims(np.argmax(r_aux, -1), -1)
 
+        if r_aux.ndim == 4:
+            r_aux = np.expand_dims(r_aux, 0)
         _decoded_aug_vols.append(r_aux)
 
     _decoded_aug_vols = np.concatenate(_decoded_aug_vols)
@@ -654,21 +655,22 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
         # Undo the combinations of the volume
         out_vols = []
         out_vols.append(np.array(decoded_aug_vols[0]))
-        out_vols.append(rotate(np.array(decoded_aug_vols[1]), mode='reflect', axes=(0, 1), angle=-90, reshape=False))
-        out_vols.append(rotate(np.array(decoded_aug_vols[2]), mode='reflect', axes=(0, 1), angle=-180, reshape=False))
-        out_vols.append(rotate(np.array(decoded_aug_vols[3]), mode='reflect', axes=(0, 1), angle=-270, reshape=False))
+        out_vols.append(rotate(np.array(decoded_aug_vols[1]), mode='reflect', axes=(2, 1), angle=-90, reshape=False))
+        out_vols.append(rotate(np.array(decoded_aug_vols[2]), mode='reflect', axes=(2, 1), angle=-180, reshape=False))
+        out_vols.append(rotate(np.array(decoded_aug_vols[3]), mode='reflect', axes=(2, 1), angle=-270, reshape=False))
         out_vols.append(np.flip(np.array(decoded_aug_vols[4]), 0))
-        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[5]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 0))
-        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[6]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 0))
-        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[7]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 0))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[5]), mode='reflect', axes=(2, 1), angle=-90, reshape=False), 0))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[6]), mode='reflect', axes=(2, 1), angle=-180, reshape=False), 0))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[7]), mode='reflect', axes=(2, 1), angle=-270, reshape=False), 0))
         out_vols.append(np.flip(np.array(decoded_aug_vols[8]), 1))
-        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[9]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 1))
-        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[10]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 1))
-        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[11]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 1))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[9]), mode='reflect', axes=(2, 1), angle=-90, reshape=False), 1))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[10]), mode='reflect', axes=(2, 1), angle=-180, reshape=False), 1))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[11]), mode='reflect', axes=(2, 1), angle=-270, reshape=False), 1))
         out_vols.append(np.flip(np.array(decoded_aug_vols[12]), 2))
-        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[13]), mode='reflect', axes=(0, 1), angle=-90, reshape=False), 2))
-        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[14]), mode='reflect', axes=(0, 1), angle=-180, reshape=False), 2))
-        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[15]), mode='reflect', axes=(0, 1), angle=-270, reshape=False), 2))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[13]), mode='reflect', axes=(2, 1), angle=-90, reshape=False), 2))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[14]), mode='reflect', axes=(2, 1), angle=-180, reshape=False), 2))
+        out_vols.append(np.flip(rotate(np.array(decoded_aug_vols[15]), mode='reflect', axes=(2, 1), angle=-270, reshape=False), 2))
+
         out_vols = np.array(out_vols)
         out_vols = np.expand_dims(out_vols, -1)
         arr.append(out_vols)
@@ -679,7 +681,7 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
     # Create the output data
     if pad_to_square != 0:
         if pad_to_square < 0:
-            out = np.zeros((out_vols.shape[0], volume.shape[0]+pad_to_square, volume.shape[1], volume.shape[2], out_vols.shape[-1]))
+            out = np.zeros((out_vols.shape[0], volume.shape[0], volume.shape[1], volume.shape[2]+pad_to_square, out_vols.shape[-1]))
         else:
             out = np.zeros((out_vols.shape[0], volume.shape[0], volume.shape[1]-pad_to_square, volume.shape[2], out_vols.shape[-1]))
     else:
@@ -688,7 +690,7 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
     # Undo the padding
     for i in range(out_vols.shape[0]):
         if pad_to_square < 0:
-            out[i] = out_vols[i,abs(pad_to_square):,:,:,:]
+            out[i] = out_vols[i,:,:,abs(pad_to_square):,:]
         else:
             out[i] = out_vols[i,:,abs(pad_to_square):,:,:]
 

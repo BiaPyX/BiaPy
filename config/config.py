@@ -125,7 +125,7 @@ class Config:
         _C.DATA.TRAIN.PADDING = (0,0)
         _C.DATA.TRAIN.CHECK_CROP = False # Used when _C.DATA.IN_MEMORY=True
         # Train data resolution. It is not completely necessary but when configured it is taken into account when
-        # performing some augmentations, e.g. cutout. If defined it need to be (y,z)/(z,y,x) and needs to be to be a 2D
+        # performing some augmentations, e.g. cutout. If defined it need to be (y,x)/(z,y,x) and needs to be to be a 2D
         # tuple when using _C.PROBLEM.NDIM='2D' and 3D tuple when using _C.PROBLEM.NDIM='3D'
         _C.DATA.TRAIN.RESOLUTION = (-1,)
 
@@ -485,7 +485,7 @@ class Config:
         # Maximum distance to not consider a point as a true positive. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
         _C.TEST.DET_TOLERANCE = [10]
         # Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value
-        # on the axis with less resolution. Need to be provided in (z,y,y) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
+        # on the axis with less resolution. Need to be provided in (z,y,x) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
         _C.TEST.DET_VOXEL_SIZE = (1,1,1)
 
         _C.TEST.STATS = CN()

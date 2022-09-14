@@ -38,7 +38,8 @@ def cutout(img, mask, channels, z_size, nb_iterations=(1,3), size=(0.2,0.4), cva
            Value to fill the area with.
 
        res_relation: tuple of ints/floats, optional
-           Relation between axis resolution. E.g. ``(1,1,0.27)`` for anisotropic data of 8umx8umx30um resolution.
+           Relation between axis resolution in ``(x,y,z)``. E.g. ``(1,1,0.27)`` for anisotropic data of 
+           8umx8umx30um resolution.
 
        apply_to_mask : boolean, optional
            To apply cutout to the mask.
@@ -86,7 +87,6 @@ def cutout(img, mask, channels, z_size, nb_iterations=(1,3), size=(0.2,0.4), cva
         # Choose a random point
         cy = np.random.randint(0, img.shape[0]-y_size)
         cx = np.random.randint(0, img.shape[1]-x_size)
-
         if z_size != -1:
             _z_size = int(max(min(z_size*_size*res_relation[2],z_size),1))
             cz = np.random.randint(0, z_size-_z_size)

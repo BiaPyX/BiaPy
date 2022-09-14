@@ -42,6 +42,7 @@ def prepare_optimizer(cfg, model):
         elif cfg.MODEL.N_CLASSES == 1 or cfg.MODEL.N_CLASSES == 2: # Binary case
             fname = jaccard_index
             loss_name = 'binary_crossentropy'
+            metric_name = "jaccard_index"
         else: # Multiclass
             # Use softmax jaccard if it is not going to be done in the last layer of the model
             if cfg.MODEL.LAST_ACTIVATION != 'softmax':

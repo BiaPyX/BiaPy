@@ -486,9 +486,14 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                     self.div_Y_on_load_no_bin_channels = True if np.max(self.Y) > 200 else False
             else:
                 self.div_Y_on_load_bin_channels = True if np.max(self.Y) > 250 else False
-
+        
+        if self.ndim == 2:
+            resolution = tuple(resolution[i] for i in [1, 0]) # y, x -> x, y
+            self.res_relation = (1.0,resolution[0]/resolution[1])
+        else:
+            resolution = tuple(resolution[i] for i in [2, 1, 0]) # z, y, x -> x, y, z
+            self.res_relation = (1.0,resolution[0]/resolution[1],resolution[0]/resolution[2])
         self.resolution = resolution
-        self.res_relation = (1.0,resolution[0]/resolution[1])
         self.o_indexes = np.arange(self.len)
         self.shuffle = shuffle_each_epoch
         self.n_classes = n_classes
