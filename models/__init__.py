@@ -28,7 +28,7 @@ def build_model(cfg, job_identifier):
 
     if cfg.MODEL.N_CLASSES > 1 and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
         raise ValueError("'MODEL.N_CLASSES' > 1 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'seunet', 'attention_unet']")
-    
+
     if cfg.MODEL.LAST_ACTIVATION not in ['softmax', 'sigmoid', 'linear']:
         raise ValueError("'MODEL.LAST_ACTIVATION' need to be in ['softmax','sigmoid','linear']. Provided {}"
                          .format(cfg.MODEL.LAST_ACTIVATION))
@@ -67,6 +67,7 @@ def build_model(cfg, job_identifier):
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             args['output_channels'] = cfg.DATA.CHANNELS
+            del args['last_act']
         else:
             args['n_classes'] = cfg.MODEL.N_CLASSES
         if cfg.PROBLEM.NDIM == '3D':
@@ -97,7 +98,7 @@ def build_model(cfg, job_identifier):
             elif cfg.MODEL.ARCHITECTURE == 'unetr':
                 num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.TOKEN_SIZE)**2
                 args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.TOKEN_SIZE, num_patches=num_patches,
-                    projection_dim=cfg.MODEL.EMBED_DIM, transformer_layers=cfg.MODEL.DEPTH, num_heads=cfg.MODEL.NUM_HEADS, 
+                    projection_dim=cfg.MODEL.EMBED_DIM, transformer_layers=cfg.MODEL.DEPTH, num_heads=cfg.MODEL.NUM_HEADS,
                     transformer_units=cfg.MODEL.MLP_HIDDEN_UNITS, data_augmentation = None,
                     num_filters = 16, num_classes=cfg.MODEL.OUT_DIM, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
                     ViT_hidd_mult = 3, batch_norm = True, dropout=cfg.MODEL.DROPOUT_VALUES)
