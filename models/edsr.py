@@ -30,8 +30,8 @@ class EDSRModel(tf.keras.Model):
         x = tf.cast(tf.expand_dims(x, axis=0), tf.float32)
         # Passing low resolution image to model
         super_resolution_img = self(x, training=False)
-        # Clips the tensor from min(0) to max(255)
-        super_resolution_img = tf.clip_by_value(super_resolution_img, 0, 255)
+        # Clips the tensor from min(0) to max(1)
+        super_resolution_img = tf.clip_by_value(super_resolution_img, 0, 1)
         # Rounds the values of a tensor to the nearest integer
         super_resolution_img = tf.round(super_resolution_img)
         # Removes dimensions of size 1 from the shape of a tensor and converting to uint8
@@ -61,10 +61,7 @@ def Upsampling(inputs, factor=2, **kwargs):
 def EDSR(num_filters, num_of_residual_blocks, num_channels):
     # Flexible Inputs to input_layer
     input_layer = layers.Input(shape=(None, None, num_channels))
-    # Scaling Pixel Values
-    #x = layers.Rescaling(scale=1.0 / 255)(input_layer)
-    x = layers.experimental.preprocessing.Rescaling(scale=1.0 / 255)(input_layer)
-    x = x_new = layers.Conv2D(num_filters, 3, padding="same")(x)
+    x = x_new = layers.Conv2D(num_filters, 3, padding="same")(input_layer)
 
     # 16 residual blocks
     for _ in range(num_of_residual_blocks):
@@ -74,7 +71,5 @@ def EDSR(num_filters, num_of_residual_blocks, num_channels):
     x = layers.Add()([x, x_new])
 
     x = Upsampling(x)
-    x = layers.Conv2D(num_channels, 3, padding="same")(x)
-    #output_layer = layers.Rescaling(scale=255)(x)
-    output_layer = layers.experimental.preprocessing.Rescaling(scale=255)(x)
+    output_layer = layers.Conv2D(num_channels, 3, padding="same")(x)
     return EDSRModel(input_layer, output_layer)

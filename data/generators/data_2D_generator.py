@@ -1,9 +1,9 @@
 import numpy as np
-import random
 import os
 from PIL import Image
 from skimage.io import imsave
 
+from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from data.generators.base_data_generator import BaseDataGenerator
 from utils.util import denormalize
 
@@ -73,6 +73,15 @@ class ImageDataGenerator(BaseDataGenerator):
         if mask.ndim == 2: 
             mask = np.expand_dims(mask, -1)
         return img, mask
+    
+    def apply_imgaug(self, image, mask, heat):
+        # Change dtype to supported one by imgaug
+        mask = mask.astype(np.uint8)
+        
+        segmap = SegmentationMapsOnImage(mask, shape=mask.shape)
+        image, vol_mask, heat_out = self.seq(image=image, segmentation_maps=segmap, heatmaps=heat)
+        mask = vol_mask.get_arr()
+        return image, mask, heat_out
 
     def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, draw_grid, point_dict):
         if draw_grid:

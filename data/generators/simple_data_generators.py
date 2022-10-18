@@ -42,10 +42,16 @@ class simple_data_generator(tf.keras.utils.Sequence):
 
        instance_problem : bool, optional
            To not divide the labels if being in an instance segmenation problem.
+           
+       norm_custom_mean : float, optional
+           Mean of the data used to normalize.
+
+       norm_custom_std : float, optional
+           Std of the data used to normalize.
     """
 
     def __init__(self, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, dims='2D', batch_size=1, seed=42,
-                 shuffle_each_epoch=False, instance_problem=False, do_normalization=True, norm_custom_mean=None, 
+                 shuffle_each_epoch=False, instance_problem=False, norm_custom_mean=None, 
                  norm_custom_std=None):
 
         if X is None and d_path is None:
@@ -81,7 +87,7 @@ class simple_data_generator(tf.keras.utils.Sequence):
             self.Y_norm = {}
             self.Y_norm['type'] = 'div'
         img, mask = self.__load_sample(0)
-        if (np.max(img) > 100 and do_normalization):
+        if np.max(img) > 100:
             self.X_norm['div'] = 1
         if norm_custom_mean is not None and norm_custom_std is not None:
             self.X_norm['type'] = 'custom'
@@ -90,7 +96,7 @@ class simple_data_generator(tf.keras.utils.Sequence):
         if mask is not None:
             self.Y_norm = {}
             self.Y_norm['type'] = 'div'
-            if (np.max(mask) > 250 and do_normalization and not instance_problem):
+            if (np.max(mask) > 100 and not instance_problem):
                 self.Y_norm['div'] = 1   
 
         self.on_epoch_end()

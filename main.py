@@ -76,7 +76,7 @@ if __name__ == '__main__':
     set_seed(cfg.SYSTEM.SEED)
 
     assert cfg.PROBLEM.NDIM in ['2D', '3D']
-    assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION']
+    assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']
 
     if not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.FULL_IMG:
         raise ValueError("One between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.FULL_IMG' need to be True")

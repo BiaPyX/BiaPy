@@ -37,6 +37,10 @@ class Config:
         _C.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS = 5
         _C.PROBLEM.DENOISING.N2V_STRUCTMASK = False
 
+        _C.PROBLEM.SELF_SUPERVISED = CN()
+        _C.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR = 4
+        _C.PROBLEM.SELF_SUPERVISED.NOISE = 0.15
+
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Dataset
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

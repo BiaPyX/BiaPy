@@ -6,7 +6,7 @@ from utils.util import load_3d_images_from_dir
 
 def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True,
                              crop_shape=(80, 80, 80, 1), random_crops_in_DA=False, ov=(0,0,0), padding=(0,0,0),
-                             reflect_to_complete_shape=False, normalize=True):
+                             reflect_to_complete_shape=False, normalize=True, self_supervised_args=None):
     """Load train and validation images from the given paths to create 3D data.
 
        Parameters
@@ -46,6 +46,9 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
            
        normalize : bool, optional
            Whether to normalize the values if np.uint16 dtype file is loaded.
+
+       self_supervised_args : dict, optional
+           Arguments to create ground truth data for self-supervised workflow. 
 
        Returns
        -------
@@ -107,6 +110,12 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
         print("1) Loading train masks . . .")
         Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
             reflect_to_complete_shape=reflect_to_complete_shape, normalize=False)
+    # Self-supervised 
+    elif self_supervised_args is not None:
+        print("1) Creating GT for self-supervision . . .")
+        from engine.self_supervised import crappify
+        X_train, Y_train = crappify(X_train, resizing_factor=self_supervised_args['factor'], 
+            add_noise=self_supervised_args['add_noise'], noise_level=self_supervised_args['noise'])
     else:
         Y_train = np.zeros(X_train.shape, dtype=np.uint8) # Fake mask val
 

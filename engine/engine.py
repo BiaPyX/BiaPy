@@ -15,6 +15,7 @@ from engine.detection import Detection
 from engine.classification import Classification
 from engine.super_resolution import Super_resolution
 from engine.denoising import Denoising
+from engine.self_supervised import Self_supervised
 
 class Engine(object):
 
@@ -70,23 +71,33 @@ class Engine(object):
         ### TRAIN ###
         #############
         if cfg.TRAIN.ENABLE:
-            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION']:
+            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']:
                 if cfg.DATA.TRAIN.IN_MEMORY:
                     norm = True if cfg.DATA.NORMALIZATION.TYPE == 'div' else False
-                    mask_path = cfg.DATA.TRAIN.MASK_PATH if cfg.PROBLEM.TYPE != 'DENOISING' else None
+                    mask_path = None
+                    self_supervised_args = None
+                    if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DENOISING', 'SUPER_RESOLUTION']:
+                        mask_path = cfg.DATA.TRAIN.MASK_PATH 
+                    elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+                        self_supervised_args = {}
+                        self_supervised_args['factor'] = cfg.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR 
+                        self_supervised_args['add_noise'] = True if cfg.PROBLEM.SELF_SUPERVISED.NOISE > 0 else False
+                        self_supervised_args['noise'] = cfg.PROBLEM.SELF_SUPERVISED.NOISE
+
                     if cfg.PROBLEM.NDIM == '2D':
                         objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, mask_path,
                             val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
                             ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, check_crop=cfg.DATA.TRAIN.CHECK_CROP,
                             check_crop_path=cfg.PATHS.CROP_CHECKS, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
-                            normalize=norm)
+                            normalize=norm, self_supervised_args=self_supervised_args)
                     else:
                         objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, mask_path,
                             val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
-                            ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING,
-                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE, normalize=norm)
+                            ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, normalize=norm,
+                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE, 
+                            self_supervised_args=self_supervised_args)
 
                     if cfg.DATA.VAL.FROM_TRAIN:
                         X_train, Y_train, X_val, Y_val, self.train_filenames = objs
@@ -139,7 +150,7 @@ class Engine(object):
         ### TEST ###
         ############
         if cfg.TEST.ENABLE:
-            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION']:
+            if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']:
                 # Path comprobations
                 if not os.path.exists(cfg.DATA.TEST.PATH):
                     raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
@@ -185,7 +196,6 @@ class Engine(object):
         if cfg.TEST.ENABLE:
             self.test_generator = create_test_augmentor(cfg, X_test, Y_test)
 
-
         print("#################\n"
               "#  BUILD MODEL  #\n"
               "#################\n")
@@ -210,7 +220,6 @@ class Engine(object):
 
 
     def test(self):
-
         print("Loading model weights from h5_file: {}".format(self.cfg.PATHS.CHECKPOINT_FILE))
         self.model.load_weights(self.cfg.PATHS.CHECKPOINT_FILE)
 
@@ -234,6 +243,8 @@ class Engine(object):
             workflow = Super_resolution(self.cfg, self.model, post_processing)
         elif self.cfg.PROBLEM.TYPE == 'DENOISING':
             workflow = Denoising(self.cfg, self.model, post_processing)
+        elif self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+            workflow = Self_supervised(self.cfg, self.model, post_processing)
         else:
             raise ValueError("Undefined 'PROBLEM.TYPE' {}".format(self.cfg.PROBLEM.TYPE))
 

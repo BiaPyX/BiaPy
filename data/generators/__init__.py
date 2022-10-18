@@ -91,13 +91,13 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
     if cfg.PROBLEM.NDIM == '2D':
         if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
             f_name = ClassImageDataGenerator
-        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+        elif cfg.PROBLEM.TYPE in ['SUPER_RESOLUTION', 'SELF_SUPERVISED']:
             f_name = PairImageDataGenerator
-        else: # Semantic/Instance seg/Denoising
+        else: # Semantic/Instance segmentation and Denoising
             f_name = ImageDataGenerator 
     else:
         f_name = VoxelDataGenerator
-
+    
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
         dic = dict(ndim=ndim, X=X_train, Y=Y_train, batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED,
@@ -136,9 +136,11 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
         if cfg.PROBLEM.NDIM == '3D':
             dic['zflip'] = cfg.AUGMENTOR.ZFLIP
 
-        if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+        if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
+            dic['instance_problem'] = True
+        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             dic['random_crop_scale'] = cfg.AUGMENTOR.RANDOM_CROP_SCALE
-        if cfg.PROBLEM.TYPE == 'DENOISING':
+        elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v']=True
             dic['n2v_perc_pix'] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
             dic['n2v_manipulator'] = cfg.PROBLEM.DENOISING.N2V_MANIPULATOR
@@ -233,8 +235,6 @@ def create_test_augmentor(cfg, X_test, Y_test):
         dic = dict(X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=cfg.DATA.TEST.LOAD_GT, Y=Y_test,
             dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, dims=cfg.PROBLEM.NDIM, seed=cfg.SYSTEM.SEED,
             instance_problem=instance_problem, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
-        if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-            dic['do_normalization']=False
         test_generator = simple_data_generator(**dic)
     return test_generator
 

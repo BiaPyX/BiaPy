@@ -88,12 +88,11 @@ class Denoising(Base_Workflow):
             pred = pred[0]
 
         # Undo normalization
-        if self.cfg.PROBLEM.TYPE == "DENOISING":
-            x_norm = norm[0]
-            if x_norm['type'] == 'div':
-                pred = pred*255
-            else:
-                pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
+        x_norm = norm[0]
+        if x_norm['type'] == 'div':
+            pred = pred*255
+        else:
+            pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
             
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":

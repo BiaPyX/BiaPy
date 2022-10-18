@@ -8,7 +8,6 @@ import imgaug as ia
 from tqdm import tqdm
 from imgaug import augmenters as iaa
 from skimage.io import imread
-from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from imgaug.augmentables.heatmaps import HeatmapsOnImage
 
 from data.data_2D_manipulation import random_crop
@@ -321,6 +320,9 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
        norm_custom_std : float, optional
            Std of the data used to normalize.
+       
+       instance_problem : bool, optional
+           To not divide the labels if being in an instance segmenation problem.
     """
 
     def __init__(self, ndim, X, Y, batch_size=32, seed=0, shuffle_each_epoch=False, in_memory=True, data_paths=None, da=True,
@@ -341,10 +343,11 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                  prob_map=None, val=False, n_classes=1, out_number=1, extra_data_factor=1, n2v=False, 
                  n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', n2v_neighborhood_radius=5, 
                  n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), max_samples_to_analyse=10, 
-                 norm_custom_mean=None, norm_custom_std=None):
+                 norm_custom_mean=None, norm_custom_std=None, instance_problem=False):
 
         self.ndim = ndim
-
+        self.z_size = -1 
+        
         if in_memory:
             if X.ndim != (self.ndim+2) or Y.ndim != (self.ndim+2):
                 raise ValueError("X and Y must be a {}D Numpy array".format((self.ndim+1)))
@@ -427,7 +430,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 _, mask = self.load_sample(i)
                 
                 # Store wheter all channels of the gt are binary or not (i.e. distance transform channel)
-                if not found and img.dtype is np.dtype(np.float32) or img.dtype is np.dtype(np.float64):
+                if not found and (img.dtype is np.dtype(np.float32) or img.dtype is np.dtype(np.float64)) and instance_problem:
                     for j in range(img.shape[-1]):
                         if len(np.unique(img[...,j])) > 2:
                             self.first_no_bin_channel = j
@@ -437,13 +440,13 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 # If found high values divide masks
                 if self.first_no_bin_channel != -1:
                     if self.first_no_bin_channel != 0:
-                        if np.max(img[...,:self.first_no_bin_channel]) > 250: self.div_Y_on_load_bin_channels = True
-                        if np.max(img[...,self.first_no_bin_channel:]) > 200: self.div_Y_on_load_no_bin_channels = True
+                        if np.max(img[...,:self.first_no_bin_channel]) > 100: self.div_Y_on_load_bin_channels = True
+                        if np.max(img[...,self.first_no_bin_channel:]) > 100: self.div_Y_on_load_no_bin_channels = True
                     else:
-                        if np.max(img) > 250: self.div_Y_on_load_bin_channels = True
-                        if np.max(img) > 200: self.div_Y_on_load_no_bin_channels = True 
+                        if np.max(img) > 100: self.div_Y_on_load_bin_channels = True
+                        if np.max(img) > 100: self.div_Y_on_load_no_bin_channels = True 
                 else:
-                    if np.max(img) > 250: self.div_Y_on_load_bin_channels = True 
+                    if np.max(img) > 100: self.div_Y_on_load_bin_channels = True 
 
             self.Y_channels = mask.shape[-1]
             self.Y_dtype = mask.dtype
@@ -472,20 +475,20 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             self.first_no_bin_channel = -1
             self.div_Y_on_load_bin_channels = False
             self.div_Y_on_load_no_bin_channels = False
-            if self.Y.dtype is np.dtype(np.float32) or self.Y.dtype is np.dtype(np.float64):
+            if (self.Y.dtype is np.dtype(np.float32) or self.Y.dtype is np.dtype(np.float64)) and instance_problem:
                 for i in range(self.Y.shape[-1]):
                     if len(np.unique(self.Y[...,i])) > 2:
                         self.first_no_bin_channel = i
                         break
             if self.first_no_bin_channel != -1:
                 if self.first_no_bin_channel != 0:
-                    self.div_Y_on_load_bin_channels = True if np.max(self.Y[...,:self.first_no_bin_channel]) > 250 else False
-                    self.div_Y_on_load_no_bin_channels = True if np.max(self.Y[...,self.first_no_bin_channel:]) > 200 else False
+                    self.div_Y_on_load_bin_channels = True if np.max(self.Y[...,:self.first_no_bin_channel]) > 100 else False
+                    self.div_Y_on_load_no_bin_channels = True if np.max(self.Y[...,self.first_no_bin_channel:]) > 100 else False
                 else:
                     self.div_Y_on_load_bin_channels = False
-                    self.div_Y_on_load_no_bin_channels = True if np.max(self.Y) > 200 else False
+                    self.div_Y_on_load_no_bin_channels = True if np.max(self.Y) > 100 else False
             else:
-                self.div_Y_on_load_bin_channels = True if np.max(self.Y) > 250 else False
+                self.div_Y_on_load_bin_channels = True if np.max(self.Y) > 100 else False
         
         if self.ndim == 2:
             resolution = tuple(resolution[i] for i in [1, 0]) # y, x -> x, y
@@ -646,10 +649,6 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
     def get_transformed_samples(self, num_examples, save_to_dir=False, out_dir='aug', 
         train=True, random_images=True, draw_grid=True):
         NotImplementedError
-      
-    @abstractmethod
-    def load_sample(self, idx):
-        NotImplementedError
 
     @abstractmethod
     def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, draw_grid, point_dict):
@@ -657,6 +656,10 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
     @abstractmethod
     def ensure_shape(self, img, mask):
+        NotImplementedError
+
+    @abstractmethod
+    def apply_imgaug(self, image, mask, heat):
         NotImplementedError
 
     def __len__(self):
@@ -819,9 +822,6 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         else:
             heat = None
 
-        # Change dtype to supported one by imgaug
-        mask = mask.astype(np.uint8)
-
         # Save shape
         o_img_shape = image.shape
         o_mask_shape = mask.shape
@@ -890,9 +890,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                              self.grid_invert)
 
         # Apply transformations to the volume and its mask
-        segmap = SegmentationMapsOnImage(mask, shape=mask.shape)
-        image, vol_mask, heat_out = self.seq(image=image, segmentation_maps=segmap, heatmaps=heat)
-        mask = vol_mask.get_arr()
+        image, mask, heat_out = self.apply_imgaug(image, mask, heat)
 
         # Recover the original shape
         image = image.reshape(o_img_shape)
