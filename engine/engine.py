@@ -76,7 +76,7 @@ class Engine(object):
                     norm = True if cfg.DATA.NORMALIZATION.TYPE == 'div' else False
                     mask_path = None
                     self_supervised_args = None
-                    if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DENOISING', 'SUPER_RESOLUTION']:
+                    if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION']:
                         mask_path = cfg.DATA.TRAIN.MASK_PATH 
                     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
                         self_supervised_args = {}
