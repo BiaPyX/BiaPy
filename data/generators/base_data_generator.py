@@ -1054,8 +1054,8 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 if self.ndim == 2:
                     img, mask, oy, ox,\
                     s_y, s_x = random_crop(img, mask, self.shape[:2], self.val, img_prob=img_prob, draw_prob_map_points=True)
-                else:  
-                    vol, vol_mask, oz, oy, ox,\
+                else:
+                    img, mask, oz, oy, ox,\
                     s_z, s_y, s_x = random_3D_crop(img, mask, self.shape[:3], self.val, vol_prob=img_prob,
                                                    draw_prob_map_points=True)
                 if save_to_dir:
@@ -1064,9 +1064,8 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 if self.ndim == 3:
                     point_dict['oz'], point_dict['s_z'] = oz, s_z
 
-                sample_x.append(vol)
-                sample_y.append(vol_mask)
-                del vol, vol_mask
+                sample_x.append(img)
+                sample_y.append(mask)
             else:
                 sample_x.append(img)
                 sample_y.append(mask)
@@ -1093,11 +1092,12 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                     sample_x[i], sample_y[i], e_im=e_img, e_mask=e_mask)
 
             if self.n2v:
-                mask = np.repeat(mask, self.Y_channels*2, axis=-1).astype(np.float32)
+                mask = np.repeat(sample_y[i], self.Y_channels*2, axis=-1).astype(np.float32)
                 self.prepare_n2v(np.expand_dims(img,0), np.expand_dims(mask,0))
-            
+                sample_y[i] = mask
+
             if save_to_dir:
-                self.save_aug_samples(img, mask, orig_images, i, pos, out_dir, draw_grid, point_dict)
+                self.save_aug_samples(sample_x[i], sample_y[i], orig_images, i, pos, out_dir, draw_grid, point_dict)
 
 
     def draw_grid(self, im, grid_width=50):

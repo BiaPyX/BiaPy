@@ -890,9 +890,7 @@ def shuffle_channels(img):
         raise ValueError("Image is supposed to be 3 or 4 dimensions but provided {} image shape instead".format(img.shape))
 
     new_channel_order = np.random.permutation(img.shape[-1])
-    out = img[...,new_channel_order]
-
-    return out
+    return img[...,new_channel_order]
 
 
 def grayscale(img):
