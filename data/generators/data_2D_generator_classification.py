@@ -187,7 +187,7 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
                     img = img.astype(np.uint8)
         else:
             img = self.X[0]
-        self.div_X_on_load = True if np.max(img) > 100 else False
+        self.div_X_on_load = True if np.max(img) > 30 else False
         self.shape = resize_shape if resize_shape is not None else img.shape
 
         self.o_indexes = np.arange(self.len)

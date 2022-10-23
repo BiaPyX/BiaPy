@@ -2,7 +2,7 @@ import numpy as np
 import os
 from skimage.io import imread, imsave
 
-from utils.util import normalize
+from utils.util import normalize, norm_range01
 from data.generators.base_data_generator import BaseDataGenerator
 
 class PairImageDataGenerator(BaseDataGenerator):
@@ -60,9 +60,15 @@ class PairImageDataGenerator(BaseDataGenerator):
     """
     def __init__(self, random_crop_scale=1, **kwars):
         super().__init__(**kwars)
-
         self.Y_shape = (self.shape[0]*random_crop_scale, self.shape[1]*random_crop_scale, self.shape[2]) 
 
+        # Normalize Y as in base data generator is was consider a mask and the normalization is different
+        if self.in_memory:
+            if self.X_norm['type'] == 'div':
+                self.Y, _ = norm_range01(self.Y)
+            elif self.X_norm['type'] == 'custom':
+                self.Y = normalize(self.Y, self.X_norm['mean'], self.X_norm['std'])
+                
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
 
@@ -82,16 +88,16 @@ class PairImageDataGenerator(BaseDataGenerator):
                 imgA = imread(os.path.join(self.paths[0], self.data_paths[idx]))
                 imgB = imread(os.path.join(self.paths[1], self.data_mask_path[idx]))
 
-        imgA, imgB = self.ensure_shape(imgA, imgB)
+            # Normalization
+            if self.X_norm:
+                if self.X_norm['type'] == 'div':
+                    imgA, _ = norm_range01(imgA)
+                    imgB, _ = norm_range01(imgB)
+                elif self.X_norm['type'] == 'custom':
+                    imgA = normalize(imgA, self.X_norm['mean'], self.X_norm['std'])
+                    imgB = normalize(imgB, self.X_norm['mean'], self.X_norm['std'])
 
-        # X normalization
-        if self.X_norm['type'] == 'div':
-            if 'div' in self.X_norm:
-                imgA = imgA/255
-                imgB = imgB/255
-        elif self.X_norm['type'] == 'custom':
-            imgA = normalize(imgA, self.X_norm['mean'], self.X_norm['std'])
-            imgB = normalize(imgB, self.X_norm['mean'], self.X_norm['std'])
+        imgA, imgB = self.ensure_shape(imgA, imgB)
 
         return imgA, imgB
 

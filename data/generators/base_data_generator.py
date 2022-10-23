@@ -14,7 +14,7 @@ from data.data_2D_manipulation import random_crop
 from data.data_3D_manipulation import random_3D_crop
 from engine.denoising import (rand_float_coords2D, rand_float_coords3D, get_stratified_coords2D, get_stratified_coords3D, get_value_manipulation,                         
                               apply_structN2Vmask, apply_structN2Vmask3D)                    
-from utils.util import img_to_onehot_encoding, normalize
+from utils.util import img_to_onehot_encoding, normalize, norm_range01
 from data.generators.augmentors import (cutout, cutblur, cutmix, cutnoise, misalignment, brightness_em, contrast_em,
                                         brightness, contrast, missing_parts, shuffle_channels, grayscale, GridMask)
 
@@ -389,24 +389,20 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
         self.batch_size = batch_size
         self.in_memory = in_memory
+        self.ax_x = None # for 3D
         if not in_memory:
             # Save paths where the data is stored
             self.paths = data_paths
             self.data_paths = sorted(next(os.walk(data_paths[0]))[2])
             self.data_mask_path = sorted(next(os.walk(data_paths[1]))[2])
             self.len = len(self.data_paths)
-            
-            # Check if a division is required
-            self.X_norm = {}
-            self.X_norm['type'] = 'div'
-            img, _ = self.load_sample(0)
-            self.X_channels = img.shape[-1]
-            if np.max(img) > 100:
-                self.X_norm['div'] = 1  
 
-            self.shape = shape if random_crops_in_DA else img.shape
+            self.first_no_bin_channel = -1
+            self.div_Y_on_load_bin_channels = False
+            self.div_Y_on_load_no_bin_channels = False
 
             # X data analysis
+            self.X_norm = {}
             if norm_custom_mean is not None and norm_custom_std is not None:
                 nsamples = min(max_samples_to_analyse, len(self.data_paths))
                 sam = []
@@ -418,21 +414,26 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 self.X_norm['mean'] = np.mean(sam)
                 self.X_norm['std'] = np.std(sam)
                 del sam
+            else:                
+                self.X_norm['type'] = 'div'
+                img, _ = self.load_sample(0)
+                img, nsteps = norm_range01(img)
+                self.X_norm.update(nsteps)
+
+            self.X_channels = img.shape[-1]
+            self.shape = shape if random_crops_in_DA else img.shape
             del img
 
             # Y data analysis
-            self.first_no_bin_channel = -1
-            self.div_Y_on_load_bin_channels = False
-            self.div_Y_on_load_no_bin_channels = False
             found = False
             # Loop over a few masks to ensure foreground class is present to decide normalization
             for i in range(min(10,len(self.data_mask_path))):
                 _, mask = self.load_sample(i)
                 
                 # Store wheter all channels of the gt are binary or not (i.e. distance transform channel)
-                if not found and (img.dtype is np.dtype(np.float32) or img.dtype is np.dtype(np.float64)) and instance_problem:
-                    for j in range(img.shape[-1]):
-                        if len(np.unique(img[...,j])) > 2:
+                if not found and (mask.dtype is np.dtype(np.float32) or mask.dtype is np.dtype(np.float64)) and instance_problem:
+                    for j in range(mask.shape[-1]):
+                        if len(np.unique(mask[...,j])) > 2:
                             self.first_no_bin_channel = j
                             found = True
                             break
@@ -440,13 +441,13 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 # If found high values divide masks
                 if self.first_no_bin_channel != -1:
                     if self.first_no_bin_channel != 0:
-                        if np.max(img[...,:self.first_no_bin_channel]) > 100: self.div_Y_on_load_bin_channels = True
-                        if np.max(img[...,self.first_no_bin_channel:]) > 100: self.div_Y_on_load_no_bin_channels = True
+                        if np.max(mask[...,:self.first_no_bin_channel]) > 30: self.div_Y_on_load_bin_channels = True
+                        if np.max(mask[...,self.first_no_bin_channel:]) > 30: self.div_Y_on_load_no_bin_channels = True
                     else:
-                        if np.max(img) > 100: self.div_Y_on_load_bin_channels = True
-                        if np.max(img) > 100: self.div_Y_on_load_no_bin_channels = True 
+                        if np.max(mask) > 30: self.div_Y_on_load_bin_channels = True
+                        if np.max(mask) > 30: self.div_Y_on_load_no_bin_channels = True 
                 else:
-                    if np.max(img) > 100: self.div_Y_on_load_bin_channels = True 
+                    if np.max(mask) > 30: self.div_Y_on_load_bin_channels = True 
 
             self.Y_channels = mask.shape[-1]
             self.Y_dtype = mask.dtype
@@ -460,16 +461,20 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             self.len = len(self.X)
             self.shape = shape if random_crops_in_DA else X.shape[1:]
 
-            # X data analysis
+            # X data analysis and normalization
             self.X_norm = {}
             if norm_custom_mean is not None and norm_custom_std is not None:
                 self.X_norm['type'] = 'custom'
                 self.X_norm['mean'] = np.mean(self.X)
                 self.X_norm['std'] = np.std(self.X)
+
+                self.X = normalize(self.X, self.X_norm['mean'], self.X_norm['std'])
             else:
                 self.X_norm['type'] = 'div'
-                if np.max(X) > 100:
-                    self.X_norm['div'] = 1
+                self.X, normx = norm_range01(self.X)
+                self.X_norm.update(normx)
+            print("Training data normalization - min: {} , max: {} , mean: {}"
+                  .format(np.min(self.X), np.max(self.X), np.mean(self.X)))
 
             # Y data analysis
             self.first_no_bin_channel = -1
@@ -482,14 +487,26 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                         break
             if self.first_no_bin_channel != -1:
                 if self.first_no_bin_channel != 0:
-                    self.div_Y_on_load_bin_channels = True if np.max(self.Y[...,:self.first_no_bin_channel]) > 100 else False
-                    self.div_Y_on_load_no_bin_channels = True if np.max(self.Y[...,self.first_no_bin_channel:]) > 100 else False
+                    self.div_Y_on_load_bin_channels = True if np.max(self.Y[...,:self.first_no_bin_channel]) > 30 else False
+                    self.div_Y_on_load_no_bin_channels = True if np.max(self.Y[...,self.first_no_bin_channel:]) > 30 else False
                 else:
                     self.div_Y_on_load_bin_channels = False
-                    self.div_Y_on_load_no_bin_channels = True if np.max(self.Y) > 100 else False
+                    self.div_Y_on_load_no_bin_channels = True if np.max(self.Y) > 30 else False
             else:
-                self.div_Y_on_load_bin_channels = True if np.max(self.Y) > 100 else False
+                self.div_Y_on_load_bin_channels = True if np.max(self.Y) > 30 else False
         
+            # Y normalization    
+            if self.first_no_bin_channel != -1:
+                if self.div_Y_on_load_bin_channels:
+                    self.Y[...,:self.first_no_bin_channel] = self.Y[...,:self.first_no_bin_channel]/255
+                if self.div_Y_on_load_no_bin_channels:
+                    if self.first_no_bin_channel != 0:
+                        self.Y[...,self.first_no_bin_channel:] = self.Y[...,self.first_no_bin_channel:]/255
+                    else:
+                        self.Y = self.Y/255
+            else:
+                if self.div_Y_on_load_bin_channels: self.Y = self.Y/255
+
         if self.ndim == 2:
             resolution = tuple(resolution[i] for i in [1, 0]) # y, x -> x, y
             self.res_relation = (1.0,resolution[0]/resolution[1])
@@ -641,8 +658,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         self.seed = seed
         ia.seed(seed)
         
-        self.random_crop_func = random_3D_crop if self.ndim == 2 else random_crop
-
+        self.random_crop_func = random_3D_crop if self.ndim == 3 else random_crop
         self.on_epoch_end()
 
     @abstractmethod
@@ -687,26 +703,26 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 img = imread(os.path.join(self.paths[0], self.data_paths[idx]))
                 mask = imread(os.path.join(self.paths[1], self.data_mask_path[idx]))
 
+            # X normalization
+            if self.X_norm:
+                if self.X_norm['type'] == 'div':
+                    img, _ = norm_range01(img)
+                elif self.X_norm['type'] == 'custom':
+                    img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
+
+            # Y normalization    
+            if self.first_no_bin_channel != -1:
+                if self.div_Y_on_load_bin_channels:
+                    mask[...,:self.first_no_bin_channel] = mask[...,:self.first_no_bin_channel]/255
+                if self.div_Y_on_load_no_bin_channels:
+                    if self.first_no_bin_channel != 0:
+                        mask[...,self.first_no_bin_channel:] = mask[...,self.first_no_bin_channel:]/255
+                    else:
+                        mask = mask/255
+            else:
+                if self.div_Y_on_load_bin_channels: mask = mask/255
+
         img, mask = self.ensure_shape(img, mask)
-
-        # X normalization
-        if self.X_norm['type'] == 'div':
-            if 'div' in self.X_norm:
-                img = img/255
-        elif self.X_norm['type'] == 'custom':
-            img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
-
-        # Y normalization    
-        if self.first_no_bin_channel != -1:
-            if self.div_Y_on_load_bin_channels:
-                mask[...,:self.first_no_bin_channel] = mask[...,:self.first_no_bin_channel]/255
-            if self.div_Y_on_load_no_bin_channels:
-                if self.first_no_bin_channel != 0:
-                    mask[...,self.first_no_bin_channel:] = mask[...,self.first_no_bin_channel:]/255
-                else:
-                    mask = mask/255
-        else:
-            if self.div_Y_on_load_bin_channels: mask = mask/255
 
         return img, mask
 
@@ -745,8 +761,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                         img_prob = self.prob_map[j]
                 else:
                     img_prob = None
-
-                batch_x[i], batch_y[i] = self.random_crop_func(img, mask, self.shape[:self.ndim], self.val, vol_prob=img_prob)
+                batch_x[i], batch_y[i] = self.random_crop_func(img, mask, self.shape[:self.ndim], self.val, img_prob=img_prob)
             else:
                 batch_x[i], batch_y[i] = img, mask
 
@@ -771,7 +786,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[k][0]))
 
             batch_y = batch_y_
-
+        
         self.total_batches_seen += 1
         if self.out_number == 1:
             return batch_x, batch_y
@@ -1056,7 +1071,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                     s_y, s_x = random_crop(img, mask, self.shape[:2], self.val, img_prob=img_prob, draw_prob_map_points=True)
                 else:
                     img, mask, oz, oy, ox,\
-                    s_z, s_y, s_x = random_3D_crop(img, mask, self.shape[:3], self.val, vol_prob=img_prob,
+                    s_z, s_y, s_x = random_3D_crop(img, mask, self.shape[:3], self.val, img_prob=img_prob,
                                                    draw_prob_map_points=True)
                 if save_to_dir:
                     point_dict = {}

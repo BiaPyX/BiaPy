@@ -86,6 +86,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
                 custom_mean = np.load(cfg.PATHS.MEAN_INFO_FILE)
                 custom_std = np.load(cfg.PATHS.STD_INFO_FILE)
                 print("Train/Val normalization values loaded!")
+        else:
+            custom_mean = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
+            custom_std = cfg.DATA.NORMALIZATION.CUSTOM_STD
         print("Train/Val normalization: using mean {} and std: {}".format(custom_mean, custom_std))
 
     if cfg.PROBLEM.NDIM == '2D':
@@ -224,7 +227,10 @@ def create_test_augmentor(cfg, X_test, Y_test):
                     .format(cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE))
             custom_mean = np.load(cfg.PATHS.MEAN_INFO_FILE)
             custom_std = np.load(cfg.PATHS.STD_INFO_FILE)
-            print("Test normalization: using mean {} and std: {}".format(custom_mean, custom_std))
+        else:
+            custom_mean = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
+            custom_std = cfg.DATA.NORMALIZATION.CUSTOM_STD
+        print("Test normalization: using mean {} and std: {}".format(custom_mean, custom_std))
 
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
         test_generator = ClassImageDataGenerator(X=X_test, Y=Y_test, data_path=cfg.DATA.TEST.PATH,

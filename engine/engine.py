@@ -73,7 +73,6 @@ class Engine(object):
         if cfg.TRAIN.ENABLE:
             if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']:
                 if cfg.DATA.TRAIN.IN_MEMORY:
-                    norm = True if cfg.DATA.NORMALIZATION.TYPE == 'div' else False
                     mask_path = None
                     self_supervised_args = None
                     if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION']:
@@ -90,12 +89,12 @@ class Engine(object):
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
                             ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, check_crop=cfg.DATA.TRAIN.CHECK_CROP,
                             check_crop_path=cfg.PATHS.CROP_CHECKS, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
-                            normalize=norm, self_supervised_args=self_supervised_args)
+                            self_supervised_args=self_supervised_args)
                     else:
                         objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, mask_path,
                             val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
-                            ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, normalize=norm,
+                            ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, 
                             reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE, 
                             self_supervised_args=self_supervised_args)
 
@@ -122,8 +121,8 @@ class Engine(object):
                                              reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
                         if cfg.PROBLEM.TYPE != 'DENOISING':
                             Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
-                                                overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
-                                                reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                                                 overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
+                                                 reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
                         else:
                             Y_val = np.zeros(X_val.shape, dtype=np.uint8) # Fake mask val
                     else:
@@ -272,7 +271,6 @@ class Engine(object):
                 if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                     if type(X) is tuple:
                         _X = X[j]
-                        
                         _Y = Y[j] if self.cfg.DATA.TEST.LOAD_GT else None
                     else:
                         _X = np.expand_dims(X[j],0)

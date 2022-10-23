@@ -103,7 +103,7 @@ class Detection(Base_Workflow):
                 self.stats[metric_names[0]] += all_channel_d_metrics[0]
                 self.stats[metric_names[1]] += all_channel_d_metrics[1]
                 self.stats[metric_names[2]] += all_channel_d_metrics[2]
-
+            
     def normalize_stats(self, image_counter):
         super().normalize_stats(image_counter)
 

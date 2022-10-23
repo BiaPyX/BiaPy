@@ -90,9 +90,11 @@ class Self_supervised(Base_Workflow):
             pred = pred[0]
 
         # Undo normalization
-        x_norm = norm[0]
+        x_norm = norm[0][0]
         if x_norm['type'] == 'div':
             pred = pred*255
+            if 'reduced_uint16' in x_norm:
+                pred = (pred*65535).astype(np.uint16)
         else:
             pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
             
@@ -172,11 +174,6 @@ def crappify(data, resizing_factor, add_noise=True, noise_level=None, Down_up=Tr
         targ_sz = (new_w, new_h)
     else:
         targ_sz = (new_d, new_w, new_h)
-
-    # Normalize data
-    if np.max(data) > 100:
-        print("WARNING: in SELF_SUPERVISED data is normalized between [0,1] even if custom normalization was selected!")
-        data = data/255        
 
     new_data = []
     for i in tqdm(range(data.shape[0]), leave=False):

@@ -89,9 +89,11 @@ class Super_resolution(Base_Workflow):
             pred = pred[0]
 
         # Undo normalization
-        x_norm = norm[0]
+        x_norm = norm[0][0]
         if x_norm['type'] == 'div':
             pred = pred*255
+            if 'reduced_uint16' in x_norm:
+                pred = (pred*65535).astype(np.uint16)
         else:
             pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
             

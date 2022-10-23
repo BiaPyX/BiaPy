@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from skimage.io import imread
 
-from utils.util import normalize
+from utils.util import normalize, norm_range01
 
 
 class simple_data_generator(tf.keras.utils.Sequence):
@@ -86,23 +86,25 @@ class simple_data_generator(tf.keras.utils.Sequence):
         if provide_Y:
             self.Y_norm = {}
             self.Y_norm['type'] = 'div'
-        img, mask = self.__load_sample(0)
-        if np.max(img) > 100:
-            self.X_norm['div'] = 1
+        img, mask, xnorm = self.load_sample(0)
+
         if norm_custom_mean is not None and norm_custom_std is not None:
             self.X_norm['type'] = 'custom'
             self.X_norm['mean'] = norm_custom_mean
             self.X_norm['std'] = norm_custom_std
+        else:
+            self.X_norm.update(xnorm)
+
         if mask is not None:
             self.Y_norm = {}
             self.Y_norm['type'] = 'div'
-            if (np.max(mask) > 100 and not instance_problem):
+            if (np.max(mask) > 30 and not instance_problem):
                 self.Y_norm['div'] = 1   
 
         self.on_epoch_end()
 
 
-    def __load_sample(self, idx):
+    def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
         mask = None
         # Choose the data source
@@ -136,22 +138,21 @@ class simple_data_generator(tf.keras.utils.Sequence):
                 if mask.ndim == 3: mask = np.expand_dims(mask, -1)
             else:
                 if mask.ndim == 2: mask = np.expand_dims(mask, -1)
-        
+
         # Normalization
+        xnorm = None
         if self.X_norm['type'] == 'div':
-            if 'div' in self.X_norm:
-                img = img/255
-            if self.provide_Y:
-                if 'div' in self.Y_norm:
-                    mask = mask/255
+            img, xnorm = norm_range01(img)
         elif self.X_norm['type'] == 'custom':
             img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
-
+        if self.provide_Y:
+            if 'div' in self.Y_norm:
+                mask = mask/255
+            
         img = np.expand_dims(img, 0).astype(np.float32)
         if self.provide_Y:
             mask = np.expand_dims(mask, 0).astype(np.uint8)
-
-        return img, mask
+        return img, mask, xnorm
 
 
     def __len__(self):
@@ -179,22 +180,29 @@ class simple_data_generator(tf.keras.utils.Sequence):
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         batch_x = []
         if self.provide_Y: batch_y = []
+        normx, normy = [], []
 
         for i, j in zip(range(len(indexes)), indexes):
-            img, mask = self.__load_sample(j)
+            img, mask, norm = self.load_sample(j)
+            
+            if self.provide_Y: 
+                batch_y.append(mask)
+                normy.append(self.Y_norm)
 
-            batch_x.append(img)
-            if self.provide_Y: batch_y.append(mask)
-
+            batch_x.append(img)    
+            if norm is not None:
+                self.X_norm.update(norm)
+            normx.append(self.X_norm)
+            
         batch_x = np.concatenate(batch_x)
         if self.provide_Y: batch_y = np.concatenate(batch_y)
 
         self.total_batches_seen += 1
         
         if self.provide_Y:
-            return batch_x, self.X_norm, batch_y, self.Y_norm
+            return batch_x, normx, batch_y, normy
         else:
-            return batch_x, self.X_norm
+            return batch_x, normx
 
     def on_epoch_end(self):
         """Updates indexes after each epoch."""

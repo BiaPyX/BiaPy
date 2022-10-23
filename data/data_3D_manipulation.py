@@ -6,7 +6,7 @@ from utils.util import load_3d_images_from_dir
 
 def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True,
                              crop_shape=(80, 80, 80, 1), random_crops_in_DA=False, ov=(0,0,0), padding=(0,0,0),
-                             reflect_to_complete_shape=False, normalize=True, self_supervised_args=None):
+                             reflect_to_complete_shape=False, self_supervised_args=None):
     """Load train and validation images from the given paths to create 3D data.
 
        Parameters
@@ -43,9 +43,6 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
        reflect_to_complete_shape : bool, optional
            Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
            'reflect'.
-           
-       normalize : bool, optional
-           Whether to normalize the values if np.uint16 dtype file is loaded.
 
        self_supervised_args : dict, optional
            Arguments to create ground truth data for self-supervised workflow. 
@@ -103,13 +100,12 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
 
     print("0) Loading train images . . .")
     X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, crop=crop, crop_shape=crop_shape,
-        overlap=ov, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape,
-        normalize=normalize)
+        overlap=ov, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape)
 
     if train_mask_path is not None:
         print("1) Loading train masks . . .")
         Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
-            reflect_to_complete_shape=reflect_to_complete_shape, normalize=False)
+            reflect_to_complete_shape=reflect_to_complete_shape)
     # Self-supervised 
     elif self_supervised_args is not None:
         print("1) Creating GT for self-supervision . . .")
@@ -493,7 +489,7 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
         return merged_data
 
 
-def random_3D_crop(vol, vol_mask, random_crop_size, val=False, vol_prob=None, weight_map=None, draw_prob_map_points=False):
+def random_3D_crop(vol, vol_mask, random_crop_size, val=False, img_prob=None, weight_map=None, draw_prob_map_points=False):
     """Extracts a random 3D patch from the given image and mask.
 
        Parameters
@@ -511,7 +507,7 @@ def random_3D_crop(vol, vol_mask, random_crop_size, val=False, vol_prob=None, we
            If the image provided is going to be used in the validation data. This forces to crop from the origin, e.g.
            ``(0, 0)`` point.
 
-       vol_prob : Numpy 4D array, optional
+       img_prob : Numpy 4D array, optional
            Probability of each pixel to be chosen as the center of the crop. E. g. ``(z, y, x, channels)``.
 
        weight_map : bool, optional
@@ -550,21 +546,21 @@ def random_3D_crop(vol, vol_mask, random_crop_size, val=False, vol_prob=None, we
            X coordinate in the complete image where the crop starts.
     """
 
-    deep, rows, cols  = vol.shape[0], vol.shape[1], vol.shape[2]
-    dz, dx, dy = random_crop_size
+    deep, cols, rows = vol.shape[0], vol.shape[1], vol.shape[2]
+    dz, dy, dx = random_crop_size
     assert rows >= dx
     assert cols >= dy
     assert deep >= dz
     if val:
         x, y, z, ox, oy, oz = 0, 0, 0, 0, 0, 0
     else:
-        if vol_prob is not None:
-            prob = vol_prob.ravel()
+        if img_prob is not None:
+            prob = img_prob.ravel()
 
             # Generate the random coordinates based on the distribution
-            choices = np.prod(vol_prob.shape)
+            choices = np.prod(img_prob.shape)
             index = np.random.choice(choices, size=1, p=prob)
-            coordinates = np.unravel_index(index, shape=vol_prob.shape)
+            coordinates = np.unravel_index(index, shape=img_prob.shape)
             x = int(coordinates[2])
             y = int(coordinates[1])
             z = int(coordinates[0])

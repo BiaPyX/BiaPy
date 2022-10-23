@@ -24,13 +24,12 @@ class VoxelDataGenerator(BaseDataGenerator):
     def __init__(self, zflip=False, **kwars):
         super().__init__(**kwars)
 
-        self.ax_x = None
         if not self.in_memory:
             # Load one image to check axis position
             if self.data_paths[0].endswith('.tif'):
                 from PIL import Image
                 from PIL.TiffTags import TAGS
-                img_aux = Image.open(os.path.join(self.data_paths[0], self.data_paths[0]))
+                img_aux = Image.open(os.path.join(self.paths[0], self.data_paths[0]))
                 meta_dict = {TAGS[key] : img_aux.tag[key] for key in img_aux.tag_v2}
                 axis = meta_dict['ImageDescription'][0].split('\n')[-2].split('=')[-1]
                 self.ax_x = {}
@@ -38,7 +37,7 @@ class VoxelDataGenerator(BaseDataGenerator):
                     self.ax_x[c] = k  
                 if 'Z' in self.ax_x: 
                     img_aux = img_aux.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
-                self.X_channels = img_aux.shape[-1]
+                self.X_channels = np.array(img_aux).shape[-1]
                 del img_aux
 
         self.z_size = self.shape[0] if self.random_crops_in_DA else self.X.shape[1]

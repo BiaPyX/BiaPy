@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
 
-from utils.util import pad_and_reflect, apply_binary_mask, save_tif, check_downsample_division, denormalize
+from utils.util import pad_and_reflect, apply_binary_mask, save_tif, check_downsample_division
 from data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap
 from data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
 from data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
@@ -74,9 +74,10 @@ class Base_Workflow(metaclass=ABCMeta):
                         X = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
                             padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
                             median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
-                        Y = crop_3D_data_with_overlap(Y, self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
-                            padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
-                            median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                        if self.cfg.DATA.TEST.LOAD_GT:
+                            Y = crop_3D_data_with_overlap(Y, self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                                padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
+                                median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
                     else:
                         obj = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
                             padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
@@ -116,7 +117,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < X.shape[0] else X.shape[0]
                     p = self.model.predict(X[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
                     pred.append(p)
-
+            
             # Delete X as in 3D there is no full image 
             if self.cfg.PROBLEM.NDIM == '3D': 
                 del X, p
@@ -130,8 +131,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.TEST.REDUCE_MEMORY:
                     pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
                         overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
-                    Y = f_name(Y, original_data_shape[:-1]+(Y.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
-                        overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
+                    if self.cfg.DATA.TEST.LOAD_GT:
+                        Y = f_name(Y, original_data_shape[:-1]+(Y.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
+                            overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
                 else:
                     obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=Y,
                         padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
@@ -164,7 +166,6 @@ class Base_Workflow(metaclass=ABCMeta):
             # Save image
             if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
                 save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
-
 
             #########################
             ### MERGE PATCH STATS ###

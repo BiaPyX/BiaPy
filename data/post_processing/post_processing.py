@@ -850,7 +850,7 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
                     print("Skip this sample as it is just background")
             else:
                 # Prediction
-                if np.max(img) > 100: img = img/255
+                if np.max(img) > 30: img = img/255
                 pred = model.predict(img, verbose=0)
 
                 if bin_mask_path is not None:

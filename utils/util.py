@@ -1114,7 +1114,7 @@ def onehot_encoding_to_img(encoded_image):
 
 
 def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), padding=(0,0), return_filenames=False,
-                       reflect_to_complete_shape=False, normalize=True):
+                       reflect_to_complete_shape=False):
     """Load data from a directory. If ``crop=False`` all the data is suposed to have the same shape.
 
        Parameters
@@ -1142,9 +1142,6 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
        reflect_to_complete_shape : bool, optional
            Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
            'reflect'.
-
-       normalize : bool, optional
-           Whether to normalize the values if np.uint16 dtype file is loaded.
 
        Returns
        -------
@@ -1215,13 +1212,6 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
            if img.shape[0] <= 3: img = img.transpose((1,2,0))
 
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=False)
-
-        # Ensure uint8
-        if img.dtype == np.uint16 and normalize:
-            if np.max(img) > 255:
-                img = reduce_dtype(img, 0, 65535)
-            else:
-                img = img.astype(np.uint8)
 
         data_shape.append(img.shape)
         img = np.expand_dims(img, axis=0)
@@ -1316,8 +1306,7 @@ def load_ct_data_from_dir(data_dir, shape=None):
 
 
 def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False, overlap=(0,0,0), padding=(0,0,0),
-                            median_padding=False, reflect_to_complete_shape=False, return_filenames=False, 
-                            normalize=True):
+                            median_padding=False, reflect_to_complete_shape=False, return_filenames=False):
     """Load data from a directory.
 
        Parameters
@@ -1351,9 +1340,6 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
        return_filenames : bool, optional
            Return a list with the loaded filenames. Useful when you need to save them afterwards with the same names as
            the original ones.
-
-       normalize : bool, optional
-           Whether to normalize the values if np.uint16 dtype file is loaded.
 
        Returns
        -------
@@ -1442,13 +1428,6 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
         if img.ndim < 3:
             raise ValueError("Read image seems to be 2D: {}. Path: {}".format(img.shape, os.path.join(data_dir, id_)))
 
-        # Ensure uint8
-        if img.dtype == np.uint16 and normalize:
-            if np.max(img) > 255:
-                img = reduce_dtype(img, 0, 65535)
-            else:
-                img = img.astype(np.uint8)
-
         if return_filenames: filenames.append(id_)
         if len(img.shape) == 3: img = np.expand_dims(img, axis=-1)
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=verbose)
@@ -1465,7 +1444,11 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
 
     same_shape = True
     s = data[0].shape
+    dtype = data[0].dtype
     for i in range(1,len(data)):
+        if dtype != data[i].dtype:
+            raise ValueError("Data type mismatch {} and {} found in the dataset. Please check it and ensure all"
+                             " images have same data type".format(dtype,data[i].dtype))
         if s != data[i].shape:
             same_shape = False
             break
@@ -1845,7 +1828,19 @@ def wrapper_matching_segCompare(stats_all):
         accumulated_values[key] = accumulated_values[key]/len(stats_all)
     return accumulated_values
 
-def reduce_dtype(x, x_min, x_max, out_min=0, out_max=255, out_type=np.float32):
+def norm_range01(x):
+    norm_steps = {}
+    if x.dtype == np.uint8:
+        x = x/255
+        norm_steps['div_255'] = 1
+    elif x.dtype == np.uint16:
+        if np.max(x) > 255:
+            x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=np.float32)
+            norm_steps['reduced_uint16'] = 1
+    x = x.astype(np.float32)
+    return x, norm_steps
+
+def reduce_dtype(x, x_min, x_max, out_min=0, out_max=1, out_type=np.float32):
     return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)
 
 def check_value(value, range=(0,1)):
