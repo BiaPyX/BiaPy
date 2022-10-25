@@ -1,10 +1,10 @@
-import sys
 import random
 import os
 import numpy as np
 import tensorflow as tf
 from skimage.io import imread
-
+from PIL import Image
+from PIL.TiffTags import TAGS
 from utils.util import normalize, norm_range01
 
 
@@ -79,6 +79,8 @@ class simple_data_generator(tf.keras.utils.Sequence):
         else:
             self.len = len(X)
         self.o_indexes = np.arange(self.len)
+        self.ax = None
+        self.ay = None
 
         # Check if a division is required
         self.X_norm = {}
@@ -115,8 +117,35 @@ class simple_data_generator(tf.keras.utils.Sequence):
                     mask = np.load(os.path.join(self.dm_path, self.data_mask_path[idx]))
             else:
                 img = imread(os.path.join(self.d_path, self.data_path[idx]))
+
+                if img.ndim == 4 and self.data_path[idx].endswith('.tif'):
+                    # Obtain axis position once
+                    if self.ax is None:
+                        img_aux = Image.open(os.path.join(self.d_path, self.data_path[idx]))
+                        meta_dict = {TAGS[key] : img_aux.tag[key] for key in img_aux.tag_v2}
+                        axis = meta_dict['ImageDescription'][0].split('\n')[-2].split('=')[-1]
+                        self.ax = {}
+                        for k, c in enumerate(axis):
+                            self.ax[c] = k
+                        del img_aux
+                    if 'Z' in self.ax:
+                        img = img.transpose((self.ax['Z'],self.ax['Y'],self.ax['X'],self.ax['C']))
+
                 if self.provide_Y:
                     mask = imread(os.path.join(self.dm_path, self.data_mask_path[idx]))
+                    if mask.ndim == 4 and self.data_mask_path[idx].endswith('.tif'):
+                        # Obtain axis position once
+                        if self.ay is None:
+                            img_aux = Image.open(os.path.join(self.dm_path, self.data_mask_path[idx]))
+                            meta_dict = {TAGS[key] : img_aux.tag[key] for key in img_aux.tag_v2}
+                            axis = meta_dict['ImageDescription'][0].split('\n')[-2].split('=')[-1]
+                            self.ay = {}
+                            for k, c in enumerate(axis):
+                                self.ay[c] = k
+                            del img_aux
+                        if 'Z' in self.ay:
+                            mask = mask.transpose((self.ay['Z'],self.ay['Y'],self.ay['X'],self.ay['C']))
+
             img = np.squeeze(img)
             if self.provide_Y:
                 mask = np.squeeze(mask) 

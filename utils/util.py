@@ -338,7 +338,6 @@ def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discar
                 f1 = os.path.join(data_dir, 'x'+suffix, str(i).zfill(d)+'.tif')
                 f2 = os.path.join(data_dir, 'y'+suffix, str(i).zfill(d)+'.tif')
             else:
-
                 f1 = os.path.join(data_dir, 'x'+suffix, os.path.splitext(filenames[i])[0]+'.tif')
                 f2 = os.path.join(data_dir, 'y'+suffix, os.path.splitext(filenames[i])[0]+'.tif')
             if X.ndim == 4:
