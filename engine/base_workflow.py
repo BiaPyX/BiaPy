@@ -75,7 +75,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
                             median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
                         if self.cfg.DATA.TEST.LOAD_GT:
-                            Y = crop_3D_data_with_overlap(Y, self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                            Y = crop_3D_data_with_overlap(Y, self.cfg.DATA.PATCH_SIZE[:-1]+(Y.shape[-1],), overlap=self.cfg.DATA.TEST.OVERLAP, 
                                 padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
                                 median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
                     else:
@@ -109,7 +109,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         p = ensemble16_3d_predictions(X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                                 pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
                     if 'pred' not in locals():
-                        pred = np.zeros((X.shape[0],)+p.shape[1:], dtype=np.float32)
+                        pred = np.zeros((X.shape[0],)+p.shape, dtype=np.float32)
                     pred[k] = p
             else:
                 l = int(math.ceil(X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
