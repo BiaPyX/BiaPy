@@ -3,30 +3,36 @@ SYSTEM:
     NUM_CPUS: 1
 
 PROBLEM:
-    TYPE: SEMANTIC_SEG
+    TYPE: DENOISING
     NDIM: 2D
   
 DATA: 
-    PATCH_SIZE: (256, 256, 1)
+    PATCH_SIZE: (64, 64, 3)
+    EXTRACT_RANDOM_PATCH: True
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
         IN_MEMORY: True
         LOAD_GT: True
+        PADDING: (8,8)
 
 AUGMENTOR:
     ENABLE: True
-    RANDOM_ROT: True
+    DA_PROB: 0.5
     VFLIP: True
     HFLIP: True
+    ROT90: True
+    RANDOM_CROP_SCALE: 4
 
 MODEL:
-    ARCHITECTURE: unet
-    FEATURE_MAPS: [16, 32, 64, 128, 256]
-    DROPOUT_VALUES: [0.1, 0.1, 0.2, 0.2, 0.3]
+    ARCHITECTURE: n2v
     LOAD_CHECKPOINT: False
 
 LOSS:
@@ -34,18 +40,11 @@ LOSS:
   
 TRAIN:
     ENABLE: True
-    OPTIMIZER: SGD
-    LR: 2.E-3
+    OPTIMIZER: ADAM
+    LR: 5.E-5
     BATCH_SIZE: 6
-    EPOCHS: 360
-    PATIENCE: 50
+    EPOCHS: 100
+    PATIENCE: 20
   
 TEST:
     ENABLE: True
-    AUGMENTATION: True
-    STATS:
-        PER_PATCH: True
-        MERGE_PATCHES: True
-        FULL_IMG: True
-    POST_PROCESSING:
-        YZ_FILTERING: True

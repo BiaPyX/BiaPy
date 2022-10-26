@@ -3,26 +3,28 @@ SYSTEM:
     NUM_CPUS: 1
 
 PROBLEM:
-    TYPE: INSTANCE_SEG
+    TYPE: SEMANTIC_SEG
     NDIM: 3D
 
 DATA: 
-    CHANNELS: BC
-    MW_TH1: 0.2
-    MW_TH2: 0.1 
-    MW_TH3: 0.3
     PATCH_SIZE: (64, 64, 64, 1)
     CHECK_GENERATORS: False
     TRAIN:
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
         IN_MEMORY: True
         PADDING: (0,0,0)
         OVERLAP: (0,0,0)
     VAL:
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
         FROM_TRAIN: False
         IN_MEMORY: True
         PADDING: (0,0,0)
         OVERLAP: (0,0,0)
     TEST:
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
         IN_MEMORY: False
         LOAD_GT: False
         PADDING: (0,0,0)
@@ -35,7 +37,7 @@ AUGMENTOR:
     HFLIP: True
 
 MODEL:
-    ARCHITECTURE: resunet
+    ARCHITECTURE: unet
     FEATURE_MAPS: [36, 48, 64]
     DROPOUT_VALUES: [0, 0, 0]
     Z_DOWN: 1
@@ -54,7 +56,6 @@ TRAIN:
   
 TEST:
     ENABLE: True
-    VERBOSE: False
     AUGMENTATION: False
     STATS:
         PER_PATCH: True

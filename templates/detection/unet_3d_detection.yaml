@@ -1,0 +1,79 @@
+SYSTEM:
+    NUM_GPUS: 1
+    NUM_CPUS: 1
+
+PROBLEM:
+    TYPE: DETECTION
+    NDIM: 3D
+
+DATA: 
+    PATCH_SIZE: (26, 128, 128, 3)
+    REFLECT_TO_COMPLETE_SHAPE: True
+    EXTRACT_RANDOM_PATCH: False
+    TRAIN:
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
+        IN_MEMORY: True
+    VAL:
+        FROM_TRAIN: True
+        SPLIT_TRAIN: 0.2
+        IN_MEMORY: True
+    TEST:
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
+        IN_MEMORY: True
+        LOAD_GT: False
+        PADDING: (0,32,32)
+                
+AUGMENTOR:
+    DA_PROB: 0.5
+    MISALIGNMENT: False
+    CUTOUT: True
+    CUTNOISE: False
+    CUTBLUR: True
+    ENABLE: True
+    RANDOM_ROT: True
+    ROT90: False
+    VFLIP: True
+    HFLIP: True
+    CONTRAST: True
+    CONTRAST_FACTOR: (-0.3, 0.3)
+    BRIGHTNESS: True
+    BRIGHTNESS_FACTOR: (0.1, 0.3)
+    GAMMA_CONTRAST: True
+    GC_GAMMA: (0.5, 1.5)
+    ELASTIC: False
+    GRAYSCALE: False
+    CHANNEL_SHUFFLE: True
+
+MODEL:
+    ARCHITECTURE: unet
+    FEATURE_MAPS: [18, 36, 48, 64]
+    DROPOUT_VALUES: [0.1, 0.2, 0.3, 0.4]
+    Z_DOWN: 1
+    LOAD_CHECKPOINT: True
+
+LOSS:
+  TYPE: CE
+  
+TRAIN:
+    ENABLE: False
+    OPTIMIZER: ADAM
+    LR: 1.E-4
+    BATCH_SIZE: 6
+    EPOCHS: 800
+    PATIENCE: 200
+  
+TEST:
+    ENABLE: True
+    VERBOSE: True
+    AUGMENTATION: False
+    DET_LOCAL_MAX_COORDS: True
+    DET_TOLERANCE: [10]
+    DET_MIN_DISTANCE: [10]
+    DET_MIN_TH_TO_BE_PEAK: [0.30]
+    DET_VOXEL_SIZE: (1.0,1.0,3.6)
+    STATS:
+        PER_PATCH: True
+        MERGE_PATCHES: True
+        FULL_IMG: False

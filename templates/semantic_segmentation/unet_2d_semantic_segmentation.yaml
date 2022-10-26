@@ -3,38 +3,34 @@ SYSTEM:
     NUM_CPUS: 1
 
 PROBLEM:
-    TYPE: INSTANCE_SEG
+    TYPE: SEMANTIC_SEG
     NDIM: 2D
   
 DATA: 
     PATCH_SIZE: (256, 256, 1)
-    CHANNELS: BC
-    MW_TH1: 0.1
-    MW_TH2: 0.01
-    MW_TH3: 0.1   
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
-        FROM_TRAIN: False
+        SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
-        IN_MEMORY: False
-        LOAD_GT: False
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
+        IN_MEMORY: True
+        LOAD_GT: True
 
 AUGMENTOR:
     ENABLE: True
     RANDOM_ROT: True
     VFLIP: True
     HFLIP: True
-    ELASTIC: True
-    BRIGHTNESS: True
-    CONTRAST: True
 
 MODEL:
     ARCHITECTURE: unet
     FEATURE_MAPS: [16, 32, 64, 128, 256]
     DROPOUT_VALUES: [0.1, 0.1, 0.2, 0.2, 0.3]
-    ACTIVATION: 'elu'
     LOAD_CHECKPOINT: False
 
 LOSS:
@@ -42,19 +38,18 @@ LOSS:
   
 TRAIN:
     ENABLE: True
-    OPTIMIZER: ADAM
-    LR: 1.E-4
+    OPTIMIZER: SGD
+    LR: 2.E-3
     BATCH_SIZE: 6
-    EPOCHS: 200
-    PATIENCE: 30
+    EPOCHS: 360
+    PATIENCE: 50
   
 TEST:
     ENABLE: True
-    AUGMENTATION: False
+    AUGMENTATION: True
     STATS:
         PER_PATCH: True
         MERGE_PATCHES: True
-        FULL_IMG: False
+        FULL_IMG: True
     POST_PROCESSING:
         YZ_FILTERING: True
-    VERBOSE: True

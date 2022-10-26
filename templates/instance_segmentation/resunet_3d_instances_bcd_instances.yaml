@@ -16,15 +16,21 @@ DATA:
     PATCH_SIZE: (64, 64, 64, 1)
     CHECK_GENERATORS: False
     TRAIN:
+        PATH: /path/to/data                                                                                             
+        MASK_PATH: /path/to/data
         IN_MEMORY: True
         PADDING: (0,0,0)
         OVERLAP: (0,0,0)
     VAL:
         FROM_TRAIN: False
+        PATH: /path/to/data                                                                                             
+        MASK_PATH: /path/to/data
         IN_MEMORY: True
         PADDING: (0,0,0)
         OVERLAP: (0,0,0)
     TEST:
+        PATH: /path/to/data                                                                                             
+        MASK_PATH: /path/to/data
         IN_MEMORY: False
         LOAD_GT: False
         PADDING: (16,16,16)

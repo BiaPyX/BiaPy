@@ -1,0 +1,59 @@
+SYSTEM:
+    NUM_GPUS: 1
+    NUM_CPUS: 1
+
+PROBLEM:
+    TYPE: SELF_SUPERVISED
+    NDIM: 2D
+  
+DATA: 
+    PATCH_SIZE: (256, 256, 1)
+    EXTRACT_RANDOM_PATCH: False
+    PROBABILITY_MAP: True
+    CHECK_GENERATORS: False
+    TRAIN:                                                                                                              
+        PATH: /path/to/data                                                                                             
+        MASK_PATH: /path/to/data
+        IN_MEMORY: True
+    VAL:
+        SPLIT_TRAIN: 0.1
+    TEST:                                                                                                               
+        IN_MEMORY: True
+        LOAD_GT: True
+        PATH: /path/to/data                                                                                             
+        MASK_PATH: /path/to/data
+        PADDING: (16,16)
+
+AUGMENTOR:
+    ENABLE: True
+    DA_PROB: 1.0
+    RANDOM_ROT: False
+    VFLIP: False
+    HFLIP: False
+    GRIDMASK: False
+    DRAW_GRID: False
+
+MODEL:
+    ARCHITECTURE: unet
+    FEATURE_MAPS: [16, 32, 64, 128, 256]
+    DROPOUT_VALUES: [0.1, 0.1, 0.2, 0.2, 0.3]
+    LOAD_CHECKPOINT: True
+
+LOSS:
+  TYPE: CE
+  
+TRAIN:
+    ENABLE: False
+    OPTIMIZER: SGD
+    LR: 2.E-3
+    BATCH_SIZE: 12
+    EPOCHS: 100
+    PATIENCE: 20
+  
+TEST:
+    ENABLE: True
+    AUGMENTATION: False
+    STATS:
+        PER_PATCH: True
+        MERGE_PATCHES: True
+        FULL_IMG: False

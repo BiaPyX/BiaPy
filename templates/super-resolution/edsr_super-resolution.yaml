@@ -1,0 +1,51 @@
+SYSTEM:
+    NUM_GPUS: 1
+    NUM_CPUS: 1
+
+PROBLEM:
+    TYPE: SUPER_RESOLUTION
+    NDIM: 2D
+  
+DATA: 
+    PATCH_SIZE: (24, 24, 1)
+    EXTRACT_RANDOM_PATCH: True
+    CHECK_GENERATORS: False
+    TRAIN:                                                                                                              
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
+        IN_MEMORY: True
+    VAL:
+        SPLIT_TRAIN: 0.1
+    TEST:                                                                                                               
+        IN_MEMORY: True
+        LOAD_GT: True
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
+        PADDING: (8,8)
+
+AUGMENTOR:
+    ENABLE: True
+    DA_PROB: 0.5
+    VFLIP: True
+    HFLIP: True
+    ROT90: True
+    RANDOM_CROP_SCALE: 4
+
+MODEL:
+    ARCHITECTURE: edsr
+    LOAD_CHECKPOINT: False
+
+LOSS:
+  TYPE: CE
+  
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAM
+    LR: 5.E-5
+    BATCH_SIZE: 6
+    EPOCHS: 100
+    PATIENCE: 20
+  
+TEST:
+    ENABLE: True
+    AUGMENTATION: False
