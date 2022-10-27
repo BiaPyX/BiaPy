@@ -19,6 +19,7 @@ DATA:
         SPLIT_TRAIN: 0.2
         IN_MEMORY: True
     TEST:
+        RESOLUTION: (1.0,1.0,3.6)
         PATH: /path/to/data
         MASK_PATH: /path/to/data
         IN_MEMORY: True
@@ -70,10 +71,11 @@ TEST:
     AUGMENTATION: False
     DET_LOCAL_MAX_COORDS: True
     DET_TOLERANCE: [10]
-    DET_MIN_DISTANCE: [10]
     DET_MIN_TH_TO_BE_PEAK: [0.30]
-    DET_VOXEL_SIZE: (1.0,1.0,3.6)
     STATS:
         PER_PATCH: True
         MERGE_PATCHES: True
         FULL_IMG: False
+    POST_PROCESSING:
+        REMOVE_CLOSE_POINTS: True
+        REMOVE_CLOSE_POINTS_RADIUS: 10.0

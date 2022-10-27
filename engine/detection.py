@@ -4,6 +4,7 @@ import numpy as np
 from skimage.feature import peak_local_max
 from scipy.ndimage.morphology import grey_dilation
 from skimage.measure import label, regionprops_table
+from data.post_processing.post_processing import remove_close_points
 
 from utils.util import save_tif
 from engine.metrics import detection_metrics
@@ -33,13 +34,16 @@ class Detection(Base_Workflow):
                     min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[0]
                 else:
                     min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[channel]
-                if len(self.cfg.TEST.DET_MIN_DISTANCE) == 1:
-                    min_distance = self.cfg.TEST.DET_MIN_DISTANCE[0]
-                else:
-                    min_distance = self.cfg.TEST.DET_MIN_DISTANCE[channel]
-                pred_coordinates = peak_local_max(pred[...,channel], threshold_abs=min_th_peak, min_distance=min_distance,
-                                                  exclude_border=False)
-                all_channel_coord.append(pred_coordinates)
+                pred_coordinates = peak_local_max(pred[...,channel], threshold_abs=min_th_peak, exclude_border=False)
+                
+                # Remove close points as post-processing method
+                if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+                    ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
+                    pred_coordinates = remove_close_points(pred_coordinates, 
+                        self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS, self.cfg.DATA.TEST.RESOLUTION,
+                        ndim=ndim)
+
+                all_channel_coord.append(pred_coordinates)   
 
             # Create a file that represent the local maxima
             points_pred = np.zeros((pred.shape[:-1] + (1,)), dtype=np.uint8)
@@ -80,9 +84,9 @@ class Detection(Base_Workflow):
                     gt_coordinates = np.array(gt_coordinates)
 
                     if self.cfg.PROBLEM.NDIM == '3D':
-                        v_size = (self.cfg.TEST.DET_VOXEL_SIZE[2], self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
+                        v_size = (self.cfg.DATA.TEST.RESOLUTION[2], self.cfg.DATA.TEST.RESOLUTION[1], self.cfg.DATA.TEST.RESOLUTION[0])
                     else:
-                        v_size = (1,self.cfg.TEST.DET_VOXEL_SIZE[1], self.cfg.TEST.DET_VOXEL_SIZE[0])
+                        v_size = (1,self.cfg.DATA.TEST.RESOLUTION[1], self.cfg.DATA.TEST.RESOLUTION[0])
                     print("Detection (class "+str(ch+1)+")")
                     d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
                                                   voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)

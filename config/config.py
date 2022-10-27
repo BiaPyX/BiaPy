@@ -161,7 +161,7 @@ class Config:
         _C.DATA.TEST.MEDIAN_PADDING = False
         # Directory where binary masks to apply to resulting images should be. Used when _C.TEST.APPLY_MASK  == True
         _C.DATA.TEST.BINARY_MASKS = os.path.join(_C.DATA.ROOT_DIR, 'test', 'bin_mask')
-        # Not used yet.
+        # Test data resolution. Need to be provided in (z,y,x) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION' now.
         _C.DATA.TEST.RESOLUTION = (-1,)
         # Wheter to apply argmax to the predicted images 
         _C.DATA.TEST.ARGMAX_TO_OUTPUT = False
@@ -357,7 +357,7 @@ class Config:
         # Ratio of rotation-based mis-alignment
         _C.AUGMENTOR.MS_ROTATE_RATIO = 0.5
         # Augment the image by creating a black line in a random position
-        _C.AUGMENTOR.MISSING_PARTS = False
+        _C.AUGMENTOR.MISSING_SECTIONS = False
         # Iterations to dilate the missing line with
         _C.AUGMENTOR.MISSP_ITERATIONS = (10, 30)
         # Convert images in grasycale gradually based on '_C.AUGMENTOR.GRAY_RANGE'
@@ -483,14 +483,9 @@ class Config:
         _C.TEST.DET_LOCAL_MAX_COORDS = False
         # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
         # 'peak_local_max' of skimage.feature
-        _C.TEST.DET_MIN_TH_TO_BE_PEAK = [0.2]
-        # The minimal allowed distance between points. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
-        _C.TEST.DET_MIN_DISTANCE = [10]
-        # Maximum distance to not consider a point as a true positive. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
+        _C.TEST.DET_MIN_TH_TO_BE_PEAK = [0.2]        
+        # Maximum distance far away from a GT point to consider a point as a true positive. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
         _C.TEST.DET_TOLERANCE = [10]
-        # Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value
-        # on the axis with less resolution. Need to be provided in (z,y,x) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
-        _C.TEST.DET_VOXEL_SIZE = (1,1,1)
 
         _C.TEST.STATS = CN()
         _C.TEST.STATS.PER_PATCH = False
@@ -506,6 +501,11 @@ class Config:
         _C.TEST.POST_PROCESSING.Z_FILTERING = False
         _C.TEST.POST_PROCESSING.Z_FILTERING_SIZE = 5
 
+        # The minimal allowed distance between points. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
+        _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = False
+        # Distance between points to be considered the same. Only applies when _C.PROBLEM.TYPE = 'DETECTION' and 
+        # TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = True
+        _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = 10.0
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Auxiliary paths

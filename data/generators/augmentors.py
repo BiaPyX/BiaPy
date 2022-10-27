@@ -756,7 +756,7 @@ def contrast_em(image, contrast_factor=(0,0), mode='2D', invert=False, invert_p=
     return image
 
 
-def missing_parts(img, iterations=(30,40)):
+def missing_sections(img, iterations=(30,40)):
     """Augment the image by creating a black line in a random position.
 
        Implementation based on `PyTorch Connectomics' missing_parts.py
@@ -823,7 +823,7 @@ def missing_parts(img, iterations=(30,40)):
 
 
 def _prepare_deform_slice(slice_shape, iterations):
-    """Auxiliary function for missing_parts. """
+    """Auxiliary function for missing_sections. """
     shape = (slice_shape[0], slice_shape[1])
     # randomly choose fixed x or fixed y with p = 1/2
     fixed_x = np.random.rand() < 0.5

@@ -16,7 +16,7 @@ from engine.denoising import (rand_float_coords2D, rand_float_coords3D, get_stra
                               apply_structN2Vmask, apply_structN2Vmask3D)                    
 from utils.util import img_to_onehot_encoding, normalize, norm_range01
 from data.generators.augmentors import (cutout, cutblur, cutmix, cutnoise, misalignment, brightness_em, contrast_em,
-                                        brightness, contrast, missing_parts, shuffle_channels, grayscale, GridMask)
+                                        brightness, contrast, missing_sections, shuffle_channels, grayscale, GridMask)
 
 class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
     """Custom 2D BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
@@ -234,7 +234,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
        ms_rotate_ratio : float, optional
            Ratio of rotation-based mis-alignment
 
-       missing_parts : boolean, optional
+       missing_sections : boolean, optional
            Augment the image by creating a black line in a random position.
 
        missp_iterations : tuple of 2 ints, optional
@@ -337,7 +337,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                  cout_size=(0.2,0.4), cout_cval=0, cout_apply_to_mask=False, cutblur=False, cblur_size=(0.1,0.5),
                  cblur_down_range=(2,8), cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), cutnoise=False,
                  cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False,
-                 ms_displacement=16, ms_rotate_ratio=0.0, missing_parts=False, missp_iterations=(30, 40),
+                 ms_displacement=16, ms_rotate_ratio=0.0, missing_sections=False, missp_iterations=(30, 40),
                  grayscale=False, channel_shuffle=False, gridmask=False, grid_ratio=0.6, grid_d_range=(0.4,1),
                  grid_rotate=1, grid_invert=False, random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,),
                  prob_map=None, val=False, n_classes=1, out_number=1, extra_data_factor=1, n2v=False, 
@@ -543,7 +543,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         self.contrast = contrast
         self.brightness_em = brightness_em
         self.contrast_em = contrast_em
-        self.missing_parts = missing_parts
+        self.missing_sections = missing_sections
         self.missp_iterations = missp_iterations
         self.grayscale = grayscale
         self.gridmask = gridmask
@@ -651,7 +651,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if cutmix: self.trans_made += '_cmix'+str(cmix_size)
         if cutnoise: self.trans_made += '_cnoi'+str(cnoise_scale)+'+'+str(cnoise_nb_iterations)+'+'+str(cnoise_size)
         if misalignment: self.trans_made += '_msalg'+str(ms_displacement)+'+'+str(ms_rotate_ratio)
-        if missing_parts: self.trans_made += '_missp'+'+'+str(missp_iterations)
+        if missing_sections: self.trans_made += '_missp'+'+'+str(missp_iterations)
 
         self.trans_made = self.trans_made.replace(" ", "")
         self.seq = iaa.Sequential(self.da_options)
@@ -896,8 +896,8 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             image = contrast_em(image, contrast_factor=self.contrast_em_factor, mode=self.contrast_em_mode)
 
         # Apply missing parts
-        if self.missing_parts and random.uniform(0, 1) < self.da_prob:
-            image = missing_parts(image, self.missp_iterations)
+        if self.missing_sections and random.uniform(0, 1) < self.da_prob:
+            image = missing_sections(image, self.missp_iterations)
 
         # Apply GridMask
         if self.gridmask and random.uniform(0, 1) < self.da_prob:

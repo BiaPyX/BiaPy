@@ -129,7 +129,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             cutnoise=cfg.AUGMENTOR.CUTNOISE, cnoise_size=cfg.AUGMENTOR.CNOISE_SIZE,
             cnoise_nb_iterations=cfg.AUGMENTOR.CNOISE_NB_ITERATIONS, cnoise_scale=cfg.AUGMENTOR.CNOISE_SCALE,
             misalignment=cfg.AUGMENTOR.MISALIGNMENT, ms_displacement=cfg.AUGMENTOR.MS_DISPLACEMENT,
-            ms_rotate_ratio=cfg.AUGMENTOR.MS_ROTATE_RATIO, missing_parts=cfg.AUGMENTOR.MISSING_PARTS,
+            ms_rotate_ratio=cfg.AUGMENTOR.MS_ROTATE_RATIO, missing_sections=cfg.AUGMENTOR.MISSING_SECTIONS,
             missp_iterations=cfg.AUGMENTOR.MISSP_ITERATIONS, grayscale=cfg.AUGMENTOR.GRAYSCALE,
             channel_shuffle=cfg.AUGMENTOR.CHANNEL_SHUFFLE, gridmask=cfg.AUGMENTOR.GRIDMASK,
             grid_ratio=cfg.AUGMENTOR.GRID_RATIO, grid_d_range=cfg.AUGMENTOR.GRID_D_RANGE, grid_rotate=cfg.AUGMENTOR.GRID_ROTATE,

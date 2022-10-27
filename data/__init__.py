@@ -118,3 +118,10 @@ def data_checks(cfg):
     if len(cfg.DATA.TEST.RESOLUTION) != 1 and len(cfg.DATA.TEST.RESOLUTION) != count:
         raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.RESOLUTION tuple must be lenght {}, given {}."
                          .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TEST.RESOLUTION))
+    
+    if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+        if len(cfg.DATA.TEST.RESOLUTION) == 1:
+            raise ValueError("'DATA.TEST.RESOLUTION' must be set when using 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS'")
+        if len(cfg.DATA.TEST.RESOLUTION) != count:
+            raise ValueError("'DATA.TEST.RESOLUTION' must match in length to {}, which is the number of "
+                             "dimensions".format(count))

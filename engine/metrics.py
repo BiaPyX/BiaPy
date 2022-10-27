@@ -528,7 +528,7 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), verbose=Fals
            List containing coordinates of predicted points. E.g. ``[[5,3,2], [4,6,7]]``.
 
        tolerance : optional, int
-           Maximum distance to consider a point as a true positive.
+           Maximum distance far away from a GT point to consider a point as a true positive.
 
        voxel_size : List of floats
            Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value

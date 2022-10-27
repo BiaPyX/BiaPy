@@ -17,7 +17,7 @@ from scipy.ndimage.morphology import binary_erosion, binary_dilation
 import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 import numpy_indexed as npi
-from scipy.spatial import KDTree
+from scipy.spatial import KDTree, cKDTree
 from scipy.spatial.distance import cdist
 
 from engine.metrics import jaccard_index_numpy
@@ -1331,3 +1331,81 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
     imsave(f, aux.astype(np.uint16), imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
     return voronoiCyst
+
+
+def remove_close_points(point_list, radius, resolution, ndim=3):
+    """Remove all points from ``point_list`` that are at a ``radius``
+       or less distance from each other.
+
+       Parameters
+       ----------
+       point_list : List of floats
+           List of 3D points. E.g. ``((0,0,0), (1,1,1)``.
+
+       radius : float
+           Radius from each point to decide what points to keep. E.g. ``10.0`.
+
+       resolution : List of floats
+           Resolution of the data, in `(z,y,x)` to calibrate coordinates.
+           E.g. ``[30,8,8]``.    
+
+       ndim : int, optional
+           Number of dimension of the data.
+
+       Returns
+       -------
+       new_point_list : List of floats
+           New list of points after removing those at a distance of ``radius``
+           or less from each other.
+    """
+    print("Removing close points . . .")
+    print( 'Initial number of points: ' + str( len( point_list ) ) )
+
+    # Resolution adjust
+    for i in range(len(point_list)):
+        point_list[i] = point_list[i].tolist()
+        point_list[i][0] = point_list[i][0]* resolution[0]
+        point_list[i][1] = point_list[i][1]* resolution[1]
+        if ndim == 3:
+            point_list[i][2] = point_list[i][2]* resolution[2]
+
+    mynumbers = [tuple(point) for point in point_list] 
+
+    tree = cKDTree(mynumbers) # build k-dimensional tree
+    
+    pairs = tree.query_pairs( radius ) # find all pairs closer than radius
+    
+    neighbors = {} # create dictionary of neighbors
+
+    for i,j in pairs: # iterate over all pairs
+        if i not in neighbors:
+            neighbors[i] = {j}
+        else:
+            neighbors[i].add(j)
+        if j not in neighbors:
+            neighbors[j] = {i}
+        else:
+            neighbors[j].add(i)
+            
+    positions = [i for i in range(0, len( point_list ))]
+
+    keep = []
+    discard = set()
+    for node in positions:
+        if node not in discard: # if node already in discard set: skip
+            keep.append(node) # add node to keep list
+            discard.update(neighbors.get(node,set())) # add node's neighbors to discard set
+
+    # points to keep
+    new_point_list = [ point_list[i] for i in keep]
+    
+    # Undo resolution adjust
+    for i in range(len(new_point_list)):
+        new_point_list[i][0] = new_point_list[i][0]/resolution[0]
+        new_point_list[i][1] = new_point_list[i][1]/resolution[1]
+        if ndim == 3:
+            new_point_list[i][2] = new_point_list[i][2]/resolution[2]
+
+    print( 'Final number of points: ' + str( len( new_point_list ) ) )
+    return new_point_list
+    
