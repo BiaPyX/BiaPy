@@ -1333,19 +1333,19 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
     return voronoiCyst
 
 
-def remove_close_points(point_list, radius, resolution, ndim=3):
+def remove_close_points(points, radius, resolution, ndim=3):
     """Remove all points from ``point_list`` that are at a ``radius``
        or less distance from each other.
 
        Parameters
        ----------
-       point_list : List of floats
+       points : ndarray of floats
            List of 3D points. E.g. ``((0,0,0), (1,1,1)``.
 
        radius : float
            Radius from each point to decide what points to keep. E.g. ``10.0`.
 
-       resolution : List of floats
+       resolution : ndarray of floats
            Resolution of the data, in `(z,y,x)` to calibrate coordinates.
            E.g. ``[30,8,8]``.    
 
@@ -1359,11 +1359,12 @@ def remove_close_points(point_list, radius, resolution, ndim=3):
            or less from each other.
     """
     print("Removing close points . . .")
-    print( 'Initial number of points: ' + str( len( point_list ) ) )
+    print( 'Initial number of points: ' + str( len( points ) ) )
+
+    point_list = points.copy()
 
     # Resolution adjust
     for i in range(len(point_list)):
-        point_list[i] = point_list[i].tolist()
         point_list[i][0] = point_list[i][0]* resolution[0]
         point_list[i][1] = point_list[i][1]* resolution[1]
         if ndim == 3:
@@ -1388,7 +1389,7 @@ def remove_close_points(point_list, radius, resolution, ndim=3):
             neighbors[j].add(i)
             
     positions = [i for i in range(0, len( point_list ))]
-
+    
     keep = []
     discard = set()
     for node in positions:
@@ -1397,14 +1398,7 @@ def remove_close_points(point_list, radius, resolution, ndim=3):
             discard.update(neighbors.get(node,set())) # add node's neighbors to discard set
 
     # points to keep
-    new_point_list = [ point_list[i] for i in keep]
-    
-    # Undo resolution adjust
-    for i in range(len(new_point_list)):
-        new_point_list[i][0] = new_point_list[i][0]/resolution[0]
-        new_point_list[i][1] = new_point_list[i][1]/resolution[1]
-        if ndim == 3:
-            new_point_list[i][2] = new_point_list[i][2]/resolution[2]
+    new_point_list = [ points[i] for i in keep]
 
     print( 'Final number of points: ' + str( len( new_point_list ) ) )
     return new_point_list

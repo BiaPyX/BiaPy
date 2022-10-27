@@ -35,7 +35,7 @@ class Detection(Base_Workflow):
                 else:
                     min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[channel]
                 pred_coordinates = peak_local_max(pred[...,channel], threshold_abs=min_th_peak, exclude_border=False)
-                
+
                 # Remove close points as post-processing method
                 if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
                     ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
@@ -65,13 +65,23 @@ class Detection(Base_Workflow):
 
             all_channel_d_metrics = [0,0,0]
             for ch, pred_coordinates in enumerate(all_channel_coord):
-                # Save coords in csv file
-                f = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'.csv')
-                with open(f, 'w', newline="") as file:
-                    csvwriter = csv.writer(file)
-                    csvwriter.writerow(['index', 'axis-0', 'axis-1', 'axis-2'])
-                    for nr in range(len(pred_coordinates)):
-                        csvwriter.writerow([nr+1] + pred_coordinates[nr].tolist())
+                # Save coords in a couple of csv files
+                f1 = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, 
+                                  os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'.csv')
+                f2 = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, 
+                                  os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_prob.csv')
+                file1 = open(f1, 'w', newline="")
+                file2 = open(f2, 'w', newline="")
+                csvwriter1 = csv.writer(file1)
+                csvwriter2 = csv.writer(file2)
+                csvwriter1.writerow(['index', 'axis-0', 'axis-1', 'axis-2'])
+                csvwriter2.writerow(['index', 'axis-0', 'axis-1', 'axis-2', 'probability'])
+                for nr in range(len(pred_coordinates)):
+                    csvwriter1.writerow([nr+1] + pred_coordinates[nr].tolist())
+                    prob = pred[pred_coordinates[nr][0],pred_coordinates[nr][1],pred_coordinates[nr][2],ch]
+                    csvwriter2.writerow([nr+1] + pred_coordinates[nr].tolist() + [prob])
+                file1.close()
+                file2.close()
 
                 # Calculate detection metrics
                 if self.cfg.DATA.TEST.LOAD_GT:

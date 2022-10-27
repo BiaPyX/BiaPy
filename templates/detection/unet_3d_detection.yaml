@@ -19,7 +19,7 @@ DATA:
         SPLIT_TRAIN: 0.2
         IN_MEMORY: True
     TEST:
-        RESOLUTION: (1.0,1.0,3.6)
+        RESOLUTION: (3.6,1.0,1.0)
         PATH: /path/to/data
         MASK_PATH: /path/to/data
         IN_MEMORY: True
