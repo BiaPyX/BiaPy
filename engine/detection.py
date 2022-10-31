@@ -39,8 +39,11 @@ class Detection(Base_Workflow):
                 # Remove close points as post-processing method
                 if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
                     ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
-                    pred_coordinates = remove_close_points(pred_coordinates, 
-                        self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS, self.cfg.DATA.TEST.RESOLUTION,
+                    if len(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS) == 1:
+                        radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0]
+                    else:
+                        radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[channel]
+                    pred_coordinates = remove_close_points(pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION,
                         ndim=ndim)
 
                 all_channel_coord.append(pred_coordinates)   

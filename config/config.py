@@ -505,7 +505,7 @@ class Config:
         _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = False
         # Distance between points to be considered the same. Only applies when _C.PROBLEM.TYPE = 'DETECTION' and 
         # TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = True
-        _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = 10.0
+        _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = [10.0]
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Auxiliary paths
