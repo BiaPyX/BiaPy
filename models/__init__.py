@@ -35,8 +35,14 @@ def build_model(cfg, job_identifier):
     if cfg.MODEL.UPSAMPLE_LAYER.lower() not in ["upsampling", "convtranspose"]:
         raise ValueError("cfg.MODEL.UPSAMPLE_LAYER' need to be one between ['upsampling', 'convtranspose']. Provided {}"
                           .format(cfg.MODEL.UPSAMPLE_LAYER))
-    if cfg.PROBLEM.TYPE == 'DENOISING' and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
-        raise ValueError("Architectures available for 'DENOISING' are: ['unet', 'resunet', 'seunet', 'attention_unet']")
+    if (cfg.PROBLEM.TYPE == 'DETECTION' or cfg.PROBLEM.TYPE == 'DENOISING' or cfg.PROBLEM.TYPE == 'SELF_SUPERVISED') and \
+        cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
+        raise ValueError("Architectures available for {} are: ['unet', 'resunet', 'seunet', 'attention_unet']"
+                         .format(cfg.PROBLEM.TYPE))
+    if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION' and cfg.MODEL.ARCHITECTURE not in ['edsr']:
+        raise ValueError("Architectures available for 'SUPER_RESOLUTION' are: ['edsr']")
+    if cfg.PROBLEM.TYPE == 'CLASSIFICATION' and cfg.MODEL.ARCHITECTURE not in ['simple_cnn', 'EfficientNetB0']:
+        raise ValueError("Architectures available for 'CLASSIFICATION' are: ['simple_cnn', 'EfficientNetB0']")
 
     # Import the model
     if cfg.MODEL.ARCHITECTURE in ['fcn32', 'fcn8']:
@@ -66,7 +72,7 @@ def build_model(cfg, job_identifier):
             f_name = SE_U_Net_3D if cfg.PROBLEM.NDIM == '3D' else SE_U_Net_2D
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-            args['output_channels'] = cfg.DATA.CHANNELS
+            args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
             del args['last_act']
         else:
             args['n_classes'] = cfg.MODEL.N_CLASSES
@@ -96,12 +102,12 @@ def build_model(cfg, job_identifier):
             elif cfg.MODEL.ARCHITECTURE == 'multiresunet':
                 model = MultiResUnet(None, None, cfg.DATA.PATCH_SIZE[-1])
             elif cfg.MODEL.ARCHITECTURE == 'unetr':
-                num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.TOKEN_SIZE)**2
-                args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.TOKEN_SIZE, num_patches=num_patches,
-                    projection_dim=cfg.MODEL.EMBED_DIM, transformer_layers=cfg.MODEL.DEPTH, num_heads=cfg.MODEL.NUM_HEADS,
-                    transformer_units=cfg.MODEL.MLP_HIDDEN_UNITS, data_augmentation = None,
-                    num_filters = 16, num_classes=cfg.MODEL.OUT_DIM, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
-                    ViT_hidd_mult = 3, batch_norm = True, dropout=cfg.MODEL.DROPOUT_VALUES)
+                num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.UNETR_TOKEN_SIZE)**2
+                args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.UNETR_TOKEN_SIZE, num_patches=num_patches,
+                    projection_dim=cfg.MODEL.UNETR_EMBED_DIM, transformer_layers=cfg.MODEL.UNETR_DEPTH, num_heads=cfg.MODEL.UNETR_NUM_HEADS,
+                    transformer_units=cfg.MODEL.UNETR_MLP_HIDDEN_UNITS, data_augmentation = None, num_filters = 16, 
+                    num_classes=cfg.MODEL.UNETR_OUT_DIM, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
+                    ViT_hidd_mult = 3, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES)
                 model = UNETR_2D(**args)
             elif cfg.MODEL.ARCHITECTURE == 'edsr':
                 model = EDSR(num_filters=64, num_of_residual_blocks=16, num_channels=cfg.DATA.PATCH_SIZE[-1])

@@ -32,7 +32,7 @@ Problem resolution
 
 To produce the cysto instances two main steps are done:
 
-* Firstly, new ``Y'`` data representations are created from the original ``Y``. This new ``Y'`` data is created with up to three channels (controlled by ``DATA.CHANNELS``). In this problem only two channels are presented: binary segmentation (referred as ``B`` in the code), contour (``C``) and distances (``D``). This way, the network will be trained with a bunch of image pairs, each containing an EM image and its ``Y'`` new data representation.
+* Firstly, new ``Y'`` data representations are created from the original ``Y``. This new ``Y'`` data is created with up to three channels (controlled by ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS``). In this problem only two channels are presented: binary segmentation (referred as ``B`` in the code), contour (``C``) and distances (``D``). This way, the network will be trained with a bunch of image pairs, each containing an EM image and its ``Y'`` new data representation.
 
 .. figure:: ../img/cysto_instance_bcd_scheme.svg
   :width: 300px
@@ -43,7 +43,7 @@ To produce the cysto instances two main steps are done:
   and distances (right). Here a patch ``(64, 64, 64)`` is presented just for visualization but the process is done for
   each full resolution image.
 
-* These extra channels predicted by the network are used to create the final instance segmentation labels using a marked controlled watershed (MW). This process involve a few thresholds that may be adjusted depending each case: ``DATA.MW_TH1``, ``DATA.MW_TH2``, ``DATA.MW_TH3``, ``DATA.MW_TH4`` and ``DATA.MW_TH5``. Find their description in `config.py <https://github.com/danifranco/BiaPy/blob/master/config/config.py>`_.
+* These extra channels predicted by the network are used to create the final instance segmentation labels using a marked controlled watershed (MW). This process involve a few thresholds that may be adjusted depending each case: ``PROBLEM.INSTANCE_SEG.DATA_MW_TH1``, ``PROBLEM.INSTANCE_SEG.DATA_MW_TH2``, ``PROBLEM.INSTANCE_SEG.DATA_MW_TH3``, ``PROBLEM.INSTANCE_SEG.DATA_MW_TH4`` and ``PROBLEM.INSTANCE_SEG.DATA_MW_TH5``. Find their description in `config.py <https://github.com/danifranco/BiaPy/blob/master/config/config.py>`_.
 
 
 Configuration file

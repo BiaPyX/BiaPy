@@ -52,8 +52,8 @@ def cutout(img, mask, channels, z_size, nb_iterations=(1,3), size=(0.2,0.4), cva
        mask : 3D Numpy array
            Transformed mask. E.g. ``(y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with ``nb_iterations=(1,3)``, ``size=(0.05,0.3)``,
        ``apply_to_mask=False`` may result in:
@@ -129,8 +129,8 @@ def cutblur(img, size=(0.2,0.4), down_ratio_range=(2,8), only_inside=True):
        out : 3D Numpy array
            Transformed image. E.g. ``(y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with ``size=(0.2,0.4)``, ``down_ratio_range=(2,8)``,
        ``only_inside=True`` may result in:
@@ -223,8 +223,8 @@ def cutmix(im1, im2, mask1, mask2, size=(0.2,0.4)):
        m_out : 3D Numpy array
            Transformed mask. E.g. ``(y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with ``size=(0.2,0.4)`` may result in:
 
@@ -291,8 +291,8 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
        out : 3D Numpy array
            Transformed image. E.g. ``(y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with ``scale=(0.1,0.2)``, ``nb_iterations=(1,3)`` and
        ``size=(0.2,0.4)`` may result in:
@@ -361,8 +361,8 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1")
        m_out : 3D Numpy array
            Transformed mask. E.g. ``(y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with ``displacement=16`` and ``rotate_ratio=0.5`` may result in:
 
@@ -503,8 +503,8 @@ def brightness(image, brightness_factor=(0,0),  mode='2D'):
        image : 3D Numpy array
            Transformed image. E.g. ``(y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with ``brightness_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
        may result in:
@@ -562,8 +562,8 @@ def contrast(image, contrast_factor=(0,0), mode='2D'):
        image : 3D Numpy array
            Transformed image. E.g. ``(y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with ``contrast_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
        may result in:
@@ -631,8 +631,8 @@ def brightness_em(image, brightness_factor=(0,0),  mode='2D', invert=False, inve
        image : 3D Numpy array
            Transformed image. E.g. ``(y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with ``brightness_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
        may result in:
@@ -708,8 +708,8 @@ def contrast_em(image, contrast_factor=(0,0), mode='2D', invert=False, invert_p=
        image : 3D Numpy array
            Transformed image. E.g. ``(y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with ``contrast_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
        may result in:
@@ -775,8 +775,8 @@ def missing_sections(img, iterations=(30,40)):
        out : 3D Numpy array
            Transformed image. E.g. ``(y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with ``iterations=(30,40)`` may result in:
 
@@ -872,8 +872,8 @@ def shuffle_channels(img):
        out : 3D/4D Numpy array
            Transformed image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        +--------------------------------------------+--------------------------------------------+
        | .. figure:: ../../img/orig_chshuffle.png   | .. figure:: ../../img/chshuffle.png        |
@@ -906,8 +906,8 @@ def grayscale(img):
        out : 3D/4D Numpy array
            Transformed image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        +--------------------------------------------+--------------------------------------------+
        | .. figure:: ../../img/orig_grayscale.png   | .. figure:: ../../img/grayscale.png        |
@@ -959,8 +959,8 @@ def GridMask(img, channels, z_size, ratio=0.6, d_range=(30,60), rotate=1, invert
        out : 3D Numpy array
            Transformed image. E.g. ``(y, x, channels)``.
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with the default settings may result in:
 

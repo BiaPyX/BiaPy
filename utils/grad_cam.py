@@ -85,7 +85,7 @@ def grad_cam_sample(input_model, image, predicted_class, layer_name, out_dir, n_
     # maps activations of the convolutional layer
     loss = K.sum(model.output)
     conv_output = [l for l in model.layers if l.name == layer_name][0].output
-    grads = normalize(_compute_gradients(loss, [conv_output])[0])
+    grads = grad_normalize(_compute_gradients(loss, [conv_output])[0])
     gradient_function = K.function([model.input], [conv_output, grads])
     output, grads_val = gradient_function([image])
     output, grads_val = output[0, :], grads_val[0, :, :, :]
@@ -115,7 +115,7 @@ def target_category_loss(x, predicted_class, n_classes):
 def target_category_loss_output_shape(input_shape):                             
     return input_shape                                                          
                                                                                 
-def normalize(x):                                                               
+def grad_normalize(x):                                                               
     # utility function to normalize a tensor by its L2 norm                     
     return x / (K.sqrt(K.mean(K.square(x))) + 1e-5)                             
                                                                                 

@@ -5,7 +5,7 @@ import tensorflow as tf
 from skimage.io import imread
 from PIL import Image
 from PIL.TiffTags import TAGS
-from utils.util import normalize, norm_range01
+from data.pre_processing import normalize, norm_range01
 
 
 class simple_data_generator(tf.keras.utils.Sequence):

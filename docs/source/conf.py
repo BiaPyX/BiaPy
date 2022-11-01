@@ -20,7 +20,6 @@ import os
 import datetime
 base_path = os.path.abspath(os.path.join("..", ".."))
 sys.path.insert(0, base_path)
-sys.path.insert(0, os.path.join(base_path, "sota_implementations", "cheng_2017"))
 print("PATH: {}".format(sys.path))
 
 

@@ -7,7 +7,9 @@ from data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_ov
 from data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
 from data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
 from engine.base_workflow import Base_Workflow
-from utils.util import denormalize, save_tif
+from utils.util import save_tif
+from data.pre_processing import denormalize
+
 
 class Denoising(Base_Workflow):
     def __init__(self, cfg, model, post_processing=False):

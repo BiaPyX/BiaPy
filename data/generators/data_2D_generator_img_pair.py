@@ -2,7 +2,7 @@ import numpy as np
 import os
 from skimage.io import imread, imsave
 
-from utils.util import normalize, norm_range01
+from data.pre_processing import normalize, norm_range01
 from data.generators.base_data_generator import BaseDataGenerator
 
 class PairImageDataGenerator(BaseDataGenerator):

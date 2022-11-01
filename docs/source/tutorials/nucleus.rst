@@ -49,7 +49,7 @@ Problem resolution
 
 To produce the nuclei instances two main steps are done:
 
-* Firstly, new ``Y'`` data representations are created from the original ``Y``. This new ``Y'`` data is created with up to three channels (controlled by ``DATA.CHANNELS``). In this problem only two channels are presented: binary segmentation (referred as ``B`` in the code) and contour (``C``). This way, the network will be trained with 27 image pairs provided in NucMM-Z, each containing an EM image and its ``Y'`` new data representation.
+* Firstly, new ``Y'`` data representations are created from the original ``Y``. This new ``Y'`` data is created with up to three channels (controlled by ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS``). In this problem only two channels are presented: binary segmentation (referred as ``B`` in the code) and contour (``C``). This way, the network will be trained with 27 image pairs provided in NucMM-Z, each containing an EM image and its ``Y'`` new data representation.
 
 .. figure:: ../img/nucmmz_instance_bc_scheme.svg
   :width: 300px
@@ -59,7 +59,7 @@ To produce the nuclei instances two main steps are done:
   Process of the new ``Y'`` data representation: from instance segmentation labels (left) to contour and binary
   segmentation (right).
 
-* These extra channels predicted by the network are used to create the final instance segmentation labels using a marked controlled watershed (MW). This process involve a few thresholds that may be adjusted depending each case: ``DATA.MW_TH1``, ``DATA.MW_TH2`` and ``DATA.MW_TH3``. Find their description in `config.py <https://github.com/danifranco/BiaPy/blob/master/config/config.py>`_.
+* These extra channels predicted by the network are used to create the final instance segmentation labels using a marked controlled watershed (MW). This process involve a few thresholds that may be adjusted depending each case: ``PROBLEM.INSTANCE_SEG.DATA_MW_TH1``, ``PROBLEM.INSTANCE_SEG.DATA_MW_TH2`` and ``PROBLEM.INSTANCE_SEG.DATA_MW_TH3``. Find their description in `config.py <https://github.com/danifranco/BiaPy/blob/master/config/config.py>`_.
 
 
 Configuration file

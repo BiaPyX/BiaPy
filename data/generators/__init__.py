@@ -2,7 +2,8 @@ import os
 import numpy as np
 from tqdm import tqdm
 
-from utils.util import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif, check_value
+from utils.util import  save_tif
+from data.pre_processing import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif, check_value
 from data.generators.data_2D_generator import ImageDataGenerator
 from data.generators.data_2D_generator_img_pair import PairImageDataGenerator
 from data.generators.data_2D_generator_classification import ClassImageDataGenerator

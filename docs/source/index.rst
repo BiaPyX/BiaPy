@@ -1,12 +1,60 @@
 BiaPy: Bioimage analysis pipelines
 ==================================
 
-This documentation explains how to use the code of the project `BiaPy <https://github.com/danifranco/BiaPy>`_, which contains different pipelines for semantic segmentation, instance segmentation, detection and classification. The code is based on Keras and TensorFlow as backend.
+`BiaPy <https://github.com/danifranco/BiaPy>`_ is an open source user-friendly Python library for building bioimage analysis pipelines, also called workflows. This repository is actively under development by `Arganda's lab <https://sites.google.com/site/iargandacarreras/>`_ at `University of the Basque Country <https://www.ehu.eus/en/en-home>`_ and `Donostia International Physics Center <http://dipc.ehu.es/>`_. 
+
+The library offers different pipelines such as semantic segmentation, instance segmentation, object detection, denoising, super-resolution, self-supervised and classification. The code is based on Keras/TensorFlow as backend. Given BiaPy’s DL-base core, a machine with a graphics processing unit (GPU) is recommended for fast training and execution.
 
                                                                                 
 .. image:: img/seg.gif
            :width: 100%                                                         
            :align: center 
+
+           
+.. toctree::
+   :maxdepth: 1
+   :caption: Get started
+   :glob:
+   
+   get_started/installation.rst
+   get_started/how_it_works.rst
+   get_started/configuration.rst
+   get_started/select_workflow.rst
+   get_started/faq.rst
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Workflows
+   :glob:
+
+   workflows/semantic_segmentation.rst
+   workflows/instance_segmentation.rst
+   workflows/detection.rst
+   workflows/denoising.rst
+   workflows/super_resolution.rst
+   workflows/self_supervision.rst
+   workflows/classification.rst
+   
+.. toctree::
+   :maxdepth: 1
+   :caption: Tutorials
+   :glob:
+
+   tutorials/*
+   
+.. toctree::                                                                    
+   :maxdepth: 1
+   :caption: API
+
+   API
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Bibliography
+
+   bibliography
+   
 
 Citation
 ========
@@ -24,44 +72,3 @@ This repository is the base of the following work: ::
              doi={10.1007/s12021-021-09556-1},                                                                                       
              url={https://doi.org/10.1007/s12021-021-09556-1}                                                                        
     }        
-
-
-.. toctree::
-   :maxdepth: 1
-   :caption: How to run
-   :glob:
-
-   how_to_run/colab.rst
-   how_to_run/first_steps.rst
-   how_to_run/bash.rst
-   how_to_run/docker.rst
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Tutorials
-   :hidden:
-   :glob:
-
-   tutorials/mitochondria.rst
-   tutorials/mitochondria_instance.rst
-   tutorials/nucleus.rst
-   tutorials/cysto.rst
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Manuscripts 
-   :glob:
-
-   manuscripts/*
-
-.. toctree::                                                                    
-   :maxdepth: 1
-   :caption: API
-
-   API
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Bibliography
-
-   bibliography

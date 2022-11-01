@@ -5,7 +5,7 @@ from skimage.io import imread
 
 from data.post_processing.post_processing import (bc_watershed,bcd_watershed, bdv2_watershed, calculate_optimal_mw_thresholds,
                                                   voronoi_on_mask_2)
-from data import create_instance_channels, create_test_instance_channels
+from data.pre_processing import create_instance_channels, create_test_instance_channels
 from utils.util import save_tif, wrapper_matching_dataset_lazy, wrapper_matching_segCompare
 from utils.matching import matching, match_using_segCompare
 
@@ -24,23 +24,23 @@ class Instance_Segmentation(Base_Workflow):
         self.all_matching_stats_segCompare = []
         self.all_matching_stats_voronoi_segCompare = []                   
 
-        if self.cfg.DATA.MW_OPTIMIZE_THS and self.cfg.DATA.CHANNELS != "BCDv2":
-            if self.cfg.TEST.APPLY_MASK and os.path.isdir(self.cfg.DATA.VAL.BINARY_MASKS):
+        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "BCDv2":
+            if self.cfg.TEST.POST_PROCESSING.APPLY_MASK and os.path.isdir(self.cfg.DATA.VAL.BINARY_MASKS):
                 bin_mask = self.cfg.DATA.VAL.BINARY_MASKS
             else:
                 bin_mask = None
             obj = calculate_optimal_mw_thresholds(self.model, self.cfg.DATA.VAL.PATH,
-                self.orig_val_mask_path, self.cfg.DATA.PATCH_SIZE, self.cfg.DATA.CHANNELS,
-                self.cfg.DATA.VAL.MASK_PATH, self.cfg.DATA.REMOVE_SMALL_OBJ, bin_mask,
+                self.orig_val_mask_path, self.cfg.DATA.PATCH_SIZE, self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                self.cfg.DATA.VAL.MASK_PATH, self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, bin_mask,
                 chart_dir=self.cfg.PATHS.CHARTS, verbose=self.cfg.TEST.VERBOSE)
-            if self.cfg.DATA.CHANNELS == "BCD":
+            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCD":
                 self.th1_opt, self.th2_opt, self.th3_opt, self.th4_opt, self.th5_opt = obj
             else:
                 self.th1_opt, self.th2_opt, self.th3_opt = obj
-                self.th4_opt, self.th5_opt = self.cfg.DATA.MW_TH4, self.cfg.DATA.MW_TH5
+                self.th4_opt, self.th5_opt = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH4, self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH5
         else:
-            self.th1_opt, self.th2_opt, self.th3_opt = self.cfg.DATA.MW_TH1, self.cfg.DATA.MW_TH2, self.cfg.DATA.MW_TH3
-            self.th4_opt, self.th5_opt = self.cfg.DATA.MW_TH4, self.cfg.DATA.MW_TH5
+            self.th1_opt, self.th2_opt, self.th3_opt = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH1, self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH2, self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH3
+            self.th4_opt, self.th5_opt = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH4, self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH5
             
     def after_merge_patches(self, pred, Y, filenames):
         #############################
@@ -49,23 +49,23 @@ class Instance_Segmentation(Base_Workflow):
         if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             print("Creating instances with watershed . . .")
             w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
-            check_wa = w_dir if self.cfg.DATA.CHECK_MW else None
-            if self.cfg.DATA.CHANNELS in ["BC", "BCM"]:
+            check_wa = w_dir if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW else None
+            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BCM"]:
                 w_pred = bc_watershed(pred, thres1=self.th1_opt, thres2=self.th2_opt, thres3=self.th3_opt,
-                    thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ, remove_before=self.cfg.DATA.REMOVE_BEFORE_MW,
+                    thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW,
                     save_dir=check_wa)
-            elif self.cfg.DATA.CHANNELS == "BCD":
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCD":
                 w_pred = bcd_watershed(pred, thres1=self.th1_opt, thres2=self.th2_opt, thres3=self.th3_opt, thres4=self.th4_opt,
-                    thres5=self.th5_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
-                    remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=check_wa)
+                    thres5=self.th5_opt, thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ,
+                    remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, save_dir=check_wa)
             else: # "BCDv2"
-                w_pred = bdv2_watershed(pred, bin_th=self.th1_opt, thres_small=self.cfg.DATA.REMOVE_SMALL_OBJ,
-                    remove_before=self.cfg.DATA.REMOVE_BEFORE_MW, save_dir=check_wa)
+                w_pred = bdv2_watershed(pred, bin_th=self.th1_opt, thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ,
+                    remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, save_dir=check_wa)
 
             save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                         filenames, verbose=self.cfg.TEST.VERBOSE)
 
-            if self.cfg.TEST.VORONOI_ON_MASK:
+            if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
                 vor_pred = voronoi_on_mask_2(np.expand_dims(w_pred,0), np.expand_dims(pred,0),
                     self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI, filenames, verbose=self.cfg.TEST.VERBOSE)[0]
 
@@ -140,7 +140,7 @@ class Instance_Segmentation(Base_Workflow):
             else:
                 print("No labels found in {} file. Skipping sample from mAP calculation . . .".format(test_file))
 
-            if self.cfg.TEST.VORONOI_ON_MASK:
+            if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
                 print("mAP with Voronoi")
                 # As the mAP code is prepared for 3D we need an extra z dimension
                 if vor_pred.ndim == 2:
@@ -196,7 +196,7 @@ class Instance_Segmentation(Base_Workflow):
             print(r_stats)
             self.all_matching_stats.append(r_stats)
 
-            if self.cfg.TEST.VORONOI_ON_MASK:
+            if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
                 r_stats = matching(_Y, vor_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=False)
                 print("Stats with Voronoi")
                 print(r_stats)
@@ -212,7 +212,7 @@ class Instance_Segmentation(Base_Workflow):
             print(r_stats_segCompare)
             self.all_matching_stats_segCompare.append(r_stats_segCompare)
 
-            if self.cfg.TEST.VORONOI_ON_MASK:
+            if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
                 r_stats_segCompare = match_using_segCompare(_Y, vor_pred)
                 print("Stats with Voronoi")
                 print(r_stats_segCompare)
@@ -231,18 +231,18 @@ class Instance_Segmentation(Base_Workflow):
             if self.cfg.TEST.MAP: 
                 self.stats['mAP_50_total'] = self.stats['mAP_50_total'] / image_counter
                 self.stats['mAP_75_total'] = self.stats['mAP_75_total'] / image_counter
-                if self.cfg.TEST.VORONOI_ON_MASK:
+                if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
                     self.stats['mAP_50_total_vor'] = self.stats['mAP_50_total_vor'] / image_counter
                     self.stats['mAP_75_total_vor'] = self.stats['mAP_75_total_vor'] / image_counter
 
             if self.cfg.TEST.MATCHING_STATS:
                 self.stats['inst_stats'] = wrapper_matching_dataset_lazy(self.all_matching_stats, self.cfg.TEST.MATCHING_STATS_THS)
-                if self.cfg.TEST.VORONOI_ON_MASK:
+                if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
                     self.stats['inst_stats_vor'] = wrapper_matching_dataset_lazy(self.all_matching_stats_voronoi, self.cfg.TEST.MATCHING_STATS_THS)
 
             if self.cfg.TEST.MATCHING_SEGCOMPARE:
                 self.stats['inst_stats_segCompare'] = wrapper_matching_segCompare(self.all_matching_stats_segCompare)
-                if self.cfg.TEST.VORONOI_ON_MASK:
+                if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
                     self.stats['inst_stats_vor_segCompare'] = wrapper_matching_segCompare(self.all_matching_stats_voronoi_segCompare)
 
     def print_stats(self, image_counter):
@@ -253,7 +253,7 @@ class Instance_Segmentation(Base_Workflow):
                 print("Test Average Precision (AP) - IoU=0.50 : {}".format(self.stats['mAP_50_total']))
                 print("Test Average Precision (AP) - IoU=0.75 : {}".format(self.stats['mAP_75_total']))
                 print(" ")
-                if self.cfg.TEST.VORONOI_ON_MASK:
+                if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
                     print("Test Average Precision (AP) (Voronoi) - IoU=0.50 : {}".format(self.stats['inst_mAP_50_total_vor']))
                     print("Test Average Precision (AP) (Voronoi) - IoU=0.75 : {}".format(self.stats['mAP_75_total_vor']))
                     print(" ")
@@ -261,14 +261,14 @@ class Instance_Segmentation(Base_Workflow):
                 for i in range(len(self.cfg.TEST.MATCHING_STATS_THS)):
                     print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                     print(self.stats['inst_stats'][i])
-                    if self.cfg.TEST.VORONOI_ON_MASK:
+                    if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
                         print("IoU (Voronoi) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                         print(self.stats['inst_stats_vor'][i])
 
             if self.cfg.TEST.MATCHING_SEGCOMPARE:
                 print("segCompare segmentation rates:")
                 print(self.stats['inst_stats_segCompare'])
-                if self.cfg.TEST.VORONOI_ON_MASK:
+                if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
                     print("segCompare segmentation rates (voronoi):")
                     print(self.stats['inst_stats_vor_segCompare'])
                     
@@ -286,7 +286,7 @@ def prepare_instance_data(cfg):
     if cfg.TRAIN.ENABLE and not os.path.isdir(cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR):
         print("You select to create {} channels from given instance labels and no file is detected in {}. "
                 "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.INSTANCE_CHANNELS_DIR' "
-                "path, this process will be done just once!".format(cfg.DATA.CHANNELS,
+                "path, this process will be done just once!".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                 cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
         train_filenames = create_instance_channels(cfg)
 
@@ -294,7 +294,7 @@ def prepare_instance_data(cfg):
     if cfg.TRAIN.ENABLE and not cfg.DATA.VAL.FROM_TRAIN and not os.path.isdir(cfg.DATA.VAL.INSTANCE_CHANNELS_DIR):
         print("You select to create {} channels from given instance labels and no file is detected in {}. "
                 "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.INSTANCE_CHANNELS_DIR' "
-                "path, this process will be done just once!".format(cfg.DATA.CHANNELS,
+                "path, this process will be done just once!".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                 cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
         create_instance_channels(cfg, data_type='val')
 
@@ -302,7 +302,7 @@ def prepare_instance_data(cfg):
     if cfg.TEST.ENABLE and not os.path.isdir(cfg.DATA.TEST.INSTANCE_CHANNELS_DIR):
         print("You select to create {} channels from given instance labels and no file is detected in {}. "
                 "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.INSTANCE_CHANNELS_DIR' "
-                "path, this process will be done just once!".format(cfg.DATA.CHANNELS,
+                "path, this process will be done just once!".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                 cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
         create_test_instance_channels(cfg)
 

@@ -26,28 +26,14 @@ class Config:
         # Problem specification
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.PROBLEM = CN()
-        # Possible options: 'CLASSIFICATION', 'SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING' and 'SUPER_RESOLUTION'
+        # Possible options: 'SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 
+        # 'SELF_SUPERVISED' and 'CLASSIFICATION'
         _C.PROBLEM.TYPE = 'SEMANTIC_SEG'
         # Possible options: '2D' and '3D'
         _C.PROBLEM.NDIM = '2D'
 
-        _C.PROBLEM.DENOISING = CN()
-        _C.PROBLEM.DENOISING.N2V_PERC_PIX = 0.198
-        _C.PROBLEM.DENOISING.N2V_MANIPULATOR = 'uniform_withCP'
-        _C.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS = 5
-        _C.PROBLEM.DENOISING.N2V_STRUCTMASK = False
-
-        _C.PROBLEM.SELF_SUPERVISED = CN()
-        _C.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR = 4
-        _C.PROBLEM.SELF_SUPERVISED.NOISE = 0.15
-
-        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Dataset
-        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        _C.DATA = CN()
-        _C.DATA.ROOT_DIR = dataroot
-        _C.DATA.CHECK_GENERATORS = False
-
+        ### INSTANCE_SEG
+        _C.PROBLEM.INSTANCE_SEG = CN()
         # Possible options: 'B', 'BC' and 'BCD'. This variable determines how many channels are going to be used to train
         # the model.
         # 'B' stands for 'Binary segmentation', which is the default setting and means that only binary
@@ -60,42 +46,76 @@ class Config:
         # that represents the distance of the pixels to the border. This setting should be used when
         # _C.PROBLEM.TYPE = 'INSTANCE_SEG'
         # 'Dv2' channels is a updated version of 'D' channel calculating background distance as well.
-        _C.DATA.CHANNELS = 'B'
+        _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = 'B'
+
         # Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. (1, 0.2), 1
         # should be multipled by BCE for the first two channels and 0.2 to MSE for the last channel.
-        _C.DATA.CHANNEL_WEIGHTS = (1, 0.2)
+        _C.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS = (1, 0.2)
         # Contour creation mode. Corresponds to 'fb_mode' arg of find_boundaries function from ``scikit-image``. More
         # info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries
-        _C.DATA.CONTOUR_MODE = "thick"
+        _C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE = "thick"
 
         # To convert the model predictions, which are between 0 and 1 range, into instances with marked controlled
         # watershed (MW) a few thresholds need to be set. There can be up to three channels, as explained above and
-        # based on 'DATA.CHANNELS' value. Each threshold is related to one of these channels. See the details in
+        # based on 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' value. Each threshold is related to one of these channels. See the details in
         # bcd_watershed() and bc_watershed() functions:
         # https://github.com/danifranco/BiaPy/blob/a1c46e6b8afaf577794aff9c30b52748490f147d/data/post_processing/post_processing.py#L172
         #
         # This variables are only used when _C.PROBLEM.TYPE = 'INSTANCE_SEG
         # TH1 controls channel 'B' in the creation of the MW seeds
-        _C.DATA.MW_TH1 = 0.2
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH1 = 0.2
         # TH2 controls channel 'C' in the creation of the MW seeds
-        _C.DATA.MW_TH2 = 0.1
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH2 = 0.1
         # TH3 acts over the channel 'B' and is used to limit how much the seeds can be grow
-        _C.DATA.MW_TH3 = 0.3
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH3 = 0.3
         # TH4 controls channel 'D' in the creation of the MW seeds
-        _C.DATA.MW_TH4 = 1.2
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH4 = 1.2
         # TH5 acts over the channel 'D' and is used to limit how much the seeds can be grow
-        _C.DATA.MW_TH5 = 1.5
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH5 = 1.5
         # Size of small objects to be removed after doing watershed
-        _C.DATA.REMOVE_SMALL_OBJ = 30
-        # Wheter to remove objects before watershed or after it
-        _C.DATA.REMOVE_BEFORE_MW = True
-        # Wheter to find an optimum value for each threshold with the validation data. If True the previous MW_TH*
+        _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ = 30
+        # Whether to remove objects before watershed or after it
+        _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW = True
+        # Whether to find an optimum value for each threshold with the validation data. If True the previous MW_TH*
         # variables will be replaced by the optimum values found
-        _C.DATA.MW_OPTIMIZE_THS = False
-        # Wheter to save watershed check files
-        _C.DATA.CHECK_MW = True
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = False
+        # Whether to save watershed check files
+        _C.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW = True
+        
+        ### DETECTION
+        _C.PROBLEM.DENOISING = CN()
+        _C.PROBLEM.DENOISING.N2V_PERC_PIX = 0.198
+        _C.PROBLEM.DENOISING.N2V_MANIPULATOR = 'uniform_withCP'
+        _C.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS = 5
+        _C.PROBLEM.DENOISING.N2V_STRUCTMASK = False
 
-        # Wheter to reshape de dimensions that does not satisfy the pathc shape selected by padding it with reflect.
+        ### SELF_SUPERVISED
+        _C.PROBLEM.SELF_SUPERVISED = CN()
+        _C.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR = 4
+        _C.PROBLEM.SELF_SUPERVISED.NOISE = 0.15
+
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Dataset
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        _C.DATA = CN()
+        _C.DATA.ROOT_DIR = dataroot
+
+        # Save all data of a generator in the given path.
+        _C.DATA.CHECK_GENERATORS = False
+
+        # _C.PROBLEM.NDIM='2D' -> _C.DATA.PATCH_SIZE=(y,x,c) ; _C.PROBLEM.NDIM='3D' -> _C.DATA.PATCH_SIZE=(z,y,x,c)
+        _C.DATA.PATCH_SIZE = (256, 256, 1)
+
+        # Extract random patches during data augmentation (DA)
+        _C.DATA.EXTRACT_RANDOM_PATCH = False
+        # Calculate probability map to make random subvolumes to be extracted with high probability of having an object
+        # on the middle of it. Useful to avoid extracting a subvolume which less foreground class information. Use it 
+        # only in 'SEMANTIC_SEG' type of problem (PROBLEM.TYPE)
+        _C.DATA.PROBABILITY_MAP = False # Used when _C.DATA.EXTRACT_RANDOM_PATCH=True
+        _C.DATA.W_FOREGROUND = 0.94 # Used when _C.DATA.PROBABILITY_MAP=True
+        _C.DATA.W_BACKGROUND = 0.06 # Used when _C.DATA.PROBABILITY_MAP=True
+
+        # Whether to reshape de dimensions that does not satisfy the pathc shape selected by padding it with reflect.
         _C.DATA.REFLECT_TO_COMPLETE_SHAPE = False
 
         _C.DATA.NORMALIZATION = CN()
@@ -115,9 +135,9 @@ class Config:
         _C.DATA.TRAIN.PATH = os.path.join(_C.DATA.ROOT_DIR, 'train', 'x')
         _C.DATA.TRAIN.MASK_PATH = os.path.join(_C.DATA.ROOT_DIR, 'train', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
-        # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.DATA.CHANNELS != 'B'
-        _C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'train', 'x_'+_C.DATA.CHANNELS)
-        _C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'train', 'y_'+_C.DATA.CHANNELS)
+        # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
+        _C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'train', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        _C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'train', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         # Extra train data generation: number of times to duplicate the train data. Useful when
         # _C.DATA.EXTRACT_RANDOM_PATCH=True is made, as more original train data can be cover on each epoch
         _C.DATA.TRAIN.REPLICATE = 0
@@ -138,9 +158,9 @@ class Config:
         # Whether to check if the data mask contains correct values, e.g. same classes as defined
         _C.DATA.TEST.CHECK_DATA = True
         _C.DATA.TEST.IN_MEMORY = False
-        # Wheter to load ground truth (GT)
+        # Whether to load ground truth (GT)
         _C.DATA.TEST.LOAD_GT = False
-        # Wheter to use validation data as test instead of trying to load test from _C.DATA.TEST.PATH and
+        # Whether to use validation data as test instead of trying to load test from _C.DATA.TEST.PATH and
         # _C.DATA.TEST.MASK_PATH. Currently only used if _C.PROBLEM.TYPE == 'CLASSIFICATION'
         _C.DATA.TEST.USE_VAL_AS_TEST = False
         # Path to load the test data from. Not used when _C.DATA.TEST.USE_VAL == True
@@ -148,27 +168,27 @@ class Config:
         # Path to load the test data masks from. Not used when _C.DATA.TEST.USE_VAL == True
         _C.DATA.TEST.MASK_PATH = os.path.join(_C.DATA.ROOT_DIR, 'test', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
-        # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.DATA.CHANNELS != 'B'
-        _C.DATA.TEST.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'x_'+_C.DATA.CHANNELS)
-        _C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'y_'+_C.DATA.CHANNELS)
+        # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
+        _C.DATA.TEST.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        _C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
         # 3D tuple when using _C.PROBLEM.NDIM='3D'
         _C.DATA.TEST.OVERLAP = (0,0)
         # Padding to be done in (y,x)/(z,y,xz) when reconstructing test data. Useful to avoid patch 'border effect'
         _C.DATA.TEST.PADDING = (0,0)
-        # Wheter to use median values to fill padded pixels or zeros
+        # Whether to use median values to fill padded pixels or zeros
         _C.DATA.TEST.MEDIAN_PADDING = False
-        # Directory where binary masks to apply to resulting images should be. Used when _C.TEST.APPLY_MASK  == True
+        # Directory where binary masks to apply to resulting images should be. Used when _C.TEST.POST_PROCESSING.APPLY_MASK  == True
         _C.DATA.TEST.BINARY_MASKS = os.path.join(_C.DATA.ROOT_DIR, 'test', 'bin_mask')
         # Test data resolution. Need to be provided in (z,y,x) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION' now.
         _C.DATA.TEST.RESOLUTION = (-1,)
-        # Wheter to apply argmax to the predicted images 
+        # Whether to apply argmax to the predicted images 
         _C.DATA.TEST.ARGMAX_TO_OUTPUT = False
 
         # Validation
         _C.DATA.VAL = CN()
-        # Wheter to create validation data from training set or read it from a directory
+        # Whether to create validation data from training set or read it from a directory
         _C.DATA.VAL.FROM_TRAIN = True
         # Use a cross validation strategy instead of just split the train data in two. Currently only used if
         # _C.PROBLEM.TYPE == 'CLASSIFICATION'
@@ -188,33 +208,22 @@ class Config:
         # Path to the validation data mask. Used when _C.DATA.VAL.FROM_TRAIN = False
         _C.DATA.VAL.MASK_PATH = os.path.join(_C.DATA.ROOT_DIR, 'val', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
-        # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.DATA.CHANNELS != 'B'
-        _C.DATA.VAL.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'x_'+_C.DATA.CHANNELS)
-        _C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'y_'+_C.DATA.CHANNELS)
+        # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
+        _C.DATA.VAL.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        _C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
         # 3D tuple when using _C.PROBLEM.NDIM='3D'
         _C.DATA.VAL.OVERLAP = (0,0)
         # Padding to be done in (y,x)/(z,y,x) when reconstructing validation data. Useful to avoid patch 'border effect'
         _C.DATA.VAL.PADDING = (0,0)
-        # Wheter to use median values to fill padded pixels or zeros
+        # Whether to use median values to fill padded pixels or zeros
         _C.DATA.VAL.MEDIAN_PADDING = False
         # Directory where validation binary masks should be located. This binary mask will be applied only when MW_TH*
-        # optimized values are find, that is, when _C.DATA.MW_OPTIMIZE_THS = True and _C.TEST.APPLY_MASK = True
+        # optimized values are find, that is, when _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = True and _C.TEST.POST_PROCESSING.APPLY_MASK = True
         _C.DATA.VAL.BINARY_MASKS = os.path.join(_C.DATA.ROOT_DIR, 'val', 'bin_mask')
         # Not used yet.
         _C.DATA.VAL.RESOLUTION = (-1,)
-
-        # _C.PROBLEM.NDIM='2D' -> _C.DATA.PATCH_SIZE=(y,x,c) ; _C.PROBLEM.NDIM='3D' -> _C.DATA.PATCH_SIZE=(z,y,x,c)
-        _C.DATA.PATCH_SIZE = (256, 256, 1)
-
-        # Extract random patches during data augmentation (DA)
-        _C.DATA.EXTRACT_RANDOM_PATCH = False
-        # Calculate probability map to make random subvolumes to be extracted with high probability of having an object
-        # on the middle of it. Useful to avoid extracting a subvolume which less foreground class information.
-        _C.DATA.PROBABILITY_MAP = False # Used when _C.DATA.EXTRACT_RANDOM_PATCH=True
-        _C.DATA.W_FOREGROUND = 0.94 # Used when _C.DATA.PROBABILITY_MAP=True
-        _C.DATA.W_BACKGROUND = 0.06 # Used when _C.DATA.PROBABILITY_MAP=True
 
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -334,7 +343,7 @@ class Config:
         _C.AUGMENTOR.CBLUR_SIZE = (0.2, 0.4)
         # Range of the downsampling to be made in cutblur
         _C.AUGMENTOR.CBLUR_DOWN_RANGE = (2, 8)
-        # Wheter to apply cut-and-paste just LR into HR image. If False, HR to LR will be applied also (see Figure 1
+        # Whether to apply cut-and-paste just LR into HR image. If False, HR to LR will be applied also (see Figure 1
         # of the paper https://arxiv.org/pdf/2004.00448.pdf)
         _C.AUGMENTOR.CBLUR_INSIDE = True
         # Apply cutmix operation
@@ -381,7 +390,8 @@ class Config:
         # Model definition
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.MODEL = CN()
-        # Architecture of the network. Possible values are: 'unet', 'resunet', 'attetion_unet'
+        # Architecture of the network. Possible values are: 'unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'nnunet', 'tiramisu', 
+        # 'mnet', 'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr'
         _C.MODEL.ARCHITECTURE = 'unet'
         # Number of feature maps on each level of the network.
         _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]
@@ -414,12 +424,12 @@ class Config:
         _C.MODEL.TIRAMISU_DEPTH = 3
 
         # UNETR
-        _C.MODEL.TOKEN_SIZE = 16
-        _C.MODEL.EMBED_DIM = 768
-        _C.MODEL.DEPTH = 12
-        _C.MODEL.MLP_HIDDEN_UNITS = [2048, 1024]
-        _C.MODEL.NUM_HEADS = 6
-        _C.MODEL.OUT_DIM = 1
+        _C.MODEL.UNETR_TOKEN_SIZE = 16
+        _C.MODEL.UNETR_EMBED_DIM = 768
+        _C.MODEL.UNETR_DEPTH = 12
+        _C.MODEL.UNETR_MLP_HIDDEN_UNITS = [2048, 1024]
+        _C.MODEL.UNETR_NUM_HEADS = 6
+        _C.MODEL.UNETR_OUT_DIM = 1
         
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -438,10 +448,13 @@ class Config:
         _C.TRAIN.ENABLE = False
         # Optimizer to use. Possible values: "SGD" or "ADAM"
         _C.TRAIN.OPTIMIZER = 'SGD'
+        # Learning rate 
         _C.TRAIN.LR = 1.E-4
+        # Batch size
         _C.TRAIN.BATCH_SIZE = 2
         # Number of epochs to train the model
         _C.TRAIN.EPOCHS = 360
+        # Epochs to wait with no validation data improvement until the training is stopped
         _C.TRAIN.PATIENCE = 50
 
         # LR Scheduler
@@ -466,32 +479,34 @@ class Config:
         _C.TEST.VERBOSE = True
         # Make test-time augmentation. Infer over 8 possible rotations for 2D img and 16 when 3D
         _C.TEST.AUGMENTATION = False
-        # Wheter to evaluate or not
+        # Whether to evaluate or not
         _C.TEST.EVALUATE = True
-        # Apply a binary mask to remove possible segmentation outside it
-        _C.TEST.APPLY_MASK = False
-        # Whether to apply Voronoi using 'B' or 'BC' channels
-        _C.TEST.VORONOI_ON_MASK = False
-        # Wheter to calculate mAP
-        _C.TEST.MAP = False # Only applies when _C.TEST.STATS.MERGE_PATCHES = True
-        # Wheter to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
-        _C.TEST.MATCHING_STATS = False
-        _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
-        _C.TEST.MATCHING_SEGCOMPARE = False
-
-        # Wheter to return local maximum coords. Only applies when _C.PROBLEM.TYPE = 'DETECTION'
-        _C.TEST.DET_LOCAL_MAX_COORDS = False
-        # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
-        # 'peak_local_max' of skimage.feature
-        _C.TEST.DET_MIN_TH_TO_BE_PEAK = [0.2]        
-        # Maximum distance far away from a GT point to consider a point as a true positive. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
-        _C.TEST.DET_TOLERANCE = [10]
 
         _C.TEST.STATS = CN()
         _C.TEST.STATS.PER_PATCH = False
         _C.TEST.STATS.MERGE_PATCHES = False # Only used when _C.TEST.STATS.PER_PATCH = True
         _C.TEST.STATS.FULL_IMG = True # Only when if PROBLEM.NDIM = '2D' as 3D images are huge for the GPU
 
+        ### Instance segmentation
+        # Whether to calculate mAP
+        _C.TEST.MAP = False # Only applies when _C.TEST.STATS.MERGE_PATCHES = True
+        # Whether to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
+        _C.TEST.MATCHING_STATS = False
+        _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
+        _C.TEST.MATCHING_SEGCOMPARE = False
+
+        ### Detection
+        # Whether to return local maximum coords
+        _C.TEST.DET_LOCAL_MAX_COORDS = False
+        # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
+        # 'peak_local_max' of skimage.feature
+        _C.TEST.DET_MIN_TH_TO_BE_PEAK = [0.2]        
+        # Maximum distance far away from a GT point to consider a point as a true positive
+        _C.TEST.DET_TOLERANCE = [10]
+
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Post-processing
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # When PROBLEM.NDIM = '2D' only applies when _C.TEST.STATS.FULL_IMG = True, if PROBLEM.NDIM = '3D' is applied
         # when _C.TEST.STATS.MERGE_PATCHES = True
         _C.TEST.POST_PROCESSING = CN()
@@ -500,12 +515,19 @@ class Config:
         _C.TEST.POST_PROCESSING.YZ_FILTERING_SIZE = 5
         _C.TEST.POST_PROCESSING.Z_FILTERING = False
         _C.TEST.POST_PROCESSING.Z_FILTERING_SIZE = 5
+        # Apply a binary mask to remove possible segmentation outside it
+        _C.TEST.POST_PROCESSING.APPLY_MASK = False
 
-        # The minimal allowed distance between points. Only applies when _C.PROBLEM.TYPE = 'DETECTION'.
+        ### Instance segmentation
+        # Whether to apply Voronoi using 'BC' or 'M' channels need to be present
+        _C.TEST.POST_PROCESSING.VORONOI_ON_MASK = False
+        
+        ### Detection
+        # The minimal allowed distance between points
         _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = False
-        # Distance between points to be considered the same. Only applies when _C.PROBLEM.TYPE = 'DETECTION' and 
-        # TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = True
+        # Distance between points to be considered the same. Only applies when TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = True
         _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = [10.0]
+
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Auxiliary paths
@@ -535,7 +557,7 @@ class Config:
         _C.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_local_max_check')
 
         # Name of the folder where the charts of the loss and metrics values while training the network are stored.
-        # Additionally, MW_TH* variable charts are stored if _C.DATA.MW_OPTIMIZE_THS = True
+        # Additionally, MW_TH* variable charts are stored if _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = True
         _C.PATHS.CHARTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'charts')
         # Directory where weight maps will be stored
         _C.PATHS.LOSS_WEIGHTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'loss_weights')
@@ -552,7 +574,7 @@ class Config:
         _C.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'val_instance_channels')
         _C.PATHS.TEST_INSTANCE_CHANNELS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'test_instance_channels')
         # Name of the folder where weights files will be stored/loaded from.
-        _C.PATHS.CHECKPOINT = os.path.join(job_dir, 'h5_files')
+        _C.PATHS.CHECKPOINT = os.path.join(job_dir, 'checkpoints')
         # Checkpoint file to load/store the model weights
         _C.PATHS.CHECKPOINT_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'model_weights_' + job_identifier + '.h5')
         # Name of the folder to store the probability map to avoid recalculating it on every run
@@ -561,9 +583,9 @@ class Config:
         # Watershed dubgging folder
         _C.PATHS.WATERSHED_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'watershed')
         # To store h5 files needed for the mAP calculation
-        _C.PATHS.MAP_H5_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'mAP_h5_files')
-        _C.PATHS.MEAN_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_mean_info.npy')
-        _C.PATHS.STD_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_std_info.npy')
+        _C.PATHS.MAP_H5_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'mAP_checkpoints')
+        _C.PATHS.MEAN_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_mean_value.npy')
+        _C.PATHS.STD_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_std_value.npy')
 
         self._C = _C
 
@@ -577,12 +599,12 @@ class Config:
         """Update some variables that depend of changes made after merge the .cfg file provide by the user. That is,
            this function should be called after YACS's merge_from_file().
         """
-        self._C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = self._C.DATA.TRAIN.PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
-        self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
-        self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = self._C.DATA.VAL.PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
-        self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
+        self._C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = self._C.DATA.TRAIN.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = self._C.DATA.VAL.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.VAL.BINARY_MASKS = os.path.join(self._C.DATA.VAL.PATH, '..', 'bin_mask')
-        self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
-        self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_'+self._C.DATA.CHANNELS+'_'+self._C.DATA.CONTOUR_MODE
+        self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, '..', 'bin_mask')
         self._C.PATHS.TEST_FULL_GT_H5 = os.path.join(self._C.DATA.TEST.MASK_PATH, 'h5')

@@ -8,7 +8,6 @@ models
    unet2d
    unet3d
    fcn
-   nnunet
    multiresunet
    tiramisu
    mnet

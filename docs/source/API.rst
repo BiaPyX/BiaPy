@@ -6,6 +6,5 @@
    data/data
    engine/engine
    models/models
-   sota_implementations/sota_implementations
    utils/utils
 

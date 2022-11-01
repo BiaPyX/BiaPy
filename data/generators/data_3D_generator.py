@@ -6,7 +6,7 @@ from skimage.io import imsave
 
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from data.generators.base_data_generator import BaseDataGenerator
-from utils.util import denormalize
+from data.pre_processing import denormalize
 
 class VoxelDataGenerator(BaseDataGenerator):
     """Custom 3D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own

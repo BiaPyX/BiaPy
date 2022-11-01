@@ -8,7 +8,7 @@ import imgaug as ia
 from skimage.io import imsave, imread
 from imgaug import augmenters as iaa
 
-from utils.util import normalize
+from data.pre_processing import normalize
 
 
 class ClassImageDataGenerator(tf.keras.utils.Sequence):

@@ -6,7 +6,8 @@ from tqdm import tqdm
 from skimage.io import imread
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from PIL import Image
-from utils.util import load_data_from_dir, normalize
+from utils.util import load_data_from_dir
+from data.pre_processing import normalize
 from skimage.io import imsave
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True, e_d_data=[],

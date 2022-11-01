@@ -14,9 +14,10 @@ from data.data_2D_manipulation import random_crop
 from data.data_3D_manipulation import random_3D_crop
 from engine.denoising import (rand_float_coords2D, rand_float_coords3D, get_stratified_coords2D, get_stratified_coords3D, get_value_manipulation,                         
                               apply_structN2Vmask, apply_structN2Vmask3D)                    
-from utils.util import img_to_onehot_encoding, normalize, norm_range01
+from utils.util import img_to_onehot_encoding
 from data.generators.augmentors import (cutout, cutblur, cutmix, cutnoise, misalignment, brightness_em, contrast_em,
                                         brightness, contrast, missing_sections, shuffle_channels, grayscale, GridMask)
+from data.pre_processing import normalize, norm_range01
 
 class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
     """Custom 2D BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_

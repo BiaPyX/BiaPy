@@ -70,18 +70,18 @@ def prepare_optimizer(cfg, model):
             if cfg.MODEL.N_CLASSES > 1:
                 raise ValueError("Not implemented pipeline option: N_CLASSES > 1 and INSTANCE_SEG")
             else:
-                if cfg.DATA.CHANNELS == "Dv2":
+                if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
                     metric_name = "mse"
-                    model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
+                    model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS),
                                     metrics=[metric_name])
                 else:
-                    if len(cfg.DATA.CHANNEL_WEIGHTS) != len(str(cfg.DATA.CHANNELS)):
-                        raise ValueError("'DATA.CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'DATA.CHANNELS'. "
-                                        "E.g. 'DATA.CHANNELS'='BC' 'DATA.CHANNEL_WEIGHTS'=[1,0.5]. "
-                                        "'DATA.CHANNELS'='BCD' 'DATA.CHANNEL_WEIGHTS'=[0.5,0.5,1]")
-                    bin_channels = 2 if cfg.DATA.CHANNELS in ["BCD", "BCDv2", "BC", "BCM"] else 1
+                    if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != len(str(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)):
+                        raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. "
+                                        "E.g. 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BC' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[1,0.5]. "
+                                        "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BCD' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]")
+                    bin_channels = 2 if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2", "BC", "BCM"] else 1
                     metric_name = "jaccard_index_instances"
-                    model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.DATA.CHANNEL_WEIGHTS, cfg.DATA.CHANNELS),
+                    model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS),
                                 metrics=[IoU_instances(binary_channels=bin_channels)])       
     elif cfg.PROBLEM.TYPE in ["SUPER_RESOLUTION", "SELF_SUPERVISED"]:
         print("Overriding 'LOSS.TYPE' to set it to MAE")

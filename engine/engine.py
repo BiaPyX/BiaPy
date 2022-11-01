@@ -3,7 +3,6 @@ import numpy as np
 from tqdm import tqdm
 
 from utils.util import check_masks, create_plots, load_data_from_dir, load_3d_images_from_dir
-from data import data_checks
 from data.data_2D_manipulation import load_and_prepare_2D_train_data, load_data_classification
 from data.data_3D_manipulation import load_and_prepare_3D_data
 from data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
@@ -55,9 +54,6 @@ class Engine(object):
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             train_filenames = prepare_instance_data(cfg)
             self.train_filenames = train_filenames
-
-        # Adjust overlap and padding for the problem type
-        data_checks(cfg)
 
         # From now on, no modification of the cfg will be allowed
         cfg.freeze()

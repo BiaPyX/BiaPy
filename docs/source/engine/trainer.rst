@@ -1,7 +1,7 @@
-Trainer 
--------
+Engine
+------
 
-.. automodule:: engine.trainer
+.. automodule:: engine.engine
     :members:                                                                   
     :undoc-members:                                                             
     :show-inheritance:

@@ -21,7 +21,8 @@ from scipy.spatial import KDTree, cKDTree
 from scipy.spatial.distance import cdist
 
 from engine.metrics import jaccard_index_numpy
-from utils.util import apply_binary_mask, pad_and_reflect, normalize
+from utils.util import pad_and_reflect
+from data.pre_processing import normalize
 from data.data_3D_manipulation import crop_3D_data_with_overlap
 
 
@@ -1403,3 +1404,57 @@ def remove_close_points(points, radius, resolution, ndim=3):
     print( 'Final number of points: ' + str( len( new_point_list ) ) )
     return new_point_list
     
+    
+def apply_binary_mask(X, bin_mask_dir):
+    """Apply a binary mask to remove values outside it.
+
+       Parameters
+       ----------
+       X : 4D Numpy array
+           Data to apply the mask. E.g. ``(vol_number, y, x, channels)``
+
+       bin_mask_dir : str, optional
+           Directory where the binary mask are located.
+
+       Returns
+       -------
+       X : 4D Numpy array
+           Data with the mask applied. E.g. ``(vol_number, y, x, channels)``.
+    """
+
+    if X.ndim != 4:
+        raise ValueError("'X' needs to have 4 dimensions and not {}".format(X.ndim))
+
+    print("Applying binary mask(s) from {}".format(bin_mask_dir))
+
+    ids = sorted(next(os.walk(bin_mask_dir))[2])
+
+    if len(ids) == 1:
+        one_file = True
+        print("It is assumed that the mask found {} is valid for all 'X' data".format(os.path.join(bin_mask_dir, ids[0])))
+    else:
+        one_file = False
+
+    if one_file:
+        mask = imread(os.path.join(bin_mask_dir, ids[0]))
+        mask = np.squeeze(mask)
+        if mask.ndim != 2 and mask.ndim != 3:
+            raise ValueError("Mask needs to have 2 or 3 dimensions and not {}".format(mask.ndim))
+
+        for k in tqdm(range(X.shape[0])):
+            if mask.ndim == 2:
+                for c in range(X.shape[-1]):
+                    X[k,:,:,c] = X[k,:,:,c]*(mask>0)
+            else:
+                X[k] = X[k]*(mask>0)
+    else:
+        for i in tqdm(range(len(ids))):
+            mask = imread(os.path.join(bin_mask_dir, ids[i]))
+            mask = np.squeeze(mask)
+            if mask.ndim == 2:
+                for c in range(X.shape[-1]):
+                    X[i,:,:,c] = X[i,:,:,c]*(mask>0)
+            else:
+                X[i] = X[i]*(mask>0)
+
+    return X
