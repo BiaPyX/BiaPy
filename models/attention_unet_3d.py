@@ -76,9 +76,6 @@ def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128,
 
        Image extracted from `Attention U-Net: Learning Where to Look for the Pancreas <https://arxiv.org/abs/1804.03999>`_.
     """
-
-    if len(feature_maps) != len(drop_values):
-        raise ValueError("'feature_maps' dimension must be equal 'drop_values' dimension")
     depth = len(feature_maps)-1
 
     #dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)

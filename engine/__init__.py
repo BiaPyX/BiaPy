@@ -21,9 +21,6 @@ def prepare_optimizer(cfg, model):
            Model to be compiled with the selected options.
     """
 
-    assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM']
-    assert cfg.LOSS.TYPE in ['CE', 'W_CE_DICE', 'MASKED_BCE']
-
     # Select the optimizer
     if cfg.TRAIN.OPTIMIZER == "SGD":
         opt = tf.keras.optimizers.SGD(lr=cfg.TRAIN.LR, momentum=0.99, decay=0.0, nesterov=False)
@@ -37,9 +34,7 @@ def prepare_optimizer(cfg, model):
         model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=[metric_name])
     elif cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", 'DETECTION']:
         if cfg.LOSS.TYPE == "CE": 
-            if cfg.MODEL.N_CLASSES == 0:
-                raise ValueError("'MODEL.N_CLASSES' can not be 0")
-            elif cfg.MODEL.N_CLASSES == 1 or cfg.MODEL.N_CLASSES == 2: # Binary case
+            if cfg.MODEL.N_CLASSES == 1 or cfg.MODEL.N_CLASSES == 2: # Binary case
                 fname = jaccard_index
                 loss_name = 'binary_crossentropy'
                 metric_name = "jaccard_index"
@@ -55,34 +50,21 @@ def prepare_optimizer(cfg, model):
                     loss_name = 'sparse_categorical_crossentropy'
             model.compile(optimizer=opt, loss=loss_name, metrics=[fname]) 
         elif cfg.LOSS.TYPE == "MASKED_BCE":
-            if cfg.MODEL.N_CLASSES > 1:
-                raise ValueError("Not implemented pipeline option: N_CLASSES > 1 and MASKED_BCE")
-            else:
-                metric_name = "masked_jaccard_index"
-                model.compile(optimizer=opt, loss=masked_bce_loss, metrics=[masked_jaccard_index])
+            metric_name = "masked_jaccard_index"
+            model.compile(optimizer=opt, loss=masked_bce_loss, metrics=[masked_jaccard_index])
         elif cfg.LOSS.TYPE == "W_CE_DICE":
             model.compile(optimizer=opt, loss=weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33), metrics=[jaccard_index])
             metric_name = "jaccard_index"
     elif cfg.PROBLEM.TYPE == "INSTANCE_SEG":
-        if cfg.LOSS.TYPE == "W_CE_DICE":
-            raise ValueError("Not implemented pipeline option: LOSS.TYPE == W_CE_DICE and INSTANCE_SEG")
-        elif cfg.LOSS.TYPE == "CE":
-            if cfg.MODEL.N_CLASSES > 1:
-                raise ValueError("Not implemented pipeline option: N_CLASSES > 1 and INSTANCE_SEG")
-            else:
-                if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
-                    metric_name = "mse"
-                    model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS),
-                                    metrics=[metric_name])
-                else:
-                    if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != len(str(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)):
-                        raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. "
-                                        "E.g. 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BC' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[1,0.5]. "
-                                        "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BCD' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]")
-                    bin_channels = 2 if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2", "BC", "BCM"] else 1
-                    metric_name = "jaccard_index_instances"
-                    model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS),
-                                metrics=[IoU_instances(binary_channels=bin_channels)])       
+            if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
+                metric_name = "mse"
+                model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS),
+                                metrics=[metric_name])
+            else:   
+                bin_channels = 2 if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2", "BC", ] else 1
+                metric_name = "jaccard_index_instances"
+                model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS),
+                            metrics=[IoU_instances(binary_channels=bin_channels)])       
     elif cfg.PROBLEM.TYPE in ["SUPER_RESOLUTION", "SELF_SUPERVISED"]:
         print("Overriding 'LOSS.TYPE' to set it to MAE")
         model.compile(optimizer=opt, loss="mae", metrics=[PSNR])

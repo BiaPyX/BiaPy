@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 
 from utils.util import  save_tif
-from data.pre_processing import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif, check_value
+from data.pre_processing import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif
 from data.generators.data_2D_generator import ImageDataGenerator
 from data.generators.data_2D_generator_img_pair import PairImageDataGenerator
 from data.generators.data_2D_generator_classification import ClassImageDataGenerator
@@ -53,20 +53,6 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             prob_map = f_name(Y_train, cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.W_FOREGROUND, cfg.DATA.W_BACKGROUND,
                               save_dir=cfg.PATHS.PROB_MAP_DIR)
 
-    # Checks
-    if cfg.AUGMENTOR.GRIDMASK:
-        if not check_value(cfg.AUGMENTOR.GRID_RATIO):
-            raise ValueError("cfg.AUGMENTOR.GRID_RATIO needs to be in [0, 1] range. Provided {}"
-                            .format(cfg.AUGMENTOR.GRID_RATIO))
-        if cfg.AUGMENTOR.GRID_D_RANGE[0] >= cfg.AUGMENTOR.GRID_D_RANGE[1]:
-            raise ValueError("cfg.AUGMENTOR.GRID_D_RANGE[0] needs to be larger than cfg.AUGMENTOR.GRID_D_RANGE[1]"
-                             "Provided {}".format(cfg.AUGMENTOR.GRID_D_RANGE))
-        if not check_value(cfg.AUGMENTOR.GRID_D_RANGE[0]) or not check_value(cfg.AUGMENTOR.GRID_D_RANGE[1]):
-            raise ValueError("cfg.AUGMENTOR.GRID_D_RANGE need to be in [0, 1] range. Provided {}"
-                             .format(cfg.AUGMENTOR.GRID_D_RANGE))
-        if not check_value(cfg.AUGMENTOR.GRID_ROTATE):
-             raise ValueError("cfg.AUGMENTOR.GRID_ROTATE need to be in [0, 1] range. Provided {}"
-                             .format(cfg.AUGMENTOR.GRID_ROTATE))
     # Normalization checks
     custom_mean, custom_std = None, None
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':
@@ -74,9 +60,6 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             print("Train/Val normalization: trying to load mean and std from {}".format(cfg.PATHS.MEAN_INFO_FILE))
             print("Train/Val normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
             if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
-                if not cfg.DATA.TRAIN.IN_MEMORY:
-                    raise ValueError("If no 'DATA.NORMALIZATION.CUSTOM_MEAN' and 'DATA.NORMALIZATION.CUSTOM_STD' were provided "
-                        "when DATA.NORMALIZATION.TYPE == 'custom', DATA.TRAIN.IN_MEMORY need to be True")
                 print("Train/Val normalization: mean and/or std files not found. Calculating it for the first time")
                 custom_mean = np.mean(X_train)
                 custom_std = np.std(X_train)

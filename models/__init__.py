@@ -19,31 +19,6 @@ def build_model(cfg, job_identifier):
        model : Keras model
            Selected model.
     """
-
-    # Checks
-    assert cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'nnunet', 'tiramisu', 'mnet',
-                                      'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr']
-    if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and cfg.MODEL.ARCHITECTURE != 'unet' and cfg.MODEL.ARCHITECTURE != 'resunet':
-        raise ValueError("Not implemented pipeline option: instance segmentation models adapted are 'unet' or 'resunet'")
-
-    if cfg.MODEL.N_CLASSES > 1 and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
-        raise ValueError("'MODEL.N_CLASSES' > 1 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'seunet', 'attention_unet']")
-
-    if cfg.MODEL.LAST_ACTIVATION not in ['softmax', 'sigmoid', 'linear']:
-        raise ValueError("'MODEL.LAST_ACTIVATION' need to be in ['softmax','sigmoid','linear']. Provided {}"
-                         .format(cfg.MODEL.LAST_ACTIVATION))
-    if cfg.MODEL.UPSAMPLE_LAYER.lower() not in ["upsampling", "convtranspose"]:
-        raise ValueError("cfg.MODEL.UPSAMPLE_LAYER' need to be one between ['upsampling', 'convtranspose']. Provided {}"
-                          .format(cfg.MODEL.UPSAMPLE_LAYER))
-    if (cfg.PROBLEM.TYPE == 'DETECTION' or cfg.PROBLEM.TYPE == 'DENOISING' or cfg.PROBLEM.TYPE == 'SELF_SUPERVISED') and \
-        cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
-        raise ValueError("Architectures available for {} are: ['unet', 'resunet', 'seunet', 'attention_unet']"
-                         .format(cfg.PROBLEM.TYPE))
-    if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION' and cfg.MODEL.ARCHITECTURE not in ['edsr']:
-        raise ValueError("Architectures available for 'SUPER_RESOLUTION' are: ['edsr']")
-    if cfg.PROBLEM.TYPE == 'CLASSIFICATION' and cfg.MODEL.ARCHITECTURE not in ['simple_cnn', 'EfficientNetB0']:
-        raise ValueError("Architectures available for 'CLASSIFICATION' are: ['simple_cnn', 'EfficientNetB0']")
-
     # Import the model
     if cfg.MODEL.ARCHITECTURE in ['fcn32', 'fcn8']:
         modelname = 'fcn_vgg'
@@ -81,36 +56,33 @@ def build_model(cfg, job_identifier):
 
         model = f_name(**args)
     else:
-        if cfg.PROBLEM.NDIM == '3D':
-            raise ValueError("Not implemented pipeline option")
-        else:
-            if cfg.MODEL.ARCHITECTURE == 'simple_cnn':
-                model = simple_CNN(image_shape=cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
-            elif cfg.MODEL.ARCHITECTURE == 'EfficientNetB0':
-                shape = (224, 224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.DATA.PATCH_SIZE[:-1] != (224, 224) else cfg.DATA.PATCH_SIZE
-                model = efficientnetb0(shape, n_classes=cfg.MODEL.N_CLASSES)
-            elif cfg.MODEL.ARCHITECTURE == 'fcn32':
-                model = FCN32_VGG16(cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
-            elif cfg.MODEL.ARCHITECTURE == 'fcn8':
-                model = FCN8_VGG16(cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
-            elif cfg.MODEL.ARCHITECTURE == 'tiramisu':
-                model = FC_DenseNet103(cfg.DATA.PATCH_SIZE, n_filters_first_conv=cfg.MODEL.FEATURE_MAPS[0],
-                    n_pool=cfg.MODEL.TIRAMISU_DEPTH, growth_rate=12, n_layers_per_block=5,
-                    dropout_p=cfg.MODEL.DROPOUT_VALUES[0])
-            elif cfg.MODEL.ARCHITECTURE == 'mnet':
-                model = MNet((None, None, cfg.DATA.PATCH_SIZE[-1]))
-            elif cfg.MODEL.ARCHITECTURE == 'multiresunet':
-                model = MultiResUnet(None, None, cfg.DATA.PATCH_SIZE[-1])
-            elif cfg.MODEL.ARCHITECTURE == 'unetr':
-                num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.UNETR_TOKEN_SIZE)**2
-                args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.UNETR_TOKEN_SIZE, num_patches=num_patches,
-                    projection_dim=cfg.MODEL.UNETR_EMBED_DIM, transformer_layers=cfg.MODEL.UNETR_DEPTH, num_heads=cfg.MODEL.UNETR_NUM_HEADS,
-                    transformer_units=cfg.MODEL.UNETR_MLP_HIDDEN_UNITS, data_augmentation = None, num_filters = 16, 
-                    num_classes=cfg.MODEL.UNETR_OUT_DIM, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
-                    ViT_hidd_mult = 3, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES)
-                model = UNETR_2D(**args)
-            elif cfg.MODEL.ARCHITECTURE == 'edsr':
-                model = EDSR(num_filters=64, num_of_residual_blocks=16, num_channels=cfg.DATA.PATCH_SIZE[-1])
+        if cfg.MODEL.ARCHITECTURE == 'simple_cnn':
+            model = simple_CNN(image_shape=cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
+        elif cfg.MODEL.ARCHITECTURE == 'EfficientNetB0':
+            shape = (224, 224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.DATA.PATCH_SIZE[:-1] != (224, 224) else cfg.DATA.PATCH_SIZE
+            model = efficientnetb0(shape, n_classes=cfg.MODEL.N_CLASSES)
+        elif cfg.MODEL.ARCHITECTURE == 'fcn32':
+            model = FCN32_VGG16(cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
+        elif cfg.MODEL.ARCHITECTURE == 'fcn8':
+            model = FCN8_VGG16(cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
+        elif cfg.MODEL.ARCHITECTURE == 'tiramisu':
+            model = FC_DenseNet103(cfg.DATA.PATCH_SIZE, n_filters_first_conv=cfg.MODEL.FEATURE_MAPS[0],
+                n_pool=cfg.MODEL.TIRAMISU_DEPTH, growth_rate=12, n_layers_per_block=5,
+                dropout_p=cfg.MODEL.DROPOUT_VALUES[0])
+        elif cfg.MODEL.ARCHITECTURE == 'mnet':
+            model = MNet((None, None, cfg.DATA.PATCH_SIZE[-1]))
+        elif cfg.MODEL.ARCHITECTURE == 'multiresunet':
+            model = MultiResUnet(None, None, cfg.DATA.PATCH_SIZE[-1])
+        elif cfg.MODEL.ARCHITECTURE == 'unetr':
+            num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.UNETR_TOKEN_SIZE)**2
+            args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.UNETR_TOKEN_SIZE, num_patches=num_patches,
+                projection_dim=cfg.MODEL.UNETR_EMBED_DIM, transformer_layers=cfg.MODEL.UNETR_DEPTH, num_heads=cfg.MODEL.UNETR_NUM_HEADS,
+                transformer_units=cfg.MODEL.UNETR_MLP_HIDDEN_UNITS, data_augmentation = None, num_filters = 16, 
+                num_classes=cfg.MODEL.UNETR_OUT_DIM, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
+                ViT_hidd_mult = 3, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES)
+            model = UNETR_2D(**args)
+        elif cfg.MODEL.ARCHITECTURE == 'edsr':
+            model = EDSR(num_filters=64, num_of_residual_blocks=16, num_channels=cfg.DATA.PATCH_SIZE[-1])
 
     # Check the network created
     model.summary(line_length=150)

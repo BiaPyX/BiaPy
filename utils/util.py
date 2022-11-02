@@ -1415,3 +1415,15 @@ def wrapper_matching_segCompare(stats_all):
             accumulated_values[key] = accumulated_values[key] + stat[key]
         accumulated_values[key] = accumulated_values[key]/len(stats_all)
     return accumulated_values
+    
+def check_value(value, value_range=(0,1)):
+    """Checks if a value is within a range """
+    if isinstance(value, list) or isinstance(value, tuple):
+        for i in range(len(value)):
+            if not (value_range[0] <= value[i] <= value_range[1]):    
+                return False
+        return True 
+    else:   
+        if value_range[0] <= value <= value_range[1]:
+            return True
+        return False

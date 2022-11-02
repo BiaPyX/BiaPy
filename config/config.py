@@ -50,8 +50,8 @@ class Config:
 
         # Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. (1, 0.2), 1
         # should be multipled by BCE for the first two channels and 0.2 to MSE for the last channel.
-        _C.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS = (1, 0.2)
-        # Contour creation mode. Corresponds to 'fb_mode' arg of find_boundaries function from ``scikit-image``. More
+        _C.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS = (1, 1)
+        # Contour creation mode. Corresponds to 'mode' arg of find_boundaries function from ``scikit-image``. More
         # info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries
         _C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE = "thick"
 
@@ -91,7 +91,10 @@ class Config:
 
         ### SELF_SUPERVISED
         _C.PROBLEM.SELF_SUPERVISED = CN()
+        # Downsizing factor to reshape the image. It will be downsampled and upsampled again by this factor so the 
+        # quality of the image is worsens
         _C.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR = 4
+        # Number between [0, 1] indicating the std of the Gaussian noise N(0,std).
         _C.PROBLEM.SELF_SUPERVISED.NOISE = 0.15
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -252,15 +255,16 @@ class Config:
         _C.AUGMENTOR.RANDOM_ROT_RANGE = (-180, 180)
         # Apply shear to images
         _C.AUGMENTOR.SHEAR = False
-        # Shear range
+        # Shear range. Expected value range is around [-360, 360], with reasonable values being in the range of [-45, 45].
         _C.AUGMENTOR.SHEAR_RANGE = (-20, 20)
         # Apply zoom to images
         _C.AUGMENTOR.ZOOM = False
-        # Zoom range
+        # Zoom range. Scaling factor to use, where 1.0 denotes “no change” and 0.5 is zoomed out to 50 percent of the original size.
         _C.AUGMENTOR.ZOOM_RANGE = (0.8, 1.2)
         # Apply shift
         _C.AUGMENTOR.SHIFT = False
-        # Shift range
+        # Shift range. Translation as a fraction of the image height/width (x-translation, y-translation), where 0 denotes 
+        # “no change” and 0.5 denotes “half of the axis size”.
         _C.AUGMENTOR.SHIFT_RANGE = (0.1, 0.2)
         # How to fill up the new values created with affine transformations (rotations, shear, shift and zoom).
         # Same meaning as in skimage (and numpy.pad()): 'constant', 'edge', 'symmetric', 'reflect' and 'wrap'
@@ -273,15 +277,18 @@ class Config:
         _C.AUGMENTOR.ZFLIP = False
         # Elastic transformations
         _C.AUGMENTOR.ELASTIC = False
-        # Strength of the distortion field
+        # Strength of the distortion field. Higher values mean that pixels are moved further with respect to the distortion 
+        # field’s direction. Set this to around 10 times the value of sigma for visible effects.
         _C.AUGMENTOR.E_ALPHA = (12, 16)
-        # Standard deviation of the gaussian kernel used to smooth the distortion fields
+        # Standard deviation of the gaussian kernel used to smooth the distortion fields.  Higher values (for 128x128 images 
+        # around 5.0) lead to more water-like effects, while lower values (for 128x128 images around 1.0 and lower) lead to
+        # more noisy, pixelated images. Set this to around 1/10th of alpha for visible effects.
         _C.AUGMENTOR.E_SIGMA = 4
         # Parameter that defines the handling of newly created pixels with the elastic transformation
         _C.AUGMENTOR.E_MODE = 'constant'
         # Gaussian blur
         _C.AUGMENTOR.G_BLUR = False
-        # Standard deviation of the gaussian kernel
+        # Standard deviation of the gaussian kernel. Values in the range 0.0 (no blur) to 3.0 (strong blur) are common.
         _C.AUGMENTOR.G_SIGMA = (1.0, 2.0)
         # To blur an image by computing median values over neighbourhoods
         _C.AUGMENTOR.MEDIAN_BLUR = False
@@ -297,29 +304,29 @@ class Config:
         _C.AUGMENTOR.GC_GAMMA = (1.25, 1.75)
         # To apply brightness changes to images
         _C.AUGMENTOR.BRIGHTNESS = False
-        # Strength of the brightness range, with valid values being 0 <= brightness_factor <= 1
-        _C.AUGMENTOR.BRIGHTNESS_FACTOR = (0.1, 0.3)
+        # Strength of the brightness range. 
+        _C.AUGMENTOR.BRIGHTNESS_FACTOR = (-0.1, 0.1)
         # If apply same contrast to the entire image or select one for each slice. For 2D does not matter but yes for
         # 3D images. Possible values: '2D' or '3D'. Used when '_C.PROBLEM.NDIM' = '3D'.
         _C.AUGMENTOR.BRIGHTNESS_MODE = '3D'
         # To apply contrast changes to images
         _C.AUGMENTOR.CONTRAST = False
-        # Strength of the contrast change range, with valid values being 0 <= contrast_factor <= 1
-        _C.AUGMENTOR.CONTRAST_FACTOR = (0.1, 0.3)
+        # Strength of the contrast change range. 
+        _C.AUGMENTOR.CONTRAST_FACTOR = (-0.1, 0.1)
         # If apply same contrast to the entire image or select one for each slice. For 2D does not matter but yes for
         # 3D images. Possible values: '2D' or '3D'. Used when '_C.PROBLEM.NDIM' = '3D'.
         _C.AUGMENTOR.CONTRAST_MODE = '3D'
         # To apply brightness changes to images based on Pytorch Connectomics library.
         _C.AUGMENTOR.BRIGHTNESS_EM = False
-        # Strength of the brightness range, with valid values being 0 <= brightness_factor <= 1
-        _C.AUGMENTOR.BRIGHTNESS_EM_FACTOR = (0.1, 0.3)
+        # Strength of the brightness range
+        _C.AUGMENTOR.BRIGHTNESS_EM_FACTOR = (-0.1, 0.1)
         # If apply same contrast to the entire image or select one for each slice. For 2D does not matter but yes for
         # 3D images. Possible values: '2D' or '3D'. Used when '_C.PROBLEM.NDIM' = '3D'.
         _C.AUGMENTOR.BRIGHTNESS_EM_MODE = '3D'
         # To apply contrast changes to images based on Pytorch Connectomics library.
         _C.AUGMENTOR.CONTRAST_EM = False
         # Strength of the contrast change range, with valid values being 0 <= contrast_em_factor <= 1
-        _C.AUGMENTOR.CONTRAST_EM_FACTOR = (0.1, 0.3)
+        _C.AUGMENTOR.CONTRAST_EM_FACTOR = (-0.1, 0.1)
         # If apply same contrast to the entire image or select one for each slice. For 2D does not matter but yes for
         # 3D images. Possible values: '2D' or '3D'. Used when '_C.PROBLEM.NDIM' = '3D'.
         _C.AUGMENTOR.CONTRAST_EM_MODE = '3D'
@@ -329,7 +336,7 @@ class Config:
         _C.AUGMENTOR.DROP_RANGE = (0, 0.2)
         # To fill one or more rectangular areas in an image using a fill mode
         _C.AUGMENTOR.CUTOUT = False
-        # Range of number of areas to fill the image with
+        # Range of number of areas to fill the image with. Reasonable values between range [0,4]
         _C.AUGMENTOR.COUT_NB_ITERATIONS = (1, 3)
         # Size of the areas in % of the corresponding image size
         _C.AUGMENTOR.COUT_SIZE = (0.05, 0.3)
@@ -398,7 +405,7 @@ class Config:
         # To activate the Spatial Dropout instead of use the "normal" dropout layer
         _C.MODEL.SPATIAL_DROPOUT = False
         # Values to make the dropout with. Set to 0 to prevent dropout
-        _C.MODEL.DROPOUT_VALUES = [0.1, 0.1, 0.2, 0.2, 0.3]
+        _C.MODEL.DROPOUT_VALUES = [0., 0., 0., 0., 0.]
         # To active batch normalization
         _C.MODEL.BATCH_NORMALIZATION = False
         # Kernel type to use on convolution layers

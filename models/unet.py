@@ -60,8 +60,6 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
        Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
     """
 
-    if len(feature_maps) != len(drop_values):
-        raise ValueError("'feature_maps' dimension must be equal 'drop_values' dimension")
     depth = len(feature_maps)-1
 
     dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)

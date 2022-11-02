@@ -10,7 +10,7 @@ from shutil import copyfile
 from utils.util import set_seed, limit_threads
 from engine.engine import Engine
 from config.config import Config
-from engine.arg_check import arg_check
+from engine.check_configuration import check_configuration
 
 if __name__ == '__main__':
 
@@ -61,8 +61,6 @@ if __name__ == '__main__':
     print("Python       : {}".format(sys.version.split('\n')[0]))
     print("Keras        : {}".format(tf.keras.__version__))
     print("Tensorflow   : {}".format(tf.__version__))
-    print("Configuration details:")
-    print(cfg)
 
     # GPU selection
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -75,8 +73,9 @@ if __name__ == '__main__':
     # Reproducibility
     set_seed(cfg.SYSTEM.SEED)
 
-    arg_check(cfg)
-
+    check_configuration(cfg)
+    print("Configuration details:")
+    print(cfg)
 
     ##########################
     #       TRAIN/TEST       #

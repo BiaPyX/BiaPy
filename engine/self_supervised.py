@@ -139,7 +139,7 @@ def crappify(data, resizing_factor, add_noise=True, noise_level=None, Down_up=Tr
         ``(num_of_images, z, y, x, channels)`` if working with 3D.
 
     resizing_factor : floats
-        Downsizing factor to divide the number of pixels with.
+        Downsizing factor to reshape the image.
 
     add_noise : boolean, optional
         Indicating whether to add gaussian noise before applying the resizing.

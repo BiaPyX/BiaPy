@@ -2,7 +2,7 @@ import os
 import numpy as np
 from tqdm import tqdm
 
-from utils.util import load_data_from_dir, load_3d_images_from_dir, save_npy_files, save_tif
+from utils.util import load_data_from_dir, load_3d_images_from_dir, save_npy_files, save_tif, check_value
 
 
 def create_instance_channels(cfg, data_type='train'):
@@ -74,60 +74,6 @@ def create_test_instance_channels(cfg):
     save_npy_files(X_test, data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_DIR, filenames=test_filenames,
                    verbose=cfg.TEST.VERBOSE)
 
-
-def data_checks(cfg):
-    """Checks data variables so no error is thrown if the user forgets setting some variables. 
-    """
-    opts = []
-    if cfg.PROBLEM.NDIM == '3D':
-        if cfg.DATA.TRAIN.OVERLAP == (0,0):
-            opts.extend(['DATA.TRAIN.OVERLAP', (0,0,0)])
-        if cfg.DATA.TRAIN.PADDING == (0,0):
-            opts.extend(['DATA.TRAIN.PADDING', (0,0,0)])
-        if cfg.DATA.VAL.OVERLAP == (0,0):
-            opts.extend(['DATA.VAL.OVERLAP', (0,0,0)])
-        if cfg.DATA.VAL.PADDING == (0,0):
-            opts.extend(['DATA.VAL.PADDING', (0,0,0)])
-        if cfg.DATA.TEST.OVERLAP == (0,0):
-            opts.extend(['DATA.TEST.OVERLAP', (0,0,0)])
-        if cfg.DATA.TEST.PADDING == (0,0):
-            opts.extend(['DATA.TEST.PADDING', (0,0,0)])
-    if len(opts) > 0:
-        cfg.merge_from_list(opts)
-
-    count = 2 if cfg.PROBLEM.NDIM == '2D' else 3
-    if len(cfg.DATA.TRAIN.OVERLAP) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.OVERLAP tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TRAIN.OVERLAP))
-    if len(cfg.DATA.TRAIN.PADDING) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.PADDING tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TRAIN.PADDING))
-    if len(cfg.DATA.TEST.OVERLAP) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.OVERLAP tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TEST.OVERLAP))
-    if len(cfg.DATA.TEST.PADDING) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.PADDING tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TEST.PADDING))
-    if len(cfg.DATA.PATCH_SIZE) != count+1:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count+1, cfg.DATA.PATCH_SIZE))
-    if len(cfg.DATA.TRAIN.RESOLUTION) != 1 and len(cfg.DATA.TRAIN.RESOLUTION) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.RESOLUTION tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TRAIN.RESOLUTION))
-    if len(cfg.DATA.VAL.RESOLUTION) != 1 and len(cfg.DATA.VAL.RESOLUTION) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.RESOLUTION tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.VAL.RESOLUTION))
-    if len(cfg.DATA.TEST.RESOLUTION) != 1 and len(cfg.DATA.TEST.RESOLUTION) != count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.RESOLUTION tuple must be lenght {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, count, cfg.DATA.TEST.RESOLUTION))
-    
-    if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
-        if len(cfg.DATA.TEST.RESOLUTION) == 1:
-            raise ValueError("'DATA.TEST.RESOLUTION' must be set when using 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS'")
-        if len(cfg.DATA.TEST.RESOLUTION) != count:
-            raise ValueError("'DATA.TEST.RESOLUTION' must match in length to {}, which is the number of "
-                             "dimensions".format(count))
-
 def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
     """Create an array with 3 channels given semantic or instance segmentation data masks. These 3 channels are:
        semantic mask, contours and distance map.
@@ -154,7 +100,6 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
            5D array with 3 channels instead of one. E.g. ``(10, 200, 1000, 1000, 3)``
     """
 
-    assert mode in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2']
     assert data_mask.ndim in [5, 4]
 
     d_shape = 4 if data_mask.ndim == 5 else 3
@@ -290,9 +235,6 @@ def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
     if Y is None and Y_path is None:
         raise ValueError("'Y' or 'Y_path' need to be provided")
 
-    if w_foreground + w_background > 1:
-        raise ValueError("'w_foreground' plus 'w_background' can not be greater than one")
-
     if Y is not None:
         prob_map = np.copy(Y).astype(np.float32)
         l = prob_map.shape[0]
@@ -407,9 +349,6 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
     if Y is None and Y_path is None:
         raise ValueError("'Y' or 'Y_path' need to be provided")
 
-    if w_foreground + w_background > 1:
-        raise ValueError("'w_foreground' plus 'w_background' can not be greater " "than one")
-
     if Y is not None:
         prob_map = np.copy(Y).astype(np.float32)
         l = prob_map.shape[0]
@@ -495,12 +434,6 @@ def norm_range01(x):
 
 def reduce_dtype(x, x_min, x_max, out_min=0, out_max=1, out_type=np.float32):
     return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)
-
-def check_value(value, range=(0,1)):
-    """Checks if a value is within a range """
-    if range[0] <= value <= range[1]:
-        return True
-    return False
 
 def normalize(data, means, stds):
     return (data - means) / stds

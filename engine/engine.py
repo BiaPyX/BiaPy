@@ -100,10 +100,6 @@ class Engine(object):
                         X_train, Y_train, self.train_filenames = objs
                     del objs
                 else:
-                    if not os.path.exists(cfg.DATA.TRAIN.PATH):
-                        raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
-                    if not os.path.exists(cfg.DATA.TRAIN.MASK_PATH) and cfg.PROBLEM.TYPE != 'DENOISING':
-                        raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.MASK_PATH))
                     X_train, Y_train = None, None
 
                 ##################
@@ -122,10 +118,6 @@ class Engine(object):
                         else:
                             Y_val = np.zeros(X_val.shape, dtype=np.uint8) # Fake mask val
                     else:
-                        if not os.path.exists(cfg.DATA.VAL.PATH):
-                            raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
-                        if not os.path.exists(cfg.DATA.VAL.MASK_PATH):
-                            raise ValueError("Validation mask data dir not found: {}".format(cfg.DATA.VAL.MASK_PATH))
                         X_val, Y_val = None, None
 
             # CLASSIFICATION
@@ -134,24 +126,13 @@ class Engine(object):
                     X_train, Y_train, X_val, Y_val = load_data_classification(cfg)
                 else:
                     X_train, Y_train = None, None
-                    if not os.path.exists(cfg.DATA.TRAIN.PATH):
-                        raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
-
                     X_val, Y_val = None, None
-                    if not os.path.exists(cfg.DATA.VAL.PATH):
-                        raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
 
         ############
         ### TEST ###
         ############
         if cfg.TEST.ENABLE:
             if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']:
-                # Path comprobations
-                if not os.path.exists(cfg.DATA.TEST.PATH):
-                    raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
-                if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.MASK_PATH):
-                        raise ValueError("Test data mask not found: {}".format(cfg.DATA.TEST.MASK_PATH))
-
                 if cfg.DATA.TEST.IN_MEMORY:
                     print("2) Loading test images . . .")
                     f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
@@ -174,8 +155,6 @@ class Engine(object):
                         self.test_mask_filenames = sorted(next(os.walk(self.original_test_mask_path))[2])
             elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
                 X_test, Y_test, self.test_filenames = load_data_classification(cfg, test=True)
-            else:
-                raise ValueError("Undefined 'PROBLEM.TYPE' {}".format(cfg.PROBLEM.TYPE))
 
 
         print("########################\n"
@@ -240,8 +219,6 @@ class Engine(object):
             workflow = Denoising(self.cfg, self.model, post_processing)
         elif self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
             workflow = Self_supervised(self.cfg, self.model, post_processing)
-        else:
-            raise ValueError("Undefined 'PROBLEM.TYPE' {}".format(self.cfg.PROBLEM.TYPE))
 
         print("###############\n"
               "#  INFERENCE  #\n"

@@ -361,15 +361,9 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if not in_memory and len(data_paths) != 2:
             raise ValueError("'data_paths' must contain the following paths: 1) data path ; 2) data masks path")
 
-        if len(resolution) == 1 and resolution[0] == -1:
-            resolution = (1,1) if self.ndim == 2 else (1,1,1)
-        
-        if len(resolution) != self.ndim:
-            raise ValueError("The resolution needs to be a tuple with {} values".format(self.ndim))
-
         if random_crops_in_DA:
             if shape is None:
-                raise ValueError("'shape' must be provided when 'random_crops_in_DA is enabled")
+                raise ValueError("'shape' must be provided when 'random_crops_in_DA' is enabled")
             if in_memory:
                 if ndim == 3:
                     if shape[0] > X.shape[1] or shape[1] > X.shape[2] or shape[2] > X.shape[3]:
