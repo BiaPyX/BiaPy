@@ -117,38 +117,10 @@ class simple_data_generator(tf.keras.utils.Sequence):
                     mask = np.load(os.path.join(self.dm_path, self.data_mask_path[idx]))
             else:
                 img = imread(os.path.join(self.d_path, self.data_path[idx]))
-
-                if img.ndim == 4 and self.data_path[idx].endswith('.tif'):
-                    # Obtain axis position once
-                    if self.ax is None:
-                        img_aux = Image.open(os.path.join(self.d_path, self.data_path[idx]))
-                        meta_dict = {TAGS[key] : img_aux.tag[key] for key in img_aux.tag_v2}
-                        axis = meta_dict['ImageDescription'][0].split('\n')[-2].split('=')[-1]
-                        self.ax = {}
-                        for k, c in enumerate(axis):
-                            self.ax[c] = k
-                        del img_aux
-                    if 'Z' in self.ax:
-                        img = img.transpose((self.ax['Z'],self.ax['Y'],self.ax['X'],self.ax['C']))
-
+                img = np.squeeze(img)
                 if self.provide_Y:
                     mask = imread(os.path.join(self.dm_path, self.data_mask_path[idx]))
-                    if mask.ndim == 4 and self.data_mask_path[idx].endswith('.tif'):
-                        # Obtain axis position once
-                        if self.ay is None:
-                            img_aux = Image.open(os.path.join(self.dm_path, self.data_mask_path[idx]))
-                            meta_dict = {TAGS[key] : img_aux.tag[key] for key in img_aux.tag_v2}
-                            axis = meta_dict['ImageDescription'][0].split('\n')[-2].split('=')[-1]
-                            self.ay = {}
-                            for k, c in enumerate(axis):
-                                self.ay[c] = k
-                            del img_aux
-                        if 'Z' in self.ay:
-                            mask = mask.transpose((self.ay['Z'],self.ay['Y'],self.ay['X'],self.ay['C']))
-
-            img = np.squeeze(img)
-            if self.provide_Y:
-                mask = np.squeeze(mask) 
+                    mask = np.squeeze(mask)  
         else:
             img = self.X[idx]
             img = np.squeeze(img)
@@ -159,14 +131,26 @@ class simple_data_generator(tf.keras.utils.Sequence):
 
         # Correct dimensions 
         if self.data_3d:
-            if img.ndim == 3: img = np.expand_dims(img, -1)
+            if img.ndim == 3: 
+                img = np.expand_dims(img, -1)
+            else:
+                if img.shape[0] <= 3: img = img.transpose((1,2,3,0))
         else:
-            if img.ndim == 2: img = np.expand_dims(img, -1) 
+            if img.ndim == 2: 
+                img = np.expand_dims(img, -1) 
+            else:
+                if img.shape[0] <= 3: img = img.transpose((1,2,0))
         if self.provide_Y:
             if self.data_3d:
-                if mask.ndim == 3: mask = np.expand_dims(mask, -1)
+                if mask.ndim == 3: 
+                    mask = np.expand_dims(mask, -1)
+                else:
+                    if mask.shape[0] <= 3: mask = mask.transpose((1,2,3,0))
             else:
-                if mask.ndim == 2: mask = np.expand_dims(mask, -1)
+                if mask.ndim == 2: 
+                    mask = np.expand_dims(mask, -1)
+                else:
+                    if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
 
         # Normalization
         xnorm = None

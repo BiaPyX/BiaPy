@@ -11,7 +11,6 @@ from PIL import Image
 from tqdm import tqdm
 from skimage.io import imsave, imread
 from skimage import measure
-from skimage.segmentation import clear_border, find_boundaries
 from collections import namedtuple
 
 from engine.metrics import jaccard_index_numpy, voc_calculation, DET_calculation
@@ -965,14 +964,13 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
             img = np.load(os.path.join(data_dir, id_))
         else:
             img = imread(os.path.join(data_dir, id_))
-        #img = np.asarray(Image.open(os.path.join(data_dir, id_)))
 
         if return_filenames: filenames.append(id_)
 
-        if len(img.shape) == 2:
-            img = np.expand_dims(img, axis=-1)
+        if img.ndim == 2:
+            img = np.expand_dims(img, -1)
         else:
-           if img.shape[0] <= 3: img = img.transpose((1,2,0))
+            if img.shape[0] <= 3: img = img.transpose((1,2,0))  
 
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=False)
 
@@ -1172,27 +1170,17 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
             img = np.load(os.path.join(data_dir, id_))
         else:
             img = imread(os.path.join(data_dir, id_))
-            if img.ndim == 4 and id_.endswith('.tif'):
-                # Obtain axis position once
-                if ax is None:
-                    from PIL import Image
-                    from PIL.TiffTags import TAGS
-                    img_aux = Image.open(os.path.join(data_dir, id_))
-                    meta_dict = {TAGS[key] : img_aux.tag[key] for key in img_aux.tag_v2}
-                    axis = meta_dict['ImageDescription'][0].split('\n')[-2].split('=')[-1]
-                    ax = {}
-                    for k, c in enumerate(axis):
-                        ax[c] = k 
-                    del img_aux 
-                if 'Z' in ax:
-                    img = img.transpose((ax['Z'],ax['Y'],ax['X'],ax['C']))
         img = np.squeeze(img)
 
         if img.ndim < 3:
             raise ValueError("Read image seems to be 2D: {}. Path: {}".format(img.shape, os.path.join(data_dir, id_)))
 
+        if img.ndim == 3: 
+            img = np.expand_dims(img, -1)
+        else:
+            if img.shape[0] <= 3: img = img.transpose((1,2,3,0))
+
         if return_filenames: filenames.append(id_)
-        if len(img.shape) == 3: img = np.expand_dims(img, axis=-1)
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=verbose)
 
         data_shape.append(img.shape)

@@ -87,6 +87,8 @@ class PairImageDataGenerator(BaseDataGenerator):
             else:
                 imgA = imread(os.path.join(self.paths[0], self.data_paths[idx]))
                 imgB = imread(os.path.join(self.paths[1], self.data_mask_path[idx]))
+            imgA = np.squeeze(imgA)
+            imgB = np.squeeze(imgB)
 
             # Normalization
             if self.X_norm:
@@ -106,12 +108,12 @@ class PairImageDataGenerator(BaseDataGenerator):
         if imgA.ndim == 2:
             imgA = np.expand_dims(imgA, -1)
         else:
-            if imgA.shape[0] == 1 or imgA.shape[0] == 3: imgA = imgA.transpose((1,2,0))
+            if imgA.shape[0] <= 3: imgA = imgA.transpose((1,2,0))
             
         if imgB.ndim == 2:
             imgB = np.expand_dims(imgB, -1)
         else:
-            if imgB.shape[0] == 1 or imgB.shape[0] == 3: imgB = imgB.transpose((1,2,0))
+            if imgB.shape[0] <= 3: imgB = imgB.transpose((1,2,0))
 
         return imgA, imgB
 

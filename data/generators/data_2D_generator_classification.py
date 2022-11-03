@@ -316,7 +316,7 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
                     if e_img.ndim == 2:
                         e_img = np.expand_dims(e_img, -1)
                     else:
-                        if e_img.shape[0] == 1 or e_img.shape[0] == 3: e_img = e_img.transpose((1,2,0))
+                        if e_img.shape[0] <= 3: e_img = e_img.transpose((1,2,0))
 
                     # Ensure uint8
                     if e_img.dtype == np.uint16:
@@ -448,10 +448,12 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
                 sample_class_dir = self.classes[sample_id]
                 img = imread(os.path.join(self.data_path, sample_class_dir, sample_id))
                 batch_y[i] = self.class_numbers[sample_class_dir]
+
+                img = np.squeeze(img)
                 if img.ndim == 2:
                     img = np.expand_dims(img, -1)
                 else:
-                    if img.shape[0] == 1 or img.shape[0] == 3: img = img.transpose((1,2,0))
+                    if img.shape[0] <= 3: img = img.transpose((1,2,0))
 
                 # Ensure uint8
                 if img.dtype == np.uint16:
@@ -480,7 +482,7 @@ class ClassImageDataGenerator(tf.keras.utils.Sequence):
                     if e_img.ndim == 2:
                         e_img = np.expand_dims(e_img, -1)
                     else:
-                        if e_img.shape[0] == 1 or e_img.shape[0] == 3: e_img = e_img.transpose((1,2,0))
+                        if e_img.shape[0] < 3: e_img = e_img.transpose((1,2,0))
                     # Ensure uint8
                     if e_img.dtype == np.uint16:
                         if np.max(e_img) > 255:

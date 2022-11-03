@@ -2,7 +2,7 @@ import numpy as np
 import random
 import os
 from PIL import Image
-from skimage.io import imsave
+from skimage.io import imsave, imread
 
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from data.generators.base_data_generator import BaseDataGenerator
@@ -25,20 +25,10 @@ class VoxelDataGenerator(BaseDataGenerator):
         super().__init__(**kwars)
 
         if not self.in_memory:
-            # Load one image to check axis position
-            if self.data_paths[0].endswith('.tif'):
-                from PIL import Image
-                from PIL.TiffTags import TAGS
-                img_aux = Image.open(os.path.join(self.paths[0], self.data_paths[0]))
-                meta_dict = {TAGS[key] : img_aux.tag[key] for key in img_aux.tag_v2}
-                axis = meta_dict['ImageDescription'][0].split('\n')[-2].split('=')[-1]
-                self.ax_x = {}
-                for k, c in enumerate(axis):
-                    self.ax_x[c] = k  
-                if 'Z' in self.ax_x: 
-                    img_aux = img_aux.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
-                self.X_channels = np.array(img_aux).shape[-1]
-                del img_aux
+            img = imread(os.path.join(self.paths[0], self.data_paths[0]))
+            img = np.squeeze(img)
+            self.X_channels = img.shape[-1]
+            del img
 
         self.z_size = self.shape[0] if self.random_crops_in_DA else self.X.shape[1]
         self.zflip = zflip
@@ -47,11 +37,12 @@ class VoxelDataGenerator(BaseDataGenerator):
         # Shape adjustment
         if img.ndim == 3: 
             img = np.expand_dims(img, -1)
-        elif img.ndim == 4 and self.ax_x is not None:
-            if 'Z' in self.ax_x: 
-                img = img.transpose((self.ax_x['Z'],self.ax_x['Y'],self.ax_x['X'],self.ax_x['C']))
+        else:
+            if img.shape[0] <= 3: img = img.transpose((1,2,3,0))
         if mask.ndim == 3: 
             mask = np.expand_dims(mask, -1)
+        else:
+            if mask.shape[0] <= 3: mask = mask.transpose((1,2,3,0))
         return img, mask
 
     def apply_imgaug(self, image, mask, heat):

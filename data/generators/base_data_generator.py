@@ -384,7 +384,6 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
         self.batch_size = batch_size
         self.in_memory = in_memory
-        self.ax_x = None # for 3D
         if not in_memory:
             # Save paths where the data is stored
             self.paths = data_paths
@@ -697,7 +696,9 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             else:
                 img = imread(os.path.join(self.paths[0], self.data_paths[idx]))
                 mask = imread(os.path.join(self.paths[1], self.data_mask_path[idx]))
-
+            img = np.squeeze(img)
+            mask = np.squeeze(mask)
+            
             # X normalization
             if self.X_norm:
                 if self.X_norm['type'] == 'div':

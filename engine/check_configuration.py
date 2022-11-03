@@ -1,6 +1,5 @@
 import os
 
-from data.pre_processing import check_value
 from utils.util import check_value
 
 def check_configuration(cfg):
