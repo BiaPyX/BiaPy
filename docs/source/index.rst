@@ -1,13 +1,13 @@
-BiaPy: Bioimage analysis pipelines
-==================================
+BiaPy: Bioimage analysis pipelines in Python
+============================================
 
-`BiaPy <https://github.com/danifranco/BiaPy>`_ is an open source user-friendly Python library for building bioimage analysis pipelines, also called workflows. This repository is actively under development by `Arganda's lab <https://sites.google.com/site/iargandacarreras/>`_ at `University of the Basque Country <https://www.ehu.eus/en/en-home>`_ and `Donostia International Physics Center <http://dipc.ehu.es/>`_. 
+`BiaPy <https://github.com/danifranco/BiaPy>`_ is an open source Python library for building bioimage analysis pipelines, also called workflows. This repository is actively under development by the Biomedical Computer Vision group at the `University of the Basque Country <https://www.ehu.eus/en/en-home>`_ and the `Donostia International Physics Center <http://dipc.ehu.es/>`_. 
 
-The library offers different pipelines such as semantic segmentation, instance segmentation, object detection, denoising, super-resolution, self-supervised and classification. The code is based on Keras/TensorFlow as backend. Given BiaPy’s DL-base core, a machine with a graphics processing unit (GPU) is recommended for fast training and execution.
+The library provides an easy way to create image processing pipelines that are typically use in the analysis of biology microscopy images in 2D and 3D. Namely, BiaPy contains ready-to-use solutions for the tasks of semantic segmentation, instance segmentation, object detection, image denoising, single image super-resolution, self-supervised learning and image classification. The source code is based on Keras/TensorFlow as backend. Given BiaPy’s deep learning based core, a machine with a graphics processing unit (GPU) is recommended for fast training and execution.
 
                                                                                 
-.. image:: img/seg.gif
-           :width: 100%                                                         
+.. image:: img/BiaPy-workflow-examples.png
+           :width: 70%
            :align: center 
 
            
