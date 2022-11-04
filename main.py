@@ -22,7 +22,6 @@ if __name__ == '__main__':
     parser.add_argument("-cfg", "--config", required=True, help="Path to the configuration file")
     parser.add_argument("-rdir", "--result_dir", help="Path to where the resulting output of the job will be stored",
                         default=os.getenv('HOME'))
-    parser.add_argument("-droot", "--dataroot", help="Dataset root directory", required=True)
     parser.add_argument("-name", "--name", "--name", help="Job name", default="unknown_job")
     parser.add_argument("-rid", "--run_id", "--rid", help="Run number of the same job", type=int, default=1)
     parser.add_argument("-gpu", "--gpu", help="GPU number according to 'nvidia-smi' command", default="0", type=str)
@@ -48,7 +47,7 @@ if __name__ == '__main__':
     copyfile(args.config, cfg_file)
 
     # Merge conf file with the default settings
-    cfg = Config(job_dir, job_identifier, args.dataroot)
+    cfg = Config(job_dir, job_identifier)
     cfg._C.merge_from_file(cfg_file)
     cfg.update_dependencies()
     cfg = cfg.get_cfg_defaults()
