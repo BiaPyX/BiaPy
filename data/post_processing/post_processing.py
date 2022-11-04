@@ -1373,6 +1373,9 @@ def remove_close_points(points, radius, resolution, ndim=3):
 
     mynumbers = [tuple(point) for point in point_list] 
 
+    if len(mynumbers) == 0:
+        return []
+        
     tree = cKDTree(mynumbers) # build k-dimensional tree
     
     pairs = tree.query_pairs( radius ) # find all pairs closer than radius

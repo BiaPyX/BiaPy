@@ -57,11 +57,12 @@ class Detection(Base_Workflow):
                         points_pred[z,y,x,0] = n+1
                 self.cell_count_lines.append([filenames, len(pred_coordinates)])
 
-            if self.cfg.PROBLEM.NDIM == '3D':
-                for z_index in range(len(points_pred)):
-                    points_pred[z_index] = grey_dilation(points_pred[z_index], size=(3,3,1))
-            else:
-                points_pred = grey_dilation(points_pred, size=(3,3))
+            if len(pred_coordinates) > 0:
+                if self.cfg.PROBLEM.NDIM == '3D':
+                    for z_index in range(len(points_pred)):
+                        points_pred[z_index] = grey_dilation(points_pred[z_index], size=(3,3,1))
+                else:
+                    points_pred = grey_dilation(points_pred, size=(3,3))
 
             save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                      filenames, verbose=self.cfg.TEST.VERBOSE)
@@ -80,10 +81,11 @@ class Detection(Base_Workflow):
                 csvwriter2 = csv.writer(file2)
                 csvwriter1.writerow(['index', 'axis-0', 'axis-1', 'axis-2'])
                 csvwriter2.writerow(['index', 'axis-0', 'axis-1', 'axis-2', 'probability'])
-                for nr in range(len(pred_coordinates)):
-                    csvwriter1.writerow([nr+1] + pred_coordinates[nr].tolist())
-                    prob = pred[pred_coordinates[nr][0],pred_coordinates[nr][1],pred_coordinates[nr][2],ch]
-                    csvwriter2.writerow([nr+1] + pred_coordinates[nr].tolist() + [prob])
+                if len(pred_coordinates) > 0:
+                    for nr in range(len(pred_coordinates)):
+                        csvwriter1.writerow([nr+1] + pred_coordinates[nr].tolist())
+                        prob = pred[pred_coordinates[nr][0],pred_coordinates[nr][1],pred_coordinates[nr][2],ch]
+                        csvwriter2.writerow([nr+1] + pred_coordinates[nr].tolist() + [prob])
                 file1.close()
                 file2.close()
 
@@ -98,16 +100,20 @@ class Detection(Base_Workflow):
                     gt_coordinates = np.array(gt_coordinates)
 
                     if self.cfg.PROBLEM.NDIM == '3D':
-                        v_size = (self.cfg.DATA.TEST.RESOLUTION[2], self.cfg.DATA.TEST.RESOLUTION[1], self.cfg.DATA.TEST.RESOLUTION[0])
+                        v_size = (self.cfg.DATA.TEST.RESOLUTION[0], self.cfg.DATA.TEST.RESOLUTION[1], self.cfg.DATA.TEST.RESOLUTION[2])
                     else:
-                        v_size = (1,self.cfg.DATA.TEST.RESOLUTION[1], self.cfg.DATA.TEST.RESOLUTION[0])
-                    print("Detection (class "+str(ch+1)+")")
-                    d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
-                                                  voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
-                    print("Detection metrics: {}".format(d_metrics))
-                    all_channel_d_metrics[0] += d_metrics[1]
-                    all_channel_d_metrics[1] += d_metrics[3]
-                    all_channel_d_metrics[2] += d_metrics[5]
+                        v_size = (1,self.cfg.DATA.TEST.RESOLUTION[0], self.cfg.DATA.TEST.RESOLUTION[1])
+
+                    if len(pred_coordinates) > 0:
+                        print("Detection (class "+str(ch+1)+")")
+                        d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
+                                                    voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
+                        print("Detection metrics: {}".format(d_metrics))
+                        all_channel_d_metrics[0] += d_metrics[1]
+                        all_channel_d_metrics[1] += d_metrics[3]
+                        all_channel_d_metrics[2] += d_metrics[5]
+                    else:
+                        print("No point found to calculate the metrics!")
 
             if self.cfg.DATA.TEST.LOAD_GT:
                 print("All classes "+str(ch+1))

@@ -224,6 +224,14 @@ def create_detection_masks(cfg, data_type='train'):
     img_ids = sorted(next(os.walk(img_dir))[2])
     img_ext = '.'+img_ids[0].split('.')[-1]
     ids = sorted(next(os.walk(label_dir))[2])
+    if cfg.PROBLEM.NDIM == '2D':
+        req_dim = 2 
+        req_columns = ['axis-0', 'axis-1']
+        req_columns_class = ['axis-0', 'axis-1', 'class']
+    else:
+        req_dim = 3
+        req_columns = ['axis-0', 'axis-1', 'axis-2']
+        req_columns_class = ['axis-0', 'axis-1', 'axis-2', 'class']
 
     print("Creating {} detection masks . . .".format(data_type))
     for i in range(len(ids)):
@@ -236,33 +244,43 @@ def create_detection_masks(cfg, data_type='train'):
             
             # Adjust shape
             img = np.squeeze(img)
-            if img.ndim == 3: 
-                img = np.expand_dims(img, -1)
+            if cfg.PROBLEM.NDIM == '2D':
+                if img.ndim == 2:
+                    img = np.expand_dims(img, -1)
+                else:
+                    if img.shape[0] <= 3: img = img.transpose((1,2,0))   
+            else: 
+                if img.ndim == 3: 
+                    img = np.expand_dims(img, -1)
+                else:
+                    if img.shape[0] <= 3: img = img.transpose((1,2,3,0))
 
             # Discard first index column to not have error if it is not sorted 
             df = df.iloc[: , 1:]
-            if len(df.columns) == 4:
-                if not all(df.columns == ['axis-0', 'axis-1', 'axis-2', 'class']):
-                    raise ValueError("CSV columns need to be ['axis-0', 'axis-1', 'axis-2', 'class']")
-            elif len(df.columns) == 3:
-                if not all(df.columns == ['axis-0', 'axis-1', 'axis-2']):
-                    raise ValueError("CSV columns need to be ['axis-0', 'axis-1', 'axis-2']")
+            if len(df.columns) == req_dim+1:
+                if not all(df.columns == req_columns_class):
+                    raise ValueError("CSV columns need to be {}".format(req_columns_class))
+            elif len(df.columns) == req_dim:
+                if not all(df.columns == req_columns):
+                    raise ValueError("CSV columns need to be {}".format(req_columns))
             else:
-                raise ValueError("CSV file {} need to have 3 or 4 columns. Found {}"
-                                 .format(os.path.join(label_dir, ids[i]), len(df.columns)))
+                raise ValueError("CSV file {} need to have {} or {} columns. Found {}"
+                                .format(os.path.join(label_dir, ids[i]), req_dim, req_dim+1, len(df.columns)))
 
             # Convert them to int in case they are floats
             df['axis-0'] = df['axis-0'].astype('int')
             df['axis-1'] = df['axis-1'].astype('int')
-            df['axis-2'] = df['axis-2'].astype('int')
+            if cfg.PROBLEM.NDIM == '3D':
+                df['axis-2'] = df['axis-2'].astype('int')
             
             # Obtain the points 
             z_axis_point = df['axis-0']                                                                       
-            y_axis_point = df['axis-1']                                                                       
-            x_axis_point = df['axis-2']
+            y_axis_point = df['axis-1']    
+            if cfg.PROBLEM.NDIM == '3D':                                                                   
+                x_axis_point = df['axis-2']
             
             # Class column present
-            if len(df.columns) == 4:
+            if len(df.columns) == req_dim+1:
                 df['class'] = df['class'].astype('int')
                 class_point = np.array(df['class'])            
             else:
@@ -274,9 +292,10 @@ def create_detection_masks(cfg, data_type='train'):
             print("Creating all points . . .")
             mask = np.zeros((img.shape[:-1]+(cfg.MODEL.N_CLASSES,)), dtype=np.uint8)
             for j in tqdm(range(len(z_axis_point)), total=len(z_axis_point), leave=False):
-                z_coord = z_axis_point[j]
-                y_coord = y_axis_point[j]
-                x_coord = x_axis_point[j]
+                a0_coord = z_axis_point[j]
+                a1_coord = y_axis_point[j]
+                if cfg.PROBLEM.NDIM == '3D':
+                    a2_coord = x_axis_point[j]
                 c_point = class_point[j]-1
 
                 if c_point+1 > mask.shape[-1]:
@@ -284,27 +303,43 @@ def create_detection_masks(cfg, data_type='train'):
                         .format(c_point+1, cfg.MODEL.N_CLASSES))
 
                 # Paint the point
-                if z_coord < mask.shape[0] and y_coord < mask.shape[1] and x_coord < mask.shape[2]:                                                                                                              
-                    if 1 in mask[max(0,z_coord-1):min(mask.shape[0],z_coord+2),                                   
-                                 max(0,y_coord-4):min(mask.shape[1],y_coord+5),                                   
-                                 max(0,x_coord-4):min(mask.shape[2],x_coord+5), c_point]: 
-                        print("WARNING: possible duplicated point in (3,9,9) neighborhood: coords {} , class {} "
-                              "(point number {} in CSV)".format((z_coord,y_coord,x_coord), c_point, j))                                                                                                                                            
-                                                                                                                            
-                    mask[z_coord,y_coord,x_coord,c_point] = 1                                            
-                    if y_coord+1 < mask.shape[1]: mask[z_coord,y_coord+1,x_coord,c_point] = 1       
-                    if y_coord-1 > 0: mask[z_coord,y_coord-1,x_coord,c_point] = 1                   
-                    if x_coord+1 < mask.shape[2]: mask[z_coord,y_coord,x_coord+1,c_point] = 1       
-                    if x_coord-1 > 0: mask[z_coord,y_coord,x_coord-1,c_point] = 1                   
-                else:  
-                    print("WARNING: discarding point {} which seems to be out of shape: {}"
-                          .format([z_coord,y_coord,x_coord], img.shape))                                                                                                     
+                if cfg.PROBLEM.NDIM == '3D':
+                    if a0_coord < mask.shape[0] and a1_coord < mask.shape[1] and a2_coord < mask.shape[2]:                                                                                                              
+                        if 1 in mask[max(0,a0_coord-1):min(mask.shape[0],a0_coord+2),                                   
+                                     max(0,a1_coord-4):min(mask.shape[1],a1_coord+5),                                   
+                                     max(0,a2_coord-4):min(mask.shape[2],a2_coord+5), c_point]: 
+                            print("WARNING: possible duplicated point in (3,9,9) neighborhood: coords {} , class {} "
+                                  "(point number {} in CSV)".format((a0_coord,a1_coord,a2_coord), c_point, j))                                                                                                                                            
+                                                                                                                                
+                        mask[a0_coord,a1_coord,a2_coord,c_point] = 1                                            
+                        if a1_coord+1 < mask.shape[1]: mask[a0_coord,a1_coord+1,a2_coord,c_point] = 1       
+                        if a1_coord-1 > 0: mask[a0_coord,a1_coord-1,a2_coord,c_point] = 1                   
+                        if a2_coord+1 < mask.shape[2]: mask[a0_coord,a1_coord,a2_coord+1,c_point] = 1       
+                        if a2_coord-1 > 0: mask[a0_coord,a1_coord,a2_coord-1,c_point] = 1                   
+                    else:  
+                        print("WARNING: discarding point {} which seems to be out of shape: {}"
+                              .format([a0_coord,a1_coord,a2_coord], img.shape))                                                                                                     
+                else:
+                    if a0_coord < mask.shape[0] and a1_coord < mask.shape[1]:                                                                                                              
+                        if 1 in mask[max(0,a0_coord-4):min(mask.shape[0],a0_coord+5),                                   
+                                    max(0,a1_coord-4):min(mask.shape[1],a1_coord+5), c_point]: 
+                            print("WARNING: possible duplicated point in (9,9) neighborhood: coords {} , class {} "
+                                  "(point number {} in CSV)".format((a0_coord,a1_coord), c_point, j))                                                                                                                                            
+                                                                                                                                
+                        mask[a0_coord,a1_coord,c_point] = 1                                            
+                        if a1_coord+1 < mask.shape[1]: mask[a0_coord,a1_coord+1,c_point] = 1       
+                        if a1_coord-1 > 0: mask[a0_coord,a1_coord-1,c_point] = 1                                     
+                    else:  
+                        print("WARNING: discarding point {} which seems to be out of shape: {}"
+                              .format([a0_coord,a1_coord], img.shape))     
 
             # Dilate the mask
+            if cfg.PROBLEM.NDIM == '2D': mask = np.expand_dims(mask,0)
             for k in range(mask.shape[0]): 
                 for ch in range(mask.shape[-1]):                                                                                  
                     mask[k,...,ch] = binary_dilation(mask[k,...,ch], iterations=1,  structure=disk(3))                                                                                                                                                    
-                
+            if cfg.PROBLEM.NDIM == '2D': mask = mask[0]
+
             if cfg.PROBLEM.DETECTION.CHECK_POINTS_CREATED:
                 print("Check points created to see if some of them are very close that create a large label") 
                 error_found = False
