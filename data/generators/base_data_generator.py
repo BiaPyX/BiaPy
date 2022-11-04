@@ -467,8 +467,10 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 self.X_norm['type'] = 'div'
                 self.X, normx = norm_range01(self.X)
                 self.X_norm.update(normx)
-            print("Training data normalization - min: {} , max: {} , mean: {}"
-                  .format(np.min(self.X), np.max(self.X), np.mean(self.X)))
+            
+            t = "Training" if not val else "Validation"
+            print("{} data normalization - min: {} , max: {} , mean: {}"
+                  .format(t,np.min(self.X), np.max(self.X), np.mean(self.X)))
 
             # Y data analysis
             self.first_no_bin_channel = -1

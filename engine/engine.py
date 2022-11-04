@@ -14,7 +14,7 @@ from engine.detection import prepare_detection_data, Detection
 from engine.classification import Classification
 from engine.super_resolution import Super_resolution
 from engine.denoising import Denoising
-from engine.self_supervised import Self_supervised
+from engine.self_supervised import prepare_ssl_data, Self_supervised
 
 class Engine(object):
 
@@ -50,12 +50,12 @@ class Engine(object):
                     check_masks(cfg.DATA.TEST.MASK_PATH, n_classes=3)
                 else:
                     check_masks(cfg.DATA.TEST.MASK_PATH, n_classes=cfg.MODEL.N_CLASSES+1)
-
-        if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
+        elif cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             prepare_instance_data(cfg)
-
-        if cfg.PROBLEM.TYPE == 'DETECTION':
+        elif cfg.PROBLEM.TYPE == 'DETECTION':
             prepare_detection_data(cfg)
+        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+            prepare_ssl_data(cfg)
 
         # From now on, no modification of the cfg will be allowed
         cfg.freeze()
@@ -71,30 +71,18 @@ class Engine(object):
         if cfg.TRAIN.ENABLE:
             if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']:
                 if cfg.DATA.TRAIN.IN_MEMORY:
-                    mask_path = None
-                    self_supervised_args = None
-                    if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION']:
-                        mask_path = cfg.DATA.TRAIN.MASK_PATH 
-                    elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
-                        self_supervised_args = {}
-                        self_supervised_args['factor'] = cfg.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR 
-                        self_supervised_args['add_noise'] = True if cfg.PROBLEM.SELF_SUPERVISED.NOISE > 0 else False
-                        self_supervised_args['noise'] = cfg.PROBLEM.SELF_SUPERVISED.NOISE
-
                     if cfg.PROBLEM.NDIM == '2D':
-                        objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, mask_path,
+                        objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
                             val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
                             ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, check_crop=cfg.DATA.TRAIN.CHECK_CROP,
-                            check_crop_path=cfg.PATHS.CROP_CHECKS, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
-                            self_supervised_args=self_supervised_args)
+                            check_crop_path=cfg.PATHS.CROP_CHECKS, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
                     else:
-                        objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, mask_path,
+                        objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
                             val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
                             ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, 
-                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE, 
-                            self_supervised_args=self_supervised_args)
+                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
 
                     if cfg.DATA.VAL.FROM_TRAIN:
                         X_train, Y_train, X_val, Y_val, self.train_filenames = objs

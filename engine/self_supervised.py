@@ -1,7 +1,7 @@
+import os
 import math
 import numpy as np
 from tqdm import tqdm
-from skimage.transform import resize
 
 from data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap
 from data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
@@ -9,7 +9,7 @@ from data.post_processing.post_processing import ensemble8_2d_predictions, ensem
 from utils.util import save_tif
 from engine.base_workflow import Base_Workflow
 from engine.metrics import PSNR
-from data.pre_processing import denormalize
+from data.pre_processing import create_ssl_target_data_masks, denormalize
 
 
 class Self_supervised(Base_Workflow):
@@ -129,90 +129,48 @@ class Self_supervised(Base_Workflow):
             print(" ")
 
 
-def crappify(data, resizing_factor, add_noise=True, noise_level=None, Down_up=True):
-    """
-    Crappifies input data by adding Gaussian noise and downsampling and upsampling it so the resolution
-    gets worsen. 
+def prepare_ssl_data(cfg):
+    print("#############################\n"
+          "#  PREPARE DETECTION DATA  #\n"
+          "############################\n")
 
-    data : 4D/5D Numpy array
-        Data to be modified. E.g. ``(num_of_images, y, x, channels)`` if working with 2D images or
-        ``(num_of_images, z, y, x, channels)`` if working with 3D.
+    # Create selected channels for train data
+    if cfg.TRAIN.ENABLE:
+        create_mask = False
+        if not os.path.isdir(cfg.DATA.TRAIN.SSL_TARGET_DIR):
+            print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                  "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.SSL_TARGET_DIR' "
+                  "path, this process will be done just once!".format(cfg.DATA.TRAIN.SSL_TARGET_DIR))
+            create_mask = True
+        else:
+            if len(next(os.walk(cfg.DATA.TRAIN.SSL_TARGET_DIR))[2]) != len(next(os.walk(cfg.DATA.TRAIN.PATH))[2]):
+                print("Different number of files found in {} and {}. Trying to create the the rest again"
+                      .format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.SSL_TARGET_DIR))
+                create_mask = True    
+        if create_mask:
+            create_ssl_target_data_masks(cfg, data_type='train')
 
-    resizing_factor : floats
-        Downsizing factor to reshape the image.
+    # Create selected channels for val data
+    if cfg.TRAIN.ENABLE and not cfg.DATA.VAL.FROM_TRAIN:
+        create_mask = False
+        if not os.path.isdir(cfg.DATA.VAL.SSL_TARGET_DIR):
+            print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                  "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.SSL_TARGET_DIR' "
+                  "path, this process will be done just once!".format(cfg.DATA.VAL.SSL_TARGET_DIR))
+            create_mask = True
+        else:
+            if len(next(os.walk(cfg.DATA.VAL.SSL_TARGET_DIR))[2]) != len(next(os.walk(cfg.DATA.VAL.PATH))[2]):
+                print("Different number of files found in {} and {}. Trying to create the the rest again"
+                      .format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.SSL_TARGET_DIR))
+                create_mask = True    
+        if create_mask:         
+            create_ssl_target_data_masks(cfg, data_type='val')
 
-    add_noise : boolean, optional
-        Indicating whether to add gaussian noise before applying the resizing.
-
-    noise_level: float, optional
-        Number between ``[0,1]`` indicating the std of the Gaussian noise N(0,std).
-
-    Down_up : bool, optional
-        Indicating whether to perform a final upsampling operation to obtain an image of the 
-        same size as the original but with the corresponding loss of quality of downsizing and 
-        upsizing.
-
-    Returns
-    -------
-    data : 4D/5D Numpy array
-        Same input data but normalized.
-
-    new_data : 4D/5D Numpy array
-        Train images. E.g. ``(num_of_images, y, x, channels)`` if working with 2D images or
-        ``(num_of_images, z, y, x, channels)`` if working with 3D.
-    """
-    if data.ndim == 4:
-        w, h, c = data[0].shape
-        org_sz = (w, h)
-    else:
-        d, w, h, c = data[0].shape
-        org_sz = (d, w, h)
-        new_d = int(d / np.sqrt(resizing_factor))
-
-    new_w = int(w / np.sqrt(resizing_factor))
-    new_h = int(h / np.sqrt(resizing_factor))
-
-    if data.ndim == 4:
-        targ_sz = (new_w, new_h)
-    else:
-        targ_sz = (new_d, new_w, new_h)
-
-    new_data = []
-    for i in tqdm(range(data.shape[0]), leave=False):
-        img = data[i]
-        if add_noise:
-            img = add_gaussian_noise(img, noise_level)
-
-        img = resize(img, targ_sz, order=1, mode='reflect',
-                     clip=True, preserve_range=True, anti_aliasing=False)
-
-        if Down_up:
-            img = resize(img, org_sz, order=1, mode='reflect',
-                         clip=True, preserve_range=True, anti_aliasing=False)
-        new_data.append(img)
-
-    return data, np.array(new_data)
-
-def add_gaussian_noise(image, percentage_of_noise):
-    """
-    Adds Gaussian noise to an input image. 
-
-    Parameters
-    ----------
-    image : 3D Numpy array
-        Image to be added Gaussian Noise with 0 mean and a certain std. E.g. ``(y, x, channels)``.
-
-    percentage_of_noise : float
-        percentage of the maximum value of the image that will be used as the std of the Gaussian Noise 
-        distribution.
-
-    Returns
-    -------
-    out : 3D Numpy array
-        Transformed image. E.g. ``(y, x, channels)``.
-    """
-    max_value=np.max(image)
-    noise_level=percentage_of_noise*max_value
-    noise = np.random.normal(loc=0, scale=noise_level, size=image.shape)
-    noisy_img=np.clip(image+noise, 0, max_value) 
-    return noisy_img
+    opts = []
+    if cfg.TRAIN.ENABLE:
+        print("DATA.TRAIN.MASK_PATH changed from {} to {}".format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.SSL_TARGET_DIR))
+        opts.extend(['DATA.TRAIN.MASK_PATH', cfg.DATA.TRAIN.SSL_TARGET_DIR])
+        if not cfg.DATA.VAL.FROM_TRAIN:
+            print("DATA.VAL.MASK_PATH changed from {} to {}".format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.SSL_TARGET_DIR))
+            opts.extend(['DATA.VAL.MASK_PATH', cfg.DATA.VAL.SSL_TARGET_DIR])
+    cfg.merge_from_list(opts)

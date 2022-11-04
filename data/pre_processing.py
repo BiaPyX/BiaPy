@@ -8,6 +8,7 @@ from skimage.io import imread
 from scipy.ndimage.morphology import binary_dilation                                                    
 from skimage.morphology import disk  
 from skimage.measure import label
+from skimage.transform import resize
 
 from utils.util import load_data_from_dir, load_3d_images_from_dir, save_npy_files, save_tif
 
@@ -213,7 +214,7 @@ def create_detection_masks(cfg, data_type='train'):
 
     if data_type == "train":
         tag = "TRAIN"
-    elif data_type == "train":
+    elif data_type == "val":
         tag = "VAL"
     else:
         tag = "TEST"
@@ -328,6 +329,136 @@ def create_detection_masks(cfg, data_type='train'):
         else:
             print("Mask file {} found for CSV file: {}".format(os.path.join(out_dir, img_filename), 
                 os.path.join(label_dir, ids[i])))
+
+def create_ssl_target_data_masks(cfg, data_type='train'):
+    """Create detection masks based on CSV files.
+
+       Parameters
+       ----------
+       cfg : YACS CN object
+           Configuration.
+
+	   data_type: str, optional
+		   Wheter to create train, validation or test masks.
+    """
+
+    assert data_type in ['train', 'val']
+
+    tag = "TRAIN" if data_type == "train" else "VAL"
+    
+    img_dir = getattr(cfg.DATA, tag).PATH
+    out_dir = getattr(cfg.DATA, tag).SSL_TARGET_DIR
+    ids = sorted(next(os.walk(img_dir))[2])
+    add_noise = True if cfg.PROBLEM.SELF_SUPERVISED.NOISE > 0 else False
+
+    print("Creating {} SSL targets. . .".format(data_type))
+    for i in range(len(ids)):
+        if not os.path.exists(os.path.join(out_dir, ids[i])):
+            print("Crappifying file {} to create SSL target".format(os.path.join(img_dir, ids[i])))
+
+            img = imread(os.path.join(img_dir, ids[i]))
+            
+            # Adjust shape
+            img = np.squeeze(img)
+            if cfg.PROBLEM.NDIM == '2D':
+                if img.ndim == 2:
+                    img = np.expand_dims(img, -1)
+                else:
+                    if img.shape[0] <= 3: img = img.transpose((1,2,0))   
+            else: 
+                if img.ndim == 3: 
+                    img = np.expand_dims(img, -1)
+                else:
+                    if img.shape[0] <= 3: img = img.transpose((1,2,3,0))
+
+            img = crappify(img, resizing_factor=cfg.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR, 
+                add_noise=add_noise, noise_level=cfg.PROBLEM.SELF_SUPERVISED.NOISE)
+
+            save_tif(np.expand_dims(img,0), out_dir, [ids[i]])
+        else:
+            print("Target file {} found".format(os.path.join(img_dir, ids[i])))
+
+def crappify(input_img, resizing_factor, add_noise=True, noise_level=None, Down_up=True):
+    """
+    Crappifies input image by adding Gaussian noise and downsampling and upsampling it so the resolution
+    gets worsen. 
+
+    input_img : 4D/5D Numpy array
+        Data to be modified. E.g. ``(y, x, channels)`` if working with 2D images or
+        ``(z, y, x, channels)`` if working with 3D.
+
+    resizing_factor : floats
+        Downsizing factor to reshape the image.
+
+    add_noise : boolean, optional
+        Indicating whether to add gaussian noise before applying the resizing.
+
+    noise_level: float, optional
+        Number between ``[0,1]`` indicating the std of the Gaussian noise N(0,std).
+
+    Down_up : bool, optional
+        Indicating whether to perform a final upsampling operation to obtain an image of the 
+        same size as the original but with the corresponding loss of quality of downsizing and 
+        upsizing.
+
+    Returns
+    -------
+    img : 4D/5D Numpy array
+        Train images. E.g. ``(y, x, channels)`` if working with 2D images or
+        ``(z, y, x, channels)`` if working with 3D.
+    """
+    if input_img.ndim == 3:
+        w, h, c = input_img.shape
+        org_sz = (w, h)
+    else:
+        d, w, h, c = input_img.shape
+        org_sz = (d, w, h)
+        new_d = int(d / np.sqrt(resizing_factor))
+
+    new_w = int(w / np.sqrt(resizing_factor))
+    new_h = int(h / np.sqrt(resizing_factor))
+
+    if input_img.ndim == 3:
+        targ_sz = (new_w, new_h)
+    else:
+        targ_sz = (new_d, new_w, new_h)
+    
+    img = input_img.copy()
+    if add_noise:
+        img = add_gaussian_noise(img, noise_level)
+
+    img = resize(img, targ_sz, order=1, mode='reflect',
+                    clip=True, preserve_range=True, anti_aliasing=False)
+
+    if Down_up:
+        img = resize(img, org_sz, order=1, mode='reflect',
+                        clip=True, preserve_range=True, anti_aliasing=False)
+
+    return img
+
+def add_gaussian_noise(image, percentage_of_noise):
+    """
+    Adds Gaussian noise to an input image. 
+
+    Parameters
+    ----------
+    image : 3D Numpy array
+        Image to be added Gaussian Noise with 0 mean and a certain std. E.g. ``(y, x, channels)``.
+
+    percentage_of_noise : float
+        percentage of the maximum value of the image that will be used as the std of the Gaussian Noise 
+        distribution.
+
+    Returns
+    -------
+    out : 3D Numpy array
+        Transformed image. E.g. ``(y, x, channels)``.
+    """
+    max_value=np.max(image)
+    noise_level=percentage_of_noise*max_value
+    noise = np.random.normal(loc=0, scale=noise_level, size=image.shape)
+    noisy_img=np.clip(image+noise, 0, max_value) 
+    return noisy_img
 
 def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background=0.06, save_dir=None):
     """Calculate the probability map of the given 2D data.

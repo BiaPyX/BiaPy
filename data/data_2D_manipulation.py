@@ -12,8 +12,7 @@ from skimage.io import imsave
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True, e_d_data=[],
     e_d_mask=[], e_d_data_dim=[], num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, ov=(0,0),
-    padding=(0,0), check_crop=True, check_crop_path="check_crop", reflect_to_complete_shape=False,
-    self_supervised_args=None):
+    padding=(0,0), check_crop=True, check_crop_path="check_crop", reflect_to_complete_shape=False):
     """Load train and validation images from the given paths to create 2D data.
 
        Parameters
@@ -72,9 +71,6 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
            Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
            'reflect'.
            
-       self_supervised_args : dict, optional
-           Arguments to create ground truth data for self-supervised workflow.
-
        Returns
        -------
        X_train : 4D Numpy array
@@ -159,12 +155,6 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
         Y_train, _, _, _ = load_data_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
                                                         padding=padding, return_filenames=True,
                                                         reflect_to_complete_shape=reflect_to_complete_shape)
-    # Self-supervised 
-    elif self_supervised_args is not None:
-        print("1) Creating GT for self-supervision . . .")
-        from engine.self_supervised import crappify
-        X_train, Y_train = crappify(X_train, resizing_factor=self_supervised_args['factor'], 
-            add_noise=self_supervised_args['add_noise'], noise_level=self_supervised_args['noise'])
     else:
         Y_train = np.zeros(X_train.shape, dtype=np.uint8) # Fake mask val
 

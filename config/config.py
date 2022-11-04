@@ -146,6 +146,8 @@ class Config:
         _C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = os.path.join("user_data", 'train', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         # Path to load/save detection masks prepared. 
         _C.DATA.TRAIN.DETECTION_MASK_DIR = os.path.join("user_data", 'train', 'y_detection_masks')
+        # Path to load/save detection masks prepared. 
+        _C.DATA.TRAIN.SSL_TARGET_DIR = os.path.join("user_data", 'train', 'y_ssl_target')
         # Extra train data generation: number of times to duplicate the train data. Useful when
         # _C.DATA.EXTRACT_RANDOM_PATCH=True is made, as more original train data can be cover on each epoch
         _C.DATA.TRAIN.REPLICATE = 0
@@ -223,6 +225,8 @@ class Config:
         _C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = os.path.join("user_data", 'val', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         # Path to load/save detection masks prepared. 
         _C.DATA.VAL.DETECTION_MASK_DIR = os.path.join("user_data", 'val', 'y_detection_masks')
+        # Path to load/save detection masks prepared. 
+        _C.DATA.VAL.SSL_TARGET_DIR = os.path.join("user_data", 'val', 'y_ssl_target')
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
         # 3D tuple when using _C.PROBLEM.NDIM='3D'
@@ -620,10 +624,12 @@ class Config:
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = self._C.DATA.TRAIN.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TRAIN.DETECTION_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_detection_masks'
+        self._C.DATA.TRAIN.SSL_TARGET_DIR = self._C.DATA.TRAIN.MASK_PATH+'_ssl_target'
         self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = self._C.DATA.VAL.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.VAL.BINARY_MASKS = os.path.join(self._C.DATA.VAL.PATH, '..', 'bin_mask')
         self._C.DATA.VAL.DETECTION_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_detection_masks'
+        self._C.DATA.VAL.SSL_TARGET_DIR = self._C.DATA.VAL.MASK_PATH+'_ssl_target'
         self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, '..', 'bin_mask')
