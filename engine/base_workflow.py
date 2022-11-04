@@ -2,14 +2,13 @@ import math
 import numpy as np
 from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
-from scipy.ndimage.filters import median_filter
 
 from utils.util import pad_and_reflect, save_tif, check_downsample_division
 from data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap
 from data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
-from data.post_processing.post_processing import (ensemble8_2d_predictions, ensemble16_3d_predictions, apply_binary_mask, 
-                                                  calculate_z_filtering)
+from data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions, apply_binary_mask
 from engine.metrics import jaccard_index_numpy, voc_calculation
+from data.post_processing import apply_post_processing
 
 
 class Base_Workflow(metaclass=ABCMeta):
@@ -193,20 +192,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 ### POST-PROCESSING (3D) ###
                 ############################
                 if self.post_processing and self.cfg.PROBLEM.NDIM == '3D':
-                    print("Applying post-processing . . .")
-
-                    if cfg.TEST.POST_PROCESSING.YZ_FILTERING:
-                        data = calculate_z_filtering(data, cfg.TEST.POST_PROCESSING.YZ_FILTERING_SIZE)
-
-                    if cfg.TEST.POST_PROCESSING.Z_FILTERING:
-                        data = median_filter(data, size=(cfg.TEST.POST_PROCESSING.Z_FILTERING_SIZE,1,1,1))
-
-                    if self.cfg.DATA.TEST.LOAD_GT:
-                        _iou_post = jaccard_index_numpy((Y>0.5).astype(np.uint8), (data>0.5).astype(np.uint8))
-                        _ov_iou_post = voc_calculation((Y>0.5).astype(np.uint8), (data>0.5).astype(np.uint8), iou_post)
-                    else:
-                        _iou_post, _ov_iou_post = 0, 0 
-                        
+                    _iou_post, _ov_iou_post = apply_post_processing(self.cfg, pred, Y)
                     self.stats['iou_post'] += _iou_post
                     self.stats['ov_iou_post'] += _ov_iou_post
                     if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
