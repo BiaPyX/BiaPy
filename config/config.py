@@ -3,7 +3,7 @@ from yacs.config import CfgNode as CN
 
 
 class Config:
-    def __init__(self, job_dir, job_identifier, dataroot):
+    def __init__(self, job_dir, job_identifier):
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Config definition
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -83,6 +83,10 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW = True
         
         ### DETECTION
+        _C.PROBLEM.DETECTION = CN()
+        _C.PROBLEM.DETECTION.CHECK_POINTS_CREATED = True
+
+        ### DENOISING
         _C.PROBLEM.DENOISING = CN()
         _C.PROBLEM.DENOISING.N2V_PERC_PIX = 0.198
         _C.PROBLEM.DENOISING.N2V_MANIPULATOR = 'uniform_withCP'
@@ -101,7 +105,6 @@ class Config:
         # Dataset
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.DATA = CN()
-        _C.DATA.ROOT_DIR = dataroot
 
         # Save all data of a generator in the given path.
         _C.DATA.CHECK_GENERATORS = False
@@ -135,12 +138,14 @@ class Config:
         # Whether to check if the data mask contains correct values, e.g. same classes as defined
         _C.DATA.TRAIN.CHECK_DATA = True
         _C.DATA.TRAIN.IN_MEMORY = True
-        _C.DATA.TRAIN.PATH = os.path.join(_C.DATA.ROOT_DIR, 'train', 'x')
-        _C.DATA.TRAIN.MASK_PATH = os.path.join(_C.DATA.ROOT_DIR, 'train', 'y')
+        _C.DATA.TRAIN.PATH = os.path.join("user_data", 'train', 'x')
+        _C.DATA.TRAIN.MASK_PATH = os.path.join("user_data", 'train', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
-        _C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'train', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
-        _C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'train', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        _C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = os.path.join("user_data", 'train', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        _C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = os.path.join("user_data", 'train', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        # Path to load/save detection masks prepared. 
+        _C.DATA.TRAIN.DETECTION_MASK_DIR = os.path.join("user_data", 'train', 'y_detection_masks')
         # Extra train data generation: number of times to duplicate the train data. Useful when
         # _C.DATA.EXTRACT_RANDOM_PATCH=True is made, as more original train data can be cover on each epoch
         _C.DATA.TRAIN.REPLICATE = 0
@@ -167,13 +172,15 @@ class Config:
         # _C.DATA.TEST.MASK_PATH. Currently only used if _C.PROBLEM.TYPE == 'CLASSIFICATION'
         _C.DATA.TEST.USE_VAL_AS_TEST = False
         # Path to load the test data from. Not used when _C.DATA.TEST.USE_VAL == True
-        _C.DATA.TEST.PATH = os.path.join(_C.DATA.ROOT_DIR, 'test', 'x')
+        _C.DATA.TEST.PATH = os.path.join("user_data", 'test', 'x')
         # Path to load the test data masks from. Not used when _C.DATA.TEST.USE_VAL == True
-        _C.DATA.TEST.MASK_PATH = os.path.join(_C.DATA.ROOT_DIR, 'test', 'y')
+        _C.DATA.TEST.MASK_PATH = os.path.join("user_data", 'test', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
-        _C.DATA.TEST.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
-        _C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        _C.DATA.TEST.INSTANCE_CHANNELS_DIR = os.path.join("user_data", 'test', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        _C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = os.path.join("user_data", 'test', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        # Path to load/save detection masks prepared. 
+        _C.DATA.TEST.DETECTION_MASK_DIR = os.path.join("user_data", 'test', 'y_detection_masks')
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
         # 3D tuple when using _C.PROBLEM.NDIM='3D'
@@ -183,7 +190,7 @@ class Config:
         # Whether to use median values to fill padded pixels or zeros
         _C.DATA.TEST.MEDIAN_PADDING = False
         # Directory where binary masks to apply to resulting images should be. Used when _C.TEST.POST_PROCESSING.APPLY_MASK  == True
-        _C.DATA.TEST.BINARY_MASKS = os.path.join(_C.DATA.ROOT_DIR, 'test', 'bin_mask')
+        _C.DATA.TEST.BINARY_MASKS = os.path.join("user_data", 'test', 'bin_mask')
         # Test data resolution. Need to be provided in (z,y,x) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION' now.
         _C.DATA.TEST.RESOLUTION = (-1,)
         # Whether to apply argmax to the predicted images 
@@ -207,13 +214,15 @@ class Config:
         # Used when _C.DATA.VAL.FROM_TRAIN = False, as DATA.VAL.FROM_TRAIN = True always implies DATA.VAL.IN_MEMORY = True
         _C.DATA.VAL.IN_MEMORY = True
         # Path to the validation data. Used when _C.DATA.VAL.FROM_TRAIN = False
-        _C.DATA.VAL.PATH = os.path.join(_C.DATA.ROOT_DIR, 'val', 'x')
+        _C.DATA.VAL.PATH = os.path.join("user_data", 'val', 'x')
         # Path to the validation data mask. Used when _C.DATA.VAL.FROM_TRAIN = False
-        _C.DATA.VAL.MASK_PATH = os.path.join(_C.DATA.ROOT_DIR, 'val', 'y')
+        _C.DATA.VAL.MASK_PATH = os.path.join("user_data", 'val', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
-        _C.DATA.VAL.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
-        _C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        _C.DATA.VAL.INSTANCE_CHANNELS_DIR = os.path.join("user_data", 'val', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        _C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = os.path.join("user_data", 'val', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        # Path to load/save detection masks prepared. 
+        _C.DATA.VAL.DETECTION_MASK_DIR = os.path.join("user_data", 'val', 'y_detection_masks')
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
         # 3D tuple when using _C.PROBLEM.NDIM='3D'
@@ -224,7 +233,7 @@ class Config:
         _C.DATA.VAL.MEDIAN_PADDING = False
         # Directory where validation binary masks should be located. This binary mask will be applied only when MW_TH*
         # optimized values are find, that is, when _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = True and _C.TEST.POST_PROCESSING.APPLY_MASK = True
-        _C.DATA.VAL.BINARY_MASKS = os.path.join(_C.DATA.ROOT_DIR, 'val', 'bin_mask')
+        _C.DATA.VAL.BINARY_MASKS = os.path.join("user_data", 'val', 'bin_mask')
         # Not used yet.
         _C.DATA.VAL.RESOLUTION = (-1,)
 
@@ -556,10 +565,12 @@ class Config:
         _C.PATHS.RESULT_DIR = CN()
         _C.PATHS.RESULT_DIR.PATH = os.path.join(job_dir, 'results', job_identifier)
         _C.PATHS.RESULT_DIR.PER_IMAGE = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image')
+        _C.PATHS.RESULT_DIR.PER_IMAGE_BIN = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_binarized')
         _C.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_instances')
         _C.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_instances_voronoi')
         _C.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_post_processing')
         _C.PATHS.RESULT_DIR.FULL_IMAGE = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_image')
+        _C.PATHS.RESULT_DIR.FULL_IMAGE_BIN = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_image_binarized')
         _C.PATHS.RESULT_DIR.FULL_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_post_processing')
         _C.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_local_max_check')
 
@@ -608,10 +619,13 @@ class Config:
         """
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = self._C.DATA.TRAIN.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        self._C.DATA.TRAIN.DETECTION_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_detection_masks'
         self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = self._C.DATA.VAL.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.VAL.BINARY_MASKS = os.path.join(self._C.DATA.VAL.PATH, '..', 'bin_mask')
+        self._C.DATA.VAL.DETECTION_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_detection_masks'
         self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, '..', 'bin_mask')
+        self._C.DATA.TEST.DETECTION_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_detection_masks'
         self._C.PATHS.TEST_FULL_GT_H5 = os.path.join(self._C.DATA.TEST.MASK_PATH, 'h5')

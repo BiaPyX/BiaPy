@@ -158,7 +158,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, in_memory=cfg.DATA.VAL.IN_MEMORY,
             data_paths=[cfg.DATA.VAL.PATH, cfg.DATA.VAL.MASK_PATH], da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
-            seed=cfg.SYSTEM.SEED, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
+            seed=cfg.SYSTEM.SEED, norm_custom_mean=custom_mean, norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION)
         if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             dic['random_crop_scale'] = cfg.AUGMENTOR.RANDOM_CROP_SCALE
         if cfg.PROBLEM.TYPE == 'DENOISING':
