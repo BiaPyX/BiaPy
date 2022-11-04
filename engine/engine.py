@@ -10,7 +10,7 @@ from models import build_model
 from engine import build_callbacks, prepare_optimizer
 from engine.semantic_seg import Semantic_Segmentation
 from engine.instance_seg import prepare_instance_data, Instance_Segmentation
-from engine.detection import Detection
+from engine.detection import prepare_detection_data, Detection
 from engine.classification import Classification
 from engine.super_resolution import Super_resolution
 from engine.denoising import Denoising
@@ -31,7 +31,7 @@ class Engine(object):
         self.orig_val_path = cfg.DATA.VAL.PATH
         self.orig_val_mask_path = cfg.DATA.VAL.MASK_PATH
 
-        if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'DETECTION']:
+        if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG']:
             print("###################\n"
                   "#  SANITY CHECKS  #\n"
                   "###################\n")
@@ -52,8 +52,10 @@ class Engine(object):
                     check_masks(cfg.DATA.TEST.MASK_PATH, n_classes=cfg.MODEL.N_CLASSES+1)
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-            train_filenames = prepare_instance_data(cfg)
-            self.train_filenames = train_filenames
+            prepare_instance_data(cfg)
+
+        if cfg.PROBLEM.TYPE == 'DETECTION':
+            prepare_detection_data(cfg)
 
         # From now on, no modification of the cfg will be allowed
         cfg.freeze()

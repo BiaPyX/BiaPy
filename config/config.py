@@ -83,6 +83,10 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW = True
         
         ### DETECTION
+        _C.PROBLEM.DETECTION = CN()
+        _C.PROBLEM.DETECTION.CHECK_POINTS_CREATED = True
+
+        ### DENOISING
         _C.PROBLEM.DENOISING = CN()
         _C.PROBLEM.DENOISING.N2V_PERC_PIX = 0.198
         _C.PROBLEM.DENOISING.N2V_MANIPULATOR = 'uniform_withCP'
@@ -141,6 +145,8 @@ class Config:
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'train', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         _C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'train', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        # Path to load/save detection masks prepared. 
+        _C.DATA.TRAIN.DETECTION_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'train', 'y_detection_masks')
         # Extra train data generation: number of times to duplicate the train data. Useful when
         # _C.DATA.EXTRACT_RANDOM_PATCH=True is made, as more original train data can be cover on each epoch
         _C.DATA.TRAIN.REPLICATE = 0
@@ -174,6 +180,8 @@ class Config:
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.TEST.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         _C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        # Path to load/save detection masks prepared. 
+        _C.DATA.TEST.DETECTION_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'test', 'y_detection_masks')
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
         # 3D tuple when using _C.PROBLEM.NDIM='3D'
@@ -214,6 +222,8 @@ class Config:
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.VAL.INSTANCE_CHANNELS_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         _C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        # Path to load/save detection masks prepared. 
+        _C.DATA.VAL.DETECTION_MASK_DIR = os.path.join(_C.DATA.ROOT_DIR, 'val', 'y_detection_masks')
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
         # 3D tuple when using _C.PROBLEM.NDIM='3D'
@@ -608,10 +618,13 @@ class Config:
         """
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = self._C.DATA.TRAIN.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        self._C.DATA.TRAIN.DETECTION_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_detection_masks'
         self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = self._C.DATA.VAL.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.VAL.BINARY_MASKS = os.path.join(self._C.DATA.VAL.PATH, '..', 'bin_mask')
+        self._C.DATA.VAL.DETECTION_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_detection_masks'
         self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, '..', 'bin_mask')
+        self._C.DATA.TEST.DETECTION_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_detection_masks'
         self._C.PATHS.TEST_FULL_GT_H5 = os.path.join(self._C.DATA.TEST.MASK_PATH, 'h5')

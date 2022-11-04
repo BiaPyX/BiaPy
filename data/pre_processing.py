@@ -1,8 +1,15 @@
 import os
+import scipy
 import numpy as np
 from tqdm import tqdm
+import pandas as pd
+from skimage.segmentation import clear_border, find_boundaries
+from skimage.io import imread
+from scipy.ndimage.morphology import binary_dilation                                                    
+from skimage.morphology import disk  
+from skimage.measure import label
 
-from utils.util import load_data_from_dir, load_3d_images_from_dir, save_npy_files, save_tif, check_value
+from utils.util import load_data_from_dir, load_3d_images_from_dir, save_npy_files, save_tif
 
 
 def create_instance_channels(cfg, data_type='train'):
@@ -42,7 +49,6 @@ def create_instance_channels(cfg, data_type='train'):
     print("Creating X_{} channels . . .".format(data_type))
     save_npy_files(X, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_DIR, filenames=filenames,
                    verbose=cfg.TEST.VERBOSE)
-    return filenames
 
 
 def create_test_instance_channels(cfg):
@@ -191,6 +197,137 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
 
     return new_mask
 
+def create_detection_masks(cfg, data_type='train'):
+    """Create detection masks based on CSV files.
+
+       Parameters
+       ----------
+       cfg : YACS CN object
+           Configuration.
+
+	   data_type: str, optional
+		   Wheter to create train, validation or test masks.
+    """
+
+    assert data_type in ['train', 'val', 'test']
+
+    if data_type == "train":
+        tag = "TRAIN"
+    elif data_type == "train":
+        tag = "VAL"
+    else:
+        tag = "TEST"
+    img_dir = getattr(cfg.DATA, tag).PATH
+    label_dir = getattr(cfg.DATA, tag).MASK_PATH
+    out_dir = getattr(cfg.DATA, tag).DETECTION_MASK_DIR
+    img_ids = sorted(next(os.walk(img_dir))[2])
+    img_ext = '.'+img_ids[0].split('.')[-1]
+    ids = sorted(next(os.walk(label_dir))[2])
+
+    print("Creating {} detection masks . . .".format(data_type))
+    for i in range(len(ids)):
+        img_filename = ids[i].split('.')[0]+img_ext
+        if not os.path.exists(os.path.join(out_dir, img_filename)):
+            print("Attempting to create mask from CSV file: {}".format(os.path.join(label_dir, ids[i])))
+
+            df = pd.read_csv(os.path.join(label_dir, ids[i]))  
+            img = imread(os.path.join(img_dir, img_filename))
+            
+            # Adjust shape
+            img = np.squeeze(img)
+            if img.ndim == 3: 
+                img = np.expand_dims(img, -1)
+
+            # Discard first index column to not have error if it is not sorted 
+            df = df.iloc[: , 1:]
+            if len(df.columns) == 4:
+                if not all(df.columns == ['axis-0', 'axis-1', 'axis-2', 'class']):
+                    raise ValueError("CSV columns need to be ['axis-0', 'axis-1', 'axis-2', 'class']")
+            elif len(df.columns) == 3:
+                if not all(df.columns == ['axis-0', 'axis-1', 'axis-2']):
+                    raise ValueError("CSV columns need to be ['axis-0', 'axis-1', 'axis-2']")
+            else:
+                raise ValueError("CSV file {} need to have 3 or 4 columns. Found {}"
+                                 .format(os.path.join(label_dir, ids[i]), len(df.columns)))
+
+            # Convert them to int in case they are floats
+            df['axis-0'] = df['axis-0'].astype('int')
+            df['axis-1'] = df['axis-1'].astype('int')
+            df['axis-2'] = df['axis-2'].astype('int')
+            
+            # Obtain the points 
+            z_axis_point = df['axis-0']                                                                       
+            y_axis_point = df['axis-1']                                                                       
+            x_axis_point = df['axis-2']
+            
+            # Class column present
+            if len(df.columns) == 4:
+                df['class'] = df['class'].astype('int')
+                class_point = np.array(df['class'])            
+            else:
+                if cfg.MODEL.N_CLASSES > 1:
+                    raise ValueError("MODEL.N_CLASSES > 1 but no class specified in CSV files (4th column must have class info)")
+                class_point = [1] * len(z_axis_point)
+
+            # Create masks
+            print("Creating all points . . .")
+            mask = np.zeros((img.shape[:-1]+(cfg.MODEL.N_CLASSES,)), dtype=np.uint8)
+            for j in tqdm(range(len(z_axis_point)), total=len(z_axis_point), leave=False):
+                z_coord = z_axis_point[j]
+                y_coord = y_axis_point[j]
+                x_coord = x_axis_point[j]
+                c_point = class_point[j]-1
+
+                if c_point+1 > mask.shape[-1]:
+                    raise ValueError("Class {} detected while MODEL.N_CLASSES was set to {}. Please check it!"
+                        .format(c_point+1, cfg.MODEL.N_CLASSES))
+
+                # Paint the point
+                if z_coord < mask.shape[0] and y_coord < mask.shape[1] and x_coord < mask.shape[2]:                                                                                                              
+                    if 1 in mask[max(0,z_coord-1):min(mask.shape[0],z_coord+2),                                   
+                                 max(0,y_coord-4):min(mask.shape[1],y_coord+5),                                   
+                                 max(0,x_coord-4):min(mask.shape[2],x_coord+5), c_point]: 
+                        print("WARNING: possible duplicated point in (3,9,9) neighborhood: coords {} , class {} "
+                              "(point number {} in CSV)".format((z_coord,y_coord,x_coord), c_point, j))                                                                                                                                            
+                                                                                                                            
+                    mask[z_coord,y_coord,x_coord,c_point] = 1                                            
+                    if y_coord+1 < mask.shape[1]: mask[z_coord,y_coord+1,x_coord,c_point] = 1       
+                    if y_coord-1 > 0: mask[z_coord,y_coord-1,x_coord,c_point] = 1                   
+                    if x_coord+1 < mask.shape[2]: mask[z_coord,y_coord,x_coord+1,c_point] = 1       
+                    if x_coord-1 > 0: mask[z_coord,y_coord,x_coord-1,c_point] = 1                   
+                else:  
+                    print("WARNING: discarding point {} which seems to be out of shape: {}"
+                          .format([z_coord,y_coord,x_coord], img.shape))                                                                                                     
+
+            # Dilate the mask
+            for k in range(mask.shape[0]): 
+                for ch in range(mask.shape[-1]):                                                                                  
+                    mask[k,...,ch] = binary_dilation(mask[k,...,ch], iterations=1,  structure=disk(3))                                                                                                                                                    
+                
+            if cfg.PROBLEM.DETECTION.CHECK_POINTS_CREATED:
+                print("Check points created to see if some of them are very close that create a large label") 
+                error_found = False
+                for ch in range(mask.shape[-1]):
+                    _, index, counts = np.unique(label(clear_border(mask[...,ch])), return_counts=True, return_index=True)                     
+                    # 0 is background so valid element is 1. We will compare that value with the rest                                                                         
+                    ref_value = counts[1]                                                                                           
+                    for k in range(2,len(counts)):                                                                                  
+                        if abs(ref_value - counts[k]) > 5:                                                                          
+                            point = np.unravel_index(index[k], mask[...,ch].shape)  
+                            print("WARNING: There is a point (coords {}) with size very different from "
+                                  "the rest. Maybe that cell has several labels: please check it! Normally all point "
+                                  "have {} pixels but this one has {}.".format(point, ref_value, counts[k])) 
+                            error_found = True
+
+                if error_found:
+                    raise ValueError("Duplicate points have been found so please check them before continuing. "
+                                     "If you consider that the points are valid simply disable "
+                                     "'PROBLEM.DETECTION.CHECK_POINTS_CREATED' so this check is not done again!")
+
+            save_tif(np.expand_dims(mask,0), out_dir, [img_filename])
+        else:
+            print("Mask file {} found for CSV file: {}".format(os.path.join(out_dir, img_filename), 
+                os.path.join(label_dir, ids[i])))
 
 def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background=0.06, save_dir=None):
     """Calculate the probability map of the given 2D data.

@@ -5,6 +5,7 @@ from skimage.feature import peak_local_max
 from scipy.ndimage.morphology import grey_dilation
 from skimage.measure import label, regionprops_table
 from data.post_processing.post_processing import remove_close_points
+from data.pre_processing import create_detection_masks
 
 from utils.util import save_tif
 from engine.metrics import detection_metrics
@@ -162,3 +163,71 @@ class Detection(Base_Workflow):
                 print("Detection - Test F1 (per image): {}".format(self.stats['d_f1']))
 
         super().print_post_processing_stats()
+
+
+def prepare_detection_data(cfg):
+    print("#############################\n"
+          "#  PREPARE DETECTION DATA  #\n"
+          "############################\n")
+
+    # Create selected channels for train data
+    if cfg.TRAIN.ENABLE:
+        create_mask = False
+        if not os.path.isdir(cfg.DATA.TRAIN.DETECTION_MASK_DIR):
+            print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                  "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.DETECTION_MASK_DIR' "
+                  "path, this process will be done just once!".format(cfg.DATA.TRAIN.DETECTION_MASK_DIR))
+            create_mask = True
+        else:
+            if len(next(os.walk(cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(next(os.walk(cfg.DATA.TRAIN.MASK_PATH))[2]):
+                print("Different number of files found in {} and {}. Trying to create the the rest again"
+                       .format(cfg.DATA.TRAIN.MASK_PATH,cfg.DATA.TRAIN.DETECTION_MASK_DIR))
+                create_mask = True    
+
+        if create_mask:
+            create_detection_masks(cfg)
+
+    # Create selected channels for val data
+    if cfg.TRAIN.ENABLE and not cfg.DATA.VAL.FROM_TRAIN:
+        create_mask = False
+        if not os.path.isdir(cfg.DATA.VAL.DETECTION_MASK_DIR):
+            print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.DETECTION_MASK_DIR' "
+                "path, this process will be done just once!".format(cfg.DATA.VAL.DETECTION_MASK_DIR))
+            create_mask = True
+        else:
+            if len(next(os.walk(cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(next(os.walk(cfg.DATA.VAL.MASK_PATH))[2]):
+                print("Different number of files found in {} and {}. Trying to create the the rest again"
+                       .format(cfg.DATA.VAL.MASK_PATH,cfg.DATA.VAL.DETECTION_MASK_DIR))
+                create_mask = True 
+                
+        if create_mask:
+            create_detection_masks(cfg, data_type='val')
+
+    # Create selected channels for test data once
+    if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT and cfg.TEST.EVALUATE:
+        create_mask = False
+        if not os.path.isdir(cfg.DATA.TEST.DETECTION_MASK_DIR):
+            print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.DETECTION_MASK_DIR' "
+                "path, this process will be done just once!".format(cfg.DATA.TEST.DETECTION_MASK_DIR))
+            create_mask = True
+        else:
+            if len(next(os.walk(cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(next(os.walk(cfg.DATA.TEST.MASK_PATH))[2]):
+                print("Different number of files found in {} and {}. Trying to create the the rest again"
+                       .format(cfg.DATA.TEST.MASK_PATH,cfg.DATA.TEST.DETECTION_MASK_DIR))
+                create_mask = True 
+        if create_mask:
+            create_detection_masks(cfg, data_type='test')
+
+    opts = []
+    if cfg.TRAIN.ENABLE:
+        print("DATA.TRAIN.MASK_PATH changed from {} to {}".format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.DETECTION_MASK_DIR))
+        opts.extend(['DATA.TRAIN.MASK_PATH', cfg.DATA.TRAIN.DETECTION_MASK_DIR])
+        if not cfg.DATA.VAL.FROM_TRAIN:
+            print("DATA.VAL.MASK_PATH changed from {} to {}".format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.DETECTION_MASK_DIR))
+            opts.extend(['DATA.VAL.MASK_PATH', cfg.DATA.VAL.DETECTION_MASK_DIR])
+    if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT:
+        print("DATA.TEST.MASK_PATH changed from {} to {}".format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.DETECTION_MASK_DIR))
+        opts.extend(['DATA.TEST.MASK_PATH', cfg.DATA.TEST.DETECTION_MASK_DIR])
+    cfg.merge_from_list(opts)
