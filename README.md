@@ -1,35 +1,18 @@
-# BiaPy: Bioimage analysis pipelines
-                                                                                                                        
-This repository contains different pipelines for semantic segmentation, instance segmentation, detection and classification. The code is based on Keras and TensorFlow as backend. 
-                                                                                                                        
-To use the code please visit our [documentation site](https://biapy.readthedocs.io/en/latest/).         
-                                                                                                                        
-### Semantic segmentation                                                                                               
-                                                                                                                        
-![.](https://github.com/danifranco/BiaPy/blob/master/docs/source/img/seg.gif)                           
-                                                                                                                        
-### Instance segmentation                                                                                               
+# BiaPy: Bioimage analysis pipelines in Python
 
-<table>
-  <tr>
-    <td>EM image</td>
-     <td>Ground Truth</td>
-     <td>Prediction</td>
-  </tr>
-  <tr>
-    <td><img src="https://github.com/danifranco/BiaPy/blob/master/docs/source/video/nucmm_z_volume.gif" width=280></td>
-    <td><img src="https://github.com/danifranco/BiaPy/blob/master/docs/source/video/nucmm_z_volume_mask.gif" width=280 ></td>
-    <td><img src="https://github.com/danifranco/BiaPy/blob/master/docs/source/video/nucmm_z_volume_mask_pred.gif" width=280 ></td>
-  </tr>
- </table>
- 
+[BiaPy](https://github.com/danifranco/BiaPy) is an open source Python library for building bioimage analysis pipelines. This repository is actively under development by the Biomedical Computer Vision group at the [University of the Basque Country](https://www.ehu.eus/en/en-home) and the [Donostia International Physics Center](http://dipc.ehu.es/). 
+
+The library provides an easy way to create image processing pipelines that are typically used in the analysis of biology microscopy images in 2D and 3D. Namely, BiaPy contains ready-to-use solutions for the tasks of [semantic segmentation](workflows/semantic_segmentation.html), [instance segmentation](workflows/instance_segmentation.html), [object detection](workflows/detection.html), [image denoising](workflows/denoising.html), [single image super-resolution](workflows/super_resolution.html), [self-supervised learning](workflows/self_supervision.html) and [image classification](workflows/classification.html). The source code is based on Keras/TensorFlow as backend. Given BiaPy’s deep learning based core, a machine with a graphics processing unit (GPU) is recommended for fast training and execution.                                                                                                                                            
+![BiaPy workflows](./docs/source/img/BiaPy-workflow-examples.svg)
+<img src="./docs/source/img/BiaPy-workflow-examples.svg">                                                                                                                                         
+     
 ## Citation                                                                                                             
                                                                                                                         
 This repository is the base of the following work:                                                                      
                                                                                                                         
 ```bibtex
 @Article{Franco-Barranco2021,
-    author={Franco-Barranco, Daniel and Muñoz-Barrutia, Arrate and Arganda-Carreras, Ignacio},
+    author={Franco-Barranco, Daniel and Muñ{\~{n}}oz-Barrutia, Arrate and Arganda-Carreras, Ignacio},
     title={Stable Deep Neural Network Architectures for Mitochondria Segmentation on Electron Microscopy Volumes},
     journal={Neuroinformatics},
     year={2021},

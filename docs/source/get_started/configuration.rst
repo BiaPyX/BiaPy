@@ -1,7 +1,7 @@
 Configuration
 -------------
 
-To run BiaPy you need to create a configuration text file built with `YACS <https://github.com/rbgirshick/yacs>`_. This configuration file includes information about the hardware to use (i.e., the number of CPUs/GPUs), the work task, the model name, optional hyperparameters, the optimizer, and the paths lo load/store data from/into. As an example, a full semantic segmentation pipeline can be created as follows:
+To run BiaPy you need to create a plain text YAML configuration text file built with `YACS <https://github.com/rbgirshick/yacs>`_. This configuration file includes information about the hardware to use (i.e., the number of CPUs/GPUs), the work task, the model name, optional hyperparameters, the optimizer, and the paths lo load/store data from/into. As an example, a full semantic segmentation pipeline can be created as follows:
 
 
 .. code-block:: yaml

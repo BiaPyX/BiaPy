@@ -40,7 +40,11 @@ The library provides an easy way to create image processing pipelines that are t
    :caption: Tutorials
    :glob:
 
-   tutorials/*
+   tutorials/stable.rst
+   tutorials/mitochondria_instance.rst
+   tutorials/cysto.rst
+   tutorials/nucleus.rst
+
    
 .. toctree::                                                                    
    :maxdepth: 1

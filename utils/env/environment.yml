@@ -1,4 +1,4 @@
-name: EM_tools
+name: BiaPy_env
 channels:
   - anaconda
   - conda-forge
