@@ -7,7 +7,7 @@ The goal of this workflow is assign a class to each pixel of the input image.
 
 * **Input:** 
     * Image. 
-    * Class mask, where each pixel is labeled with an integer representing a class.
+    * Class mask where each pixel is labeled with an integer representing a class.
 * **Output:**
     * Image with the probability of being part of each class.  
 
@@ -27,7 +27,7 @@ In the figure below an example of this workflow's **input** is depicted. There, 
 
 The **output** in case that only two classes are present, as in this example, will be an image where each pixel will have the probability of being of class 1. 
 
-If there are **3 or more classes**, the output will be a multi-channel image, with the same number of channels as classes, and the same pixel in each channel will be the probability of being of the class that represents that channel number. For instance, with 3 classes, e.g. background, mitochondria and contours, the fist channel will represent background, the second mitochondria and the last contour class. 
+If there are **3 or more classes**, the output will be a multi-channel image, with the same number of channels as classes, and the same pixel in each channel will be the probability (in ``[0-1]`` range) of being of the class that represents that channel number. For instance, with 3 classes, e.g. background, mitochondria and contours, the fist channel will represent background, the second mitochondria and the last contour class. 
 
 .. _semantic_segmentation_data_prep:
 
@@ -37,37 +37,54 @@ Data preparation
 To ensure the proper operation of the library the data directory tree should be something like this: ::
 
     dataset/
-    ├── test
+    ├── train
     │   ├── x
-    │   │   ├── testing-0001.tif
-    │   │   ├── testing-0002.tif
+    │   │   ├── training-0001.tif
+    │   │   ├── training-0002.tif
     │   │   ├── . . .
-    │   │   ├── testing-9999.tif
+    │   │   ├── training-9999.tif
     │   └── y
-    │       ├── testing_groundtruth-0001.tif
-    │       ├── testing_groundtruth-0002.tif
+    │       ├── training_groundtruth-0001.tif
+    │       ├── training_groundtruth-0002.tif
     │       ├── . . .
-    │       ├── testing_groundtruth-9999.tif
-    └── train
+    │       ├── training_groundtruth-9999.tif
+    └── test
         ├── x
-        │   ├── training-0001.tif
-        │   ├── training-0002.tif
+        │   ├── testing-0001.tif
+        │   ├── testing-0002.tif
         │   ├── . . .
-        │   ├── training-9999.tif
+        │   ├── testing-9999.tif
         └── y
-            ├── training_groundtruth-0001.tif
-            ├── training_groundtruth-0002.tif
+            ├── testing_groundtruth-0001.tif
+            ├── testing_groundtruth-0002.tif
             ├── . . .
-            ├── training_groundtruth-9999.tif
+            ├── testing_groundtruth-9999.tif
 
 .. warning:: Ensure that images and their corresponding masks are sorted in the same way. A common approach is to fill with zeros the image number added to the filenames (as in the example). 
 
 Configuration                                                                                                                 
 ~~~~~~~~~~~~~
 
-Find in `templates/semantic_segmentation <https://github.com/danifranco/BiaPy/tree/master/templates/semantic_segmentation>`__ folder BiaPy configuration templates for this workflow. 
+Find in `templates/semantic_segmentation <https://github.com/danifranco/BiaPy/tree/master/templates/semantic_segmentation>`__ folder of BiaPy a few YAML configuration templates for this workflow. 
 
 
+Special workflow configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Here some special configuration options that can be selected in this workflow are described:
+
+* **Metrics**: during the inference phase the performance of the test data is measured using different metrics if test masks were provided (i.e. ground truth) and, consequently, ``DATA.TEST.LOAD_GT`` is enabled. In the case of semantic segmentation the **Intersection over Union** (IoU) metrics is calculated. This metric, also referred as the Jaccard index, is essentially a method to quantify the percent of overlap between the target mask and the prediction output. Depending on the configuration different values are calculated (as explained in :ref:`_config_test`). This values can vary a lot as stated in :cite:p:`Franco-Barranco2021`.
+
+    * ``per patch`` values are calculated if ``TEST.STATS.PER_PATCH`` is enabled. IoU is calculated for each patch separately and then averaged. 
+    * ``merge patches`` values are calculated if ``TEST.STATS.MERGE_PATCHES`` is enabled. Notice that depending on the amount of overlap/padding selected the merged image can be different than just concatenating each patch. 
+    * ``full image`` values are calculated if ``TEST.STATS.FULL_IMG`` is enabled. This can be done if the model selected if fully convolutional. The results may be slightly different from ``merge patches`` as you may notice and probably no border effect will be seen. 
+
+* **Post-processing**: When ``PROBLEM.NDIM`` is ``2D`` the post-processing will be enabled only if ``TEST.STATS.FULL_IMG`` is enabled. In that case the post-processing will process all 2D predicted images as a unique 3D stack. On the other hand, when ``PROBLEM.NDIM`` is ``3D`` the post-processing will be applied when ``TEST.STATS.PER_PATCH`` and ``TEST.STATS.MERGE_PATCHES`` is selected. In this case, each 3D predicted image will be processed individually.
+
+    * **Z-filtering**: to apply a median filtering in ``z`` axis. Useful to maintain class coherence across 3D volumes. Enable it with ``TEST.POST_PROCESSING.Z_FILTERING`` and use ``TEST.POST_PROCESSING.Z_FILTERING_SIZE`` for the size of the median filter. 
+
+    * **YZ-filtering**: to apply a median filtering in ``y`` and ``z`` axes. Useful to maintain class coherence across 3D volumes that can work slightly better than ``Z-filtering``. Enable it with ``TEST.POST_PROCESSING.YZ_FILTERING`` and use ``TEST.POST_PROCESSING.YZ_FILTERING_SIZE`` for the size of the median filter.  
+    
 .. _semantic_segmentation_data_run:
 
 Run
@@ -153,7 +170,7 @@ For the examples above, you should see that the directory ``/home/user/exp_resul
     ├── config_files/
     │   └── resunet_2d_semantic_segmentation.yaml                                                                                                           
     ├── checkpoints
-    │   └── model_weights_unet_2d_1.h5
+    │   └── model_weights_resunet_2d_1.h5
     └── results
         ├── resunet_2d_1
         ├── . . .
@@ -161,9 +178,9 @@ For the examples above, you should see that the directory ``/home/user/exp_resul
             ├── aug
             │   └── .tif files
             ├── charts
-            │   ├── unet_2d_1_jaccard_index.png
-            │   ├── unet_2d_1_loss.png
-            │   └── model_plot_unet_2d_1.png
+            │   ├── resunet_2d_1_jaccard_index.png
+            │   ├── resunet_2d_1_loss.png
+            │   └── model_plot_resunet_2d_1.png
             ├── check_crop
             │   └── .tif files
             ├── full_image
@@ -182,10 +199,9 @@ For the examples above, you should see that the directory ``/home/user/exp_resul
 
     * ``resunet_2d_semantic_segmentation.yaml``: YAML configuration file used (it will be overwrited every time the code is run)
 
-
 * ``checkpoints``: directory where model's weights are stored.
 
-    * ``model_weights_unet_2d_1.h5``: model's weights file.
+    * ``model_weights_resunet_2d_1.h5``: model's weights file.
 
 * ``results``: directory where all the generated checks and results will be stored. There, one folder per each run are going to be placed.
 

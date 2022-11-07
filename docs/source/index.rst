@@ -7,10 +7,10 @@ The library provides an easy way to create image processing pipelines that are t
 
                                                                                 
 .. image:: img/BiaPy-workflow-examples.svg
-           :width: 70%
-           :align: center 
+   :width: 70%
+   :align: center 
 
-           
+   
 .. toctree::
    :maxdepth: 1
    :caption: Get started
@@ -42,7 +42,7 @@ The library provides an easy way to create image processing pipelines that are t
 
    tutorials/stable.rst
    tutorials/mitochondria_instance.rst
-   tutorials/cysto.rst
+   tutorials/cartocell.rst
    tutorials/nucleus.rst
 
    

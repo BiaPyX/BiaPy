@@ -119,12 +119,14 @@ Apart from that you need to specify **how many images will be feed into the netw
 
 For training you need to choose how many **epochs** to train the network with ``TRAIN.EPOCHS``. You can also set patience with ``TRAIN.PATIENCE``, which will stop the training process if no improvement in the validation data was made in those epochs. 
 
+.. _config_test:
+
 Test phase
 ~~~~~~~~~~
 
 Set ``TEST.ENABLE`` to **activate test phase**, sometimes called also as inference or prediction. Here, if the **test images are too big** to input them directly in the GPU, e.g. 3D images, you need to set ``TEST.STATS.PER_PATCH``. With this option each test image will be cropped into ``DATA.PATCH_SIZE`` patches, pass them through the network, and then reconstruct the original image. This option will automatically calculate performance metrics per patch if the ground truth is available (enabled by ``DATA.TEST.LOAD_GT``). Here you can also set ``TEST.STATS.MERGE_PATCHES`` to calculate same metrics but once the patches have been merged into the original image.
 
-In case that the **entire images can be placed in the GPU** you can set only ``TEST.STATS.FULL_IMG`` without ``TEST.STATS.PER_PATCH`` and ``TEST.STATS.MERGE_PATCHES`` as explained above. here the performance metrics will be calculated if a ground truth the available (enabled by ``DATA.TEST.LOAD_GT``).
+In case that the **entire images can be placed in the GPU** you can set only ``TEST.STATS.FULL_IMG`` without ``TEST.STATS.PER_PATCH`` and ``TEST.STATS.MERGE_PATCHES`` as explained above. For simplicity this setting is only available for ``2D``. Here the performance metrics will be calculated if a ground truth the available (enabled by ``DATA.TEST.LOAD_GT``). 
 
 You can use **test-time augmentation** setting ``TEST.AUGMENTATION``, which will create multiple augmented copies of each test image, or patch if ``TEST.STATS.PER_PATCH`` has been selected, by all possible rotations (8 copies in 2D and 16 in 3D). This will slow down the inference process but will return more robust predictions. 
 
@@ -132,7 +134,7 @@ You can use also use ``DATA.REFLECT_TO_COMPLETE_SHAPE`` to ensure that the patch
 
 .. seealso::
 
-If the test images are big and you have memory problems you can set ``TEST.REDUCE_MEMORY`` which will save as much memory as the library can at the price of slow down the inference process. 
+    If the test images are big and you have memory problems you can set ``TEST.REDUCE_MEMORY`` which will save as much memory as the library can at the price of slow down the inference process. 
 
 Post-processing
 ~~~~~~~~~~~~~~~

@@ -46,34 +46,33 @@ class Instance_Segmentation(Base_Workflow):
         #############################
         ### INSTANCE SEGMENTATION ###
         #############################
-        if self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-            print("Creating instances with watershed . . .")
-            w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
-            check_wa = w_dir if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW else None
-            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BCM"]:
-                w_pred = bc_watershed(pred, thres1=self.th1_opt, thres2=self.th2_opt, thres3=self.th3_opt,
-                    thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW,
-                    save_dir=check_wa)
-            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCD":
-                w_pred = bcd_watershed(pred, thres1=self.th1_opt, thres2=self.th2_opt, thres3=self.th3_opt, thres4=self.th4_opt,
-                    thres5=self.th5_opt, thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ,
-                    remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, save_dir=check_wa)
-            else: # "BCDv2"
-                w_pred = bdv2_watershed(pred, bin_th=self.th1_opt, thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ,
-                    remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, save_dir=check_wa)
+        print("Creating instances with watershed . . .")
+        w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
+        check_wa = w_dir if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW else None
+        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BCM"]:
+            w_pred = bc_watershed(pred, thres1=self.th1_opt, thres2=self.th2_opt, thres3=self.th3_opt,
+                thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW,
+                save_dir=check_wa)
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCD":
+            w_pred = bcd_watershed(pred, thres1=self.th1_opt, thres2=self.th2_opt, thres3=self.th3_opt, thres4=self.th4_opt,
+                thres5=self.th5_opt, thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ,
+                remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, save_dir=check_wa)
+        else: # "BCDv2"
+            w_pred = bdv2_watershed(pred, bin_th=self.th1_opt, thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ,
+                remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, save_dir=check_wa)
 
-            save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
-                        filenames, verbose=self.cfg.TEST.VERBOSE)
+        save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                    filenames, verbose=self.cfg.TEST.VERBOSE)
 
-            if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
-                vor_pred = voronoi_on_mask_2(np.expand_dims(w_pred,0), np.expand_dims(pred,0),
-                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI, filenames, verbose=self.cfg.TEST.VERBOSE)[0]
+        if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
+            vor_pred = voronoi_on_mask_2(np.expand_dims(w_pred,0), np.expand_dims(pred,0),
+                self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI, filenames, verbose=self.cfg.TEST.VERBOSE)[0]
 
-            # Add extra dimension if working in 2D
-            if w_pred.ndim == 2:
-                w_pred = np.expand_dims(w_pred,0)
+        # Add extra dimension if working in 2D
+        if w_pred.ndim == 2:
+            w_pred = np.expand_dims(w_pred,0)
 
-        if self.cfg.TEST.MAP and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.TEST.MAP and self.cfg.DATA.TEST.LOAD_GT:
             print("####################\n"
                   "#  mAP Calculation #\n"
                   "####################\n")
@@ -171,7 +170,7 @@ class Instance_Segmentation(Base_Workflow):
                 else:
                     print("No labels found in {} file. Skipping sample from mAP calculation (Voronoi). . .".format(test_file))
 
-        if self.cfg.TEST.MATCHING_STATS and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.TEST.MATCHING_STATS and self.cfg.DATA.TEST.LOAD_GT:
             print("Calculating matching stats . . .")
             test_file = os.path.join(self.original_test_mask_path, filenames[0])
             if not os.path.isfile(test_file):
@@ -202,7 +201,7 @@ class Instance_Segmentation(Base_Workflow):
                 print(r_stats)
                 self.all_matching_stats_voronoi.append(r_stats)
 
-        if self.cfg.TEST.MATCHING_SEGCOMPARE and self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.TEST.MATCHING_SEGCOMPARE and self.cfg.DATA.TEST.LOAD_GT:
             print("Calculating matching stats using segCompare. . .")
             test_file = os.path.join(self.cfg.DATA.TEST.MASK_PATH, filenames[0])
             if not os.path.isfile(test_file):

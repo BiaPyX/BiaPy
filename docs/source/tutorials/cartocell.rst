@@ -1,30 +1,37 @@
-.. _cysto_tutorial:
+.. _cartocell:
 
-3D Cysto Instance Segmentation
--------------------------------
+CartoCell, a high-throughput pipeline for accurate 3D image analysis
+--------------------------------------------------------------------
+
+This tutorial describes how to reproduce the results reported in our paper to 
+make instance segmentation of cysts in confocal microscope images:
+
+[Paper under review]
 
 Problem description
 ~~~~~~~~~~~~~~~~~~~
 
-The goal is to segment and identify automatically each cysto in EM images. This is an instance segmentation problem,
-which is the next step of semantic segmentation, as its requires identifying each blob unequivocally with a given
-id. In this tutorial, pairs of EM 3D images (``X``) with their corresponding instance sementation annotations
-(``Y``) are provided. Here a cysto dataset (not released yet) is used. In this dataset some 3D images of multiple
-shapes are used for train and other cystos are used for test. Here is a sample:
+The goal is to segment and identify automatically each cysto in EM images. This is an instance segmentation problem, which is the next step of semantic segmentation, as its requires identifying each blob unequivocally with a given id. To solve such task pairs of 3D confocal cyst images and their corresponding instance sementation annotations are provided. Below a pair example is depicted:
 
 
-.. figure:: ../video/cyst_sample.gif
-  :scale: 60%
-  :alt: Cysto image sample
-  :align: center
+.. list-table:: 
 
-  Overview of one cysto image.
+  * - .. figure:: ../video/cyst_sample.gif
+        :align: center
+        :scale: 50%
 
+        Cyst image sample
+
+    - .. figure:: ../video/cyst_instance_prediction.gif 
+        :align: center
+        :scale: 50%
+
+        Corresponding instance mask 
 
 Data preparation
 ~~~~~~~~~~~~~~~~
 
-The data directory tree should follow the structure described `First steps -> Step 1: Data preparation <../how_to_run/first_steps.html#step-1-data-preparation>`_.
+The data directory tree need to follow the structure described in :ref:`semantic_segmentation_data_prep`.
 
 
 Problem resolution
@@ -64,7 +71,7 @@ it through bash shell as described in: `Bash Shell -> Step 2: Run the code <../h
 Results
 ~~~~~~~
 
-The results are placed in ``results`` folder under ``--result_dir`` directory with the ``--name`` given. See `Step-4-analizing-the-results <../          how_to_run/first_steps.html#step-4-analizing-the-results>`_ to find more details about the files and directories created. There
+The results are placed in ``results`` folder under ``--result_dir`` directory with the ``--name`` given. See `Step-4-analizing-the-results <../how_to_run/first_steps.html#step-4-analizing-the-results>`_ to find more details about the files and directories created. There
 you should find something similiar to these results:
 
 .. figure:: ../video/cyst_instance_prediction.gif 

@@ -34,18 +34,14 @@ class Config:
 
         ### INSTANCE_SEG
         _C.PROBLEM.INSTANCE_SEG = CN()
-        # Possible options: 'B', 'BC' and 'BCD'. This variable determines how many channels are going to be used to train
-        # the model.
-        # 'B' stands for 'Binary segmentation', which is the default setting and means that only binary
-        # segmentation mask are going to be used. This setting id the default and should be used when
-        # _C.PROBLEM.TYPE = 'SEMANTIC_SEG'.
-        # 'BC' stands for 'Binary segmentation' + 'Contour'. Here the library expects mask to be instance segmenation mask
-        # so the binary and contour channel are created from that data automatically. This setting should be used when
-        # _C.PROBLEM.TYPE = 'INSTANCE_SEG'
-        # 'BCD' stands for 'Binary segmentation' + 'Contour' + 'Distance'. As 'BC' but creating an additional channel
-        # that represents the distance of the pixels to the border. This setting should be used when
-        # _C.PROBLEM.TYPE = 'INSTANCE_SEG'
-        # 'Dv2' channels is a updated version of 'D' channel calculating background distance as well.
+        # Possible options: 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2' and 'BDv2'. This variable determines the channels to be created 
+        # based on input instance masks. These option are composed from these individual options:
+        #   - 'B' stands for 'Binary segmentation', containing each instance region without the contour. 
+        #   - 'C' stands for 'Contour', containing each instance contour. 
+        #   - 'D' stands for 'Distance', each pixel containing the distance of it to the instance contour. 
+        #   - 'M' stands for 'Mask', contains the B and the C channels, i.e. the foreground mask. 
+        #     Is simply achieved by binarizing input instance masks. 
+        #   - 'Dv2' stands for 'Distance V2', which is an updated version of 'D' channel calculating background distance as well.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = 'B'
 
         # Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. (1, 0.2), 1
