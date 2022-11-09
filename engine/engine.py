@@ -24,7 +24,7 @@ class Engine(object):
         self.original_test_path = None
         self.original_test_mask_path = None
         self.test_mask_filenames = None
-
+        
         # Save paths in case we need them in a future
         self.orig_train_path = cfg.DATA.TRAIN.PATH
         self.orig_train_mask_path = cfg.DATA.TRAIN.MASK_PATH
@@ -51,7 +51,7 @@ class Engine(object):
                 else:
                     check_masks(cfg.DATA.TEST.MASK_PATH, n_classes=cfg.MODEL.N_CLASSES+1)
         elif cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-            prepare_instance_data(cfg)
+            self.original_test_path, self.original_test_mask_path = prepare_instance_data(cfg)
         elif cfg.PROBLEM.TYPE == 'DETECTION':
             prepare_detection_data(cfg)
         elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
@@ -75,8 +75,8 @@ class Engine(object):
                         objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
                             val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
-                            ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, check_crop=cfg.DATA.TRAIN.CHECK_CROP,
-                            check_crop_path=cfg.PATHS.CROP_CHECKS, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                            ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING,
+                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
                     else:
                         objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH,
                             val_split=cfg.DATA.VAL.SPLIT_TRAIN, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
@@ -137,12 +137,8 @@ class Engine(object):
 
                 if self.original_test_path is None:
                     self.test_filenames = sorted(next(os.walk(cfg.DATA.TEST.PATH))[2])
-                    if cfg.TEST.MAP and cfg.DATA.TEST.LOAD_GT:
-                        self.test_mask_filenames = sorted(next(os.walk(cfg.DATA.TEST.MASK_PATH))[2])
                 else:
                     self.test_filenames = sorted(next(os.walk(self.original_test_path))[2])
-                    if cfg.TEST.MAP and cfg.DATA.TEST.LOAD_GT:
-                        self.test_mask_filenames = sorted(next(os.walk(self.original_test_mask_path))[2])
             elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
                 X_test, Y_test, self.test_filenames = load_data_classification(cfg, test=True)
 
@@ -198,7 +194,7 @@ class Engine(object):
         if self.cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
             workflow = Semantic_Segmentation(self.cfg, self.model, post_processing)
         elif self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-            workflow = Instance_Segmentation(self.cfg, self.model, post_processing)
+            workflow = Instance_Segmentation(self.cfg, self.model, post_processing, self.original_test_mask_path)
         elif self.cfg.PROBLEM.TYPE == 'DETECTION':
             workflow = Detection(self.cfg, self.model, post_processing)
         elif self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':

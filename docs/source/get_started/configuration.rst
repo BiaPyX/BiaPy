@@ -84,6 +84,8 @@ Data augmentation (DA)
 ~~~~~~~~~~~~~~~~~~~~~~
 ``AUGMENTOR.ENABLE`` need to be set to enable DA. Probability of each **transformation** is set by ``AUGMENTOR.DA_PROB`` variable. BiaPy offers a wide range of transformations so please refers to `config.py <https://github.com/danifranco/BiaPy/blob/master/config/config.py>`_ to see the complete list.
 
+In ``PATHS.DA_SAMPLES`` path, i.e. ``aug`` folder by default, some images will be generated so you can check the data augmentation applied. In case you want a more exhaustive check you can save all the training data augmented with ``DATA.CHECK_GENERATORS`` enabled. The images will be saved in ``PATHS.GEN_CHECKS`` and ``PATHS.GEN_MASK_CHECKS``. Be aware with this option and the disk space, as the training data will be entirely copied. 
+
 Model definition
 ~~~~~~~~~~~~~~~~
 Use ``MODEL.ARCHITECTURE`` to select the model. Different **models for each workflow** are implemented in BiaPy:
@@ -141,7 +143,7 @@ Post-processing
 
 BiaPy offers the following post-processing methods:
 
-* Apply **binary mask** to remove everything not contained in that mask. For this ``DATA.TEST.BINARY_MASKS`` path need to be set. Only implemented in ``TEST.STATS.PER_PATCH`` option. 
+* Apply **binary mask** to remove everything not contained in that mask. For this ``DATA.TEST.BINARY_MASKS`` path need to be set. ``TEST.STATS.PER_PATCH`` need to be enabled and will be done after the original image is reconstructed from patches. 
 * **Z axis filtering** with ``TEST.POST_PROCESSING.Z_FILTERING`` for 3D data when ``TEST.STATS.PER_PATCH`` option is set. Also, **YZ axes filtering** is implemented via ``TEST.POST_PROCESSING.YZ_FILTERING`` variable. 
 * In instance segmentation workflow **Voronoi** can be used after creating the instances to ensure all cells are touching each other setting ``TEST.POST_PROCESSING.VORONOI_ON_MASK``.
-* In detection worflow ``TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS`` can be used to **remove points** close to each other.
+* In detection workflow ``TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS`` can be used to **remove points** close to each other.

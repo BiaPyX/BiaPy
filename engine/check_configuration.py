@@ -87,6 +87,9 @@ def check_configuration(cfg):
             raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. "
                             "E.g. 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BC' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[1,0.5]. "
                             "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BCD' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]")
+        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['BC', 'BCM', 'BCD', 'BCDv2'] and cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
+            raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' need to be one between ['BC', 'BCM', 'BCD', 'BCDv2'] "
+                             "when 'TEST.POST_PROCESSING.VORONOI_ON_MAS' is enabled")
 
     #### Detection ####
     if cfg.PROBLEM.TYPE == 'DETECTION':
@@ -150,6 +153,9 @@ def check_configuration(cfg):
             raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
         if not os.path.exists(cfg.DATA.TRAIN.MASK_PATH) and cfg.PROBLEM.TYPE != 'DENOISING':
             raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.MASK_PATH))
+        if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
+            if not cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
+                raise ValueError("'DATA.PROBABILITY_MAP' can only be selected when 'PROBLEM.TYPE' is 'SEMANTIC_SEG'")
 
     if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.CROSS_VAL and cfg.DATA.VAL.SPLIT_TRAIN <= 0:
         raise ValueError("'DATA.VAL.SPLIT_TRAIN' needs to be > 0 when 'DATA.VAL.FROM_TRAIN' == True")

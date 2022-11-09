@@ -1326,7 +1326,7 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
         voronoiCyst[idsToFill[nId][0], idsToFill[nId][1], idsToFill[nId][2]] = labelsPerimIds[idSeedMin]
 
     # Save image
-    f = os.path.join(save_dir, filenames[0])
+    f = os.path.join(save_dir, ' '.join(filenames[0].split('.')[:-1])+'.tif')
     voronoiCyst = np.reshape(voronoiCyst, (1, mask_shape[1], mask_shape[2], mask_shape[3]))
     aux = np.reshape(voronoiCyst, (mask_shape[1], 1, mask_shape[2], mask_shape[3], 1))
     imsave(f, aux.astype(np.uint16), imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)

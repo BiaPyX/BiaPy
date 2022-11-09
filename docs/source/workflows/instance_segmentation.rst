@@ -25,7 +25,7 @@ In the figure below an example of this workflow's **input** is depicted. Each co
     - .. figure:: ../img/mitoem_crop_mask.png
          :align: center
 
-         Corresponding input instance mask.
+         Input instance mask (ground truth).
 
 
 .. _instance_segmentation_data_prep:
@@ -92,21 +92,28 @@ Firstly, a **pre-processing** step is done where the new data representation is 
 
   Process of the new multi-channel mask creation based on ``BCD`` configuration. From instance segmentation labels (left) to contour, binary mask and distances (right). Here a small patch is presented just for the sake of visualization but the process is done for each full resolution image.
 
+This new data representation is stored in ``DATA.TRAIN.INSTANCE_CHANNELS_DIR`` and ``DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR`` for train data, ``DATA.VAL.INSTANCE_CHANNELS_DIR`` and ``DATA.VAL.INSTANCE_CHANNELS_MASK_DIR`` for validation, and ``DATA.TEST.INSTANCE_CHANNELS_DIR``, ``DATA.TEST.INSTANCE_CHANNELS_MASK_DIR`` for test. 
+
+.. seealso::
+
+  You can modify ``PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS`` to control which channels the model will learn the most. For instance, in ``BCD`` setting you can set it to ``(1,1,0.5)`` for distance channel (``D``) to have half the impact during the learning process.
+
+
 After the train phase, the model output will have the same channels as the ones used to train. In the case of binary channels, i.e. ``B``, ``C`` and ``M``, each pixel of each channel will have the probability (in ``[0-1]`` range) of being of the class that represents that channel. Whereas for the ``D`` and ``Dv2`` channel each pixel will have a float that represents the distance.
 
 In a **post-processing** step the multi-channel data information will be used to create the final instance segmentation labels using a marker-controlled watershed. The process is as follows:
 
 * First, instance seeds are created based on ``B``, ``C``, ``D`` and ``Dv2`` (notice that depending on the configuration selected not all of them will be present). For that, each channel is binarized using different thresholds: ``PROBLEM.INSTANCE_SEG.DATA_MW_TH1`` for ``B`` channel, ``PROBLEM.INSTANCE_SEG.DATA_MW_TH2`` for ``C`` and ``PROBLEM.INSTANCE_SEG.DATA_MW_TH4`` for ``D`` or ``Dv2``. These thresholds will decide wheter a point is labeled as a class or not. This way, the seeds are created following this formula: :: 
 
-    seeds = (B > DATA_MW_TH1) * (D > DATA_MW_TH2) * (C < DATA_MW_TH2)  
+    seeds = (B > DATA_MW_TH1) * (D > DATA_MW_TH4) * (C < DATA_MW_TH2)  
 
-  Translated to words seeds will be: all pixels part of the binary mask (``B`` channel), which will be those higher than ``PROBLEM.INSTANCE_SEG.DATA_MW_TH1``; and also in the center of each instances, i.e. higher than ``PROBLEM.INSTANCE_SEG.DATA_MW_TH2`` ; but not labeled as contour, i.e. less than ``PROBLEM.INSTANCE_SEG.DATA_MW_TH3``. 
+  Translated to words seeds will be: all pixels part of the binary mask (``B`` channel), which will be those higher than ``PROBLEM.INSTANCE_SEG.DATA_MW_TH1``; and also in the center of each instances, i.e. higher than ``PROBLEM.INSTANCE_SEG.DATA_MW_TH4`` ; but not labeled as contour, i.e. less than ``PROBLEM.INSTANCE_SEG.DATA_MW_TH2``. 
 
-* After that, each instance is labeled with a unique integer, e.g. using `connected component <https://en.wikipedia.org/wiki/Connected-component_labeling>`_. Then a foreground mask is created to delimit the area in which the seeds may grow. This foreground mask is defined based on ``B`` channel using ``PROBLEM.INSTANCE_SEG.DATA_MW_TH3``and ``D`` or ``Dv2`` using ``PROBLEM.INSTANCE_SEG.DATA_MW_TH5``. The formula is as follows: :: 
+* After that, each instance is labeled with a unique integer, e.g. using `connected component <https://en.wikipedia.org/wiki/Connected-component_labeling>`_. Then a foreground mask is created to delimit the area in which the seeds may grow. This foreground mask is defined based on ``B`` channel using ``PROBLEM.INSTANCE_SEG.DATA_MW_TH3`` and ``D`` or ``Dv2`` using ``PROBLEM.INSTANCE_SEG.DATA_MW_TH5``. The formula is as follows: :: 
 
     foreground mask = (B > DATA_MW_TH3) * (D > DATA_MW_TH5) 
 
-* Finally the seeds are grown using marker-controlled watershed.
+* Afterwards, tiny instances are removed using ``PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ`` value. Finally, the seeds are grown using marker-controlled watershed.
 
 Configuration file
 ~~~~~~~~~~~~~~~~~~
@@ -120,11 +127,23 @@ Special workflow configuration
 Here some special configuration options that can be selected in this workflow are described:
 
 * **Metrics**: during the inference phase the performance of the test data is measured using different metrics if test masks were provided (i.e. ground truth) and, consequently, ``DATA.TEST.LOAD_GT`` is enabled. In the case of instance segmentation the **Intersection over Union** (IoU), **mAP** and **matching metrics** are calculated:
-  * **IoU** metric, also referred as the Jaccard index, is essentially a method to quantify the percent of overlap between the target mask and the prediction output. Depending on the configuration different values are calculated (as explained in :ref:`_config_test`). 
 
-  * **mAP**, which is the mean average precision score adapted for 3D images (but can be used in BiaPy for 2D also). It was introduced in in :cite:p:`wei2020mitoem`. It can be enabled with ``TEST.MAP``.
+  * **IoU** metric, also referred as the Jaccard index, is essentially a method to quantify the percent of overlap between the target mask and the prediction output. Depending on the configuration different values are calculated (as explained in :ref:`config_test`). 
 
-  * **Matching metrics**, that was adapted from Stardist (:cite:p:`weigert2020star`) evaluation `code <https://github.com/stardist/stardist>`_. It calculates precision, recall, accuracy, F1 and panoptic quality based on a defined threshold to decide wheter an instance is a true positive, false positive,  
+  * **mAP**, which is the mean average precision score adapted for 3D images (but can be used in BiaPy for 2D also). It was introduced in :cite:p:`wei2020mitoem` and can be enabled with ``TEST.MAP``. This metric is used with a external code that need to be installed as follows: 
+
+    .. code-block:: bash
+      
+      # Download the repo
+      git clone https://github.com/danifranco/mAP_3Dvolume.Git
+      # Change the branch
+      git checkout grand-challenge
+
+    You need to also set the variable ``PATHS.MAP_CODE_DIR`` to the path where ``mAP_3Dvolume`` project resides.
+
+  * **Matching metrics**, that was adapted from Stardist (:cite:p:`weigert2020star`) evaluation `code <https://github.com/stardist/stardist>`_. It is enabled with ``TEST.MATCHING_STATS``. It calculates precision, recall, accuracy, F1 and panoptic quality based on a defined threshold to decide wheter an instance is a true positive. That threshold measures the overlap between predicted instance and its ground truth. More than one threshold can be set and it is done with ``TEST.MATCHING_STATS_THS``. For instance, if ``TEST.MATCHING_STATS_THS`` is ``[0.5, 0.75]`` this means that these metrics will be calculated two times, one for ``0.5`` threshold and another for ``0.75``. In the first case, all instances that have more than ``0.5``, i.e. ``50%``, of overlap with their respective ground truth are considered true positives. 
+
+* **Post-processing**: after all instances have been grown with the marker-controlled watershed you can use ``TEST.POST_PROCESSING.VORONOI_ON_MASK`` to apply `Voronoi tesellation <https://en.wikipedia.org/wiki/Voronoi_diagram>`_ and grow them even more until they touch each other. This grown is restricted by a predefined area from ``PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS``. For that reason, that last variable need to be set as one between ``BC``, ``BCM``, ``BCD`` and ``BCDv2``. This way, the area will be the foreground mask, so ``M`` will be used ``BCM`` and the sum of ``B`` and ``C`` channels in the rest of the options.
 
 Run
 ~~~
@@ -190,15 +209,9 @@ Run
 Results                                                                                                                 
 ~~~~~~~  
 
-The results are placed in ``results`` folder under ``--result_dir`` directory with the ``--name`` given. An example of this workflow is depicted below:
+The results are placed in ``results`` folder under ``--result_dir`` directory with the ``--name`` given. 
 
-.. figure:: ../img/unet2d_prediction.gif
-   :align: center                  
-
-   Example of semantic segmentation model predictions. From left to right: input image, its mask and the overlap between the mask and the model's output binarized. 
-
-
-For the examples above, you should see that the directory ``/home/user/exp_results/resunet_instances_3d`` has been created. If the same experiment is run 5 times, varying ``--run_id`` argument only, you should find the following directory tree: ::
+Following the example, you should see that the directory ``/home/user/exp_results/resunet_instances_3d`` has been created. If the same experiment is run 5 times, varying ``--run_id`` argument only, you should find the following directory tree: ::
 
     resunet_instances_3d/
     ├── config_files/
@@ -206,7 +219,7 @@ For the examples above, you should see that the directory ``/home/user/exp_resul
     ├── checkpoints
     │   └── model_weights_resunet_instances_3d_1.h5
     └── results
-        ├── rresunet_instances_3d_1
+        ├── resunet_instances_3d_1
         ├── . . .
         └── resunet_instances_3d_5
             ├── aug
@@ -215,17 +228,21 @@ For the examples above, you should see that the directory ``/home/user/exp_resul
             │   ├── resunet_instances_3d_1_jaccard_index.png
             │   ├── resunet_instances_3d_1_loss.png
             │   └── model_plot_resunet_instances_3d_1.png
-            ├── check_crop
-            │   └── .tif files
             ├── per_image
             │   └── .tif files
-            └── per_image_binarized
-                └── .tif files
+            ├── per_image_instances
+            │   └── .tif files  
+            ├── per_image_instances_voronoi
+            │   └── .tif files                          
+            └── watershed
+                ├── seed_map.tif
+                ├── foreground.tif                
+                └── watershed.tif
 
 
 * ``config_files``: directory where the .yaml filed used in the experiment is stored. 
 
-    * ``resunet_3d_instances_bcd_instances.yaml``: YAML configuration file used (it will be overwrited every time the code is run)
+    * ``resunet_3d_instances_bcd_instances.yaml``: YAML configuration file used (it will be overwrited every time the code is run).
 
 * ``checkpoints``: directory where model's weights are stored.
 
@@ -245,55 +262,27 @@ For the examples above, you should see that the directory ``/home/user/exp_resul
 
              * ``model_plot_resunet_instances_3d_1.png``: plot of the model.
 
-        * ``full_image``: 
-
-            * ``.tif files``: output of the model when feeding entire images (without patching). 
-
-        * ``full_image_binarized``: 
-
-            * ``.tif files``: Same as ``full_image`` but with the image binarized.
-
-        * ``full_post_processing``:
-
-            * ``.tif files``: output of the model when feeding entire images (without patching) and applying post-processing, which in this case only `y` and `z` axes filtering was selected.
-
         * ``per_image``:
 
             * ``.tif files``: predicted patches are combined again to recover the original test image. This folder contains these images. 
 
-        * ``per_image_binarized``: 
+        * ``per_image_instances``: 
 
-            * ``.tif files``: Same as ``per_image`` but with the images binarized.
+            * ``.tif files``: Same as ``per_image`` but with the instances.
 
+        * ``per_image_instances_voronoi`` (optional): 
+
+            * ``.tif files``: Same as ``per_image_instances`` but applied Voronoi. Created when ``TEST.POST_PROCESSING.VORONOI_ON_MASK`` is enabled.
+
+        * ``watershed`` (optional): 
+
+            * Created when ``PROBLEM.INSTANCE_SEG.DATA_CHECK_MW`` is enabled. Inside a folder for each test image will be created containing:
+                
+                * ``seed_map.tif``: initial seeds created before growing. 
+                
+                * ``foreground.tif``: foreground mask area that delimits the grown of the seeds.
+                
+                * ``watershed.tif``: result of watershed.
 .. note:: 
-   Here, for visualization purposes, only ``resunet_instances_3d_1`` has been described but ``resunet_instances_3d_2``, ``resunet_instances_3d_3``, ``resunet_instances_3d_4``
-   and ``resunet_instances_3d_5`` will follow the same structure.
-
-
-    
-
-Evaluation
-~~~~~~~~~~
-
-To evaluate the quality of the results there are different options implemented for instance segmentation:
-
-- IoU values will be printed when ``DATA.TEST.LOAD_GT`` is True, as we have GT to compare the predictions with. The results
-  will be divided in: per patch, merging patches and full image depending on the options selected to True in
-  ``TEST.STATS.*`` variable. Notice that the IoU are only calculated over binary channels (``BC``) and not in distances
-  ones (``D`` or ``Dv2``).
-
-- mAP for instance segmentation (introduced in :cite:p:`wei2020mitoem`) with ``TEST.MAP`` to True. It requires the path
-  to the code to be set in ``PATHS.MAP_CODE_DIR``. Find `mAP_3Dvolume <https://github.com/danifranco/mAP_3Dvolume>`__ and
-  more information of the implementation in :cite:p:`wei2020mitoem`. If ``TEST.VORONOI_ON_MASK`` is True separate values
-  are printed, before and after applying it. Follow this steps to download have mAP ready for use:
-
-.. code-block:: bash
-
-     git clone https://github.com/danifranco/mAP_3Dvolume.git
-     git checkout grand-challenge
-
-- Other common matching statistics as precision, accuracy, recall, F1 and panoptic quality measured in the way Stardist
-  (:cite:p:`schmidt2018cell,weigert2020star`) does. Set ``TEST.MATCHING_STATS`` to True and control the IoU thresholds
-  with ``TEST.MATCHING_STATS_THS`` variable.
-
+   Here, for visualization purposes, only ``resunet_instances_3d_1`` has been described but ``resunet_instances_3d_2``, ``resunet_instances_3d_3``, ``resunet_instances_3d_4`` and ``resunet_instances_3d_5`` will follow the same structure.
 

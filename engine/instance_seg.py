@@ -12,9 +12,10 @@ from utils.matching import matching, match_using_segCompare
 from engine.base_workflow import Base_Workflow
 
 class Instance_Segmentation(Base_Workflow):
-    def __init__(self, cfg, model, post_processing=False):
+    def __init__(self, cfg, model, post_processing=False, original_test_mask_path=None):
         super().__init__(cfg, model, post_processing)
 
+        self.original_test_mask_path = original_test_mask_path
         self.stats['mAP_50_total'] = 0
         self.stats['mAP_75_total'] = 0
         self.stats['mAP_50_total_vor'] = 0
@@ -277,6 +278,7 @@ def prepare_instance_data(cfg):
     print("###########################\n"
            "#  PREPARE INSTANCE DATA  #\n"
            "###########################\n")
+    original_test_path, original_test_mask_path = None, None
 
     # Create selected channels for train data
     if cfg.TRAIN.ENABLE and not os.path.isdir(cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR):
@@ -315,9 +317,12 @@ def prepare_instance_data(cfg):
     if cfg.TEST.ENABLE:
         print("DATA.TEST.PATH changed from {} to {}".format(cfg.DATA.TEST.PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
         opts.extend(['DATA.TEST.PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_DIR])
+        original_test_path = cfg.DATA.TEST.PATH
         if cfg.DATA.TEST.LOAD_GT:
             print("DATA.TEST.MASK_PATH changed from {} to {}".format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
             opts.extend(['DATA.TEST.MASK_PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR])
+        original_test_mask_path = cfg.DATA.TEST.MASK_PATH
     cfg.merge_from_list(opts)
 
+    return original_test_path, original_test_mask_path
 

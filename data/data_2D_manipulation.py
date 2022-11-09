@@ -12,7 +12,7 @@ from skimage.io import imsave
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True, e_d_data=[],
     e_d_mask=[], e_d_data_dim=[], num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, ov=(0,0),
-    padding=(0,0), check_crop=True, check_crop_path="check_crop", reflect_to_complete_shape=False):
+    padding=(0,0), reflect_to_complete_shape=False):
     """Load train and validation images from the given paths to create 2D data.
 
        Parameters
@@ -60,12 +60,6 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
 
        padding : tuple of ints, optional
            Size of padding to be added on each axis ``(x, y)``. E.g. ``(24, 24)``
-
-       check_crop : bool, optional
-           To save the crops made to ensure they are generating as one wish.
-
-       check_crop_path : str, optional
-           Path to save the crop samples.
 
        reflect_to_complete_shape : bool, optional
            Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
@@ -116,8 +110,7 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
            # Same as the first example but creating patches of (256x256)
            X_train, Y_train, X_val,
            Y_val, crops_made = load_and_prepare_2D_data(train_path, train_mask_path, img_train_shape, val_split=0.1,
-               shuffle_val=True, make_crops=True, crop_shape=(256, 256, 1), check_crop=True,
-               check_crop_path="check_folder")
+               shuffle_val=True, make_crops=True, crop_shape=(256, 256, 1))
 
            # The function will print the shapes of the generated arrays. In this example:
            #    *** Loaded train data shape is: (1776, 256, 256, 1)
@@ -133,9 +126,8 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
 
            X_train, Y_train, X_val,
            Y_val, crops_made = load_and_prepare_2D_data(train_path, train_mask_path, img_train_shape, val_split=0.1,
-               shuffle_val=True, make_crops=True, crop_shape=(256, 256, 1), check_crop=True,
-               check_crop_path="check_folder" e_d_data=extra_datasets_data_list, e_d_mask=extra_datasets_mask_list,
-               e_d_data_dim=extra_datasets_data_dim_list)
+               shuffle_val=True, make_crops=True, crop_shape=(256, 256, 1), e_d_data=extra_datasets_data_list, 
+               e_d_mask=extra_datasets_mask_list, e_d_data_dim=extra_datasets_data_dim_list)
     """
 
     print("### LOAD ###")
@@ -161,15 +153,6 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
     if num_crops_per_dataset != 0:
         X_train = X_train[:num_crops_per_dataset]
         Y_train = Y_train[:num_crops_per_dataset]
-
-    if check_crop and (orig_train_shape[0] != X_train.shape[1:]):
-        print("Checking the crops . . .")
-        print("WARNING: All the images in train need to be of the same shape in order to use this option. If not, the "
-              "merge function will crash")
-        s = [len(orig_train_shape), *orig_train_shape[0]]
-        check_crops(X_train, s, ov, out_dir=check_crop_path, prefix="X_train_")
-        s[-1] = Y_train.shape[-1]
-        check_crops(Y_train, s, ov, out_dir=check_crop_path, prefix="Y_train_")
 
     # Create validation data splitting the train
     if create_val:
@@ -666,86 +649,6 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
         return merged_data, merged_data_mask
     else:
         return merged_data
-
-
-def check_crops(data, original_shape, ov, num_examples=1, include_crops=True, out_dir="check_crops", prefix=""):
-    """Check cropped images by the function :func:`~crop_data` and
-       :func:`~crop_data_with_overlap`.
-
-       Parameters
-       ----------
-       data : 4D Numpy array
-           Data to crop. E.g. ``(num_of_images, y, x, channels)``.
-
-       original_shape : Tuple of 4 ints
-           Shape of the original data. E.g. ``(num_of_images, y, x, channels)``.
-
-       ov : Tuple of 2 floats, optional
-           Amount of minimum overlap on x and y dimensions. The values must be on range ``[0, 1)``, that is, ``0%`` or
-           ``99%`` of overlap. E. g. ``(y, x)``.
-
-       num_examples : int, optional
-           Number of examples to create.
-
-       include_crops : bool, optional
-           To save cropped images or only the image to contruct.
-
-       out_dir : str, optional
-           Directory where the images will be save.
-
-       prefix : str, optional
-           Prefix to save overlap map with.
-
-       Examples
-       --------
-       ::
-
-           # EXAMPLE 1
-           # Check crops made in the first example of 'crop_data' function
-           original_shape = (165, 768, 1024)
-           X_train = np.ones(original_shape)
-           Y_train = np.ones(original_shape)
-
-           X_train, Y_train = crop_data_with_overlap(X_train, (256, 256, 1), Y_train, (0, 0))
-
-           check_crops(X_train, original_shape, num_examples=1, out_dir='out')
-
-       The example above will store 12 individual crops (4x3, height x width), and two images of the original shape:
-       data image and its mask. For instance:
-
-       +----------------------------------------------+----------------------------------------------+
-       | .. figure:: ../img/check_crop_data.png       | .. figure:: ../img/check_crop_mask.png       |
-       |   :width: 80%                                |   :width: 80%                                |
-       |   :align: center                             |   :align: center                             |
-       |                                              |                                              |
-       | Original image (the grid should be each crop)| Original mask (the grid should be each crop) |
-       +----------------------------------------------+----------------------------------------------+
-    """
-
-    print("### CHECK-CROPS ###")
-
-    os.makedirs(out_dir, exist_ok=True)
-
-    # Calculate horizontal and vertical image number for the data
-    h_num = math.ceil(original_shape[1] / data.shape[1])
-    v_num = math.ceil(original_shape[2] / data.shape[2])
-    total = h_num*v_num*num_examples
-
-    if total > data.shape[0]:
-        num_examples = math.ceil(data.shape[0]/(h_num*v_num))
-        total = num_examples
-        print("Requested num_examples too high for data. Set automatically to {}".format(num_examples))
-
-    if include_crops:
-        print("0) Saving cropped data images . . .")
-        for i in tqdm(range(total)):
-            f = os.path.join(out_dir, prefix + "c_" + str(i) + ".tif")
-            aux = np.expand_dims(np.expand_dims(data[i].transpose((2,0,1)),0),-1)
-            imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-
-    merge_data_with_overlap(data, original_shape, overlap=ov, out_dir=out_dir, prefix=prefix, verbose=False)
-
-    print("### END CHECK-CROP ###")
 
 
 def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=False, img_prob=None, weight_map=None,

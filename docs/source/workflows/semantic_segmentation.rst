@@ -18,12 +18,12 @@ In the figure below an example of this workflow's **input** is depicted. There, 
   * - .. figure:: ../img/FIBSEM_test_0.png
          :align: center
 
-         Input image
+         Input image.
 
     - .. figure:: ../img/FIBSEM_test_0_gt.png
          :align: center
 
-         Input class mask
+         Input class mask (ground truth).
 
 The **output** in case that only two classes are present, as in this example, will be an image where each pixel will have the probability of being of class 1. 
 
@@ -72,6 +72,10 @@ Special workflow configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Here some special configuration options that can be selected in this workflow are described:
+
+* **Data loading**: if you want to select ``DATA.EXTRACT_RANDOM_PATCH`` you can also set ``DATA.PROBABILITY_MAP`` to create a probability map so the patches extracted will have a high probability of having an object in the middle of it. Useful to avoid extracting patches which no foreground class information. That map will be saved in ``PATHS.PROB_MAP_DIR``.
+
+Furthermore, when this is enabled, in ``PATHS.DA_SAMPLES`` path, i.e. ``aug`` folder by default (see :ref:`semantic_segmentation_results`), two more images will be created so you can check how this probability map is working. These images will have painted a blue square and a red point in its middle, which correspond to the patch area extracted and the central point selected respectively. One image will be named as ``mark_x`` and the other one as ``mark_y``, which correspond to the input image and ground truth respectively.  
 
 * **Metrics**: during the inference phase the performance of the test data is measured using different metrics if test masks were provided (i.e. ground truth) and, consequently, ``DATA.TEST.LOAD_GT`` is enabled. In the case of semantic segmentation the **Intersection over Union** (IoU) metrics is calculated. This metric, also referred as the Jaccard index, is essentially a method to quantify the percent of overlap between the target mask and the prediction output. Depending on the configuration different values are calculated (as explained in :ref:`_config_test`). This values can vary a lot as stated in :cite:p:`Franco-Barranco2021`.
 
@@ -164,7 +168,7 @@ The results are placed in ``results`` folder under ``--result_dir`` directory wi
    Example of semantic segmentation model predictions. From left to right: input image, its mask and the overlap between the mask and the model's output binarized. 
 
 
-For the examples above, you should see that the directory ``/home/user/exp_results/resunet_2d`` has been created. If the same experiment is run 5 times, varying ``--run_id`` argument only, you should find the following directory tree: ::
+Following the example, you should see that the directory ``/home/user/exp_results/resunet_2d`` has been created. If the same experiment is run 5 times, varying ``--run_id`` argument only, you should find the following directory tree: ::
 
     resunet_2d/
     ├── config_files/
@@ -181,8 +185,6 @@ For the examples above, you should see that the directory ``/home/user/exp_resul
             │   ├── resunet_2d_1_jaccard_index.png
             │   ├── resunet_2d_1_loss.png
             │   └── model_plot_resunet_2d_1.png
-            ├── check_crop
-            │   └── .tif files
             ├── full_image
             │   └── .tif files
             ├── full_image_binarized
@@ -216,7 +218,7 @@ For the examples above, you should see that the directory ``/home/user/exp_resul
              * ``resunet_2d_1_loss.png``: Loss over epochs plot (when training is done). 
 
              * ``model_plot_resunet_2d_1.png``: plot of the model.
-
+        
         * ``full_image``: 
 
             * ``.tif files``: output of the model when feeding entire images (without patching). 
@@ -225,7 +227,7 @@ For the examples above, you should see that the directory ``/home/user/exp_resul
 
             * ``.tif files``: Same as ``full_image`` but with the image binarized.
 
-        * ``full_post_processing``:
+        * ``full_post_processing`` (optional if any post-processing was selected):
 
             * ``.tif files``: output of the model when feeding entire images (without patching) and applying post-processing, which in this case only `y` and `z` axes filtering was selected.
 

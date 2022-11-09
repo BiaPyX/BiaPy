@@ -44,8 +44,7 @@ class Config:
         #   - 'Dv2' stands for 'Distance V2', which is an updated version of 'D' channel calculating background distance as well.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = 'B'
 
-        # Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. (1, 0.2), 1
-        # should be multipled by BCE for the first two channels and 0.2 to MSE for the last channel.
+        # Weights to be applied to the channels.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS = (1, 1)
         # Contour creation mode. Corresponds to 'mode' arg of find_boundaries function from ``scikit-image``. More
         # info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries
@@ -110,9 +109,9 @@ class Config:
 
         # Extract random patches during data augmentation (DA)
         _C.DATA.EXTRACT_RANDOM_PATCH = False
-        # Calculate probability map to make random subvolumes to be extracted with high probability of having an object
-        # on the middle of it. Useful to avoid extracting a subvolume which less foreground class information. Use it 
-        # only in 'SEMANTIC_SEG' type of problem (PROBLEM.TYPE)
+        # Create a probability map so the patches extracted will have a high probability of having an object in the middle 
+        # of it. Useful to avoid extracting patches which no foreground class information. Use it only when
+        # 'PROBLEM.TYPE' is 'SEMANTIC_SEG' 
         _C.DATA.PROBABILITY_MAP = False # Used when _C.DATA.EXTRACT_RANDOM_PATCH=True
         _C.DATA.W_FOREGROUND = 0.94 # Used when _C.DATA.PROBABILITY_MAP=True
         _C.DATA.W_BACKGROUND = 0.06 # Used when _C.DATA.PROBABILITY_MAP=True
@@ -153,7 +152,6 @@ class Config:
         _C.DATA.TRAIN.OVERLAP = (0,0)
         # Padding to be done in (y,x)/(z,y,x) when reconstructing train data. Useful to avoid patch 'border effect'.
         _C.DATA.TRAIN.PADDING = (0,0)
-        _C.DATA.TRAIN.CHECK_CROP = False # Used when _C.DATA.IN_MEMORY=True
         # Train data resolution. It is not completely necessary but when configured it is taken into account when
         # performing some augmentations, e.g. cutout. If defined it need to be (y,x)/(z,y,x) and needs to be to be a 2D
         # tuple when using _C.PROBLEM.NDIM='2D' and 3D tuple when using _C.PROBLEM.NDIM='3D'
@@ -504,8 +502,14 @@ class Config:
         _C.TEST.STATS.FULL_IMG = True # Only when if PROBLEM.NDIM = '2D' as 3D images are huge for the GPU
 
         ### Instance segmentation
-        # Whether to calculate mAP
-        _C.TEST.MAP = False # Only applies when _C.TEST.STATS.MERGE_PATCHES = True
+        # Whether to calculate mAP- Only applies when _C.TEST.STATS.MERGE_PATCHES = True
+        _C.TEST.MAP = False  
+        # Do not forgive to clone the repo:
+        #       git clone https://github.com/danifranco/mAP_3Dvolume.git
+        #
+        # Change the branch:
+        #       git checkout grand-challenge
+
         # Whether to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
         _C.TEST.MATCHING_STATS = False
         _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
@@ -550,12 +554,6 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.PATHS = CN()
 
-        ### mAP calculation options
-        # Do not forgive to clone the repo:
-        #       git clone https://github.com/danifranco/mAP_3Dvolume.git
-        #
-        # Change the branch:
-        #       git checkout grand-challenge
         # Folder where the mAP code should be placed
         _C.PATHS.MAP_CODE_DIR = ''
         # Path to the GT h5 files to calculate the mAP
@@ -577,12 +575,8 @@ class Config:
         # Name of the folder where the charts of the loss and metrics values while training the network are stored.
         # Additionally, MW_TH* variable charts are stored if _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = True
         _C.PATHS.CHARTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'charts')
-        # Directory where weight maps will be stored
-        _C.PATHS.LOSS_WEIGHTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'loss_weights')
         # Folder where samples of DA will be stored
         _C.PATHS.DA_SAMPLES = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'aug')
-        # Folder where crop samples will be stored
-        _C.PATHS.CROP_CHECKS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'check_crop')
         # Folder where generator samples (X) will be stored
         _C.PATHS.GEN_CHECKS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'gen_check')
         # Folder where generator samples (Y) will be stored
@@ -598,7 +592,7 @@ class Config:
         # Name of the folder to store the probability map to avoid recalculating it on every run
         _C.PATHS.PROB_MAP_DIR = os.path.join(job_dir, 'prob_map')
         _C.PATHS.PROB_MAP_FILENAME = 'prob_map.npy'
-        # Watershed dubgging folder
+        # Watershed debugging folder
         _C.PATHS.WATERSHED_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'watershed')
         # To store h5 files needed for the mAP calculation
         _C.PATHS.MAP_H5_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'mAP_checkpoints')
