@@ -318,7 +318,7 @@ def prepare_instance_data(cfg):
         print("DATA.TEST.PATH changed from {} to {}".format(cfg.DATA.TEST.PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
         opts.extend(['DATA.TEST.PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_DIR])
         original_test_path = cfg.DATA.TEST.PATH
-        if cfg.DATA.TEST.LOAD_GT:
+        if cfg.DATA.TEST.LOAD_GT and cfg.TEST.EVALUATE:
             print("DATA.TEST.MASK_PATH changed from {} to {}".format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
             opts.extend(['DATA.TEST.MASK_PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR])
         original_test_mask_path = cfg.DATA.TEST.MASK_PATH
