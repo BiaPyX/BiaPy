@@ -63,16 +63,26 @@ The library provides an easy way to create image processing pipelines that are t
 Citation
 ========
 
-This repository is the base of the following work: ::
+This repository is the base of the following works: ::
 
-    @Article{Franco-Barranco2021,                                                                                           
-             author={Franco-Barranco, Daniel and Muñoz-Barrutia, Arrate and Arganda-Carreras, Ignacio},                        
-             title={Stable Deep Neural Network Architectures for Mitochondria Segmentation on Electron Microscopy Volumes},          
-             journal={Neuroinformatics},                                                                                             
-             year={2021},                                                                                                            
-             month={Dec},                                                                                                            
-             day={02},                                                                                                               
-             issn={1559-0089},                                                                                                       
-             doi={10.1007/s12021-021-09556-1},                                                                                       
-             url={https://doi.org/10.1007/s12021-021-09556-1}                                                                        
-    }        
+   @Article{Franco-Barranco2021,                                                                                           
+            author={Franco-Barranco, Daniel and Muñoz-Barrutia, Arrate and Arganda-Carreras, Ignacio},                        
+            title={Stable Deep Neural Network Architectures for Mitochondria Segmentation on Electron Microscopy Volumes},          
+            journal={Neuroinformatics},                                                                                             
+            year={2021},                                                                                                            
+            month={Dec},                                                                                                            
+            day={02},                                                                                                               
+            issn={1559-0089},                                                                                                       
+            doi={10.1007/s12021-021-09556-1},                                                                                       
+            url={https://doi.org/10.1007/s12021-021-09556-1}                                                                        
+   }        
+
+  @inproceedings{wei2020mitoem,
+                 title={MitoEM dataset: large-scale 3D mitochondria instance segmentation from EM images},
+                 author={Wei, Donglai and Lin, Zudi and Franco-Barranco, Daniel and Wendt, Nils and Liu, Xingyu and Yin, Wenjie and Huang, Xin and Gupta, Aarush and Jang, Won-Dong and Wang, Xueying and others},
+                 booktitle={International Conference on Medical Image Computing and Computer-Assisted Intervention},
+                 pages={66--76},
+                 year={2020},
+                 organization={Springer}
+  }
+  

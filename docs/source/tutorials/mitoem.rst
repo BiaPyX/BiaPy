@@ -46,7 +46,6 @@ instances are connected by thin microtubules, and (b) multiple instances can ent
 
 Data preparation                                                                                                        
 ~~~~~~~~~~~~~~~~                                                                                                        
-
        
 You need to download MitoEM dataset first:
 
