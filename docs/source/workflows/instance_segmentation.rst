@@ -145,6 +145,8 @@ Here some special configuration options that can be selected in this workflow ar
 
 * **Post-processing**: after all instances have been grown with the marker-controlled watershed you can use ``TEST.POST_PROCESSING.VORONOI_ON_MASK`` to apply `Voronoi tesellation <https://en.wikipedia.org/wiki/Voronoi_diagram>`_ and grow them even more until they touch each other. This grown is restricted by a predefined area from ``PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS``. For that reason, that last variable need to be set as one between ``BC``, ``BCM``, ``BCD`` and ``BCDv2``. This way, the area will be the foreground mask, so ``M`` will be used ``BCM`` and the sum of ``B`` and ``C`` channels in the rest of the options.
 
+.. _instance_segmentation_run:
+
 Run
 ~~~
 
