@@ -120,7 +120,7 @@ The procedure to run the library is slightly different as it is now for the last
            --rid $job_counter \
            --gpu $gpu_number 
 
-**Colab**: The fastest and easiest way to run it is via Google Colab |colablink|
+**Colab**: |colablink|
 
 .. |colablink| image:: https://colab.research.google.com/assets/colab-badge.svg
     :target: https://colab.research.google.com/github/danifranco/BiaPy/blob/master/templates/notebooks/old_notebooks/v1.0_semantic_segmentation_workflow.ipynb

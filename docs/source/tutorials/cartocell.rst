@@ -30,7 +30,7 @@ The goal is to segment and identify automatically each cell of each cyst in conf
 Data preparation
 ~~~~~~~~~~~~~~~~
 
-You need to download `test_dataset_raw_images <https://data.mendeley.com/v1/datasets/7gbkxgngpm/draft#folder-ba6774bd-7858-4bfb-aca9-9ac307e72120>`__ and `test_dataset_ground_truth <https://data.mendeley.com/v1/datasets/7gbkxgngpm/draft#folder-efddb305-dec1-46e3-b235-00d7cd670e66>`__ data. This data follows directory described in :ref:`instance_segmentation_data_prep`. 
+You need to download `test_dataset_raw_images <https://data.mendeley.com/v1/datasets/7gbkxgngpm/draft#folder-ba6774bd-7858-4bfb-aca9-9ac307e72120>`__ and `test_dataset_ground_truth <https://data.mendeley.com/v1/datasets/7gbkxgngpm/draft#folder-efddb305-dec1-46e3-b235-00d7cd670e66>`__ data.
 
 
 Choose a template
@@ -38,14 +38,14 @@ Choose a template
 
 To reproduce the exact results of our manuscript you need to use `cartocell.yaml <https://github.com/danifranco/BiaPy/blob/master/templates/instance_segmentation/CartoCell_paper/cartocell.yaml>`__ configuration file and `model_weights_cartocell.h5 <https://github.com/danifranco/BiaPy/blob/master/templates/instance_segmentation/CartoCell_paper/model_weights_cartocell.h5>`_ to load the pretrained model.  
 
-Then you need to modify ``TEST.PATH`` and ``TEST.MASK_PATH`` with the paths to ``test_dataset_raw_images`` and ``test_dataset_ground_truth`` respectively. You also need to modify ``PATHS.CHECKPOINT_FILE`` with the path of ``model_weights_cartocell.h5`` file.
+Then you need to modify ``TEST.PATH`` and ``TEST.MASK_PATH`` with the paths downloaded previouslty, i.e. ``test_dataset_raw_images`` and ``test_dataset_ground_truth`` respectively. You also need to modify ``PATHS.CHECKPOINT_FILE`` with the path of ``model_weights_cartocell.h5`` file.
 
 Run
 ~~~
 
 To run it via **command line** or **Docker** you can follow the same steps as decribed in :ref:`instance_segmentation_run`. 
 
-**Colab**: This  |colablink|
+**Colab**: |colablink|
 
 .. |colablink| image:: https://colab.research.google.com/assets/colab-badge.svg
     :target: https://colab.research.google.com/github/danifranco/BiaPy/blob/master/templates/instance_segmentation/CartoCell_paper/CartoCell_workflow.ipynb
