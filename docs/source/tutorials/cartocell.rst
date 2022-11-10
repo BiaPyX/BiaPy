@@ -3,14 +3,14 @@
 CartoCell, a high-throughput pipeline for accurate 3D image analysis
 --------------------------------------------------------------------
 
-This tutorial describes how to reproduce the results of the ``M2 model`` reported in our paper to make instance segmentation of cysts in confocal microscope images. The tutorial is prepared to make inference and load our pretrained model. The citation of our work is as follows:
+This tutorial describes how to reproduce the results of the ``M2 model`` reported in our paper to make instance segmentation of cysts in confocal microscope 3D images. The tutorial is prepared to make inference and load our pretrained model. The citation of our work is as follows:
 
 [Paper under review]
 
 Problem description
 ~~~~~~~~~~~~~~~~~~~
 
-The goal is to segment and identify automatically each cysto in EM images. This is an instance segmentation problem, which is the next step of semantic segmentation, and the goal is to assign an unique id, i.e. integer, to each object of the input image. To solve such task pairs of 3D confocal cyst images and their corresponding instance sementation annotations are provided. Below a pair example is depicted:
+The goal is to segment and identify automatically each cell of each cyst in confocal microscope 3D images. To solve such task pairs of cyst images and their corresponding instance segmentation labels are provided. Below a pair example is depicted:
 
 
 .. list-table:: 
@@ -36,7 +36,7 @@ You need to download `test_dataset_raw_images <https://data.mendeley.com/v1/data
 Choose a template
 ~~~~~~~~~~~~~~~~~
 
-To reproduce the exact results of our manuscript you need to use `cartocell.yaml <https://github.com/danifranco/BiaPy/templates/instance_segmentation/CartoCell_paper/cartocell.yaml>`__ configuration file and `model_weights_cartocell.h5 <https://github.com/danifranco/BiaPy/blob/master/templates/instance_segmentation/CartoCell_paper/model_weights_cartocell.h5>`_ to load the pretrained model.  
+To reproduce the exact results of our manuscript you need to use `cartocell.yaml <https://github.com/danifranco/BiaPy/blob/master/templates/instance_segmentation/CartoCell_paper/cartocell.yaml>`__ configuration file and `model_weights_cartocell.h5 <https://github.com/danifranco/BiaPy/blob/master/templates/instance_segmentation/CartoCell_paper/model_weights_cartocell.h5>`_ to load the pretrained model.  
 
 Then you need to modify ``TEST.PATH`` and ``TEST.MASK_PATH`` with the paths to ``test_dataset_raw_images`` and ``test_dataset_ground_truth`` respectively. You also need to modify ``PATHS.CHECKPOINT_FILE`` with the path of ``model_weights_cartocell.h5`` file.
 

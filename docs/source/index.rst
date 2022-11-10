@@ -41,8 +41,8 @@ The library provides an easy way to create image processing pipelines that are t
    :glob:
 
    tutorials/stable.rst
-   tutorials/mitochondria_instance.rst
    tutorials/cartocell.rst
+   tutorials/mitoem.rst
    tutorials/nucleus.rst
 
    

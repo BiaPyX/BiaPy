@@ -5,13 +5,13 @@ SYSTEM:
 PROBLEM:
     TYPE: INSTANCE_SEG
     NDIM: 2D
-  
+    INSTANCE_SEG:
+        DATA_CHANNELS: BC
+        DATA_MW_TH1: 0.1
+        DATA_MW_TH2: 0.01
+        DATA_MW_TH3: 0.1
 DATA: 
     PATCH_SIZE: (256, 256, 1)
-    CHANNELS: BC
-    MW_TH1: 0.1
-    MW_TH2: 0.01
-    MW_TH3: 0.1   
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data                                                                                             
@@ -24,6 +24,7 @@ DATA:
     TEST:                       
         PATH: /path/to/data                                                                                             
         MASK_PATH: /path/to/data                                                                                        
+        PADDING: (32,32)
         IN_MEMORY: False
         LOAD_GT: False
 
@@ -61,6 +62,6 @@ TEST:
         PER_PATCH: True
         MERGE_PATCHES: True
         FULL_IMG: False
+    VERBOSE: True
     POST_PROCESSING:
         YZ_FILTERING: True
-    VERBOSE: True
