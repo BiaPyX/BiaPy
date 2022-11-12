@@ -264,27 +264,36 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
     step_z = int((vol_shape[0]-padding[0]*2)*overlap_z)
     vols_per_z = math.ceil(data.shape[0]/step_z)
     last_z = 0 if vols_per_z == 1 else (((vols_per_z-1)*step_z)+vol_shape[0])-padded_data.shape[0]
+    ovz_per_block = last_z//(vols_per_z-1) if vols_per_z > 1 else 0
+    step_z -= ovz_per_block
+    last_z -= ovz_per_block*(vols_per_z-1)
 
     # Y
     step_y = int((vol_shape[1]-padding[1]*2)*overlap_y)
     vols_per_y = math.ceil(data.shape[1]/step_y)
     last_y = 0 if vols_per_y == 1 else (((vols_per_y-1)*step_y)+vol_shape[1])-padded_data.shape[1]
+    ovy_per_block = last_y//(vols_per_y-1) if vols_per_y > 1 else 0
+    step_y -= ovy_per_block
+    last_y -= ovy_per_block*(vols_per_y-1)
 
     # X
     step_x = int((vol_shape[2]-padding[2]*2)*overlap_x)
     vols_per_x = math.ceil(data.shape[2]/step_x)
     last_x = 0 if vols_per_x == 1 else (((vols_per_x-1)*step_x)+vol_shape[2])-padded_data.shape[2]
+    ovx_per_block = last_x//(vols_per_x-1) if vols_per_x > 1 else 0
+    step_x -= ovx_per_block
+    last_x -= ovx_per_block*(vols_per_x-1)
 
     # Real overlap calculation for printing
-    real_ov_z = ((vol_shape[0]-padding[0]*2)-step_z)/(vol_shape[0]-padding[0]*2)
-    real_ov_y = ((vol_shape[1]-padding[1]*2)-step_y)/(vol_shape[1]-padding[1]*2)
-    real_ov_x = ((vol_shape[2]-padding[2]*2)-step_x)/(vol_shape[2]-padding[2]*2)
+    real_ov_z = ovz_per_block/(vol_shape[0]-padding[0]*2)
+    real_ov_y = ovy_per_block/(vol_shape[1]-padding[1]*2)
+    real_ov_x = ovx_per_block/(vol_shape[2]-padding[2]*2)
     if verbose:
         print("Real overlapping (%): {}".format((real_ov_z,real_ov_y,real_ov_x)))
         print("Real overlapping (pixels): {}".format(((vol_shape[0]-padding[0]*2)*real_ov_z,
               (vol_shape[1]-padding[1]*2)*real_ov_y,(vol_shape[2]-padding[2]*2)*real_ov_x)))
         print("{} patches per (z,y,x) axis".format((vols_per_z,vols_per_x,vols_per_y)))
-
+    
     total_vol = vols_per_z*vols_per_y*vols_per_x
     cropped_data = np.zeros((total_vol,) + padded_vol_shape, dtype=data.dtype)
     if data_mask is not None:
@@ -426,21 +435,30 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
     step_z = int((pad_input_shape[1]-padding[0]*2)*overlap_z)
     vols_per_z = math.ceil(orig_vol_shape[0]/step_z)
     last_z = 0 if vols_per_z == 1 else (((vols_per_z-1)*step_z)+pad_input_shape[1])-padded_vol_shape[0]
+    ovz_per_block = last_z//(vols_per_z-1) if vols_per_z > 1 else 0
+    step_z -= ovz_per_block
+    last_z -= ovz_per_block*(vols_per_z-1)
 
     # Y
     step_y = int((pad_input_shape[2]-padding[1]*2)*overlap_y)
     vols_per_y = math.ceil(orig_vol_shape[1]/step_y)
     last_y = 0 if vols_per_y == 1 else (((vols_per_y-1)*step_y)+pad_input_shape[2])-padded_vol_shape[1]
+    ovy_per_block = last_y//(vols_per_y-1) if vols_per_y > 1 else 0
+    step_y -= ovy_per_block
+    last_y -= ovy_per_block*(vols_per_y-1)
 
     # X
     step_x = int((pad_input_shape[3]-padding[2]*2)*overlap_x)
     vols_per_x = math.ceil(orig_vol_shape[2]/step_x)
     last_x = 0 if vols_per_x == 1 else (((vols_per_x-1)*step_x)+pad_input_shape[3])-padded_vol_shape[2]
+    ovx_per_block = last_x//(vols_per_x-1) if vols_per_x > 1 else 0
+    step_x -= ovx_per_block
+    last_x -= ovx_per_block*(vols_per_x-1)
 
     # Real overlap calculation for printing
-    real_ov_z = ((pad_input_shape[1]-padding[0]*2)-step_z)/(pad_input_shape[1]-padding[0]*2) 
-    real_ov_y = ((pad_input_shape[2]-padding[1]*2)-step_y)/(pad_input_shape[2]-padding[1]*2) 
-    real_ov_x = ((pad_input_shape[3]-padding[2]*2)-step_x)/(pad_input_shape[3]-padding[2]*2) 
+    real_ov_z = ovz_per_block/(pad_input_shape[1]-padding[0]*2) 
+    real_ov_y = ovy_per_block/(pad_input_shape[2]-padding[1]*2) 
+    real_ov_x = ovx_per_block/(pad_input_shape[3]-padding[2]*2) 
 
     if verbose:
         print("Real overlapping (%): {}".format((real_ov_z,real_ov_y,real_ov_x)))

@@ -348,15 +348,21 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
     step_y = int((crop_shape[0]-padding[0]*2)*overlap_y)
     crops_per_y = math.ceil(data.shape[1]/step_y)
     last_y = 0 if crops_per_y == 1 else (((crops_per_y-1)*step_y)+crop_shape[0])-padded_data.shape[1]
+    ovy_per_block = last_y//(crops_per_y-1) if crops_per_y > 1 else 0
+    step_y -= ovy_per_block
+    last_y -= ovy_per_block*(crops_per_y-1)
 
     # X
     step_x = int((crop_shape[1]-padding[1]*2)*overlap_x)
     crops_per_x = math.ceil(data.shape[2]/step_x)
     last_x = 0 if crops_per_x == 1 else (((crops_per_x-1)*step_x)+crop_shape[1])-padded_data.shape[2]
+    ovx_per_block = last_x//(crops_per_x-1) if crops_per_x > 1 else 0
+    step_x -= ovx_per_block
+    last_x -= ovx_per_block*(crops_per_x-1)
 
     # Real overlap calculation for printing
-    real_ov_y = ((crop_shape[0]-padding[0]*2)-step_y)/(crop_shape[0]-padding[0]*2)
-    real_ov_x = ((crop_shape[1]-padding[1]*2)-step_x)/(crop_shape[1]-padding[1]*2)
+    real_ov_y = ovy_per_block/(crop_shape[0]-padding[0]*2)
+    real_ov_x = ovx_per_block/(crop_shape[1]-padding[1]*2)
 
     if verbose:
         print("Real overlapping (%): {}".format(real_ov_x,real_ov_y))
@@ -565,15 +571,21 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
     step_y = int((pad_input_shape[1]-padding[0]*2)*overlap_y)
     crops_per_y = math.ceil(original_shape[1]/step_y)
     last_y = 0 if crops_per_y == 1 else (((crops_per_y-1)*step_y)+pad_input_shape[1])-padded_data_shape[0]
+    ovy_per_block = last_y//(crops_per_y-1) if crops_per_y > 1 else 0
+    step_y -= ovy_per_block
+    last_y -= ovy_per_block*(crops_per_y-1)
 
     # X
     step_x = int((pad_input_shape[2]-padding[1]*2)*overlap_x)
     crops_per_x = math.ceil(original_shape[2]/step_x)
     last_x = 0 if crops_per_x == 1 else (((crops_per_x-1)*step_x)+pad_input_shape[2])-padded_data_shape[1]
+    ovx_per_block = last_x//(crops_per_x-1) if crops_per_x > 1 else 0
+    step_x -= ovx_per_block
+    last_x -= ovx_per_block*(crops_per_x-1)
 
     # Real overlap calculation for printing
-    real_ov_y = ((pad_input_shape[1]-padding[0]*2)-step_y)/(pad_input_shape[1]-padding[0]*2)
-    real_ov_x = ((pad_input_shape[2]-padding[1]*2)-step_x)/(pad_input_shape[2]-padding[1]*2)
+    real_ov_y = ovy_per_block/(pad_input_shape[1]-padding[0]*2)
+    real_ov_x = ovx_per_block/(pad_input_shape[2]-padding[1]*2)
     if verbose:
         print("Real overlapping (%): {}".format((real_ov_x,real_ov_y)))
         print("Real overlapping (pixels): {}".format(((pad_input_shape[2]-padding[1]*2)*real_ov_x,
