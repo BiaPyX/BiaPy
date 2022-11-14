@@ -90,7 +90,7 @@ class Denoising(Base_Workflow):
             pred = pred[0]
 
         # Undo normalization
-        x_norm = norm[0]
+        x_norm = norm[0][0]
         if x_norm['type'] == 'div':
             pred = pred*255
         else:
@@ -116,7 +116,6 @@ class Denoising(Base_Workflow):
         self.normalize_stats(image_counter)
 
 
-            
 ####################################
 # Adapted from N2V code:           #
 #   https://github.com/juglab/n2v  #
@@ -389,58 +388,6 @@ def manipulate_val_data(X_val, Y_val, perc_pix=0.198, shape=(64, 64), value_mani
             Y_val[indexing] = y_val
             Y_val[indexing_mask] = 1
             X_val[indexing] = x_val
-
-
-def autocorrelation(x):
-    """
-    nD autocorrelation
-    remove mean per-patch (not global GT)
-    normalize stddev to 1
-    value at zero shift normalized to 1...
-    """
-    x = (x - np.mean(x)) / np.std(x)
-    x = np.fft.fftn(x)
-    x = np.abs(x) ** 2
-    x = np.fft.ifftn(x).real
-    x = x / x.flat[0]
-    x = np.fft.fftshift(x)
-    return x
-
-
-def tta_forward(x):
-    """
-    Augments x 8-fold: all 90 deg rotations plus lr flip of the four rotated versions.
-
-    Parameters
-    ----------
-    x: data to augment
-
-    Returns
-    -------
-    Stack of augmented x.
-    """
-    x_aug = [x, np.rot90(x, 1), np.rot90(x, 2), np.rot90(x, 3)]
-    x_aug_flip = x_aug.copy()
-    for x_ in x_aug:
-        x_aug_flip.append(np.fliplr(x_))
-    return x_aug_flip
-
-
-def tta_backward(x_aug):
-    """
-    Inverts `tta_forward` and averages the 8 images.
-
-    Parameters
-    ----------
-    x_aug: stack of 8-fold augmented images.
-
-    Returns
-    -------
-    average of de-augmented x_aug.
-    """
-    x_deaug = [x_aug[0], np.rot90(x_aug[1], -1), np.rot90(x_aug[2], -2), np.rot90(x_aug[3], -3),
-               np.fliplr(x_aug[4]), np.rot90(np.fliplr(x_aug[5]), -1), np.rot90(np.fliplr(x_aug[6]), -2), np.rot90(np.fliplr(x_aug[7]), -3)]
-    return np.mean(x_deaug, 0)
 
 def get_value_manipulation(n2v_manipulator, n2v_neighborhood_radius):
     return eval('pm_{0}({1})'.format(n2v_manipulator, str(n2v_neighborhood_radius)))

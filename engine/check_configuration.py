@@ -118,6 +118,9 @@ def check_configuration(cfg):
             raise ValueError("DATA.TEST.IN_MEMORY==True not supported in DENOISING. Please change it to False")
         if cfg.DATA.TEST.LOAD_GT:
             raise NotImplementedError
+        if not cfg.DATA.TRAIN.IN_MEMORY or not cfg.DATA.VAL.IN_MEMORY:
+            raise NotImplementedError
+            # Neither cfg.DATA.EXTRACT_RANDOM_PATCH:
 
     ### Pre-processing ###
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:

@@ -141,7 +141,7 @@ class Config:
         _C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = os.path.join("user_data", 'train', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         # Path to load/save detection masks prepared. 
         _C.DATA.TRAIN.DETECTION_MASK_DIR = os.path.join("user_data", 'train', 'y_detection_masks')
-        # Path to load/save detection masks prepared. 
+        # Path to load/save SSL target prepared. 
         _C.DATA.TRAIN.SSL_TARGET_DIR = os.path.join("user_data", 'train', 'y_ssl_target')
         # Extra train data generation: number of times to duplicate the train data. Useful when
         # _C.DATA.EXTRACT_RANDOM_PATCH=True is made, as more original train data can be cover on each epoch
@@ -219,7 +219,7 @@ class Config:
         _C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = os.path.join("user_data", 'val', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         # Path to load/save detection masks prepared. 
         _C.DATA.VAL.DETECTION_MASK_DIR = os.path.join("user_data", 'val', 'y_detection_masks')
-        # Path to load/save detection masks prepared. 
+        # Path to load/save SSL target prepared. 
         _C.DATA.VAL.SSL_TARGET_DIR = os.path.join("user_data", 'val', 'y_ssl_target')
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and

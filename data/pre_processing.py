@@ -13,6 +13,9 @@ from skimage.transform import resize
 from utils.util import load_data_from_dir, load_3d_images_from_dir, save_npy_files, save_tif
 
 
+#########################
+# INSTANCE SEGMENTATION #
+#########################
 def create_instance_channels(cfg, data_type='train'):
     """Create training and validation new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` for instance
        segmentation.
@@ -198,6 +201,9 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
 
     return new_mask
 
+#############
+# DETECTION #
+#############
 def create_detection_masks(cfg, data_type='train'):
     """Create detection masks based on CSV files.
 
@@ -365,8 +371,11 @@ def create_detection_masks(cfg, data_type='train'):
             print("Mask file {} found for CSV file: {}".format(os.path.join(out_dir, img_filename), 
                 os.path.join(label_dir, ids[i])))
 
+#######
+# SSL #
+#######
 def create_ssl_target_data_masks(cfg, data_type='train'):
-    """Create detection masks based on CSV files.
+    """Create SSL target data.
 
        Parameters
        ----------
@@ -374,7 +383,7 @@ def create_ssl_target_data_masks(cfg, data_type='train'):
            Configuration.
 
 	   data_type: str, optional
-		   Wheter to create train, validation or test masks.
+		   Wheter to create train or validation target data.
     """
 
     assert data_type in ['train', 'val']
@@ -495,6 +504,9 @@ def add_gaussian_noise(image, percentage_of_noise):
     noisy_img=np.clip(image+noise, 0, max_value) 
     return noisy_img
 
+################
+# SEMANTIC SEG #
+################
 def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background=0.06, save_dir=None):
     """Calculate the probability map of the given 2D data.
 
@@ -723,6 +735,9 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
                 np.save(f, maps[i])
             return save_dir
 
+###########
+# GENERAL #
+###########
 def norm_range01(x):
     norm_steps = {}
     if x.dtype == np.uint8:

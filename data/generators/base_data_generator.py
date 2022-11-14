@@ -552,6 +552,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
         # Denoising options
         self.n2v = n2v
+        self.val = val
         if self.n2v:
             self.box_size = np.round(np.sqrt(100/n2v_perc_pix)).astype(np.int)
             self.get_stratified_coords = get_stratified_coords2D if self.ndim == 2 else get_stratified_coords3D
@@ -559,6 +560,11 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             self.value_manipulation = get_value_manipulation(n2v_manipulator, n2v_neighborhood_radius)
             self.n2v_structMask = n2v_structMask 
             self.apply_structN2Vmask_func = apply_structN2Vmask if self.ndim == 2 else apply_structN2Vmask3D
+
+            if val and self.in_memory:
+                self.Y = np.zeros(self.X.shape[:-1] + (self.X.shape[-1]*2,), dtype=np.float32)
+                self.prepare_n2v(self.X, self.Y)
+
             self.Y_shape = self.shape[:self.ndim] + (self.Y_channels*2,)
         else:
             self.Y_shape = self.shape[:self.ndim]+(self.Y_channels,)
@@ -573,7 +579,6 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             else:
                 self.prob_map = prob_map
 
-        self.val = val
         if extra_data_factor > 1:
             self.extra_data_factor = extra_data_factor
             self.o_indexes = np.concatenate([self.o_indexes]*extra_data_factor)
@@ -774,9 +779,10 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
         # Prepare mask when denoising with Noise2Void
         if self.n2v:
-            batch_y = batch_y.astype(np.float32)
-            self.prepare_n2v(batch_x, batch_y)
-
+            if not self.val or (self.val and not self.in_memory):
+                batch_y = batch_y.astype(np.float32)
+                self.prepare_n2v(batch_x, batch_y)
+            
         # One-hot enconde
         if self.n_classes > 1 and (self.n_classes != self.Y_channels):
             batch_y_ = np.zeros((len(indexes), ) + self.shape[:self.ndim] + (self.n_classes,))
@@ -1104,7 +1110,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 sample_x[i], sample_y[i] = self.apply_transform(
                     sample_x[i], sample_y[i], e_im=e_img, e_mask=e_mask)
 
-            if self.n2v:
+            if self.n2v and not self.val:
                 mask = np.repeat(sample_y[i], self.Y_channels*2, axis=-1).astype(np.float32)
                 self.prepare_n2v(np.expand_dims(img,0), np.expand_dims(mask,0))
                 sample_y[i] = mask
@@ -1143,8 +1149,11 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                         im[k,j] = v
                     else:
                         im[k,j] = [v]*im.shape[-1]
-    
+        
     def prepare_n2v(self, batch_x, batch_y):
+        if self.val and not self.in_memory:
+            np.random.seed(0) 
+
         for c in range(self.Y_channels):
             for j in range(batch_x.shape[0]):       
                 coords = self.get_stratified_coords(self.rand_float, box_size=self.box_size, shape=self.shape)                             
@@ -1160,4 +1169,3 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 if self.n2v_structMask is not None:
                     self.apply_structN2Vmask_func(batch_x[j, ..., c], coords, self.n2v_structMask)
                    
-    

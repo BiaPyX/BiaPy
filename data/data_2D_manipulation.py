@@ -148,7 +148,7 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
                                                         padding=padding, return_filenames=True,
                                                         reflect_to_complete_shape=reflect_to_complete_shape)
     else:
-        Y_train = np.zeros(X_train.shape, dtype=np.uint8) # Fake mask val
+        Y_train = np.zeros(X_train.shape, dtype=np.float32) # Fake mask val
 
     if num_crops_per_dataset != 0:
         X_train = X_train[:num_crops_per_dataset]

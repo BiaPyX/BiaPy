@@ -107,7 +107,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
         Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
             padding=padding, reflect_to_complete_shape=reflect_to_complete_shape)
     else:
-        Y_train = np.zeros(X_train.shape, dtype=np.uint8) # Fake mask val
+        Y_train = np.zeros(X_train.shape, dtype=np.float32) # Fake mask val
 
     if isinstance(X_train, list):
         raise NotImplementedError("If you arrived here means that your images are not all of the same shape, and you "
