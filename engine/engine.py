@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import tensorflow as tf
 from tqdm import tqdm
 
 from utils.util import check_masks, create_plots, load_data_from_dir, load_3d_images_from_dir
@@ -161,8 +162,13 @@ class Engine(object):
         print("#################\n"
               "#  BUILD MODEL  #\n"
               "#################\n")
-        self.model = build_model(cfg, self.job_identifier)
-        self.metric = prepare_optimizer(cfg, self.model)
+        strategy = tf.distribute.MirroredStrategy()
+        print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+
+        # Open a strategy scope.
+        with strategy.scope():
+            self.model = build_model(cfg, self.job_identifier)
+            self.metric = prepare_optimizer(cfg, self.model)
 
 
     def train(self):

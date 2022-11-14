@@ -14,8 +14,6 @@ class Config:
         # System
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.SYSTEM = CN()
-        # Number of GPUs to use
-        _C.SYSTEM.NUM_GPUS = 1
         # Number of CPUs to use
         _C.SYSTEM.NUM_CPUS = 1
         # Math seed

@@ -1,5 +1,4 @@
 SYSTEM:
-    NUM_GPUS: 1
     NUM_CPUS: 1
 
 PROBLEM:
