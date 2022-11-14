@@ -4,23 +4,23 @@ SYSTEM:
 
 PROBLEM:
     TYPE: DENOISING
-    NDIM: 2D
+    NDIM: 3D
     DENOISING:
         N2V_STRUCTMASK: True
+  
 DATA: 
-    PATCH_SIZE: (64, 64, 1)
+    PATCH_SIZE: (8, 64, 64, 1)
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data
         IN_MEMORY: True
     VAL:
-        IN_MEMORY: True
         FROM_TRAIN: True
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
         IN_MEMORY: False
         LOAD_GT: False
-        PADDING: (12,12)
+        PADDING: (2,12,12)
         PATH: /path/to/data
     NORMALIZATION:
         TYPE: 'custom'
@@ -33,7 +33,7 @@ AUGMENTOR:
 
 MODEL:
     ARCHITECTURE: unet
-    FEATURE_MAPS: [32, 64, 96]
+    FEATURE_MAPS: [32, 64, 128]
     KERNEL_SIZE: 3
     KERNEL_INIT: "glorot_uniform"
     UPSAMPLE_LAYER: "upsampling"
@@ -47,13 +47,12 @@ TRAIN:
     ENABLE: True
     OPTIMIZER: ADAM
     LR: 4.E-4
-    BATCH_SIZE: 128
+    BATCH_SIZE: 4
     EPOCHS: 100
     PATIENCE: 20
   
 TEST:
     ENABLE: True
-    AUGMENTATION: False
     STATS:
         PER_PATCH: True
         MERGE_PATCHES: True
