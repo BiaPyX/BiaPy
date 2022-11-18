@@ -1178,7 +1178,11 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
         if img.ndim == 3: 
             img = np.expand_dims(img, -1)
         else:
-            if img.shape[0] <= 3: img = img.transpose((1,2,3,0))
+            min_val = min(img.shape)
+            channel_pos = img.shape.index(min_val)
+            if channel_pos != 3 and img.shape[channel_pos] <= 4:
+                new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
+                img = img.transpose(new_pos)
 
         if return_filenames: filenames.append(id_)
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=verbose)

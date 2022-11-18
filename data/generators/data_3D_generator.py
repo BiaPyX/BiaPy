@@ -37,12 +37,20 @@ class VoxelDataGenerator(BaseDataGenerator):
         # Shape adjustment
         if img.ndim == 3: 
             img = np.expand_dims(img, -1)
-        else:
-            if img.shape[0] <= 3: img = img.transpose((1,2,3,0))
+        else:                    
+            min_val = min(img.shape)
+            channel_pos = img.shape.index(min_val)
+            if channel_pos != 3 and mask.shape[channel_pos] <= 4:
+                new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
+                img = img.transpose(new_pos)
         if mask.ndim == 3: 
             mask = np.expand_dims(mask, -1)
         else:
-            if mask.shape[0] <= 3: mask = mask.transpose((1,2,3,0))
+            min_val = min(mask.shape)
+            channel_pos = mask.shape.index(min_val)
+            if channel_pos != 3 and mask.shape[channel_pos] <= 4:
+                new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
+                mask = mask.transpose(new_pos)
         return img, mask
 
     def apply_imgaug(self, image, mask, heat):
