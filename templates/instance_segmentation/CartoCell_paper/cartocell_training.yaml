@@ -1,0 +1,67 @@
+SYSTEM:
+    NUM_CPUS: 1
+
+PROBLEM:
+    TYPE: INSTANCE_SEG
+    NDIM: 3D
+    INSTANCE_SEG:
+        DATA_CHANNELS: BCM
+        DATA_MW_TH1: 0.2
+        DATA_MW_TH2: 0.2
+        DATA_MW_TH3: 0.25
+        DATA_REMOVE_SMALL_OBJ: 5
+        DATA_REMOVE_BEFORE_MW: True
+DATA: 
+    REFLECT_TO_COMPLETE_SHAPE: True
+    PATCH_SIZE: (80, 80, 80, 1)
+    TRAIN:
+        PATH: /home/user/train/x
+        MASK_PATH: /home/user/train/y
+        IN_MEMORY: True
+    VAL:
+        FROM_TRAIN: False
+        IN_MEMORY: True
+        PATH: /home/user/val/x
+        MASK_PATH: /home/user/val/y
+    TEST:
+        PATH: /home/user/test/x
+        MASK_PATH: /home/user/test/y
+        IN_MEMORY: True
+        PADDING: (16,16,16)
+        
+AUGMENTOR:
+    ENABLE: True
+    RANDOM_ROT: False
+    VFLIP: True
+    HFLIP: True
+    ZFLIP: True 
+    ELASTIC: True
+    BRIGHTNESS: True
+    BRIGHTNESS_FACTOR: (0.1, 0.15)
+
+MODEL:
+    ARCHITECTURE: resunet
+    FEATURE_MAPS: [52, 68, 84]
+    DROPOUT_VALUES: [0.1, 0.1, 0.1]
+    Z_DOWN: 1
+    LOAD_CHECKPOINT: False
+  
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAM
+    LR: 1.E-4
+    BATCH_SIZE: 2
+    EPOCHS: 1300
+    PATIENCE: 100
+  
+TEST:
+    ENABLE: False
+    EVALUATE: False
+    STATS:
+        PER_PATCH: True
+        MERGE_PATCHES: True
+        FULL_IMG: False
+    MATCHING_STATS: True 
+    VERBOSE: True
+    POST_PROCESSING:
+        VORONOI_ON_MASK: True
