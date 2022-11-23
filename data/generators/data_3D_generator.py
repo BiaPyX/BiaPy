@@ -23,13 +23,6 @@ class VoxelDataGenerator(BaseDataGenerator):
     """
     def __init__(self, zflip=False, **kwars):
         super().__init__(**kwars)
-
-        if not self.in_memory:
-            img = imread(os.path.join(self.paths[0], self.data_paths[0]))
-            img = np.squeeze(img)
-            self.X_channels = img.shape[-1]
-            del img
-
         self.z_size = self.shape[0] if self.random_crops_in_DA else self.X.shape[1]
         self.zflip = zflip
 
