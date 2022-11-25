@@ -4,13 +4,14 @@ SYSTEM:
 PROBLEM:
     TYPE: INSTANCE_SEG
     NDIM: 2D
+    INSTANCE_SEG:
+        DATA_CHANNELS: BC
+        DATA_MW_TH1: 0.2
+        DATA_MW_TH2: 0.1
+        DATA_MW_TH3: 0.3
   
 DATA: 
-    PATCH_SIZE: (256, 256, 1)
-    CHANNELS: BC
-    MW_TH1: 0.2                                                                                                         
-    MW_TH2: 0.1                                                                                                         
-    MW_TH3: 0.3   
+    PATCH_SIZE: (256, 256, 1)  
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data                                                                                             
