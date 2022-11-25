@@ -14,14 +14,14 @@ DATA:
     PATCH_SIZE: (256, 256, 1)  
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
-        PATH: /path/to/data                                                                                             
-        MASK_PATH: /path/to/data
+        PATH: edit_trainx_path_here 
+        MASK_PATH: edit_trainy_path_here
         IN_MEMORY: True
     VAL:
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
-        PATH: /path/to/data                                                                                             
-        MASK_PATH: /path/to/data
+        PATH: edit_testx_path_here
+        MASK_PATH: edit_testy_path_here
         IN_MEMORY: True
         LOAD_GT: True
 
