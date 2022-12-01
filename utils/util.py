@@ -978,7 +978,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=False)
 
         if crop_shape is not None and check_channel:
-            if crop_shape[-1] != crop_shape[:2]+(img.shape[-1],):
+            if crop_shape[-1] != img.shape[-1]:
                 raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
                     "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1]))
 
