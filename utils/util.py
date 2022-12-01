@@ -974,10 +974,15 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
 
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=False)
 
+        if crop_shape is not None:
+            if crop_shape[-1] != img.shape[-1]:
+                raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                    "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1]))
+
         data_shape.append(img.shape)
         img = np.expand_dims(img, axis=0)
-        if crop and img[0].shape != crop_shape[:2]+(img.shape[-1],):
-            img = crop_data_with_overlap(img, crop_shape[:2]+(img.shape[-1],), overlap=overlap, padding=padding,
+        if crop and img[0].shape != crop_shape:
+            img = crop_data_with_overlap(img, crop_shape, overlap=overlap, padding=padding,
                                          verbose=False)
         c_shape.append(img.shape)
         data.append(img)
@@ -1186,6 +1191,11 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
 
         if return_filenames: filenames.append(id_)
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=verbose)
+        
+        if crop_shape is not None:
+            if crop_shape[-1] != img.shape[-1]:
+                raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                    "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1]))
 
         data_shape.append(img.shape)
         if crop and img.shape != crop_shape[:3]+(img.shape[-1],):

@@ -64,6 +64,7 @@ if __name__ == '__main__':
     # GPU selection
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    num_gpus = len(args.gpu.split(','))
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
     # CPU limit
@@ -79,7 +80,7 @@ if __name__ == '__main__':
     ##########################
     #       TRAIN/TEST       #
     ##########################
-    engine = Engine(cfg, job_identifier)
+    engine = Engine(cfg, job_identifier, num_gpus)
 
     if cfg.TRAIN.ENABLE:
         engine.train()

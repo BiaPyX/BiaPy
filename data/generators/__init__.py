@@ -5,7 +5,6 @@ from tqdm import tqdm
 from utils.util import  save_tif
 from data.pre_processing import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif
 from data.generators.data_2D_generator import ImageDataGenerator
-from data.generators.data_2D_generator_img_pair import PairImageDataGenerator
 from data.generators.data_2D_generator_classification import ClassImageDataGenerator
 from data.generators.data_3D_generator import VoxelDataGenerator
 from data.generators.simple_data_generators import simple_data_generator
@@ -78,9 +77,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
     if cfg.PROBLEM.NDIM == '2D':
         if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
             f_name = ClassImageDataGenerator
-        elif cfg.PROBLEM.TYPE in ['SUPER_RESOLUTION', 'SELF_SUPERVISED']:
-            f_name = PairImageDataGenerator
-        else: # Semantic/Instance segmentation and Denoising
+        else: 
             f_name = ImageDataGenerator 
     else:
         f_name = VoxelDataGenerator
@@ -119,14 +116,18 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             grid_ratio=cfg.AUGMENTOR.GRID_RATIO, grid_d_range=cfg.AUGMENTOR.GRID_D_RANGE, grid_rotate=cfg.AUGMENTOR.GRID_ROTATE,
             grid_invert=cfg.AUGMENTOR.GRID_INVERT, shape=cfg.DATA.PATCH_SIZE, resolution=cfg.DATA.TRAIN.RESOLUTION,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, prob_map=prob_map, n_classes=cfg.MODEL.N_CLASSES,
-            extra_data_factor=cfg.DATA.TRAIN.REPLICATE, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
+            extra_data_factor=cfg.DATA.TRAIN.REPLICATE, norm_custom_mean=custom_mean, norm_custom_std=custom_std,
+            random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
+
         if cfg.PROBLEM.NDIM == '3D':
             dic['zflip'] = cfg.AUGMENTOR.ZFLIP
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             dic['instance_problem'] = True
         elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-            dic['random_crop_scale'] = cfg.AUGMENTOR.RANDOM_CROP_SCALE
+            dic['normalizeY'] = 'none'
+        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+            dic['normalizeY'] = 'as_image'
         elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v']=True
             dic['n2v_perc_pix'] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
@@ -158,10 +159,14 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, in_memory=cfg.DATA.VAL.IN_MEMORY,
             data_paths=[cfg.DATA.VAL.PATH, cfg.DATA.VAL.MASK_PATH], da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
-            seed=cfg.SYSTEM.SEED, norm_custom_mean=custom_mean, norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION)
+            seed=cfg.SYSTEM.SEED, norm_custom_mean=custom_mean, norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION,
+            random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
+
         if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-            dic['random_crop_scale'] = cfg.AUGMENTOR.RANDOM_CROP_SCALE
-        if cfg.PROBLEM.TYPE == 'DENOISING':
+            dic['normalizeY'] = 'none'
+        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+            dic['normalizeY'] = 'as_image'
+        elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v'] = True
             dic['n2v_perc_pix'] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
             dic['n2v_manipulator'] = cfg.PROBLEM.DENOISING.N2V_MANIPULATOR
@@ -170,7 +175,6 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
     else:
         val_generator = f_name(X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, n_classes=cfg.MODEL.N_CLASSES, in_memory=cfg.DATA.VAL.IN_MEMORY,
             batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED, shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, da=False)
-
 
     # Generate examples of data augmentation
     if cfg.AUGMENTOR.AUG_SAMPLES:
@@ -222,9 +226,15 @@ def create_test_augmentor(cfg, X_test, Y_test):
             seed=cfg.SYSTEM.SEED, shuffle_each_epoch=False, da=False)
     else:
         instance_problem = True if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else False
+        normalizeY='as_mask'
+        if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+            normalizeY = 'none'
+        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+            normalizeY = 'as_image'
         dic = dict(X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=cfg.DATA.TEST.LOAD_GT, Y=Y_test,
             dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, dims=cfg.PROBLEM.NDIM, seed=cfg.SYSTEM.SEED,
-            instance_problem=instance_problem, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
+            instance_problem=instance_problem, normalizeY=normalizeY, norm_custom_mean=custom_mean, 
+            norm_custom_std=custom_std)
         test_generator = simple_data_generator(**dic)
     return test_generator
 

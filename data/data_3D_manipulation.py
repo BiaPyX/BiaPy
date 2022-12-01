@@ -4,9 +4,8 @@ from sklearn.model_selection import train_test_split
 from utils.util import load_3d_images_from_dir
 
 
-def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True,
-                             crop_shape=(80, 80, 80, 1), random_crops_in_DA=False, ov=(0,0,0), padding=(0,0,0),
-                             reflect_to_complete_shape=False):
+def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True, crop_shape=(80, 80, 80, 1), 
+                             y_upscaling=1, random_crops_in_DA=False, ov=(0,0,0), padding=(0,0,0), reflect_to_complete_shape=False):
     """Load train and validation images from the given paths to create 3D data.
 
        Parameters
@@ -28,6 +27,9 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
 
        crop_shape : 4D tuple
             Shape of the train subvolumes to create. E.g. ``(z, y, x, channels)``.
+
+       y_upscaling : int, optional
+           Upscaling to be done when loading Y data. User for super-resolution workflow.
 
        random_crops_in_DA : bool, optional
            To advice the method that not preparation of the data must be done, as random subvolumes will be created on
@@ -104,7 +106,8 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
 
     if train_mask_path is not None:
         print("1) Loading train masks . . .")
-        Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
+        scrop = [crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3]]
+        Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov,
             padding=padding, reflect_to_complete_shape=reflect_to_complete_shape)
     else:
         Y_train = np.zeros(X_train.shape, dtype=np.float32) # Fake mask val
@@ -501,7 +504,8 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
         return merged_data
 
 
-def random_3D_crop(vol, vol_mask, random_crop_size, val=False, img_prob=None, weight_map=None, draw_prob_map_points=False):
+def random_3D_crop(vol, vol_mask, random_crop_size, val=False, img_prob=None, weight_map=None, draw_prob_map_points=False,
+                scale=1):
     """Extracts a random 3D patch from the given image and mask.
 
        Parameters
@@ -527,6 +531,9 @@ def random_3D_crop(vol, vol_mask, random_crop_size, val=False, img_prob=None, we
 
        draw_prob_map_points : bool, optional
            To return the voxel chosen to be the center of the crop.
+
+       scale : int, optional
+           Scale factor the second image given.
 
        Returns
        -------
@@ -611,10 +618,11 @@ def random_3D_crop(vol, vol_mask, random_crop_size, val=False, img_prob=None, we
             x = np.random.randint(0, rows - dx + 1)
 
     if draw_prob_map_points:
-        return vol[z:(z+dz), y:(y+dy), x:(x+dx)], vol_mask[z:(z+dz), y:(y+dy),x:(x+dx)], oz, oy, ox, z, y, x
+        return vol[z:(z+dz), y:(y+dy), x:(x+dx)], vol_mask[z*scale:(z+dz)*scale, y*scale:(y+dy)*scale, x*scale:(x+dx)*scale],\
+               oz, oy, ox, z, y, x
     else:
         if weight_map is not None:
-            return vol[z:(z+dz), y:(y+dy), x:(x+dx)], vol_mask[z:(z+dz), y:(y+dy), x:(x+dx)],\
+            return vol[z:(z+dz), y:(y+dy), x:(x+dx)], vol_mask[z*scale:(z+dz)*scale, y*scale:(y+dy)*scale, x*scale:(x+dx)*scale],\
                    weight_map[z:(z+dz), y:(y+dy), x:(x+dx)]
         else:
             return vol[z:(z+dz), y:(y+dy), x:(x+dx)], vol_mask[z:(z+dz), y:(y+dy), x:(x+dx)]

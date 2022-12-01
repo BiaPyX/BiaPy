@@ -51,7 +51,7 @@ class simple_data_generator(tf.keras.utils.Sequence):
     """
 
     def __init__(self, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, dims='2D', batch_size=1, seed=42,
-                 shuffle_each_epoch=False, instance_problem=False, norm_custom_mean=None, 
+                 shuffle_each_epoch=False, instance_problem=False, normalizeY='as_mask', norm_custom_mean=None, 
                  norm_custom_std=None):
 
         if X is None and d_path is None:
@@ -60,7 +60,8 @@ class simple_data_generator(tf.keras.utils.Sequence):
             if Y is None and dm_path is None:
                 raise ValueError("One between 'Y' or 'dm_path' must be provided")
         assert dims in ['2D', '3D']
-
+        assert normalizeY in ['as_mask', 'as_image', 'none']
+        
         self.X = X
         self.Y = Y
         self.d_path = d_path
@@ -81,7 +82,8 @@ class simple_data_generator(tf.keras.utils.Sequence):
         self.o_indexes = np.arange(self.len)
         self.ax = None
         self.ay = None
-
+        self.normalizeY = normalizeY
+        
         # Check if a division is required
         self.X_norm = {}
         self.X_norm['type'] = 'div'
@@ -99,10 +101,12 @@ class simple_data_generator(tf.keras.utils.Sequence):
 
         if mask is not None:
             self.Y_norm = {}
-            self.Y_norm['type'] = 'div'
-            if (np.max(mask) > 30 and not instance_problem):
-                self.Y_norm['div'] = 1   
-
+            if normalizeY == 'as_mask':
+                self.Y_norm['type'] = 'div'
+                if (np.max(mask) > 30 and not instance_problem):
+                    self.Y_norm['div'] = 1   
+            elif normalizeY == 'as_image':
+                self.Y_norm.update(self.X_norm)
         self.on_epoch_end()
 
 
@@ -167,12 +171,20 @@ class simple_data_generator(tf.keras.utils.Sequence):
         elif self.X_norm['type'] == 'custom':
             img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
         if self.provide_Y:
-            if 'div' in self.Y_norm:
-                mask = mask/255
-            
+            if self.normalizeY == 'as_mask':
+                if 'div' in self.Y_norm:
+                    mask = mask/255
+            elif self.normalizeY == 'as_image':
+                if self.X_norm['type'] == 'div':
+                    mask, xnorm = norm_range01(mask)
+                elif self.X_norm['type'] == 'custom':
+                    mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'])
+           
         img = np.expand_dims(img, 0).astype(np.float32)
         if self.provide_Y:
-            mask = np.expand_dims(mask, 0).astype(np.uint8)
+            mask = np.expand_dims(mask, 0)
+            if self.normalizeY == 'as_mask':
+                mask = mask.astype(np.uint8)
         return img, mask, xnorm
 
 

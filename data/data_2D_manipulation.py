@@ -11,8 +11,8 @@ from data.pre_processing import normalize
 from skimage.io import imsave
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True, e_d_data=[],
-    e_d_mask=[], e_d_data_dim=[], num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, ov=(0,0),
-    padding=(0,0), reflect_to_complete_shape=False):
+    e_d_mask=[], e_d_data_dim=[], num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, y_upscaling=1,
+    ov=(0,0), padding=(0,0), reflect_to_complete_shape=False):
     """Load train and validation images from the given paths to create 2D data.
 
        Parameters
@@ -53,6 +53,9 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
 
        crop_shape : 3D int tuple, optional
            Shape of the crops. E.g. ``(x, y, channels)``.
+
+       y_upscaling : int, optional
+           Upscaling to be done when loading Y data. User for super-resolution workflow.
 
        ov : 2 floats tuple, optional
            Amount of minimum overlap on x and y dimensions. The values must be on range ``[0, 1)``, that is, ``0%`` or
@@ -144,7 +147,8 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
                                                          reflect_to_complete_shape=reflect_to_complete_shape)
     if train_mask_path is not None:                                            
         print("1) Loading train masks . . .")
-        Y_train, _, _, _ = load_data_from_dir(train_mask_path, crop=crop, crop_shape=crop_shape, overlap=ov,
+        scrop = [crop_shape[0]*y_upscaling, crop_shape[1]*y_upscaling, crop_shape[2]]
+        Y_train, _, _, _ = load_data_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov,
                                                         padding=padding, return_filenames=True,
                                                         reflect_to_complete_shape=reflect_to_complete_shape)
     else:
@@ -721,7 +725,7 @@ def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=F
         img = image
 
     height, width = img.shape[0], img.shape[1]
-    dy, dx = random_crop_size[0]//scale, random_crop_size[1]//scale
+    dy, dx = random_crop_size[0], random_crop_size[1]
     if val == True:
         x = 0
         y = 0

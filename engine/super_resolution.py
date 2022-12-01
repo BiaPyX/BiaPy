@@ -16,38 +16,20 @@ class Super_resolution(Base_Workflow):
         self.stats['psnr_per_image'] = 0
 
     def process_sample(self, X, Y, filenames, norm): 
-        original_data_shape = X.shape
-    
+        original_data_shape= (X.shape[0], X.shape[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+                              X.shape[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, X.shape[3])
+
         # Crop if necessary
         if X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == '2D':
-                obj = crop_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                X = crop_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
                     padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
-                if self.cfg.DATA.TEST.LOAD_GT:
-                    X, Y = obj
-                else:
-                    X = obj
-                del obj
             else:
-                if self.cfg.DATA.TEST.LOAD_GT: Y = Y[0]
-                if self.cfg.TEST.REDUCE_MEMORY:
-                    X = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
-                        padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
-                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
-                    Y = crop_3D_data_with_overlap(Y, self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
-                        padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
-                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
-                else:
-                    obj = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
-                        padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
-                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
-                    if self.cfg.DATA.TEST.LOAD_GT:
-                        X, Y = obj
-                    else:
-                        X = obj
-                    del obj
+                X = crop_3D_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                    padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
 
         # Predict each patch
+        self.model.set_dtype(Y[0])
         pred = []
         if self.cfg.TEST.AUGMENTATION:
             for k in tqdm(range(X.shape[0]), leave=False):
@@ -57,7 +39,7 @@ class Super_resolution(Base_Workflow):
                 else:
                     p = ensemble16_3d_predictions(X[k], batch_size_value=1,
                             pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
-                pred.append(p)
+                pred.append(np.expand_dims(p,0))
         else:
             l = int(math.ceil(X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
             for k in tqdm(range(l), leave=False):
@@ -71,32 +53,12 @@ class Super_resolution(Base_Workflow):
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
             f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
-
-            if self.cfg.TEST.REDUCE_MEMORY:
-                pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
-                    overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
-                Y = f_name(Y, original_data_shape[:-1]+(Y.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
-                    overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
-            else:
-                obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=Y,
-                    padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
-                    verbose=self.cfg.TEST.VERBOSE)
-                if self.cfg.DATA.TEST.LOAD_GT:
-                    pred, Y = obj
-                else:
-                    pred = obj
-                del obj
+            pad = tuple(p*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING for p in self.cfg.DATA.TEST.PADDING)
+            ov = tuple(o*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING for o in self.cfg.DATA.TEST.OVERLAP) 
+            pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=pad, 
+                overlap=ov, verbose=self.cfg.TEST.VERBOSE)
         else:
             pred = pred[0]
-
-        # Undo normalization
-        x_norm = norm[0][0]
-        if x_norm['type'] == 'div':
-            pred = pred*255
-            if 'reduced_uint16' in x_norm:
-                pred = (pred*65535).astype(np.uint16)
-        else:
-            pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
             
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
@@ -104,7 +66,8 @@ class Super_resolution(Base_Workflow):
     
         # Calculate PSNR
         if self.cfg.DATA.TEST.LOAD_GT:
-            psnr_per_image = PSNR(pred, Y)
+            m_val = 255 if Y.dtype != np.uint16 else 65535
+            psnr_per_image = PSNR(pred, Y, m_val)
             self.stats['psnr_per_image'] += psnr_per_image
 
     def after_merge_patches(self, pred, Y, filenames):

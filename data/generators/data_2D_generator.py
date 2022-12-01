@@ -3,7 +3,6 @@ import os
 from PIL import Image
 from skimage.io import imsave
 
-from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from data.generators.base_data_generator import BaseDataGenerator
 from data.pre_processing import denormalize
 
@@ -74,16 +73,13 @@ class ImageDataGenerator(BaseDataGenerator):
         else:
             if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
 
+        # Super-resolution check
+        s = [img.shape[0]*self.random_crop_scale, img.shape[1]*self.random_crop_scale]
+        if all(x!=y for x,y in zip(s,mask.shape[:-1])):
+            raise ValueError("Images loaded need to be LR and its HR version. LR shape:"
+                " {} vs HR shape {} is not x{} larger".format(img.shape[:-1], mask.shape[:-1], self.random_crop_scale))
+
         return img, mask
-    
-    def apply_imgaug(self, image, mask, heat):
-        # Change dtype to supported one by imgaug
-        mask = mask.astype(np.uint8)
-        
-        segmap = SegmentationMapsOnImage(mask, shape=mask.shape)
-        image, vol_mask, heat_out = self.seq(image=image, segmentation_maps=segmap, heatmaps=heat)
-        mask = vol_mask.get_arr()
-        return image, mask, heat_out
 
     def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, draw_grid, point_dict):
         if draw_grid:
@@ -115,12 +111,20 @@ class ImageDataGenerator(BaseDataGenerator):
             if self.X_norm['type'] == 'div':
                 if 'div' in self.X_norm:
                     img = img*255
-                # Undo Y normalization 
-                if self.div_Y_on_load_bin_channels:
-                    mask = mask*255
             elif self.X_norm['type'] == 'custom':
                 img = denormalize(img, self.X_norm['mean'], self.X_norm['std'])
-            
+
+            # Undo Y normalization
+            if self.normalizeY == 'as_mask':
+                if self.div_Y_on_load_bin_channels: 
+                    mask = mask*255
+            elif self.normalizeY == 'as_image':
+                if self.X_norm['type'] == 'div':
+                    if 'div' in self.X_norm:
+                        mask = mask*255
+                elif self.X_norm['type'] == 'custom':
+                    mask = denormalize(mask, self.X_norm['mean'], self.X_norm['std'])
+                    
             img, mask = img.astype(np.uint8), mask.astype(np.uint8)
 
             if self.shape[-1] == 1:

@@ -62,13 +62,16 @@ def check_configuration(cfg):
         raise ValueError("mAP calculation code not found. Please set 'PATHS.MAP_CODE_DIR' variable with the path of the "
                          "Github repo 'mAP_3Dvolume': 0) git clone https://github.com/danifranco/mAP_3Dvolume.git ; "
                          "1) git checkout grand-challenge ")
-
+    
     if cfg.PROBLEM.NDIM == '3D' and cfg.TEST.STATS.FULL_IMG:
         print("WARNING: TEST.STATS.FULL_IMG == True while using PROBLEM.NDIM == '3D'. As 3D images are usually 'huge'"
               ", full image statistics will be disabled to avoid GPU memory overflow")
 
     if cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE not in ['SEMANTIC_SEG', 'DETECTION']:
         raise ValueError("Not implemented pipeline option: LOSS.TYPE != 'CE' only available in 'SEMANTIC_SEG' and 'DETECTION'")
+    
+    if cfg.PROBLEM.TYPE != 'SUPER_RESOLUTION' and cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING != 1:
+        raise ValueError("'PROBLEM.SUPER_RESOLUTION.UPSCALING' can only be 1 if the problem is not 'SUPER_RESOLUTION'")
 
     #### Semantic segmentation ####
     if cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
@@ -98,10 +101,11 @@ def check_configuration(cfg):
 
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-        if not cfg.DATA.EXTRACT_RANDOM_PATCH:
-            raise ValueError("'DATA.EXTRACT_RANDOM_PATCH' need to be True for 'SUPER_RESOLUTION'")
-        if cfg.AUGMENTOR.RANDOM_CROP_SCALE == 1:
-            raise ValueError("Resolution scale must be provided with 'AUGMENTOR.RANDOM_CROP_SCALE' variable")
+        if cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING == 1:
+            raise ValueError("Resolution scale must be provided with 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable")
+        assert cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING in [2, 4]
+        if cfg.DATA.NORMALIZATION.TYPE == 'custom':
+            raise NotImplementedError
         if cfg.PROBLEM.NDIM == '3D':
             raise NotImplementedError
 
@@ -163,8 +167,8 @@ def check_configuration(cfg):
     if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.CROSS_VAL and cfg.DATA.VAL.SPLIT_TRAIN <= 0:
         raise ValueError("'DATA.VAL.SPLIT_TRAIN' needs to be > 0 when 'DATA.VAL.FROM_TRAIN' == True")
     if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.TRAIN.IN_MEMORY:
-        raise ValueError("Validation can be extracted from train while 'DATA.TRAIN.IN_MEMORY' == False. Please set"
-                         "'DATA.VAL.FROM_TRAIN' to False")
+        raise ValueError("Validation can be extracted from train when 'DATA.TRAIN.IN_MEMORY' == False. Please set"
+                         " 'DATA.VAL.FROM_TRAIN' to False and configure 'DATA.VAL.PATH'/'DATA.VAL.MASK_PATH'")
                         
     if len(cfg.DATA.TRAIN.RESOLUTION) != dim_count:
         raise ValueError("Train resolution needs to be a tuple with {} values".format(dim_count))

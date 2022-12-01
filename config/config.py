@@ -86,6 +86,10 @@ class Config:
         _C.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS = 5
         _C.PROBLEM.DENOISING.N2V_STRUCTMASK = False
 
+        ### SUPER_RESOLUTION
+        _C.PROBLEM.SUPER_RESOLUTION = CN()
+        _C.PROBLEM.SUPER_RESOLUTION.UPSCALING = 1
+
         ### SELF_SUPERVISED
         _C.PROBLEM.SELF_SUPERVISED = CN()
         # Downsizing factor to reshape the image. It will be downsampled and upsampled again by this factor so the 
@@ -395,8 +399,7 @@ class Config:
         _C.AUGMENTOR.GRID_ROTATE = 1
         # Whether to invert the mask
         _C.AUGMENTOR.GRID_INVERT = False
-        # Whether to scale the second random crop done. Used in SUPER_RESOLUTION and when 'DATA.EXTRACT_RANDOM_PATCH'=True
-        _C.AUGMENTOR.RANDOM_CROP_SCALE = 1
+
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Model definition

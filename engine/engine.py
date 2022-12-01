@@ -19,7 +19,7 @@ from engine.self_supervised import prepare_ssl_data, Self_supervised
 
 class Engine(object):
 
-    def __init__(self, cfg, job_identifier):
+    def __init__(self, cfg, job_identifier, num_gpus):
         self.cfg = cfg
         self.job_identifier = job_identifier
         self.original_test_path = None
@@ -78,14 +78,14 @@ class Engine(object):
                         objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, mask_path,
                             val_split=val_split, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
-                            ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING,
-                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                            y_upscaling=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, ov=cfg.DATA.TRAIN.OVERLAP, 
+                            padding=cfg.DATA.TRAIN.PADDING, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
                     else:
                         objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, mask_path,
                             val_split=val_split, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
-                            ov=cfg.DATA.TRAIN.OVERLAP, padding=cfg.DATA.TRAIN.PADDING, 
-                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                            y_upscaling=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, ov=cfg.DATA.TRAIN.OVERLAP, 
+                            padding=cfg.DATA.TRAIN.PADDING, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
 
                     if cfg.DATA.VAL.FROM_TRAIN:
                         X_train, Y_train, X_val, Y_val, self.train_filenames = objs
@@ -105,7 +105,13 @@ class Engine(object):
                                              overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
                                              reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
                         if cfg.PROBLEM.TYPE != 'DENOISING':
-                            Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
+                            if cfg.PROBLEM.NDIM == '2D':
+                                crop_shape = [cfg.DATA.PATCH_SIZE[0]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+                                    cfg.DATA.PATCH_SIZE[1]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, cfg.DATA.PATCH_SIZE[2]]
+                            else:
+                                crop_shape = [cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+                                    cfg.DATA.PATCH_SIZE[2]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, cfg.DATA.PATCH_SIZE[3]]
+                            Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH, crop=True, crop_shape=crop_shape,
                                                  overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
                                                  reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
                         else:
@@ -162,14 +168,17 @@ class Engine(object):
         print("#################\n"
               "#  BUILD MODEL  #\n"
               "#################\n")
-        strategy = tf.distribute.MirroredStrategy()
-        print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+        if num_gpus > 1:
+            strategy = tf.distribute.MirroredStrategy()
+            print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
-        # Open a strategy scope.
-        with strategy.scope():
+            # Open a strategy scope.
+            with strategy.scope():
+                self.model = build_model(cfg, self.job_identifier)
+                self.metric = prepare_optimizer(cfg, self.model)
+        else:
             self.model = build_model(cfg, self.job_identifier)
             self.metric = prepare_optimizer(cfg, self.model)
-
 
     def train(self):
         print("#####################\n"
@@ -267,9 +276,9 @@ class Engine(object):
             print("Epoch number: {}".format(len(self.results.history['val_loss'])))
             print("Train time (s): {}".format(np.sum(self.callbacks[0].times)))
             print("Train loss: {}".format(np.min(self.results.history['loss'])))
-            print("Train Foreground IoU: {}".format(np.max(self.results.history[self.metric])))
+            print("Train Foreground {}: {}".format(self.metric, np.max(self.results.history[self.metric])))
             print("Validation loss: {}".format(np.min(self.results.history['val_loss'])))
-            print("Validation Foreground IoU: {}".format(np.max(self.results.history['val_'+self.metric])))
+            print("Validation Foreground {}: {}".format(self.metric, np.max(self.results.history['val_'+self.metric])))
 
         workflow.print_stats(image_counter)
 

@@ -9,6 +9,7 @@ from tqdm import tqdm
 from imgaug import augmenters as iaa
 from skimage.io import imread
 from imgaug.augmentables.heatmaps import HeatmapsOnImage
+from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 
 from data.data_2D_manipulation import random_crop
 from data.data_3D_manipulation import random_3D_crop
@@ -322,8 +323,12 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
        norm_custom_std : float, optional
            Std of the data used to normalize.
        
+       normalizeY : str, optional
+           Whether Y is going to be normalized or not. 
+
        instance_problem : bool, optional
-           To not divide the labels if being in an instance segmenation problem.
+           Advice the class that the workflow is of instance segmentation to divide the labels by channels.
+       
     """
 
     def __init__(self, ndim, X, Y, batch_size=32, seed=0, shuffle_each_epoch=False, in_memory=True, data_paths=None, da=True,
@@ -344,16 +349,24 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                  prob_map=None, val=False, n_classes=1, out_number=1, extra_data_factor=1, n2v=False, 
                  n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', n2v_neighborhood_radius=5, 
                  n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), max_samples_to_analyse=10, 
-                 norm_custom_mean=None, norm_custom_std=None, instance_problem=False):
+                 norm_custom_mean=None, norm_custom_std=None, normalizeY='as_mask', instance_problem=False,
+                 random_crop_scale=1):
 
         self.ndim = ndim
         self.z_size = -1 
         
+        assert normalizeY in ['as_mask', 'as_image', 'none']
+
         if in_memory:
-            if X.ndim != (self.ndim+2) or Y.ndim != (self.ndim+2):
+            _X = X if type(X) != list else X[0]
+            _Y = Y if type(Y) != list else Y[0]
+
+            if _X.ndim != (self.ndim+2) or _Y.ndim != (self.ndim+2):
                 raise ValueError("X and Y must be a {}D Numpy array".format((self.ndim+1)))
-            if X.shape[:(self.ndim+1)] != Y.shape[:(self.ndim+1)]:
-                raise ValueError("The shape of X and Y must be the same. {} != {}".format(X.shape[:(self.ndim+1)], Y.shape[:(self.ndim+1)]))
+
+            if type(X) != list and random_crop_scale==1:
+                if X.shape[:(self.ndim+1)] != Y.shape[:(self.ndim+1)]:
+                    raise ValueError("The shape of X and Y must be the same. {} != {}".format(X.shape[:(self.ndim+1)], Y.shape[:(self.ndim+1)]))
 
         if in_memory and (X is None or Y is None):
             raise ValueError("'X' and 'Y' need to be provided together with 'in_memory'")
@@ -366,10 +379,10 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 raise ValueError("'shape' must be provided when 'random_crops_in_DA' is enabled")
             if in_memory:
                 if ndim == 3:
-                    if shape[0] > X.shape[1] or shape[1] > X.shape[2] or shape[2] > X.shape[3]:
+                    if shape[0] > _X.shape[1] or shape[1] > _X.shape[2] or shape[2] > _X.shape[3]:
                         raise ValueError("Given 'shape' is bigger than the data provided")
                 else:
-                    if shape[0] > X.shape[1] or shape[1] > X.shape[2]:
+                    if shape[0] > _X.shape[1] or shape[1] > _X.shape[2]:
                         raise ValueError("Given 'shape' is bigger than the data provided")
                     if shape[0] != shape[1]:
                         raise ValueError("When 'random_crops_in_DA' is selected the shape given must be square, e.g. (256, 256, 1)")
@@ -382,8 +395,12 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if rotation90 and rand_rot:
             print("Warning: you selected double rotation type. Maybe you should set only 'rand_rot'?")
 
+        # Super-resolution options
+        self.random_crop_scale = random_crop_scale
+
         self.batch_size = batch_size
         self.in_memory = in_memory
+        self.normalizeY = normalizeY
         if not in_memory:
             # Save paths where the data is stored
             self.paths = data_paths
@@ -403,6 +420,9 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 for i in range(np.random.choice(len(self.data_paths), nsamples, replace=False)):
                     img, _ = self.load_sample(i)
                     sam.append(img)
+                    if shape[-1] != img.shape[-1]:
+                        raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                                         "Please, check the channels of the images!".format(shape[-1], img.shape[-1]))
                 sam = np.array(sam)
                 self.X_norm['type'] = 'custom'
                 self.X_norm['mean'] = np.mean(sam)
@@ -413,6 +433,9 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 img, _ = self.load_sample(0)
                 img, nsteps = norm_range01(img)
                 self.X_norm.update(nsteps)
+                if shape[-1] != img.shape[-1]:
+                    raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                                     "Please, check the channels of the images!".format(shape[-1], img.shape[-1]))
 
             self.X_channels = img.shape[-1]
             self.shape = shape if random_crops_in_DA else img.shape
@@ -423,25 +446,25 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             # Loop over a few masks to ensure foreground class is present to decide normalization
             for i in range(min(10,len(self.data_mask_path))):
                 _, mask = self.load_sample(i)
-                
-                # Store wheter all channels of the gt are binary or not (i.e. distance transform channel)
-                if not found and (mask.dtype is np.dtype(np.float32) or mask.dtype is np.dtype(np.float64)) and instance_problem:
-                    for j in range(mask.shape[-1]):
-                        if len(np.unique(mask[...,j])) > 2:
-                            self.first_no_bin_channel = j
-                            found = True
-                            break
+                if self.normalizeY == 'as_mask':
+                    # Store wheter all channels of the gt are binary or not (i.e. distance transform channel)
+                    if not found and (mask.dtype is np.dtype(np.float32) or mask.dtype is np.dtype(np.float64)) and instance_problem:
+                        for j in range(mask.shape[-1]):
+                            if len(np.unique(mask[...,j])) > 2:
+                                self.first_no_bin_channel = j
+                                found = True
+                                break
 
-                # If found high values divide masks
-                if self.first_no_bin_channel != -1:
-                    if self.first_no_bin_channel != 0:
-                        if np.max(mask[...,:self.first_no_bin_channel]) > 30: self.div_Y_on_load_bin_channels = True
-                        if np.max(mask[...,self.first_no_bin_channel:]) > 30: self.div_Y_on_load_no_bin_channels = True
+                    # If found high values divide masks
+                    if self.first_no_bin_channel != -1:
+                        if self.first_no_bin_channel != 0:
+                            if np.max(mask[...,:self.first_no_bin_channel]) > 30: self.div_Y_on_load_bin_channels = True
+                            if np.max(mask[...,self.first_no_bin_channel:]) > 30: self.div_Y_on_load_no_bin_channels = True
+                        else:
+                            if np.max(mask) > 30: self.div_Y_on_load_bin_channels = True
+                            if np.max(mask) > 30: self.div_Y_on_load_no_bin_channels = True 
                     else:
-                        if np.max(mask) > 30: self.div_Y_on_load_bin_channels = True
-                        if np.max(mask) > 30: self.div_Y_on_load_no_bin_channels = True 
-                else:
-                    if np.max(mask) > 30: self.div_Y_on_load_bin_channels = True 
+                        if np.max(mask) > 30: self.div_Y_on_load_bin_channels = True 
 
             self.Y_channels = mask.shape[-1]
             self.Y_dtype = mask.dtype
@@ -449,11 +472,13 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         else:
             self.X = X
             self.Y = Y
-            self.Y_channels = Y.shape[-1]
-            self.Y_dtype = Y.dtype
-            self.X_channels = X.shape[-1]
+            self.Y_channels = Y.shape[-1] if type(Y) != list else Y[0].shape[-1]
+            self.X_channels = X.shape[-1] if type(X) != list else X[0].shape[-1]
             self.len = len(self.X)
-            self.shape = shape if random_crops_in_DA else X.shape[1:]
+            if random_crops_in_DA:
+                self.shape = shape
+            else:
+                self.shape = X.shape[1:] if type(X) != list else X[0].shape[1:]
 
             # X data analysis and normalization
             self.X_norm = {}
@@ -465,43 +490,75 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 self.X = normalize(self.X, self.X_norm['mean'], self.X_norm['std'])
             else:
                 self.X_norm['type'] = 'div'
-                self.X, normx = norm_range01(self.X)
+                if type(X) != list:
+                    self.X, normx = norm_range01(self.X)
+                else:
+                    self.X[0], normx = norm_range01(self.X[0])
+                    for i in range(1,len(self.X)):
+                        self.X[i], _ = norm_range01(self.X[i])
                 self.X_norm.update(normx)
             
             t = "Training" if not val else "Validation"
-            print("{} data normalization - min: {} , max: {} , mean: {}"
-                  .format(t,np.min(self.X), np.max(self.X), np.mean(self.X)))
-
+            if type(X) != list:
+                print("{} data normalization - min: {} , max: {} , mean: {}"
+                    .format(t,np.min(self.X), np.max(self.X), np.mean(self.X)))
+            else:
+                print("{} data[0] normalization - min: {} , max: {} , mean: {}"
+                    .format(t,np.min(self.X[0]), np.max(self.X[0]), np.mean(self.X[0])))
+            
             # Y data analysis
             self.first_no_bin_channel = -1
             self.div_Y_on_load_bin_channels = False
             self.div_Y_on_load_no_bin_channels = False
-            if (self.Y.dtype is np.dtype(np.float32) or self.Y.dtype is np.dtype(np.float64)) and instance_problem:
-                for i in range(self.Y.shape[-1]):
-                    if len(np.unique(self.Y[...,i])) > 2:
-                        self.first_no_bin_channel = i
-                        break
-            if self.first_no_bin_channel != -1:
-                if self.first_no_bin_channel != 0:
-                    self.div_Y_on_load_bin_channels = True if np.max(self.Y[...,:self.first_no_bin_channel]) > 30 else False
-                    self.div_Y_on_load_no_bin_channels = True if np.max(self.Y[...,self.first_no_bin_channel:]) > 30 else False
-                else:
-                    self.div_Y_on_load_bin_channels = False
-                    self.div_Y_on_load_no_bin_channels = True if np.max(self.Y) > 30 else False
-            else:
-                self.div_Y_on_load_bin_channels = True if np.max(self.Y) > 30 else False
-        
-            # Y normalization    
-            if self.first_no_bin_channel != -1:
-                if self.div_Y_on_load_bin_channels:
-                    self.Y[...,:self.first_no_bin_channel] = self.Y[...,:self.first_no_bin_channel]/255
-                if self.div_Y_on_load_no_bin_channels:
+            if self.normalizeY == 'as_mask':
+                if (_Y.dtype is np.dtype(np.float32) or _Y.dtype is np.dtype(np.float64)) and instance_problem:
+                    for i in range(_Y.shape[-1]):
+                        if len(np.unique(_Y[...,i])) > 2:
+                            self.first_no_bin_channel = i
+                            break
+                if self.first_no_bin_channel != -1:
                     if self.first_no_bin_channel != 0:
-                        self.Y[...,self.first_no_bin_channel:] = self.Y[...,self.first_no_bin_channel:]/255
+                        self.div_Y_on_load_bin_channels = True if np.max(_Y[...,:self.first_no_bin_channel]) > 30 else False
+                        self.div_Y_on_load_no_bin_channels = True if np.max(_Y[...,self.first_no_bin_channel:]) > 30 else False
                     else:
-                        self.Y = self.Y/255
+                        self.div_Y_on_load_bin_channels = False
+                        self.div_Y_on_load_no_bin_channels = True if np.max(_Y) > 30 else False
+                else:
+                    self.div_Y_on_load_bin_channels = True if np.max(_Y) > 30 else False
+            
+                # Y normalization 
+                if type(Y) != list:   
+                    if self.first_no_bin_channel != -1:
+                        if self.div_Y_on_load_bin_channels:
+                            self.Y[...,:self.first_no_bin_channel] = self.Y[...,:self.first_no_bin_channel]/255
+                        if self.div_Y_on_load_no_bin_channels:
+                            if self.first_no_bin_channel != 0:
+                                self.Y[...,self.first_no_bin_channel:] = self.Y[...,self.first_no_bin_channel:]/255
+                            else:
+                                self.Y = self.Y/255
+                    else:
+                        if self.div_Y_on_load_bin_channels: self.Y = self.Y/255
+                else:
+                    for i in range(len(self.Y)):
+                        if self.first_no_bin_channel != -1:
+                            if self.div_Y_on_load_bin_channels:
+                                self.Y[i][...,:self.first_no_bin_channel] = self.Y[i][...,:self.first_no_bin_channel]/255
+                            if self.div_Y_on_load_no_bin_channels:
+                                if self.first_no_bin_channel != 0:
+                                    self.Y[i][...,self.first_no_bin_channel:] = self.Y[i][...,self.first_no_bin_channel:]/255
+                                else:
+                                    self.Y[i] = self.Y[i]/255
+                        else:
+                            if self.div_Y_on_load_bin_channels: self.Y[i] = self.Y[i]/255
+                self.Y_dtype = self.Y.dtype if type(self.Y) != list else self.Y[0].dtype
+            elif self.normalizeY == 'as_image':
+                self.Y_dtype = np.float32
+                if self.X_norm['type'] == 'div':
+                    self.Y, _ = norm_range01(self.Y)
+                elif self.X_norm['type'] == 'custom':
+                    self.Y = normalize(self.Y, self.X_norm['mean'], self.X_norm['std'])
             else:
-                if self.div_Y_on_load_bin_channels: self.Y = self.Y/255
+                self.Y_dtype = self.Y.dtype if type(self.Y) != list else self.Y[0].dtype
 
         if self.ndim == 2:
             resolution = tuple(resolution[i] for i in [1, 0]) # y, x -> x, y
@@ -550,6 +607,9 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         self.grid_d_size = (self.shape[0]*grid_d_range[0], self.shape[1]*grid_d_range[1])
         self.channel_shuffle = channel_shuffle
 
+        # Instance segmentation options
+        self.instance_problem = instance_problem
+
         # Denoising options
         self.n2v = n2v
         self.val = val
@@ -562,12 +622,23 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             self.apply_structN2Vmask_func = apply_structN2Vmask if self.ndim == 2 else apply_structN2Vmask3D
 
             if val and self.in_memory:
-                self.Y = np.zeros(self.X.shape[:-1] + (self.X.shape[-1]*2,), dtype=np.float32)
-                self.prepare_n2v(self.X, self.Y)
+                self.Y = np.zeros(_X.shape[:-1] + (_X.shape[-1]*2,), dtype=np.float32)
+                if type(self.X) != list: 
+                    self.prepare_n2v(self.X, self.Y)
+                else:
+                    for i in range(len(self.X)):
+                        self.prepare_n2v(self.X[i], self.Y[i])    
 
             self.Y_shape = self.shape[:self.ndim] + (self.Y_channels*2,)
         else:
             self.Y_shape = self.shape[:self.ndim]+(self.Y_channels,)
+
+            if self.ndim == 2:
+                self.Y_shape = (self.Y_shape[0]*random_crop_scale, self.Y_shape[1]*random_crop_scale, self.Y_shape[2]) 
+            else:
+                self.Y_shape = (self.Y_shape[0], self.Y_shape[1]*random_crop_scale, \
+                                self.Y_shape[2]*random_crop_scale, self.Y_shape[2]) 
+        del _X, _Y
 
         self.prob_map = None
         if random_crops_in_DA and prob_map is not None:
@@ -675,10 +746,6 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
     def ensure_shape(self, img, mask):
         NotImplementedError
 
-    @abstractmethod
-    def apply_imgaug(self, image, mask, heat):
-        NotImplementedError
-
     def __len__(self):
         """Defines the number of batches per epoch."""
         return int(np.ceil((self.len*self.extra_data_factor)/self.batch_size))
@@ -696,6 +763,9 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if self.in_memory:
             img = self.X[idx]
             mask = self.Y[idx]
+
+            img = np.squeeze(img)
+            mask = np.squeeze(mask)
         else:
             if self.data_paths[idx].endswith('.npy'):
                 img = np.load(os.path.join(self.paths[0], self.data_paths[idx]))
@@ -713,17 +783,23 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 elif self.X_norm['type'] == 'custom':
                     img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
 
-            # Y normalization    
-            if self.first_no_bin_channel != -1:
-                if self.div_Y_on_load_bin_channels:
-                    mask[...,:self.first_no_bin_channel] = mask[...,:self.first_no_bin_channel]/255
-                if self.div_Y_on_load_no_bin_channels:
-                    if self.first_no_bin_channel != 0:
-                        mask[...,self.first_no_bin_channel:] = mask[...,self.first_no_bin_channel:]/255
-                    else:
-                        mask = mask/255
-            else:
-                if self.div_Y_on_load_bin_channels: mask = mask/255
+            # Y normalization  
+            if self.normalizeY == 'as_mask':  
+                if self.first_no_bin_channel != -1:
+                    if self.div_Y_on_load_bin_channels:
+                        mask[...,:self.first_no_bin_channel] = mask[...,:self.first_no_bin_channel]/255
+                    if self.div_Y_on_load_no_bin_channels:
+                        if self.first_no_bin_channel != 0:
+                            mask[...,self.first_no_bin_channel:] = mask[...,self.first_no_bin_channel:]/255
+                        else:
+                            mask = mask/255
+                else:
+                    if self.div_Y_on_load_bin_channels: mask = mask/255
+            elif self.normalizeY == 'as_image': 
+                if self.X_norm['type'] == 'div':
+                    mask, _ = norm_range01(mask)
+                elif self.X_norm['type'] == 'custom':
+                    mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'])
 
         img, mask = self.ensure_shape(img, mask)
 
@@ -764,7 +840,8 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                         img_prob = self.prob_map[j]
                 else:
                     img_prob = None
-                batch_x[i], batch_y[i] = self.random_crop_func(img, mask, self.shape[:self.ndim], self.val, img_prob=img_prob)
+                batch_x[i], batch_y[i] = self.random_crop_func(img, mask, self.shape[:self.ndim], self.val, img_prob=img_prob,
+                    scale=self.random_crop_scale)
             else:
                 batch_x[i], batch_y[i] = img, mask
 
@@ -788,9 +865,8 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             batch_y_ = np.zeros((len(indexes), ) + self.shape[:self.ndim] + (self.n_classes,))
             for k in range(len(indexes)):
                 batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[k][0]))
-
             batch_y = batch_y_
-        
+            
         self.total_batches_seen += 1
         if self.out_number == 1:
             return batch_x, batch_y
@@ -909,7 +985,18 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                              self.grid_invert)
 
         # Apply transformations to the volume and its mask
-        image, mask, heat_out = self.apply_imgaug(image, mask, heat)
+        if self.normalizeY == 'as_mask':  
+            # Change dtype to supported one by imgaug
+            mask = mask.astype(np.uint8)
+            
+            segmap = SegmentationMapsOnImage(mask, shape=mask.shape)
+            image, vol_mask, heat_out = self.seq(image=image, segmentation_maps=segmap, heatmaps=heat)
+            mask = vol_mask.get_arr()
+        else:
+            # Apply transformations to both images
+            augseq_det = self.seq.to_deterministic()
+            image = augseq_det.augment_image(image)
+            mask = augseq_det.augment_image(mask)
 
         # Recover the original shape
         image = image.reshape(o_img_shape)
@@ -1072,7 +1159,8 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
                 if self.ndim == 2:
                     img, mask, oy, ox,\
-                    s_y, s_x = random_crop(img, mask, self.shape[:2], self.val, img_prob=img_prob, draw_prob_map_points=True)
+                    s_y, s_x = random_crop(img, mask, self.shape[:2], self.val, img_prob=img_prob, draw_prob_map_points=True, 
+                        scale=self.random_crop_scale)
                 else:
                     img, mask, oz, oy, ox,\
                     s_z, s_y, s_x = random_3D_crop(img, mask, self.shape[:3], self.val, img_prob=img_prob,
