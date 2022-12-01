@@ -106,9 +106,9 @@ def load_and_prepare_3D_data(train_path, train_mask_path, val_split=0.1, seed=0,
 
     if train_mask_path is not None:
         print("1) Loading train masks . . .")
-        scrop = [crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3]]
+        scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
         Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov,
-            padding=padding, reflect_to_complete_shape=reflect_to_complete_shape)
+            padding=padding, reflect_to_complete_shape=reflect_to_complete_shape, check_channel=False)
     else:
         Y_train = np.zeros(X_train.shape, dtype=np.float32) # Fake mask val
 

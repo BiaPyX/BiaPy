@@ -143,14 +143,12 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
 
     print("0) Loading train images . . .")
     X_train, orig_train_shape, _, t_filenames = load_data_from_dir(train_path, crop=crop, crop_shape=crop_shape, overlap=ov,
-                                                         padding=padding, return_filenames=True,
-                                                         reflect_to_complete_shape=reflect_to_complete_shape)
+        padding=padding, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape)
     if train_mask_path is not None:                                            
         print("1) Loading train masks . . .")
-        scrop = [crop_shape[0]*y_upscaling, crop_shape[1]*y_upscaling, crop_shape[2]]
-        Y_train, _, _, _ = load_data_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov,
-                                                        padding=padding, return_filenames=True,
-                                                        reflect_to_complete_shape=reflect_to_complete_shape)
+        scrop = (crop_shape[0]*y_upscaling, crop_shape[1]*y_upscaling, crop_shape[2])
+        Y_train, _, _, _ = load_data_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov, padding=padding, 
+            return_filenames=True, check_channel=False, reflect_to_complete_shape=reflect_to_complete_shape)
     else:
         Y_train = np.zeros(X_train.shape, dtype=np.float32) # Fake mask val
 

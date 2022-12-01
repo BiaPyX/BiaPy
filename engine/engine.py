@@ -106,14 +106,15 @@ class Engine(object):
                                              reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
                         if cfg.PROBLEM.TYPE != 'DENOISING':
                             if cfg.PROBLEM.NDIM == '2D':
-                                crop_shape = [cfg.DATA.PATCH_SIZE[0]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
-                                    cfg.DATA.PATCH_SIZE[1]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, cfg.DATA.PATCH_SIZE[2]]
+                                crop_shape = (cfg.DATA.PATCH_SIZE[0]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+                                    cfg.DATA.PATCH_SIZE[1]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, cfg.DATA.PATCH_SIZE[2])
                             else:
-                                crop_shape = [cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
-                                    cfg.DATA.PATCH_SIZE[2]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, cfg.DATA.PATCH_SIZE[3]]
+                                crop_shape = (cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+                                    cfg.DATA.PATCH_SIZE[2]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, cfg.DATA.PATCH_SIZE[3])
                             Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH, crop=True, crop_shape=crop_shape,
                                                  overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
-                                                 reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                                                 reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
+                                                 check_channel=False)
                         else:
                             Y_val = np.zeros(X_val.shape, dtype=np.float32) # Fake mask val
                     else:
@@ -138,7 +139,7 @@ class Engine(object):
                     X_test, _, _ = f_name(cfg.DATA.TEST.PATH)
                     if cfg.DATA.TEST.LOAD_GT:
                         print("3) Loading test masks . . .")
-                        Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH)
+                        Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH, check_channel=False)
                     else:
                         Y_test = None
                 else:

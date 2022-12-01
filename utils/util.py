@@ -313,7 +313,7 @@ def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discar
            Filenames that should be used when saving each image.
 
        discard : bool, optional
-           Wheter to discard image/mask pairs if the mask has no label information.
+           Whether to discard image/mask pairs if the mask has no label information.
 
        verbose : bool, optional
             To print saving information.
@@ -781,7 +781,7 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="", 
 
 
 def check_masks(path, n_classes=2):
-    """Check wheter the data masks have the correct labels inspection a few random images of the given path. If the
+    """Check Whether the data masks have the correct labels inspection a few random images of the given path. If the
        function gives no error one should assume that the masks are correct.
 
        Parameters
@@ -793,7 +793,7 @@ def check_masks(path, n_classes=2):
            Maximum classes that the masks must contain.
     """
 
-    print("Checking wheter the images in {} are binary . . .".format(path))
+    print("Checking Whether the images in {} are binary . . .".format(path))
 
     ids = sorted(next(os.walk(path))[2])
 
@@ -876,7 +876,7 @@ def onehot_encoding_to_img(encoded_image):
 
 
 def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), padding=(0,0), return_filenames=False,
-                       reflect_to_complete_shape=False):
+                       reflect_to_complete_shape=False, check_channel=True):
     """Load data from a directory. If ``crop=False`` all the data is suposed to have the same shape.
 
        Parameters
@@ -902,9 +902,12 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
            the original ones.
 
        reflect_to_complete_shape : bool, optional
-           Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
+           Whether to increase the shape of the dimension that have less size than selected patch size padding it with
            'reflect'.
 
+       check_channel : bool, optional
+           Whether to check if the crop_shape channel matches with the loaded images' one. 
+           
        Returns
        -------
        data : 4D Numpy array or list of 3D Numpy arrays
@@ -974,16 +977,16 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
 
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=False)
 
-        if crop_shape is not None:
-            if crop_shape[-1] != img.shape[-1]:
+        if crop_shape is not None and check_channel:
+            if crop_shape[-1] != crop_shape[:2]+(img.shape[-1],):
                 raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
                     "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1]))
 
         data_shape.append(img.shape)
         img = np.expand_dims(img, axis=0)
-        if crop and img[0].shape != crop_shape:
-            img = crop_data_with_overlap(img, crop_shape, overlap=overlap, padding=padding,
-                                         verbose=False)
+        if crop and img[0].shape != crop_shape[:2]+(img.shape[-1],):
+            img = crop_data_with_overlap(img, crop_shape[:2]+(img.shape[-1],), overlap=overlap, padding=padding,
+                                        verbose=False)
         c_shape.append(img.shape)
         data.append(img)
 
@@ -1072,7 +1075,8 @@ def load_ct_data_from_dir(data_dir, shape=None):
 
 
 def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False, overlap=(0,0,0), padding=(0,0,0),
-                            median_padding=False, reflect_to_complete_shape=False, return_filenames=False):
+                            median_padding=False, reflect_to_complete_shape=False, check_channel=True,
+                            return_filenames=False):
     """Load data from a directory.
 
        Parameters
@@ -1087,7 +1091,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
            Shape of the subvolumes to create when cropping.  E.g. ``(z, y, x, channels)``.
 
        verbose : bool, optional
-           Wheter to enable verbosity.
+           Whether to enable verbosity.
 
        overlap : Tuple of 3 floats, optional
            Amount of minimum overlap on z, y and x dimensions. The values must be on range ``[0, 1)``, that is, ``0%``
@@ -1100,9 +1104,12 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
            If ``True`` the padding value is the median value. If ``False``, the added values are zeroes.
 
        reflect_to_complete_shape : bool, optional
-           Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
+           Whether to increase the shape of the dimension that have less size than selected patch size padding it with
            'reflect'.
 
+       check_channel : bool, optional
+           Whether to check if the crop_shape channel matches with the loaded images' one.
+           
        return_filenames : bool, optional
            Return a list with the loaded filenames. Useful when you need to save them afterwards with the same names as
            the original ones.
@@ -1192,7 +1199,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
         if return_filenames: filenames.append(id_)
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=verbose)
         
-        if crop_shape is not None:
+        if crop_shape is not None and check_channel:
             if crop_shape[-1] != img.shape[-1]:
                 raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
                     "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1]))
@@ -1311,7 +1318,7 @@ def pad_and_reflect(img, crop_shape, verbose=False):
            Shape of the subvolumes to create when cropping.  E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
        verbose : bool, optional
-           Wheter to output information.
+           Whether to output information.
 
        Returns
        -------

@@ -637,7 +637,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 self.Y_shape = (self.Y_shape[0]*random_crop_scale, self.Y_shape[1]*random_crop_scale, self.Y_shape[2]) 
             else:
                 self.Y_shape = (self.Y_shape[0], self.Y_shape[1]*random_crop_scale, \
-                                self.Y_shape[2]*random_crop_scale, self.Y_shape[2]) 
+                                self.Y_shape[2]*random_crop_scale, self.Y_shape[3]) 
         del _X, _Y
 
         self.prob_map = None
