@@ -29,7 +29,7 @@ def check_configuration(cfg):
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != len(str(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)):
             if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1):
-                opts.extend(['cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS', (1,1,1)])    
+                opts.extend(['PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS', (1,1,1)])    
         
     # Adjust dropout to feature maps
     if len(cfg.MODEL.FEATURE_MAPS) != len(cfg.MODEL.DROPOUT_VALUES):
@@ -44,7 +44,6 @@ def check_configuration(cfg):
         opts.extend(['DATA.VAL.RESOLUTION', (1,)*dim_count])
     if len(cfg.DATA.TEST.RESOLUTION) == 1 and cfg.DATA.TEST.RESOLUTION[0] == -1:
         opts.extend(['DATA.TEST.RESOLUTION', (1,)*dim_count])
-
     if len(opts) > 0:
         cfg.merge_from_list(opts)
 
