@@ -40,7 +40,7 @@ class Config:
         #   - 'M' stands for 'Mask', contains the B and the C channels, i.e. the foreground mask. 
         #     Is simply achieved by binarizing input instance masks. 
         #   - 'Dv2' stands for 'Distance V2', which is an updated version of 'D' channel calculating background distance as well.
-        _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = 'B'
+        _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = 'BC'
 
         # Weights to be applied to the channels.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS = (1, 1)
@@ -78,6 +78,8 @@ class Config:
         ### DETECTION
         _C.PROBLEM.DETECTION = CN()
         _C.PROBLEM.DETECTION.CHECK_POINTS_CREATED = True
+        # Whether to save watershed check files
+        _C.PROBLEM.DETECTION.DATA_CHECK_MW = True
 
         ### DENOISING
         _C.PROBLEM.DENOISING = CN()
@@ -548,7 +550,19 @@ class Config:
         _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = False
         # Distance between points to be considered the same. Only applies when TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = True
         _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = [10.0]
-
+        # Whether to apply a watershed to grow the points detected 
+        _C.TEST.POST_PROCESSING.DET_WATERSHED = False
+        # Threshold to be used during the detection watershed to decide the mask that delimits
+        # the grow of the seeds
+        _C.TEST.POST_PROCESSING.DET_WATERSHED_FOREGROUND_TH = 0.5
+        # Structure per each class to dilate the initial seeds of detection 
+        _C.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION = [[-1,-1],]
+        # C
+        _C.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES = [-1]
+        _C.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH = [13,120,120]
+        _C.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER = 30
+        # Filter instances by their eccentricity
+        _C.TEST.POST_PROCESSING.DET_WATERSHED_CIRCULARITY = 0.5
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Auxiliary paths

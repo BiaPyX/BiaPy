@@ -1,4 +1,5 @@
 import os
+import numpy as np
 
 from utils.util import check_value
 
@@ -44,6 +45,24 @@ def check_configuration(cfg):
         opts.extend(['DATA.VAL.RESOLUTION', (1,)*dim_count])
     if len(cfg.DATA.TEST.RESOLUTION) == 1 and cfg.DATA.TEST.RESOLUTION[0] == -1:
         opts.extend(['DATA.TEST.RESOLUTION', (1,)*dim_count])
+
+    if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
+        for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION:
+            if any(y == -1 for y in x):
+                raise ValueError("Please set 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' when using 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION'")
+        if not check_value(cfg.TEST.POST_PROCESSING.DET_WATERSHED_CIRCULARITY):
+            raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_CIRCULARITY' not in [0, 1] range")
+        if cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES != [-1]:
+            if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES) > cfg.MODEL.N_CLASSES:
+                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' length can't be greater than 'MODEL.N_CLASSES'")
+            if np.max(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES) > cfg.MODEL.N_CLASSES:
+                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' can not have a class number greater than 'MODEL.N_CLASSES'")
+            min_class = np.min(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES)
+            if not all(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES == np.array(range(min_class,len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES)+1))):
+                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' must be consecutive, e.g [1,2,3,4..]") 
+        if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH) != dim_count:
+            raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH' need to be of dimension {} for {} problem".format(dim_count, cfg.PROBLEM.NDIM))
+          
     if len(opts) > 0:
         cfg.merge_from_list(opts)
 
@@ -97,7 +116,11 @@ def check_configuration(cfg):
     if cfg.PROBLEM.TYPE == 'DETECTION':
         if cfg.MODEL.N_CLASSES == 0:
             raise ValueError("'MODEL.N_CLASSES' can not be 0")
-
+        if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
+            if any(len(x) != dim_count for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION):
+                raise ValueError("Each structure object defined in 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' "
+                                 "need to be of {} dimension".format(dim_count))
+    
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
         if cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING == 1:

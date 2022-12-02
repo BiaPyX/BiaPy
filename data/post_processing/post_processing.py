@@ -3,28 +3,34 @@ import os
 import math
 import statistics
 import sys
+import time
 import numpy as np
-from tqdm import tqdm
-from scipy import ndimage as ndi
-from skimage import morphology
-from skimage.morphology import disk, remove_small_objects
-from skimage.segmentation import watershed
-from skimage.filters import rank, threshold_otsu
-from scipy.ndimage import rotate
-from skimage.measure import label
-from skimage.io import imsave, imread
-from scipy.ndimage.morphology import binary_erosion, binary_dilation
 import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 import numpy_indexed as npi
+from tqdm import tqdm
+from scipy import ndimage as ndi
+from scipy.signal import find_peaks
 from scipy.spatial import KDTree, cKDTree
 from scipy.spatial.distance import cdist
+from scipy.ndimage.morphology import binary_erosion, binary_dilation
+from scipy.ndimage import rotate, gaussian_filter, grey_dilation, grey_erosion
+from scipy.signal import savgol_filter
+from skimage import morphology
+from skimage.morphology import disk, ball, binary_opening, binary_closing, remove_small_objects, area_closing, dilation, erosion
+from skimage.segmentation import watershed, find_boundaries, clear_border
+from skimage.filters import rank, threshold_otsu
+from skimage.measure import label, regionprops_table
+from skimage.io import imsave, imread
+from skimage.draw import circle_perimeter
+from skimage.exposure import equalize_adapthist
+from skimage.feature import canny
 
 from engine.metrics import jaccard_index_numpy
 from utils.util import pad_and_reflect
 from data.pre_processing import normalize
 from data.data_3D_manipulation import crop_3D_data_with_overlap
-
+from data.pre_processing import reduce_dtype
 
 def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
     """Apply watershed to the given predictions with the goal of refine the boundaries of the artifacts.
@@ -1334,7 +1340,7 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
     return voronoiCyst
 
 
-def remove_close_points(points, radius, resolution, ndim=3):
+def remove_close_points(points, radius, resolution, classes=None, ndim=3):
     """Remove all points from ``point_list`` that are at a ``radius``
        or less distance from each other.
 
@@ -1360,9 +1366,11 @@ def remove_close_points(points, radius, resolution, ndim=3):
            or less from each other.
     """
     print("Removing close points . . .")
-    print( 'Initial number of points: ' + str( len( points ) ) )
+    print('Initial number of points: ' + str( len( points ) ) )
 
     point_list = points.copy()
+    if classes is not None:
+        class_list = classes.copy()
 
     # Resolution adjust
     for i in range(len(point_list)):
@@ -1402,12 +1410,425 @@ def remove_close_points(points, radius, resolution, ndim=3):
             discard.update(neighbors.get(node,set())) # add node's neighbors to discard set
 
     # points to keep
-    new_point_list = [ points[i] for i in keep]
-
+    new_point_list = [points[i] for i in keep]
     print( 'Final number of points: ' + str( len( new_point_list ) ) )
-    return new_point_list
     
+    if classes is not None:
+        new_class_list = [classes[i] for i in keep]
+        return new_point_list, new_class_list
+    else:
+        return new_point_list
     
+
+def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1, ndim=3, donuts_classes=[-1], donuts_patch=[13,120,120],
+    donuts_nucleus_diameter=30, save_dir=None):
+    """
+    Grow given detection seeds.
+     
+    Parameters
+    ----------
+    seeds : 4D Numpy array
+        Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
+
+    coords : List of 3 ints
+        Coordinates of all detected points. 
+
+    data_filename : str
+        Path to load the image paired with seeds. 
+
+    first_dilation : str
+        Each class seed's dilation before watershed.
+
+    nclasses : int, optional
+        Number of classes.
+
+    ndim : int, optional
+        Number of dimensions. E.g. for 2D set it to ``2`` and for 3D to ``3``. 
+
+    donuts_classes : List of ints, optional
+        Classes to check a donuts type cell. Set to ``-1`` to disable it. 
+
+    donuts_patch : List of ints, optional
+        Patch to analize donuts cells. Give a shape that covers all sizes of this type of 
+        cells. 
+
+    donuts_nucleus_diameter : int, optional
+        Aproximate nucleus diameter for donuts type cells. 
+
+    save_dir :  str, optional
+        Directory to save watershed output into.
+
+    Returns
+    -------
+    segm : 4D Numpy array
+        Image with Voronoi applied. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
+    """
+    print("Applying detection watershed . . .")
+    
+    # Read the test image
+    img = imread(data_filename)
+    img = reduce_dtype(img, np.min(img), np.max(img), out_min=0, out_max=255, out_type=np.uint8)
+
+    # Adjust shape
+    img = np.squeeze(img)
+    if ndim == 2:
+        if img.ndim == 3:
+            if img.shape[0] <= 3: 
+                img = img.transpose((1,2,0))  
+                img = np.mean(img, -1)
+    else: 
+        if img.ndim == 4: 
+            if img.shape[0] <= 3: 
+                img = img.transpose((1,2,3,0))
+                img = np.mean(img, -1)
+
+    img = equalize_adapthist(img)
+    
+    # Dilate first the seeds if needed 
+    print("Dilating a bit the seeds . . .")
+    seeds = seeds.squeeze()
+    dilated = False
+    new_seeds = np.zeros(seeds.shape, dtype=seeds.dtype)
+    for i in range(nclasses):
+        if all(x != 0 for x in first_dilation[i]):
+            new_seeds += (binary_dilation(seeds == i+1, structure=np.ones(first_dilation[i]))*(i+1)).astype(np.uint8)
+            dilated = True
+        else:
+            new_seeds += ((seeds == i+1)*(i+1)).astype(np.uint8)
+    if dilated:
+        seeds = np.clip(new_seeds, 0, nclasses)
+    seeds = new_seeds 
+    del new_seeds
+
+    # Background seed 
+    seeds = label(seeds)
+    max_seed = np.max(seeds)
+    if ndim == 2:
+        seeds[:4,:4] = max_seed+1
+        background_label = seeds[1,1]
+    else:
+        seeds[0,:4,:4] = max_seed+1 
+        background_label = seeds[0,1,1]
+    
+    # Try to dilate those instances that have 'donuts' like shape and that might have problems with the watershed
+    if donuts_classes[0] != -1:
+        for dclass in donuts_classes:
+            class_coords = coords[dclass-1]
+            nticks = [x//8 for x in donuts_patch]
+            nticks = [x+(1-x%2) for x in nticks]
+            half_spatch = [x//2 for x in donuts_patch]
+
+            class_check_dir = os.path.join(save_dir, "class_{}_check".format(dclass))
+            os.makedirs(class_check_dir, exist_ok=True)
+
+            for i in tqdm(range(len(class_coords)), leave=False):
+                c = class_coords[i] 
+
+                # Patch coordinates
+                l = seeds[c[0],c[1],c[2]]
+                if ndim == 2:
+                    y1, y2 = max(c[0]-half_spatch[0],0),min(c[0]+half_spatch[0],img.shape[0])
+                    x1, x2 = max(c[1]-half_spatch[1],0),min(c[1]+half_spatch[1],img.shape[1])
+                    img_patch = img[y1:y2,x1:x2]
+                    seed_patch = seeds[y1:y2,x1:x2]
+
+                    # Extract horizontal and vertical line
+                    line_y = img_patch[:, half_spatch[1]]
+                    line_x = img_patch[half_spatch[0], :]
+                else:
+                    z1, z2 = max(c[0]-half_spatch[0],0),min(c[0]+half_spatch[0],img.shape[0])
+                    y1, y2 = max(c[1]-half_spatch[1],0),min(c[1]+half_spatch[1],img.shape[1])
+                    x1, x2 = max(c[2]-half_spatch[2],0),min(c[2]+half_spatch[2],img.shape[2])
+                    img_patch = img[z1:z2,y1:y2,x1:x2]
+                    seed_patch = seeds[z1:z2,y1:y2,x1:x2]
+                    
+                    # Extract horizontal and vertical line
+                    line_y = img_patch[half_spatch[0],:, half_spatch[2]]
+                    line_x = img_patch[half_spatch[0], half_spatch[1], :]
+
+                fillable_patch = seed_patch.copy()
+                seed_patch = (seed_patch == l)*l
+                fillable_patch = (fillable_patch == 0)
+
+                f = os.path.join(class_check_dir, "{}_patch.tif".format(l))
+                aux = np.expand_dims(np.expand_dims((img_patch).astype(np.float32), -1),1)
+                if ndim == 2: aux = np.expand_dims(aux,0)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+
+                # Save the verticial and horizontal lines in the patch to debug 
+                patch_y = np.zeros(img_patch.shape, dtype=np.float32)
+                if ndim == 2:
+                    patch_y[:, half_spatch[1]] = img_patch[:, half_spatch[1]]
+                else:
+                    patch_y[half_spatch[0],:, half_spatch[2]] = img_patch[half_spatch[0],:, half_spatch[2]]
+                f = os.path.join(class_check_dir, "{}_y_line.tif".format(l))
+                aux = np.expand_dims(np.expand_dims((patch_y).astype(np.float32), -1),1)
+                if ndim == 2: aux = np.expand_dims(aux,0)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+                patch_x = np.zeros(img_patch.shape, dtype=np.float32)
+                if ndim == 2:
+                    patch_x[half_spatch[0], :] = img_patch[half_spatch[0], :]
+                else:
+                    patch_x[half_spatch[0], half_spatch[1], :] = img_patch[half_spatch[0], half_spatch[1], :]
+                f = os.path.join(class_check_dir, "{}_x_line.tif".format(l))
+                aux = np.expand_dims(np.expand_dims((patch_x).astype(np.float32), -1),1)
+                if ndim == 2: aux = np.expand_dims(aux,0)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+                # Save vertical and horizontal line plots to debug 
+                plt.title("Line graph")
+                plt.plot(list(range(len(line_y))), line_y, color="red")
+                plt.savefig(os.path.join(class_check_dir, "{}_line_y.png".format(l)))
+                plt.clf()
+                plt.title("Line graph")
+                plt.plot(list(range(len(line_x))), line_x, color="red")
+                plt.savefig(os.path.join(class_check_dir, "{}_line_x.png".format(l)))
+                plt.clf()
+
+                # Smooth them to analize easily
+                line_y = savgol_filter(line_y, nticks[1], 2)
+                line_x = savgol_filter(line_x, nticks[2], 2)
+
+                # Save vertical and horizontal lines again but now filtered
+                plt.title("Line graph")
+                plt.plot(list(range(len(line_y))), line_y, color="red")
+                plt.savefig(os.path.join(class_check_dir, "{}_line_y_filtered.png".format(l)))
+                plt.clf()
+                plt.title("Line graph")
+                plt.plot(list(range(len(line_x))), line_x, color="red")
+                plt.savefig(os.path.join(class_check_dir, "{}_line_x_filtered.png".format(l)))
+                plt.clf()
+
+                # Find maximums 
+                peak_y, _ = find_peaks(line_y)
+                peak_x, _ = find_peaks(line_x)
+
+                # Find minimums 
+                mins_y, _ = find_peaks(-line_y)
+                mins_x, _ = find_peaks(-line_x)
+
+                # Find the donuts shape cells
+                # Vertical line
+                mid = len(line_y)//2
+                mid_value = line_y[min(mins_y, key=lambda x:abs(x-mid))]
+                found_left_peak, found_right_peak = False, False
+                max_right, max_left = 0., 0.
+                max_right_pos, max_left_pos= -1, -1
+                for peak_pos in peak_y:
+                    if line_y[peak_pos] >= mid_value*1.5:
+                        # Left side
+                        if peak_pos <= mid:
+                            found_left_peak = True
+                            if line_y[peak_pos] > max_left: 
+                                max_left = line_y[peak_pos]
+                                max_left_pos = peak_pos
+                        # Right side
+                        else:
+                            found_right_peak = True  
+                            if line_y[peak_pos] > max_right: 
+                                max_right = line_y[peak_pos]
+                                max_right_pos = peak_pos
+                ushape_in_liney = (found_left_peak and found_right_peak)
+                y_diff_dilation = max_right_pos-max_left_pos
+                if ushape_in_liney:
+                    y_left_gradient = min(line_y[:max_left_pos]) < max_left*0.7
+                    y_right_gradient = min(line_y[max_right_pos:]) < max_right*0.7
+
+                # Horizontal line
+                mid = len(line_x)//2
+                mid_value = line_x[min(mins_x, key=lambda x:abs(x-mid))]
+                found_left_peak, found_right_peak = False, False
+                max_right, max_left = 0., 0.
+                max_right_pos, max_left_pos= -1, -1
+                for peak_pos in peak_x:
+                    if line_x[peak_pos] >= mid_value*1.5:
+                        # Left side
+                        if peak_pos <= mid:
+                            found_left_peak = True
+                            if line_x[peak_pos] > max_left: 
+                                max_left = line_x[peak_pos]
+                                max_left_pos = peak_pos
+                        # Right side
+                        else:
+                            found_right_peak = True  
+                            if line_x[peak_pos] > max_right: 
+                                max_right = line_x[peak_pos]
+                                max_right_pos = peak_pos
+                ushape_in_linex = (found_left_peak and found_right_peak)
+                x_diff_dilation = max_right_pos-max_left_pos
+                if ushape_in_linex:
+                    x_left_gradient = min(line_x[:max_left_pos]) < max_left*0.7
+                    x_right_gradient = min(line_x[max_right_pos:]) < max_right*0.7
+
+                # Donuts shape cell found
+                if ushape_in_liney and ushape_in_linex:
+                    # Calculate the dilation to be made based on the nucleus size 
+                    if ndim == 2:
+                        donuts_cell_dilation = [y_diff_dilation-first_dilation[dclass-1][0], x_diff_dilation-first_dilation[dclass-1][1]]
+                        donuts_cell_dilation = [donuts_cell_dilation[0]-int(donuts_cell_dilation[0]*0.4), donuts_cell_dilation[1]-int(donuts_cell_dilation[1]*0.4)]
+                    else:
+                        donuts_cell_dilation = [first_dilation[dclass-1][0], y_diff_dilation-first_dilation[dclass-1][1], x_diff_dilation-first_dilation[dclass-1][2]]
+                        donuts_cell_dilation = [donuts_cell_dilation[0], donuts_cell_dilation[1]-int(donuts_cell_dilation[1]*0.4),
+                            donuts_cell_dilation[2]-int(donuts_cell_dilation[2]*0.4)]
+
+                    # If the center is not wide the cell is not very large
+                    dilate = True
+                    if x_diff_dilation+y_diff_dilation < donuts_nucleus_diameter*2:
+                        print("Instance {} has 'donuts' shape but it seems to be not very large!".format(l))
+                    else:
+                        print("Instance {} has 'donuts' shape!".format(l))
+                        if not y_left_gradient:
+                            print("    - Its vertical left part seems to have low gradient")
+                            dilate = False
+                        if not y_right_gradient:
+                            print("    - Its vertical right part seems to have low gradient")
+                            dilate = False
+                        if not x_left_gradient:
+                            print("    - Its horizontal left part seems to have low gradient")
+                            dilate = False
+                        if not x_right_gradient:
+                            print("    - Its horizontal right part seems to have low gradient")
+                            dilate = False   
+                    if dilate:
+                        if all(x > 0 for x in donuts_cell_dilation):
+                            seed_patch = grey_dilation(seed_patch, footprint=np.ones((donuts_cell_dilation)))
+                            if ndim == 2:
+                                seeds[y1:y2,x1:x2] += seed_patch * fillable_patch
+                            else:
+                                seeds[z1:z2,y1:y2,x1:x2] += seed_patch * fillable_patch
+                    else:
+                        print("    - Not dilating it!")
+                else:
+                    print("Instance {} checked".format(l))
+    
+    print("Calculating gradient . . .")
+    start = time.time()
+    if ndim == 2:
+        gradient = rank.gradient(img, disk(3)).astype(np.uint8)
+    else:
+        gradient = rank.gradient(img, ball(3)).astype(np.uint8)
+    end = time.time()
+    grad_elapsed = end - start
+    print("Gradient took {} seconds".format(int(grad_elapsed)))
+
+    print("Run watershed . . .")
+    segm = watershed(gradient, seeds)
+    
+    # Remove background label
+    segm[segm == background_label] = 0
+
+    # Dilate a bit the instances 
+    if ndim == 2:
+        segm += dilation(segm, disk(5))*(segm==0)
+        segm = erosion(segm, disk(3))
+    else:
+        for i in range(segm.shape[0]):
+            dil_slice = (segm[i]==0)
+            dil_slice = dilation(segm[i], disk(5))*dil_slice
+            segm[i] += dil_slice
+            segm[i] = erosion(segm[i], disk(2))
+        
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+
+        f = os.path.join(save_dir, "img.tif")
+        aux = np.expand_dims(np.expand_dims((img).astype(np.float32), -1),1)
+        if ndim == 2: aux = np.expand_dims(aux,0)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+        
+        f = os.path.join(save_dir, "gradient.tif")
+        aux = np.expand_dims(np.expand_dims((gradient).astype(np.float32), -1),1)
+        if ndim == 2: aux = np.expand_dims(aux,0)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+
+        f = os.path.join(save_dir, "seed_map.tif")
+        aux = np.expand_dims(np.expand_dims((seeds).astype(np.float32), -1),1)
+        if ndim == 2: aux = np.expand_dims(aux,0)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+
+        f = os.path.join(save_dir, "watershed.tif")
+        aux = np.expand_dims(np.expand_dims((segm).astype(np.float32), -1),1)
+        if ndim == 2: aux = np.expand_dims(aux,0)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+
+    return segm
+
+def check_instances_by_prop(img, resolution, coords_list, circularity_th=0.7):
+    """
+    Check the properties of input image instances. Apart from 'label', 'area' and 'circularity'
+    properties lists that are returned another one identifying those instances that do not satisfy
+    the input property threshold are marked as 'Strange' whereas the rest are 'Correct'.     
+    
+    Parameters
+    ----------
+    img : 2D/3D Numpy array
+        Image with instances. E.g. ``(397, 1450, 2000)``.
+
+    resolution : str
+        Path to load the image paired with seeds. 
+
+    coords_list : List of 3 ints
+        Coordinates of all detected points. 
+
+    circularity_th : float, optional
+        circularity threshold value. Those instances that are below that value will be marked as 'Strange'
+        in the returned comment list. 
+
+    Returns
+    -------
+    labels : List of ints
+        Instance label list. 
+    
+    npixels : List of ints
+        Number of pixels of each instance. 
+        
+    areas : List of ints
+        areas/volumes (2D/3D) based on the given resolution.
+    
+    circularities, comment : 4D Numpy array
+        Image with Voronoi applied. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
+    """
+    print("Checking the circularity of instances . . .")
+
+    correct_str = "Correct"
+    unsure_str = "Strange"
+
+    areas = []
+    circularities = np.zeros(len(coords_list), dtype=np.float32)
+    comment = []
+
+    # Obtain each instance labels based on the input image first
+    label_list = []
+    for c in coords_list:
+        label_list.append(img[c[0],c[1],c[2]])
+        comment.append('none')
+
+    _, npixels = np.unique(img, return_counts=True)
+    # Delete background instance '0'
+    npixels = npixels[1:]
+    for pixels in npixels:
+        vol = pixels*(resolution[0]+resolution[1]+resolution[2])
+        areas.append(vol)
+       
+    # Circularity calculation in the slice where the central point was considerer by the model
+    # which is marked by coords_list
+    for i in tqdm(range(img.shape[0]), leave=False):
+        props = regionprops_table(img[i], properties=('label','area', 'perimeter'))             
+        if len(props['label'])>0:                           
+            for k, l in enumerate(props['label']):
+                j = label_list.index(l)
+                coord = coords_list[j]
+                # If instances' center point matches the slice i save the circularity
+                if coord[0] == i: 
+                    circularity = (4 * math.pi * props['area'][k]) / (props['perimeter'][k]*props['perimeter'][k])               
+                    circularities[j] = circularity
+                    if circularity > circularity_th:
+                        comment[j] = correct_str
+                    else:
+                        comment[j] = unsure_str
+
+    return label_list, npixels, areas, circularities, comment
+
+
 def apply_binary_mask(X, bin_mask_dir):
     """Apply a binary mask to remove values outside it.
 

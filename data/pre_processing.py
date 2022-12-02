@@ -288,7 +288,13 @@ def create_detection_masks(cfg, data_type='train'):
             # Class column present
             if len(df.columns) == req_dim+1:
                 df['class'] = df['class'].astype('int')
-                class_point = np.array(df['class'])            
+                class_point = np.array(df['class']) 
+
+                uniq = np.sort(np.unique(class_point))        
+                if uniq[0] != 1:
+                    raise ValueError("Class number must start with 1")    
+                if not all(uniq == np.array(range(1,cfg.MODEL.N_CLASSES+1))):
+                    raise ValueError("Classes must be consecutive, e.g [1,2,3,4..]. Given {}".format(uniq))   
             else:
                 if cfg.MODEL.N_CLASSES > 1:
                     raise ValueError("MODEL.N_CLASSES > 1 but no class specified in CSV files (4th column must have class info)")

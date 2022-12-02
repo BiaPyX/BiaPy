@@ -1,11 +1,12 @@
 import os
 import csv
 import numpy as np
+import pandas as pd
 from skimage.feature import peak_local_max
-from scipy.ndimage.morphology import grey_dilation
 from skimage.measure import label, regionprops_table
-from data.post_processing.post_processing import remove_close_points
+from data.post_processing.post_processing import remove_close_points, detection_watershed, check_instances_by_prop
 from data.pre_processing import create_detection_masks
+from skimage.morphology import disk, dilation                                                    
 
 from utils.util import save_tif
 from engine.metrics import detection_metrics
@@ -27,70 +28,113 @@ class Detection(Base_Workflow):
         self.stats['d_f1_per_crop'] = 0
 
     def detection_process(self, pred, Y, filenames, metric_names=[]):
+        ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
+
         if self.cfg.TEST.DET_LOCAL_MAX_COORDS:
             print("Capturing the local maxima ")
-            all_channel_coord = []
+            all_points = []
+            all_classes = []
             for channel in range(pred.shape[-1]):
+                print("Class {}".format(channel+1))
                 if len(self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK) == 1:
                     min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[0]
                 else:
                     min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[channel]
                 pred_coordinates = peak_local_max(pred[...,channel], threshold_abs=min_th_peak, exclude_border=False)
 
-                # Remove close points as post-processing method
+                # Remove close points per class as post-processing method
                 if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
-                    ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
                     if len(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS) == 1:
                         radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0]
                     else:
                         radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[channel]
+    
                     pred_coordinates = remove_close_points(pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION,
                         ndim=ndim)
+                        
+                all_points.append(pred_coordinates)   
+                all_classes.append(np.full(len(pred_coordinates), channel))
 
-                all_channel_coord.append(pred_coordinates)   
+            # Remove close points again seeing all classes together
+            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+                print("All classes together")
+                radius = np.min(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS)
+ 
+                all_points = np.concatenate(all_points, axis=0)
+                all_classes = np.concatenate(all_classes, axis=0)
+
+                new_points, all_classes = remove_close_points(all_points, radius, self.cfg.DATA.TEST.RESOLUTION,
+                    classes=all_classes, ndim=ndim)
+                
+                # Create again list of arrays of all points
+                all_points = []
+                for i in range(self.cfg.MODEL.N_CLASSES):
+                    all_points.append([])
+                for i, c in enumerate(all_classes):
+                    all_points[c].append(new_points[i])
+                del new_points
 
             # Create a file that represent the local maxima
-            points_pred = np.zeros((pred.shape[:-1] + (1,)), dtype=np.uint8)
-            for n, pred_coordinates in enumerate(all_channel_coord):
+            print("Creating the image with detected points . . .")
+            all_labels = []
+            points_pred = np.zeros(pred.shape[:-1], dtype=np.uint8)
+            for n, pred_coordinates in enumerate(all_points):
                 for coord in pred_coordinates:
                         z,y,x = coord
-                        points_pred[z,y,x,0] = n+1
+                        points_pred[z,y,x] = n+1
                 self.cell_count_lines.append([filenames, len(pred_coordinates)])
 
             if len(pred_coordinates) > 0:
-                if self.cfg.PROBLEM.NDIM == '3D':
-                    for z_index in range(len(points_pred)):
-                        points_pred[z_index] = grey_dilation(points_pred[z_index], size=(3,3,1))
-                else:
-                    points_pred = grey_dilation(points_pred, size=(3,3))
+                for i in range(points_pred.shape[0]):                                                                                  
+                    points_pred[i] = dilation(points_pred[i], disk(3)) 
 
-            save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+            save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                      filenames, verbose=self.cfg.TEST.VERBOSE)
+
+            # Detection watershed
+            if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
+                data_filename = os.path.join(self.cfg.DATA.TEST.PATH, filenames[0])
+                w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
+                check_wa = w_dir if self.cfg.PROBLEM.DETECTION.DATA_CHECK_MW else None
+
+                points_pred = detection_watershed(points_pred, all_points, data_filename, self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION,
+                    self.cfg.MODEL.N_CLASSES, ndim=ndim, donuts_classes=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES,
+                    donuts_patch=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH, 
+                    donuts_nucleus_diameter=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER, save_dir=check_wa)
+                
+                # Advice user if instance     
+                labels, npixels, areas, circularities, comment = check_instances_by_prop(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
+                    np.concatenate(all_points, axis=0), circularity_th=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_CIRCULARITY)
+
+                save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
+                    filenames, verbose=self.cfg.TEST.VERBOSE)
             del points_pred
 
-            all_channel_d_metrics = [0,0,0]
-            for ch, pred_coordinates in enumerate(all_channel_coord):
-                # Save coords in a couple of csv files
-                f1 = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, 
-                                  os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'.csv')
-                f2 = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, 
-                                  os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_prob.csv')
-                file1 = open(f1, 'w', newline="")
-                file2 = open(f2, 'w', newline="")
-                csvwriter1 = csv.writer(file1)
-                csvwriter2 = csv.writer(file2)
-                csvwriter1.writerow(['index', 'axis-0', 'axis-1', 'axis-2'])
-                csvwriter2.writerow(['index', 'axis-0', 'axis-1', 'axis-2', 'probability'])
-                if len(pred_coordinates) > 0:
-                    for nr in range(len(pred_coordinates)):
-                        csvwriter1.writerow([nr+1] + pred_coordinates[nr].tolist())
-                        prob = pred[pred_coordinates[nr][0],pred_coordinates[nr][1],pred_coordinates[nr][2],ch]
-                        csvwriter2.writerow([nr+1] + pred_coordinates[nr].tolist() + [prob])
-                file1.close()
-                file2.close()
+            # Save coords in a couple of csv files            
+            aux = np.concatenate(all_points, axis=0)
+            prob = pred[aux[:,0], aux[:,1], aux[:,2], all_classes]
 
-                # Calculate detection metrics
-                if self.cfg.DATA.TEST.LOAD_GT:
+            if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
+                df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes),\
+                    npixels, areas, circularities, comment), columns =['label', 'axis-0', 'axis-1', 'axis-2', 'probability', \
+                    'class', 'npixels','area', 'circularity', 'comment'])
+                df = df.sort_values(by=['label'])   
+            else:
+                df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes)), 
+                    columns =['axis-0', 'axis-1', 'axis-2', 'probability', 'class'])
+            del aux 
+
+            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_full_info.csv'))
+            if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
+                df = df.drop(columns=['class', 'label', 'npixels', 'area', 'circularity', 'comment'])
+            else:
+                df = df.drop(columns=['class'])
+            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_prob.csv'))
+
+            # Calculate detection metrics
+            if self.cfg.DATA.TEST.LOAD_GT:
+                all_channel_d_metrics = [0,0,0]
+                for ch, pred_coordinates in enumerate(all_points):
                     exclusion_mask = Y[...,ch] > 0
                     bin_Y = Y[...,ch] * exclusion_mask.astype( float )
                     props = regionprops_table(label( bin_Y ), properties=('area','centroid'))
@@ -107,7 +151,7 @@ class Detection(Base_Workflow):
                     if len(pred_coordinates) > 0:
                         print("Detection (class "+str(ch+1)+")")
                         d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
-                                                    voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
+                                                      voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
                         print("Detection metrics: {}".format(d_metrics))
                         all_channel_d_metrics[0] += d_metrics[1]
                         all_channel_d_metrics[1] += d_metrics[3]
@@ -115,7 +159,6 @@ class Detection(Base_Workflow):
                     else:
                         print("No point found to calculate the metrics!")
 
-            if self.cfg.DATA.TEST.LOAD_GT:
                 print("All classes "+str(ch+1))
                 all_channel_d_metrics[0] = all_channel_d_metrics[0]/Y.shape[-1]
                 all_channel_d_metrics[1] = all_channel_d_metrics[1]/Y.shape[-1]
@@ -172,7 +215,7 @@ class Detection(Base_Workflow):
 
 
 def prepare_detection_data(cfg):
-    print("#############################\n"
+    print("############################\n"
           "#  PREPARE DETECTION DATA  #\n"
           "############################\n")
 
@@ -211,7 +254,7 @@ def prepare_detection_data(cfg):
             create_detection_masks(cfg, data_type='val')
 
     # Create selected channels for test data once
-    if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT and cfg.TEST.EVALUATE:
+    if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT:
         create_mask = False
         if not os.path.isdir(cfg.DATA.TEST.DETECTION_MASK_DIR):
             print("You select to create detection masks from given .csv files but no file is detected in {}. "
