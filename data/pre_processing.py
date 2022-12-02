@@ -129,17 +129,10 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
 
         # If only have background -> skip
         if len(l) != 1:
-            vol_dist = np.zeros(vol.shape)
 
             if mode in ["BCD", "BCDv2", "Dv2"]:
-                # For each nucleus
-                for i in tqdm(range(1,len(l)), leave=False):
-                    obj = l[i]
-                    distance = scipy.ndimage.distance_transform_edt(vol==obj)
-                    vol_dist += distance
-
                 # Foreground distance
-                new_mask[img,...,2] = vol_dist.copy()
+                new_mask[img,...,2] = scipy.ndimage.distance_transform_edt(vol>0)
 
                 # Background distance
                 if mode in ["BCDv2", "Dv2"]:

@@ -4,10 +4,11 @@ SYSTEM:
 PROBLEM:
     TYPE: SUPER_RESOLUTION
     NDIM: 2D
+    SUPER_RESOLUTION:
+        UPSCALING: 2
   
 DATA: 
     PATCH_SIZE: (24, 24, 1)
-    EXTRACT_RANDOM_PATCH: True
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data
@@ -28,7 +29,6 @@ AUGMENTOR:
     VFLIP: True
     HFLIP: True
     ROT90: True
-    RANDOM_CROP_SCALE: 4
 
 MODEL:
     ARCHITECTURE: edsr
@@ -41,9 +41,9 @@ TRAIN:
     ENABLE: True
     OPTIMIZER: ADAM
     LR: 5.E-5
-    BATCH_SIZE: 6
-    EPOCHS: 100
-    PATIENCE: 20
+    BATCH_SIZE: 12
+    EPOCHS: 400
+    PATIENCE: 50
   
 TEST:
     ENABLE: True

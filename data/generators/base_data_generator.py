@@ -881,10 +881,10 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
            Parameters
            ----------
            image : 3D/4D Numpy array
-               Image to transform. E.g. ``(y, x, channels)`` in 2D or ``(z, y, x, channels)`` in 3D.
+               Image to transform. E.g. ``(y, x, channels)`` in 2D or ``(z, y, x, z, channels)`` in 3D.
 
            mask : 3D/4D Numpy array
-               Mask to transform. E.g. ``(y, x, channels)`` in 2D or ``(z, y, x, channels)`` in 3D.
+               Mask to transform. E.g. ``(y, x, channels)`` in 2D or ``(y, x, z, channels)`` in 3D.
 
            e_img : 3D/4D Numpy array
                Extra image to help transforming ``image``. E.g. ``(y, x, channels)`` in 2D or 
@@ -897,10 +897,10 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
            Returns
            -------
            image : 3D/4D Numpy array
-               Transformed image. E.g. ``(y, x, channels)`` in 2D or ``(z, y, x, channels)`` in 3D.
+               Transformed image. E.g. ``(y, x, channels)`` in 2D or ``(y, x, z, channels)`` in 3D.
 
            mask : 3D/4D Numpy array
-               Transformed image mask. E.g. ``(y, x, channels)`` in 2D or ``(z, y, x, channels)`` in 3D.
+               Transformed image mask. E.g. ``(y, x, channels)`` in 2D or ``(y, x, z, channels)`` in 3D.
         """
         # Split heatmaps from masks
         if self.first_no_bin_channel != -1:
@@ -912,7 +912,8 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 mask = np.zeros(mask.shape) # Fake mask
             o_heat_shape = heat.shape
             o_mask_shape = mask.shape
-            heat = heat.reshape(heat.shape[:(self.ndim-1)]+(heat.shape[2]*heat.shape[3],))
+            if self.ndim == 3:
+                heat = heat.reshape(heat.shape[:(self.ndim-1)]+(heat.shape[2]*heat.shape[3],))
             heat = HeatmapsOnImage(heat, shape=heat.shape, min_value=0.0, max_value=np.max(heat)+sys.float_info.epsilon)
         else:
             heat = None
@@ -1005,7 +1006,8 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         # Merge heatmaps and masks again
         if self.first_no_bin_channel != -1:
             heat = heat_out.get_arr()
-            heat = heat.reshape(o_heat_shape)
+            if self.ndim == 3:
+                heat = heat.reshape(o_heat_shape)
             if self.first_no_bin_channel != 0:
                 mask = np.concatenate((mask,heat),axis=-1)
             else:
