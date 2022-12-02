@@ -552,16 +552,17 @@ class Config:
         _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = [10.0]
         # Whether to apply a watershed to grow the points detected 
         _C.TEST.POST_PROCESSING.DET_WATERSHED = False
-        # Threshold to be used during the detection watershed to decide the mask that delimits
-        # the grow of the seeds
-        _C.TEST.POST_PROCESSING.DET_WATERSHED_FOREGROUND_TH = 0.5
-        # Structure per each class to dilate the initial seeds of detection 
+        # Structure per each class to dilate the initial seeds before watershed
         _C.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION = [[-1,-1],]
-        # C
+        # List of classes to be consider as 'donuts'. For those class points, the 'donuts' type cell means that their nucleus is 
+        # to big and that the seeds need to be dilated more so the watershed can grow the instances properly.
         _C.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES = [-1]
+        # Patch shape to extract all donuts type cells. It needs to be a bit greater than bigest donuts type cell so all of them can
+        # be contained in this patch. This is used to analize that area for each point of class `DET_WATERSHED_DONUTS_CLASSES`.
         _C.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH = [13,120,120]
+        # Diameter (in pixels) that a cell need to have to be considered as donuts type
         _C.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER = 30
-        # Filter instances by their eccentricity
+        # Circularity that each instance need to be greater than to not be marked as 'Strange'
         _C.TEST.POST_PROCESSING.DET_WATERSHED_CIRCULARITY = 0.5
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
