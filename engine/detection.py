@@ -115,18 +115,20 @@ class Detection(Base_Workflow):
             prob = pred[aux[:,0], aux[:,1], aux[:,2], all_classes]
 
             if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
+                size_measure = 'area' if ndim == 2 else 'volume'
                 df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes),\
                     npixels, areas, circularities, comment), columns =['label', 'axis-0', 'axis-1', 'axis-2', 'probability', \
-                    'class', 'npixels','area', 'circularity', 'comment'])
+                    'class', 'npixels', size_measure, 'circularity', 'comment'])
                 df = df.sort_values(by=['label'])   
             else:
                 df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes)), 
                     columns =['axis-0', 'axis-1', 'axis-2', 'probability', 'class'])
+                df = df.sort_values(by=['axis-0'])
             del aux 
 
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_full_info.csv'))
             if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-                df = df.drop(columns=['class', 'label', 'npixels', 'area', 'circularity', 'comment'])
+                df = df.drop(columns=['class', 'label', 'npixels', size_measure, 'circularity', 'comment'])
             else:
                 df = df.drop(columns=['class'])
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_prob.csv'))
