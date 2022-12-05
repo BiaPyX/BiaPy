@@ -220,16 +220,16 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
     """
 
     assert channels in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2']
-
+    
     if channels in ["BC", "BCM"]:
         semantic = data[...,0]
-        seed_map = (data[...,0] > int(ths['TH1'])) * (data[...,1] < int(ths['TH2']))
-        foreground = (semantic > int(ths['TH3']))
+        seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH2'])
+        foreground = (semantic > ths['TH3'])
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BCD"]:
         semantic = data[...,0]
-        seed_map = (data[...,0] > int(ths['TH1'])) * (data[...,1] < int(ths['TH2'])) * (data[...,2] > ths['TH4'])
-        foreground = (semantic > int(ths['TH3'])) * (data[...,2] > ths['TH5'])
+        seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH2']) * (data[...,2] > ths['TH4'])
+        foreground = (semantic > ths['TH3']) * (data[...,2] > ths['TH5'])
         seed_map = label(seed_map, connectivity=1)
     else: # 'BCDv2', 'Dv2', 'BDv2'
         semantic = data[...,-1]
@@ -260,7 +260,7 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
             seed_map = label(seed_map, connectivity=1) # re-label again
         elif channels == "Dv2": # 'Dv2'
             seed_map = data[...,0] < ths['TH4']
-            seed_map, num = label(seed_map, connectivity=1)
+            seed_map = label(seed_map, connectivity=1)
 
     if remove_before:
         seed_map = remove_small_objects(seed_map, thres_small)
