@@ -227,11 +227,13 @@ def create_test_augmentor(cfg, X_test, Y_test):
     else:
         instance_problem = True if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else False
         normalizeY='as_mask'
+        provide_Y=cfg.DATA.TEST.LOAD_GT
         if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             normalizeY = 'none'
         elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
             normalizeY = 'as_image'
-        dic = dict(X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=cfg.DATA.TEST.LOAD_GT, Y=Y_test,
+            provide_Y = True
+        dic = dict(X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=provide_Y, Y=Y_test,
             dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, dims=cfg.PROBLEM.NDIM, seed=cfg.SYSTEM.SEED,
             instance_problem=instance_problem, normalizeY=normalizeY, norm_custom_mean=custom_mean, 
             norm_custom_std=custom_std)

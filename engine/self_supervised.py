@@ -9,7 +9,7 @@ from data.post_processing.post_processing import ensemble8_2d_predictions, ensem
 from utils.util import save_tif
 from engine.base_workflow import Base_Workflow
 from engine.metrics import PSNR
-from data.pre_processing import create_ssl_target_data_masks, denormalize
+from data.pre_processing import create_ssl_source_data_masks, denormalize
 
 
 class Self_supervised(Base_Workflow):
@@ -23,15 +23,10 @@ class Self_supervised(Base_Workflow):
         # Crop if necessary
         if X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == '2D':
-                obj = crop_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                X, Y = crop_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
                     padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
-                if self.cfg.DATA.TEST.LOAD_GT:
-                    X, Y = obj
-                else:
-                    X = obj
-                del obj
             else:
-                if self.cfg.DATA.TEST.LOAD_GT: Y = Y[0]
+                Y = Y[0]
                 if self.cfg.TEST.REDUCE_MEMORY:
                     X = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
                         padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
@@ -40,14 +35,9 @@ class Self_supervised(Base_Workflow):
                         padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
                         median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
                 else:
-                    obj = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                    X, Y = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
                         padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
                         median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
-                    if self.cfg.DATA.TEST.LOAD_GT:
-                        X, Y = obj
-                    else:
-                        X = obj
-                    del obj
 
         # Predict each patch
         pred = []
@@ -80,14 +70,9 @@ class Self_supervised(Base_Workflow):
                 Y = f_name(Y, original_data_shape[:-1]+(Y.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
                     overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
             else:
-                obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=Y,
+                pred, Y = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=Y,
                     padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
                     verbose=self.cfg.TEST.VERBOSE)
-                if self.cfg.DATA.TEST.LOAD_GT:
-                    pred, Y = obj
-                else:
-                    pred = obj
-                del obj
         else:
             pred = pred[0]
 
@@ -105,9 +90,8 @@ class Self_supervised(Base_Workflow):
             save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
     
         # Calculate PSNR
-        if self.cfg.DATA.TEST.LOAD_GT:
-            psnr_per_image = PSNR(pred, Y)
-            self.stats['psnr_per_image'] += psnr_per_image
+        psnr_per_image = PSNR(pred, Y)
+        self.stats['psnr_per_image'] += psnr_per_image
 
     def after_merge_patches(self, pred, Y, filenames):
         pass
@@ -137,40 +121,68 @@ def prepare_ssl_data(cfg):
     # Create selected channels for train data
     if cfg.TRAIN.ENABLE:
         create_mask = False
-        if not os.path.isdir(cfg.DATA.TRAIN.SSL_TARGET_DIR):
+        if not os.path.isdir(cfg.DATA.TRAIN.SSL_SOURCE_DIR):
             print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                  "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.SSL_TARGET_DIR' "
-                  "path, this process will be done just once!".format(cfg.DATA.TRAIN.SSL_TARGET_DIR))
+                  "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.SSL_SOURCE_DIR' "
+                  "path, this process will be done just once!".format(cfg.DATA.TRAIN.SSL_SOURCE_DIR))
             create_mask = True
         else:
-            if len(next(os.walk(cfg.DATA.TRAIN.SSL_TARGET_DIR))[2]) != len(next(os.walk(cfg.DATA.TRAIN.PATH))[2]):
+            if len(next(os.walk(cfg.DATA.TRAIN.SSL_SOURCE_DIR))[2]) != len(next(os.walk(cfg.DATA.TRAIN.PATH))[2]):
                 print("Different number of files found in {} and {}. Trying to create the the rest again"
-                      .format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.SSL_TARGET_DIR))
-                create_mask = True    
+                      .format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.SSL_SOURCE_DIR))
+                create_mask = True 
+            else:
+                print("Train source data found in {}".format(cfg.DATA.TRAIN.SSL_SOURCE_DIR))   
         if create_mask:
-            create_ssl_target_data_masks(cfg, data_type='train')
+            create_ssl_source_data_masks(cfg, data_type='train')
 
     # Create selected channels for val data
     if cfg.TRAIN.ENABLE and not cfg.DATA.VAL.FROM_TRAIN:
         create_mask = False
-        if not os.path.isdir(cfg.DATA.VAL.SSL_TARGET_DIR):
+        if not os.path.isdir(cfg.DATA.VAL.SSL_SOURCE_DIR):
             print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                  "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.SSL_TARGET_DIR' "
-                  "path, this process will be done just once!".format(cfg.DATA.VAL.SSL_TARGET_DIR))
+                  "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.SSL_SOURCE_DIR' "
+                  "path, this process will be done just once!".format(cfg.DATA.VAL.SSL_SOURCE_DIR))
             create_mask = True
         else:
-            if len(next(os.walk(cfg.DATA.VAL.SSL_TARGET_DIR))[2]) != len(next(os.walk(cfg.DATA.VAL.PATH))[2]):
+            if len(next(os.walk(cfg.DATA.VAL.SSL_SOURCE_DIR))[2]) != len(next(os.walk(cfg.DATA.VAL.PATH))[2]):
                 print("Different number of files found in {} and {}. Trying to create the the rest again"
-                      .format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.SSL_TARGET_DIR))
-                create_mask = True    
+                      .format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.SSL_SOURCE_DIR))
+                create_mask = True   
+            else:
+                print("Validation source data found in {}".format(cfg.DATA.VAL.SSL_SOURCE_DIR)) 
         if create_mask:         
-            create_ssl_target_data_masks(cfg, data_type='val')
+            create_ssl_source_data_masks(cfg, data_type='val')
+
+    # Create selected channels for test data
+    if cfg.TEST.ENABLE:
+        create_mask = False
+        if not os.path.isdir(cfg.DATA.TEST.SSL_SOURCE_DIR):
+            print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                  "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.SSL_SOURCE_DIR' "
+                  "path, this process will be done just once!".format(cfg.DATA.TEST.SSL_SOURCE_DIR))
+            create_mask = True
+        else:
+            if len(next(os.walk(cfg.DATA.TEST.SSL_SOURCE_DIR))[2]) != len(next(os.walk(cfg.DATA.TEST.PATH))[2]):
+                print("Different number of files found in {} and {}. Trying to create the the rest again"
+                      .format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.SSL_SOURCE_DIR))
+                create_mask = True    
+            else:
+                print("Test source data found in {}".format(cfg.DATA.TEST.SSL_SOURCE_DIR))
+        if create_mask:
+            create_ssl_source_data_masks(cfg, data_type='test')
 
     opts = []
     if cfg.TRAIN.ENABLE:
-        print("DATA.TRAIN.MASK_PATH changed from {} to {}".format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.SSL_TARGET_DIR))
-        opts.extend(['DATA.TRAIN.MASK_PATH', cfg.DATA.TRAIN.SSL_TARGET_DIR])
+        print("DATA.TRAIN.PATH changed from {} to {}".format(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.SSL_SOURCE_DIR))
+        print("DATA.TRAIN.MASK_PATH changed from {} to {}".format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.PATH))
+        opts.extend(['DATA.TRAIN.PATH', cfg.DATA.TRAIN.SSL_SOURCE_DIR, 'DATA.TRAIN.MASK_PATH', cfg.DATA.TRAIN.PATH])
         if not cfg.DATA.VAL.FROM_TRAIN:
-            print("DATA.VAL.MASK_PATH changed from {} to {}".format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.SSL_TARGET_DIR))
-            opts.extend(['DATA.VAL.MASK_PATH', cfg.DATA.VAL.SSL_TARGET_DIR])
+            print("DATA.VAL.PATH changed from {} to {}".format(cfg.DATA.VAL.PATH, cfg.DATA.VAL.SSL_SOURCE_DIR))
+            print("DATA.VAL.MASK_PATH changed from {} to {}".format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.PATH))
+            opts.extend(['DATA.VAL.PATH', cfg.DATA.VAL.SSL_SOURCE_DIR, 'DATA.VAL.MASK_PATH', cfg.DATA.VAL.PATH])
+    if cfg.TEST.ENABLE:
+        print("DATA.TEST.PATH changed from {} to {}".format(cfg.DATA.TEST.PATH, cfg.DATA.TEST.SSL_SOURCE_DIR))
+        print("DATA.TEST.MASK_PATH changed from {} to {}".format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.PATH))
+        opts.extend(['DATA.TEST.PATH', cfg.DATA.TEST.SSL_SOURCE_DIR, 'DATA.TEST.MASK_PATH', cfg.DATA.TEST.PATH]) 
     cfg.merge_from_list(opts)

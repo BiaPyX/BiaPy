@@ -111,66 +111,71 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
     """
 
     assert data_mask.ndim in [5, 4]
+    assert mode in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2']
 
     d_shape = 4 if data_mask.ndim == 5 else 3
-    if mode in ['BCDv2', 'Dv2']:
+    if mode in ['BCDv2', 'Dv2', 'BDv2']:
         c_number = 4
     elif mode in ['BCD', 'BCM']:
         c_number = 3
     elif mode == 'BC':
         c_number = 2
 
-
     new_mask = np.zeros(data_mask.shape[:d_shape] + (c_number,), dtype=np.float32)
-
     for img in tqdm(range(data_mask.shape[0])):
         vol = data_mask[img,...,0].astype(np.int64)
-        l = np.unique(vol)
+        instance_count = len(np.unique(vol))
 
         # If only have background -> skip
-        if len(l) != 1:
+        if ('D' in mode or 'Dv2' in mode) and instance_count != 1:
+            # Foreground distance
+            new_mask[img,...,2] = scipy.ndimage.distance_transform_edt(vol>0)
 
-            if mode in ["BCD", "BCDv2", "Dv2"]:
-                # Foreground distance
-                new_mask[img,...,2] = scipy.ndimage.distance_transform_edt(vol>0)
+        # Background distance
+        if 'Dv2' in mode:
+            # Background distance
+            vol_b_dist = np.invert(vol>0)
+            vol_b_dist= scipy.ndimage.distance_transform_edt(vol_b_dist)
+            vol_b_dist = np.max(vol_b_dist)-vol_b_dist
+            new_mask[img,...,3] = vol_b_dist.copy()
 
-                # Background distance
-                if mode in ["BCDv2", "Dv2"]:
-                    # Background distance
-                    vol_b_dist = np.invert(vol>0)
-                    vol_b_dist= scipy.ndimage.distance_transform_edt(vol_b_dist)
-                    vol_b_dist = np.max(vol_b_dist)-vol_b_dist
-                    new_mask[img,...,3] = vol_b_dist.copy()
+        # Semantic mask
+        if 'B' in mode and instance_count != 1:
+            new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)
 
-            # Semantic mask
-            if mode != "Dv2":
-                new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)
-
-            # Contour
-            if mode in ["BCD", "BCDv2", "BC", "BCM", "Dv2"]:
-                new_mask[img,...,1] = find_boundaries(vol, mode=fb_mode).astype(np.uint8)
+        # Contour
+        if ('C' in mode or 'Dv2' in mode) and instance_count != 1: 
+            new_mask[img,...,1] = find_boundaries(vol, mode=fb_mode).astype(np.uint8)
+            if 'B' in mode:
                 # Remove contours from segmentation maps
                 new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0
-                if mode == "BCM":
-                    new_mask[img,...,2] = (vol>0).astype(np.uint8)
+            if mode == "BCM":
+                new_mask[img,...,2] = (vol>0).astype(np.uint8)
 
     # Normalize and merge distance channels
-    if mode in ["BCDv2", "Dv2"]:
-        f_min = np.min(new_mask[...,2])
-        f_max = np.max(new_mask[...,2])
+    if 'Dv2' in mode:
+        # Normalize background   
         b_min = np.min(new_mask[...,3])
-        b_max = np.max(new_mask[...,3])
-
-        # Normalize foreground and background separately
-        new_mask[...,2] = (new_mask[...,2]-f_min)/(f_max-f_min)
+        b_max = np.max(new_mask[...,3])    
         new_mask[...,3] = (new_mask[...,3]-b_min)/(b_max-b_min)
 
-        new_mask[...,2] = new_mask[...,3] - new_mask[...,2]
-        # The intersection of the channels is the contour channel, so set it to the maximum value 1
-        new_mask[...,2][new_mask[...,1]>0] = 1
-        new_mask = new_mask[...,:3]
-        if mode == "Dv2":
-            new_mask = np.expand_dims(new_mask[...,-1], -1)
+        if instance_count != 1: 
+            # Normalize foreground  
+            f_min = np.min(new_mask[...,2])
+            f_max = np.max(new_mask[...,2])
+            new_mask[...,2] = (new_mask[...,2]-f_min)/(f_max-f_min)
+
+            new_mask[...,2] = new_mask[...,3] - new_mask[...,2]
+
+            # The intersection of the channels is the contour channel, so set it to the maximum value 1
+            new_mask[...,2][new_mask[...,1]>0] = 1
+
+        if mode == "BCDv2":
+            new_mask = new_mask[...,:3]
+        elif mode == "BDv2":
+            new_mask = new_mask[...,[0,-1]]   
+        elif mode == "Dv2":
+            new_mask = np.expand_dims(new_mask[...,2], -1)
 
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
@@ -185,13 +190,14 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
                 suffix.append('_distance.tif')
             elif mode == "BCM":
                 suffix.append('_binary_mask.tif')
+        elif mode == "BDv2":
+            suffix.append('_distance.tif')
 
         for i in range(min(3,len(new_mask))):
             for j in range(len(suffix)):
-                aux = np.transpose(new_mask[i,...,j],(2,0,1)) if data_mask.ndim == 5 else new_mask[i,...,j]
+                aux = new_mask[i,...,j]
                 aux = np.expand_dims(np.expand_dims(aux,-1),0)
                 save_tif(aux, save_dir, filenames=['vol'+str(i)+suffix[j]], verbose=False)
-
     return new_mask
 
 #############
@@ -373,8 +379,8 @@ def create_detection_masks(cfg, data_type='train'):
 #######
 # SSL #
 #######
-def create_ssl_target_data_masks(cfg, data_type='train'):
-    """Create SSL target data.
+def create_ssl_source_data_masks(cfg, data_type='train'):
+    """Create SSL source data.
 
        Parameters
        ----------
@@ -382,22 +388,21 @@ def create_ssl_target_data_masks(cfg, data_type='train'):
            Configuration.
 
 	   data_type: str, optional
-		   Wheter to create train or validation target data.
+		   Wheter to create train, validation or test source data.
     """
 
-    assert data_type in ['train', 'val']
-
-    tag = "TRAIN" if data_type == "train" else "VAL"
+    assert data_type in ['train', 'val', 'test']
+    tag = data_type.upper()
     
     img_dir = getattr(cfg.DATA, tag).PATH
-    out_dir = getattr(cfg.DATA, tag).SSL_TARGET_DIR
+    out_dir = getattr(cfg.DATA, tag).SSL_SOURCE_DIR
     ids = sorted(next(os.walk(img_dir))[2])
     add_noise = True if cfg.PROBLEM.SELF_SUPERVISED.NOISE > 0 else False
 
-    print("Creating {} SSL targets. . .".format(data_type))
+    print("Creating {} SSL source. . .".format(data_type))
     for i in range(len(ids)):
         if not os.path.exists(os.path.join(out_dir, ids[i])):
-            print("Crappifying file {} to create SSL target".format(os.path.join(img_dir, ids[i])))
+            print("Crappifying file {} to create SSL source".format(os.path.join(img_dir, ids[i])))
 
             img = imread(os.path.join(img_dir, ids[i]))
             
@@ -412,14 +417,18 @@ def create_ssl_target_data_masks(cfg, data_type='train'):
                 if img.ndim == 3: 
                     img = np.expand_dims(img, -1)
                 else:
-                    if img.shape[0] <= 3: img = img.transpose((1,2,3,0))
+                    min_val = min(img.shape)
+                    channel_pos = img.shape.index(min_val)
+                    if channel_pos != 3 and img.shape[channel_pos] <= 4:
+                        new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
+                        img = img.transpose(new_pos)
 
             img = crappify(img, resizing_factor=cfg.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR, 
                 add_noise=add_noise, noise_level=cfg.PROBLEM.SELF_SUPERVISED.NOISE)
 
             save_tif(np.expand_dims(img,0), out_dir, [ids[i]])
         else:
-            print("Target file {} found".format(os.path.join(img_dir, ids[i])))
+            print("Source file {} found".format(os.path.join(img_dir, ids[i])))
 
 def crappify(input_img, resizing_factor, add_noise=True, noise_level=None, Down_up=True):
     """
@@ -471,13 +480,13 @@ def crappify(input_img, resizing_factor, add_noise=True, noise_level=None, Down_
         img = add_gaussian_noise(img, noise_level)
 
     img = resize(img, targ_sz, order=1, mode='reflect',
-                    clip=True, preserve_range=True, anti_aliasing=False)
+                 clip=True, preserve_range=True, anti_aliasing=False)
 
     if Down_up:
         img = resize(img, org_sz, order=1, mode='reflect',
                         clip=True, preserve_range=True, anti_aliasing=False)
 
-    return img
+    return img.astype(input_img.dtype)
 
 def add_gaussian_noise(image, percentage_of_noise):
     """
@@ -500,7 +509,7 @@ def add_gaussian_noise(image, percentage_of_noise):
     max_value=np.max(image)
     noise_level=percentage_of_noise*max_value
     noise = np.random.normal(loc=0, scale=noise_level, size=image.shape)
-    noisy_img=np.clip(image+noise, 0, max_value) 
+    noisy_img=np.clip(image+noise, 0, max_value).astype(image.dtype)
     return noisy_img
 
 ################

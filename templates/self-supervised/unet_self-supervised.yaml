@@ -18,7 +18,6 @@ DATA:
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
         IN_MEMORY: True
-        LOAD_GT: True
         PATH: /path/to/data                                                                                             
         MASK_PATH: /path/to/data
         PADDING: (16,16)

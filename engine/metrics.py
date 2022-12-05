@@ -151,20 +151,17 @@ def jaccard_index_softmax(y_true, y_pred, t=0.5):
     return tot_jac/(y_pred.shape[-1]-1)
 
 
-def IoU_instances(t=0.5, binary_channels=2):
+def IoU_instances(t=0.5, first_not_binary_channel=2):
     """Define Jaccard index. It only applies for the first two segmentation
        channels.
 
        Parameters
        ----------
-       y_true : Tensor
-           Ground truth masks.
-
-       y_pred : Tensor
-           Predicted masks.
-
        t : float, optional
            Threshold to be applied.
+
+       first_not_binary_channel : int, optional
+           First channel not binary to not apply IoU in. 
 
        Returns
        -------
@@ -173,8 +170,8 @@ def IoU_instances(t=0.5, binary_channels=2):
     """
 
     def jaccard_index_instances(y_true, y_pred):
-        y_pred_ = tf.cast(y_pred[...,:binary_channels] > t, dtype=tf.int32)
-        y_true_ = tf.cast(y_true[...,:binary_channels] > t, dtype=tf.int32)
+        y_pred_ = tf.cast(y_pred[...,:first_not_binary_channel] > t, dtype=tf.int32)
+        y_true_ = tf.cast(y_true[...,:first_not_binary_channel] > t, dtype=tf.int32)
 
         TP = tf.math.count_nonzero(y_pred_ * y_true_)
         FP = tf.math.count_nonzero(y_pred_ * (y_true_ - 1))
@@ -184,6 +181,28 @@ def IoU_instances(t=0.5, binary_channels=2):
         return jac
 
     return jaccard_index_instances
+
+def MAE_instances(distance_channel=-1):
+    """Define MAE function to be applied to the distance channel in instance segmentation.
+
+       Parameters
+       ----------
+       y_true : Tensor
+           Ground truth masks.
+
+       y_pred : Tensor
+           Predicted masks.
+
+       Returns
+       -------
+       mae : Tensor
+           MAE value.
+    """
+
+    def mae_distance_channel(y_true, y_pred):
+        return tf.keras.losses.mean_absolute_error(y_true[...,distance_channel], y_pred[...,distance_channel])
+    return mae_distance_channel
+
 
 
 def jaccard_loss(y_true, y_pred):

@@ -28,9 +28,13 @@ def check_configuration(cfg):
 
     # Adjust channel weights 
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-        if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != len(str(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)):
+        if not 'Dv2' in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        else:
+            channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.replace('Dv2',''))+1
+        if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
             if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1):
-                opts.extend(['PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS', (1,1,1)])    
+                opts.extend(['PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS', (1,)*channels_provided])    
         
     # Adjust dropout to feature maps
     if len(cfg.MODEL.FEATURE_MAPS) != len(cfg.MODEL.DROPOUT_VALUES):
@@ -104,7 +108,7 @@ def check_configuration(cfg):
         assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2']
         if cfg.MODEL.N_CLASSES > 1:
             raise ValueError("Not implemented pipeline option for INSTANCE_SEGMENTATION")
-        if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != len(str(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)):
+        if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
             raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. "
                             "E.g. 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BC' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[1,0.5]. "
                             "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BCD' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]")

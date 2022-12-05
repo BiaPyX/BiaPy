@@ -3,8 +3,7 @@ import h5py
 import numpy as np
 from skimage.io import imread
 
-from data.post_processing.post_processing import (bc_watershed,bcd_watershed, bdv2_watershed, calculate_optimal_mw_thresholds,
-                                                  voronoi_on_mask_2)
+from data.post_processing.post_processing import watershed_by_channels, calculate_optimal_mw_thresholds, voronoi_on_mask_2
 from data.pre_processing import create_instance_channels, create_test_instance_channels
 from utils.util import save_tif, wrapper_matching_dataset_lazy, wrapper_matching_segCompare
 from utils.matching import matching, match_using_segCompare
@@ -25,6 +24,13 @@ class Instance_Segmentation(Base_Workflow):
         self.all_matching_stats_segCompare = []
         self.all_matching_stats_voronoi_segCompare = []                   
 
+        self.instance_ths = {}
+        self.instance_ths['TH1'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH1
+        self.instance_ths['TH2'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH2
+        self.instance_ths['TH3'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH3
+        self.instance_ths['TH4'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH4
+        self.instance_ths['TH5'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH5
+
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "BCDv2":
             if self.cfg.TEST.POST_PROCESSING.APPLY_MASK and os.path.isdir(self.cfg.DATA.VAL.BINARY_MASKS):
                 bin_mask = self.cfg.DATA.VAL.BINARY_MASKS
@@ -35,13 +41,9 @@ class Instance_Segmentation(Base_Workflow):
                 self.cfg.DATA.VAL.MASK_PATH, self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, bin_mask,
                 chart_dir=self.cfg.PATHS.CHARTS, verbose=self.cfg.TEST.VERBOSE)
             if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCD":
-                self.th1_opt, self.th2_opt, self.th3_opt, self.th4_opt, self.th5_opt = obj
+                self.instance_ths['TH1'], self.instance_ths['TH2'], self.instance_ths['TH3'], self.instance_ths['TH4'], self.instance_ths['TH5'] = obj
             else:
-                self.th1_opt, self.th2_opt, self.th3_opt = obj
-                self.th4_opt, self.th5_opt = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH4, self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH5
-        else:
-            self.th1_opt, self.th2_opt, self.th3_opt = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH1, self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH2, self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH3
-            self.th4_opt, self.th5_opt = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH4, self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH5
+                self.instance_ths['TH1'], self.instance_ths['TH2'], self.instance_ths['TH3'] = obj
             
     def after_merge_patches(self, pred, Y, filenames):
         #############################
@@ -50,17 +52,10 @@ class Instance_Segmentation(Base_Workflow):
         print("Creating instances with watershed . . .")
         w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
         check_wa = w_dir if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW else None
-        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BCM"]:
-            w_pred = bc_watershed(pred, thres1=self.th1_opt, thres2=self.th2_opt, thres3=self.th3_opt,
-                thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW,
-                save_dir=check_wa)
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCD":
-            w_pred = bcd_watershed(pred, thres1=self.th1_opt, thres2=self.th2_opt, thres3=self.th3_opt, thres4=self.th4_opt,
-                thres5=self.th5_opt, thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ,
-                remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, save_dir=check_wa)
-        else: # "BCDv2"
-            w_pred = bdv2_watershed(pred, bin_th=self.th1_opt, thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ,
-                remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, save_dir=check_wa)
+        
+        w_pred = watershed_by_channels(pred, self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, ths=self.instance_ths, 
+            thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, 
+            save_dir=check_wa)
 
         save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                     filenames, verbose=self.cfg.TEST.VERBOSE)

@@ -188,7 +188,7 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
     return np.expand_dims(watershed_predictions, -1)
 
 
-def bc_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres_small=128, remove_before=False, save_dir=None):
+def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before=False, save_dir=None):
     """Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
        algorithm.
 
@@ -200,14 +200,14 @@ def bc_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres_small=128, rem
        data : 4D Numpy array
            Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
 
-       thres1 : float, optional
-           Threshold used in the semantic mask to create watershed seeds.
+       channels : str
+           Channel type used. Possible options: ``BC``, ``BCM``, ``BCD``, ``BCDv2``, ``Dv2`` and ``BDv2``.
 
-       thres2 : float, optional
-           Threshold used in the contours to create watershed seeds.
-
-       thres3 : float, optional
-           Threshold used in the semantic mask to create the foreground mask.
+       ths : float, optional
+           Thresholds to be used on each channel. ``TH1`` used in the semantic mask to create watershed seeds;
+           ``TH2`` used in the contours to create watershed seeds; ``TH3`` used in the semantic mask to create the 
+           foreground mask; ``TH4`` used in the distances to create watershed seeds; and ``TH5`` used in the distances 
+           to create the foreground mask.
 
        thres_small : int, optional
            Theshold to remove small objects created by the watershed.
@@ -219,11 +219,48 @@ def bc_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres_small=128, rem
            Directory to save watershed output into.
     """
 
-    v = 255 if np.max(data) <= 1 else 1
-    semantic = data[...,0]*v
-    seed_map = (data[...,0]*v > int(255*thres1)) * (data[...,1]*v < int(255*thres2))
-    foreground = (semantic > int(255*thres3))
-    seed_map = label(seed_map, connectivity=1)
+    assert channels in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2']
+
+    if channels in ["BC", "BCM"]:
+        semantic = data[...,0]
+        seed_map = (data[...,0] > int(ths['TH1'])) * (data[...,1] < int(ths['TH2']))
+        foreground = (semantic > int(ths['TH3']))
+        seed_map = label(seed_map, connectivity=1)
+    elif channels in ["BCD"]:
+        semantic = data[...,0]
+        seed_map = (data[...,0] > int(ths['TH1'])) * (data[...,1] < int(ths['TH2'])) * (data[...,2] > ths['TH4'])
+        foreground = (semantic > int(ths['TH3'])) * (data[...,2] > ths['TH5'])
+        seed_map = label(seed_map, connectivity=1)
+    else: # 'BCDv2', 'Dv2', 'BDv2'
+        semantic = data[...,-1]
+        foreground = None
+        if channels == "BCDv2": # 'BCDv2'
+            seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH2']) * (data[...,1] < ths['TH4'])
+            background_seed = binary_dilation( ((data[...,0]>ths['TH1']) + (data[...,1]>ths['TH2'])).astype(np.uint8), iterations=2)
+            seed_map, num = label(seed_map, connectivity=1, return_num=True)
+
+            # Create background seed and label correctly
+            background_seed = 1 - background_seed
+            background_seed[background_seed==1] = num+1
+            seed_map = seed_map + background_seed
+            del background_seed
+        elif channels == "BDv2": # 'BDv2'
+            seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH4'])
+            background_seed = binary_dilation((data[...,1]<ths['TH4']).astype(np.uint8), iterations=2)
+            seed_map = label(seed_map, connectivity=1)
+            background_seed = label(background_seed, connectivity=1)
+
+            props = regionprops_table(seed_map, properties=('area','centroid'))
+            for n in range(len(props['centroid-0'])):
+                label_center = [props['centroid-0'][n], props['centroid-1'][n], props['centroid-2'][n]]
+                instance_to_remove = background_seed[label_center]
+                background_seed[background_seed == instance_to_remove] = 0
+            seed_map = seed_map + background_seed
+            del background_seed
+            seed_map = label(seed_map, connectivity=1) # re-label again
+        elif channels == "Dv2": # 'Dv2'
+            seed_map = data[...,0] < ths['TH4']
+            seed_map, num = label(seed_map, connectivity=1)
 
     if remove_before:
         seed_map = remove_small_objects(seed_map, thres_small)
@@ -239,148 +276,13 @@ def bc_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres_small=128, rem
         aux = np.expand_dims(np.expand_dims((seed_map).astype(np.float32), -1),1)
         imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
-        f = os.path.join(save_dir, "foreground.tif")
-        aux = np.expand_dims(np.expand_dims((foreground).astype(np.float32), -1),1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+        if channels in ["BC", "BCM", "BCD"]:
+            f = os.path.join(save_dir, "foreground.tif")
+            aux = np.expand_dims(np.expand_dims((foreground).astype(np.float32), -1),1)
+            imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
         f = os.path.join(save_dir, "watershed.tif")
         aux = np.expand_dims(np.expand_dims((segm).astype(np.float32), -1),1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-
-    return segm
-
-
-def bcd_watershed(data, thres1=0.9, thres2=0.8, thres3=0.85, thres4=0.5, thres5=0.0, thres_small=128,
-                  remove_before=False, save_dir=None):
-    """Convert binary foreground probability maps, instance contours to instance masks via watershed segmentation
-       algorithm.
-
-       Implementation based on `PyTorch Connectomics' process.py
-       <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py>`_.
-
-       Parameters
-       ----------
-       data : 4D Numpy array
-           Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
-
-       thres1 : float, optional
-           Threshold used in the semantic mask to create watershed seeds.
-
-       thres2 : float, optional
-           Threshold used in the contours to create watershed seeds.
-
-       thres3 : float, optional
-           Threshold used in the semantic mask to create the foreground mask.
-
-       thres4 : float, optional
-           Threshold used in the distances to create watershed seeds.
-
-       thres5 : float, optional
-           Threshold used in the distances to create the foreground mask.
-
-       thres_small : int, optional
-           Theshold to remove small objects created by the watershed.
-
-       remove_before : bool, optional
-           To remove objects before watershed. If ``False`` it is done after watershed.
-
-       save_dir :  str, optional
-           Directory to save watershed output into.
-    """
-
-    v = 255 if np.max(data[...,:2]) <= 1 else 1
-    semantic = data[...,0]*v
-    seed_map = (data[...,0]*v > int(255*thres1)) * (data[...,1]*v < int(255*thres2)) * (data[...,2] > thres4)
-    foreground = (semantic > int(255*thres3)) * (data[...,2] > thres5)
-    seed_map = label(seed_map, connectivity=1)
-
-    if remove_before:
-        seed_map = remove_small_objects(seed_map, thres_small)
-        segm = watershed(-semantic, seed_map, mask=foreground)
-    else:
-        segm = watershed(-semantic, seed_map, mask=foreground)
-        segm = remove_small_objects(segm, thres_small)
-
-    if save_dir is not None:
-        os.makedirs(save_dir, exist_ok=True)
-
-        f = os.path.join(save_dir, "semantic.tif")
-        aux = np.expand_dims(np.expand_dims((semantic).astype(np.float32), -1),1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-
-        f = os.path.join(save_dir, "seed_map.tif")
-        aux = np.expand_dims(np.expand_dims((seed_map).astype(np.float32), -1),1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-
-        f = os.path.join(save_dir, "foreground.tif")
-        aux = np.expand_dims(np.expand_dims((foreground).astype(np.float32), -1),1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-
-        f = os.path.join(save_dir, "watershed.tif")
-        aux = np.expand_dims(np.expand_dims((segm).astype(np.float32), -1),1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-
-    return segm
-
-
-def bdv2_watershed(data, bin_th=0.2, thres_small=128, remove_before=False, save_dir=None):
-    """Convert binary foreground probability maps, instance contours to instance masks via watershed segmentation
-       algorithm.
-
-       Implementation based on `PyTorch Connectomics' process.py
-       <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py>`_.
-
-       Parameters
-       ----------
-       data : 4D Numpy array
-           Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
-
-       bin_th : float, optional
-           Threshold used to binarize the input.
-
-       thres_small : int, optional
-           Theshold to remove small objects created by the watershed.
-
-       remove_before : bool, optional
-           To remove objects before watershed. If ``False`` it is done after watershed.
-
-       save_dir :  str, optional
-           Directory to save watershed output into.
-    """
-
-    if data.shape[-1] == 3:
-        # Label all the instance seeds
-        seed_map = (data[...,0] > bin_th) * (data[...,1] < bin_th)
-        seed_map, num = label(seed_map, return_num=True)
-
-        # Create background seed and label correctly
-        background_seed = binary_dilation(((data[...,0]+data[...,1]) > bin_th).astype(int), iterations=2)
-        background_seed = 1 - background_seed
-        background_seed[background_seed==1] = num+1
-
-        seed_map = seed_map + background_seed
-        del background_seed
-    # Assume is 'Dv2'
-    else:
-        seed_map = data[...,0] < bin_th
-        seed_map = label(seed_map)
-
-    if remove_before:
-        seed_map = remove_small_objects(seed_map, thres_small)
-        segm = watershed(data[...,-1], seed_map)
-    else:
-        segm = watershed(data[...,-1], seed_map)
-        seed_map = remove_small_objects(seed_map, thres_small)
-
-    if data.shape[-1] == 3:
-        # Change background instance value to 0 again
-        segm[segm == num+1] = 0
-
-    if save_dir is not None:
-        os.makedirs(save_dir, exist_ok=True)
-
-        f = os.path.join(save_dir, "seed_map.tif")
-        aux = np.expand_dims(np.expand_dims((seed_map).astype(np.float32), -1),1)
         imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
     return segm

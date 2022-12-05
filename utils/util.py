@@ -72,8 +72,8 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
        chartOutDir : str
            Path where the charts will be stored into.
 
-       metric : str, optional
-           Metric used.
+       metric : List of str, optional
+           Metrics used.
 
        Examples
        --------
@@ -104,14 +104,15 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
     plt.clf()
 
     # Metric
-    plt.plot(results.history[metric])
-    plt.plot(results.history['val_' + metric])
-    plt.title('Model JOBID=' + job_id + " " + metric)
-    plt.ylabel('Value')
-    plt.xlabel('Epoch')
-    plt.legend(['Train metric', 'Val. metric'], loc='upper left')
-    plt.savefig(os.path.join(chartOutDir, job_id + '_' + metric +'.png'))
-    plt.clf()
+    for i in range(len(metric)):
+        plt.plot(results.history[metric[i]])
+        plt.plot(results.history['val_' + metric[i]])
+        plt.title('Model JOBID=' + job_id + " " + metric[i])
+        plt.ylabel('Value')
+        plt.xlabel('Epoch')
+        plt.legend(['Train metric', 'Val. metric'], loc='upper left')
+        plt.savefig(os.path.join(chartOutDir, job_id + '_' + metric[i] +'.png'))
+        plt.clf()
 
 
 def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin, n_dig, job_id, job_file, char_dir,

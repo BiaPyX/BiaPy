@@ -137,7 +137,7 @@ class Engine(object):
                     print("2) Loading test images . . .")
                     f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
                     X_test, _, _ = f_name(cfg.DATA.TEST.PATH)
-                    if cfg.DATA.TEST.LOAD_GT:
+                    if cfg.DATA.TEST.LOAD_GT or cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
                         print("3) Loading test masks . . .")
                         Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH, check_channel=False)
                     else:
@@ -233,7 +233,7 @@ class Engine(object):
         it = iter(self.test_generator)
         for i in tqdm(range(len(self.test_generator))):
             batch = next(it)
-            if self.cfg.DATA.TEST.LOAD_GT:
+            if self.cfg.DATA.TEST.LOAD_GT or self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
                 X, X_norm, Y, Y_norm = batch
             else:
                 X, X_norm = batch
@@ -248,10 +248,16 @@ class Engine(object):
                 if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                     if type(X) is tuple:
                         _X = X[j]
-                        _Y = Y[j] if self.cfg.DATA.TEST.LOAD_GT else None
+                        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+                            _Y = Y[j]  
+                        else:
+                            _Y = None
                     else:
                         _X = np.expand_dims(X[j],0)
-                        _Y = np.expand_dims(Y[j],0) if self.cfg.DATA.TEST.LOAD_GT else None
+                        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+                            _Y = np.expand_dims(Y[j],0)  
+                        else:
+                            _Y = None
                 else:
                     _X = np.expand_dims(X[j], 0)
                     _Y = np.expand_dims(Y[j], 0)
@@ -277,9 +283,11 @@ class Engine(object):
             print("Epoch number: {}".format(len(self.results.history['val_loss'])))
             print("Train time (s): {}".format(np.sum(self.callbacks[0].times)))
             print("Train loss: {}".format(np.min(self.results.history['loss'])))
-            print("Train Foreground {}: {}".format(self.metric, np.max(self.results.history[self.metric])))
+            for i in range(len(self.metric)):
+                print("Train Foreground {}: {}".format(self.metric[i], np.max(self.results.history[self.metric[i]])))
             print("Validation loss: {}".format(np.min(self.results.history['val_loss'])))
-            print("Validation Foreground {}: {}".format(self.metric, np.max(self.results.history['val_'+self.metric])))
+            for i in range(len(self.metric)):
+                print("Validation Foreground {}: {}".format(self.metric[i], np.max(self.results.history['val_'+self.metric[i]])))
 
         workflow.print_stats(image_counter)
 

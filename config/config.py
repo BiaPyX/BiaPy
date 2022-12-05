@@ -98,7 +98,7 @@ class Config:
         # quality of the image is worsens
         _C.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR = 4
         # Number between [0, 1] indicating the std of the Gaussian noise N(0,std).
-        _C.PROBLEM.SELF_SUPERVISED.NOISE = 0.15
+        _C.PROBLEM.SELF_SUPERVISED.NOISE = 0.2
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Dataset
@@ -146,7 +146,7 @@ class Config:
         # Path to load/save detection masks prepared. 
         _C.DATA.TRAIN.DETECTION_MASK_DIR = os.path.join("user_data", 'train', 'y_detection_masks')
         # Path to load/save SSL target prepared. 
-        _C.DATA.TRAIN.SSL_TARGET_DIR = os.path.join("user_data", 'train', 'y_ssl_target')
+        _C.DATA.TRAIN.SSL_SOURCE_DIR = os.path.join("user_data", 'train', 'x_ssl_source')
         # Extra train data generation: number of times to duplicate the train data. Useful when
         # _C.DATA.EXTRACT_RANDOM_PATCH=True is made, as more original train data can be cover on each epoch
         _C.DATA.TRAIN.REPLICATE = 0
@@ -181,6 +181,8 @@ class Config:
         _C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = os.path.join("user_data", 'test', 'y_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         # Path to load/save detection masks prepared. 
         _C.DATA.TEST.DETECTION_MASK_DIR = os.path.join("user_data", 'test', 'y_detection_masks')
+        # Path to load/save SSL target prepared. 
+        _C.DATA.TEST.SSL_SOURCE_DIR = os.path.join("user_data", 'test', 'x_ssl_source')
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
         # 3D tuple when using _C.PROBLEM.NDIM='3D'
@@ -224,7 +226,7 @@ class Config:
         # Path to load/save detection masks prepared. 
         _C.DATA.VAL.DETECTION_MASK_DIR = os.path.join("user_data", 'val', 'y_detection_masks')
         # Path to load/save SSL target prepared. 
-        _C.DATA.VAL.SSL_TARGET_DIR = os.path.join("user_data", 'val', 'y_ssl_target')
+        _C.DATA.VAL.SSL_SOURCE_DIR = os.path.join("user_data", 'val', 'x_ssl_source')
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
         # 3D tuple when using _C.PROBLEM.NDIM='3D'
@@ -514,7 +516,7 @@ class Config:
         #       git checkout grand-challenge
 
         # Whether to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
-        _C.TEST.MATCHING_STATS = False
+        _C.TEST.MATCHING_STATS = True
         _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
         _C.TEST.MATCHING_SEGCOMPARE = False
 
@@ -598,9 +600,9 @@ class Config:
         # Folder where generator samples (Y) will be stored
         _C.PATHS.GEN_MASK_CHECKS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'gen_mask_check')
         # Paths where a few samples of instance channels created will be stored just to check id there is any problem
-        _C.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'train_instance_channels')
-        _C.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'val_instance_channels')
-        _C.PATHS.TEST_INSTANCE_CHANNELS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'test_instance_channels')
+        _C.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'train_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_instance_channels')
+        _C.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'val_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_instance_channels')
+        _C.PATHS.TEST_INSTANCE_CHANNELS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'test_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_instance_channels')
         # Name of the folder where weights files will be stored/loaded from.
         _C.PATHS.CHECKPOINT = os.path.join(job_dir, 'checkpoints')
         # Checkpoint file to load/store the model weights
@@ -630,14 +632,19 @@ class Config:
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = self._C.DATA.TRAIN.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TRAIN.DETECTION_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_detection_masks'
-        self._C.DATA.TRAIN.SSL_TARGET_DIR = self._C.DATA.TRAIN.MASK_PATH+'_ssl_target'
+        self._C.DATA.TRAIN.SSL_SOURCE_DIR = self._C.DATA.TRAIN.PATH+'_ssl_source'
         self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = self._C.DATA.VAL.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.VAL.BINARY_MASKS = os.path.join(self._C.DATA.VAL.PATH, '..', 'bin_mask')
         self._C.DATA.VAL.DETECTION_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_detection_masks'
-        self._C.DATA.VAL.SSL_TARGET_DIR = self._C.DATA.VAL.MASK_PATH+'_ssl_target'
+        self._C.DATA.VAL.SSL_SOURCE_DIR = self._C.DATA.VAL.PATH+'_ssl_source'
         self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, '..', 'bin_mask')
         self._C.DATA.TEST.DETECTION_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_detection_masks'
+        self._C.DATA.TEST.SSL_SOURCE_DIR = self._C.DATA.TEST.PATH+'_ssl_source'
         self._C.PATHS.TEST_FULL_GT_H5 = os.path.join(self._C.DATA.TEST.MASK_PATH, 'h5')
+
+        self._C.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(self._C.PATHS.RESULT_DIR.PATH, 'train_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_instance_channels')
+        self._C.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(self._C.PATHS.RESULT_DIR.PATH, 'val_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_instance_channels')
+        self._C.PATHS.TEST_INSTANCE_CHANNELS_CHECK = os.path.join(self._C.PATHS.RESULT_DIR.PATH, 'test_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_instance_channels')
