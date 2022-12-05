@@ -56,8 +56,8 @@ def prepare_optimizer(cfg, model):
     elif cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         metrics = []
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BCM"]:
-            metrics.append("jaccard_index")
-            metric_name.append("jaccard_index")
+            metrics.append(IoU_instances(first_not_binary_channel=len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)))
+            metric_name.append("jaccard_index_instances")
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", 'BCDv2']:
             metrics.append(IoU_instances(first_not_binary_channel=2))
             metrics.append(MAE_instances(distance_channel=-1))
