@@ -60,13 +60,13 @@ def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
        --------
 
        +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../img/FIBSEM_test_0.png     | .. figure:: ../../img/FIBSEM_test_0_gt.png  |
+       | .. figure:: ../../img/lucchi_test_0.png     | .. figure:: ../../img/lucchi_test_0_gt.png  |
        |   :width: 80%                               |   :width: 80%                               |
        |   :align: center                            |   :align: center                            |
        |                                             |                                             |
        |   Original image                            |   Ground truth                              |
        +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../img/FIBSEM_test_0_pred.png| .. figure:: ../../img/FIBSEM_test_0_wa.png  |
+       | .. figure:: ../../img/lucchi_test_0_pred.png| .. figure:: ../../img/lucchi_test_0_wa.png  |
        |   :width: 80%                               |   :width: 80%                               |
        |   :align: center                            |   :align: center                            |
        |                                             |                                             |

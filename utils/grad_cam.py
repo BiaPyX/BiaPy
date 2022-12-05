@@ -49,7 +49,7 @@ def grad_cam_sample(input_model, image, predicted_class, layer_name, out_dir, n_
            grad_cam_sample(unet_model, img, 1, 'conv2d_16', 'out_dir', 2)
 
        +----------------------------------------------+----------------------------------------------+
-       | .. figure:: ../img/FIBSEM_test_0.png         | .. figure:: ../img/out_gradcam_conv2d_16.png |
+       | .. figure:: ../img/lucchi_test_0.png         | .. figure:: ../img/out_gradcam_conv2d_16.png |
        |   :width: 80%                                |   :width: 80%                                |
        |   :align: center                             |   :align: center                             |
        |                                              |                                              |
