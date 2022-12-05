@@ -48,9 +48,6 @@ MODEL:
     Z_DOWN: 1
     LOAD_CHECKPOINT: False
 
-LOSS:
-  TYPE: CE
-  
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAM

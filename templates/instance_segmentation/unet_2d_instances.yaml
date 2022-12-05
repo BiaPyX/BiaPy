@@ -35,9 +35,6 @@ MODEL:
     ARCHITECTURE: unet
     LOAD_CHECKPOINT: False
 
-LOSS:
-  TYPE: CE
-  
 TRAIN:
     ENABLE: True
     OPTIMIZER: SGD
@@ -53,5 +50,3 @@ TEST:
         PER_PATCH: True
         MERGE_PATCHES: True
         FULL_IMG: True
-    POST_PROCESSING:
-        YZ_FILTERING: True

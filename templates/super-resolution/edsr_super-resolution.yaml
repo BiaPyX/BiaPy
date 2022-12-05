@@ -34,9 +34,6 @@ MODEL:
     ARCHITECTURE: edsr
     LOAD_CHECKPOINT: False
 
-LOSS:
-  TYPE: CE
-  
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAM

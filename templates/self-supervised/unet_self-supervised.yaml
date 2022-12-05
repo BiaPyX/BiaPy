@@ -37,9 +37,6 @@ MODEL:
     DROPOUT_VALUES: [0.1, 0.1, 0.2, 0.2, 0.3]
     LOAD_CHECKPOINT: True
 
-LOSS:
-  TYPE: CE
-  
 TRAIN:
     ENABLE: False
     OPTIMIZER: SGD

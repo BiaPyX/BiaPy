@@ -43,9 +43,6 @@ MODEL:
     ACTIVATION: 'elu'
     LOAD_CHECKPOINT: False
 
-LOSS:
-  TYPE: CE
-  
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAM
@@ -62,5 +59,3 @@ TEST:
         MERGE_PATCHES: True
         FULL_IMG: False
     VERBOSE: True
-    POST_PROCESSING:
-        YZ_FILTERING: True
