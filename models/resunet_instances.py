@@ -37,7 +37,7 @@ def ResUNet_2D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
        upsample_layer : str, optional
            Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling".    
 
-       out_channels : str, optional
+       output_channels : str, optional
            Channels to operate with. Possible values: ``B``, ``BC`` and ``BCD``. ``B`` stands for binary segmentation.
            ``BC`` corresponds to use binary segmentation+contour. ``BCD`` stands for binary segmentation+contour+distances.
 
@@ -76,7 +76,13 @@ def ResUNet_2D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
         outputs = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
     elif output_channels == "BC":
         outputs = Conv2D(2, (2, 2), activation="sigmoid", padding='same') (x)
-    else:
+    elif output_channels == "BCM":
+        outputs = Conv2D(3, (2, 2), activation="sigmoid", padding='same') (x)
+    elif output_channels == "BDv2":
+        seg = Conv2D(1, (2, 2), activation="sigmoid", padding='same') (x)
+        dis = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
+        outputs = Concatenate()([seg, dis])
+    elif output_channels in ["BCD", "BCDv2"]:
         seg = Conv2D(2, (2, 2), activation="sigmoid", padding='same') (x)
         dis = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
         outputs = Concatenate()([seg, dis])

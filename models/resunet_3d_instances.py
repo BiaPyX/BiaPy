@@ -44,7 +44,7 @@ def ResUNet_3D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
        upsample_layer : str, optional
            Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
                       
-       out_channels : str, optional
+       output_channels : str, optional
            Channels to operate with. Possible values: ``BC`` and ``BCD``.  ``BC`` corresponds to use binary
            segmentation+contour. ``BCD`` stands for binary segmentation+contour+distances.
 
@@ -78,20 +78,20 @@ def ResUNet_3D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
     x = level_block(inputs, depth, fm, k_size, activation, k_init, drop_values, spatial_dropout, batch_norm, True, z_down,
         upsample_layer)
 
-    if output_channels == "BC":
+    if output_channels == "Dv2":
+        outputs = Conv3D(1, (2, 2, 2), activation="linear", padding='same') (x)
+    elif output_channels == "BC":
         outputs = Conv3D(2, (2, 2, 2), activation="sigmoid", padding='same') (x)
     elif output_channels == "BCM":
         outputs = Conv3D(3, (2, 2, 2), activation="sigmoid", padding='same') (x)
-    elif output_channels in ["BCD", "BCDv2"]:
-        seg = Conv3D(2, (2, 2, 2), activation="sigmoid", padding='same') (x)
-        dis = Conv3D(1, (2, 2, 2), activation="linear", padding='same') (x)
-        outputs = Concatenate()([seg, dis])
     elif output_channels == "BDv2":
         seg = Conv3D(1, (2, 2, 2), activation="sigmoid", padding='same') (x)
         dis = Conv3D(1, (2, 2, 2), activation="linear", padding='same') (x)
         outputs = Concatenate()([seg, dis])
-    else: # Dv2
-        outputs = Conv3D(1, (2, 2, 2), activation="linear", padding='same') (x)
+    elif output_channels in ["BCD", "BCDv2"]:
+        seg = Conv3D(2, (2, 2, 2), activation="sigmoid", padding='same') (x)
+        dis = Conv3D(1, (2, 2, 2), activation="linear", padding='same') (x)
+        outputs = Concatenate()([seg, dis])
 
     model = Model(inputs=[inputs], outputs=[outputs])
 

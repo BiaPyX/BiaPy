@@ -557,7 +557,6 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), verbose=Fals
        -------
        metrics : List of strings
            List containing precision, accuracy and F1 between the predicted points and ground truth.
-
     """
 
     _true = np.array(true, dtype=np.float32)

@@ -1,5 +1,5 @@
-from tensorflow.keras.layers import (Dropout, SpatialDropout2D, Conv2D, Conv2DTranspose, MaxPooling2D, concatenate,
-                                     BatchNormalization, Activation, UpSampling2D)
+from tensorflow.keras.layers import (Dropout, SpatialDropout2D, Conv2D, Conv2DTranspose, MaxPooling2D, 
+                                     Concatenate, BatchNormalization, Activation, UpSampling2D)
 from tensorflow.keras import Model, Input
 
 
@@ -43,7 +43,7 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
        upsample_layer : str, optional
            Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
 
-       out_channels : str, optional
+       output_channels : str, optional
            Channels to operate with. Possible values: ``B``, ``BC`` and ``BCD``. ``B`` stands for binary segmentation.
            ``BC`` corresponds to use binary segmentation+contour. ``BCD`` stands for binary segmentation+contour+distances.
 
@@ -111,7 +111,7 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
             x = Conv2DTranspose(feature_maps[d], (2, 2), strides=(2, 2), padding='same') (x)
         else:
             x = UpSampling2D() (x)
-        x = concatenate([x, l[i]])
+        x = Concatenate()([x, l[i]])
         x = Conv2D(feature_maps[d], k_size, activation=None, kernel_initializer=k_init, padding='same') (x)
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
@@ -124,20 +124,20 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
 
-    if output_channels == "B":
-        outputs = Conv2D(1, (2, 2), activation="sigmoid", padding='same') (x)
+    if output_channels == "Dv2":
+        outputs = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
     elif output_channels == "BC":
         outputs = Conv2D(2, (2, 2), activation="sigmoid", padding='same') (x)
-    elif output_channels in ["BCD", "BCDv2"]:
-        seg = Conv2D(2, (2, 2), activation="sigmoid", padding='same') (x)
-        dis = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
-        outputs = concatenate([seg, dis])
+    elif output_channels == "BCM":
+        outputs = Conv2D(3, (2, 2), activation="sigmoid", padding='same') (x)
     elif output_channels == "BDv2":
         seg = Conv2D(1, (2, 2), activation="sigmoid", padding='same') (x)
         dis = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
-        outputs = concatenate([seg, dis])
-    else: # Dv2
-        outputs = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
+        outputs = Concatenate()([seg, dis])
+    elif output_channels in ["BCD", "BCDv2"]:
+        seg = Conv2D(2, (2, 2), activation="sigmoid", padding='same') (x)
+        dis = Conv2D(1, (2, 2), activation="linear", padding='same') (x)
+        outputs = Concatenate()([seg, dis])
 
     model = Model(inputs=[inputs], outputs=[outputs])
 
