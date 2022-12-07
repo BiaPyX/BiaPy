@@ -272,7 +272,7 @@ class Engine(object):
                 image_counter += 1
         del _X, _Y
 
-        workflow.after_all_images(Y)
+        workflow.after_all_images()
 
         print("#############\n"
               "#  RESULTS  #\n"

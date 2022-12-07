@@ -76,7 +76,7 @@ class Super_resolution(Base_Workflow):
     def after_full_image(self, pred, Y, filenames):
         pass
 
-    def after_all_images(self, Y):
+    def after_all_images(self):
         pass
 
     def normalize_stats(self, image_counter):

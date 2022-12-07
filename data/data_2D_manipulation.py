@@ -665,182 +665,6 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
         return merged_data
 
 
-def random_crop(image, mask, random_crop_size, val=False, draw_prob_map_points=False, img_prob=None, weight_map=None,
-                scale=1):
-    """Random crop.
-
-       Parameters
-       ----------
-       image : Numpy 3D array
-           Image. E.g. ``(y, x, channels)``.
-
-       mask : Numpy 3D array
-           Image mask. E.g. ``(y, x, channels)``.
-
-       random_crop_size : 2 int tuple
-           Size of the crop. E.g. ``(height, width)``.
-
-       val : bool, optional
-           If the image provided is going to be used in the validation data. This forces to crop from the origin,
-           e. g. ``(0, 0)`` point.
-
-       draw_prob_map_points : bool, optional
-           To return the pixel chosen to be the center of the crop.
-
-       img_prob : Numpy 3D array, optional
-           Probability of each pixel to be chosen as the center of the crop. E. .g. ``(y, x, channels)``.
-
-       weight_map : bool, optional
-           Weight map of the given image. E.g. ``(y, x, channels)``.
-
-       scale : int, optional
-           Scale factor the second image given.
-
-       Returns
-       -------
-       img : 2D Numpy array
-           Crop of the given image. E.g. ``(y, x)``.
-
-       weight_map : 2D Numpy array, optional
-           Crop of the given image's weigth map. E.g. ``(y, x)``.
-
-       ox : int, optional
-           X coordinate in the complete image of the chose central pixel to make the crop.
-
-       oy : int, optional
-           Y coordinate in the complete image of the chose central pixel to make the crop.
-
-       x : int, optional
-           X coordinate in the complete image where the crop starts.
-
-       y : int, optional
-           Y coordinate in the complete image where the crop starts.
-    """
-
-    if weight_map is not None:
-        img, we = image
-    else:
-        img = image
-
-    height, width = img.shape[0], img.shape[1]
-    dy, dx = random_crop_size[0], random_crop_size[1]
-    if val == True:
-        x = 0
-        y = 0
-        ox = 0
-        oy = 0
-    else:
-        if img_prob is not None:
-            prob = img_prob.ravel()
-
-            # Generate the random coordinates based on the distribution
-            choices = np.prod(img_prob.shape)
-            index = np.random.choice(choices, size=1, p=prob)
-            coordinates = np.unravel_index(index, dims=img_prob.shape)
-            x = int(coordinates[1][0])
-            y = int(coordinates[0][0])
-            ox = int(coordinates[1][0])
-            oy = int(coordinates[0][0])
-
-            # Adjust the coordinates to be the origin of the crop and control to
-            # not be out of the image
-            if y < int(random_crop_size[0]/2):
-                y = 0
-            elif y > img.shape[0] - int(random_crop_size[0]/2):
-                y = img.shape[0] - random_crop_size[0]
-            else:
-                y -= int(random_crop_size[0]/2)
-
-            if x < int(random_crop_size[1]/2):
-                x = 0
-            elif x > img.shape[1] - int(random_crop_size[1]/2):
-                x = img.shape[1] - random_crop_size[1]
-            else:
-                x -= int(random_crop_size[1]/2)
-        else:
-            ox = 0
-            oy = 0
-            x = np.random.randint(0, width - dx + 1)
-            y = np.random.randint(0, height - dy + 1)
-
-    if draw_prob_map_points == True:
-        return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], oy, ox, y, x
-    else:
-        if weight_map is not None:
-            return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], weight_map[y:(y+dy), x:(x+dx)]
-        else:
-            return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale]
-
-
-def random_crop_classification(image, random_crop_size, val=False, draw_prob_map_points=False, weight_map=None):
-    """Random crop.
-
-       Parameters
-       ----------
-       image : Numpy 3D array
-           Image. E.g. ``(x, y, channels)``.
-
-       random_crop_size : 2 int tuple
-           Size of the crop. E.g. ``(height, width)``.
-
-       val : bool, optional
-           If the image provided is going to be used in the validation data. This forces to crop from the origin,
-           e. g. ``(0, 0)`` point.
-
-       draw_prob_map_points : bool, optional
-           To return the pixel chosen to be the center of the crop.
-
-       weight_map : bool, optional
-           Weight map of the given image. E.g. ``(x, y, channels)``.
-
-       Returns
-       -------
-       img : 2D Numpy array
-           Crop of the given image. E.g. ``(x, y)``.
-
-       weight_map : 2D Numpy array, optional
-           Crop of the given image's weigth map. E.g. ``(x, y)``.
-
-       ox : int, optional
-           X coordinate in the complete image of the chose central pixel to make the crop.
-
-       oy : int, optional
-           Y coordinate in the complete image of the chose central pixel to make the crop.
-
-       x : int, optional
-           X coordinate in the complete image where the crop starts.
-
-       y : int, optional
-           Y coordinate in the complete image where the crop starts.
-    """
-
-    if weight_map is not None:
-        img, we = image
-    else:
-        img = image
-
-    height, width = img.shape[0], img.shape[1]
-    dy, dx = random_crop_size
-    if val == True:
-        x = 0
-        y = 0
-        ox = 0
-        oy = 0
-    else:
-        ox = 0
-        oy = 0
-        x = np.random.randint(0, width - dx + 1)
-        y = np.random.randint(0, height - dy + 1)
-
-    if draw_prob_map_points == True:
-        return img[y:(y+dy), x:(x+dx)], ox, oy, x, y
-    else:
-        if weight_map is not None:
-            return img[y:(y+dy), x:(x+dx)], weight_map[y:(y+dy), x:(x+dx)]
-        else:
-            return img[y:(y+dy), x:(x+dx)]
-
-
 def load_data_classification(cfg, test=False):
     """Load data to train classification methods.
 
@@ -873,6 +697,7 @@ def load_data_classification(cfg, test=False):
     else:
         path = cfg.DATA.TEST.PATH
 
+    all_ids = []
     if not test:
         if not cfg.DATA.VAL.CROSS_VAL:
             X_data_npy_file = os.path.join(path, '../prepared_npy', 'X_data.npy')
@@ -894,13 +719,14 @@ def load_data_classification(cfg, test=False):
             X_data_npy_file = os.path.join(path, '../prepared_npy', 'X_val'+f_info+'.npy')
             Y_data_npy_file = os.path.join(path, '../prepared_npy', 'Y_val'+f_info+'.npy')
 
+    class_names = sorted(next(os.walk(path))[1])
     if not os.path.exists(X_data_npy_file):
         print("Seems to be the first run as no data is prepared. Creating .npy files: {}".format(X_data_npy_file))
-        class_names = sorted(next(os.walk(path))[1])
         X_data, Y_data = [], []
         for c_num, folder in enumerate(class_names):
             print("Analizing folder {}".format(os.path.join(path,folder)))
             ids = sorted(next(os.walk(os.path.join(path,folder)))[2])
+            all_ids.append(ids)
             print("Found {} samples".format(len(ids)))
             class_X_data, class_Y_data = [], []
             for i in tqdm(range(len(ids)), leave=False):
@@ -957,6 +783,11 @@ def load_data_classification(cfg, test=False):
             X_val = np.load(X_val_npy_file)
             Y_val = np.load(Y_val_npy_file)
 
+        for c_num, folder in enumerate(class_names):
+            ids = sorted(next(os.walk(os.path.join(path,folder)))[2])
+            all_ids.append(ids)
+    
+    all_ids = np.concatenate(all_ids)
     if not test:
         print("*** Loaded train data shape is: {}".format(X_data.shape))
         print("*** Loaded validation data shape is: {}".format(X_val.shape))
@@ -964,5 +795,5 @@ def load_data_classification(cfg, test=False):
         return X_data, Y_data, X_val, Y_val
     else:
         print("*** Loaded test data shape is: {}".format(X_data.shape))
-        return X_data, Y_data, ids
+        return X_data, Y_data, all_ids
 

@@ -3,61 +3,16 @@ import os
 from PIL import Image
 from skimage.io import imsave
 
-from data.generators.base_data_generator import BaseDataGenerator
+from data.generators.pair_base_data_generator import PairBaseDataGenerator
 from data.pre_processing import denormalize
 
-class ImageDataGenerator(BaseDataGenerator):
+class PairImageDataGenerator(PairBaseDataGenerator):
     """Custom 2D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
        and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
        transformations. This generator will yield an image and its corresponding mask.
 
        Based on `microDL <https://github.com/czbiohub/microDL>`_ and
        `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
-
-       Examples
-       --------
-       ::
-
-           # EXAMPLE 1
-           # Define train and val generators to make random rotations between 0 and
-           # 180 degrees. Notice that DA is disabled in val data
-
-           X_train = np.ones((1776, 256, 256, 1))
-           Y_train = np.ones((1776, 256, 256, 1))
-           X_val = np.ones((204, 256, 256, 1))
-           Y_val = np.ones((204, 256, 256, 1))
-
-           data_gen_args = dict(X=X_train, Y=Y_train, batch_size=6, shuffle_each_epoch=True, rand_rot=True, vflip=True,
-                                hflip=True)
-           data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=6, shuffle_each_epoch=True, da=False, val=True)
-           train_generator = ImageDataGenerator(**data_gen_args)
-           val_generator = ImageDataGenerator(**data_gen_val_args)
-
-
-           # EXAMPLE 2
-           # Generate random crops on DA-time. To allow that notice that the
-           # data in this case is bigger in width and height than example 1, to
-           # allow a (256, 256) random crop extraction
-
-           X_train = np.zeros((148, 768, 1024, 1))
-           Y_train = np.zeros((148, 768, 1024, 1))
-           X_val = np.zeros((17, 768, 1024, 1))
-           Y_val = np.zeros((17, 768, 1024, 1))
-
-           # Create a prbobability map for each image. Here we define foreground
-           # probability much higher than the background simulating a class inbalance
-           # With this, the probability of take the center pixel of the random crop
-           # that corresponds to the foreground class will be so high
-           prob_map = calculate_2D_volume_prob_map(
-                Y_train, 0.94, 0.06, save_file='prob_map.npy')
-
-           data_gen_args = dict(X=X_train, Y=Y_train, batch_size=6, shuffle_each_epoch=True, rand_rot=True, vflip=True,
-                                hflip=True, random_crops_in_DA=True, shape=(256, 256, 1), prob_map=prob_map)
-
-           data_gen_val_args = dict(X=X_val, Y=Y_val, batch_size=6, random_crops_in_DA=True, shape=(256, 256, 1),
-                                    shuffle_each_epoch=True, da=False, val=True)
-           train_generator = ImageDataGenerator(**data_gen_args)
-           val_generator = ImageDataGenerator(**data_gen_val_args)
     """
     def __init__(self, **kwars):
         super().__init__(**kwars)

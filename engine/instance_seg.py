@@ -216,8 +216,8 @@ class Instance_Segmentation(Base_Workflow):
     def after_full_image(self, pred, Y, filenames):
         pass
 
-    def after_all_images(self, Y):
-        super().after_all_images(None)
+    def after_all_images(self):
+        super().after_all_images()
 
     def normalize_stats(self, image_counter): 
         super().normalize_stats(image_counter) 

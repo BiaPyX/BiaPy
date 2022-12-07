@@ -1016,3 +1016,352 @@ def GridMask(img, channels, z_size, ratio=0.6, d_range=(30,60), rotate=1, invert
         return img
     else:
         return img*np.stack((mask,)*img.shape[-1], axis=-1)
+
+
+def random_crop_pair(image, mask, random_crop_size, val=False, draw_prob_map_points=False, img_prob=None, weight_map=None,
+        scale=1):
+    """Random crop for an image and its mask.
+
+       Parameters
+       ----------
+       image : Numpy 3D array
+           Image. E.g. ``(y, x, channels)``.
+
+       mask : Numpy 3D array
+           Image mask. E.g. ``(y, x, channels)``.
+
+       random_crop_size : 2 int tuple
+           Size of the crop. E.g. ``(height, width)``.
+
+       val : bool, optional
+           If the image provided is going to be used in the validation data. This forces to crop from the origin,
+           e. g. ``(0, 0)`` point.
+
+       draw_prob_map_points : bool, optional
+           To return the pixel chosen to be the center of the crop.
+
+       img_prob : Numpy 3D array, optional
+           Probability of each pixel to be chosen as the center of the crop. E. .g. ``(y, x, channels)``.
+
+       weight_map : bool, optional
+           Weight map of the given image. E.g. ``(y, x, channels)``.
+
+       scale : int, optional
+           Scale factor the second image given.
+
+       Returns
+       -------
+       img : 2D Numpy array
+           Crop of the given image. E.g. ``(y, x)``.
+
+       weight_map : 2D Numpy array, optional
+           Crop of the given image's weigth map. E.g. ``(y, x)``.
+
+       ox : int, optional
+           X coordinate in the complete image of the chose central pixel to make the crop.
+
+       oy : int, optional
+           Y coordinate in the complete image of the chose central pixel to make the crop.
+
+       x : int, optional
+           X coordinate in the complete image where the crop starts.
+
+       y : int, optional
+           Y coordinate in the complete image where the crop starts.
+    """
+
+    if weight_map is not None:
+        img, we = image
+    else:
+        img = image
+
+    height, width = img.shape[0], img.shape[1]
+    dy, dx = random_crop_size[0], random_crop_size[1]
+    if val == True:
+        x = 0
+        y = 0
+        ox = 0
+        oy = 0
+    else:
+        if img_prob is not None:
+            prob = img_prob.ravel()
+
+            # Generate the random coordinates based on the distribution
+            choices = np.prod(img_prob.shape)
+            index = np.random.choice(choices, size=1, p=prob)
+            coordinates = np.unravel_index(index, dims=img_prob.shape)
+            x = int(coordinates[1][0])
+            y = int(coordinates[0][0])
+            ox = int(coordinates[1][0])
+            oy = int(coordinates[0][0])
+
+            # Adjust the coordinates to be the origin of the crop and control to
+            # not be out of the image
+            if y < int(random_crop_size[0]/2):
+                y = 0
+            elif y > img.shape[0] - int(random_crop_size[0]/2):
+                y = img.shape[0] - random_crop_size[0]
+            else:
+                y -= int(random_crop_size[0]/2)
+
+            if x < int(random_crop_size[1]/2):
+                x = 0
+            elif x > img.shape[1] - int(random_crop_size[1]/2):
+                x = img.shape[1] - random_crop_size[1]
+            else:
+                x -= int(random_crop_size[1]/2)
+        else:
+            ox = 0
+            oy = 0
+            x = np.random.randint(0, width - dx + 1)
+            y = np.random.randint(0, height - dy + 1)
+
+    if draw_prob_map_points == True:
+        return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], oy, ox, y, x
+    else:
+        if weight_map is not None:
+            return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], weight_map[y:(y+dy), x:(x+dx)]
+        else:
+            return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale]
+
+
+def random_3D_crop_pair(vol, vol_mask, random_crop_size, val=False, img_prob=None, weight_map=None, draw_prob_map_points=False,
+        scale=1):
+    """Extracts a random 3D patch from the given image and mask.
+
+       Parameters
+       ----------
+       vol : 4D Numpy array
+           Data to extract the patch from. E.g. ``(z, y, x, channels)``.
+
+       vol_mask : 4D Numpy array
+           Data mask to extract the patch from. E.g. ``(z, y, x, channels)``.
+
+       random_crop_size : 3D int tuple
+           Shape of the patches to create. E.g. ``(z, y, x)``.
+
+       val : bool, optional
+           If the image provided is going to be used in the validation data. This forces to crop from the origin, e.g.
+           ``(0, 0)`` point.
+
+       img_prob : Numpy 4D array, optional
+           Probability of each pixel to be chosen as the center of the crop. E. g. ``(z, y, x, channels)``.
+
+       weight_map : bool, optional
+           Weight map of the given image. E.g. ``(y, x, channels)``.
+
+       draw_prob_map_points : bool, optional
+           To return the voxel chosen to be the center of the crop.
+
+       scale : int, optional
+           Scale factor the second image given.
+
+       Returns
+       -------
+       img : 4D Numpy array
+           Crop of the given image. E.g. ``(z, y, x, channels)``.
+
+       weight_map : 4D Numpy array, optional
+           Crop of the given image's weigth map. E.g. ``(z, y, x, channels)``.
+    
+       oz : int, optional
+           Z coordinate in the complete image of the chose central pixel to
+           make the crop.
+
+       oy : int, optional
+           Y coordinate in the complete image of the chose central pixel to
+           make the crop.
+
+       ox : int, optional
+           X coordinate in the complete image of the chose central pixel to
+           make the crop.
+
+       z : int, optional
+           Z coordinate in the complete image where the crop starts.
+
+       y : int, optional
+           Y coordinate in the complete image where the crop starts.
+
+       x : int, optional
+           X coordinate in the complete image where the crop starts.
+    """
+
+    deep, cols, rows = vol.shape[0], vol.shape[1], vol.shape[2]
+    dz, dy, dx = random_crop_size
+    assert rows >= dx
+    assert cols >= dy
+    assert deep >= dz
+    if val:
+        x, y, z, ox, oy, oz = 0, 0, 0, 0, 0, 0
+    else:
+        if img_prob is not None:
+            prob = img_prob.ravel()
+
+            # Generate the random coordinates based on the distribution
+            choices = np.prod(img_prob.shape)
+            index = np.random.choice(choices, size=1, p=prob)
+            coordinates = np.unravel_index(index, shape=img_prob.shape)
+            x = int(coordinates[2])
+            y = int(coordinates[1])
+            z = int(coordinates[0])
+            ox = int(coordinates[2])
+            oy = int(coordinates[1])
+            oz = int(coordinates[0])
+
+            # Adjust the coordinates to be the origin of the crop and control to
+            # not be out of the volume
+            if z < int(random_crop_size[0]/2):
+                z = 0
+            elif z > vol.shape[0] - int(random_crop_size[0]/2):
+                z = vol.shape[0] - random_crop_size[0]
+            else:
+                z -= int(random_crop_size[0]/2)
+
+            if y < int(random_crop_size[1]/2):
+                y = 0
+            elif y > vol.shape[1] - int(random_crop_size[1]/2):
+                y = vol.shape[1] - random_crop_size[1]
+            else:
+                y -= int(random_crop_size[1]/2)
+
+            if x < int(random_crop_size[2]/2):
+                x = 0
+            elif x > vol.shape[2] - int(random_crop_size[2]/2):
+                x = vol.shape[2] - random_crop_size[2]
+            else:
+                x -= int(random_crop_size[2]/2)
+        else:
+            ox = 0
+            oy = 0
+            oz = 0
+            z = np.random.randint(0, deep - dz + 1)
+            y = np.random.randint(0, cols - dy + 1)
+            x = np.random.randint(0, rows - dx + 1)
+
+    if draw_prob_map_points:
+        return vol[z:(z+dz), y:(y+dy), x:(x+dx)], vol_mask[z*scale:(z+dz)*scale, y*scale:(y+dy)*scale, x*scale:(x+dx)*scale],\
+               oz, oy, ox, z, y, x
+    else:
+        if weight_map is not None:
+            return vol[z:(z+dz), y:(y+dy), x:(x+dx)], vol_mask[z*scale:(z+dz)*scale, y*scale:(y+dy)*scale, x*scale:(x+dx)*scale],\
+                   weight_map[z:(z+dz), y:(y+dy), x:(x+dx)]
+        else:
+            return vol[z:(z+dz), y:(y+dy), x:(x+dx)], vol_mask[z:(z+dz), y:(y+dy), x:(x+dx)]
+
+
+def random_crop_single(image, random_crop_size, val=False, draw_prob_map_points=False, weight_map=None):
+    """Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater that
+       the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size``
+       is ``224x224`` the resulting image will be ``224x150``.
+
+       Parameters
+       ----------
+       image : Numpy 3D array
+           Image. E.g. ``(x, y, channels)``.
+
+       random_crop_size : 2 int tuple
+           Size of the crop. E.g. ``(height, width)``.
+
+       val : bool, optional
+           If the image provided is going to be used in the validation data. This forces to crop from the origin,
+           e. g. ``(0, 0)`` point.
+
+       draw_prob_map_points : bool, optional
+           To return the pixel chosen to be the center of the crop.
+
+       weight_map : bool, optional
+           Weight map of the given image. E.g. ``(x, y, channels)``.
+
+       Returns
+       -------
+       img : 2D Numpy array
+           Crop of the given image. E.g. ``(x, y)``.
+
+       weight_map : 2D Numpy array, optional
+           Crop of the given image's weigth map. E.g. ``(x, y)``.
+
+       ox : int, optional
+           X coordinate in the complete image of the chose central pixel to make the crop.
+
+       oy : int, optional
+           Y coordinate in the complete image of the chose central pixel to make the crop.
+
+       x : int, optional
+           X coordinate in the complete image where the crop starts.
+
+       y : int, optional
+           Y coordinate in the complete image where the crop starts.
+    """
+
+    if weight_map is not None:
+        img, we = image
+    else:
+        img = image
+
+    height, width = img.shape[0], img.shape[1]
+    dy, dx = random_crop_size
+    if val == True:
+        x = 0
+        y = 0
+        ox = 0
+        oy = 0
+    else:
+        ox = 0
+        oy = 0
+        x = np.random.randint(0, width - dx + 1) if width - dx +1 > 0 else 0
+        y = np.random.randint(0, height - dy + 1) if height - dy + 1 > 0 else 0
+
+    if draw_prob_map_points == True:
+        return img[y:(y+dy), x:(x+dx)], ox, oy, x, y
+    else:
+        if weight_map is not None:
+            return img[y:(y+dy), x:(x+dx)], weight_map[y:(y+dy), x:(x+dx)]
+        else:
+            return img[y:(y+dy), x:(x+dx)]
+
+def center_crop_single(img, crop_shape):
+    """Extract the central patch from a single image.
+
+       Parameters
+       ----------
+       img : 3D/4D array
+           Image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+
+       crop_shape : 2/3 int tuple
+           Size of the crop. E.g. ``(y, x)`` or ``(z, y, x)``.
+
+       Returns
+       -------
+       img : 3D/4D Numpy array
+           Center crop of the given image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+    """
+    if img.ndim == 4:
+        z,y,x,c = img.shape
+        startz = max(z//2 - crop_shape[0]//2, 0)
+        starty = max(y//2 - crop_shape[1]//2, 0)
+        startx = max(x//2 - crop_shape[2]//2, 0)  
+        return img[startz:startz+crop_shape[0], starty:starty+crop_shape[1], startx:startx+crop_shape[2]]
+    else:
+        y,x,c = img.shape
+        starty = max(y//2 - crop_shape[0]//2, 0)
+        startx = max(x//2 - crop_shape[1]//2, 0)   
+        return img[starty:starty+crop_shape[0], startx:startx+crop_shape[1]]
+
+def resize_2D_img(img, shape):
+    """Resizes input image to given shape.
+
+       Parameters
+       ----------
+       img : 4D Numpy array
+           Data to extract the patch from. E.g. ``(z, y, x, channels)``.
+
+       crop_shape : 3D int tuple
+           Shape of the patches to create. E.g. ``(z, y, x)``.
+
+       Returns
+       -------
+       img : 4D Numpy array
+           Center crop of the given image. E.g. ``(z, y, x, channels)``.
+    """
+
+    return cv2.resize(img, (shape[1], shape[0]), interpolation=cv2.INTER_CUBIC)

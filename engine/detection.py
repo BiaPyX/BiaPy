@@ -197,8 +197,8 @@ class Detection(Base_Workflow):
     def after_full_image(self, pred, Y, filenames):
         self.detection_process(pred, Y, filenames, ['d_precision', 'd_recall', 'd_f1'])
 
-    def after_all_images(self, Y):
-        super().after_all_images(None)
+    def after_all_images(self):
+        super().after_all_images()
 
     def print_stats(self, image_counter):
         super().print_stats(image_counter)

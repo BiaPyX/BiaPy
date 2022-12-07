@@ -5,10 +5,11 @@ import tensorflow as tf
 from skimage.io import imread
 from PIL import Image
 from PIL.TiffTags import TAGS
+
 from data.pre_processing import normalize, norm_range01
 
 
-class simple_data_generator(tf.keras.utils.Sequence):
+class simple_pair_data_generator(tf.keras.utils.Sequence):
     """Image data generator without data augmentation. Used only for test data.
 
        Parameters
@@ -20,13 +21,13 @@ class simple_data_generator(tf.keras.utils.Sequence):
            Path to load the data from.
 
        provide_Y: bool, optional
-           Wheter to return ground truth, using ``Y`` or loading from ``dm_path``.
+           Whether to return ground truth, using ``Y`` or loading from ``dm_path``.
 
        Y : Numpy 5D/4D array, optional
            Data mask. E.g. ``(num_of_images, x, y, z, channels)`` or ``(num_of_images, x, y, channels)``.
 
        dm_path : Str, optional
-           Path to load themask  data mask from.
+           Path to load the mask data from.
 
        dims: str, optional
            Dimension of the data. Possible options: ``2D`` or ``3D``.
@@ -49,7 +50,6 @@ class simple_data_generator(tf.keras.utils.Sequence):
        norm_custom_std : float, optional
            Std of the data used to normalize.
     """
-
     def __init__(self, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, dims='2D', batch_size=1, seed=42,
                  shuffle_each_epoch=False, instance_problem=False, normalizeY='as_mask', norm_custom_mean=None, 
                  norm_custom_std=None):
@@ -80,8 +80,6 @@ class simple_data_generator(tf.keras.utils.Sequence):
         else:
             self.len = len(X)
         self.o_indexes = np.arange(self.len)
-        self.ax = None
-        self.ay = None
         self.normalizeY = normalizeY
         
         # Check if a division is required
@@ -140,7 +138,7 @@ class simple_data_generator(tf.keras.utils.Sequence):
             else:
                 min_val = min(img.shape)
                 channel_pos = img.shape.index(min_val)
-                if channel_pos != 3 and mask.shape[channel_pos] <= 4:
+                if channel_pos != 3 and img.shape[channel_pos] <= 4:
                     new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
                     img = img.transpose(new_pos)
         else:

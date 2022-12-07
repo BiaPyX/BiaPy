@@ -11,16 +11,13 @@ from skimage.io import imread
 from imgaug.augmentables.heatmaps import HeatmapsOnImage
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 
-from data.data_2D_manipulation import random_crop
-from data.data_3D_manipulation import random_3D_crop
 from engine.denoising import (rand_float_coords2D, rand_float_coords3D, get_stratified_coords2D, get_stratified_coords3D, get_value_manipulation,                         
                               apply_structN2Vmask, apply_structN2Vmask3D)                    
 from utils.util import img_to_onehot_encoding
-from data.generators.augmentors import (cutout, cutblur, cutmix, cutnoise, misalignment, brightness_em, contrast_em,
-                                        brightness, contrast, missing_sections, shuffle_channels, grayscale, GridMask)
+from data.generators.augmentors import *
 from data.pre_processing import normalize, norm_range01
 
-class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
+class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
     """Custom 2D BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
        and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
        transformations. 
@@ -314,9 +311,6 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
            Nested lists equivalent to ndarray. Must have odd length in each dimension (center pixel is blind spot). ``None`` 
            implies normal N2V masking.
 
-       max_samples_to_analyse : int, optinal
-           Samples to be analysed when the data is not in memory and mean/std need to be calculated. 
-       
        norm_custom_mean : float, optional
            Mean of the data used to normalize.
 
@@ -328,7 +322,6 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
        instance_problem : bool, optional
            Advice the class that the workflow is of instance segmentation to divide the labels by channels.
-       
     """
 
     def __init__(self, ndim, X, Y, batch_size=32, seed=0, shuffle_each_epoch=False, in_memory=True, data_paths=None, da=True,
@@ -348,9 +341,8 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                  grid_rotate=1, grid_invert=False, random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,),
                  prob_map=None, val=False, n_classes=1, out_number=1, extra_data_factor=1, n2v=False, 
                  n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', n2v_neighborhood_radius=5, 
-                 n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), max_samples_to_analyse=10, 
-                 norm_custom_mean=None, norm_custom_std=None, normalizeY='as_mask', instance_problem=False,
-                 random_crop_scale=1):
+                 n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), norm_custom_mean=None, norm_custom_std=None, 
+                 normalizeY='as_mask', instance_problem=False, random_crop_scale=1):
 
         self.ndim = ndim
         self.z_size = -1 
@@ -415,9 +407,9 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             # X data analysis
             self.X_norm = {}
             if norm_custom_mean is not None and norm_custom_std is not None:
-                nsamples = min(max_samples_to_analyse, len(self.data_paths))
+                nsamples = len(self.data_paths)
                 sam = []
-                for i in range(np.random.choice(len(self.data_paths), nsamples, replace=False)):
+                for i in range(len(self.data_paths)):
                     img, _ = self.load_sample(i)
                     sam.append(img)
                     if shape[-1] != img.shape[-1]:
@@ -730,7 +722,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         self.seed = seed
         ia.seed(seed)
         
-        self.random_crop_func = random_3D_crop if self.ndim == 3 else random_crop
+        self.random_crop_func = random_3D_crop_pair if self.ndim == 3 else random_crop_pair
         self.on_epoch_end()
 
     @abstractmethod
@@ -1038,6 +1030,7 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
            train : bool, optional
                To avoid drawing a grid on the generated images. This should be set when the samples will be used for
                training.
+
            draw_grid : bool, optional
                Draw a grid in the generated samples. Useful to see some types of deformations.
 
@@ -1161,12 +1154,11 @@ class BaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
                 if self.ndim == 2:
                     img, mask, oy, ox,\
-                    s_y, s_x = random_crop(img, mask, self.shape[:2], self.val, img_prob=img_prob, draw_prob_map_points=True, 
+                    s_y, s_x = random_crop_pair(img, mask, self.shape[:2], self.val, img_prob=img_prob, draw_prob_map_points=True, 
                         scale=self.random_crop_scale)
                 else:
                     img, mask, oz, oy, ox,\
-                    s_z, s_y, s_x = random_3D_crop(img, mask, self.shape[:3], self.val, img_prob=img_prob,
-                                                   draw_prob_map_points=True)
+                    s_z, s_y, s_x = random_3D_crop_pair(img, mask, self.shape[:3], self.val, img_prob=img_prob, draw_prob_map_points=True)
                 if save_to_dir:
                     point_dict = {}
                     point_dict['oy'], point_dict['ox'], point_dict['s_y'], point_dict['s_x'] = oy, ox, s_y, s_x

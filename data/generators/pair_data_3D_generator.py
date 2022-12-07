@@ -4,10 +4,10 @@ import os
 from PIL import Image
 from skimage.io import imsave, imread
 
-from data.generators.base_data_generator import BaseDataGenerator
+from data.generators.pair_base_data_generator import PairBaseDataGenerator
 from data.pre_processing import denormalize
 
-class VoxelDataGenerator(BaseDataGenerator):
+class PairVoxelDataGenerator(PairBaseDataGenerator):
     """Custom 3D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own
        `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
        transformations. This generator will yield an image and its corresponding mask.
@@ -32,7 +32,7 @@ class VoxelDataGenerator(BaseDataGenerator):
         else:                    
             min_val = min(img.shape)
             channel_pos = img.shape.index(min_val)
-            if channel_pos != 3 and mask.shape[channel_pos] <= 4:
+            if channel_pos != 3 and img.shape[channel_pos] <= 4:
                 new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
                 img = img.transpose(new_pos)
         if mask.ndim == 3: 

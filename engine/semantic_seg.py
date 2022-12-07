@@ -25,8 +25,8 @@ class Semantic_Segmentation(Base_Workflow):
             save_tif((pred>0.5).astype(np.uint8), self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_BIN, filenames,
                         verbose=self.cfg.TEST.VERBOSE)
 
-    def after_all_images(self, Y):
-        super().after_all_images(None)
+    def after_all_images(self):
+        super().after_all_images()
 
     def normalize_stats(self, image_counter):
         super().normalize_stats(image_counter)

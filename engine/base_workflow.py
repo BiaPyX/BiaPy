@@ -208,7 +208,7 @@ class Base_Workflow(metaclass=ABCMeta):
         ##################
         ### FULL IMAGE ###
         ##################
-        if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D' :
+        if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D':
             X, o_test_shape = check_downsample_division(X, len(self.cfg.MODEL.FEATURE_MAPS)-1)
             if self.cfg.DATA.TEST.LOAD_GT:
                 Y, _ = check_downsample_division(Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
@@ -304,7 +304,7 @@ class Base_Workflow(metaclass=ABCMeta):
     def after_full_image(self):
         raise NotImplementedError
 
-    def after_all_images(self, Y):
+    def after_all_images(self):
         ############################
         ### POST-PROCESSING (2D) ###
         ############################

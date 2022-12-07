@@ -4,10 +4,11 @@ from tqdm import tqdm
 
 from utils.util import  save_tif
 from data.pre_processing import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif
-from data.generators.data_2D_generator import ImageDataGenerator
-from data.generators.data_2D_generator_classification import ClassImageDataGenerator
-from data.generators.data_3D_generator import VoxelDataGenerator
-from data.generators.simple_data_generators import simple_data_generator
+from data.generators.pair_data_2D_generator import PairImageDataGenerator
+from data.generators.single_data_2D_generator import SingleImageDataGenerator
+from data.generators.pair_data_3D_generator import PairVoxelDataGenerator
+from data.generators.simple_pair_data_generators import simple_pair_data_generator
+from data.generators.simple_single_data_generator import simple_single_data_generator
 
 
 def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
@@ -32,10 +33,10 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
 
        Returns
        -------
-       train_generator : ImageDataGenerator (2D) or VoxelDataGenerator (3D)
+       train_generator : PairImageDataGenerator (2D) or PairVoxelDataGenerator (3D)
            Training data generator.
 
-       val_generator : ImageDataGenerator (2D) or VoxelDataGenerator (3D)
+       val_generator : PairImageDataGenerator (2D) or PairVoxelDataGenerator (3D)
            Validation data generator.
     """
 
@@ -76,11 +77,11 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
 
     if cfg.PROBLEM.NDIM == '2D':
         if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-            f_name = ClassImageDataGenerator
+            f_name = SingleImageDataGenerator
         else: 
-            f_name = ImageDataGenerator 
+            f_name = PairImageDataGenerator 
     else:
-        f_name = VoxelDataGenerator
+        f_name = PairVoxelDataGenerator
     
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
@@ -135,7 +136,11 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             dic['n2v_neighborhood_radius'] = cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
             dic['n2v_structMask'] = np.array([[0,1,1,1,1,1,1,1,1,1,0]]) if cfg.PROBLEM.DENOISING.N2V_STRUCTMASK else None
     else:
-        r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' else None
+        r_shape = cfg.DATA.PATCH_SIZE
+        if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' and cfg.DATA.PATCH_SIZE[:-1] != (224,224):
+            r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) 
+            print("Changing patch size from {} to {} to use EfficientNetB0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
+
         dic = dict(X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, n_classes=cfg.MODEL.N_CLASSES,
             batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED, shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_TRAIN_DATA_EACH_EPOCH,
             da=cfg.AUGMENTOR.ENABLE, in_memory=cfg.DATA.TRAIN.IN_MEMORY, da_prob=cfg.AUGMENTOR.DA_PROB,
@@ -148,7 +153,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             median_blur=cfg.AUGMENTOR.MEDIAN_BLUR, mb_kernel=cfg.AUGMENTOR.MB_KERNEL, motion_blur=cfg.AUGMENTOR.MOTION_BLUR,
             motb_k_range=cfg.AUGMENTOR.MOTB_K_RANGE, gamma_contrast=cfg.AUGMENTOR.GAMMA_CONTRAST,
             gc_gamma=cfg.AUGMENTOR.GC_GAMMA, dropout=cfg.AUGMENTOR.DROPOUT, drop_range=cfg.AUGMENTOR.DROP_RANGE,
-            resize_shape=r_shape)
+            resize_shape=r_shape, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
 
     print("Initializing train data generator . . .")
     train_generator = f_name(**dic)
@@ -174,7 +179,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
         val_generator = f_name(**dic)
     else:
         val_generator = f_name(X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, n_classes=cfg.MODEL.N_CLASSES, in_memory=cfg.DATA.VAL.IN_MEMORY,
-            batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED, shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, da=False)
+            batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED, shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, da=False,
+            resize_shape=r_shape, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
 
     # Generate examples of data augmentation
     if cfg.AUGMENTOR.AUG_SAMPLES:
@@ -202,7 +208,7 @@ def create_test_augmentor(cfg, X_test, Y_test):
 
        Returns
        -------
-       test_generator : simple_data_generator
+       test_generator : simple_pair_data_generator
            Test data generator.
     """
     custom_mean, custom_std = None, None
@@ -220,24 +226,34 @@ def create_test_augmentor(cfg, X_test, Y_test):
             custom_std = cfg.DATA.NORMALIZATION.CUSTOM_STD
         print("Test normalization: using mean {} and std: {}".format(custom_mean, custom_std))
 
-    if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-        test_generator = ClassImageDataGenerator(X=X_test, Y=Y_test, data_path=cfg.DATA.TEST.PATH,
-            n_classes=cfg.MODEL.N_CLASSES, in_memory=cfg.DATA.VAL.IN_MEMORY, batch_size=X_test.shape[0],
-            seed=cfg.SYSTEM.SEED, shuffle_each_epoch=False, da=False)
+    instance_problem = True if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else False
+    normalizeY='as_mask'
+    provide_Y=cfg.DATA.TEST.LOAD_GT
+    if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+        normalizeY = 'none'
+    elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+        normalizeY = 'as_image'
+        provide_Y = True
+    elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+        normalizeY = 'as_image'
+        
+    dic = dict(X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=provide_Y, Y=Y_test,
+        dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, dims=cfg.PROBLEM.NDIM, seed=cfg.SYSTEM.SEED,
+        instance_problem=instance_problem, normalizeY=normalizeY, norm_custom_mean=custom_mean, 
+        norm_custom_std=custom_std)        
+        
+    if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+        gen_name = simple_pair_data_generator
     else:
-        instance_problem = True if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else False
-        normalizeY='as_mask'
-        provide_Y=cfg.DATA.TEST.LOAD_GT
-        if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-            normalizeY = 'none'
-        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
-            normalizeY = 'as_image'
-            provide_Y = True
-        dic = dict(X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=provide_Y, Y=Y_test,
-            dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, dims=cfg.PROBLEM.NDIM, seed=cfg.SYSTEM.SEED,
-            instance_problem=instance_problem, normalizeY=normalizeY, norm_custom_mean=custom_mean, 
-            norm_custom_std=custom_std)
-        test_generator = simple_data_generator(**dic)
+        gen_name = simple_single_data_generator 
+        
+        r_shape = cfg.DATA.PATCH_SIZE
+        if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' and cfg.DATA.PATCH_SIZE[:-1] != (224,224):
+            r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) 
+            print("Changing patch size from {} to {} to use EfficientNetB0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
+        dic['crop_center'] = True
+        dic['resize_shape'] = r_shape
+    test_generator = gen_name(**dic)
     return test_generator
 
 
@@ -246,7 +262,7 @@ def check_generator_consistence(gen, data_out_dir, mask_out_dir, filenames=None)
 
        Parameters
        ----------
-       gen : ImageDataGenerator (2D) or VoxelDataGenerator (3D)
+       gen : PairImageDataGenerator/SingleImageDataGenerator (2D) or PairVoxelDataGenerator (3D)
            Generator to extract the data from.
 
        data_out_dir : str
