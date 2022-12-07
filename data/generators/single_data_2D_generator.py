@@ -327,7 +327,7 @@ class SingleImageDataGenerator(tf.keras.utils.Sequence):
         else:
             sample_id = self.all_samples[idx]
             sample_class_dir = self.classes[sample_id]
-            if self.data_paths[idx].endswith('.npy'):
+            if sample_id.endswith('.npy'):
                 img = np.load(os.path.join(self.data_path, sample_class_dir, sample_id))
             else:
                 img = imread(os.path.join(self.data_path, sample_class_dir, sample_id))

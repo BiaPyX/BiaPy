@@ -113,7 +113,7 @@ class simple_pair_data_generator(tf.keras.utils.Sequence):
         mask = None
         # Choose the data source
         if self.X is None:
-            if self.d_path[0].endswith('.npy'):
+            if self.data_path[idx].endswith('.npy'):
                 img = np.load(os.path.join(self.d_path, self.data_path[idx]))
                 if self.provide_Y:
                     mask = np.load(os.path.join(self.dm_path, self.data_mask_path[idx]))
