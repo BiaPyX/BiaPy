@@ -118,6 +118,8 @@ class simple_single_data_generator(tf.keras.utils.Sequence):
 
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
+        img_class = None
+
         # Choose the data source
         if self.X is not None:
             img = self.X[idx]

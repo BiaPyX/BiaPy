@@ -683,6 +683,9 @@ def load_data_classification(cfg, test=False):
 
        ids : List of str
            Filenames loaded.
+       
+       class_names : List of str
+           Class names extracted from directory names.
 
        X_val : 4D Numpy array, optional
            Validation images. E.g. ``(num_of_images, y, x, channels)``.
@@ -700,28 +703,29 @@ def load_data_classification(cfg, test=False):
     all_ids = []
     if not test:
         if not cfg.DATA.VAL.CROSS_VAL:
-            X_data_npy_file = os.path.join(path, '../prepared_npy', 'X_data.npy')
-            Y_data_npy_file = os.path.join(path, '../prepared_npy', 'Y_data.npy')
-            X_val_npy_file = os.path.join(path, '../prepared_npy', 'X_val.npy')
-            Y_val_npy_file = os.path.join(path, '../prepared_npy', 'Y_val.npy')
+            X_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'X_train.npy')
+            Y_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'Y_train.npy')
+            X_val_npy_file = os.path.join(path, '../npy_data_for_classification', 'X_val.npy')
+            Y_val_npy_file = os.path.join(path, '../npy_data_for_classification', 'Y_val.npy')
         else:
             f_info = str(cfg.DATA.VAL.CROSS_VAL_FOLD)+'of'+str(cfg.DATA.VAL.CROSS_VAL_NFOLD)
-            X_data_npy_file = os.path.join(path, '../prepared_npy', 'X_data'+f_info+'.npy')
-            Y_data_npy_file = os.path.join(path, '../prepared_npy', 'Y_data'+f_info+'.npy')
-            X_val_npy_file = os.path.join(path, '../prepared_npy', 'X_val'+f_info+'.npy')
-            Y_val_npy_file = os.path.join(path, '../prepared_npy', 'Y_val'+f_info+'.npy')
+            X_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'X_train'+f_info+'.npy')
+            Y_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'Y_train'+f_info+'.npy')
+            X_val_npy_file = os.path.join(path, '../npy_data_for_classification', 'X_val'+f_info+'.npy')
+            Y_val_npy_file = os.path.join(path, '../npy_data_for_classification', 'Y_val'+f_info+'.npy')
     else:
         if not cfg.DATA.TEST.USE_VAL_AS_TEST:
-            X_data_npy_file = os.path.join(path, '../prepared_npy', 'X_data.npy')
-            Y_data_npy_file = os.path.join(path, '../prepared_npy', 'Y_data.npy')
+            X_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'X_test.npy')
+            Y_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'Y_test.npy')
         else:
             f_info = str(cfg.DATA.VAL.CROSS_VAL_FOLD)+'of'+str(cfg.DATA.VAL.CROSS_VAL_NFOLD)
-            X_data_npy_file = os.path.join(path, '../prepared_npy', 'X_val'+f_info+'.npy')
-            Y_data_npy_file = os.path.join(path, '../prepared_npy', 'Y_val'+f_info+'.npy')
+            X_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'X_val'+f_info+'.npy')
+            Y_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'Y_val'+f_info+'.npy')
 
     class_names = sorted(next(os.walk(path))[1])
     if not os.path.exists(X_data_npy_file):
         print("Seems to be the first run as no data is prepared. Creating .npy files: {}".format(X_data_npy_file))
+        print("## TRAIN ##")
         X_data, Y_data = [], []
         for c_num, folder in enumerate(class_names):
             print("Analizing folder {}".format(os.path.join(path,folder)))
@@ -737,13 +741,6 @@ def load_data_classification(cfg, test=False):
                     if img.shape[0] <= 3: img = img.transpose((1,2,0))
                 img = np.expand_dims(img, 0).astype(np.uint8)
 
-                # Ensure uint8
-                if img.dtype == np.uint16:
-                    if np.max(img) > 255:
-                        img = normalize(img, 0, 65535)
-                    else:
-                        img = img.astype(np.uint8)
-
                 class_X_data.append(img)
                 class_Y_data.append(np.expand_dims(np.array(c_num),0).astype(np.uint8))
 
@@ -757,23 +754,56 @@ def load_data_classification(cfg, test=False):
         Y_data = np.concatenate(Y_data, 0)
         Y_data = np.squeeze(Y_data)
 
-        os.makedirs(os.path.join(path, '../prepared_npy'), exist_ok=True)
+        os.makedirs(os.path.join(path, '../npy_data_for_classification'), exist_ok=True)
         if not test:
-            if cfg.DATA.VAL.CROSS_VAL:
-                skf = StratifiedKFold(n_splits=cfg.DATA.VAL.CROSS_VAL_NFOLD, shuffle=cfg.DATA.VAL.RANDOM,
-                    random_state=cfg.SYSTEM.SEED)
-                f_num = 1
-                for train_index, test_index in skf.split(X_data, Y_data):
-                    if cfg.DATA.VAL.CROSS_VAL_FOLD == f_num:
-                        X_data, X_val = X_data[train_index], X_data[test_index]
-                        Y_data, Y_val = Y_data[train_index], Y_data[test_index]
-                        break
-                    f_num+= 1
+            print("## VAL ##")
+            X_val, Y_val = [], []
+            if cfg.DATA.VAL.FROM_TRAIN:
+                if cfg.DATA.VAL.CROSS_VAL: 
+                    skf = StratifiedKFold(n_splits=cfg.DATA.VAL.CROSS_VAL_NFOLD, shuffle=cfg.DATA.VAL.RANDOM,
+                        random_state=cfg.SYSTEM.SEED)
+                    f_num = 1
+                    for train_index, test_index in skf.split(X_data, Y_data):
+                        if cfg.DATA.VAL.CROSS_VAL_FOLD == f_num:
+                            X_data, X_val = X_data[train_index], X_data[test_index]
+                            Y_data, Y_val = Y_data[train_index], Y_data[test_index]
+                            break
+                        f_num+= 1
+                else:
+                    X_data, X_val, Y_data, Y_val = train_test_split(X_data, Y_data, test_size=cfg.DATA.VAL.SPLIT_TRAIN,
+                        shuffle=cfg.DATA.VAL.RANDOM, random_state=cfg.SYSTEM.SEED)
             else:
-                X_data, X_val, Y_data, Y_val = train_test_split(X_data, Y_data, test_size=cfg.DATA.VAL.SPLIT_TRAIN,
-                    shuffle=cfg.DATA.VAL.RANDOM, random_state=cfg.SYSTEM.SEED)
+                path_val = cfg.DATA.VAL.PATH
+                class_names = sorted(next(os.walk(path_val))[1])
+                for c_num, folder in enumerate(class_names):
+                    print("Analizing folder {}".format(os.path.join(path_val, folder)))
+                    ids = sorted(next(os.walk(os.path.join(path_val,folder)))[2])
+                    print("Found {} samples".format(len(ids)))
+                    class_X_data, class_Y_data = [], []
+                    for i in tqdm(range(len(ids)), leave=False):
+                        img = imread(os.path.join(path_val, folder, ids[i]))
+                        if img.ndim == 2:
+                            img = np.expand_dims(img, -1)
+                        else:
+                            if img.shape[0] <= 3: img = img.transpose((1,2,0))
+                        img = np.expand_dims(img, 0).astype(np.uint8)
+
+                        class_X_data.append(img)
+                        class_Y_data.append(np.expand_dims(np.array(c_num),0).astype(np.uint8))
+
+                    class_X_data = np.concatenate(class_X_data, 0)
+                    class_Y_data = np.concatenate(class_Y_data, 0)
+                    X_val.append(class_X_data)
+                    Y_val.append(class_Y_data)
+
+                # Fuse all data
+                X_val = np.concatenate(X_val, 0)
+                Y_val = np.concatenate(Y_val, 0)
+                Y_val = np.squeeze(Y_val)
+
             np.save(X_val_npy_file, X_val)
             np.save(Y_val_npy_file, Y_val)
+
         np.save(X_data_npy_file, X_data)
         np.save(Y_data_npy_file, Y_data)
     else:
@@ -784,7 +814,7 @@ def load_data_classification(cfg, test=False):
             Y_val = np.load(Y_val_npy_file)
 
         for c_num, folder in enumerate(class_names):
-            ids = sorted(next(os.walk(os.path.join(path,folder)))[2])
+            ids = sorted(next(os.walk(os.path.join(path, folder)))[2])
             all_ids.append(ids)
     
     all_ids = np.concatenate(all_ids)
@@ -795,5 +825,5 @@ def load_data_classification(cfg, test=False):
         return X_data, Y_data, X_val, Y_val
     else:
         print("*** Loaded test data shape is: {}".format(X_data.shape))
-        return X_data, Y_data, all_ids
+        return X_data, Y_data, all_ids, class_names
 

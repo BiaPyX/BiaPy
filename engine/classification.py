@@ -9,7 +9,7 @@ from engine.base_workflow import Base_Workflow
 from utils.util import save_tif
 
 class Classification(Base_Workflow):
-    def __init__(self, cfg, model, post_processing=False):
+    def __init__(self, cfg, model, class_names=None, post_processing=False):
         super().__init__(cfg, model, post_processing)
         
         self.stats['test_accuracy'] = 0
@@ -18,15 +18,11 @@ class Classification(Base_Workflow):
         if self.cfg.DATA.TEST.LOAD_GT: 
             self.all_gt = []
         self.test_filenames = []
+        self.class_names = class_names
 
     def process_sample(self, X, Y, filenames, norm):   
         self.test_filenames.append(filenames)   
 
-        # Check shape 
-        if X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
-            raise ValueError("For classification the images provided need to be of the selected "
-                             "'DATA.PATCH_SIZE', {} given".format(X.shape[1:]))
-            
         self.stats['patch_counter'] += X.shape[0]
 
         # Predict each patch
@@ -45,7 +41,7 @@ class Classification(Base_Workflow):
         df = pd.DataFrame(self.test_filenames, columns=['filename'])
         df['class'] = np.array(self.all_pred)
         f= os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, "predictions.csv")
-        os.makedirs(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, exist_ok=True)
+        os.makedirs(self.cfg.PATHS.RESULT_DIR.PATH, exist_ok=True)
         df.to_csv(f, index=False, header=True)
 
         if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
@@ -57,7 +53,10 @@ class Classification(Base_Workflow):
             print('Test Accuracy: ', round((self.stats['test_accuracy'] * 100), 2), "%")
             print("Confusion matrix: ")
             print(self.stats['cm'])
-            display_labels = ["Category {}".format(i) for i in range(self.cfg.MODEL.N_CLASSES)]
+            if self.class_names is not None:
+                display_labels = ["Category {} ({})".format(i, self.class_names[i]) for i in range(self.cfg.MODEL.N_CLASSES)]
+            else:
+                display_labels = ["Category {}".format(i) for i in range(self.cfg.MODEL.N_CLASSES)]
             print(classification_report(self.all_gt, self.all_pred, target_names=display_labels))
 
     def after_merge_patches(self, pred, Y, filenames):

@@ -381,7 +381,7 @@ class SingleImageDataGenerator(tf.keras.utils.Sequence):
             img, img_class =  self.load_sample(j)
 
             if img.shape[:-1] != self.shape[:-1]:
-                img = random_crop_single(img, self.shape, self.val)
+                img = random_crop_single(img, self.shape[:-1], self.val)
                 img = resize_2D_img(img, self.shape)
 
             batch_x[i] = img

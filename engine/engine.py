@@ -150,7 +150,7 @@ class Engine(object):
                 else:
                     self.test_filenames = sorted(next(os.walk(self.original_test_path))[2])
             elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-                X_test, Y_test, self.test_filenames = load_data_classification(cfg, test=True)
+                X_test, Y_test, self.test_filenames, self.class_names = load_data_classification(cfg, test=True)
 
 
         print("########################\n"
@@ -216,7 +216,7 @@ class Engine(object):
         elif self.cfg.PROBLEM.TYPE == 'DETECTION':
             workflow = Detection(self.cfg, self.model, post_processing)
         elif self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-            workflow = Classification(self.cfg, self.model, post_processing)
+            workflow = Classification(self.cfg, self.model, self.class_names, post_processing)
         elif self.cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             workflow = Super_resolution(self.cfg, self.model, post_processing)
         elif self.cfg.PROBLEM.TYPE == 'DENOISING':
@@ -259,8 +259,8 @@ class Engine(object):
                         else:
                             _Y = None
                 else:
-                    _X = np.expand_dims(X[j], 0)
-                    _Y = np.expand_dims(Y[j], 0)
+                    _X = np.expand_dims(X[j], 0)                    
+                    _Y = np.expand_dims(Y[j], 0) if self.cfg.DATA.TEST.LOAD_GT else None
 
                 # Save memory if possible
                 if l_X == 1: 
