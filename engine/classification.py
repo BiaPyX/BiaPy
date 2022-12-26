@@ -6,7 +6,6 @@ from tqdm import tqdm
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
 from engine.base_workflow import Base_Workflow
-from utils.util import save_tif
 
 class Classification(Base_Workflow):
     def __init__(self, cfg, model, class_names=None, post_processing=False):

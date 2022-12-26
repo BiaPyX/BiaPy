@@ -103,7 +103,7 @@ class Detection(Base_Workflow):
                     donuts_nucleus_diameter=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER, save_dir=check_wa)
                 
                 # Advice user if instance     
-                labels, npixels, areas, circularities, comment = check_instances_by_prop(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
+                points_pred, labels, npixels, areas, circularities, comment = check_instances_by_prop(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
                     np.concatenate(all_points, axis=0), circularity_th=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_CIRCULARITY)
 
                 save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,

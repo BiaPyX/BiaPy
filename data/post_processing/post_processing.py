@@ -1728,7 +1728,11 @@ def check_instances_by_prop(img, resolution, coords_list, circularity_th=0.7):
                     else:
                         comment[j] = unsure_str
 
-    return label_list, npixels, areas, circularities, comment
+                        # Remove that label from the image
+                        img[img==l] = 0
+                         
+
+    return img, label_list, npixels, areas, circularities, comment
 
 
 def apply_binary_mask(X, bin_mask_dir):
