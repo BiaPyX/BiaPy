@@ -443,12 +443,16 @@ class Config:
         _C.MODEL.TIRAMISU_DEPTH = 3
 
         # UNETR
+        # Size of the patches that are extracted from the input image.
         _C.MODEL.UNETR_TOKEN_SIZE = 16
+        # Dimension of the embedding space
         _C.MODEL.UNETR_EMBED_DIM = 768
+        # Number of transformer encoder layers
         _C.MODEL.UNETR_DEPTH = 12
-        _C.MODEL.UNETR_MLP_HIDDEN_UNITS = [2048, 1024]
-        _C.MODEL.UNETR_NUM_HEADS = 6
-        _C.MODEL.UNETR_OUT_DIM = 1
+        # Number of units in the MLP blocks. 
+        _C.MODEL.UNETR_MLP_HIDDEN_UNITS = [3072, 768]
+        # Number of heads in the multi-head attention layer.
+        _C.MODEL.UNETR_NUM_HEADS = 4
         
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

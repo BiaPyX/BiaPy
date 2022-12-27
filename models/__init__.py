@@ -78,7 +78,7 @@ def build_model(cfg, job_identifier):
             args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.UNETR_TOKEN_SIZE, num_patches=num_patches,
                 projection_dim=cfg.MODEL.UNETR_EMBED_DIM, transformer_layers=cfg.MODEL.UNETR_DEPTH, num_heads=cfg.MODEL.UNETR_NUM_HEADS,
                 transformer_units=cfg.MODEL.UNETR_MLP_HIDDEN_UNITS, data_augmentation = None, num_filters = 16, 
-                num_classes=cfg.MODEL.UNETR_OUT_DIM, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
+                num_classes=cfg.MODEL.N_CLASSES, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
                 ViT_hidd_mult = 3, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES)
             model = UNETR_2D(**args)
         elif cfg.MODEL.ARCHITECTURE == 'edsr':

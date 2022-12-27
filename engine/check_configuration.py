@@ -234,6 +234,9 @@ def check_configuration(cfg):
                                       'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr']
     if cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet'] and cfg.PROBLEM.NDIM == '3D':
         raise ValueError("For 3D these models are available: {}".format(['unet', 'resunet', 'seunet', 'attention_unet']))
+    if cfg.MODEL.ARCHITECTURE == "unetr":
+        if cfg.MODEL.UNETR_EMBED_DIM != cfg.MODEL.UNETR_MLP_HIDDEN_UNITS[1]:
+            raise ValueError("'MODEL.UNETR_EMBED_DIM' and 'MODEL.UNETR_MLP_HIDDEN_UNITS[1]' need to ")
     if cfg.MODEL.N_CLASSES > 1 and cfg.PROBLEM.TYPE != "CLASSIFICATION" and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
         raise ValueError("'MODEL.N_CLASSES' > 1 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'seunet', 'attention_unet']")
     if cfg.MODEL.LAST_ACTIVATION not in ['softmax', 'sigmoid', 'linear']:
