@@ -4,6 +4,10 @@ from yacs.config import CfgNode as CN
 
 class Config:
     def __init__(self, job_dir, job_identifier):
+        
+        if "/" in job_identifier:
+            raise ValueError("Job name can not contain / character. Provided: {}".format(job_identifier))
+
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Config definition
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -633,6 +637,14 @@ class Config:
         """Update some variables that depend of changes made after merge the .cfg file provide by the user. That is,
            this function should be called after YACS's merge_from_file().
         """
+        # Remove possible / characters at the end of the paths
+        self._C.DATA.TRAIN.PATH = self._C.DATA.TRAIN.PATH if self._C.DATA.TRAIN.PATH[-1] != '/' else self._C.DATA.TRAIN.PATH[:-1]
+        self._C.DATA.TRAIN.MASK_PATH = self._C.DATA.TRAIN.MASK_PATH if self._C.DATA.TRAIN.MASK_PATH[-1] != '/' else self._C.DATA.TRAIN.MASK_PATH[:-1]
+        self._C.DATA.VAL.PATH = self._C.DATA.VAL.PATH if self._C.DATA.VAL.PATH[-1] != '/' else self._C.DATA.VAL.PATH[:-1]
+        self._C.DATA.VAL.MASK_PATH = self._C.DATA.VAL.MASK_PATH if self._C.DATA.VAL.MASK_PATH[-1] != '/' else self._C.DATA.VAL.MASK_PATH[:-1]
+        self._C.DATA.TEST.PATH = self._C.DATA.TEST.PATH if self._C.DATA.TEST.PATH[-1] != '/' else self._C.DATA.TEST.PATH[:-1]
+        self._C.DATA.TEST.MASK_PATH = self._C.DATA.TEST.MASK_PATH if self._C.DATA.TEST.MASK_PATH[-1] != '/' else self._C.DATA.TEST.MASK_PATH[:-1]
+
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = self._C.DATA.TRAIN.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TRAIN.DETECTION_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_detection_masks'
