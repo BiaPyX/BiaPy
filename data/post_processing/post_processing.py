@@ -1654,16 +1654,17 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
 
     return segm
 
-def check_instances_by_prop(img, resolution, coords_list, circularity_th=0.7):
-    """
-    Check the properties of input image instances. Apart from 'label', 'area' and 'circularity'
-    properties lists that are returned another one identifying those instances that do not satisfy
-    the input property threshold are marked as 'Strange' whereas the rest are 'Correct'.     
+def remove_instance_by_circularity_central_slice(img, resolution, coords_list, circularity_th=0.7):
+    """label_list, npixels, areas, circularities, comment
+    Check the properties of input image instances. Apart from label id, number of pixels, area/volume 
+    (2D/3D respec. and taking into account the resolution) and circularity properties lists that are 
+    returned another one identifying those instances that do not satisfy the circularity threshold
+    are marked as 'Strange' whereas the rest are 'Correct'.     
     
     Parameters
     ----------
     img : 2D/3D Numpy array
-        Image with instances. E.g. ``(397, 1450, 2000)``.
+        Image with instances. E.g. ``(1450, 2000)`` for 2D and ``(397, 1450, 2000)`` for 3D.
 
     resolution : str
         Path to load the image paired with seeds. 
@@ -1676,7 +1677,11 @@ def check_instances_by_prop(img, resolution, coords_list, circularity_th=0.7):
         in the returned comment list. 
 
     Returns
-    -------
+    ------- img, label_list, npixels, areas, circularities, comment
+    img : 2D/3D Numpy array
+        Input image without the instances that do not satisfy the circularity constraint. 
+        Image with instances. E.g. ``(1450, 2000)`` for 2D and ``(397, 1450, 2000)`` for 3D.
+
     labels : List of ints
         Instance label list. 
     
@@ -1686,8 +1691,12 @@ def check_instances_by_prop(img, resolution, coords_list, circularity_th=0.7):
     areas : List of ints
         areas/volumes (2D/3D) based on the given resolution.
     
-    circularities, comment : 4D Numpy array
+    circularities : 4D Numpy array
         Image with Voronoi applied. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
+
+    comment : List of str
+        List containing 'Correct' string when the instance surpass the circularity 
+        threshold and 'Strange' otherwise.
     """
     print("Checking the circularity of instances . . .")
 
@@ -1701,14 +1710,20 @@ def check_instances_by_prop(img, resolution, coords_list, circularity_th=0.7):
     # Obtain each instance labels based on the input image first
     label_list = []
     for c in coords_list:
-        label_list.append(img[c[0],c[1],c[2]])
+        if img.ndim == 3:
+            label_list.append(img[c[0],c[1],c[2]])
+        else:
+            label_list.append(img[c[0],c[1]])
         comment.append('none')
 
     _, npixels = np.unique(img, return_counts=True)
     # Delete background instance '0'
     npixels = npixels[1:]
     for pixels in npixels:
-        vol = pixels*(resolution[0]+resolution[1]+resolution[2])
+        if img.ndim == 3:
+            vol = pixels*(resolution[0]+resolution[1]+resolution[2])
+        else:
+            vol = pixels*(resolution[0]+resolution[1])
         areas.append(vol)
        
     # Circularity calculation in the slice where the central point was considerer by the model
@@ -1730,7 +1745,6 @@ def check_instances_by_prop(img, resolution, coords_list, circularity_th=0.7):
 
                         # Remove that label from the image
                         img[img==l] = 0
-                         
 
     return img, label_list, npixels, areas, circularities, comment
 
