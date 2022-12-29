@@ -457,6 +457,8 @@ class Config:
         _C.MODEL.UNETR_MLP_HIDDEN_UNITS = [3072, 768]
         # Number of heads in the multi-head attention layer.
         _C.MODEL.UNETR_NUM_HEADS = 4
+        # Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted
+        _C.MODEL.UNETR_VIT_HIDD_MULT = 3
         
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
