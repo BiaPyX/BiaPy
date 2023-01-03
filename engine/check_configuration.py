@@ -259,6 +259,8 @@ def check_configuration(cfg):
         raise ValueError("Architectures available for 'SUPER_RESOLUTION' are: ['edsr']")
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' and cfg.MODEL.ARCHITECTURE not in ['simple_cnn', 'EfficientNetB0']:
         raise ValueError("Architectures available for 'CLASSIFICATION' are: ['simple_cnn', 'EfficientNetB0']")
+    if cfg.MODEL.ARCHITECTURE == "unetr" and cfg.TEST.STATS.FULL_IMG:
+        raise ValueError("'TEST.STATS.FULL_IMG' can not be activate when using UNETR") 
 
     ### Train ###
     assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM']
