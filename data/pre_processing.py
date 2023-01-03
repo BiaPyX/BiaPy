@@ -54,6 +54,9 @@ def create_instance_channels(cfg, data_type='train'):
     save_npy_files(X, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_DIR, filenames=filenames,
                    verbose=cfg.TEST.VERBOSE)
 
+    # Save original X data with the labels 
+    for i in range(min(3,len(X))):
+        save_tif(np.expand_dims(X[i],0), getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), filenames=['vol'+str(i)+".tif"], verbose=False)
 
 def create_test_instance_channels(cfg):
     """Create test new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` for instance segmentation.
@@ -83,6 +86,10 @@ def create_test_instance_channels(cfg):
     X_test, _, _, test_filenames = f_name(cfg.DATA.TEST.PATH, return_filenames=True)
     save_npy_files(X_test, data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_DIR, filenames=test_filenames,
                    verbose=cfg.TEST.VERBOSE)
+    
+    # Save original X data with the labels 
+    for i in range(min(3,len(X_test))):
+        save_tif(np.expand_dims(X_test[i],0), cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK, filenames=['vol'+str(i)+".tif"], verbose=False)
 
 def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
     """Create an array with 3 channels given semantic or instance segmentation data masks. These 3 channels are:
@@ -198,6 +205,7 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
                 aux = new_mask[i,...,j]
                 aux = np.expand_dims(np.expand_dims(aux,-1),0)
                 save_tif(aux, save_dir, filenames=['vol'+str(i)+suffix[j]], verbose=False)
+                save_tif(np.expand_dims(data_mask[i],0), save_dir, filenames=['vol'+str(i)+"_y.tif"], verbose=False)
     return new_mask
 
 #############

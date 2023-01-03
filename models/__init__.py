@@ -79,7 +79,7 @@ def build_model(cfg, job_identifier):
                 projection_dim=cfg.MODEL.UNETR_EMBED_DIM, transformer_layers=cfg.MODEL.UNETR_DEPTH, num_heads=cfg.MODEL.UNETR_NUM_HEADS,
                 transformer_units=cfg.MODEL.UNETR_MLP_HIDDEN_UNITS, data_augmentation = None, num_filters = 16, 
                 num_classes=cfg.MODEL.N_CLASSES, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
-                ViT_hidd_mult = 3, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES)
+                ViT_hidd_mult = cfg.MODEL.UNETR_VIT_HIDD_MULT, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES)
             model = UNETR_2D(**args)
         elif cfg.MODEL.ARCHITECTURE == 'edsr':
             model = EDSR(num_filters=64, num_of_residual_blocks=16, upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, 
