@@ -73,6 +73,18 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ = 30
         # Whether to remove objects before watershed or after it
         _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW = True
+        # To erode seeds before growing them with the marker controlled watershed 
+        _C.PROBLEM.INSTANCE_SEG.ERODE_SEEDS = False
+        # Radius to erode instance seeds
+        _C.PROBLEM.INSTANCE_SEG.SEED_EROSION_RADIUS = 10
+        # To erode and dilate the foreground mask before using marker controlled watershed. The idea is to remove the small holes 
+        # that may be produced so the instances grow without them
+        _C.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND = False
+        # Radius to erode the foreground mask
+        _C.PROBLEM.INSTANCE_SEG.FORE_EROSION_RADIUS = 5
+        # Radius to dilate the foreground mask
+        _C.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS = 5
+
         # Whether to find an optimum value for each threshold with the validation data. If True the previous MW_TH*
         # variables will be replaced by the optimum values found
         _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = False
@@ -552,6 +564,8 @@ class Config:
         _C.TEST.POST_PROCESSING.Z_FILTERING_SIZE = 5
         # Apply a binary mask to remove possible segmentation outside it
         _C.TEST.POST_PROCESSING.APPLY_MASK = False
+        # Circularity that each instance need to be greater than to not be marked as 'Strange'. Need to be in [0,1] range.
+        _C.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY = -1.
 
         ### Instance segmentation
         # Whether to apply Voronoi using 'BC' or 'M' channels need to be present
@@ -574,9 +588,7 @@ class Config:
         _C.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH = [13,120,120]
         # Diameter (in pixels) that a cell need to have to be considered as donuts type
         _C.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER = 30
-        # Circularity that each instance need to be greater than to not be marked as 'Strange'
-        _C.TEST.POST_PROCESSING.DET_WATERSHED_CIRCULARITY = 0.5
-
+        
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Auxiliary paths
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -653,12 +665,16 @@ class Config:
         self._C.DATA.TRAIN.SSL_SOURCE_DIR = self._C.DATA.TRAIN.PATH+'_ssl_source'
         self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = self._C.DATA.VAL.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-        self._C.DATA.VAL.BINARY_MASKS = os.path.join(self._C.DATA.VAL.PATH, '..', 'bin_mask')
+        # If value is not the default
+        if self._C.DATA.VAL.BINARY_MASKS == os.path.join("user_data", 'val', 'bin_mask'):
+            self._C.DATA.VAL.BINARY_MASKS = os.path.join(self._C.DATA.VAL.PATH, '..', 'bin_mask')
         self._C.DATA.VAL.DETECTION_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_detection_masks'
         self._C.DATA.VAL.SSL_SOURCE_DIR = self._C.DATA.VAL.PATH+'_ssl_source'
         self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-        self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, '..', 'bin_mask')
+        # If value is not the default
+        if self._C.DATA.TEST.BINARY_MASKS == os.path.join("user_data", 'test', 'bin_mask'):
+            self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, '..', 'bin_mask')
         self._C.DATA.TEST.DETECTION_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_detection_masks'
         self._C.DATA.TEST.SSL_SOURCE_DIR = self._C.DATA.TEST.PATH+'_ssl_source'
         self._C.PATHS.TEST_FULL_GT_H5 = os.path.join(self._C.DATA.TEST.MASK_PATH, 'h5')

@@ -1,9 +1,11 @@
 import os
 import h5py
 import numpy as np
+import pandas as pd
 from skimage.io import imread
 
-from data.post_processing.post_processing import watershed_by_channels, calculate_optimal_mw_thresholds, voronoi_on_mask_2
+from data.post_processing.post_processing import (watershed_by_channels, calculate_optimal_mw_thresholds, voronoi_on_mask_2, 
+                                                  remove_instance_by_circularity_central_slice)
 from data.pre_processing import create_instance_channels, create_test_instance_channels
 from utils.util import save_tif, wrapper_matching_dataset_lazy, wrapper_matching_segCompare
 from utils.matching import matching, match_using_segCompare
@@ -55,11 +57,28 @@ class Instance_Segmentation(Base_Workflow):
         
         w_pred = watershed_by_channels(pred, self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, ths=self.instance_ths, 
             thres_small=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, 
-            save_dir=check_wa)
+            erode_seeds=self.cfg.PROBLEM.INSTANCE_SEG.ERODE_SEEDS, seed_erosion_radius=self.cfg.PROBLEM.INSTANCE_SEG.SEED_EROSION_RADIUS, 
+            erode_and_dilate_foreground=self.cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND, fore_erosion_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_EROSION_RADIUS, 
+            fore_dilation_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS, save_dir=check_wa)
 
         save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
-                    filenames, verbose=self.cfg.TEST.VERBOSE)
-
+            filenames, verbose=self.cfg.TEST.VERBOSE)
+        
+        if self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1:
+            w_pred, labels, npixels, areas, circularities, comment = remove_instance_by_circularity_central_slice(w_pred, self.cfg.DATA.TEST.RESOLUTION, 
+                circularity_th=self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY)
+            
+            save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
+                filenames, verbose=self.cfg.TEST.VERBOSE)
+            
+            # Save stats
+            size_measure = 'area' if w_pred.ndim == 2 else 'volume'
+            df = pd.DataFrame(zip(labels, npixels, areas, circularities, comment), 
+                columns=['label','class','npixels', size_measure, 'circularity', 'comment'])
+            df = df.sort_values(by=['label'])   
+            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, os.path.splitext(filenames[0])[0]+'_stats.csv'))
+            del df
+            
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             vor_pred = voronoi_on_mask_2(np.expand_dims(w_pred,0), np.expand_dims(pred,0),
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI, filenames, verbose=self.cfg.TEST.VERBOSE)[0]
@@ -313,7 +332,7 @@ def prepare_instance_data(cfg):
         print("DATA.TEST.PATH changed from {} to {}".format(cfg.DATA.TEST.PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
         opts.extend(['DATA.TEST.PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_DIR])
         original_test_path = cfg.DATA.TEST.PATH
-        if cfg.DATA.TEST.LOAD_GT and cfg.TEST.EVALUATE:
+        if cfg.DATA.TEST.LOAD_GT:
             print("DATA.TEST.MASK_PATH changed from {} to {}".format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
             opts.extend(['DATA.TEST.MASK_PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR])
         original_test_mask_path = cfg.DATA.TEST.MASK_PATH

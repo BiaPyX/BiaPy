@@ -69,7 +69,7 @@ def create_test_instance_channels(cfg):
 
     f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
 
-    if cfg.DATA.TEST.LOAD_GT and cfg.TEST.EVALUATE:
+    if cfg.DATA.TEST.LOAD_GT:
         Y_test, _, _, test_filenames = f_name(cfg.DATA.TEST.MASK_PATH, return_filenames=True)
         print("Creating Y_test channels . . .")
         if isinstance(Y_test, list):

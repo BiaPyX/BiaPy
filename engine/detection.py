@@ -104,7 +104,7 @@ class Detection(Base_Workflow):
                 
                 # Advice user if instance     
                 points_pred, labels, npixels, areas, circularities, comment = remove_instance_by_circularity_central_slice(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
-                    np.concatenate(all_points, axis=0), circularity_th=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_CIRCULARITY)
+                    np.concatenate(all_points, axis=0), circularity_th=self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY)
 
                 save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                     filenames, verbose=self.cfg.TEST.VERBOSE)
