@@ -43,6 +43,12 @@ def check_configuration(cfg):
         else:
             raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.DROPOUT_VALUES' lengths must be equal")
 
+    if cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER != -1:
+        if not check_value(cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER):
+            raise ValueError("DATA.TRAIN.MINIMUM_FOREGROUND_PER not in [0, 1] range")
+        if cfg.PROBLEM.TYPE not in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']:
+            raise ValueError("'DATA.TRAIN.MINIMUM_FOREGROUND_PER' can only be set in 'SEMANTIC_SEG', 'INSTANCE_SEG' and 'DETECTION' workflows")
+
     if len(cfg.DATA.TRAIN.RESOLUTION) == 1 and cfg.DATA.TRAIN.RESOLUTION[0] == -1:
         opts.extend(['DATA.TRAIN.RESOLUTION', (1,)*dim_count])
     if len(cfg.DATA.VAL.RESOLUTION) == 1 and cfg.DATA.VAL.RESOLUTION[0] == -1:
@@ -206,12 +212,24 @@ def check_configuration(cfg):
     if len(cfg.DATA.TRAIN.OVERLAP) != dim_count:
         raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.OVERLAP tuple must be lenght {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TRAIN.OVERLAP))
+    if any(not check_value(x) for x in cfg.DATA.TRAIN.OVERLAP):
+            raise ValueError("DATA.TRAIN.OVERLAP not in [0, 1] range")
     if len(cfg.DATA.TRAIN.PADDING) != dim_count:
         raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.PADDING tuple must be lenght {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TRAIN.PADDING))
+    if len(cfg.DATA.VAL.OVERLAP) != dim_count:
+        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.OVERLAP tuple must be lenght {}, given {}."
+                         .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.VAL.OVERLAP))
+    if any(not check_value(x) for x in cfg.DATA.VAL.OVERLAP):
+            raise ValueError("DATA.VAL.OVERLAP not in [0, 1] range")
+    if len(cfg.DATA.VAL.PADDING) != dim_count:
+        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.PADDING tuple must be lenght {}, given {}."
+                         .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.VAL.PADDING))
     if len(cfg.DATA.TEST.OVERLAP) != dim_count:
         raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.OVERLAP tuple must be lenght {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TEST.OVERLAP))
+    if any(not check_value(x) for x in cfg.DATA.TEST.OVERLAP):
+            raise ValueError("DATA.TEST.OVERLAP not in [0, 1] range")
     if len(cfg.DATA.TEST.PADDING) != dim_count:
         raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.PADDING tuple must be lenght {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TEST.PADDING))

@@ -12,7 +12,7 @@ from skimage.io import imsave
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True, e_d_data=[],
     e_d_mask=[], e_d_data_dim=[], num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, y_upscaling=1,
-    ov=(0,0), padding=(0,0), reflect_to_complete_shape=False):
+    ov=(0,0), padding=(0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False):
     """Load train and validation images from the given paths to create 2D data.
 
        Parameters
@@ -63,6 +63,9 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
 
        padding : tuple of ints, optional
            Size of padding to be added on each axis ``(x, y)``. E.g. ``(24, 24)``
+
+       minimum_foreground_perc : float, optional
+           Minimum percetnage of foreground that a sample need to have no not be discarded. 
 
        reflect_to_complete_shape : bool, optional
            Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
@@ -152,6 +155,60 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
     else:
         Y_train = np.zeros(X_train.shape, dtype=np.float32) # Fake mask val
 
+    # Discard images that do not surpass the foreground percentage threshold imposed 
+    if minimum_foreground_perc != -1:
+        print("Data that do not have {}% of foreground is discarded".format(minimum_foreground_perc))
+
+        X_train_keep = []
+        Y_train_keep = []
+        are_lists = True if type(Y_train) is list else False
+
+        samples_discarded = 0
+        for i in tqdm(range(len(Y_train)), leave=False):
+            labels, npixels = np.unique((Y_train[i]>0).astype(np.uint8), return_counts=True)
+
+            total_pixels = 1
+            for val in list(Y_train[i].shape):
+                total_pixels *= val
+            
+            discard = False
+            if len(labels) == 1:
+                discard = True
+            else:
+                if (sum(npixels[1:]/total_pixels)) < minimum_foreground_perc:
+                    discard = True
+
+            if discard:
+                samples_discarded += 1
+            else:
+                if are_lists:
+                    X_train_keep.append(X_train[i])
+                    Y_train_keep.append(Y_train[i])
+                else:
+                    X_train_keep.append(np.expand_dims(X_train[i],0))
+                    Y_train_keep.append(np.expand_dims(Y_train[i],0))
+        del X_train, Y_train
+        
+        if not are_lists:
+            X_train_keep = np.concatenate(X_train_keep)
+            Y_train_keep = np.concatenate(Y_train_keep)
+        
+        # Rename 
+        X_train, Y_train = X_train_keep, Y_train_keep 
+        del X_train_keep, Y_train_keep 
+
+        print("{} samples discarded!".format(samples_discarded)) 
+        if type(Y_train) is not list:      
+            print("*** Remaining data shape is {}".format(X_train.shape))
+            if X_train.shape[0] <= 1 and create_val: 
+                raise ValueError("0 or 1 sample left to train, which is insufficent. "
+                "Please, decrease the percentage to be more permissive")
+        else:
+            print("*** Remaining data shape is {}".format((len(X_train),)+X_train[0].shape[1:]))
+            if len(X_train) <= 1 and create_val:
+                raise ValueError("0 or 1 sample left to train, which is insufficent. "
+                "Please, decrease the percentage to be more permissive")
+
     if num_crops_per_dataset != 0:
         X_train = X_train[:num_crops_per_dataset]
         Y_train = Y_train[:num_crops_per_dataset]
@@ -206,11 +263,11 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
             X_train = np.vstack((X_train, e_X_train))
             Y_train = np.vstack((Y_train, e_Y_train))
 
-    s = X_train.shape if not random_crops_in_DA else X_train[0].shape
-    sm = Y_train.shape if not random_crops_in_DA else Y_train[0].shape
+    s = X_train.shape if not random_crops_in_DA else (len(X_train),)+X_train[0].shape[1:]
+    sm = Y_train.shape if not random_crops_in_DA else (len(Y_train),)+Y_train[0].shape[1:]
     if create_val:
-        sv = X_val.shape if not random_crops_in_DA else X_val[0].shape
-        svm = Y_val.shape if not random_crops_in_DA else Y_val[0].shape
+        sv = X_val.shape if not random_crops_in_DA else (len(X_val),)+X_val[0].shape[1:]
+        svm = Y_val.shape if not random_crops_in_DA else (len(Y_val),)+Y_val[0].shape[1:]
         print("*** Loaded train data shape is: {}".format(s))
         print("*** Loaded train mask shape is: {}".format(sm))
         print("*** Loaded validation data shape is: {}".format(sv))
@@ -324,6 +381,14 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
         if p >= crop_shape[i]//2:
             raise ValueError("'Padding' can not be greater than the half of 'crop_shape'. Max value for this {} input shape is {}"
                               .format(data.shape, [(crop_shape[0]//2)-1,(crop_shape[1]//2)-1]))
+    if len(crop_shape) != 3:
+        raise ValueError("crop_shape expected to be of length 3, given {}".format(crop_shape))
+    if crop_shape[0] > data.shape[1]:
+        raise ValueError("'crop_shape[0]' {} greater than {}".format(crop_shape[0], data.shape[1]))
+    if crop_shape[1] > data.shape[2]:
+        raise ValueError("'crop_shape[1]' {} greater than {}".format(crop_shape[1], data.shape[2]))
+    if (overlap[0] >= 1 or overlap[0] < 0) or (overlap[1] >= 1 or overlap[1] < 0):
+        raise ValueError("'overlap' values must be floats between range [0, 1)")
 
     if verbose:
         print("### OV-CROP ###")

@@ -79,13 +79,15 @@ class Engine(object):
                             val_split=val_split, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
                             y_upscaling=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, ov=cfg.DATA.TRAIN.OVERLAP, 
-                            padding=cfg.DATA.TRAIN.PADDING, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                            padding=cfg.DATA.TRAIN.PADDING, minimum_foreground_perc=cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER,
+                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
                     else:
                         objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, mask_path,
                             val_split=val_split, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
                             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
                             y_upscaling=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, ov=cfg.DATA.TRAIN.OVERLAP, 
-                            padding=cfg.DATA.TRAIN.PADDING, reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                            padding=cfg.DATA.TRAIN.PADDING, minimum_foreground_perc=cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER,
+                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
 
                     if cfg.DATA.VAL.FROM_TRAIN:
                         X_train, Y_train, X_val, Y_val, self.train_filenames = objs

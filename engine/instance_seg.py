@@ -74,7 +74,7 @@ class Instance_Segmentation(Base_Workflow):
             # Save stats
             size_measure = 'area' if w_pred.ndim == 2 else 'volume'
             df = pd.DataFrame(zip(labels, npixels, areas, circularities, comment), 
-                columns=['label','class','npixels', size_measure, 'circularity', 'comment'])
+                columns=['label','npixels', size_measure, 'circularity', 'comment'])
             df = df.sort_values(by=['label'])   
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, os.path.splitext(filenames[0])[0]+'_stats.csv'))
             del df
