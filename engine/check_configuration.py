@@ -54,8 +54,6 @@ def check_configuration(cfg):
         for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION:
             if any(y == -1 for y in x):
                 raise ValueError("Please set 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' when using 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION'")
-        if not check_value(cfg.TEST.POST_PROCESSING.DET_WATERSHED_CIRCULARITY):
-            raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_CIRCULARITY' not in [0, 1] range")
         if cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES != [-1]:
             if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES) > cfg.MODEL.N_CLASSES:
                 raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' length can't be greater than 'MODEL.N_CLASSES'")
@@ -66,7 +64,13 @@ def check_configuration(cfg):
                 raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' must be consecutive, e.g [1,2,3,4..]") 
         if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH) != dim_count:
             raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH' need to be of dimension {} for {} problem".format(dim_count, cfg.PROBLEM.NDIM))
-          
+
+    if cfg.TEST.POST_PROCESSING.DET_WATERSHED and cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY == -1:
+        raise ValueError("Set 'TEST.POST_PROCESSING.WATERSHED_CIRCULARITY' to a appropiate value between [0, 1] range")
+    if cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1:
+        if not check_value(cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY):
+            raise ValueError("'TEST.POST_PROCESSING.WATERSHED_CIRCULARITY' not in [0, 1] range")
+
     if len(opts) > 0:
         cfg.merge_from_list(opts)
 
@@ -115,6 +119,8 @@ def check_configuration(cfg):
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['BC', 'BCM', 'BCD', 'BCDv2'] and cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' need to be one between ['BC', 'BCM', 'BCD', 'BCDv2'] "
                              "when 'TEST.POST_PROCESSING.VORONOI_ON_MAS' is enabled")
+        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ["BC", "BCM", "BCD"] and cfg.PROBLEM.INSTANCE_SEG.ERODE_FOREGROUND:
+            raise ValueError("'PROBLEM.INSTANCE_SEG.ERODE_FOREGROUND' can not be enabled if not using 'BC', 'BCM' or 'BCD' channels")
 
     #### Detection ####
     if cfg.PROBLEM.TYPE == 'DETECTION':

@@ -14,17 +14,15 @@ from scipy.signal import find_peaks
 from scipy.spatial import KDTree, cKDTree
 from scipy.spatial.distance import cdist
 from scipy.ndimage.morphology import binary_erosion, binary_dilation
-from scipy.ndimage import rotate, gaussian_filter, grey_dilation, grey_erosion
+from scipy.ndimage import rotate, grey_dilation, distance_transform_edt
 from scipy.signal import savgol_filter
 from skimage import morphology
-from skimage.morphology import disk, ball, binary_opening, binary_closing, remove_small_objects, area_closing, dilation, erosion
-from skimage.segmentation import watershed, find_boundaries, clear_border
+from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
+from skimage.segmentation import watershed
 from skimage.filters import rank, threshold_otsu
 from skimage.measure import label, regionprops_table
 from skimage.io import imsave, imread
-from skimage.draw import circle_perimeter
 from skimage.exposure import equalize_adapthist
-from skimage.feature import canny
 
 from engine.metrics import jaccard_index_numpy
 from utils.util import pad_and_reflect
@@ -188,7 +186,9 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
     return np.expand_dims(watershed_predictions, -1)
 
 
-def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before=False, save_dir=None):
+def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before=False, erode_seeds=False, 
+    seed_erosion_radius=10, erode_and_dilate_foreground=False, fore_erosion_radius=5, fore_dilation_radius=5, 
+    save_dir=None):
     """Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
        algorithm.
 
@@ -215,21 +215,66 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
        remove_before : bool, optional
            To remove objects before watershed. If ``False`` it is done after watershed.
 
+       erode_seeds : bool, optional
+           To erode seeds before growing them with the marker controlled watershed. 
+        
+       seed_erosion_radius: int, optional
+           Radius to erode instance seeds. 
+
+       erode_and_dilate_foreground : bool, optional
+           To erode and dilate the foreground mask before using marker controlled watershed. The idea is to 
+           remove the small holes that may be produced so the instances grow without them.
+        
+       fore_erosion_radius: int, optional
+           Radius to erode the foreground mask. 
+
+       fore_dilation_radius: int, optional
+           Radius to dilate the foreground mask. 
+
        save_dir :  str, optional
            Directory to save watershed output into.
     """
 
     assert channels in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2']
-    
+
+    def erode_seed_and_foreground():
+        nonlocal seed_map
+        nonlocal foreground
+        if erode_seeds and not erode_and_dilate_foreground:
+            print("Seed erosion . . .")
+        if not erode_seeds and erode_and_dilate_foreground:
+            print("Foreground erosion . . .")
+        else:
+            print("Seed and foreground erosion . . .")
+
+        if seed_map.ndim == 3:
+            for i in tqdm(range(seed_map.shape[0])):
+                if erode_seeds:
+                    seed_map[i] = binary_erosion(seed_map[i], disk(radius=seed_erosion_radius))
+
+                if erode_and_dilate_foreground:
+                    foreground[i] = binary_dilation(foreground[i], disk(radius=fore_erosion_radius))
+                    foreground[i] = binary_erosion(foreground[i], disk(radius=fore_dilation_radius))
+        else:
+            seed_map = binary_erosion(seed_map, disk(radius=seed_erosion_radius))
+            foreground = binary_dilation(foreground, disk(radius=fore_erosion_radius))
+            foreground = binary_erosion(foreground, disk(radius=fore_dilation_radius))
+
     if channels in ["BC", "BCM"]:
-        semantic = data[...,0]
         seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH2'])
-        foreground = (semantic > ths['TH3'])
+        foreground = (data[...,0] > ths['TH3'])
+
+        if erode_seeds or erode_and_dilate_foreground:
+            erode_seed_and_foreground()
+        
+        semantic = distance_transform_edt(foreground)
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BCD"]:
         semantic = data[...,0]
         seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH2']) * (data[...,2] > ths['TH4'])
         foreground = (semantic > ths['TH3']) * (data[...,2] > ths['TH5'])
+        if erode_seeds or erode_and_dilate_foreground:
+            erode_seed_and_foreground()
         seed_map = label(seed_map, connectivity=1)
     else: # 'BCDv2', 'Dv2', 'BDv2'
         semantic = data[...,-1]
@@ -262,6 +307,9 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
             seed_map = data[...,0] < ths['TH4']
             seed_map = label(seed_map, connectivity=1)
 
+        if erode_seeds:
+            erode_seed_and_foreground()
+
     if remove_before:
         seed_map = remove_small_objects(seed_map, thres_small)
         segm = watershed(-semantic, seed_map, mask=foreground)
@@ -269,20 +317,29 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
         segm = watershed(-semantic, seed_map, mask=foreground)
         segm = remove_small_objects(segm, thres_small)
 
+    # Choose appropiate dtype
+    max_value = np.max(segm)
+    if max_value < 255:
+        segm = segm.astype(np.uint8)
+    elif max_value < 65535:
+        segm = segm.astype(np.uint16)
+    else:
+        segm = segm.astype(np.uint32)
+
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
 
         f = os.path.join(save_dir, "seed_map.tif")
-        aux = np.expand_dims(np.expand_dims((seed_map).astype(np.float32), -1),1)
+        aux = np.expand_dims(np.expand_dims((seed_map).astype(segm.dtype), -1),1)
         imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
         if channels in ["BC", "BCM", "BCD"]:
             f = os.path.join(save_dir, "foreground.tif")
-            aux = np.expand_dims(np.expand_dims((foreground).astype(np.float32), -1),1)
+            aux = np.expand_dims(np.expand_dims((foreground).astype(np.uint8), -1),1)
             imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
         f = os.path.join(save_dir, "watershed.tif")
-        aux = np.expand_dims(np.expand_dims((segm).astype(np.float32), -1),1)
+        aux = np.expand_dims(np.expand_dims(segm, -1),1)
         imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
     return segm
@@ -1654,12 +1711,14 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
 
     return segm
 
-def remove_instance_by_circularity_central_slice(img, resolution, coords_list, circularity_th=0.7):
-    """label_list, npixels, areas, circularities, comment
+def remove_instance_by_circularity_central_slice(img, resolution, coords_list=None, circularity_th=0.7):
+    """
     Check the properties of input image instances. Apart from label id, number of pixels, area/volume 
     (2D/3D respec. and taking into account the resolution) and circularity properties lists that are 
     returned another one identifying those instances that do not satisfy the circularity threshold
-    are marked as 'Strange' whereas the rest are 'Correct'.     
+    are marked as 'Strange' whereas the rest are 'Correct'. For 3D the circularity is only measured in the center 
+    slice of the instance, which is decided by the given coordinates in ``coords_list`` or calculated taking
+    the central slice in z of each instance, which is computationally more expensive as the bboxes are calculated.   
     
     Parameters
     ----------
@@ -1669,15 +1728,15 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list, c
     resolution : str
         Path to load the image paired with seeds. 
 
-    coords_list : List of 3 ints
-        Coordinates of all detected points. 
+    coords_list : List of 3 ints, optional
+        Coordinates of all detected points. If 
 
     circularity_th : float, optional
         circularity threshold value. Those instances that are below that value will be marked as 'Strange'
         in the returned comment list. 
 
     Returns
-    ------- img, label_list, npixels, areas, circularities, comment
+    ------- 
     img : 2D/3D Numpy array
         Input image without the instances that do not satisfy the circularity constraint. 
         Image with instances. E.g. ``(1450, 2000)`` for 2D and ``(397, 1450, 2000)`` for 3D.
@@ -1700,40 +1759,83 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list, c
     """
     print("Checking the circularity of instances . . .")
 
+    image3d = True if img.ndim == 3 else False
     correct_str = "Correct"
     unsure_str = "Strange"
 
-    areas = []
-    circularities = np.zeros(len(coords_list), dtype=np.float32)
     comment = []
-
-    # Obtain each instance labels based on the input image first
-    label_list = []
-    for c in coords_list:
-        if img.ndim == 3:
-            label_list.append(img[c[0],c[1],c[2]])
-        else:
-            label_list.append(img[c[0],c[1]])
-        comment.append('none')
-
-    _, npixels = np.unique(img, return_counts=True)
-    # Delete background instance '0'
+    label_list_coords = []
+    label_list_unique, npixels = np.unique(img, return_counts=True)
+    label_list_unique = label_list_unique[1:] # Delete background instance '0'
     npixels = npixels[1:]
-    for pixels in npixels:
-        if img.ndim == 3:
-            vol = pixels*(resolution[0]+resolution[1]+resolution[2])
-        else:
-            vol = pixels*(resolution[0]+resolution[1])
-        areas.append(vol)
-       
+
+    if coords_list is not None:
+        total_labels = len(coords_list)
+        
+        # Obtain each instance labels based on the input image first
+        for c in coords_list:
+            if image3d:
+                label_list_coords.append(img[c[0],c[1],c[2]])
+            else:
+                label_list_coords.append(img[c[0],c[1]])
+            comment.append('none')
+
+        areas = np.zeros(total_labels, dtype=np.uint32)
+        # Insert in the label position the area/volume
+        for i, pixels in enumerate(npixels):
+            label = label_list_unique[i]
+            label_index = label_list_coords.index(label)
+            if image3d:
+                vol = pixels*(resolution[0]+resolution[1]+resolution[2])
+            else:
+                vol = pixels*(resolution[0]+resolution[1])
+            areas[label_index] = vol
+
+    # If no coords_list is given it is calculated by each instance central slice in z
+    else:
+        label_list_coords = list(label_list_unique).copy()
+        total_labels = len(label_list_unique)
+        coords_list = [[] for i in range(total_labels)]
+        comment = ['none' for i in range(total_labels)]
+        areas = np.zeros(total_labels, dtype=np.uint32)
+
+        props = regionprops_table(img, properties=('label', 'bbox')) 
+        for k, label in enumerate(props['label']):
+            label_index, = np.where(label_list_unique == label)[0]
+            pixels = npixels[label_index]
+
+            if image3d:
+                # Central slice
+                z_coord_start = props['bbox-0'][k]
+                z_coord_finish = props['bbox-3'][k]
+                central_slice = (z_coord_start+z_coord_finish)//2
+
+                vol = pixels*(resolution[0]+resolution[1]+resolution[2])
+            else:
+                central_slice = 0
+                vol = pixels*(resolution[0]+resolution[1])
+
+            coords_list[label_index] = [central_slice]
+            areas[label_index] = vol
+
+    circularities = np.zeros(total_labels, dtype=np.float32)
+    print("{} instances found before circularity filtering".format(total_labels))
+
+    if not image3d:
+        img = np.expand_dims(img,0)  
+
     # Circularity calculation in the slice where the central point was considerer by the model
     # which is marked by coords_list
+    labels_removed = 0
     for i in tqdm(range(img.shape[0]), leave=False):
         props = regionprops_table(img[i], properties=('label','area', 'perimeter'))             
         if len(props['label'])>0:                           
             for k, l in enumerate(props['label']):
-                j = label_list.index(l)
-                coord = coords_list[j]
+                if image3d:
+                    j = label_list_coords.index(l)
+                    coord = coords_list[j]
+                else:
+                    coord = [0]
                 # If instances' center point matches the slice i save the circularity
                 if coord[0] == i: 
                     circularity = (4 * math.pi * props['area'][k]) / (props['perimeter'][k]*props['perimeter'][k])               
@@ -1742,33 +1844,37 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list, c
                         comment[j] = correct_str
                     else:
                         comment[j] = unsure_str
-
                         # Remove that label from the image
                         img[img==l] = 0
+                        labels_removed += 1
+                        
+    if not image3d:
+        img = img[0]
 
-    return img, label_list, npixels, areas, circularities, comment
+    print("Removed {} instances by circularity, {} instances left".format(labels_removed, total_labels-labels_removed))
 
+    return img, label_list_coords, npixels, areas, circularities, comment
 
 def apply_binary_mask(X, bin_mask_dir):
     """Apply a binary mask to remove values outside it.
 
        Parameters
        ----------
-       X : 4D Numpy array
-           Data to apply the mask. E.g. ``(vol_number, y, x, channels)``
+       X : 3D/4D Numpy array
+           Data to apply the mask. E.g. ``(y, x, channels)`` for 2D or ``(z, y, x, channels)`` for 3D.
 
        bin_mask_dir : str, optional
            Directory where the binary mask are located.
 
        Returns
        -------
-       X : 4D Numpy array
-           Data with the mask applied. E.g. ``(vol_number, y, x, channels)``.
+       X : 3D/4D Numpy array
+           Data with the mask applied. E.g. ``(y, x, channels)`` for 2D or ``(z, y, x, channels)`` for 3D.
     """
 
-    if X.ndim != 4:
-        raise ValueError("'X' needs to have 4 dimensions and not {}".format(X.ndim))
-
+    if X.ndim != 4 and X.ndim != 3:
+        raise ValueError("'X' needs to have 3 or 4 dimensions and not {}".format(X.ndim))
+    
     print("Applying binary mask(s) from {}".format(bin_mask_dir))
 
     ids = sorted(next(os.walk(bin_mask_dir))[2])
@@ -1782,23 +1888,32 @@ def apply_binary_mask(X, bin_mask_dir):
     if one_file:
         mask = imread(os.path.join(bin_mask_dir, ids[0]))
         mask = np.squeeze(mask)
-        if mask.ndim != 2 and mask.ndim != 3:
-            raise ValueError("Mask needs to have 2 or 3 dimensions and not {}".format(mask.ndim))
 
-        for k in tqdm(range(X.shape[0])):
-            if mask.ndim == 2:
+        if X.ndim != mask.ndim +1 and X.ndim != mask.ndim +2:
+            raise ValueError("Mask found has {} dims, shape: {}. Need to be of {} or {} dims instead"
+                .format(mask.ndim, mask.shape, mask.ndim+1,mask.ndim+2))
+
+        if mask.ndim == X.ndim-1:
+            for c in range(X.shape[-1]):
+                X[...,c] = X[...,c]*(mask>0)
+        else: # mask.ndim == 2 and X.ndim == 4
+            for k in range(X.shape[0]):
                 for c in range(X.shape[-1]):
-                    X[k,:,:,c] = X[k,:,:,c]*(mask>0)
-            else:
-                X[k] = X[k]*(mask>0)
+                    X[k,...,c] = X[k,...,c]*(mask>0)
     else:
         for i in tqdm(range(len(ids))):
             mask = imread(os.path.join(bin_mask_dir, ids[i]))
             mask = np.squeeze(mask)
-            if mask.ndim == 2:
-                for c in range(X.shape[-1]):
-                    X[i,:,:,c] = X[i,:,:,c]*(mask>0)
-            else:
-                X[i] = X[i]*(mask>0)
 
+            if X.ndim != mask.ndim +1 and X.ndim != mask.ndim +2:
+                raise ValueError("Mask found has {} dims, shape: {}. Need to be of {} or {} dims instead"
+                    .format(mask.ndim, mask.shape, mask.ndim+1,mask.ndim+2))
+                    
+            if mask.ndim == X.ndim-1:
+                for c in range(X.shape[-1]):
+                    X[...,c] = X[...,c]*(mask>0)
+            else: # mask.ndim == 2 and X.ndim == 4
+                for k in range(X.shape[0]):
+                    for c in range(X.shape[-1]):
+                        X[k,...,c] = X[k,...,c]*(mask>0)
     return X
