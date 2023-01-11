@@ -60,23 +60,24 @@ class Config:
         #
         # This variables are only used when _C.PROBLEM.TYPE = 'INSTANCE_SEG
         # TH1 controls channel 'B' in the creation of the MW seeds
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH1 = 0.2
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH1 = 0.5
         # TH2 controls channel 'C' in the creation of the MW seeds
         _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH2 = 0.1
         # TH3 acts over the channel 'B' and is used to limit how much the seeds can be grow
         _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH3 = 0.3
         # TH4 controls channel 'D' in the creation of the MW seeds
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH4 = 1.2
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH4 = 1.5
         # TH5 acts over the channel 'D' and is used to limit how much the seeds can be grow
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH5 = 1.5
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH5 = 1.2
         # Size of small objects to be removed after doing watershed
         _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ = 30
         # Whether to remove objects before watershed or after it
         _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW = True
-        # To erode seeds before growing them with the marker controlled watershed 
-        _C.PROBLEM.INSTANCE_SEG.ERODE_SEEDS = False
-        # Radius to erode instance seeds
-        _C.PROBLEM.INSTANCE_SEG.SEED_EROSION_RADIUS = 10
+        # Sequence of string to determine the morphological filters to apply to instance seeds. They will be done in that order.
+        # Possible options 'dilate' and 'erode'. E.g. ['erode','dilate'] to erode first and dilate later.
+        _C.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE = []
+        # Sequence of ints to determine the radius of the erosion or dilation for instance seeds 
+        _C.PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS = []
         # To erode and dilate the foreground mask before using marker controlled watershed. The idea is to remove the small holes 
         # that may be produced so the instances grow without them
         _C.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND = False

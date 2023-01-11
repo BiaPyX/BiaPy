@@ -186,8 +186,8 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
     return np.expand_dims(watershed_predictions, -1)
 
 
-def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before=False, erode_seeds=False, 
-    seed_erosion_radius=10, erode_and_dilate_foreground=False, fore_erosion_radius=5, fore_dilation_radius=5, 
+def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before=False, seed_morph_sequence=[], 
+    seed_morph_radius=[], erode_and_dilate_foreground=False, fore_erosion_radius=5, fore_dilation_radius=5, 
     save_dir=None):
     """Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
        algorithm.
@@ -215,12 +215,13 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
        remove_before : bool, optional
            To remove objects before watershed. If ``False`` it is done after watershed.
 
-       erode_seeds : bool, optional
-           To erode seeds before growing them with the marker controlled watershed. 
+       seed_morph_sequence : List of str, optional
+           List of strings to determine the morphological filters to apply to instance seeds. They will be done in that order.
+           E.g. ``['dilate','erode']``.
         
-       seed_erosion_radius: int, optional
-           Radius to erode instance seeds. 
-
+       seed_morph_radius: List of ints, optional
+           List of ints to determine the radius of the erosion or dilation for instance seeds.
+           
        erode_and_dilate_foreground : bool, optional
            To erode and dilate the foreground mask before using marker controlled watershed. The idea is to 
            remove the small holes that may be produced so the instances grow without them.
@@ -240,40 +241,51 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
     def erode_seed_and_foreground():
         nonlocal seed_map
         nonlocal foreground
-        if erode_seeds and not erode_and_dilate_foreground:
-            print("Seed erosion . . .")
-        if not erode_seeds and erode_and_dilate_foreground:
+        if len(seed_morph_sequence) != 0:
+            print("Applying {} to seeds . . .".format(seed_morph_sequence))
+        if erode_and_dilate_foreground:
             print("Foreground erosion . . .")
-        else:
-            print("Seed and foreground erosion . . .")
 
-        if seed_map.ndim == 3:
-            for i in tqdm(range(seed_map.shape[0])):
-                if erode_seeds:
-                    seed_map[i] = binary_erosion(seed_map[i], disk(radius=seed_erosion_radius))
+        if len(seed_morph_sequence) != 0:
+            morph_funcs = []
+            for operation in seed_morph_sequence:
+                if operation == "dilate":
+                    morph_funcs.append(binary_dilation)
+                elif operation == "erode":
+                    morph_funcs.append(binary_erosion)  
 
-                if erode_and_dilate_foreground:
-                    foreground[i] = binary_dilation(foreground[i], disk(radius=fore_erosion_radius))
-                    foreground[i] = binary_erosion(foreground[i], disk(radius=fore_dilation_radius))
-        else:
-            seed_map = binary_erosion(seed_map, disk(radius=seed_erosion_radius))
-            foreground = binary_dilation(foreground, disk(radius=fore_erosion_radius))
-            foreground = binary_erosion(foreground, disk(radius=fore_dilation_radius))
+        image3d = True if seed_map.ndim == 3 else False
+        if not image3d:
+            seed_map = np.expand_dims(seed_map,0)
+            foreground = np.expand_dims(foreground,0)
+
+        for i in tqdm(range(seed_map.shape[0])):
+            if len(seed_morph_sequence) != 0:
+                for k, morph_function in enumerate(morph_funcs):
+                    seed_map[i] = morph_function(seed_map[i], disk(radius=seed_morph_radius[k]))
+
+            if erode_and_dilate_foreground:
+                foreground[i] = binary_dilation(foreground[i], disk(radius=fore_erosion_radius))
+                foreground[i] = binary_erosion(foreground[i], disk(radius=fore_dilation_radius))
+       
+        if not image3d:
+            seed_map = seed_map.squeeze()
+            foreground = foreground.squeeze()
 
     if channels in ["BC", "BCM"]:
         seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH2'])
         foreground = (data[...,0] > ths['TH3'])
 
-        if erode_seeds or erode_and_dilate_foreground:
+        if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
-        
+
         semantic = distance_transform_edt(foreground)
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BCD"]:
         semantic = data[...,0]
         seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH2']) * (data[...,2] > ths['TH4'])
         foreground = (semantic > ths['TH3']) * (data[...,2] > ths['TH5'])
-        if erode_seeds or erode_and_dilate_foreground:
+        if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
         seed_map = label(seed_map, connectivity=1)
     else: # 'BCDv2', 'Dv2', 'BDv2'
@@ -307,7 +319,7 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
             seed_map = data[...,0] < ths['TH4']
             seed_map = label(seed_map, connectivity=1)
 
-        if erode_seeds:
+        if len(seed_morph_sequence) != 0:
             erode_seed_and_foreground()
 
     if remove_before:
@@ -337,11 +349,6 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
             f = os.path.join(save_dir, "foreground.tif")
             aux = np.expand_dims(np.expand_dims((foreground).astype(np.uint8), -1),1)
             imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-
-        f = os.path.join(save_dir, "watershed.tif")
-        aux = np.expand_dims(np.expand_dims(segm, -1),1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
-
     return segm
 
 

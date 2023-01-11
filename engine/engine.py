@@ -205,7 +205,8 @@ class Engine(object):
 
         image_counter = 0
         if self.cfg.TEST.POST_PROCESSING.BLENDING or self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or \
-           self.cfg.TEST.POST_PROCESSING.Z_FILTERING:
+           self.cfg.TEST.POST_PROCESSING.Z_FILTERING or self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK\
+           or self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY:
             post_processing = True
         else:
             post_processing = False
