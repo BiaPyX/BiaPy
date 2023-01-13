@@ -18,18 +18,18 @@ dependencies:
   - attrs=21.2.0=pyhd3eb1b0_0
   - blas=1.0=mkl
   - blinker=1.4=py38h06a4308_0
-  - blosc=1.21.1=hd32f23e_0
+  - blosc=1.21.0=h8c45485_0
   - brotli=1.0.9=he6710b0_2
   - brotlipy=0.7.0=py38h27cfd23_1003
-  - brunsli=0.1=h9c3ff4c_0
+  - brunsli=0.1=h2531618_0
   - bzip2=1.0.8=h7f98852_4
   - c-ares=1.17.1=h27cfd23_0
-  - ca-certificates=2021.10.8=ha878542_0
+  - ca-certificates=2022.10.11=h06a4308_0
   - cachetools=4.2.2=pyhd3eb1b0_0
   - cairo=1.16.0=hf32fb01_1
-  - certifi=2021.10.8=py38h578d9bd_2
+  - certifi=2022.12.7=py38h06a4308_0
   - cffi=1.14.6=py38h400218f_0
-  - cfitsio=3.470=h2e3daa1_7
+  - cfitsio=3.470=hf0d0db6_6
   - chardet=3.0.4=py38h06a4308_1003
   - charls=2.2.0=h2531618_0
   - click=8.0.1=pyhd3eb1b0_0
@@ -59,7 +59,7 @@ dependencies:
   - freetype=2.10.4=h5ab3b9f_0
   - fribidi=1.0.10=h36c2ea0_0
   - fsspec=2021.7.0=pyhd8ed1ab_0
-  - future=0.18.2=py38h578d9bd_4
+  - future=0.18.2=py38_1
   - gast=0.4.0=py_0
   - gdk-pixbuf=2.42.6=h04a7f16_0
   - geos=3.9.1=h9c3ff4c_2
@@ -93,22 +93,22 @@ dependencies:
   - jasper=1.900.1=h07fcdf6_1006
   - joblib=1.0.1=pyhd3eb1b0_0
   - jpeg=9d=h36c2ea0_0
-  - jxrlib=1.1=h7f98852_2
+  - jxrlib=1.1=h7b6447c_2
   - keras-preprocessing=1.1.2=pyhd3eb1b0_0
   - kiwisolver=1.3.1=py38h2531618_0
   - krb5=1.19.2=hcc1bbae_0
   - lame=3.100=h7f98852_1001
   - lcms2=2.12=h3be6417_0
   - ld_impl_linux-64=2.35.1=h7274673_9
-  - lerc=3.0=h9c3ff4c_0
-  - libaec=1.0.6=h9c3ff4c_0
+  - lerc=3.0=h295c915_0
+  - libaec=1.0.4=he6710b0_1
   - libblas=3.9.0=10_mkl
   - libcblas=3.9.0=10_mkl
   - libclang=11.1.0=default_ha53f305_1
   - libcurl=7.82.0=h0b77cf5_0
-  - libdeflate=1.8=h7f98852_0
+  - libdeflate=1.8=h7f8727e_5
   - libedit=3.1.20191231=he28a2e2_2
-  - libev=4.33=h516909a_1
+  - libev=4.33=h7f8727e_1
   - libevent=2.1.10=hcdb4288_3
   - libffi=3.3=he6710b0_2
   - libgcc-ng=11.1.0=hc902ee8_8
@@ -128,7 +128,7 @@ dependencies:
   - libpq=13.3=hd57d9b9_0
   - libprotobuf=3.15.8=h780b84a_0
   - librsvg=2.50.7=hc3c00ef_0
-  - libssh2=1.10.0=ha56f1ee_2
+  - libssh2=1.10.0=h8f2d780_0
   - libstdcxx-ng=11.1.0=h56837e0_8
   - libtiff=4.2.0=h85742a9_0
   - libtool=2.4.6=h58526e2_1007
@@ -139,7 +139,7 @@ dependencies:
   - libxcb=1.14=h7b6447c_0
   - libxkbcommon=1.0.3=he3ba5ed_0
   - libxml2=2.9.12=h72842e0_0
-  - libzopfli=1.0.3=h9c3ff4c_0
+  - libzopfli=1.0.3=he6710b0_0
   - llvm-openmp=12.0.1=h4bd325d_1
   - llvmlite=0.37.0=py38h4630a5e_0
   - locket=0.2.0=py_2
@@ -169,7 +169,7 @@ dependencies:
   - opencv=4.5.2=py38h578d9bd_0
   - openh264=2.1.1=h780b84a_0
   - openjpeg=2.3.0=h05c96fa_1
-  - openssl=1.1.1o=h166bdaf_0
+  - openssl=1.1.1s=h7f8727e_0
   - opt_einsum=3.3.0=pyhd3eb1b0_1
   - packaging=21.0=pyhd8ed1ab_0
   - pandas=1.3.1=py38h1abd341_0
@@ -208,14 +208,14 @@ dependencies:
   - requests=2.25.1=pyhd3eb1b0_0
   - requests-oauthlib=1.3.0=py_0
   - rsa=4.7.2=pyhd3eb1b0_1
-  - scikit-image=0.18.2=py38h1abd341_0
+  - scikit-image=0.19.2=py38h51133e4_0
   - scikit-learn=0.24.2=py38ha9443f7_0
   - scipy=1.6.2=py38had2a1c9_1
   - setuptools=52.0.0=py38h06a4308_0
   - shapely=1.7.1=py38hb7fe4a8_5
   - sip=4.19.13=py38he6710b0_0
   - six=1.16.0=pyhd3eb1b0_0
-  - snappy=1.1.8=he1b5a44_3
+  - snappy=1.1.9=h295c915_0
   - sqlite=3.36.0=hc218d9a_0
   - tensorboard=2.4.0=pyhc547734_0
   - tensorboard-plugin-wit=1.6.0=py_0
@@ -225,7 +225,7 @@ dependencies:
   - tensorflow-gpu=2.4.1=h30adc30_0
   - termcolor=1.1.0=py38h06a4308_1
   - threadpoolctl=2.2.0=pyhb85f177_0
-  - tifffile=2019.7.26.2=py38_0
+  - tifffile=2021.4.8=pyhd8ed1ab_0
   - tk=8.6.10=hbc83047_0
   - toolz=0.11.1=py_0
   - tornado=6.1=py38h27cfd23_0
@@ -241,10 +241,12 @@ dependencies:
   - yacs=0.1.6=py_0
   - yaml=0.2.5=h516909a_0
   - yarl=1.6.3=py38h27cfd23_0
-  - zfp=0.5.5=h9c3ff4c_8
+  - zfp=0.5.5=h295c915_6
   - zipp=3.5.0=pyhd3eb1b0_0
   - zlib=1.2.11=h7b6447c_3
   - zstd=1.4.9=haebb681_0
   - pip:
     - csbdeep==0.6.3
+    - fastremap==1.13.3
+    - fill-voids==2.0.3
 prefix: /scratch/dfranco/new_anaconda/envs/EM_tools
