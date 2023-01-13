@@ -88,6 +88,10 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.FORE_EROSION_RADIUS = 5
         # Radius to dilate the foreground mask
         _C.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS = 5
+        # Set it to try to repare large instances by merging their neighbors with them and removing possible central holes.  
+        # Its value determine which instances are going to be repared by size (number of pixels that compose the instance)
+        # Thi option is useful when 'BP' channel were chosen, as multiple central seeds may appear in big instances.
+        _C.PROBLEM.INSTANCE_SEG.REPARE_LARGE_BLOBS_SIZE = -1
 
         # Whether to find an optimum value for each threshold with the validation data. If True the previous MW_TH*
         # variables will be replaced by the optimum values found

@@ -5,7 +5,7 @@ import pandas as pd
 from skimage.io import imread
 
 from data.post_processing.post_processing import (watershed_by_channels, calculate_optimal_mw_thresholds, voronoi_on_mask_2, 
-                                                  remove_instance_by_circularity_central_slice)
+                                                  remove_instance_by_circularity_central_slice, repare_large_blobs)
 from data.pre_processing import create_instance_channels, create_test_instance_channels
 from utils.util import save_tif, wrapper_matching_dataset_lazy
 from utils.matching import matching
@@ -61,7 +61,7 @@ class Instance_Segmentation(Base_Workflow):
 
         save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
             filenames, verbose=self.cfg.TEST.VERBOSE)
-   
+
         # Add extra dimension if working in 2D
         if w_pred.ndim == 2:
             w_pred = np.expand_dims(w_pred,0)
@@ -95,6 +95,9 @@ class Instance_Segmentation(Base_Workflow):
         ###################
         # Post-processing #
         ###################
+        if self.cfg.PROBLEM.INSTANCE_SEG.REPARE_LARGE_BLOBS_SIZE != -1:
+            w_pred = repare_large_blobs(w_pred, self.cfg.PROBLEM.INSTANCE_SEG.REPARE_LARGE_BLOBS_SIZE)
+
         if self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1:
             w_pred, labels, npixels, areas, circularities, diameters, comment = remove_instance_by_circularity_central_slice(w_pred, self.cfg.DATA.TEST.RESOLUTION, 
                 circularity_th=self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY)

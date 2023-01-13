@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 import numpy_indexed as npi
+import fill_voids
 from tqdm import tqdm
 from scipy import ndimage as ndi
 from scipy.signal import find_peaks
@@ -1748,7 +1749,7 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
         Coordinates of all detected points. If 
 
     circularity_th : float, optional
-        circularity threshold value. Those instances that are below that value will be marked as 'Strange'
+        Circularity threshold value. Those instances that are below that value will be marked as 'Strange'
         in the returned comment list. 
 
     Returns
@@ -1911,6 +1912,92 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
     print("Removed {} instances by circularity, {} instances left".format(labels_removed, total_labels-labels_removed))
 
     return img, label_list_coords, npixels, areas, circularities, diameters, comment
+
+def repare_large_blobs(img, size_th=10000):
+    """
+    Try to repare large instances by merging neighbors ones with it and by removing possible central holes.  
+
+    Parameters
+    ----------
+    img : 2D/3D Numpy array
+        Image with instances. E.g. ``(1450, 2000)`` for 2D and ``(397, 1450, 2000)`` for 3D.
+
+    size_th : int, optional
+        Size that the instances need to be larger than to be analised.
+
+    Returns
+    ------- 
+    img : 2D/3D Numpy array
+        Input image without the large instances repaired. E.g. ``(1450, 2000)`` for 2D and 
+        ``(397, 1450, 2000)`` for 3D.
+    """
+    print("Reparing large instances (more than {} pixels) . . .".format(size_th))
+    image3d = True if img.ndim == 3 else False
+
+    # Finds touching instances to a given instance
+    def find_neigbors(img, label, neighbors=1):
+        neigbors = []
+        label_points = np.where((img==label)>0) 
+        if img.ndim == 3:
+            for p in range(len(label_points[0])):
+                coord = [label_points[0][p],label_points[1][p],label_points[2][p]]
+                for i in range(-neighbors,neighbors+1):
+                    for j in range(-neighbors,neighbors+1):
+                        for k in range(-neighbors,neighbors+1):
+                            z = min(max(coord[0]+i,0),img.shape[0]-1)
+                            y = min(max(coord[1]+j,0),img.shape[1]-1)
+                            x = min(max(coord[2]+k,0),img.shape[2]-1)
+                            if img[z,y,x] not in neigbors and img[z,y,x] != label and img[z,y,x] != 0:
+                                neigbors.append(img[z,y,x]) 
+        else:
+            for p in range(len(label_points[0])):
+                coord = [label_points[0][p],label_points[1][p]]
+                for i in range(-neighbors,neighbors+1):
+                    for j in range(-neighbors,neighbors+1):
+                            y = min(max(coord[0]+i,0),img.shape[0]-1)
+                            x = min(max(coord[1]+j,0),img.shape[1]-1)
+                            if img[y,x] not in neigbors and img[y,x] != label and img[y,x] != 0:
+                                neigbors.append(img[y,x])                            
+        return neigbors
+
+    props = regionprops_table(img, properties=('label', 'area', 'bbox'))
+    for k, l in enumerate(props['label']):
+        if props['area'][k] >= size_th:
+            if image3d:
+                sz,fz,sy,fy,sx,fx = props['bbox-0'][k],props['bbox-3'][k],props['bbox-1'][k],props['bbox-4'][k],props['bbox-2'][k],props['bbox-5'][k]
+                patch = img[sz:fz,sy:fy,sx:fx].copy()
+            else:
+                sy,fy,sx,fx = props['bbox-0'][k],props['bbox-2'][k],props['bbox-1'][k],props['bbox-3'][k]
+                patch = img[sy:fy,sx:fx].copy()
+
+            inst_patches = np.unique(patch)
+            if len(inst_patches) > 2:
+                neigbors = find_neigbors(patch, l)
+
+                # Merge neighbors with the big label
+                for i in range(len(neigbors)):
+                    img[img==neigbors[i]] = l
+                    
+            # Fills holes 
+            if image3d:
+                patch = img[sz:fz,sy:fy,sx:fx].copy()   
+            else:
+                patch = img[sy:fy,sx:fx].copy() 
+            only_label_patch = patch.copy()
+            only_label_patch[only_label_patch!=l] = 0    
+            if image3d:
+                for i in range(only_label_patch.shape[0]):
+                    only_label_patch[i] = fill_voids.fill(only_label_patch[i])*l
+            else:
+                only_label_patch = fill_voids.fill(only_label_patch)*l
+            patch[patch==l] = 0
+            patch += only_label_patch
+            if image3d:
+                img[sz:fz,sy:fy,sx:fx] = patch
+            else:
+                img[sy:fy,sx:fx] = patch
+    return img
+        
 
 def apply_binary_mask(X, bin_mask_dir):
     """Apply a binary mask to remove values outside it.
