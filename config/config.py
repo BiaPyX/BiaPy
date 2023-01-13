@@ -44,6 +44,7 @@ class Config:
         #   - 'M' stands for 'Mask', contains the B and the C channels, i.e. the foreground mask. 
         #     Is simply achieved by binarizing input instance masks. 
         #   - 'Dv2' stands for 'Distance V2', which is an updated version of 'D' channel calculating background distance as well.
+        #   - 'P' stands for 'Points' and contains the central points of an instance (as in Detection workflow) 
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = 'BC'
 
         # Weights to be applied to the channels.
@@ -69,6 +70,8 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH4 = 1.5
         # TH5 acts over the channel 'D' and is used to limit how much the seeds can be grow
         _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH5 = 1.2
+        # TH_POINTS controls channel 'P' in the creation of the MW seeds
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_POINTS = 0.5
         # Size of small objects to be removed after doing watershed
         _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ = 30
         # Whether to remove objects before watershed or after it
@@ -533,14 +536,6 @@ class Config:
         _C.TEST.STATS.FULL_IMG = True # Only when if PROBLEM.NDIM = '2D' as 3D images are huge for the GPU
 
         ### Instance segmentation
-        # Whether to calculate mAP- Only applies when _C.TEST.STATS.MERGE_PATCHES = True
-        _C.TEST.MAP = False  
-        # Do not forgive to clone the repo:
-        #       git clone https://github.com/danifranco/mAP_3Dvolume.git
-        #
-        # Change the branch:
-        #       git checkout grand-challenge
-
         # Whether to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
         _C.TEST.MATCHING_STATS = True
         _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
@@ -598,11 +593,6 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.PATHS = CN()
 
-        # Folder where the mAP code should be placed
-        _C.PATHS.MAP_CODE_DIR = ''
-        # Path to the GT h5 files to calculate the mAP
-        _C.PATHS.TEST_FULL_GT_H5 = os.path.join(_C.DATA.TEST.MASK_PATH, 'h5')
-
         # Directories to store the results
         _C.PATHS.RESULT_DIR = CN()
         _C.PATHS.RESULT_DIR.PATH = os.path.join(job_dir, 'results', job_identifier)
@@ -638,8 +628,6 @@ class Config:
         _C.PATHS.PROB_MAP_FILENAME = 'prob_map.npy'
         # Watershed debugging folder
         _C.PATHS.WATERSHED_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'watershed')
-        # To store h5 files needed for the mAP calculation
-        _C.PATHS.MAP_H5_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'mAP_checkpoints')
         _C.PATHS.MEAN_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_mean_value.npy')
         _C.PATHS.STD_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_std_value.npy')
 

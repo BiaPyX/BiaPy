@@ -483,8 +483,7 @@ def instance_segmentation_loss(weights=(1,0.2), out_channels="BC"):
            ``1`` should be multipled by ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the last channel.
 
        out_channels : str, optional
-           Channels to operate with. Possible values: ``BC`` and ``BCD``. ``BC`` corresponds to use binary
-           segmentation+contour. ``BCD`` stands for binary segmentation+contour+distances.
+           Channels to operate with. 
     """
 
     def loss(y_true, y_pred):
@@ -506,6 +505,9 @@ def instance_segmentation_loss(weights=(1,0.2), out_channels="BC"):
         elif out_channels == "BDv2":
             return weights[0]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,0], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,0],-1))+\
                    weights[1]*masked_mse(tf.cast(y_true[...,1], dtype=tf.float32), y_pred[...,1], tf.cast(y_true[...,0], dtype=tf.float32))
+        elif out_channels == "BP":
+            return weights[0]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,0], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,0],-1))+\
+                   weights[1]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,1], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,1],-1))
         # Dv2
         else:
             return K.mean(K.square(tf.cast(y_true, dtype=tf.float32) - y_pred), axis=-1)

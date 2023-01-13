@@ -89,11 +89,6 @@ def check_configuration(cfg):
 
     if cfg.PROBLEM.NDIM == '3D' and not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.MERGE_PATCHES:
         raise ValueError("One between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.MERGE_PATCHES' need to be True when 'PROBLEM.NDIM'=='3D'")
-
-    if cfg.TEST.MAP and not os.path.isdir(cfg.PATHS.MAP_CODE_DIR):
-        raise ValueError("mAP calculation code not found. Please set 'PATHS.MAP_CODE_DIR' variable with the path of the "
-                         "Github repo 'mAP_3Dvolume': 0) git clone https://github.com/danifranco/mAP_3Dvolume.git ; "
-                         "1) git checkout grand-challenge ")
     
     if cfg.PROBLEM.NDIM == '3D' and cfg.TEST.STATS.FULL_IMG:
         print("WARNING: TEST.STATS.FULL_IMG == True while using PROBLEM.NDIM == '3D'. As 3D images are usually 'huge'"
@@ -115,7 +110,7 @@ def check_configuration(cfg):
                     
     #### Instance segmentation ####
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-        assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2']
+        assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP']
         if cfg.MODEL.N_CLASSES > 1:
             raise ValueError("Not implemented pipeline option for INSTANCE_SEGMENTATION")
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
@@ -125,8 +120,8 @@ def check_configuration(cfg):
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['BC', 'BCM', 'BCD', 'BCDv2'] and cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' need to be one between ['BC', 'BCM', 'BCD', 'BCDv2'] "
                              "when 'TEST.POST_PROCESSING.VORONOI_ON_MASK' is enabled")
-        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ["BC", "BCM", "BCD"] and cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND:
-            raise ValueError("'PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND' can not be enabled if not using 'BC', 'BCM' or 'BCD' channels")
+        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ["BC", "BCM", "BCD", "BP"] and cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND:
+            raise ValueError("'PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND' can only be used with 'BC', 'BCM', 'BP' or 'BCD' channels")
         for morph_operation in cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE:
             if morph_operation != "dilate" and morph_operation != "erode":
                 raise ValueError("'PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE' can only be a sequence with 'dilate' or 'erode' operations. "

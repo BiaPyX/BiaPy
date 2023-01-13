@@ -55,7 +55,7 @@ def prepare_optimizer(cfg, model):
             metric_name.append("jaccard_index")
     elif cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         metrics = []
-        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BCM"]:
+        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BCM", "BP"]:
             metrics.append(IoU_instances(first_not_binary_channel=len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)))
             metric_name.append("jaccard_index_instances")
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", 'BCDv2']:

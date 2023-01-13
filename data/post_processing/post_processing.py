@@ -236,7 +236,7 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
            Directory to save watershed output into.
     """
 
-    assert channels in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2']
+    assert channels in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP']
 
     def erode_seed_and_foreground():
         nonlocal seed_map
@@ -274,6 +274,15 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
 
     if channels in ["BC", "BCM"]:
         seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH2'])
+        foreground = (data[...,0] > ths['TH3'])
+
+        if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
+            erode_seed_and_foreground()
+
+        semantic = distance_transform_edt(foreground)
+        seed_map = label(seed_map, connectivity=1)
+    elif channels in ["BP"]:
+        seed_map = (data[...,1] > ths['TH_POINTS'])
         foreground = (data[...,0] > ths['TH3'])
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
@@ -1748,17 +1757,20 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
         Input image without the instances that do not satisfy the circularity constraint. 
         Image with instances. E.g. ``(1450, 2000)`` for 2D and ``(397, 1450, 2000)`` for 3D.
 
-    labels : List of ints
+    labels : Array of ints
         Instance label list. 
     
-    npixels : List of ints
+    npixels : Array of ints
         Number of pixels of each instance. 
         
-    areas : List of ints
-        areas/volumes (2D/3D) based on the given resolution.
+    areas : Array of ints
+        Areas/volumes (2D/3D) of each instance based on the given resolution.
     
-    circularities : 4D Numpy array
-        Image with Voronoi applied. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
+    circularities : Array of ints
+        Circularity of each instance.
+
+    diameters : Array of ints
+        Diameter of each instance obtained from the bounding box.
 
     comment : List of str
         List containing 'Correct' string when the instance surpass the circularity 
@@ -1788,6 +1800,8 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
             comment.append('none')
 
         areas = np.zeros(total_labels, dtype=np.uint32)
+        diameters = np.zeros(total_labels, dtype=np.uint32)
+        diam_calc = False
         # Insert in the label position the area/volume
         for i, pixels in enumerate(npixels):
             label = label_list_unique[i]
@@ -1805,6 +1819,8 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
         coords_list = [[] for i in range(total_labels)]
         comment = ['none' for i in range(total_labels)]
         areas = np.zeros(total_labels, dtype=np.uint32)
+        diameters = np.zeros(total_labels, dtype=np.uint32)
+        diam_calc = True
 
         props = regionprops_table(img, properties=('label', 'bbox')) 
         for k, label in enumerate(props['label']):
@@ -1812,20 +1828,28 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
             pixels = npixels[label_index]
 
             if image3d:
-                # Central slice
                 z_coord_start = props['bbox-0'][k]
                 z_coord_finish = props['bbox-3'][k]
                 central_slice = (z_coord_start+z_coord_finish)//2
 
                 vol = pixels*(resolution[0]+resolution[1]+resolution[2])
+
+                diam = max(props['bbox-3'][k]-props['bbox-0'][k],props['bbox-4'][k]-props['bbox-1'][k],props['bbox-5'][k]-props['bbox-2'][k])
             else:
                 central_slice = 0
                 vol = pixels*(resolution[0]+resolution[1])
+                diam = max(props['bbox-2'][k]-props['bbox-0'][k],props['bbox-3'][k]-props['bbox-1'][k])
 
-            coords_list[label_index] = [central_slice]
+            slices = []
+            if central_slice-1 >= z_coord_start: slices.append(central_slice-1)
+            slices.append(central_slice)
+            if central_slice+1 <= z_coord_finish: slices.append(central_slice+1)
+            coords_list[label_index] = slices.copy()
             areas[label_index] = vol
+            diameters[label_index] = diam
 
     circularities = np.zeros(total_labels, dtype=np.float32)
+    circularities_count = np.zeros(total_labels, dtype=np.uint8)
     print("{} instances found before circularity filtering".format(total_labels))
 
     if not image3d:
@@ -1835,32 +1859,58 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
     # which is marked by coords_list
     labels_removed = 0
     for i in tqdm(range(img.shape[0]), leave=False):
-        props = regionprops_table(img[i], properties=('label','area', 'perimeter'))             
+        props = regionprops_table(img[i], properties=('label','area', 'perimeter', 'bbox'))             
         if len(props['label'])>0:                           
             for k, l in enumerate(props['label']):
+                multiple_slices = False
                 if image3d:
                     j = label_list_coords.index(l)
                     coord = coords_list[j]
+                    
+                    if len(coord) > 1:
+                        coord = [coord[0]]
+                        multiple_slices = True
+
+                    if not diam_calc:
+                        diam = max(props['bbox-3'][k]-props['bbox-0'][k],props['bbox-4'][k]-props['bbox-1'][k],props['bbox-5'][k]-props['bbox-2'][k])
                 else:
                     coord = [0]
+                    if not diam_calc:
+                        diam = max(props['bbox-2'][k]-props['bbox-0'][k],props['bbox-3'][k]-props['bbox-1'][k])
+
                 # If instances' center point matches the slice i save the circularity
                 if coord[0] == i: 
-                    circularity = (4 * math.pi * props['area'][k]) / (props['perimeter'][k]*props['perimeter'][k])               
-                    circularities[j] = circularity
-                    if circularity > circularity_th:
-                        comment[j] = correct_str
+                    if props['perimeter'][k] != 0:
+                        circularity = (4 * math.pi * props['area'][k]) / (props['perimeter'][k]*props['perimeter'][k])     
                     else:
-                        comment[j] = unsure_str
-                        # Remove that label from the image
-                        img[img==l] = 0
-                        labels_removed += 1
-                        
+                        circularity = 0         
+                    circularities[j] += circularity
+                    circularities_count[j] += 1
+
+                    if multiple_slices:
+                        v = coords_list[j].pop(0)
+                        coords_list[j].append(v)
+
+                if not diam_calc:
+                    diameters[j] = diam
+
+    # Remove those instances that do not pass the threshold        
+    for i in tqdm(range(len(circularities)), leave=False):
+        circularities[i] = circularities[i]/circularities_count[i] if circularities_count[i] != 0 else 0
+        if circularities[i] > circularity_th:
+            comment[i] = correct_str
+        else:
+            comment[i] = unsure_str
+            # Remove that label from the image
+            img[img==label_list_coords[i]] = 0
+            labels_removed += 1
+
     if not image3d:
         img = img[0]
 
     print("Removed {} instances by circularity, {} instances left".format(labels_removed, total_labels-labels_removed))
 
-    return img, label_list_coords, npixels, areas, circularities, comment
+    return img, label_list_coords, npixels, areas, circularities, diameters, comment
 
 def apply_binary_mask(X, bin_mask_dir):
     """Apply a binary mask to remove values outside it.

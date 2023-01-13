@@ -1,5 +1,6 @@
 import math
 import numpy as np
+from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from utils.util import load_3d_images_from_dir
 

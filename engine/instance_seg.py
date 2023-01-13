@@ -29,6 +29,7 @@ class Instance_Segmentation(Base_Workflow):
         self.instance_ths['TH3'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH3
         self.instance_ths['TH4'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH4
         self.instance_ths['TH5'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH5
+        self.instance_ths['TH_POINTS'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_POINTS
 
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "BCDv2":
             if self.cfg.TEST.POST_PROCESSING.APPLY_MASK and os.path.isdir(self.cfg.DATA.VAL.BINARY_MASKS):
@@ -60,7 +61,7 @@ class Instance_Segmentation(Base_Workflow):
 
         save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
             filenames, verbose=self.cfg.TEST.VERBOSE)
-
+   
         # Add extra dimension if working in 2D
         if w_pred.ndim == 2:
             w_pred = np.expand_dims(w_pred,0)
@@ -95,12 +96,12 @@ class Instance_Segmentation(Base_Workflow):
         # Post-processing #
         ###################
         if self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1:
-            w_pred, labels, npixels, areas, circularities, comment = remove_instance_by_circularity_central_slice(w_pred, self.cfg.DATA.TEST.RESOLUTION, 
+            w_pred, labels, npixels, areas, circularities, diameters, comment = remove_instance_by_circularity_central_slice(w_pred, self.cfg.DATA.TEST.RESOLUTION, 
                 circularity_th=self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY)
             # Save stats
             size_measure = 'area' if w_pred.ndim == 2 else 'volume'
-            df = pd.DataFrame(zip(labels, npixels, areas, circularities, comment), 
-                columns=['label','npixels', size_measure, 'circularity', 'comment'])
+            df = pd.DataFrame(zip(labels, npixels, areas, circularities, diameters, comment), 
+                columns=['label','npixels', size_measure, 'circularity', 'diameter', 'comment'])
             df = df.sort_values(by=['label'])   
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, os.path.splitext(filenames[0])[0]+'_stats.csv'))
             del df

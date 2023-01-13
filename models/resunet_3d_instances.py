@@ -80,7 +80,7 @@ def ResUNet_3D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], d
 
     if output_channels == "Dv2":
         outputs = Conv3D(1, (2, 2, 2), activation="linear", padding='same') (x)
-    elif output_channels == "BC":
+    elif output_channels in ["BC", "BP"]:
         outputs = Conv3D(2, (2, 2, 2), activation="sigmoid", padding='same') (x)
     elif output_channels == "BCM":
         outputs = Conv3D(3, (2, 2, 2), activation="sigmoid", padding='same') (x)

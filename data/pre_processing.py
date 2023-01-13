@@ -5,10 +5,12 @@ from tqdm import tqdm
 import pandas as pd
 from skimage.segmentation import clear_border, find_boundaries
 from skimage.io import imread
-from scipy.ndimage.morphology import binary_dilation                                                    
-from skimage.morphology import disk  
+from scipy.ndimage.morphology import binary_dilation  
+from scipy.ndimage.measurements import center_of_mass                                                  
+from skimage.morphology import disk, dilation
 from skimage.measure import label
 from skimage.transform import resize
+from skimage.feature import peak_local_max
 
 from utils.util import load_data_from_dir, load_3d_images_from_dir, save_npy_files, save_tif
 
@@ -42,10 +44,10 @@ def create_instance_channels(cfg, data_type='train'):
     print("Creating Y_{} channels . . .".format(data_type))
     if isinstance(Y, list):
         for i in tqdm(range(len(Y))):
-            Y[i] = labels_into_bcd(Y[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
+            Y[i] = labels_into_channels(Y[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
                           fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
     else:
-        Y = labels_into_bcd(Y, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
+        Y = labels_into_channels(Y, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
                    fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
     save_npy_files(Y, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, filenames=filenames,
                    verbose=cfg.TEST.VERBOSE)
@@ -74,10 +76,10 @@ def create_test_instance_channels(cfg):
         print("Creating Y_test channels . . .")
         if isinstance(Y_test, list):
             for i in tqdm(range(len(Y_test))):
-                Y_test[i] = labels_into_bcd(Y_test[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
+                Y_test[i] = labels_into_channels(Y_test[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
                                             fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
         else:
-            Y_test = labels_into_bcd(Y_test, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
+            Y_test = labels_into_channels(Y_test, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
                                      fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
         save_npy_files(Y_test, data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR, filenames=test_filenames,
                        verbose=cfg.TEST.VERBOSE)
@@ -91,13 +93,13 @@ def create_test_instance_channels(cfg):
     for i in range(min(3,len(X_test))):
         save_tif(np.expand_dims(X_test[i],0), cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK, filenames=['vol'+str(i)+".tif"], verbose=False)
 
-def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
-    """Create an array with 3 channels given semantic or instance segmentation data masks. These 3 channels are:
-       semantic mask, contours and distance map.
+def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
+    """Coverts input semantic or instance segmentation data masks into different binary channels to train an instance segmentation
+       problem. 
 
        Parameters
        ----------
-       data_mask : 5D Numpy array
+       data_mask : 4D/5D Numpy array
            Data mask to create the new array from. It is expected to have just one channel. E.g. ``(10, 200, 1000, 1000, 1)``
 
        mode : str, optional
@@ -118,20 +120,26 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
     """
 
     assert data_mask.ndim in [5, 4]
-    assert mode in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2']
+    assert mode in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP']
 
     d_shape = 4 if data_mask.ndim == 5 else 3
     if mode in ['BCDv2', 'Dv2', 'BDv2']:
         c_number = 4
     elif mode in ['BCD', 'BCM']:
         c_number = 3
-    elif mode == 'BC':
+    elif mode in ['BC', 'BP']:
         c_number = 2
 
-    new_mask = np.zeros(data_mask.shape[:d_shape] + (c_number,), dtype=np.float32)
+    if 'D' in mode:
+        dtype = np.float32  
+    else:
+        dtype = np.uint8
+
+    new_mask = np.zeros(data_mask.shape[:d_shape] + (c_number,), dtype=dtype)
     for img in tqdm(range(data_mask.shape[0])):
         vol = data_mask[img,...,0].astype(np.int64)
-        instance_count = len(np.unique(vol))
+        instances = np.unique(vol)
+        instance_count = len(instances)
 
         # If only have background -> skip
         if ('D' in mode or 'Dv2' in mode) and instance_count != 1:
@@ -149,6 +157,24 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
         # Semantic mask
         if 'B' in mode and instance_count != 1:
             new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)
+
+        # Central points
+        if 'P' in mode and instance_count != 1:
+            coords = center_of_mass(vol>0, vol, instances[1:])
+            coords = np.round(coords).astype(int)
+            for coord in coords:
+                if data_mask.ndim == 5:
+                    z,y,x = coord
+                    new_mask[img,z,y,x,1] = 1
+                else:
+                    y,x = coord
+                    new_mask[img,y,x,1] = 1
+
+            if data_mask.ndim == 5:
+                for i in range(new_mask.shape[1]):                                                                                  
+                    new_mask[img,i,...,1] = dilation(new_mask[img,i,...,1], disk(3)) 
+            else:
+                new_mask[img,...,1] = dilation(new_mask[img,...,1], disk(3))  
 
         # Contour
         if ('C' in mode or 'Dv2' in mode) and instance_count != 1: 
@@ -197,6 +223,8 @@ def labels_into_bcd(data_mask, mode="BCD", fb_mode="outer", save_dir=None):
                 suffix.append('_distance.tif')
             elif mode == "BCM":
                 suffix.append('_binary_mask.tif')
+        elif mode == "BP":
+            suffix.append('_points.tif')
         elif mode == "BDv2":
             suffix.append('_distance.tif')
 
