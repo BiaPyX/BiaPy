@@ -398,7 +398,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             self.paths = data_paths
             self.data_paths = sorted(next(os.walk(data_paths[0]))[2])
             self.data_mask_path = sorted(next(os.walk(data_paths[1]))[2])
-            self.len = len(self.data_paths)
+            self.length = len(self.data_paths)
 
             self.first_no_bin_channel = -1
             self.div_Y_on_load_bin_channels = False
@@ -466,7 +466,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             self.Y = Y
             self.Y_channels = Y.shape[-1] if type(Y) != list else Y[0].shape[-1]
             self.X_channels = X.shape[-1] if type(X) != list else X[0].shape[-1]
-            self.len = len(self.X)
+            self.length = len(self.X)
             if random_crops_in_DA:
                 self.shape = shape
             else:
@@ -559,7 +559,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             resolution = tuple(resolution[i] for i in [2, 1, 0]) # z, y, x -> x, y, z
             self.res_relation = (1.0,resolution[0]/resolution[1],resolution[0]/resolution[2])
         self.resolution = resolution
-        self.o_indexes = np.arange(self.len)
+        self.o_indexes = np.arange(self.length)
         self.shuffle = shuffle_each_epoch
         self.n_classes = n_classes
         self.out_number = out_number
@@ -724,6 +724,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         
         self.random_crop_func = random_3D_crop_pair if self.ndim == 3 else random_crop_pair
         self.on_epoch_end()
+        self.len = self.__len__() 
 
     @abstractmethod
     def get_transformed_samples(self, num_examples, save_to_dir=False, out_dir='aug', 
@@ -740,7 +741,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
     def __len__(self):
         """Defines the number of batches per epoch."""
-        return int(np.ceil((self.len*self.extra_data_factor)/self.batch_size))
+        return int(np.ceil((self.length*self.extra_data_factor)/self.batch_size))
 
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
@@ -792,10 +793,13 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                     mask, _ = norm_range01(mask)
                 elif self.X_norm['type'] == 'custom':
                     mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'])
-
+ 
         img, mask = self.ensure_shape(img, mask)
 
         return img, mask
+
+    def getitem(self, index):
+        return self.__getitem__(index)
 
     def __getitem__(self, index):
         """Generation of one batch of data.
@@ -841,7 +845,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             if self.da:
                 e_img, e_mask = None, None
                 if self.cutmix:
-                    extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
+                    extra_img = np.random.randint(0, self.length-1) if self.length > 2 else 0
                     e_img, e_mask =  self.load_sample(extra_img)
 
                 batch_x[i], batch_y[i] = self.apply_transform(batch_x[i], batch_y[i], e_im=e_img, e_mask=e_mask)
@@ -1122,8 +1126,8 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
            |   Random rotation [0, 180] applied                     |   Random rotation [0, 180] applied                     |
            +--------------------------------------------------------+--------------------------------------------------------+
         """
-        if random_images == False and num_examples > self.len:
-            num_examples = self.len
+        if random_images == False and num_examples > self.length:
+            num_examples = self.length
             print("WARNING: More samples requested than the ones available. 'num_examples' fixed to {}".format(num_examples))
 
         sample_x = []
@@ -1135,7 +1139,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         print("0) Creating samples of data augmentation . . .")
         for i in tqdm(range(num_examples)):
             if random_images:
-                pos = random.randint(0,self.len-1) if self.len > 2 else 0
+                pos = random.randint(0,self.length-1) if self.length > 2 else 0
             else:
                 pos = i
 
@@ -1186,7 +1190,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
                 e_img, e_mask = None, None
                 if self.cutmix:
-                    extra_img = np.random.randint(0, self.len-1) if self.len > 2 else 0
+                    extra_img = np.random.randint(0, self.length-1) if self.length > 2 else 0
                     e_img, e_mask = self.load_sample(extra_img)
                 
                 sample_x[i], sample_y[i] = self.apply_transform(

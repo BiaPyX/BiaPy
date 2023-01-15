@@ -68,7 +68,8 @@ if __name__ == '__main__':
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
     # CPU limit
-    limit_threads(cfg.SYSTEM.NUM_CPUS)
+    if cfg.SYSTEM.NUM_CPUS != -1:
+        limit_threads(cfg.SYSTEM.NUM_CPUS)
 
     # Reproducibility
     set_seed(cfg.SYSTEM.SEED)

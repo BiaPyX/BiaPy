@@ -183,7 +183,7 @@ class SingleImageDataGenerator(tf.keras.utils.Sequence):
                 raise ValueError("MODEL.N_CLASSES is {} but {} classes found: {}"
                     .format(n_classes, len(present_classes),present_classes))
 
-            self.len = len(self.all_samples)
+            self.length = len(self.all_samples)
 
             # X data analysis
             self.X_norm = {}
@@ -217,7 +217,7 @@ class SingleImageDataGenerator(tf.keras.utils.Sequence):
                 raise ValueError("MODEL.N_CLASSES is {} but {} classes found: {}"
                     .format(n_classes, len(present_classes), present_classes))
 
-            self.len = len(self.X)
+            self.length = len(self.X)
     
             # X data analysis and normalization
             self.X_norm = {}
@@ -249,7 +249,7 @@ class SingleImageDataGenerator(tf.keras.utils.Sequence):
 
         self.shape = resize_shape if resize_shape is not None else img.shape
 
-        self.o_indexes = np.arange(self.len)
+        self.o_indexes = np.arange(self.length)
         self.shuffle = shuffle_each_epoch
         self.n_classes = n_classes
         self.da = da
@@ -305,10 +305,11 @@ class SingleImageDataGenerator(tf.keras.utils.Sequence):
         self.seed = seed
         ia.seed(seed)
         self.on_epoch_end()
+        self.len = self.__len__() 
 
     def __len__(self):
         """Defines the number of batches per epoch."""
-        return int(np.ceil(self.len/self.batch_size))
+        return int(np.ceil(self.length/self.batch_size))
 
     def on_epoch_end(self):
         """Updates indexes after each epoch."""
@@ -353,6 +354,9 @@ class SingleImageDataGenerator(tf.keras.utils.Sequence):
         else:
             if img.shape[0] <= 3: img = img.transpose((1,2,0))   
         return img 
+        
+    def getitem(self, index):
+        return self.__getitem__(index)
 
     def __getitem__(self, index):
         """Generation of one batch data.
@@ -466,8 +470,8 @@ class SingleImageDataGenerator(tf.keras.utils.Sequence):
                Corresponding classes of X. E.g. ``(batch_size)``.
         """
 
-        if random_images == False and num_examples > self.len:
-            num_examples = self.len
+        if random_images == False and num_examples > self.length:
+            num_examples = self.length
             print("WARNING: More samples requested than the ones available. 'num_examples' fixed to {}".format(num_examples))
 
         sample_x = []
@@ -479,7 +483,7 @@ class SingleImageDataGenerator(tf.keras.utils.Sequence):
         print("0) Creating the examples of data augmentation . . .")
         for i in tqdm(range(num_examples)):
             if random_images:
-                pos = random.randint(0,self.len-1) if self.len > 2 else 0
+                pos = random.randint(0,self.length-1) if self.length > 2 else 0
             else:
                 pos = i
 

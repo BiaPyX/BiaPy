@@ -1,4 +1,5 @@
 import os
+import tensorflow as tf
 import numpy as np
 from tqdm import tqdm
 
@@ -189,7 +190,34 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             cfg.AUGMENTOR.AUG_NUM_SAMPLES, save_to_dir=True, train=False, out_dir=cfg.PATHS.DA_SAMPLES,
             draw_grid=cfg.AUGMENTOR.DRAW_GRID)
 
-    return train_generator, val_generator
+    # Decide number of processes
+    num_parallel_calls = tf.data.AUTOTUNE if cfg.SYSTEM.NUM_CPUS == -1 else cfg.SYSTEM.NUM_CPUS
+    
+    # Paralelize as explained in: 
+    # https://medium.com/@acordier/tf-data-dataset-generators-with-parallelization-the-easy-way-b5c5f7d2a18
+    def train_func(i):
+        i = i.numpy() 
+        x, y = train_generator.getitem(i)
+        return x, y
+    def val_func(i):
+        i = i.numpy() 
+        x, y = val_generator.getitem(i)
+        return x, y
+    train_index_generator = list(range(len(train_generator))) 
+    val_index_generator = list(range(len(val_generator))) 
+    dataset = tf.data.Dataset.from_generator(lambda: train_index_generator, tf.uint8)
+    dataset2 = tf.data.Dataset.from_generator(lambda: val_index_generator, tf.uint8)
+    train_dataset = dataset.map(lambda i: tf.py_function(
+        func=train_func, inp=[i], Tout=[tf.float32, tf.float32]), num_parallel_calls=num_parallel_calls)
+    val_dataset = dataset.map(lambda i: tf.py_function(
+        func=val_func, inp=[i], Tout=[tf.float32, tf.float32]), num_parallel_calls=num_parallel_calls)
+
+    # Fixing some error with dataset length: https://discuss.tensorflow.org/t/typeerror-dataset-length-is-unknown-tensorflow/948/9
+    # Using assert_cardinality to add the number of samples (input)
+    train_dataset = train_dataset.apply(tf.data.experimental.assert_cardinality(len(train_generator)))
+    val_dataset = val_dataset.apply(tf.data.experimental.assert_cardinality(len(val_generator)))
+
+    return train_dataset, val_dataset
 
 
 def create_test_augmentor(cfg, X_test, Y_test):

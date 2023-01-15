@@ -19,7 +19,7 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.SYSTEM = CN()
         # Number of CPUs to use
-        _C.SYSTEM.NUM_CPUS = 1
+        _C.SYSTEM.NUM_CPUS = -1
         # Math seed
         _C.SYSTEM.SEED = 0
 
