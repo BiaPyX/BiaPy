@@ -187,8 +187,8 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
     return np.expand_dims(watershed_predictions, -1)
 
 
-def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before=False, seed_morph_sequence=[], 
-    seed_morph_radius=[], erode_and_dilate_foreground=False, fore_erosion_radius=5, fore_dilation_radius=5, 
+def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_small_before=10, remove_after=False, thres_small_after=128,
+    seed_morph_sequence=[], seed_morph_radius=[], erode_and_dilate_foreground=False, fore_erosion_radius=5, fore_dilation_radius=5, 
     save_dir=None):
     """Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
        algorithm.
@@ -210,12 +210,18 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
            foreground mask; ``TH4`` used in the distances to create watershed seeds; and ``TH5`` used in the distances 
            to create the foreground mask.
 
-       thres_small : int, optional
+       remove_before : bool, optional
+           To remove objects before watershed. 
+
+       thres_small_before : int, optional
            Theshold to remove small objects created by the watershed.
 
-       remove_before : bool, optional
-           To remove objects before watershed. If ``False`` it is done after watershed.
+       remove_after : bool, optional
+           To remove objects after watershed. 
 
+       thres_small_after : int, optional
+           Theshold to remove small objects created by the watershed.
+           
        seed_morph_sequence : List of str, optional
            List of strings to determine the morphological filters to apply to instance seeds. They will be done in that order.
            E.g. ``['dilate','erode']``.
@@ -333,11 +339,12 @@ def watershed_by_channels(data, channels, ths={}, thres_small=128, remove_before
             erode_seed_and_foreground()
 
     if remove_before:
-        seed_map = remove_small_objects(seed_map, thres_small)
-        segm = watershed(-semantic, seed_map, mask=foreground)
-    else:
-        segm = watershed(-semantic, seed_map, mask=foreground)
-        segm = remove_small_objects(segm, thres_small)
+        seed_map = remove_small_objects(seed_map, thres_small_before)
+
+    segm = watershed(-semantic, seed_map, mask=foreground)
+
+    if remove_after:
+        segm = remove_small_objects(segm, thres_small_after)
 
     # Choose appropiate dtype
     max_value = np.max(segm)
@@ -1961,7 +1968,7 @@ def repare_large_blobs(img, size_th=10000):
         return neigbors
 
     props = regionprops_table(img, properties=('label', 'area', 'bbox'))
-    for k, l in enumerate(props['label']):
+    for k, l in tqdm(enumerate(props['label']), leave=False):
         if props['area'][k] >= size_th:
             if image3d:
                 sz,fz,sy,fy,sx,fx = props['bbox-0'][k],props['bbox-3'][k],props['bbox-1'][k],props['bbox-4'][k],props['bbox-2'][k],props['bbox-5'][k]
@@ -1976,7 +1983,25 @@ def repare_large_blobs(img, size_th=10000):
 
                 # Merge neighbors with the big label
                 for i in range(len(neigbors)):
-                    img[img==neigbors[i]] = l
+                    ind = np.where(props['label'] == neigbors[i])[0] 
+
+                    # Only merge labels if the small neighbor instance is fully contained in the large one
+                    contained_in_large_blob = True
+                    if image3d:
+                        neig_sz, neig_fz= props['bbox-0'][ind],props['bbox-3'][ind]
+                        neig_sy, neig_fy= props['bbox-1'][ind],props['bbox-4'][ind]
+                        neig_sx, neig_fx= props['bbox-2'][ind],props['bbox-5'][ind]
+
+                        if neig_sz < sz or neig_fz > fz or neig_sy < sy or neig_fy > fy or neig_sx < sx or neig_fx > fx: 
+                            contained_in_large_blob = False
+                    else:
+                        neig_sy, neig_fy= props['bbox-0'][ind],props['bbox-2'][ind]
+                        neig_sx, neig_fx= props['bbox-1'][ind],props['bbox-3'][ind]
+                        if neig_sy < sy or neig_fy > fy or neig_sx < sx or neig_fx > fx: 
+                            contained_in_large_blob = False
+
+                    if contained_in_large_blob:
+                        img[img==neigbors[i]] = l
                     
             # Fills holes 
             if image3d:

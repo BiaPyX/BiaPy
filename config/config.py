@@ -73,9 +73,13 @@ class Config:
         # TH_POINTS controls channel 'P' in the creation of the MW seeds
         _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_POINTS = 0.5
         # Size of small objects to be removed after doing watershed
-        _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ = 30
-        # Whether to remove objects before watershed or after it
+        _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_BEFORE = 10
+        # Whether to remove objects before watershed 
         _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW = True
+        # Size of small objects to be removed after doing watershed
+        _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_AFTER = 100
+        # Whether to remove objects after watershed 
+        _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_AFTER_MW = False
         # Sequence of string to determine the morphological filters to apply to instance seeds. They will be done in that order.
         # Possible options 'dilate' and 'erode'. E.g. ['erode','dilate'] to erode first and dilate later.
         _C.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE = []
