@@ -58,7 +58,10 @@ def create_instance_channels(cfg, data_type='train'):
 
     # Save original X data with the labels 
     for i in range(min(3,len(X))):
-        save_tif(np.expand_dims(X[i],0), getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), filenames=['vol'+str(i)+".tif"], verbose=False)
+        if isinstance(X_test, list):
+            save_tif(X[i], getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), filenames=['vol'+str(i)+".tif"], verbose=False)
+        else:
+            save_tif(np.expand_dims(X[i],0), getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), filenames=['vol'+str(i)+".tif"], verbose=False)
 
 def create_test_instance_channels(cfg):
     """Create test new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` for instance segmentation.
@@ -91,7 +94,10 @@ def create_test_instance_channels(cfg):
     
     # Save original X data with the labels 
     for i in range(min(3,len(X_test))):
-        save_tif(np.expand_dims(X_test[i],0), cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK, filenames=['vol'+str(i)+".tif"], verbose=False)
+        if isinstance(X_test, list):
+            save_tif(X_test[i], cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK, filenames=['vol'+str(i)+".tif"], verbose=True)
+        else:
+            save_tif(np.expand_dims(X_test[i],0), cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK, filenames=['vol'+str(i)+".tif"], verbose=True)
 
 def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
     """Coverts input semantic or instance segmentation data masks into different binary channels to train an instance segmentation
