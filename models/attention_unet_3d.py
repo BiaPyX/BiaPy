@@ -57,8 +57,8 @@ def Attention_U_Net_3D(image_shape, activation='elu', feature_maps=[32, 64, 128,
        Calling this function with its default parameters returns the following network:
 
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with its default parameters returns the following network:
 

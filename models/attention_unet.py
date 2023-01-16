@@ -53,8 +53,8 @@ def Attention_U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 
            Model containing the Attention U-Net.
 
 
-       Example
-       -------
+       Examples
+       --------
 
        Calling this function with its default parameters returns the following network:
 

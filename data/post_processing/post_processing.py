@@ -362,7 +362,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         aux = np.expand_dims(np.expand_dims((seed_map).astype(segm.dtype), -1),1)
         imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
 
-        if channels in ["BC", "BCM", "BCD"]:
+        if channels in ["BC", "BCM", "BCD", "BP"]:
             f = os.path.join(save_dir, "foreground.tif")
             aux = np.expand_dims(np.expand_dims((foreground).astype(np.uint8), -1),1)
             imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
@@ -725,8 +725,8 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
        verbose : bool, optional
            To print saving information.
 
-       Return
-       ------
+       Returns
+       -------
        global_th1_min_opt: float
            MW_TH1 optimum value.
 

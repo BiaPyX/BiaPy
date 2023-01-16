@@ -491,8 +491,8 @@ def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
        sigma : int, optional
           Represents the standard deviation of the Gaussian used for the weight map.
 
-       Example
-       -------
+       Examples
+       --------
 
        Notice that weight has been defined where the objects are almost touching
        each other.
