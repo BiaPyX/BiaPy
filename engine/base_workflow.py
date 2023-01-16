@@ -290,7 +290,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 print(" ")
 
     def print_post_processing_stats(self):
-        if self.post_processing:
+        if self.post_processing and self.cfg.DATA.TEST.LOAD_GT:
             print("Test Foreground IoU (post-processing): {}".format(self.stats['iou_post']))
             print("Test Overall IoU (post-processing): {}".format(self.stats['ov_iou_post']))
             print(" ")

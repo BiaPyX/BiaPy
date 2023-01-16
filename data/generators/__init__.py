@@ -193,6 +193,11 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
     # Decide number of processes
     num_parallel_calls = tf.data.AUTOTUNE if cfg.SYSTEM.NUM_CPUS == -1 else cfg.SYSTEM.NUM_CPUS
     
+    if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+        out_dtype = tf.uint8
+    else:
+        out_dtype = tf.float32
+
     # Paralelize as explained in: 
     # https://medium.com/@acordier/tf-data-dataset-generators-with-parallelization-the-easy-way-b5c5f7d2a18
     def train_func(i):
@@ -205,12 +210,22 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
         return x, y
     train_index_generator = list(range(len(train_generator))) 
     val_index_generator = list(range(len(val_generator))) 
-    dataset = tf.data.Dataset.from_generator(lambda: train_index_generator, tf.uint8)
-    dataset2 = tf.data.Dataset.from_generator(lambda: val_index_generator, tf.uint8)
-    train_dataset = dataset.map(lambda i: tf.py_function(
-        func=train_func, inp=[i], Tout=[tf.float32, tf.float32]), num_parallel_calls=num_parallel_calls)
-    val_dataset = dataset.map(lambda i: tf.py_function(
-        func=val_func, inp=[i], Tout=[tf.float32, tf.float32]), num_parallel_calls=num_parallel_calls)
+    tdataset = tf.data.Dataset.from_generator(lambda: train_index_generator, tf.uint8)
+    vdataset = tf.data.Dataset.from_generator(lambda: val_index_generator, tf.uint8)
+    train_dataset = tdataset.map(lambda i: tf.py_function(
+        func=train_func, inp=[i], Tout=[tf.float32, out_dtype]), num_parallel_calls=num_parallel_calls)
+    val_dataset = vdataset.map(lambda i: tf.py_function(
+        func=val_func, inp=[i], Tout=[tf.float32, out_dtype]), num_parallel_calls=num_parallel_calls)
+
+    def _fixup_shape(x, y):
+        x.set_shape([None, ]*(len(cfg.DATA.PATCH_SIZE)+1)) 
+        if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+            y.set_shape([None, ]*(len(cfg.DATA.PATCH_SIZE)+1)) 
+        else:
+            y.set_shape([None, cfg.MODEL.N_CLASSES]) 
+        return x, y
+    train_dataset = train_dataset.map(_fixup_shape)
+    val_dataset = val_dataset.map(_fixup_shape)
 
     # Fixing some error with dataset length: https://discuss.tensorflow.org/t/typeerror-dataset-length-is-unknown-tensorflow/948/9
     # Using assert_cardinality to add the number of samples (input)
@@ -218,7 +233,6 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
     val_dataset = val_dataset.apply(tf.data.experimental.assert_cardinality(len(val_generator)))
 
     return train_dataset, val_dataset
-
 
 def create_test_augmentor(cfg, X_test, Y_test):
     """Create test data generator.
