@@ -360,12 +360,12 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
 
         f = os.path.join(save_dir, "seed_map.tif")
         aux = np.expand_dims(np.expand_dims((seed_map).astype(segm.dtype), -1),1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
 
         if channels in ["BC", "BCM", "BCD"]:
             f = os.path.join(save_dir, "foreground.tif")
             aux = np.expand_dims(np.expand_dims((foreground).astype(np.uint8), -1),1)
-            imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+            imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
     return segm
 
 
@@ -1217,7 +1217,7 @@ def voronoi_on_mask(data, mask, save_dir, filenames, th=0.3, thres_small=128, ve
         else:
             f = os.path.join(save_dir, os.path.splitext(filenames[i])[0]+'.tif')
         aux = np.expand_dims(np.expand_dims(_data[i],-1),1).astype(np.float32)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
 
     return _data
 
@@ -1318,7 +1318,7 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
     f = os.path.join(save_dir, ' '.join(filenames[0].split('.')[:-1])+'.tif')
     voronoiCyst = np.reshape(voronoiCyst, (1, mask_shape[1], mask_shape[2], mask_shape[3]))
     aux = np.reshape(voronoiCyst, (mask_shape[1], 1, mask_shape[2], mask_shape[3], 1))
-    imsave(f, aux.astype(np.uint16), imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+    imsave(f, aux.astype(np.uint16), imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
 
     return voronoiCyst
 
@@ -1536,7 +1536,7 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
                 f = os.path.join(class_check_dir, "{}_patch.tif".format(l))
                 aux = np.expand_dims(np.expand_dims((img_patch).astype(np.float32), -1),1)
                 if ndim == 2: aux = np.expand_dims(aux,0)
-                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
 
                 # Save the verticial and horizontal lines in the patch to debug 
                 patch_y = np.zeros(img_patch.shape, dtype=np.float32)
@@ -1547,7 +1547,7 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
                 f = os.path.join(class_check_dir, "{}_y_line.tif".format(l))
                 aux = np.expand_dims(np.expand_dims((patch_y).astype(np.float32), -1),1)
                 if ndim == 2: aux = np.expand_dims(aux,0)
-                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
                 patch_x = np.zeros(img_patch.shape, dtype=np.float32)
                 if ndim == 2:
                     patch_x[half_spatch[0], :] = img_patch[half_spatch[0], :]
@@ -1556,7 +1556,7 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
                 f = os.path.join(class_check_dir, "{}_x_line.tif".format(l))
                 aux = np.expand_dims(np.expand_dims((patch_x).astype(np.float32), -1),1)
                 if ndim == 2: aux = np.expand_dims(aux,0)
-                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
                 # Save vertical and horizontal line plots to debug 
                 plt.title("Line graph")
                 plt.plot(list(range(len(line_y))), line_y, color="red")
@@ -1716,22 +1716,22 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
         f = os.path.join(save_dir, "img.tif")
         aux = np.expand_dims(np.expand_dims((img).astype(np.float32), -1),1)
         if ndim == 2: aux = np.expand_dims(aux,0)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
         
         f = os.path.join(save_dir, "gradient.tif")
         aux = np.expand_dims(np.expand_dims((gradient).astype(np.float32), -1),1)
         if ndim == 2: aux = np.expand_dims(aux,0)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
 
         f = os.path.join(save_dir, "seed_map.tif")
         aux = np.expand_dims(np.expand_dims((seeds).astype(np.float32), -1),1)
         if ndim == 2: aux = np.expand_dims(aux,0)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
 
         f = os.path.join(save_dir, "watershed.tif")
         aux = np.expand_dims(np.expand_dims((segm).astype(np.float32), -1),1)
         if ndim == 2: aux = np.expand_dims(aux,0)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
 
     return segm
 

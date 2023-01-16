@@ -288,7 +288,7 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
             aux = np.expand_dims(np.expand_dims(X[i],0).transpose((0,3,1,2)), -1).astype(_dtype)
         else:
             aux = np.expand_dims(X[i].transpose((0,3,1,2)), -1).astype(_dtype)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
 
 
 def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discard=True, verbose=True):
@@ -344,12 +344,12 @@ def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discar
                 aux = np.expand_dims(np.expand_dims(X[i],0).transpose((0,3,1,2)), -1).astype(_dtype)
             else:
                 aux = np.expand_dims(X[i].transpose((0,3,1,2)), -1).astype(_dtype)
-            imsave(f1, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+            imsave(f1, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
             if Y.ndim == 4:
                 aux = np.expand_dims(np.expand_dims(Y[i],0).transpose((0,3,1,2)), -1).astype(_dtype)
             else:
                 aux = np.expand_dims(Y[i].transpose((0,3,1,2)), -1).astype(_dtype)
-            imsave(f2, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+            imsave(f2, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
 
 
 def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,

@@ -8,7 +8,6 @@ from sklearn.model_selection import train_test_split, StratifiedKFold
 from PIL import Image
 from utils.util import load_data_from_dir
 from data.pre_processing import normalize
-from skimage.io import imsave
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True, e_d_data=[],
     e_d_mask=[], e_d_data_dim=[], num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, y_upscaling=1,
