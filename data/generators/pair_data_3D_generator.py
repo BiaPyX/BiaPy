@@ -7,7 +7,7 @@ from skimage.io import imsave, imread
 from data.generators.pair_base_data_generator import PairBaseDataGenerator
 from data.pre_processing import denormalize
 
-class PairVoxelDataGenerator(PairBaseDataGenerator):
+class Pair3DImageDataGenerator(PairBaseDataGenerator):
     """Custom 3D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own
        `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
        transformations. This generator will yield an image and its corresponding mask.

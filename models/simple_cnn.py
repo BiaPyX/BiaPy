@@ -1,8 +1,8 @@
 from tensorflow.keras import Input, Model
-from tensorflow.keras.layers import Conv2D, Dropout, BatchNormalization, Flatten, Dense
+from tensorflow.keras.layers import Conv2D, Conv3D, Dropout, BatchNormalization, Flatten, Dense
 
 
-def simple_CNN(image_shape, n_classes=2):
+def simple_CNN(image_shape, ndim=2, n_classes=2):
     """Create simple CNN.
 
        Parameters
@@ -19,26 +19,27 @@ def simple_CNN(image_shape, n_classes=2):
            Model containing the simple CNN.
     """
 
+    conv = Conv2D if ndim == 2 else Conv3D
 
     #dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)
     #inputs = Input(dinamic_dim, name="input")
     inputs = Input(image_shape, name="input")
 
     # Block 1
-    x = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
+    x = conv(32, kernel_size=3, activation='relu', padding='same')(inputs)
     x = BatchNormalization()(x)
-    x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
+    x = conv(32, kernel_size=3, activation='relu', padding='same')(x)
     x = BatchNormalization()(x)
-    x = Conv2D(32, kernel_size=5, strides=2, padding='same', activation='relu')(x)
+    x = conv(32, kernel_size=5, strides=2, padding='same', activation='relu')(x)
     x = BatchNormalization()(x)
     x = Dropout(0.4)(x)
 
     # Block 2
-    x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
+    x = conv(64, kernel_size=3, activation='relu', padding='same')(x)
     x = BatchNormalization()(x)
-    x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
+    x = conv(64, kernel_size=3, activation='relu', padding='same')(x)
     x = BatchNormalization()(x)
-    x = Conv2D(64, kernel_size=5, strides=2, padding='same', activation='relu')(x)
+    x = conv(64, kernel_size=5, strides=2, padding='same', activation='relu')(x)
     x = BatchNormalization()(x)
     x = Dropout(0.4)(x)
 

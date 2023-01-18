@@ -1,7 +1,10 @@
 import math
+import os
 import numpy as np
+from skimage.io import imread
 from tqdm import tqdm
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold
+
 from utils.util import load_3d_images_from_dir
 
 
@@ -562,3 +565,194 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
     else:
         return merged_data
 
+
+def load_3d_data_classification(cfg, test=False):
+    """Load 3D data to train classification methods.
+
+       Parameters
+       ----------
+       test : bool, optional
+           To load test data instead of train/validation.
+
+       Returns
+       -------
+       X_data : 5D Numpy array
+           Train/test images. E.g. ``(num_of_images, z, y, x, channels)``.
+
+       Y_data : 1D Numpy array
+           Train/test images' classes. E.g. ``(num_of_images)``.
+
+       ids : List of str
+           Filenames loaded.
+       
+       class_names : List of str
+           Class names extracted from directory names.
+
+       X_val : 4D Numpy array, optional
+           Validation images. E.g. ``(num_of_images, z, y, x, channels)``.
+
+       Y_val : 1D Numpy array, optional
+           Validation images' classes. E.g. ``(num_of_images)``.
+    """
+
+    print("### LOAD ###")
+    if not test:
+        path = cfg.DATA.TRAIN.PATH
+    else:
+        path = cfg.DATA.TEST.PATH
+
+    all_ids = []
+    if not test:
+        if not cfg.DATA.VAL.CROSS_VAL:
+            X_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'X_train.npy')
+            Y_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'Y_train.npy')
+            X_val_npy_file = os.path.join(path, '../npy_data_for_classification', 'X_val.npy')
+            Y_val_npy_file = os.path.join(path, '../npy_data_for_classification', 'Y_val.npy')
+        else:
+            f_info = str(cfg.DATA.VAL.CROSS_VAL_FOLD)+'of'+str(cfg.DATA.VAL.CROSS_VAL_NFOLD)
+            X_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'X_train'+f_info+'.npy')
+            Y_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'Y_train'+f_info+'.npy')
+            X_val_npy_file = os.path.join(path, '../npy_data_for_classification', 'X_val'+f_info+'.npy')
+            Y_val_npy_file = os.path.join(path, '../npy_data_for_classification', 'Y_val'+f_info+'.npy')
+    else:
+        if not cfg.DATA.TEST.USE_VAL_AS_TEST:
+            X_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'X_test.npy')
+            Y_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'Y_test.npy')
+        else:
+            f_info = str(cfg.DATA.VAL.CROSS_VAL_FOLD)+'of'+str(cfg.DATA.VAL.CROSS_VAL_NFOLD)
+            X_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'X_val'+f_info+'.npy')
+            Y_data_npy_file = os.path.join(path, '../npy_data_for_classification', 'Y_val'+f_info+'.npy')
+
+    class_names = sorted(next(os.walk(path))[1])
+    if not os.path.exists(X_data_npy_file):
+        print("Seems to be the first run as no data is prepared. Creating .npy files: {}".format(X_data_npy_file))
+        if not test:
+            print("## TRAIN ##")
+        else:
+            print("## TEST ##")
+        X_data, Y_data = [], []
+        for c_num, folder in enumerate(class_names):
+            print("Analizing folder {}".format(os.path.join(path,folder)))
+            ids = sorted(next(os.walk(os.path.join(path,folder)))[2])
+            all_ids.append(ids)
+            print("Found {} samples".format(len(ids)))
+            class_X_data, class_Y_data = [], []
+            for i in tqdm(range(len(ids)), leave=False):
+                img = imread(os.path.join(path, folder, ids[i]))
+                img = np.squeeze(img)
+
+                if img.ndim < 3:
+                    raise ValueError("Read image seems to be 2D: {}. Path: {}".format(img.shape, os.path.join(data_dir, id_)))
+                        
+                if img.ndim == 3: 
+                    img = np.expand_dims(img, -1)
+                else:
+                    min_val = min(img.shape)
+                    channel_pos = img.shape.index(min_val)
+                    if channel_pos != 3 and img.shape[channel_pos] <= 4:
+                        new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
+                        img = img.transpose(new_pos)
+                img = np.expand_dims(img, 0)
+
+                if cfg.DATA.PATCH_SIZE[-1] != img.shape[-1]:
+                    raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                        "Please, check the channels of the images!".format(cfg.DATA.PATCH_SIZE[-1], img.shape[-1]))
+
+                class_X_data.append(img)
+                class_Y_data.append(np.expand_dims(np.array(c_num),0).astype(np.uint8))
+
+            class_X_data = np.concatenate(class_X_data, 0)
+            class_Y_data = np.concatenate(class_Y_data, 0)
+            X_data.append(class_X_data)
+            Y_data.append(class_Y_data)
+
+        # Fuse all data
+        X_data = np.concatenate(X_data, 0)
+        Y_data = np.concatenate(Y_data, 0)
+        Y_data = np.squeeze(Y_data)
+
+        os.makedirs(os.path.join(path, '../npy_data_for_classification'), exist_ok=True)
+        if not test:
+            print("## VAL ##")
+            X_val, Y_val = [], []
+            if cfg.DATA.VAL.FROM_TRAIN:
+                if cfg.DATA.VAL.CROSS_VAL: 
+                    skf = StratifiedKFold(n_splits=cfg.DATA.VAL.CROSS_VAL_NFOLD, shuffle=cfg.DATA.VAL.RANDOM,
+                        random_state=cfg.SYSTEM.SEED)
+                    f_num = 1
+                    for train_index, test_index in skf.split(X_data, Y_data):
+                        if cfg.DATA.VAL.CROSS_VAL_FOLD == f_num:
+                            X_data, X_val = X_data[train_index], X_data[test_index]
+                            Y_data, Y_val = Y_data[train_index], Y_data[test_index]
+                            break
+                        f_num+= 1
+                else:
+                    X_data, X_val, Y_data, Y_val = train_test_split(X_data, Y_data, test_size=cfg.DATA.VAL.SPLIT_TRAIN,
+                        shuffle=cfg.DATA.VAL.RANDOM, random_state=cfg.SYSTEM.SEED)
+            else:
+                path_val = cfg.DATA.VAL.PATH
+                class_names = sorted(next(os.walk(path_val))[1])
+                for c_num, folder in enumerate(class_names):
+                    print("Analizing folder {}".format(os.path.join(path_val, folder)))
+                    ids = sorted(next(os.walk(os.path.join(path_val,folder)))[2])
+                    print("Found {} samples".format(len(ids)))
+                    class_X_data, class_Y_data = [], []
+                    for i in tqdm(range(len(ids)), leave=False):
+                        img = imread(os.path.join(path_val, folder, ids[i]))
+                        img = np.squeeze(img)
+
+                        if img.ndim < 3:
+                            raise ValueError("Read image seems to be 2D: {}. Path: {}".format(img.shape, os.path.join(data_dir, id_)))
+                            
+                        if img.ndim == 3: 
+                            img = np.expand_dims(img, -1)
+                        else:
+                            min_val = min(img.shape)
+                            channel_pos = img.shape.index(min_val)
+                            if channel_pos != 3 and img.shape[channel_pos] <= 4:
+                                new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
+                                img = img.transpose(new_pos)
+                        img = np.expand_dims(img, 0)
+
+                        if cfg.DATA.PATCH_SIZE[-1] != img.shape[-1]:
+                            raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                                "Please, check the channels of the images!".format(cfg.DATA.PATCH_SIZE[-1], img.shape[-1]))
+                        
+                        class_X_data.append(img)
+                        class_Y_data.append(np.expand_dims(np.array(c_num),0).astype(np.uint8))
+
+                    class_X_data = np.concatenate(class_X_data, 0)
+                    class_Y_data = np.concatenate(class_Y_data, 0)
+                    X_val.append(class_X_data)
+                    Y_val.append(class_Y_data)
+
+                # Fuse all data
+                X_val = np.concatenate(X_val, 0)
+                Y_val = np.concatenate(Y_val, 0)
+                Y_val = np.squeeze(Y_val)
+
+            np.save(X_val_npy_file, X_val)
+            np.save(Y_val_npy_file, Y_val)
+
+        np.save(X_data_npy_file, X_data)
+        np.save(Y_data_npy_file, Y_data)
+    else:
+        X_data = np.load(X_data_npy_file)
+        Y_data = np.load(Y_data_npy_file)
+        if not test:
+            X_val = np.load(X_val_npy_file)
+            Y_val = np.load(Y_val_npy_file)
+
+        for c_num, folder in enumerate(class_names):
+            ids = sorted(next(os.walk(os.path.join(path, folder)))[2])
+            all_ids.append(ids)
+    
+    all_ids = np.concatenate(all_ids)
+    if not test:
+        print("*** Loaded train data shape is: {}".format(X_data.shape))
+        print("*** Loaded validation data shape is: {}".format(X_val.shape))
+        print("### END LOAD ###")
+        return X_data, Y_data, X_val, Y_val
+    else:
+        print("*** Loaded test data shape is: {}".format(X_data.shape))
+        return X_data, Y_data, all_ids, class_names

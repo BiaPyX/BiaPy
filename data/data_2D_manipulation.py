@@ -6,6 +6,7 @@ from tqdm import tqdm
 from skimage.io import imread
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from PIL import Image
+
 from utils.util import load_data_from_dir
 from data.pre_processing import normalize
 
@@ -735,7 +736,7 @@ def load_data_classification(cfg, test=False):
        Parameters
        ----------
        test : bool, optional
-           To load test data isntead of train/validation.
+           To load test data instead of train/validation.
 
        Returns
        -------
@@ -789,7 +790,10 @@ def load_data_classification(cfg, test=False):
     class_names = sorted(next(os.walk(path))[1])
     if not os.path.exists(X_data_npy_file):
         print("Seems to be the first run as no data is prepared. Creating .npy files: {}".format(X_data_npy_file))
-        print("## TRAIN ##")
+        if not test:
+            print("## TRAIN ##")
+        else:
+            print("## TEST ##")
         X_data, Y_data = [], []
         for c_num, folder in enumerate(class_names):
             print("Analizing folder {}".format(os.path.join(path,folder)))
@@ -803,7 +807,11 @@ def load_data_classification(cfg, test=False):
                     img = np.expand_dims(img, -1)
                 else:
                     if img.shape[0] <= 3: img = img.transpose((1,2,0))
-                img = np.expand_dims(img, 0).astype(np.uint8)
+                img = np.expand_dims(img, 0)
+
+                if cfg.DATA.PATCH_SIZE[-1] != img.shape[-1]:
+                    raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                        "Please, check the channels of the images!".format(cfg.DATA.PATCH_SIZE[-1], img.shape[-1]))
 
                 class_X_data.append(img)
                 class_Y_data.append(np.expand_dims(np.array(c_num),0).astype(np.uint8))
@@ -850,7 +858,11 @@ def load_data_classification(cfg, test=False):
                             img = np.expand_dims(img, -1)
                         else:
                             if img.shape[0] <= 3: img = img.transpose((1,2,0))
-                        img = np.expand_dims(img, 0).astype(np.uint8)
+                        img = np.expand_dims(img, 0)
+
+                        if cfg.DATA.PATCH_SIZE[-1] != img.shape[-1]:
+                            raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                                "Please, check the channels of the images!".format(cfg.DATA.PATCH_SIZE[-1], img.shape[-1]))
 
                         class_X_data.append(img)
                         class_Y_data.append(np.expand_dims(np.array(c_num),0).astype(np.uint8))

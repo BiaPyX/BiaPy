@@ -18,7 +18,7 @@ from data.generators.augmentors import *
 from data.pre_processing import normalize, norm_range01
 
 class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
-    """Custom 2D BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
+    """Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
        and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
        transformations. 
 
@@ -27,11 +27,11 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
        Parameters
        ----------
-       X : 4D Numpy array
-           Data. E.g. ``(num_of_images, y, x, channels)``.
+       X : 4D/5D Numpy array
+           Data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
-       Y : 4D Numpy array
-           Mask data. E.g. ``(num_of_images, y, x, 1)``.
+       Y : 4D/5D Numpy array
+           Mask data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
        batch_size : int, optional
            Size of the batches.
@@ -725,11 +725,6 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         self.random_crop_func = random_3D_crop_pair if self.ndim == 3 else random_crop_pair
         self.on_epoch_end()
         self.len = self.__len__() 
-
-    @abstractmethod
-    def get_transformed_samples(self, num_examples, save_to_dir=False, out_dir='aug', 
-        train=True, random_images=True, draw_grid=True):
-        NotImplementedError
 
     @abstractmethod
     def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, draw_grid, point_dict):

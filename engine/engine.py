@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from utils.util import check_masks, create_plots, load_data_from_dir, load_3d_images_from_dir
 from data.data_2D_manipulation import load_and_prepare_2D_train_data, load_data_classification
-from data.data_3D_manipulation import load_and_prepare_3D_data
+from data.data_3D_manipulation import load_and_prepare_3D_data, load_3d_data_classification
 from data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
 from models import build_model
 from engine import build_callbacks, prepare_optimizer
@@ -124,8 +124,9 @@ class Engine(object):
 
             # CLASSIFICATION
             else:
+                f_name = load_data_classification if cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
                 if cfg.DATA.TRAIN.IN_MEMORY:
-                    X_train, Y_train, X_val, Y_val = load_data_classification(cfg)
+                    X_train, Y_train, X_val, Y_val = f_name(cfg)
                 else:
                     X_train, Y_train = None, None
                     X_val, Y_val = None, None
@@ -152,7 +153,8 @@ class Engine(object):
                 else:
                     self.test_filenames = sorted(next(os.walk(self.original_test_path))[2])
             elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-                X_test, Y_test, self.test_filenames, self.class_names = load_data_classification(cfg, test=True)
+                f_name = load_data_classification if cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
+                X_test, Y_test, self.test_filenames, self.class_names = f_name(cfg, test=True)
 
 
         print("########################\n"
@@ -160,7 +162,7 @@ class Engine(object):
               "########################\n")
         if cfg.TRAIN.ENABLE:
             self.train_generator, self.val_generator = create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val)
-            if cfg.DATA.CHECK_GENERATORS:
+            if cfg.DATA.CHECK_GENERATORS and cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                 check_generator_consistence(
                     self.train_generator, cfg.PATHS.GEN_CHECKS+"_train", cfg.PATHS.GEN_MASK_CHECKS+"_train")
                 check_generator_consistence(
@@ -287,11 +289,16 @@ class Engine(object):
             print("Train time (s): {}".format(np.sum(self.callbacks[0].times)))
             print("Train loss: {}".format(np.min(self.results.history['loss'])))
             for i in range(len(self.metric)):
-                print("Train Foreground {}: {}".format(self.metric[i], np.max(self.results.history[self.metric[i]])))
+                if self.metric[i] == "IoU":
+                    print("Train Foreground {}: {}".format(self.metric[i], np.max(self.results.history[self.metric[i]])))
+                else:
+                    print("Train {}: {}".format(self.metric[i], np.max(self.results.history[self.metric[i]])))
             print("Validation loss: {}".format(np.min(self.results.history['val_loss'])))
             for i in range(len(self.metric)):
-                print("Validation Foreground {}: {}".format(self.metric[i], np.max(self.results.history['val_'+self.metric[i]])))
-
+                if self.metric[i] == "IoU":
+                    print("Validation Foreground {}: {}".format(self.metric[i], np.max(self.results.history['val_'+self.metric[i]])))
+                else:
+                    print("Validation {}: {}".format(self.metric[i], np.max(self.results.history['val_'+self.metric[i]])))
         workflow.print_stats(image_counter)
 
 

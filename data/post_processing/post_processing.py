@@ -1941,7 +1941,7 @@ def repare_large_blobs(img, size_th=10000):
     print("Reparing large instances (more than {} pixels) . . .".format(size_th))
     image3d = True if img.ndim == 3 else False
 
-    # Finds touching instances to a given instance
+    # Finds touching instances for a given instance
     def find_neigbors(img, label, neighbors=1):
         neigbors = []
         label_points = np.where((img==label)>0) 
@@ -1968,7 +1968,7 @@ def repare_large_blobs(img, size_th=10000):
         return neigbors
 
     props = regionprops_table(img, properties=('label', 'area', 'bbox'))
-    for k, l in tqdm(enumerate(props['label']), leave=False):
+    for k, l in tqdm(enumerate(props['label']), total=len(props['label']), leave=False):
         if props['area'][k] >= size_th:
             if image3d:
                 sz,fz,sy,fy,sx,fx = props['bbox-0'][k],props['bbox-3'][k],props['bbox-1'][k],props['bbox-4'][k],props['bbox-2'][k],props['bbox-5'][k]

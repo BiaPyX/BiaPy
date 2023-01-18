@@ -7,16 +7,16 @@ from PIL import Image
 from PIL.TiffTags import TAGS
 
 from data.pre_processing import normalize, norm_range01
-from data.generators.augmentors import center_crop_single, resize_2D_img
+from data.generators.augmentors import center_crop_single, resize_img
 
 
-class simple_single_data_generator(tf.keras.utils.Sequence):
+class test_single_data_generator(tf.keras.utils.Sequence):
     """Image data generator without data augmentation. Used only for test data.
 
        Parameters
        ----------
        X : Numpy 5D/4D array, optional
-           Data. E.g. ``(num_of_images, x, y, z, channels)`` or ``(num_of_images, x, y, channels)``.
+           Data. E.g. ``(num_of_images, z, y, x, channels)``  for ``3D`` or ``(num_of_images, y, x, channels)`` for ``2D``.
 
        d_path : Str, optional
            Path to load the data from.
@@ -24,8 +24,8 @@ class simple_single_data_generator(tf.keras.utils.Sequence):
        provide_Y: bool, optional
            Whether the ground truth has been provided or not.
 
-       Y : Numpy 5D/4D array, optional
-           Data mask. E.g. ``(num_of_images, x, y, z, channels)`` or ``(num_of_images, x, y, channels)``.
+       Y : Numpy 2D array, optional
+           Image classes. E.g. ``(num_of_images, class)``.
 
        dm_path : Str, optional
            Not used here.
@@ -55,15 +55,13 @@ class simple_single_data_generator(tf.keras.utils.Sequence):
            Whether to extract a
 
     """
-    def __init__(self, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, dims='2D', batch_size=1, seed=42,
-                 shuffle_each_epoch=False, instance_problem=False, normalizeY='as_mask', norm_custom_mean=None, 
+    def __init__(self, ndim, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, batch_size=1, seed=42,
+                 shuffle_each_epoch=False, instance_problem=False, norm_custom_mean=None, 
                  norm_custom_std=None, crop_center=False, resize_shape=None):
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
         if provide_Y and Y is None:
             raise ValueError("'Y' must be provided")
-        assert dims in ['2D', '3D']
-        assert normalizeY in ['as_image', 'none']
         if crop_center and resize_shape is None:
             raise ValueError("'resize_shape' need to be provided if 'crop_center' is enabled")
         
@@ -98,9 +96,8 @@ class simple_single_data_generator(tf.keras.utils.Sequence):
         self.seed = seed
         self.batch_size = batch_size
         self.total_batches_seen = 0
-        self.data_3d = True if dims == '3D' else False
+        self.ndim = ndim
         self.o_indexes = np.arange(self.len)
-        self.normalizeY = normalizeY
         
         # Check if a division is required
         self.X_norm = {}
@@ -137,7 +134,7 @@ class simple_single_data_generator(tf.keras.utils.Sequence):
             img_class = self.class_numbers[sample_class_dir]
             
         # Correct dimensions 
-        if self.data_3d:
+        if self.ndim == 3:
             if img.ndim == 3: 
                 img = np.expand_dims(img, -1)
             else:
@@ -196,7 +193,7 @@ class simple_single_data_generator(tf.keras.utils.Sequence):
             
             if self.crop_center and img.shape[:-1] != self.resize_shape[:-1]:
                 img = center_crop_single(img[0], self.resize_shape)
-                img = resize_2D_img(img, self.resize_shape)
+                img = resize_img(img, self.resize_shape[:-1])
                 img = np.expand_dims(img,0)
 
             if self.provide_Y: 

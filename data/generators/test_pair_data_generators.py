@@ -9,13 +9,13 @@ from PIL.TiffTags import TAGS
 from data.pre_processing import normalize, norm_range01
 
 
-class simple_pair_data_generator(tf.keras.utils.Sequence):
+class test_pair_data_generator(tf.keras.utils.Sequence):
     """Image data generator without data augmentation. Used only for test data.
 
        Parameters
        ----------
        X : Numpy 5D/4D array, optional
-           Data. E.g. ``(num_of_images, x, y, z, channels)`` or ``(num_of_images, x, y, channels)``.
+           Data. E.g. ``(num_of_images, z, y, x, channels)`` for ``3D`` or ``(num_of_images, y, x, channels)`` for ``2D``.
 
        d_path : Str, optional
            Path to load the data from.
@@ -24,7 +24,7 @@ class simple_pair_data_generator(tf.keras.utils.Sequence):
            Whether to return ground truth, using ``Y`` or loading from ``dm_path``.
 
        Y : Numpy 5D/4D array, optional
-           Data mask. E.g. ``(num_of_images, x, y, z, channels)`` or ``(num_of_images, x, y, channels)``.
+           Data mask. E.g. ``(num_of_images, z, y, x, channels)`` for ``3D`` or ``(num_of_images, y, x, channels)`` for ``2D``.
 
        dm_path : Str, optional
            Path to load the mask data from.
@@ -50,7 +50,7 @@ class simple_pair_data_generator(tf.keras.utils.Sequence):
        norm_custom_std : float, optional
            Std of the data used to normalize.
     """
-    def __init__(self, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, dims='2D', batch_size=1, seed=42,
+    def __init__(self, ndim, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, batch_size=1, seed=42,
                  shuffle_each_epoch=False, instance_problem=False, normalizeY='as_mask', norm_custom_mean=None, 
                  norm_custom_std=None):
 
@@ -59,7 +59,6 @@ class simple_pair_data_generator(tf.keras.utils.Sequence):
         if provide_Y:
             if Y is None and dm_path is None:
                 raise ValueError("One between 'Y' or 'dm_path' must be provided")
-        assert dims in ['2D', '3D']
         assert normalizeY in ['as_mask', 'as_image', 'none']
         
         self.X = X
@@ -74,7 +73,7 @@ class simple_pair_data_generator(tf.keras.utils.Sequence):
         self.seed = seed
         self.batch_size = batch_size
         self.total_batches_seen = 0
-        self.data_3d = True if dims == '3D' else False
+        self.ndim = ndim
         if X is None:
             self.len = len(self.data_path)
         else:
@@ -132,7 +131,7 @@ class simple_pair_data_generator(tf.keras.utils.Sequence):
                 mask = np.squeeze(mask)
 
         # Correct dimensions 
-        if self.data_3d:
+        if self.ndim == 3:
             if img.ndim == 3: 
                 img = np.expand_dims(img, -1)
             else:
@@ -147,7 +146,7 @@ class simple_pair_data_generator(tf.keras.utils.Sequence):
             else:
                 if img.shape[0] <= 3: img = img.transpose((1,2,0))
         if self.provide_Y:
-            if self.data_3d:
+            if self.ndim == 3:
                 if mask.ndim == 3: 
                     mask = np.expand_dims(mask, -1)
                 else:

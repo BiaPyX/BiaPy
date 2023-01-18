@@ -5,11 +5,12 @@ from tqdm import tqdm
 
 from utils.util import  save_tif
 from data.pre_processing import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif
-from data.generators.pair_data_2D_generator import PairImageDataGenerator
-from data.generators.single_data_2D_generator import SingleImageDataGenerator
-from data.generators.pair_data_3D_generator import PairVoxelDataGenerator
-from data.generators.simple_pair_data_generators import simple_pair_data_generator
-from data.generators.simple_single_data_generator import simple_single_data_generator
+from data.generators.pair_data_2D_generator import Pair2DImageDataGenerator
+from data.generators.pair_data_3D_generator import Pair3DImageDataGenerator
+from data.generators.single_data_2D_generator import Single2DImageDataGenerator
+from data.generators.single_data_3D_generator import Single3DImageDataGenerator
+from data.generators.test_pair_data_generators import test_pair_data_generator
+from data.generators.test_single_data_generator import test_single_data_generator
 
 
 def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
@@ -20,24 +21,26 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
        cfg : YACS CN object
            Configuration.
 
-       X_train : 4D Numpy array
-           Training data. E.g. ``(num_of_images, y, x, channels)``.
+       X_train : 4D/5D Numpy array
+           Training data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
-       Y_train : 4D Numpy array
-           Training data mask. E.g. ``(num_of_images, y, x, 1)``.
+       Y_train : 4D/5D Numpy array
+           Training data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
+           in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``.
 
-       X_val : 4D Numpy array
-           Validation data mask. E.g. ``(num_of_images, y, x, channels)``.
+       X_val : 4D/5D Numpy array
+           Validation data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
-       Y_val : 4D Numpy array
-           Validation data mask. E.g. ``(num_of_images, y, x, 1)``.
+       Y_val : 4D/5D Numpy array
+           Validation data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
+           in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``. 
 
        Returns
        -------
-       train_generator : PairImageDataGenerator (2D) or PairVoxelDataGenerator (3D)
+       train_generator : Pair2DImageDataGenerator/Single2DImageDataGenerator (2D) or Pair3DImageDataGenerator/Single3DImageDataGenerator (3D)
            Training data generator.
 
-       val_generator : PairImageDataGenerator (2D) or PairVoxelDataGenerator (3D)
+       val_generator : Pair2DImageDataGenerator/Single2DImageDataGenerator (2D) or Pair3DImageDataGenerator/Single3DImageDataGenerator (3D)
            Validation data generator.
     """
 
@@ -77,12 +80,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
         print("Train/Val normalization: using mean {} and std: {}".format(custom_mean, custom_std))
 
     if cfg.PROBLEM.NDIM == '2D':
-        if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-            f_name = SingleImageDataGenerator
-        else: 
-            f_name = PairImageDataGenerator 
+        f_name = Single2DImageDataGenerator if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else Pair2DImageDataGenerator
     else:
-        f_name = PairVoxelDataGenerator
+        f_name = Single3DImageDataGenerator if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else Pair3DImageDataGenerator
     
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
@@ -142,7 +142,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) 
             print("Changing patch size from {} to {} to use EfficientNetB0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
 
-        dic = dict(X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, n_classes=cfg.MODEL.N_CLASSES,
+        dic = dict(ndim=ndim, X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, n_classes=cfg.MODEL.N_CLASSES,
             batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED, shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_TRAIN_DATA_EACH_EPOCH,
             da=cfg.AUGMENTOR.ENABLE, in_memory=cfg.DATA.TRAIN.IN_MEMORY, da_prob=cfg.AUGMENTOR.DA_PROB,
             rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT, rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE,
@@ -179,7 +179,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             dic['n2v_neighborhood_radius'] = cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
         val_generator = f_name(**dic)
     else:
-        val_generator = f_name(X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, n_classes=cfg.MODEL.N_CLASSES, in_memory=cfg.DATA.VAL.IN_MEMORY,
+        val_generator = f_name(ndim=ndim, X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, n_classes=cfg.MODEL.N_CLASSES, in_memory=cfg.DATA.VAL.IN_MEMORY,
             batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED, shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, da=False,
             resize_shape=r_shape, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
 
@@ -243,14 +243,15 @@ def create_test_augmentor(cfg, X_test, Y_test):
            Configuration.
 
        X_test : 4D Numpy array
-           Test data. E.g. ``(num_of_images, y, x, channels)``.
+           Test data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
        Y_test : 4D Numpy array
-           Test data mask. E.g. ``(num_of_images, y, x, 1)``.
+           Test data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
+           in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``.
 
        Returns
        -------
-       test_generator : simple_pair_data_generator
+       test_generator : test_pair_data_generator
            Test data generator.
     """
     custom_mean, custom_std = None, None
@@ -276,19 +277,18 @@ def create_test_augmentor(cfg, X_test, Y_test):
     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
         normalizeY = 'as_image'
         provide_Y = True
-    elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-        normalizeY = 'as_image'
-        
-    dic = dict(X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=provide_Y, Y=Y_test,
-        dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, dims=cfg.PROBLEM.NDIM, seed=cfg.SYSTEM.SEED,
-        instance_problem=instance_problem, normalizeY=normalizeY, norm_custom_mean=custom_mean, 
+    
+    ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
+    dic = dict(ndim=ndim, X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=provide_Y, Y=Y_test,
+        dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, seed=cfg.SYSTEM.SEED,
+        instance_problem=instance_problem, norm_custom_mean=custom_mean, 
         norm_custom_std=custom_std)        
         
     if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-        gen_name = simple_pair_data_generator
+        gen_name = test_pair_data_generator
+        dic['normalizeY'] = normalizeY 
     else:
-        gen_name = simple_single_data_generator 
-        
+        gen_name = test_single_data_generator 
         r_shape = cfg.DATA.PATCH_SIZE
         if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' and cfg.DATA.PATCH_SIZE[:-1] != (224,224):
             r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) 
@@ -304,7 +304,7 @@ def check_generator_consistence(gen, data_out_dir, mask_out_dir, filenames=None)
 
        Parameters
        ----------
-       gen : PairImageDataGenerator/SingleImageDataGenerator (2D) or PairVoxelDataGenerator (3D)
+       gen : Pair2DImageDataGenerator/Single2DImageDataGenerator (2D) or Pair3DImageDataGenerator/Single3DImageDataGenerator (3D)
            Generator to extract the data from.
 
        data_out_dir : str

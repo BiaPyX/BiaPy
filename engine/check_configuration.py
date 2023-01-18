@@ -87,7 +87,7 @@ def check_configuration(cfg):
     if not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.FULL_IMG:
         raise ValueError("One between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.FULL_IMG' need to be True")
 
-    if cfg.PROBLEM.NDIM == '3D' and not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.MERGE_PATCHES:
+    if cfg.PROBLEM.NDIM == '3D' and not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.MERGE_PATCHES and cfg.PROBLEM.TYPE != "CLASSIFICATION":
         raise ValueError("One between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.MERGE_PATCHES' need to be True when 'PROBLEM.NDIM'=='3D'")
     
     if cfg.PROBLEM.NDIM == '3D' and cfg.TEST.STATS.FULL_IMG:
@@ -164,11 +164,6 @@ def check_configuration(cfg):
         if not cfg.DATA.TRAIN.IN_MEMORY or not cfg.DATA.VAL.IN_MEMORY:
             raise NotImplementedError
             # Neither cfg.DATA.EXTRACT_RANDOM_PATCH:
-
-    #### Classification ####
-    elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-        if cfg.PROBLEM.NDIM == '3D':
-            raise NotImplementedError
 
     ### Pre-processing ###
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
@@ -257,7 +252,7 @@ def check_configuration(cfg):
     ### Model ###
     assert cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'tiramisu', 'mnet',
                                       'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr']
-    if cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet'] and cfg.PROBLEM.NDIM == '3D':
+    if cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet'] and cfg.PROBLEM.NDIM == '3D' and cfg.PROBLEM.TYPE != "CLASSIFICATION":
         raise ValueError("For 3D these models are available: {}".format(['unet', 'resunet', 'seunet', 'attention_unet']))
     if cfg.MODEL.ARCHITECTURE == "unetr":
         if cfg.MODEL.UNETR_EMBED_DIM != cfg.MODEL.UNETR_MLP_HIDDEN_UNITS[1]:

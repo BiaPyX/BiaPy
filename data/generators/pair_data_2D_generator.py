@@ -6,7 +6,7 @@ from skimage.io import imsave
 from data.generators.pair_base_data_generator import PairBaseDataGenerator
 from data.pre_processing import denormalize
 
-class PairImageDataGenerator(PairBaseDataGenerator):
+class Pair2DImageDataGenerator(PairBaseDataGenerator):
     """Custom 2D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
        and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
        transformations. This generator will yield an image and its corresponding mask.
