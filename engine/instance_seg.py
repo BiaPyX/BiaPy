@@ -102,14 +102,18 @@ class Instance_Segmentation(Base_Workflow):
         if self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1:
             w_pred, labels, npixels, areas, circularities, diameters, comment = remove_instance_by_circularity_central_slice(w_pred, self.cfg.DATA.TEST.RESOLUTION, 
                 circularity_th=self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY)
-            # Save stats
+
+            # Save all instance stats
             size_measure = 'area' if w_pred.ndim == 2 else 'volume'
-            df = pd.DataFrame(zip(labels, npixels, areas, circularities, diameters, comment), 
+            df = pd.DataFrame(zip(np.array(labels, dtype=np.uint64), npixels, areas, circularities, diameters, comment),  
                 columns=['label','npixels', size_measure, 'circularity', 'diameter', 'comment'])
             df = df.sort_values(by=['label'])   
-            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, os.path.splitext(filenames[0])[0]+'_stats.csv'))
+            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, os.path.splitext(filenames[0])[0]+'_full_stats.csv'), index=False)
+            # Save only remain instances stats
+            df = df[df["comment"].str.contains("Strange")==False] 
+            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, os.path.splitext(filenames[0])[0]+'_filtered_stats.csv'), index=False)
             del df
-            
+
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             w_pred = voronoi_on_mask_2(np.expand_dims(w_pred,0), np.expand_dims(pred,0),
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI, filenames, verbose=self.cfg.TEST.VERBOSE)[0]
