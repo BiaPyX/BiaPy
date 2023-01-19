@@ -16,7 +16,7 @@ DATA:
         PATH: /path/to/data
     TEST:                                                                                                               
         IN_MEMORY: False
-        LOAD_GT: True
+        LOAD_GT: False
         PATH: /path/to/data
 
 AUGMENTOR:

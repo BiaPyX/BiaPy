@@ -31,6 +31,8 @@ def build_model(cfg, job_identifier):
     names = [x for x in mdl.__dict__ if not x.startswith("_")]
     globals().update({k: getattr(mdl, k) for k in names})
 
+    ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
+
     # Model building
     if cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'seunet', 'attention_unet']:
         args = dict(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION, feature_maps=cfg.MODEL.FEATURE_MAPS,
@@ -57,7 +59,7 @@ def build_model(cfg, job_identifier):
         model = f_name(**args)
     else:
         if cfg.MODEL.ARCHITECTURE == 'simple_cnn':
-            model = simple_CNN(image_shape=cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
+            model = simple_CNN(image_shape=cfg.DATA.PATCH_SIZE, ndim=ndim, n_classes=cfg.MODEL.N_CLASSES)
         elif cfg.MODEL.ARCHITECTURE == 'EfficientNetB0':
             shape = (224, 224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.DATA.PATCH_SIZE[:-1] != (224, 224) else cfg.DATA.PATCH_SIZE
             model = efficientnetb0(shape, n_classes=cfg.MODEL.N_CLASSES)
