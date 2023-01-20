@@ -22,11 +22,11 @@ from skimage.morphology import disk, ball, remove_small_objects, dilation, erosi
 from skimage.segmentation import watershed
 from skimage.filters import rank, threshold_otsu
 from skimage.measure import label, regionprops_table
-from skimage.io import imsave, imread
+from skimage.io import imread
 from skimage.exposure import equalize_adapthist
 
 from engine.metrics import jaccard_index_numpy
-from utils.util import pad_and_reflect
+from utils.util import pad_and_reflect, save_tif
 from data.pre_processing import normalize
 from data.data_3D_manipulation import crop_3D_data_with_overlap
 from data.pre_processing import reduce_dtype
@@ -356,16 +356,9 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         segm = segm.astype(np.uint32)
 
     if save_dir is not None:
-        os.makedirs(save_dir, exist_ok=True)
-
-        f = os.path.join(save_dir, "seed_map.tif")
-        aux = np.expand_dims(np.expand_dims((seed_map).astype(segm.dtype), -1),1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
-
+        save_tif(np.expand_dims(np.expand_dims(seed_map,-1),0).astype(segm.dtype), save_dir, ["seed_map.tif"], verbose=False)
         if channels in ["BC", "BCM", "BCD", "BP"]:
-            f = os.path.join(save_dir, "foreground.tif")
-            aux = np.expand_dims(np.expand_dims((foreground).astype(np.uint8), -1),1)
-            imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+            save_tif(np.expand_dims(np.expand_dims(foreground,-1),0).astype(np.uint8), save_dir, ["foreground.tif"], verbose=False)
     return segm
 
 
@@ -1212,12 +1205,7 @@ def voronoi_on_mask(data, mask, save_dir, filenames, th=0.3, thres_small=128, ve
             _data[i,z,x,y] = tree.query(pos_not_labelled_points[j])[1]
 
         # Save image
-        if filenames is None:
-            f = os.path.join(save_dir, str(i).zfill(d)+'.tif')
-        else:
-            f = os.path.join(save_dir, os.path.splitext(filenames[i])[0]+'.tif')
-        aux = np.expand_dims(np.expand_dims(_data[i],-1),1).astype(np.float32)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+        save_tif(np.expand_dims(np.expand_dims(_data[i],-1),0).astype(np.float32), save_dir, [f], verbose=False)
 
     return _data
 
@@ -1315,10 +1303,8 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
         voronoiCyst[idsToFill[nId][0], idsToFill[nId][1], idsToFill[nId][2]] = labelsPerimIds[idSeedMin]
 
     # Save image
-    f = os.path.join(save_dir, ' '.join(filenames[0].split('.')[:-1])+'.tif')
-    voronoiCyst = np.reshape(voronoiCyst, (1, mask_shape[1], mask_shape[2], mask_shape[3]))
-    aux = np.reshape(voronoiCyst, (mask_shape[1], 1, mask_shape[2], mask_shape[3], 1))
-    imsave(f, aux.astype(np.uint16), imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+    voronoiCyst = np.expand_dims(np.expand_dims(voronoiCyst,-1),0).astype(np.uint16)
+    save_tif(voronoiCyst, save_dir, [' '.join(filenames[0].split('.')[:-1])+'.tif'], verbose=False)
 
     return voronoiCyst
 
@@ -1502,7 +1488,6 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
             half_spatch = [x//2 for x in donuts_patch]
 
             class_check_dir = os.path.join(save_dir, "class_{}_check".format(dclass))
-            os.makedirs(class_check_dir, exist_ok=True)
 
             for i in tqdm(range(len(class_coords)), leave=False):
                 c = class_coords[i] 
@@ -1533,10 +1518,8 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
                 seed_patch = (seed_patch == l)*l
                 fillable_patch = (fillable_patch == 0)
 
-                f = os.path.join(class_check_dir, "{}_patch.tif".format(l))
-                aux = np.expand_dims(np.expand_dims((img_patch).astype(np.float32), -1),1)
-                if ndim == 2: aux = np.expand_dims(aux,0)
-                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+                aux = np.expand_dims(np.expand_dims((img_patch).astype(np.float32), -1),0)
+                save_tif(aux, class_check_dir, ["{}_patch.tif".format(l)], verbose=False)
 
                 # Save the verticial and horizontal lines in the patch to debug 
                 patch_y = np.zeros(img_patch.shape, dtype=np.float32)
@@ -1544,19 +1527,17 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
                     patch_y[:, half_spatch[1]] = img_patch[:, half_spatch[1]]
                 else:
                     patch_y[half_spatch[0],:, half_spatch[2]] = img_patch[half_spatch[0],:, half_spatch[2]]
-                f = os.path.join(class_check_dir, "{}_y_line.tif".format(l))
-                aux = np.expand_dims(np.expand_dims((patch_y).astype(np.float32), -1),1)
-                if ndim == 2: aux = np.expand_dims(aux,0)
-                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+
+                aux = np.expand_dims(np.expand_dims((patch_y).astype(np.float32), -1),0)
+                save_tif(aux, class_check_dir, ["{}_y_line.tif".format(l)], verbose=False)
+
                 patch_x = np.zeros(img_patch.shape, dtype=np.float32)
                 if ndim == 2:
                     patch_x[half_spatch[0], :] = img_patch[half_spatch[0], :]
                 else:
                     patch_x[half_spatch[0], half_spatch[1], :] = img_patch[half_spatch[0], half_spatch[1], :]
-                f = os.path.join(class_check_dir, "{}_x_line.tif".format(l))
-                aux = np.expand_dims(np.expand_dims((patch_x).astype(np.float32), -1),1)
-                if ndim == 2: aux = np.expand_dims(aux,0)
-                imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+                aux = np.expand_dims(np.expand_dims((patch_x).astype(np.float32), -1),0)
+                save_tif(aux, class_check_dir, ["{}_x_line.tif".format(l)], verbose=False)
                 # Save vertical and horizontal line plots to debug 
                 plt.title("Line graph")
                 plt.plot(list(range(len(line_y))), line_y, color="red")
@@ -1713,25 +1694,17 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
 
-        f = os.path.join(save_dir, "img.tif")
-        aux = np.expand_dims(np.expand_dims((img).astype(np.float32), -1),1)
-        if ndim == 2: aux = np.expand_dims(aux,0)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
-        
-        f = os.path.join(save_dir, "gradient.tif")
-        aux = np.expand_dims(np.expand_dims((gradient).astype(np.float32), -1),1)
-        if ndim == 2: aux = np.expand_dims(aux,0)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+        aux = np.expand_dims(np.expand_dims((img).astype(np.float32), -1),0)
+        save_tif(aux, save_dir, ["img.tif"], verbose=False)
 
-        f = os.path.join(save_dir, "seed_map.tif")
-        aux = np.expand_dims(np.expand_dims((seeds).astype(np.float32), -1),1)
-        if ndim == 2: aux = np.expand_dims(aux,0)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+        aux = np.expand_dims(np.expand_dims((gradient).astype(np.float32), -1),0)
+        save_tif(aux, save_dir, ["gradient.tif"], verbose=False)
 
-        f = os.path.join(save_dir, "watershed.tif")
-        aux = np.expand_dims(np.expand_dims((segm).astype(np.float32), -1),1)
-        if ndim == 2: aux = np.expand_dims(aux,0)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+        aux = np.expand_dims(np.expand_dims((seeds).astype(np.float32), -1),0)
+        save_tif(aux, save_dir, ["seed_map.tif"], verbose=False)
+
+        aux = np.expand_dims(np.expand_dims((segm).astype(np.float32), -1),0)
+        save_tif(aux, save_dir, ["watershed.tif"], verbose=False)
 
     return segm
 

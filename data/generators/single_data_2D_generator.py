@@ -1,7 +1,7 @@
 import numpy as np
 import os
-from skimage.io import imsave
 
+from utils.util import save_tif
 from data.generators.single_base_data_generator import SingleBaseDataGenerator
 
 class Single2DImageDataGenerator(SingleBaseDataGenerator):
@@ -24,15 +24,9 @@ class Single2DImageDataGenerator(SingleBaseDataGenerator):
         return img 
 
     def save_aug_samples(self, img, orig_image, i, pos, out_dir, draw_grid):
-        if draw_grid:
-            self.draw_grid(orig_image['o_x'])
-            
-        os.makedirs(out_dir, exist_ok=True)
-        f = os.path.join(out_dir,str(i)+"_"+str(pos)+'_orig_x'+self.trans_made+".tif")
-        aux = np.expand_dims(np.expand_dims(orig_image['o_x'].transpose((2,0,1)), -1), 0).astype(np.float32)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
-
+        if draw_grid: self.draw_grid(orig_images['o_x'])
+        aux = np.expand_dims(orig_image['o_x'], 0).astype(np.float32)
+        save_tif(aux, out_dir, [str(i)+"_"+str(pos)+'_orig_x'+self.trans_made+".tif"], verbose=False)
         # Save transformed images
-        f = os.path.join(out_dir,str(i)+"_"+str(pos)+'_x'+self.trans_made+".tif")
-        aux = np.expand_dims(np.expand_dims(img.transpose((2,0,1)), -1), 0).astype(np.float32)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+        aux = np.expand_dims(img, 0).astype(np.float32)
+        save_tif(aux, out_dir, [str(i)+"_"+str(pos)+'_x'+self.trans_made+".tif"], verbose=False)

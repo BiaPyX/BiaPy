@@ -5,9 +5,10 @@ import os
 import cv2
 from tqdm import tqdm
 import imgaug as ia
-from skimage.io import imsave, imread
+from skimage.io import imread
 from imgaug import augmenters as iaa
 
+from utils.util import save_tif
 from data.generators.single_base_data_generator import SingleBaseDataGenerator
 from data.pre_processing import denormalize
 
@@ -67,13 +68,10 @@ class Single3DImageDataGenerator(SingleBaseDataGenerator):
             img = denormalize(img, self.X_norm['mean'], self.X_norm['std'])
             orig_images['o_x'] = denormalize(orig_images['o_x'], self.X_norm['mean'], self.X_norm['std'])
 
-        os.makedirs(out_dir, exist_ok=True)
         # Original image
-        f = os.path.join(out_dir, str(i)+"_orig_x_"+str(pos)+"_"+self.trans_made+'.tiff')
         if draw_grid: self.draw_grid(orig_images['o_x'])
-        aux = np.expand_dims((np.transpose(orig_images['o_x'], (0,3,1,2))).astype(np.float32), -1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+        aux = np.expand_dims(orig_images['o_x'], 0).astype(np.float32)
+        save_tif(aux, out_dir, [str(i)+"_orig_x_"+str(pos)+"_"+self.trans_made+'.tif'], verbose=False)
         # Transformed
-        f = os.path.join(out_dir, str(i)+"_x_aug_"+str(pos)+"_"+self.trans_made+'.tiff')
-        aux = np.expand_dims((np.transpose(img, (0,3,1,2))).astype(np.float32), -1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+        aux = np.expand_dims(img, 0).astype(np.float32)
+        save_tif(aux, out_dir, [str(i)+"_x_aug_"+str(pos)+"_"+self.trans_made+'.tif'], verbose=False)

@@ -2,8 +2,9 @@ import numpy as np
 import random
 import os
 from PIL import Image
-from skimage.io import imsave, imread
+from skimage.io import imread
 
+from utils.util import save_tif
 from data.generators.pair_base_data_generator import PairBaseDataGenerator
 from data.pre_processing import denormalize
 
@@ -99,24 +100,22 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
                 orig_images['o_y2'] = orig_images['o_y2']*255
                 mask = mask*255
 
-        os.makedirs(out_dir, exist_ok=True)
         # Original image/mask
-        f = os.path.join(out_dir, str(i)+"_orig_x_"+str(pos)+"_"+self.trans_made+'.tiff')
         if draw_grid: self.draw_grid(orig_images['o_x'])
-        aux = np.expand_dims((np.transpose(orig_images['o_x'], (0,3,1,2))).astype(np.float32), -1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
-        f = os.path.join(out_dir, str(i)+"_orig_y_"+str(pos)+"_"+self.trans_made+'.tiff')
+        aux = np.expand_dims(orig_images['o_x'],0).astype(np.float32)
+        save_tif(aux, out_dir, [str(i)+"_orig_x_"+str(pos)+"_"+self.trans_made+'.tif'], verbose=False)
+
         if draw_grid: self.draw_grid(orig_images['o_y'])
-        aux = np.expand_dims((np.transpose(orig_images['o_y'], (0,3,1,2))).astype(np.float32), -1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+        aux = np.expand_dims(orig_images['o_y'],0).astype(np.float32)
+        save_tif(aux, out_dir, [str(i)+"_orig_y_"+str(pos)+"_"+self.trans_made+'.tif'], verbose=False)
+
         # Transformed
-        f = os.path.join(out_dir, str(i)+"_x_aug_"+str(pos)+"_"+self.trans_made+'.tiff')
-        aux = np.expand_dims((np.transpose(img, (0,3,1,2))).astype(np.float32), -1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+        aux = np.expand_dims(img,0).astype(np.float32)
+        save_tif(aux, out_dir, [str(i)+"_x_aug_"+str(pos)+"_"+self.trans_made+'.tif'], verbose=False)
+
         # Mask
-        f = os.path.join(out_dir, str(i)+"_y_aug_"+str(pos)+"_"+self.trans_made+'.tiff')
-        aux = np.expand_dims((np.transpose(mask, (0,3,1,2))).astype(np.float32), -1)
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+        aux = np.expand_dims(mask,0).astype(np.float32)
+        save_tif(aux, out_dir, [str(i)+"_y_aug_"+str(pos)+"_"+self.trans_made+'.tif'], verbose=False)
 
         # Save the original images with a red point and a blue square that represents the point selected with
         # the probability map and the random volume extracted from the original data
@@ -164,11 +163,10 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
                     aux[s] = im
                     auxm[s] = m
 
-            aux = np.expand_dims((np.transpose(aux, (0,3,1,2))).astype(np.float32), -1)
-            f = os.path.join(out_dir, "extract_example_"+str(pos)+"_mark_x_"+self.trans_made+'.tiff')
-            imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
-            auxm = np.expand_dims((np.transpose(auxm, (0,3,1,2))).astype(np.float32), -1)
-            f = os.path.join(out_dir, "extract_example_"+str(pos)+"_mark_y_"+self.trans_made+'.tiff')
-            imsave(f, auxm, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+            aux = np.expand_dims(aux,0).astype(np.float32)
+            save_tif(aux, out_dir, ["extract_example_"+str(pos)+"_mark_x_"+self.trans_made+'.tif'], verbose=False)
+
+            auxm = np.expand_dims(auxm,0).astype(np.float32)
+            save_tif(auxm, out_dir, ["extract_example_"+str(pos)+"_mark_y_"+self.trans_made+'.tif'], verbose=False)
 
 
