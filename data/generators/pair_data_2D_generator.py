@@ -41,10 +41,10 @@ class Pair2DImageDataGenerator(PairBaseDataGenerator):
             self.draw_grid(orig_images['o_x'])
             self.draw_grid(orig_images['o_y'])
         
-        aux = np.expand_dims(orig_image['o_x'], 0).astype(np.float32)
+        aux = np.expand_dims(orig_images['o_x'], 0).astype(np.float32)
         save_tif(aux, out_dir, [str(i)+"_"+str(pos)+'_orig_x'+self.trans_made+".tif"], verbose=False)
 
-        aux = np.expand_dims(orig_image['o_y'], 0).astype(np.float32)
+        aux = np.expand_dims(orig_images['o_y'], 0).astype(np.float32)
         save_tif(aux, out_dir, [str(i)+"_"+str(pos)+'_orig_y'+self.trans_made+".tif"], verbose=False)
  
         # Save transformed images
