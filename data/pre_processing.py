@@ -58,7 +58,7 @@ def create_instance_channels(cfg, data_type='train'):
 
     # Save original X data with the labels 
     for i in range(min(3,len(X))):
-        if isinstance(X_test, list):
+        if isinstance(X, list):
             save_tif(X[i], getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), filenames=['vol'+str(i)+".tif"], verbose=False)
         else:
             save_tif(np.expand_dims(X[i],0), getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), filenames=['vol'+str(i)+".tif"], verbose=False)
