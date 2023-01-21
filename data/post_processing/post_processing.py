@@ -1950,7 +1950,7 @@ def repare_large_blobs(img, size_th=10000):
                 sy,fy,sx,fx = props['bbox-0'][k],props['bbox-2'][k],props['bbox-1'][k],props['bbox-3'][k]
                 patch = img[sy:fy,sx:fx].copy()
 
-            inst_patches = np.unique(patch)
+            inst_patches, inst_pixels = np.unique(patch, return_counts=True)
             if len(inst_patches) > 2:
                 neigbors = find_neigbors(patch, l)
 
@@ -1966,7 +1966,12 @@ def repare_large_blobs(img, size_th=10000):
                         neig_sx, neig_fx= props['bbox-2'][ind],props['bbox-5'][ind]
 
                         if neig_sz < sz or neig_fz > fz or neig_sy < sy or neig_fy > fy or neig_sx < sx or neig_fx > fx: 
-                            contained_in_large_blob = False
+                            neigbor_ind_in_patch = list(inst_patches).index(neigbors[i])
+                            pixels_in_patch = inst_pixels[neigbor_ind_in_patch]
+                            # pixels outside the patch of that neighbor are greater than 30% means that probably it will 
+                            # represent another blob so do not merge 
+                            if (props['area'][ind][0]-pixels_in_patch)/props['area'][ind][0]>0.30:
+                                contained_in_large_blob = False
                     else:
                         neig_sy, neig_fy= props['bbox-0'][ind],props['bbox-2'][ind]
                         neig_sx, neig_fx= props['bbox-1'][ind],props['bbox-3'][ind]
