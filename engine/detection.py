@@ -13,7 +13,7 @@ from engine.metrics import detection_metrics
 from engine.base_workflow import Base_Workflow
 
 class Detection(Base_Workflow):
-    def __init__(self, cfg, model, post_processing=False):
+    def __init__(self, cfg, model, post_processing={}):
         super().__init__(cfg, model, post_processing)
 
         self.cell_count_file = os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, 'cell_counter.csv')
@@ -191,7 +191,7 @@ class Detection(Base_Workflow):
                 self.stats['d_recall'] = self.stats['d_recall'] / image_counter
                 self.stats['d_f1'] = self.stats['d_f1'] / image_counter
 
-    def after_merge_patches(self, pred, Y, filenames):
+    def after_merge_patches(self, pred, Y, filenames, f_numbers):
         self.detection_process(pred, Y, filenames, ['d_precision_per_crop', 'd_recall_per_crop', 'd_f1_per_crop'])
 
     def after_full_image(self, pred, Y, filenames):
@@ -202,7 +202,9 @@ class Detection(Base_Workflow):
 
     def print_stats(self, image_counter):
         super().print_stats(image_counter)
+        super().print_post_processing_stats()
 
+        print("Detection specific metrics:")
         if self.cfg.DATA.TEST.LOAD_GT:
             if self.cfg.TEST.STATS.PER_PATCH:
                 print("Detection - Test Precision (merge patches): {}".format(self.stats['d_precision_per_crop']))
@@ -212,9 +214,6 @@ class Detection(Base_Workflow):
                 print("Detection - Test Precision (per image): {}".format(self.stats['d_precision']))
                 print("Detection - Test Recall (per image): {}".format(self.stats['d_recall']))
                 print("Detection - Test F1 (per image): {}".format(self.stats['d_f1']))
-
-        super().print_post_processing_stats()
-
 
 def prepare_detection_data(cfg):
     print("############################\n"

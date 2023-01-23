@@ -13,11 +13,11 @@ from data.pre_processing import create_ssl_source_data_masks, denormalize
 
 
 class Self_supervised(Base_Workflow):
-    def __init__(self, cfg, model, post_processing=False):
+    def __init__(self, cfg, model, post_processing={}):
         super().__init__(cfg, model, post_processing)
         self.stats['psnr_per_image'] = 0
 
-    def process_sample(self, X, Y, filenames, norm): 
+    def process_sample(self, X, Y, filenames, f_numbers, norm): 
         original_data_shape = X.shape
     
         # Crop if necessary
@@ -93,7 +93,7 @@ class Self_supervised(Base_Workflow):
         psnr_per_image = PSNR(pred, Y)
         self.stats['psnr_per_image'] += psnr_per_image
 
-    def after_merge_patches(self, pred, Y, filenames):
+    def after_merge_patches(self, pred, Y, filenames, f_numbers):
         pass
 
     def after_full_image(self, pred, Y, filenames):

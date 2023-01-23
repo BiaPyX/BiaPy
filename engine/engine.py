@@ -25,7 +25,10 @@ class Engine(object):
         self.original_test_path = None
         self.original_test_mask_path = None
         self.test_mask_filenames = None
-        
+        self.post_processing = {}
+        self.post_processing['per_image'] = False
+        self.post_processing['all_images'] = False
+
         # Save paths in case we need them in a future
         self.orig_train_path = cfg.DATA.TRAIN.PATH
         self.orig_train_mask_path = cfg.DATA.TRAIN.MASK_PATH
@@ -206,28 +209,39 @@ class Engine(object):
         self.model.load_weights(self.cfg.PATHS.CHECKPOINT_FILE)
 
         image_counter = 0
-        if self.cfg.TEST.POST_PROCESSING.BLENDING or self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or \
-           self.cfg.TEST.POST_PROCESSING.Z_FILTERING or self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK\
-           or self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY:
-            post_processing = True
-        else:
-            post_processing = False
-
+        if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and self.cfg.PROBLEM.NDIM == "2D":
+            if self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or self.cfg.TEST.POST_PROCESSING.Z_FILTERING:
+                self.post_processing['all_images'] = True
+        elif self.cfg.PROBLEM.NDIM == "3D":
+            if self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or self.cfg.TEST.POST_PROCESSING.Z_FILTERING:
+                self.post_processing['per_image'] = True
+                
         # Initialize the workflow
         if self.cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
-            workflow = Semantic_Segmentation(self.cfg, self.model, post_processing)
+            workflow = Semantic_Segmentation(self.cfg, self.model, self.post_processing)
         elif self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-            workflow = Instance_Segmentation(self.cfg, self.model, post_processing, self.original_test_mask_path)
+            # Specific instance segmentation post-processing
+            if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK or self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY or\
+                self.cfg.PROBLEM.INSTANCE_SEG.REPARE_LARGE_BLOBS_SIZE:
+                self.post_processing['instance_post'] = True
+            else:
+                self.post_processing['instance_post'] = False
+            workflow = Instance_Segmentation(self.cfg, self.model, self.post_processing, self.original_test_mask_path)
         elif self.cfg.PROBLEM.TYPE == 'DETECTION':
-            workflow = Detection(self.cfg, self.model, post_processing)
+            # Specific detection post-processing
+            if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED or self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+                self.post_processing['detection_post'] = True
+            else:
+                self.post_processing['detection_post'] = False
+            workflow = Detection(self.cfg, self.model, self.post_processing)
         elif self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-            workflow = Classification(self.cfg, self.model, self.class_names, post_processing)
+            workflow = Classification(self.cfg, self.model, self.class_names, self.post_processing)
         elif self.cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-            workflow = Super_resolution(self.cfg, self.model, post_processing)
+            workflow = Super_resolution(self.cfg, self.model, self.post_processing)
         elif self.cfg.PROBLEM.TYPE == 'DENOISING':
-            workflow = Denoising(self.cfg, self.model, post_processing)
+            workflow = Denoising(self.cfg, self.model, self.post_processing)
         elif self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
-            workflow = Self_supervised(self.cfg, self.model, post_processing)
+            workflow = Self_supervised(self.cfg, self.model, self.post_processing)
 
         print("###############\n"
               "#  INFERENCE  #\n"
@@ -272,7 +286,8 @@ class Engine(object):
                     del X
 
                 # Process each image separately
-                workflow.process_sample(_X, _Y, self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], norm=(X_norm, Y_norm))
+                workflow.process_sample(_X, _Y, self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], f_numbers=list(range((i*l_X)+j,(i*l_X)+j+1)), 
+                    norm=(X_norm, Y_norm))
 
                 image_counter += 1
         del _X, _Y

@@ -17,6 +17,7 @@ from scipy.spatial.distance import cdist
 from scipy.ndimage.morphology import binary_erosion, binary_dilation
 from scipy.ndimage import rotate, grey_dilation, distance_transform_edt
 from scipy.signal import savgol_filter
+from scipy.ndimage.filters import median_filter
 from skimage import morphology
 from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
 from skimage.segmentation import watershed
@@ -362,6 +363,37 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
     return segm
 
 
+def calculate_zy_filtering(data, mf_size=5):
+    """Applies a median filtering in the z and y axes of the provided data.
+
+       Parameters
+       ----------
+       data : 4D Numpy array
+           Data to apply the filter to. E.g. ``(num_of_images, y, x, channels)``.
+
+       mf_size : int, optional
+           Size of the median filter. Must be an odd number.
+
+       Returns
+       -------
+       Array : 4D Numpy array
+           Filtered data. E.g. ``(num_of_images, y, x, channels)``.
+    """
+
+    out_data = np.copy(data)
+
+    # Must be odd
+    if mf_size % 2 == 0:
+       mf_size += 1
+
+    for i in range(data.shape[0]):
+        for c in range(data.shape[-1]):
+            sl = (data[i,...,c]).astype(np.float32)
+            sl = cv2.medianBlur(sl, mf_size)
+            out_data[i,...,c] = sl
+
+    return out_data
+
 def calculate_z_filtering(data, mf_size=5):
     """Applies a median filtering in the z dimension of the provided data.
 
@@ -376,7 +408,7 @@ def calculate_z_filtering(data, mf_size=5):
        Returns
        -------
        Array : 4D Numpy array
-           Z filtered data. E.g. ``(num_of_images, y, x, channels)``.
+           Filtered data. E.g. ``(num_of_images, y, x, channels)``.
     """
 
     out_data = np.copy(data)
@@ -385,14 +417,10 @@ def calculate_z_filtering(data, mf_size=5):
     if mf_size % 2 == 0:
        mf_size += 1
 
-    for i in range(data.shape[0]):
-        sl = (data[i]).astype(np.float32)
-        sl = cv2.medianBlur(sl, mf_size)
-        sl = np.expand_dims(sl,-1) if sl.ndim == 2 else sl
-        out_data[i] = sl
+    for c in range(out_data.shape[-1]):
+        out_data[...,c] = median_filter(data[...,c], size=(mf_size,1,1,1))
 
-    return out_data
-
+    return out_data 
 
 def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=1):
     """Outputs the mean prediction of a given image generating its 8 possible rotations and flips.
@@ -1127,90 +1155,7 @@ def create_th_plot(ths, y_list, th_name="TH1", chart_dir=None, per_sample=True, 
     plt.show()
 
 
-def voronoi_on_mask(data, mask, save_dir, filenames, th=0.3, thres_small=128, verbose=False):
-    """Apply Voronoi to the voxels not labeled yet marked by the mask. Its done witk K-nearest neighbors.
-
-       Parameters
-       ----------
-       data : 4D Numpy array
-           Data to apply Voronoi. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
-
-       mask : 5D Numpy array
-           Data mask to determine which points need to be proccessed. ``(num_of_images, z, y, x, channels)`` e.g.
-           ``(1, 397, 1450, 2000, 3)``.
-
-       save_dir :  str, optional
-           Directory to save the resulting image.
-
-       filenames : List, optional
-           Filenames that should be used when saving each image.
-
-       th : float, optional
-           Threshold used to binarize the input.
-
-       thres_small : int, optional
-           Theshold to remove small objects created by the watershed.
-
-       verbose : bool, optional
-            To print saving information.
-
-       Returns
-       -------
-       data : 4D Numpy array
-           Image with Voronoi applied. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
-
-    """
-    if data.ndim != 4:
-        raise ValueError("Data must be 4 dimensional, provided {}".format(data.shape))
-    if mask.ndim != 5:
-        raise ValueError("Data mask must be 5 dimensional, provided {}".format(mask.shape))
-    if mask.shape[-1] < 2:
-        raise ValueError("Mask needs to have two channels at least, received {}".format(mask.shape[-1]))
-
-    if verbose:
-        print("Applying Voronoi . . .")
-
-    os.makedirs(save_dir, exist_ok=True)
-    if filenames is not None:
-        if len(filenames) != len(data):
-            raise ValueError("Filenames array and length of X have different shapes: {} vs {}".format(len(filenames),len(data)))
-
-    _data = data.copy()
-    d = len(str(len(_data)))
-    for i in range(len(_data)):
-        # Obtain centroids of labels
-        idx = np.indices(_data[i].shape).reshape(_data[i].ndim, _data[i].size)
-        labels, mean = npi.group_by(_data[i], axis=None).mean(idx, axis=1)
-        points = mean.transpose((1,0))
-        label_points = list(range(len(points)))
-
-        # K-nearest neighbors
-        tree = KDTree(points)
-
-        # Create voxel mask
-        voronoi_mask = (mask[i,...,0] > th).astype(np.uint8)
-        voronoi_mask = label(voronoi_mask)
-        voronoi_mask = (remove_small_objects(voronoi_mask, thres_small))>0
-        # Remove small objects
-        voronoi_mask = binary_dilation(voronoi_mask, iterations=2)
-        voronoi_mask = binary_erosion(voronoi_mask, iterations=2)
-
-        # XOR to determine the particular voxels to apply Voronoi
-        not_labelled_points = ((_data[i] > 0) != voronoi_mask).astype(np.uint8)
-        pos_not_labelled_points = np.argwhere(not_labelled_points>0)
-        for j in range(len(pos_not_labelled_points)):
-            z = pos_not_labelled_points[j][0]
-            x = pos_not_labelled_points[j][1]
-            y = pos_not_labelled_points[j][2]
-            _data[i,z,x,y] = tree.query(pos_not_labelled_points[j])[1]
-
-        # Save image
-        save_tif(np.expand_dims(np.expand_dims(_data[i],-1),0).astype(np.float32), save_dir, [f], verbose=False)
-
-    return _data
-
-
-def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
+def voronoi_on_mask(data, mask, th=0, verbose=False):
     """Apply Voronoi to the voxels not labeled yet marked by the mask. It is done using distances from the un-labeled
        voxels to the cell perimeters.
 
@@ -1222,12 +1167,6 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
        mask : 5D Numpy array
            Data mask to determine which points need to be proccessed. ``(num_of_images, z, y, x, channels)`` e.g.
            ``(1, 397, 1450, 2000, 3)``.
-
-       save_dir :  str, optional
-           Directory to save the resulting image.
-
-       filenames : List, optional
-           Filenames that should be used when saving each image.
 
        th : float, optional
            Threshold used to binarize the input. If th=0, otsu threshold is used.
@@ -1253,11 +1192,6 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
 
     if verbose:
         print("Applying Voronoi 3D . . .")
-
-    os.makedirs(save_dir, exist_ok=True)
-    if filenames is not None:
-        if len(filenames) != len(data):
-            raise ValueError("Filenames array and length of X have different shapes: {} vs {}".format(len(filenames),len(data)))
 
 	# Extract mask from prediction
     if mask.shape[-1] == 3:
@@ -1301,10 +1235,6 @@ def voronoi_on_mask_2(data, mask, save_dir, filenames, th=0, verbose=False):
         idSeedMin = idSeedMin[0][1]
         labelPerId[nId] = labelsPerimIds[idSeedMin]
         voronoiCyst[idsToFill[nId][0], idsToFill[nId][1], idsToFill[nId][2]] = labelsPerimIds[idSeedMin]
-
-    # Save image
-    voronoiCyst = np.expand_dims(np.expand_dims(voronoiCyst,-1),0).astype(np.uint16)
-    save_tif(voronoiCyst, save_dir, [' '.join(filenames[0].split('.')[:-1])+'.tif'], verbose=False)
 
     return voronoiCyst
 

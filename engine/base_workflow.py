@@ -12,7 +12,7 @@ from data.post_processing import apply_post_processing
 
 
 class Base_Workflow(metaclass=ABCMeta):
-    def __init__(self, cfg, model, post_processing=False):
+    def __init__(self, cfg, model, post_processing={}):
         self.cfg = cfg
         self.model = model
         self.post_processing = post_processing
@@ -41,7 +41,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.stats['ov_iou_post'] = 0
 
 
-    def process_sample(self, X, Y, filenames, norm):
+    def process_sample(self, X, Y, filenames, f_numbers, norm):
         #################
         ### PER PATCH ###
         #################
@@ -191,19 +191,22 @@ class Base_Workflow(metaclass=ABCMeta):
                 ############################
                 ### POST-PROCESSING (3D) ###
                 ############################
-                if self.post_processing and self.cfg.PROBLEM.NDIM == '3D':
-                    _iou_post, _ov_iou_post = apply_post_processing(self.cfg, pred, Y)
+                if self.post_processing['per_image']:
+                    pred, _iou_post, _ov_iou_post = apply_post_processing(self.cfg, pred, Y)
                     self.stats['iou_post'] += _iou_post
                     self.stats['ov_iou_post'] += _ov_iou_post
-                    if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
+                    if pred.ndim == 4:
                         save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                                     filenames, verbose=self.cfg.TEST.VERBOSE)
                     else:
                         save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, filenames,
                                     verbose=self.cfg.TEST.VERBOSE)
 
-            self.after_merge_patches(pred, Y, filenames)
-
+            self.after_merge_patches(pred, Y, filenames, f_numbers)
+            
+            if not self.cfg.TEST.STATS.FULL_IMG and self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                self.all_pred.append(pred)
+                if self.cfg.DATA.TEST.LOAD_GT: self.all_gt.append(Y)            
 
         ##################
         ### FULL IMAGE ###
@@ -248,7 +251,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.stats['iou'] += score[1]
                 self.stats['ov_iou'] += voc_calculation((Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8), score[1])
 
-            if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D' and self.post_processing:
+            if self.post_processing['all_images']:
                 self.all_pred.append(pred)
                 if self.cfg.DATA.TEST.LOAD_GT: self.all_gt.append(Y)
 
@@ -268,7 +271,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.stats['loss'] = self.stats['loss'] / image_counter
         self.stats['ov_iou'] = self.stats['ov_iou'] / image_counter
 
-        if self.post_processing and self.cfg.PROBLEM.NDIM == '3D':
+        if self.post_processing['per_image'] or self.post_processing['all_images']:
             self.stats['iou_post'] = self.stats['iou_post'] / image_counter
             self.stats['ov_iou_post'] = self.stats['ov_iou_post'] / image_counter
 
@@ -290,14 +293,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 print(" ")
 
     def print_post_processing_stats(self):
-        if self.post_processing and self.cfg.DATA.TEST.LOAD_GT:
+        if self.post_processing['per_image'] or self.post_processing['all_images']:
             print("Test Foreground IoU (post-processing): {}".format(self.stats['iou_post']))
             print("Test Overall IoU (post-processing): {}".format(self.stats['ov_iou_post']))
             print(" ")
 
 
     @abstractmethod
-    def after_merge_patches(self, pred, Y, filenames):
+    def after_merge_patches(self, pred, Y, filenames, f_numbers):
         raise NotImplementedError
 
     @abstractmethod
@@ -308,13 +311,9 @@ class Base_Workflow(metaclass=ABCMeta):
         ############################
         ### POST-PROCESSING (2D) ###
         ############################
-        if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D' and self.post_processing:
+        if self.post_processing['all_images']:
             self.all_pred = np.concatenate(self.all_pred)
-            if self.cfg.DATA.TEST.LOAD_GT:
-                self.all_gt = np.concatenate(self.all_gt)
-                self.stats['iou_post'], self.stats['ov_iou_post'] = apply_post_processing(self.cfg, self.all_pred, self.all_gt)
-            else:
-                self.stats['iou_post'], self.stats['ov_iou_post'] = 0, 0
-            save_tif(self.all_pred, self.cfg.PATHS.RESULT_DIR.FULL_POST_PROCESSING, verbose=self.cfg.TEST.VERBOSE)
-            del self.all_pred
+            self.all_gt = np.concatenate(self.all_gt) if self.cfg.DATA.TEST.LOAD_GT else None
+            self.all_pred, self.stats['iou_post'], self.stats['ov_iou_post'] = apply_post_processing(self.cfg, self.all_pred, self.all_gt)
+            save_tif(self.all_pred, self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING, verbose=self.cfg.TEST.VERBOSE)
 

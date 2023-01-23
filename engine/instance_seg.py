@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from skimage.io import imread
 
-from data.post_processing.post_processing import (watershed_by_channels, calculate_optimal_mw_thresholds, voronoi_on_mask_2, 
+from data.post_processing.post_processing import (watershed_by_channels, calculate_optimal_mw_thresholds, voronoi_on_mask, 
                                                   remove_instance_by_circularity_central_slice, repare_large_blobs)
 from data.pre_processing import create_instance_channels, create_test_instance_channels
 from utils.util import save_tif, wrapper_matching_dataset_lazy
@@ -13,14 +13,15 @@ from utils.matching import matching
 from engine.base_workflow import Base_Workflow
 
 class Instance_Segmentation(Base_Workflow):
-    def __init__(self, cfg, model, post_processing=False, original_test_mask_path=None):
+    def __init__(self, cfg, model, post_processing={}, original_test_mask_path=None):
         super().__init__(cfg, model, post_processing)
 
         self.original_test_mask_path = original_test_mask_path     
+        self.original_test_mask_ids = sorted(next(os.walk(self.original_test_mask_path))[2])
         self.all_matching_stats = []
         self.post_processing = post_processing
 
-        if post_processing:
+        if self.post_processing['instance_post']:
             self.all_matching_stats_post_processing = []            
 
         self.instance_ths = {}
@@ -45,7 +46,7 @@ class Instance_Segmentation(Base_Workflow):
             else:
                 self.instance_ths['TH1'], self.instance_ths['TH2'], self.instance_ths['TH3'] = obj
             
-    def after_merge_patches(self, pred, Y, filenames):
+    def instance_seg_process(self, pred, Y, filenames, f_numbers):
         #############################
         ### INSTANCE SEGMENTATION ###
         #############################
@@ -69,24 +70,23 @@ class Instance_Segmentation(Base_Workflow):
 
         if self.cfg.TEST.MATCHING_STATS and self.cfg.DATA.TEST.LOAD_GT:
             print("Calculating matching stats . . .")
-            test_file = os.path.join(self.original_test_mask_path, filenames[0])
-            if not os.path.isfile(test_file):
-                raise ValueError("The mask is supossed to have the same name as the image")
-            _Y = imread(test_file).squeeze()
 
-            # If multiple-channel data then only capture the first channel that is assumed to be instance labels
-            if (self.cfg.PROBLEM.NDIM == '2D' and (_Y.shape[0] > 1 and _Y.ndim == 3)) or\
-                (self.cfg.PROBLEM.NDIM == '3D' and (_Y.shape[0] > 1 and _Y.ndim == 4)):
-                _Y =  _Y[0]
+            # Need to load instance labels, as Y are binary channel used for IoU calculation
+            if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                del Y
+                _Y = np.zeros(w_pred.shape, dtype=w_pred.dtype)
+                for i in range(len(self.original_test_mask_ids)):
+                    test_file = os.path.join(self.original_test_mask_path, self.original_test_mask_ids[i])
+                    _Y[i] = imread(test_file).squeeze()
+            else:
+                test_file = os.path.join(self.original_test_mask_path, self.original_test_mask_ids[f_numbers[0]])
+                _Y = imread(test_file).squeeze()
 
-            # As the mAP code is prepared for 3D we need an extra z dimension and change dtype ot int
-            if _Y.dtype == np.float32: _Y = _Y.astype(np.int32)
-            if _Y.dtype == np.float64: _Y = _Y.astype(np.int64)
             if _Y.ndim == 2: _Y = np.expand_dims(_Y,0)
 
             # Convert instances to integer
-            if _Y.dtype == np.float32: _Y = _Y.astype(np.int32)
-            if _Y.dtype == np.float64: _Y = _Y.astype(np.int64)
+            if _Y.dtype == np.float32: _Y = _Y.astype(np.uint32)
+            if _Y.dtype == np.float64: _Y = _Y.astype(np.uint64)
 
             r_stats = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=False)
             print(r_stats)
@@ -115,10 +115,9 @@ class Instance_Segmentation(Base_Workflow):
             del df
 
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
-            w_pred = voronoi_on_mask_2(np.expand_dims(w_pred,0), np.expand_dims(pred,0),
-                self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI, filenames, verbose=self.cfg.TEST.VERBOSE)[0]
+            w_pred = voronoi_on_mask(np.expand_dims(w_pred,0), np.expand_dims(pred,0), verbose=self.cfg.TEST.VERBOSE)[0]
 
-        if self.post_processing:
+        if self.post_processing['instance_post']:
             save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                 filenames, verbose=self.cfg.TEST.VERBOSE)
 
@@ -128,12 +127,18 @@ class Instance_Segmentation(Base_Workflow):
                 print(r_stats)
                 self.all_matching_stats_post_processing.append(r_stats)
 
+    def after_merge_patches(self, pred, Y, filenames, f_numbers):
+        if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+            self.instance_seg_process(pred, Y, filenames, f_numbers)        
 
     def after_full_image(self, pred, Y, filenames):
         pass
 
     def after_all_images(self):
         super().after_all_images()
+        if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+            print("Analysing all images as a 3D stack . . .")    
+            self.instance_seg_process(self.all_pred,  self.all_gt, ["3D_stack.tif"], [])
 
     def normalize_stats(self, image_counter): 
         super().normalize_stats(image_counter) 
@@ -141,22 +146,21 @@ class Instance_Segmentation(Base_Workflow):
         if self.cfg.DATA.TEST.LOAD_GT:
             if self.cfg.TEST.MATCHING_STATS:
                 self.stats['inst_stats'] = wrapper_matching_dataset_lazy(self.all_matching_stats, self.cfg.TEST.MATCHING_STATS_THS)
-                if self.post_processing:
+                if self.post_processing['instance_post']:
                     self.stats['inst_stats_vor'] = wrapper_matching_dataset_lazy(self.all_matching_stats_post_processing, self.cfg.TEST.MATCHING_STATS_THS)
 
     def print_stats(self, image_counter):
         super().print_stats(image_counter)
-
-        if self.cfg.DATA.TEST.LOAD_GT:
-            if self.cfg.TEST.MATCHING_STATS:
-                for i in range(len(self.cfg.TEST.MATCHING_STATS_THS)):
-                    print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
-                    print(self.stats['inst_stats'][i])
-                    if self.post_processing:
-                        print("IoU (post-processing) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
-                        print(self.stats['inst_stats_vor'][i])
-
         super().print_post_processing_stats()
+
+        print("Instance segmentation specific metrics:")
+        if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.MATCHING_STATS:
+            for i in range(len(self.cfg.TEST.MATCHING_STATS_THS)):
+                print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
+                print(self.stats['inst_stats'][i])
+                if self.post_processing['instance_post']:
+                    print("IoU (post-processing) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
+                    print(self.stats['inst_stats_vor'][i])
 
 def prepare_instance_data(cfg):
     print("###########################\n"

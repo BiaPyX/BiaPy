@@ -12,10 +12,10 @@ from data.pre_processing import denormalize
 
 
 class Denoising(Base_Workflow):
-    def __init__(self, cfg, model, post_processing=False):
+    def __init__(self, cfg, model, post_processing={}):
         super().__init__(cfg, model, post_processing)
     
-    def process_sample(self, X, Y, filenames, norm): 
+    def process_sample(self, X, Y, filenames, f_numbers, norm): 
         original_data_shape = X.shape
     
         # Crop if necessary
@@ -100,7 +100,7 @@ class Denoising(Base_Workflow):
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
             save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
 
-    def after_merge_patches(self, pred, Y, filenames):
+    def after_merge_patches(self, pred, Y, filenames, f_numbers):
         pass
 
     def after_full_image(self, pred, Y, filenames):

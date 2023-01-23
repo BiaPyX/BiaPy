@@ -4,10 +4,10 @@ from engine.base_workflow import Base_Workflow
 from utils.util import save_tif
 
 class Semantic_Segmentation(Base_Workflow):
-    def __init__(self, cfg, model, post_processing=False):
+    def __init__(self, cfg, model, post_processing={}):
         super().__init__(cfg, model, post_processing)
         
-    def after_merge_patches(self, pred, Y, filenames):
+    def after_merge_patches(self, pred, Y, filenames, f_numbers):
         # Save simple binarization of predictions
         if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
             save_tif(np.expand_dims((pred>0.5).astype(np.uint8),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,

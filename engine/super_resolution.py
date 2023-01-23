@@ -11,11 +11,11 @@ from engine.metrics import PSNR
 from data.pre_processing import denormalize
 
 class Super_resolution(Base_Workflow):
-    def __init__(self, cfg, model, post_processing=False):
+    def __init__(self, cfg, model, post_processing={}):
         super().__init__(cfg, model, post_processing)
         self.stats['psnr_per_image'] = 0
 
-    def process_sample(self, X, Y, filenames, norm): 
+    def process_sample(self, X, Y, filenames, f_numbers, norm): 
         original_data_shape= (X.shape[0], X.shape[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
                               X.shape[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, X.shape[3])
 
@@ -70,7 +70,7 @@ class Super_resolution(Base_Workflow):
             psnr_per_image = PSNR(pred, Y, m_val)
             self.stats['psnr_per_image'] += psnr_per_image
 
-    def after_merge_patches(self, pred, Y, filenames):
+    def after_merge_patches(self, pred, Y, filenames, f_numbers):
         pass
 
     def after_full_image(self, pred, Y, filenames):

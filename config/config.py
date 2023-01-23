@@ -537,6 +537,8 @@ class Config:
         _C.TEST.AUGMENTATION = False
         # Whether to evaluate or not
         _C.TEST.EVALUATE = True
+        
+        _C.TEST.ANALIZE_2D_IMGS_AS_3D_STACK = False
 
         _C.TEST.STATS = CN()
         _C.TEST.STATS.PER_PATCH = False
@@ -564,7 +566,6 @@ class Config:
         # When PROBLEM.NDIM = '2D' only applies when _C.TEST.STATS.FULL_IMG = True, if PROBLEM.NDIM = '3D' is applied
         # when _C.TEST.STATS.MERGE_PATCHES = True
         _C.TEST.POST_PROCESSING = CN()
-        _C.TEST.POST_PROCESSING.BLENDING = False
         _C.TEST.POST_PROCESSING.YZ_FILTERING = False
         _C.TEST.POST_PROCESSING.YZ_FILTERING_SIZE = 5
         _C.TEST.POST_PROCESSING.Z_FILTERING = False
@@ -607,11 +608,10 @@ class Config:
         _C.PATHS.RESULT_DIR.PER_IMAGE = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image')
         _C.PATHS.RESULT_DIR.PER_IMAGE_BIN = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_binarized')
         _C.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_instances')
-        _C.PATHS.RESULT_DIR.PER_IMAGE_INST_VORONOI = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_instances_voronoi')
         _C.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_post_processing')
         _C.PATHS.RESULT_DIR.FULL_IMAGE = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_image')
         _C.PATHS.RESULT_DIR.FULL_IMAGE_BIN = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_image_binarized')
-        _C.PATHS.RESULT_DIR.FULL_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_post_processing')
+        _C.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'as_3d_stack_post_processing')
         _C.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_local_max_check')
 
         # Name of the folder where the charts of the loss and metrics values while training the network are stored.

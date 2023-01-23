@@ -8,7 +8,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 from engine.base_workflow import Base_Workflow
 
 class Classification(Base_Workflow):
-    def __init__(self, cfg, model, class_names=None, post_processing=False):
+    def __init__(self, cfg, model, class_names=None, post_processing={}):
         super().__init__(cfg, model, post_processing)
         
         self.stats['test_accuracy'] = 0
@@ -19,7 +19,7 @@ class Classification(Base_Workflow):
         self.test_filenames = []
         self.class_names = class_names
 
-    def process_sample(self, X, Y, filenames, norm):   
+    def process_sample(self, X, Y, filenames, f_numbers, norm):   
         self.test_filenames.append(filenames)   
 
         self.stats['patch_counter'] += X.shape[0]
@@ -58,7 +58,7 @@ class Classification(Base_Workflow):
                 display_labels = ["Category {}".format(i) for i in range(self.cfg.MODEL.N_CLASSES)]
             print(classification_report(self.all_gt, self.all_pred, target_names=display_labels))
 
-    def after_merge_patches(self, pred, Y, filenames):
+    def after_merge_patches(self, pred, Y, filenames, f_numbers):
         pass
 
     def after_full_image(self, pred, Y, filenames):

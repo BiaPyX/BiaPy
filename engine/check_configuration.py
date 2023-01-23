@@ -56,6 +56,8 @@ def check_configuration(cfg):
     if len(cfg.DATA.TEST.RESOLUTION) == 1 and cfg.DATA.TEST.RESOLUTION[0] == -1:
         opts.extend(['DATA.TEST.RESOLUTION', (1,)*dim_count])
 
+    if cfg.TEST.POST_PROCESSING.DET_WATERSHED and cfg.PROBLEM.TYPE != 'DETECTION':
+        raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED' can only be set when 'PROBLEM.TYPE' is 'DETECTION'")
     if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
         for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION:
             if any(y == -1 for y in x):
@@ -71,11 +73,28 @@ def check_configuration(cfg):
         if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH) != dim_count:
             raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH' need to be of dimension {} for {} problem".format(dim_count, cfg.PROBLEM.NDIM))
 
-    if cfg.TEST.POST_PROCESSING.DET_WATERSHED and cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY == -1:
-        raise ValueError("Set 'TEST.POST_PROCESSING.WATERSHED_CIRCULARITY' to a appropiate value between [0, 1] range")
     if cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1:
         if not check_value(cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY):
             raise ValueError("'TEST.POST_PROCESSING.WATERSHED_CIRCULARITY' not in [0, 1] range")
+    if cfg.PROBLEM.TYPE != 'INSTANCE_SEG':
+        if cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1 and cfg.PROBLEM.TYPE != 'DETECTION':
+            raise ValueError("'TEST.POST_PROCESSING.WATERSHED_CIRCULARITY' can only be set in 'DETECTION' or 'INSTANCE_SEG' problems")    
+        if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
+            raise ValueError("'TEST.POST_PROCESSING.VORONOI_ON_MASK' can only be enabled in a 'INSTANCE_SEG' problem")
+    if cfg.TEST.POST_PROCESSING.DET_WATERSHED and cfg.PROBLEM.TYPE != 'DETECTION':
+        raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED' can only be set when 'PROBLEM.TYPE' is 'DETECTION'")
+
+    if cfg.PROBLEM.NDIM == "2D":
+        if (cfg.TEST.POST_PROCESSING.YZ_FILTERING or cfg.TEST.POST_PROCESSING.Z_FILTERING) \
+            and not cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+            raise ValueError("'TEST.POST_PROCESSING.YZ_FILTERING' and 'TEST.POST_PROCESSING.Z_FILTERING' is done only if"
+                " 'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' is enabled. Enable this last or disable those post-processing methods "
+                "because it can not be applied to 2D images")
+    if (cfg.TEST.POST_PROCESSING.YZ_FILTERING or cfg.TEST.POST_PROCESSING.Z_FILTERING) \
+        and cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+        raise ValueError("'TEST.POST_PROCESSING.YZ_FILTERING' or 'TEST.POST_PROCESSING.Z_FILTERING' can not be enabled "
+            "when 'PROBLEM.TYPE' is 'CLASSIFICATION'")
+ 
 
     if len(opts) > 0:
         cfg.merge_from_list(opts)
@@ -99,6 +118,8 @@ def check_configuration(cfg):
     
     if cfg.PROBLEM.TYPE != 'SUPER_RESOLUTION' and cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING != 1:
         raise ValueError("'PROBLEM.SUPER_RESOLUTION.UPSCALING' can only be 1 if the problem is not 'SUPER_RESOLUTION'")
+    if cfg.TEST.ENABLE and cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and cfg.PROBLEM.NDIM == "3D":
+        raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' makes no sense when the problem is 3D. Disable it.")
 
     #### Semantic segmentation ####
     if cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
@@ -271,7 +292,7 @@ def check_configuration(cfg):
                          "'attention_unet', 'fcn32', 'fcn8', 'tiramisu', 'mnet', 'multiresunet', 'seunet', 'unetr']")
     if cfg.PROBLEM.TYPE == "INSTANCE_SEG" and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet']:
         raise ValueError("Not implemented pipeline option: instance segmentation models are ['unet', 'resunet']")    
-    if cfg.PROBLEM.TYPE in ['DETECTION', 'DENOISING', 'SELF_SUPERVISED'] and \
+    if cfg.PROBLEM.TYPE in ['DETECTION', 'DENOISING'] and \
         cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
         raise ValueError("Architectures available for {} are: ['unet', 'resunet', 'seunet', 'attention_unet']"
                          .format(cfg.PROBLEM.TYPE))
