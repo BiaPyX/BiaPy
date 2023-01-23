@@ -59,23 +59,23 @@ def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
        Examples
        --------
 
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../img/lucchi_test_0.png     | .. figure:: ../../img/lucchi_test_0_gt.png  |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Original image                            |   Ground truth                              |
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../img/lucchi_test_0_pred.png| .. figure:: ../../img/lucchi_test_0_wa.png  |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Predicted image                           |   Watershed ouput                           |
-       +---------------------------------------------+---------------------------------------------+
+       +------------------------------------------------+------------------------------------------------+
+       | .. figure:: ../../../img/lucchi_test_0.png     | .. figure:: ../../../img/lucchi_test_0_gt.png  |
+       |   :width: 80%                                  |   :width: 80%                                  |
+       |   :align: center                               |   :align: center                               |
+       |                                                |                                                |
+       |   Original image                               |   Ground truth                                 |
+       +------------------------------------------------+------------------------------------------------+
+       | .. figure:: ../../../img/lucchi_test_0_pred.png| .. figure:: ../../../img/lucchi_test_0_wa.png  |
+       |   :width: 80%                                  |   :width: 80%                                  |
+       |   :align: center                               |   :align: center                               |
+       |                                                |                                                |
+       |   Predicted image                              |   Watershed ouput                              |
+       +------------------------------------------------+------------------------------------------------+
 
        The marks used to guide the watershed is this example are these:
 
-        .. image:: ../../img/watershed2_marks_test0.png
+        .. image:: ../../../img/watershed2_marks_test0.png
           :width: 70%
           :align: center
     """

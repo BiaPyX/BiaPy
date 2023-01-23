@@ -53,7 +53,7 @@ def U_Net_2D(image_shape, activation='elu', feature_maps=[16, 32, 64, 128, 256],
 
        Calling this function with its default parameters returns the following  network:
 
-       .. image:: ../img/unet.png
+       .. image:: ../../img/unet.png
            :width: 100%
            :align: center
 

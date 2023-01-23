@@ -33,7 +33,7 @@ def Vanilla_U_Net_3D(image_shape, activation='relu', feature_maps=[32, 64, 128, 
     
        Calling this function with its default parameters returns the following network:
 
-       .. image:: ../img/vanilla_unet_3d.png
+       .. image:: ../../img/vanilla_unet_3d.png
            :width: 100%
            :align: center
 

@@ -48,13 +48,13 @@ def grad_cam_sample(input_model, image, predicted_class, layer_name, out_dir, n_
            # classes is 2, which should correspond to setting n_classes=2 on the provided templates 
            grad_cam_sample(unet_model, img, 1, 'conv2d_16', 'out_dir', 2)
 
-       +----------------------------------------------+----------------------------------------------+
-       | .. figure:: ../img/lucchi_test_0.png         | .. figure:: ../img/out_gradcam_conv2d_16.png |
-       |   :width: 80%                                |   :width: 80%                                |
-       |   :align: center                             |   :align: center                             |
-       |                                              |                                              |
-       |   Input image                                |   Output of Grad-CAM                         |
-       +----------------------------------------------+----------------------------------------------+
+       +-------------------------------------------------+-------------------------------------------------+
+       | .. figure:: ../../img/lucchi_test_0.png         | .. figure:: ../../img/out_gradcam_conv2d_16.png |
+       |   :width: 80%                                   |   :width: 80%                                   |
+       |   :align: center                                |   :align: center                                |
+       |                                                 |                                                 |
+       |   Input image                                   |   Output of Grad-CAM                            |
+       +-------------------------------------------------+-------------------------------------------------+
 
        ::
   
@@ -63,13 +63,13 @@ def grad_cam_sample(input_model, image, predicted_class, layer_name, out_dir, n_
            # complete image
            grad_cam_sample(unet_model, img, 1, 'conv2d_18', 'out_dir', 2)
 
-       +----------------------------------------------+----------------------------------------------+
-       | .. figure:: ../img/gradcam_pred.png          | .. figure:: ../img/out_gradcam_conv2d_18.png |
-       |   :width: 80%                                |   :width: 80%                                |
-       |   :align: center                             |   :align: center                             |
-       |                                              |                                              |
-       |   Network prediction                         |   Output of Grad-CAM                         |
-       +----------------------------------------------+----------------------------------------------+
+       +-------------------------------------------------+-------------------------------------------------+
+       | .. figure:: ../../img/gradcam_pred.png          | .. figure:: ../../img/out_gradcam_conv2d_18.png |
+       |   :width: 80%                                   |   :width: 80%                                   |
+       |   :align: center                                |   :align: center                                |
+       |                                                 |                                                 |
+       |   Network prediction                            |   Output of Grad-CAM                            |
+       +-------------------------------------------------+-------------------------------------------------+
     """
 
     os.makedirs(out_dir, exist_ok=True)

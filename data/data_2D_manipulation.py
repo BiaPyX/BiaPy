@@ -580,19 +580,19 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
 
        As example of different overlap maps are presented below.
 
-       +--------------------------------------------+--------------------------------------------+
-       | .. figure:: ../img/merged_ov_map_0.png     | .. figure:: ../img/merged_ov_map_0.25.png  |
-       |   :width: 80%                              |   :width: 80%                              |
-       |   :align: center                           |   :align: center                           |
-       |                                            |                                            |
-       |   Example 1 overlapping map                |   Example 2 overlapping map                |
-       +--------------------------------------------+--------------------------------------------+
-       | .. figure:: ../img/merged_ov_map_0.5.png   | .. figure:: ../img/merged_ov_map_0.5inx.png|
-       |   :width: 80%                              |   :width: 80%                              |
-       |   :align: center                           |   :align: center                           |
-       |                                            |                                            |
-       |   Example 3 overlapping map                |   Example 4 overlapping map                |
-       +--------------------------------------------+--------------------------------------------+
+       +-----------------------------------------------+-----------------------------------------------+
+       | .. figure:: ../../img/merged_ov_map_0.png     | .. figure:: ../../img/merged_ov_map_0.25.png  |
+       |   :width: 80%                                 |   :width: 80%                                 |
+       |   :align: center                              |   :align: center                              |
+       |                                               |                                               |
+       |   Example 1 overlapping map                   |   Example 2 overlapping map                   |
+       +-----------------------------------------------+-----------------------------------------------+
+       | .. figure:: ../../img/merged_ov_map_0.5.png   | .. figure:: ../../img/merged_ov_map_0.5inx.png|
+       |   :width: 80%                                 |   :width: 80%                                 |
+       |   :align: center                              |   :align: center                              |
+       |                                               |                                               |
+       |   Example 3 overlapping map                   |   Example 4 overlapping map                   |
+       +-----------------------------------------------+-----------------------------------------------+
     """
 
     if data_mask is not None:

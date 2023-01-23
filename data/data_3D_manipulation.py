@@ -257,7 +257,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
 
        A visual explanation of the process:
 
-       .. image:: ../img/crop_3D_ov.png
+       .. image:: ../../img/crop_3D_ov.png
            :width: 80%
            :align: center
 

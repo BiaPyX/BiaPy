@@ -77,13 +77,13 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
 
        Examples
        --------
-       +--------------------------------------------+--------------------------------------------+
-       | .. figure:: ../img/chart_loss.png          | .. figure:: ../img/chart_jaccard_index.png |
-       |   :width: 80%                              |   :width: 80%                              |
-       |   :align: center                           |   :align: center                           |
-       |                                            |                                            |
-       |   Loss values on each epoch                |   Jaccard index values on each epoch       |
-       +--------------------------------------------+--------------------------------------------+
+       +-----------------------------------------------+-----------------------------------------------+
+       | .. figure:: ../../img/chart_loss.png          | .. figure:: ../../img/chart_jaccard_index.png |
+       |   :width: 80%                                 |   :width: 80%                                 |
+       |   :align: center                              |   :align: center                              |
+       |                                               |                                               |
+       |   Loss values on each epoch                   |   Jaccard index values on each epoch          |
+       +-----------------------------------------------+-----------------------------------------------+
     """
 
     print("Creating training plots . . .")
@@ -175,7 +175,7 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin
        thresholds applied, that is: ``0.1, 0.2, 0.3, ..., 0.9``. The y axis is the value of the metric in each chart. For
        instance, the Jaccard/IoU chart will look like this:
 
-       .. image:: ../img/278_3_threshold_Jaccard.png
+       .. image:: ../../img/278_3_threshold_Jaccard.png
            :width: 60%
            :align: center
 
@@ -500,7 +500,7 @@ def make_weight_map(label, binary = True, w0 = 10, sigma = 5):
        Notice that weight has been defined where the objects are almost touching
        each other.
 
-       .. image:: ../img/weight_map.png
+       .. image:: ../../img/weight_map.png
            :width: 650
            :align: center
     """
@@ -741,7 +741,7 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="", 
 
        That will save in ``out_dir`` an image like this:
 
-       .. image:: ../img/save_filters.png
+       .. image:: ../../img/save_filters.png
            :width: 60%
            :align: center
     """
