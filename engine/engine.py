@@ -35,10 +35,11 @@ class Engine(object):
         self.orig_val_path = cfg.DATA.VAL.PATH
         self.orig_val_mask_path = cfg.DATA.VAL.MASK_PATH
 
+        print("####################\n"
+              "#  PRE-PROCESSING  #\n"
+              "####################\n")
         if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG']:
-            print("###################\n"
-                  "#  SANITY CHECKS  #\n"
-                  "###################\n")
+            
             if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
                 if cfg.LOSS.TYPE == 'MASKED_BCE':
                     check_masks(cfg.DATA.TRAIN.MASK_PATH, n_classes=3)
