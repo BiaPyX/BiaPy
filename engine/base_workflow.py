@@ -250,6 +250,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 pred = np.expand_dims(np.argmax(pred,-1), -1)
                 if self.cfg.DATA.TEST.LOAD_GT: Y = np.expand_dims(np.argmax(Y,-1), -1)
 
+            if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
+                pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
+                
             if self.cfg.DATA.TEST.LOAD_GT:
                 score[1] = jaccard_index_numpy((Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
                 self.stats['iou'] += score[1]
