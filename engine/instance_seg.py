@@ -96,8 +96,8 @@ class Instance_Segmentation(Base_Workflow):
         ###################
         # Post-processing #
         ###################
-        if self.cfg.PROBLEM.INSTANCE_SEG.REPARE_LARGE_BLOBS_SIZE != -1:
-            w_pred = repare_large_blobs(w_pred, self.cfg.PROBLEM.INSTANCE_SEG.REPARE_LARGE_BLOBS_SIZE)
+        if self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
+            w_pred = repare_large_blobs(w_pred, self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE)
 
         if self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1:
             w_pred, labels, npixels, areas, circularities, diameters, comment = remove_instance_by_circularity_central_slice(w_pred, self.cfg.DATA.TEST.RESOLUTION, 

@@ -223,7 +223,7 @@ class Engine(object):
         elif self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             # Specific instance segmentation post-processing
             if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK or self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY or\
-                self.cfg.PROBLEM.INSTANCE_SEG.REPARE_LARGE_BLOBS_SIZE:
+                self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE:
                 self.post_processing['instance_post'] = True
             else:
                 self.post_processing['instance_post'] = False

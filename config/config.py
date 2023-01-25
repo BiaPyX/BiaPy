@@ -36,7 +36,7 @@ class Config:
 
         ### INSTANCE_SEG
         _C.PROBLEM.INSTANCE_SEG = CN()
-        # Possible options: 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2' and 'BDv2'. This variable determines the channels to be created 
+        # Possible options: 'BC', 'BP', 'BCM', 'BCD', 'BCDv2', 'Dv2' and 'BDv2'. This variable determines the channels to be created 
         # based on input instance masks. These option are composed from these individual options:
         #   - 'B' stands for 'Binary segmentation', containing each instance region without the contour. 
         #   - 'C' stands for 'Contour', containing each instance contour. 
@@ -92,10 +92,6 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.FORE_EROSION_RADIUS = 5
         # Radius to dilate the foreground mask
         _C.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS = 5
-        # Set it to try to repare large instances by merging their neighbors with them and removing possible central holes.  
-        # Its value determine which instances are going to be repared by size (number of pixels that compose the instance)
-        # Thi option is useful when 'BP' channel were chosen, as multiple central seeds may appear in big instances.
-        _C.PROBLEM.INSTANCE_SEG.REPARE_LARGE_BLOBS_SIZE = -1
 
         # Whether to find an optimum value for each threshold with the validation data. If True the previous MW_TH*
         # variables will be replaced by the optimum values found
@@ -578,7 +574,12 @@ class Config:
         ### Instance segmentation
         # Whether to apply Voronoi using 'BC' or 'M' channels need to be present
         _C.TEST.POST_PROCESSING.VORONOI_ON_MASK = False
-        
+        # Set it to try to repare large instances by merging their neighbors with them and removing possible central holes.  
+        # Its value determines which instances are going to be repared by size (number of pixels that compose the instance)
+        # This option is useful when PROBLEM.INSTANCE_SEG.DATA_CHANNELS is 'BP', as multiple central seeds may appear in big 
+        # instances.
+        _C.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE = -1
+
         ### Detection
         # The minimal allowed distance between points
         _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = False
