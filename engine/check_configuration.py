@@ -158,7 +158,9 @@ def check_configuration(cfg):
             if any(len(x) != dim_count for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION):
                 raise ValueError("Each structure object defined in 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' "
                                  "need to be of {} dimension".format(dim_count))
-    
+        if cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY == -1:
+            raise ValueError("'TEST.POST_PROCESSING.WATERSHED_CIRCULARITY' need to be set when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
+
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
         if cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING == 1:
