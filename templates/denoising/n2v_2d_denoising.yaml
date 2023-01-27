@@ -1,5 +1,5 @@
 SYSTEM:
-    NUM_CPUS: 1
+    NUM_CPUS: -1
 
 PROBLEM:
     TYPE: DENOISING
@@ -17,7 +17,7 @@ DATA:
         FROM_TRAIN: True
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
-        IN_MEMORY: False
+        IN_MEMORY: True
         LOAD_GT: False
         PADDING: (12,12)
         PATH: /path/to/data

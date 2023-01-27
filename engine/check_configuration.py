@@ -180,13 +180,13 @@ def check_configuration(cfg):
 
     #### Denoising ####
     elif cfg.PROBLEM.TYPE == 'DENOISING':
-        # if cfg.DATA.TEST.IN_MEMORY:
-        #     raise ValueError("DATA.TEST.IN_MEMORY==True not supported in DENOISING. Please change it to False")
         if cfg.DATA.TEST.LOAD_GT:
             raise ValueError("Denoising is made in an unsupervised way so there is no ground truth required. Disable 'DATA.TEST.LOAD_GT'")
         if not cfg.DATA.TRAIN.IN_MEMORY or not cfg.DATA.VAL.IN_MEMORY:
             raise NotImplementedError
-            # Neither cfg.DATA.EXTRACT_RANDOM_PATCH:
+        if not check_value(cfg.PROBLEM.DENOISING.N2V_PERC_PIX):
+            raise ValueError("PROBLEM.DENOISING.N2V_PERC_PIX not in [0, 1] range")
+           
 
     ### Pre-processing ###
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:

@@ -106,10 +106,19 @@ class Config:
         _C.PROBLEM.DETECTION.DATA_CHECK_MW = True
 
         ### DENOISING
+        # Based Noise2Void paper: https://arxiv.org/abs/1811.10980 
         _C.PROBLEM.DENOISING = CN()
+        # This variable corresponds to n2v_perc_pix from Noise2Void. It explanation is as follows: for faster training multiple 
+        # pixels per input patch can be manipulated. In our experiments we manipulated about 0.198% of the input pixels per 
+        # patch. For a patch size of 64 by 64 pixels this corresponds to about 8 pixels. This fraction can be tuned via this variable
         _C.PROBLEM.DENOISING.N2V_PERC_PIX = 0.198
+        # This variable corresponds to n2v_manipulator from Noise2Void. Most pixel manipulators will compute the replacement value based 
+        # on a neighborhood and this variable controls how to do that
         _C.PROBLEM.DENOISING.N2V_MANIPULATOR = 'uniform_withCP'
+        # This variable corresponds to n2v_neighborhood_radius from Noise2Void. Size of the neighborhood to compute the replacement
         _C.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS = 5
+        # To apply a structured mask as is proposed in Noise2Void to alleviate the limitation of the method of not removing efectively 
+        # the structured noise (section 4.4 of their paper). 
         _C.PROBLEM.DENOISING.N2V_STRUCTMASK = False
 
         ### SUPER_RESOLUTION
