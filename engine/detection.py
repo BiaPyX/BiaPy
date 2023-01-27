@@ -53,10 +53,11 @@ class Detection(Base_Workflow):
                         ndim=ndim)
                         
                 all_points.append(pred_coordinates)   
-                all_classes.append(np.full(len(pred_coordinates), channel))
+                c_size = 1 if len(pred_coordinates) == 0 else len(pred_coordinates)
+                all_classes.append(np.full(c_size, channel))
 
             # Remove close points again seeing all classes together
-            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.cfg.MODEL.N_CLASSES > 1:
                 print("All classes together")
                 radius = np.min(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS)
  
@@ -112,26 +113,27 @@ class Detection(Base_Workflow):
 
             # Save coords in a couple of csv files            
             aux = np.concatenate(all_points, axis=0)
-            prob = pred[aux[:,0], aux[:,1], aux[:,2], all_classes]
+            if len(aux) != 0:
+                prob = pred[aux[:,0], aux[:,1], aux[:,2], all_classes]
 
-            if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-                size_measure = 'area' if ndim == 2 else 'volume'
-                df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes),\
-                    npixels, areas, circularities, comment), columns =['label', 'axis-0', 'axis-1', 'axis-2', 'probability', \
-                    'class', 'npixels', size_measure, 'circularity', 'comment'])
-                df = df.sort_values(by=['label'])   
-            else:
-                df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes)), 
-                    columns =['axis-0', 'axis-1', 'axis-2', 'probability', 'class'])
-                df = df.sort_values(by=['axis-0'])
-            del aux 
+                if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
+                    size_measure = 'area' if ndim == 2 else 'volume'
+                    df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes),\
+                        npixels, areas, circularities, comment), columns =['label', 'axis-0', 'axis-1', 'axis-2', 'probability', \
+                        'class', 'npixels', size_measure, 'circularity', 'comment'])
+                    df = df.sort_values(by=['label'])   
+                else:
+                    df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes)), 
+                        columns =['axis-0', 'axis-1', 'axis-2', 'probability', 'class'])
+                    df = df.sort_values(by=['axis-0'])
+                del aux 
 
-            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_full_info.csv'))
-            if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-                df = df.drop(columns=['class', 'label', 'npixels', size_measure, 'circularity', 'comment'])
-            else:
-                df = df.drop(columns=['class'])
-            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_prob.csv'))
+                df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_full_info.csv'))
+                if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
+                    df = df.drop(columns=['class', 'label', 'npixels', size_measure, 'circularity', 'comment'])
+                else:
+                    df = df.drop(columns=['class'])
+                df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_prob.csv'))
 
             # Calculate detection metrics
             if self.cfg.DATA.TEST.LOAD_GT:
@@ -197,8 +199,8 @@ class Detection(Base_Workflow):
     def after_full_image(self, pred, Y, filenames):
         self.detection_process(pred, Y, filenames, ['d_precision', 'd_recall', 'd_f1'])
 
-    def after_all_images(self, Y):
-        super().after_all_images(None)
+    def after_all_images(self):
+        super().after_all_images()
 
     def print_stats(self, image_counter):
         super().print_stats(image_counter)
