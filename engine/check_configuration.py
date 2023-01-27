@@ -180,10 +180,10 @@ def check_configuration(cfg):
 
     #### Denoising ####
     elif cfg.PROBLEM.TYPE == 'DENOISING':
-        if cfg.DATA.TEST.IN_MEMORY:
-            raise ValueError("DATA.TEST.IN_MEMORY==True not supported in DENOISING. Please change it to False")
+        # if cfg.DATA.TEST.IN_MEMORY:
+        #     raise ValueError("DATA.TEST.IN_MEMORY==True not supported in DENOISING. Please change it to False")
         if cfg.DATA.TEST.LOAD_GT:
-            raise NotImplementedError
+            raise ValueError("Denoising is made in an unsupervised way so there is no ground truth required. Disable 'DATA.TEST.LOAD_GT'")
         if not cfg.DATA.TRAIN.IN_MEMORY or not cfg.DATA.VAL.IN_MEMORY:
             raise NotImplementedError
             # Neither cfg.DATA.EXTRACT_RANDOM_PATCH:
