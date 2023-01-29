@@ -1,5 +1,5 @@
 SYSTEM:
-    NUM_CPUS: 1
+    NUM_CPUS: -1
 
 PROBLEM:
     TYPE: DENOISING
@@ -8,7 +8,7 @@ PROBLEM:
         N2V_STRUCTMASK: True
   
 DATA: 
-    PATCH_SIZE: (8, 64, 64, 1)
+    PATCH_SIZE: (32, 64, 64, 1)
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data
@@ -17,7 +17,7 @@ DATA:
         FROM_TRAIN: True
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
-        IN_MEMORY: False
+        IN_MEMORY: True
         LOAD_GT: False
         PADDING: (2,12,12)
         PATH: /path/to/data
