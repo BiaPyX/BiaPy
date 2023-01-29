@@ -276,14 +276,14 @@ def pm_identity(local_sub_patch_radius):
     return identity
 
 
-def get_stratified_coords2D(coord_gen, box_size, shape):
+def get_stratified_coords2D(box_size, shape):
     box_count_Y = int(np.ceil(shape[0] / box_size))
     box_count_X = int(np.ceil(shape[1] / box_size))
     x_coords = []
     y_coords = []
     for i in range(box_count_Y):
         for j in range(box_count_X):
-            y, x = next(coord_gen)
+            y, x = np.random.rand() * box_size, np.random.rand() * box_size
             y = int(i * box_size + y)
             x = int(j * box_size + x)
             if (y < shape[0] and x < shape[1]):
@@ -291,7 +291,7 @@ def get_stratified_coords2D(coord_gen, box_size, shape):
                 x_coords.append(x)
     return (y_coords, x_coords)
 
-def get_stratified_coords3D(coord_gen, box_size, shape):
+def get_stratified_coords3D(box_size, shape):
         box_count_z = int(np.ceil(shape[0] / box_size))
         box_count_Y = int(np.ceil(shape[1] / box_size))
         box_count_X = int(np.ceil(shape[2] / box_size))
@@ -301,7 +301,7 @@ def get_stratified_coords3D(coord_gen, box_size, shape):
         for i in range(box_count_z):
             for j in range(box_count_Y):
                 for k in range(box_count_X):
-                    z, y, x = next(coord_gen)
+                    z, y, x = np.random.rand() * box_size, np.random.rand() * box_size, np.random.rand() * box_size
                     z = int(i * box_size + z)
                     y = int(j * box_size + y)
                     x = int(k * box_size + x)
@@ -310,14 +310,6 @@ def get_stratified_coords3D(coord_gen, box_size, shape):
                         y_coords.append(y)
                         x_coords.append(x)
         return (z_coords, y_coords, x_coords)
-
-def rand_float_coords2D(boxsize):
-    while True:
-        yield (np.random.rand() * boxsize, np.random.rand() * boxsize)
-
-def rand_float_coords3D(boxsize):
-    while True:
-        yield (np.random.rand() * boxsize, np.random.rand() * boxsize, np.random.rand() * boxsize)
 
 def apply_structN2Vmask(patch, coords, mask):
     """
@@ -367,17 +359,15 @@ def manipulate_val_data(X_val, Y_val, perc_pix=0.198, shape=(64, 64), value_mani
     if dims == 2:
         box_size = np.round(np.sqrt(100 / perc_pix)).astype(np.int)
         get_stratified_coords = get_stratified_coords2D
-        rand_float = rand_float_coords2D(box_size)
     elif dims == 3:
         box_size = np.round(np.sqrt(100 / perc_pix)).astype(np.int)
         get_stratified_coords = get_stratified_coords3D
-        rand_float = rand_float_coords3D(box_size)
 
     n_chan = X_val.shape[-1]
 
     Y_val *= 0
     for j in tqdm(range(X_val.shape[0]), desc='Preparing validation data: '):
-        coords = get_stratified_coords(rand_float, box_size=box_size,
+        coords = get_stratified_coords(box_size=box_size,
                                        shape=np.array(X_val.shape)[1:-1])
         for c in range(n_chan):
             indexing = (j,) + coords + (c,)

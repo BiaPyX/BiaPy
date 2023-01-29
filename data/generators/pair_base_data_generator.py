@@ -11,7 +11,7 @@ from skimage.io import imread
 from imgaug.augmentables.heatmaps import HeatmapsOnImage
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 
-from engine.denoising import (rand_float_coords2D, rand_float_coords3D, get_stratified_coords2D, get_stratified_coords3D, get_value_manipulation,                         
+from engine.denoising import (get_stratified_coords2D, get_stratified_coords3D, get_value_manipulation,                         
                               apply_structN2Vmask, apply_structN2Vmask3D)                    
 from utils.util import img_to_onehot_encoding
 from data.generators.augmentors import *
@@ -608,7 +608,6 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if self.n2v:
             self.box_size = np.round(np.sqrt(100/n2v_perc_pix)).astype(np.int)
             self.get_stratified_coords = get_stratified_coords2D if self.ndim == 2 else get_stratified_coords3D
-            self.rand_float = rand_float_coords2D(self.box_size) if self.ndim == 2 else rand_float_coords3D(self.box_size) 
             self.value_manipulation = get_value_manipulation(n2v_manipulator, n2v_neighborhood_radius)
             self.n2v_structMask = n2v_structMask 
             self.apply_structN2Vmask_func = apply_structN2Vmask if self.ndim == 2 else apply_structN2Vmask3D
@@ -1237,7 +1236,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
         for c in range(self.Y_channels):
             for j in range(batch_x.shape[0]):       
-                coords = self.get_stratified_coords(self.rand_float, box_size=self.box_size, shape=self.shape)                             
+                coords = self.get_stratified_coords(box_size=self.box_size, shape=self.shape)                             
                 indexing = (j,) + coords + (c,)
                 indexing_mask = (j,) + coords + (c + self.Y_channels, )
                 y_val = batch_x[indexing]
