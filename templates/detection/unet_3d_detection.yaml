@@ -18,11 +18,11 @@ DATA:
         SPLIT_TRAIN: 0.2
         IN_MEMORY: True
     TEST:
-        RESOLUTION: (3.6,1.0,1.0)
+        RESOLUTION: (1,1,1)
         PATH: /path/to/data
         MASK_PATH: /path/to/data
         IN_MEMORY: True
-        LOAD_GT: False
+        LOAD_GT: True
         PADDING: (0,32,32)
                 
 AUGMENTOR:
@@ -51,10 +51,10 @@ MODEL:
     FEATURE_MAPS: [18, 36, 48, 64]
     DROPOUT_VALUES: [0.1, 0.2, 0.3, 0.4]
     Z_DOWN: 1
-    LOAD_CHECKPOINT: True
+    LOAD_CHECKPOINT: False
 
 TRAIN:
-    ENABLE: False
+    ENABLE: True
     OPTIMIZER: ADAM
     LR: 1.E-4
     BATCH_SIZE: 6
@@ -71,7 +71,6 @@ TEST:
     STATS:
         PER_PATCH: True
         MERGE_PATCHES: True
-        FULL_IMG: False
     POST_PROCESSING:
         REMOVE_CLOSE_POINTS: True
-        REMOVE_CLOSE_POINTS_RADIUS: 10.0
+        REMOVE_CLOSE_POINTS_RADIUS: [10.0]
