@@ -84,7 +84,8 @@ class Base_Workflow(metaclass=ABCMeta):
                                 padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
                                 median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
                     else:
-                        obj = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, data_mask=Y[0], overlap=self.cfg.DATA.TEST.OVERLAP, 
+                        if self.cfg.DATA.TEST.LOAD_GT: Y = Y[0]
+                        obj = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
                             padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
                             median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
                         if self.cfg.DATA.TEST.LOAD_GT:
