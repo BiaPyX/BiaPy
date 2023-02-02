@@ -25,6 +25,8 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         super().__init__(**kwars)
         self.z_size = self.shape[0] if self.random_crops_in_DA else self.X.shape[1]
         self.zflip = zflip
+        self.grid_d_size = (self.shape[1]*self.grid_d_range[0], self.shape[2]*self.grid_d_range[1],\
+                            self.shape[0]*self.grid_d_range[0], self.shape[0]*self.grid_d_range[1])
 
     def ensure_shape(self, img, mask):
         # Shape adjustment
