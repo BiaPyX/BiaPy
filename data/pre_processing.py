@@ -303,7 +303,9 @@ def create_detection_masks(cfg, data_type='train'):
                     if img.shape[0] <= 3: img = img.transpose((1,2,3,0))
 
             # Discard first index column to not have error if it is not sorted 
+            p_number=df.iloc[: , 0].to_list()
             df = df.iloc[: , 1:]
+            df = df.rename(columns=lambda x: x.strip()) # trim spaces in column names
             if len(df.columns) == req_dim+1:
                 if not all(df.columns == req_columns_class):
                     raise ValueError("CSV columns need to be {}".format(req_columns_class))
@@ -362,7 +364,7 @@ def create_detection_masks(cfg, data_type='train'):
                                      max(0,a1_coord-4):min(mask.shape[1],a1_coord+5),                                   
                                      max(0,a2_coord-4):min(mask.shape[2],a2_coord+5), c_point]: 
                             print("WARNING: possible duplicated point in (3,9,9) neighborhood: coords {} , class {} "
-                                  "(point number {} in CSV)".format((a0_coord,a1_coord,a2_coord), c_point, j))                                                                                                                                            
+                                  "(point number {} in CSV)".format((a0_coord,a1_coord,a2_coord), c_point, p_number[j]))                                                                                                                                            
                                                                                                                                 
                         mask[a0_coord,a1_coord,a2_coord,c_point] = 1                                            
                         if a1_coord+1 < mask.shape[1]: mask[a0_coord,a1_coord+1,a2_coord,c_point] = 1       
@@ -377,7 +379,7 @@ def create_detection_masks(cfg, data_type='train'):
                         if 1 in mask[max(0,a0_coord-4):min(mask.shape[0],a0_coord+5),                                   
                                     max(0,a1_coord-4):min(mask.shape[1],a1_coord+5), c_point]: 
                             print("WARNING: possible duplicated point in (9,9) neighborhood: coords {} , class {} "
-                                  "(point number {} in CSV)".format((a0_coord,a1_coord), c_point, j))                                                                                                                                            
+                                  "(point number {} in CSV)".format((a0_coord,a1_coord), c_point, p_number[j]))                                                                                                                                            
                                                                                                                                 
                         mask[a0_coord,a1_coord,c_point] = 1                                            
                         if a1_coord+1 < mask.shape[1]: mask[a0_coord,a1_coord+1,c_point] = 1       
