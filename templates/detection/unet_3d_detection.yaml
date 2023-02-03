@@ -1,5 +1,5 @@
 SYSTEM:
-    NUM_CPUS: 1
+    NUM_CPUS: -1
 
 PROBLEM:
     TYPE: DETECTION
@@ -27,29 +27,14 @@ DATA:
                 
 AUGMENTOR:
     DA_PROB: 0.5
-    MISALIGNMENT: False
-    CUTOUT: True
-    CUTNOISE: False
-    CUTBLUR: True
     ENABLE: True
-    RANDOM_ROT: True
-    ROT90: False
     VFLIP: True
     HFLIP: True
-    CONTRAST: True
-    CONTRAST_FACTOR: (-0.3, 0.3)
-    BRIGHTNESS: True
-    BRIGHTNESS_FACTOR: (0.1, 0.3)
-    GAMMA_CONTRAST: True
-    GC_GAMMA: (0.5, 1.5)
-    ELASTIC: False
-    GRAYSCALE: False
-    CHANNEL_SHUFFLE: True
+    ZFLIP: True
 
 MODEL:
     ARCHITECTURE: unet
     FEATURE_MAPS: [18, 36, 48, 64]
-    DROPOUT_VALUES: [0.1, 0.2, 0.3, 0.4]
     Z_DOWN: 1
     LOAD_CHECKPOINT: False
 
