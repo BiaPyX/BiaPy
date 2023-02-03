@@ -271,6 +271,9 @@ def create_detection_masks(cfg, data_type='train'):
     img_ids = sorted(next(os.walk(img_dir))[2])
     img_ext = '.'+img_ids[0].split('.')[-1]
     ids = sorted(next(os.walk(label_dir))[2])
+    if len(img_ids) != len(ids):
+        raise ValueError("Different number of CSV files and images found ({} vs {}). "
+            "Please check that every image has one and only one CSV file".format(len(ids), len(img_ids)))
     if cfg.PROBLEM.NDIM == '2D':
         req_dim = 2 
         req_columns = ['axis-0', 'axis-1']
@@ -285,7 +288,12 @@ def create_detection_masks(cfg, data_type='train'):
         img_filename = os.path.splitext(ids[i])[0]+img_ext
         if not os.path.exists(os.path.join(out_dir, img_filename)):
             print("Attempting to create mask from CSV file: {}".format(os.path.join(label_dir, ids[i])))
-
+            if not os.path.exists(os.path.join(img_dir, img_filename)):
+                print("WARNING: The image seems to have different name than the CSV file. Using the image "
+                    "with the same position as the CSV in the directory. Check if it is correct!")
+                img_filename = img_ids[i]
+            print("Its respective image seems to be: {}".format(os.path.join(img_dir, img_filename)))
+            
             df = pd.read_csv(os.path.join(label_dir, ids[i]))  
             img = imread(os.path.join(img_dir, img_filename))
             
@@ -370,7 +378,16 @@ def create_detection_masks(cfg, data_type='train'):
                         if a1_coord+1 < mask.shape[1]: mask[a0_coord,a1_coord+1,a2_coord,c_point] = 1       
                         if a1_coord-1 > 0: mask[a0_coord,a1_coord-1,a2_coord,c_point] = 1                   
                         if a2_coord+1 < mask.shape[2]: mask[a0_coord,a1_coord,a2_coord+1,c_point] = 1       
-                        if a2_coord-1 > 0: mask[a0_coord,a1_coord,a2_coord-1,c_point] = 1                   
+                        if a2_coord-1 > 0: mask[a0_coord,a1_coord,a2_coord-1,c_point] = 1     
+                        if cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION == 0:
+                            if a1_coord+1 < mask.shape[1] and a2_coord+1 < mask.shape[2]: 
+                                mask[a0_coord,a1_coord+1,a2_coord+1,c_point] = 1       
+                            if a1_coord-1 > 0 and a2_coord-1 > 0: 
+                                mask[a0_coord,a1_coord-1,a2_coord-1,c_point] = 1  
+                            if a1_coord-1 > 0 and a2_coord+1 < mask.shape[2]: 
+                                mask[a0_coord,a1_coord-1,a2_coord+1,c_point] = 1   
+                            if a1_coord+1 < mask.shape[1] and a2_coord-1 > 0: 
+                                mask[a0_coord,a1_coord+1,a2_coord-1,c_point] = 1             
                     else:  
                         print("WARNING: discarding point {} which seems to be out of shape: {}"
                               .format([a0_coord,a1_coord,a2_coord], img.shape))                                                                                                     
@@ -389,11 +406,12 @@ def create_detection_masks(cfg, data_type='train'):
                               .format([a0_coord,a1_coord], img.shape))     
 
             # Dilate the mask
-            if cfg.PROBLEM.NDIM == '2D': mask = np.expand_dims(mask,0)
-            for k in range(mask.shape[0]): 
-                for ch in range(mask.shape[-1]):                                                                                  
-                    mask[k,...,ch] = binary_dilation(mask[k,...,ch], iterations=1,  structure=disk(3))                                                                                                                                                    
-            if cfg.PROBLEM.NDIM == '2D': mask = mask[0]
+            if cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION > 0:
+                if cfg.PROBLEM.NDIM == '2D': mask = np.expand_dims(mask,0)
+                for k in range(mask.shape[0]): 
+                    for ch in range(mask.shape[-1]):                                                                                  
+                        mask[k,...,ch] = binary_dilation(mask[k,...,ch], iterations=1,  structure=disk(cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION))                                                                                                                                                    
+                if cfg.PROBLEM.NDIM == '2D': mask = mask[0]
 
             if cfg.PROBLEM.DETECTION.CHECK_POINTS_CREATED:
                 print("Check points created to see if some of them are very close that create a large label") 

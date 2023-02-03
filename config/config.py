@@ -101,6 +101,8 @@ class Config:
         
         ### DETECTION
         _C.PROBLEM.DETECTION = CN()
+        # Size of the disk that will be used to dilate the central point created from the CSV file. 0 to not dilate and only create a 3x3 square.
+        _C.PROBLEM.DETECTION.CENTRAL_POINT_DILATION = 3
         _C.PROBLEM.DETECTION.CHECK_POINTS_CREATED = True
         # Whether to save watershed check files
         _C.PROBLEM.DETECTION.DATA_CHECK_MW = True
