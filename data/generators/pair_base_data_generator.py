@@ -490,14 +490,6 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                         self.X[i], _ = norm_range01(self.X[i])
                 self.X_norm.update(normx)
             
-            t = "Training" if not val else "Validation"
-            if type(X) != list:
-                print("{} data normalization - min: {} , max: {} , mean: {}"
-                    .format(t,np.min(self.X), np.max(self.X), np.mean(self.X)))
-            else:
-                print("{} data[0] normalization - min: {} , max: {} , mean: {}"
-                    .format(t,np.min(self.X[0]), np.max(self.X[0]), np.mean(self.X[0])))
-            
             # Y data analysis
             self.first_no_bin_channel = -1
             self.div_Y_on_load_bin_channels = False
@@ -551,6 +543,20 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                     self.Y = normalize(self.Y, self.X_norm['mean'], self.X_norm['std'])
             else:
                 self.Y_dtype = self.Y.dtype if type(self.Y) != list else self.Y[0].dtype
+
+            t = "Training" if not val else "Validation"
+            if type(X) != list:
+                print("{} data X normalization - min: {} , max: {} , mean: {} , dtype: {}"
+                    .format(t,np.min(self.X), np.max(self.X), np.mean(self.X), self.X.dtype))
+                print("{} data Y normalization - min: {} , max: {} , mean: {} , dtype: {}"
+                    .format(t,np.min(self.Y), np.max(self.Y), np.mean(self.Y), self.Y.dtype))
+            else:
+                print("{} data[0] X normalization - min: {} , max: {} , mean: {} , dtype: {}"
+                    .format(t,np.min(self.X[0]), np.max(self.X[0]), np.mean(self.X[0]), self.X[0].dtype))
+                print("{} data[0] Y normalization - min: {} , max: {} , mean: {} , dtype: {}"
+                    .format(t,np.min(self.Y[0]), np.max(self.Y[0]), np.mean(self.Y[0]), self.Y[0].dtype))
+            print("Normalization config used for X: {}".format(self.X_norm))
+            print("Normalization config used for Y: {}".format(self.normalizeY))
 
         if self.ndim == 2:
             resolution = tuple(resolution[i] for i in [1, 0]) # y, x -> x, y
@@ -1138,6 +1144,8 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 pos = i
 
             img, mask = self.load_sample(pos)
+            img = np.copy(img)
+            mask = np.copy(mask)
 
             # Apply random crops if it is selected
             if self.random_crops_in_DA:
