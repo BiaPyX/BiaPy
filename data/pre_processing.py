@@ -282,7 +282,7 @@ def create_detection_masks(cfg, data_type='train'):
 
     print("Creating {} detection masks . . .".format(data_type))
     for i in range(len(ids)):
-        img_filename = ids[i].split('.')[0]+img_ext
+        img_filename = os.path.splitext(ids[i])[0]+img_ext
         if not os.path.exists(os.path.join(out_dir, img_filename)):
             print("Attempting to create mask from CSV file: {}".format(os.path.join(label_dir, ids[i])))
 
@@ -799,6 +799,10 @@ def norm_range01(x):
         if np.max(x) > 255:
             x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=np.float32)
             norm_steps['reduced_uint16'] = 1
+    elif x.dtype == np.int32:
+        if np.max(x) > 255:
+            x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=np.float32)
+            norm_steps['reduced_int32'] = 1
     x = x.astype(np.float32)
     return x, norm_steps
 
