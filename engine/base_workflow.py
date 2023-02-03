@@ -56,7 +56,8 @@ class Base_Workflow(metaclass=ABCMeta):
             original_data_shape = X.shape
             
             # Crop if necessary
-            if X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+            if X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1] or any(x == 0 for x in self.cfg.DATA.TEST.PADDING)\
+                or any(x == 0 for x in self.cfg.DATA.TEST.OVERLAP):
                 # Copy X to be used later in full image 
                 if self.cfg.PROBLEM.NDIM != '3D': 
                     X_original = X.copy()
@@ -131,7 +132,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 del X, p
 
             # Reconstruct the predictions
-            if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+            if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1] or any(x == 0 for x in self.cfg.DATA.TEST.PADDING)\
+                or any(x == 0 for x in self.cfg.DATA.TEST.OVERLAP):
                 if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
                 f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
 
