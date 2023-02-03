@@ -367,10 +367,11 @@ def create_detection_masks(cfg, data_type='train'):
 
                 # Paint the point
                 if cfg.PROBLEM.NDIM == '3D':
-                    if a0_coord < mask.shape[0] and a1_coord < mask.shape[1] and a2_coord < mask.shape[2]:                                                                                                              
+                    if a0_coord < mask.shape[0] and a1_coord < mask.shape[1] and a2_coord < mask.shape[2]:
+                        cpd = cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION                                                                                                              
                         if 1 in mask[max(0,a0_coord-1):min(mask.shape[0],a0_coord+2),                                   
-                                     max(0,a1_coord-4):min(mask.shape[1],a1_coord+5),                                   
-                                     max(0,a2_coord-4):min(mask.shape[2],a2_coord+5), c_point]: 
+                                     max(0,a1_coord-1-cpd):min(mask.shape[1],a1_coord+2+cpd),                                   
+                                     max(0,a2_coord-1-cpd):min(mask.shape[2],a2_coord+2+cpd), c_point]: 
                             print("WARNING: possible duplicated point in (3,9,9) neighborhood: coords {} , class {} "
                                   "(point number {} in CSV)".format((a0_coord,a1_coord,a2_coord), c_point, p_number[j]))                                                                                                                                            
                                                                                                                                 
