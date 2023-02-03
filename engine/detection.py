@@ -51,7 +51,7 @@ class Detection(Base_Workflow):
     
                     pred_coordinates = remove_close_points(pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION,
                         ndim=ndim)
-                        
+                     
                 all_points.append(pred_coordinates)   
                 c_size = 1 if len(pred_coordinates) == 0 else len(pred_coordinates)
                 all_classes.append(np.full(c_size, channel))
@@ -104,7 +104,7 @@ class Detection(Base_Workflow):
                     donuts_nucleus_diameter=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER, save_dir=check_wa)
                 
                 # Advice user if instance     
-                points_pred, labels, npixels, areas, circularities, comment = remove_instance_by_circularity_central_slice(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
+                points_pred, labels, npixels, areas, circularities, diameters, comment = remove_instance_by_circularity_central_slice(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
                     np.concatenate(all_points, axis=0), circularity_th=self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY)
 
                 save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
@@ -114,18 +114,31 @@ class Detection(Base_Workflow):
             # Save coords in a couple of csv files            
             aux = np.concatenate(all_points, axis=0)
             if len(aux) != 0:
-                prob = pred[aux[:,0], aux[:,1], aux[:,2], all_classes]
-
-                if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-                    size_measure = 'area' if ndim == 2 else 'volume'
-                    df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes),\
-                        npixels, areas, circularities, comment), columns =['label', 'axis-0', 'axis-1', 'axis-2', 'probability', \
-                        'class', 'npixels', size_measure, 'circularity', 'comment'])
-                    df = df.sort_values(by=['label'])   
+                if self.cfg.PROBLEM.NDIM == "3D":
+                    prob = pred[aux[:,0], aux[:,1], aux[:,2], all_classes]
+                    if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
+                        size_measure = 'area' if ndim == 2 else 'volume'
+                        df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes),\
+                            npixels, areas, circularities, diameters, comment), columns =['label', 'axis-0', 'axis-1', 'axis-2', 'probability', \
+                            'class', 'npixels', size_measure, 'circularity', 'diameters', 'comment'])
+                        df = df.sort_values(by=['label'])   
+                    else:
+                        df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes)), 
+                            columns =['axis-0', 'axis-1', 'axis-2', 'probability', 'class'])
+                        df = df.sort_values(by=['axis-0'])
                 else:
-                    df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes)), 
-                        columns =['axis-0', 'axis-1', 'axis-2', 'probability', 'class'])
-                    df = df.sort_values(by=['axis-0'])
+                    aux = aux[:,1:]
+                    prob = pred[0,aux[:,0], aux[:,1], all_classes]
+                    if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
+                        size_measure = 'area' if ndim == 2 else 'volume'
+                        df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(prob), list(all_classes),\
+                            npixels, areas, circularities, diameters, comment), columns =['label', 'axis-0', 'axis-1', 'probability', \
+                            'class', 'npixels', size_measure, 'circularity', 'diameters', 'comment'])
+                        df = df.sort_values(by=['label'])   
+                    else:
+                        df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(prob), list(all_classes)), 
+                            columns =['axis-0', 'axis-1', 'probability', 'class'])
+                        df = df.sort_values(by=['axis-0'])
                 del aux 
 
                 df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_full_info.csv'))

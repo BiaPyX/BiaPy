@@ -60,8 +60,12 @@ def check_configuration(cfg):
         raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED' can only be set when 'PROBLEM.TYPE' is 'DETECTION'")
     if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
         for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION:
+            if not isinstance(x, list):
+                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' need to be a list of list") 
             if any(y == -1 for y in x):
                 raise ValueError("Please set 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' when using 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION'")
+            if len(x) != dim_count:
+                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' need to be of dimension {} for {} problem".format(dim_count, cfg.PROBLEM.NDIM))
         if cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES != [-1]:
             if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES) > cfg.MODEL.N_CLASSES:
                 raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' length can't be greater than 'MODEL.N_CLASSES'")
@@ -70,8 +74,8 @@ def check_configuration(cfg):
             min_class = np.min(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES)
             if not all(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES == np.array(range(min_class,len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES)+1))):
                 raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' must be consecutive, e.g [1,2,3,4..]") 
-        if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH) != dim_count:
-            raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH' need to be of dimension {} for {} problem".format(dim_count, cfg.PROBLEM.NDIM))
+            if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH) != dim_count:
+                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH' need to be of dimension {} for {} problem".format(dim_count, cfg.PROBLEM.NDIM))
 
     if cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1:
         if not check_value(cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY):

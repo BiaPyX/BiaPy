@@ -1707,7 +1707,7 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
             if image3d:
                 label_list_coords.append(img[c[0],c[1],c[2]])
             else:
-                label_list_coords.append(img[c[0],c[1]])
+                label_list_coords.append(img[c[1],c[2]])
             comment.append('none')
 
         areas = np.zeros(total_labels, dtype=np.uint32)
@@ -1774,8 +1774,8 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
         if len(props['label'])>0:                           
             for k, l in enumerate(props['label']):
                 multiple_slices = False
+                j = label_list_coords.index(l)
                 if image3d:
-                    j = label_list_coords.index(l)
                     coord = coords_list[j]
                     
                     if len(coord) > 1:
