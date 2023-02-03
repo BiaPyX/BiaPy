@@ -1,0 +1,66 @@
+SYSTEM:
+    NUM_CPUS: -1
+
+PROBLEM:
+    TYPE: DETECTION
+    NDIM: 2D
+
+DATA:
+    PATCH_SIZE: (256, 256, 1)
+    REFLECT_TO_COMPLETE_SHAPE: True
+    CHECK_GENERATORS: False
+    EXTRACT_RANDOM_PATCH: False
+    TRAIN:
+        PATH: /data2/dfranco/datasets/Stardist/detection/data/train/x
+        MASK_PATH: /data2/dfranco/datasets/Stardist/detection/data/train/y
+        IN_MEMORY: True
+    VAL:
+        FROM_TRAIN: True
+        PATH: /data2/dfranco/datasets/demo3D/detection/data/train/x
+        MASK_PATH: /data2/dfranco/datasets/demo3D/detection/data/train/y
+        SPLIT_TRAIN: 0.2
+        IN_MEMORY: True
+    TEST:
+        RESOLUTION: (1,1)
+        PATH: /data2/dfranco/datasets/Stardist/detection/data/test/x
+        MASK_PATH: /data2/dfranco/datasets/Stardist/detection/data/test/y
+        IN_MEMORY: False
+        LOAD_GT: True
+        PADDING: (32,32)
+
+AUGMENTOR:
+    DA_PROB: 0.5
+    ENABLE: True
+    VFLIP: True
+    HFLIP: True
+    ZFLIP: True
+
+MODEL:
+    ARCHITECTURE: resunet
+    FEATURE_MAPS: [36, 48, 64]
+    DROPOUT_VALUES: [0, 0, 0]
+    LOAD_CHECKPOINT: False
+
+LOSS:
+  TYPE: CE
+
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAM
+    LR: 1.E-4
+    BATCH_SIZE: 4
+    EPOCHS: 40
+    PATIENCE: 10
+
+TEST:
+    ENABLE: True                                                                                                        
+    AUGMENTATION: False                                                                                                 
+    DET_LOCAL_MAX_COORDS: True                                                                                          
+    DET_TOLERANCE: [3]                                                                                             
+    DET_MIN_TH_TO_BE_PEAK: [0.2]                                                                                   
+    STATS:                                                                                                              
+        PER_PATCH: True                                                                                                 
+        MERGE_PATCHES: True                                                                                             
+    POST_PROCESSING:                                                                                                    
+        REMOVE_CLOSE_POINTS: True                                                                                       
+        REMOVE_CLOSE_POINTS_RADIUS: [3] 
