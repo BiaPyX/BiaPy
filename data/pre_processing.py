@@ -818,10 +818,18 @@ def norm_range01(x):
         if np.max(x) > 255:
             x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=np.float32)
             norm_steps['reduced_uint16'] = 1
+    elif x.dtype == np.int16:
+        if np.max(x) > 255:
+            x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=np.float32)
+            norm_steps['reduced_int16'] = 1
     elif x.dtype == np.int32:
         if np.max(x) > 255:
             x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=np.float32)
             norm_steps['reduced_int32'] = 1
+    elif x.dtype == np.float32:
+        if np.max(x) > 255:
+            x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=np.float32)
+            norm_steps['reduced_float32'] = 1
     x = x.astype(np.float32)
     return x, norm_steps
 
