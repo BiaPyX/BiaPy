@@ -996,10 +996,13 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
 
     same_shape = True
     s = data[0].shape
+    dtype = data[0].dtype
     for i in range(1,len(data)):
+        if dtype != data[i].dtype:
+            raise ValueError("Data type mismatch {} and {} found in the dataset. Please check it and ensure all"
+                             " images have same data type".format(dtype,data[i].dtype))
         if s != data[i].shape:
             same_shape = False
-            break
 
     if crop or same_shape:
         data = np.concatenate(data)
@@ -1227,7 +1230,6 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
                              " images have same data type".format(dtype,data[i].dtype))
         if s != data[i].shape:
             same_shape = False
-            break
 
     if crop or same_shape:
         data = np.concatenate(data)
