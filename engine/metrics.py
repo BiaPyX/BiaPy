@@ -3,6 +3,7 @@ import os
 import distutils
 import tensorflow as tf
 import numpy as np
+import pandas as pd
 from tensorflow.keras import backend as K
 from skimage import measure
 from PIL import Image
@@ -537,7 +538,7 @@ def masked_mse(y_true, y_pred, mask):
     return K.mean(tf.expand_dims(mask*K.square(y_true - y_pred), -1), axis=-1)
 
 
-def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), verbose=False):
+def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc=False, verbose=False):
     """Calculate detection metrics based on
 
        Parameters
@@ -555,6 +556,12 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), verbose=Fals
            Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value
            on the axis with less resolution. E.g. ``(1,1,0.5)``.
 
+       return_assoc : bool, optional
+           To return two dataframes containing the gt points association and the FP. 
+
+       verbose : bool, optional
+            To print extra information.
+
        Returns
        -------
        metrics : List of strings
@@ -571,16 +578,40 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), verbose=Fals
 
     # Create cost matrix
     distances = distance_matrix(_pred, _true)
-
+    distances[distances>tolerance] *= 100 
     pred_ind, true_ind = linear_sum_assignment(distances)
 
     TP, FP, FN = 0, 0, 0
+    tag = ["FN" for x in _true]
+    fp_preds = list(range(1,len(_pred)+1))
+    dis = [-1 for x in _true]
+    pred_id_assoc = [-1 for x in _true]
+
+    # Analyse which associations are below the tolerance to consider them TP
     for i in range(len(pred_ind)):
         if distances[pred_ind[i],true_ind[i]] < tolerance:
             TP += 1
+            tag[true_ind[i]] = "TP"
+            fp_preds.remove(pred_ind[i]+1)
+
+        dis[true_ind[i]] = distances[pred_ind[i],true_ind[i]]
+        pred_id_assoc[true_ind[i]] = pred_ind[i]+1
 
     FN = len(_true) - TP
     FP = len(_pred) - TP
+
+    # Create tow dataframes with the GT and prediction points association made and another one with the FPs
+    if return_assoc:
+        _true = np.array(true, dtype=np.float32)
+        _pred = np.array(pred, dtype=np.float32)
+
+        fp_coords = np.zeros((len(fp_preds),_pred.shape[-1]))
+        for i in range(len(fp_preds)):
+            fp_coords[i] = _pred[fp_preds[i]-1]
+        df = pd.DataFrame(zip(list(range(1,len(_true)+1)), pred_id_assoc, dis, tag, _true[...,0], _true[...,1], _true[...,2]), 
+            columns =['gt_id', 'pred_id', 'distance', 'tag', 'axis-0', 'axis-1', 'axis-2'])
+        df_fn = pd.DataFrame(zip(fp_preds, fp_coords[...,0], fp_coords[...,1], fp_coords[...,2]), 
+            columns =['pred_id', 'axis-0', 'axis-1', 'axis-2'])
 
     try:
         precision = TP/(TP+FP)
@@ -598,8 +629,11 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), verbose=Fals
     if verbose:
     	print("Points in ground truth: {}, Points in prediction: {}".format(len(_true), len(_pred)))
     	print("True positives: {}, False positives: {}, False negatives: {}".format(TP, FP, FN))
-        
-    return ["Precision", precision, "Recall", recall, "F1", F1]
+    
+    if return_assoc:
+        return ["Precision", precision, "Recall", recall, "F1", F1], df, df_fn
+    else:
+        return ["Precision", precision, "Recall", recall, "F1", F1]
 
 def masked_bce_loss( y_true, y_pred ):
     """Binary cross-entropy loss masking pixels of value 2 out.

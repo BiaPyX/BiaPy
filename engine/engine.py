@@ -58,7 +58,7 @@ class Engine(object):
         elif cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             self.original_test_path, self.original_test_mask_path = prepare_instance_data(cfg)
         elif cfg.PROBLEM.TYPE == 'DETECTION':
-            prepare_detection_data(cfg)
+            self.original_test_mask_path = prepare_detection_data(cfg)
         elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
             prepare_ssl_data(cfg)
 
@@ -234,7 +234,7 @@ class Engine(object):
                 self.post_processing['detection_post'] = True
             else:
                 self.post_processing['detection_post'] = False
-            workflow = Detection(self.cfg, self.model, self.post_processing)
+            workflow = Detection(self.cfg, self.model, self.post_processing, self.original_test_mask_path)
         elif self.cfg.PROBLEM.TYPE == 'CLASSIFICATION':
             workflow = Classification(self.cfg, self.model, self.class_names, self.post_processing)
         elif self.cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':

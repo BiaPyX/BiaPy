@@ -13,9 +13,12 @@ from engine.metrics import detection_metrics
 from engine.base_workflow import Base_Workflow
 
 class Detection(Base_Workflow):
-    def __init__(self, cfg, model, post_processing={}):
+    def __init__(self, cfg, model, post_processing={}, original_test_mask_path=None):
         super().__init__(cfg, model, post_processing)
 
+        self.original_test_mask_path = original_test_mask_path    
+        if self.cfg.DATA.TEST.LOAD_GT:
+            self.csv_files = sorted(next(os.walk(original_test_mask_path))[2])
         self.cell_count_file = os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, 'cell_counter.csv')
         self.cell_count_lines = []
 
@@ -27,9 +30,10 @@ class Detection(Base_Workflow):
         self.stats['d_recall_per_crop'] = 0
         self.stats['d_f1_per_crop'] = 0
 
-    def detection_process(self, pred, Y, filenames, metric_names=[]):
+    def detection_process(self, pred, filenames, metric_names=[], f_numbers=0):
         ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
-
+        pred_shape = pred.shape
+        
         if self.cfg.TEST.DET_LOCAL_MAX_COORDS:
             print("Capturing the local maxima ")
             all_points = []
@@ -56,7 +60,8 @@ class Detection(Base_Workflow):
                 c_size = 1 if len(pred_coordinates) == 0 else len(pred_coordinates)
                 all_classes.append(np.full(c_size, channel))
 
-            # Remove close points again seeing all classes together
+            # Remove close points again seeing all classes together, as it can be that a point is detected in both classes
+            # if there is not clear distinction between them
             if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.cfg.MODEL.N_CLASSES > 1:
                 print("All classes together")
                 radius = np.min(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS)
@@ -75,20 +80,33 @@ class Detection(Base_Workflow):
                     all_points[c].append(new_points[i])
                 del new_points
 
-            # Create a file that represent the local maxima
-            print("Creating the image with detected points . . .")
-            all_labels = []
+            # Create a file with detected point and other image with predictions ids (if GT given)
+            print("Creating the images with detected points . . .")   
             points_pred = np.zeros(pred.shape[:-1], dtype=np.uint8)
             for n, pred_coordinates in enumerate(all_points):
-                for coord in pred_coordinates:
-                        z,y,x = coord
-                        points_pred[z,y,x] = n+1
+                if self.cfg.DATA.TEST.LOAD_GT:
+                    pred_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
+                for j, coord in enumerate(pred_coordinates):
+                    z,y,x = coord
+                    points_pred[z,y,x] = n+1
+                    if self.cfg.DATA.TEST.LOAD_GT:
+                        pred_id_img[z,y,x] = j+1
+                
+                # Dilate and save the prediction ids for the current class 
+                if self.cfg.DATA.TEST.LOAD_GT:
+                    for i in range(pred_id_img.shape[0]):                                                                                  
+                        pred_id_img[i] = dilation(pred_id_img[i], disk(3))
+                    save_tif(np.expand_dims(np.expand_dims(pred_id_img,0),-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                        [os.path.splitext(filenames[0])[0]+'_class'+str(n+1)+'_pred_ids.tif'], verbose=self.cfg.TEST.VERBOSE)
+
                 self.cell_count_lines.append([filenames, len(pred_coordinates)])
 
+            if self.cfg.DATA.TEST.LOAD_GT: del pred_id_img
+
+            # Dilate and save the detected point image
             if len(pred_coordinates) > 0:
                 for i in range(points_pred.shape[0]):                                                                                  
                     points_pred[i] = dilation(points_pred[i], disk(3)) 
-
             save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                      filenames, verbose=self.cfg.TEST.VERBOSE)
 
@@ -116,25 +134,34 @@ class Detection(Base_Workflow):
             if len(aux) != 0:
                 if self.cfg.PROBLEM.NDIM == "3D":
                     prob = pred[aux[:,0], aux[:,1], aux[:,2], all_classes]
+                    prob = np.concatenate(prob, axis=0)
+                    all_classes = np.concatenate(all_classes, axis=0)
                     if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
                         size_measure = 'area' if ndim == 2 else 'volume'
                         df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes),\
-                            npixels, areas, circularities, diameters, comment), columns =['label', 'axis-0', 'axis-1', 'axis-2', 'probability', \
+                            npixels, areas, circularities, diameters, comment), columns =['pred_id', 'axis-0', 'axis-1', 'axis-2', 'probability', \
                             'class', 'npixels', size_measure, 'circularity', 'diameters', 'comment'])
-                        df = df.sort_values(by=['label'])   
+                        df = df.sort_values(by=['pred_id'])   
                     else:
-                        df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes)), 
-                            columns =['axis-0', 'axis-1', 'axis-2', 'probability', 'class'])
-                        df = df.sort_values(by=['axis-0'])
+                        labels = []
+                        for i, pred_coordinates in enumerate(all_points):
+                            for j in range(len(pred_coordinates)):
+                                labels.append(j+1)
+
+                        df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes)), 
+                            columns =['pred_id', 'axis-0', 'axis-1', 'axis-2', 'probability', 'class'])
+                        df = df.sort_values(by=['pred_id'])
                 else:
                     aux = aux[:,1:]
                     prob = pred[0,aux[:,0], aux[:,1], all_classes]
+                    prob = np.concatenate(prob, axis=0)
+                    all_classes = np.concatenate(all_classes, axis=0)
                     if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
                         size_measure = 'area' if ndim == 2 else 'volume'
                         df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(prob), list(all_classes),\
-                            npixels, areas, circularities, diameters, comment), columns =['label', 'axis-0', 'axis-1', 'probability', \
+                            npixels, areas, circularities, diameters, comment), columns =['pred_id', 'axis-0', 'axis-1', 'probability', \
                             'class', 'npixels', size_measure, 'circularity', 'diameters', 'comment'])
-                        df = df.sort_values(by=['label'])   
+                        df = df.sort_values(by=['pred_id'])   
                     else:
                         df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(prob), list(all_classes)), 
                             columns =['axis-0', 'axis-1', 'probability', 'class'])
@@ -143,51 +170,114 @@ class Detection(Base_Workflow):
 
                 df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_full_info.csv'))
                 if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-                    df = df.drop(columns=['class', 'label', 'npixels', size_measure, 'circularity', 'comment'])
+                    df = df.drop(columns=['class', 'pred_id', 'npixels', size_measure, 'circularity', 'comment'])
                 else:
                     df = df.drop(columns=['class'])
                 df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_prob.csv'))
+                del df
 
             # Calculate detection metrics
             if self.cfg.DATA.TEST.LOAD_GT:
                 all_channel_d_metrics = [0,0,0]
+                dfs = []
+                gt_all_coords = []
                 for ch, pred_coordinates in enumerate(all_points):
-                    exclusion_mask = Y[...,ch] > 0
-                    bin_Y = Y[...,ch] * exclusion_mask.astype( float )
-                    props = regionprops_table(label( bin_Y ), properties=('area','centroid'))
-                    gt_coordinates = []
-                    for n in range(len(props['centroid-0'])):
-                        gt_coordinates.append([props['centroid-0'][n], props['centroid-1'][n], props['centroid-2'][n]])
-                    gt_coordinates = np.array(gt_coordinates)
+
+                    # Read the GT coordinates from the CSV file
+                    csv_filename = os.path.join(self.original_test_mask_path, os.path.splitext(filenames[0])[0]+'.csv')
+                    if not os.path.exists(csv_filename):
+                        print("WARNING: The CSV file seems to have different name than iamge. Using the CSV file "
+                              "with the same position as the CSV in the directory. Check if it is correct!")
+                        csv_filename = os.path.join(self.original_test_mask_path, self.csv_files[f_numbers[0]])
+                        print("Its respective CSV file seems to be: {}".format(csv_filename))
+                    print("Reading GT data from: {}".format(csv_filename))
+                    df = pd.read_csv(csv_filename, index_col=0)     
+                    zcoords = df['axis-0'].tolist()
+                    ycoords = df['axis-1'].tolist()
+                    if self.cfg.PROBLEM.NDIM == '3D': 
+                        xcoords = df['axis-2'].tolist()
+                        gt_coordinates = [[z,y,x] for z,y,x in zip(zcoords,ycoords,xcoords)]
+                    else:
+                        gt_coordinates = [[0,y,x] for y,x in zip(zcoords,ycoords)]
+                    gt_all_coords.append(gt_coordinates)
 
                     if self.cfg.PROBLEM.NDIM == '3D':
                         v_size = (self.cfg.DATA.TEST.RESOLUTION[0], self.cfg.DATA.TEST.RESOLUTION[1], self.cfg.DATA.TEST.RESOLUTION[2])
                     else:
                         v_size = (1,self.cfg.DATA.TEST.RESOLUTION[0], self.cfg.DATA.TEST.RESOLUTION[1])
 
+                    # Calculate detection metrics 
                     if len(pred_coordinates) > 0:
                         print("Detection (class "+str(ch+1)+")")
-                        d_metrics = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
-                                                      voxel_size=v_size, verbose=self.cfg.TEST.VERBOSE)
+                        d_metrics, gt_assoc, fn = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
+                            voxel_size=v_size, return_assoc=True, verbose=self.cfg.TEST.VERBOSE)
                         print("Detection metrics: {}".format(d_metrics))
                         all_channel_d_metrics[0] += d_metrics[1]
                         all_channel_d_metrics[1] += d_metrics[3]
                         all_channel_d_metrics[2] += d_metrics[5]
+
+                        # Save csv files with the associations between GT points and predicted ones 
+                        dfs.append([gt_assoc.copy(),fn.copy()])
+                        if self.cfg.PROBLEM.NDIM == "2D":
+                            gt_assoc = gt_assoc.drop(columns=['axis-0'])
+                            fn = fn.drop(columns=['axis-0'])
+                            gt_assoc = gt_assoc.rename(columns={'axis-1': 'axis-0', 'axis-2': 'axis-1'})
+                            fn = fn.rename(columns={'axis-1': 'axis-0', 'axis-2': 'axis-1'})
+                        gt_assoc.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_assoc.csv'))
+                        fn.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_fn.csv'))             
                     else:
                         print("No point found to calculate the metrics!")
 
                 print("All classes "+str(ch+1))
-                all_channel_d_metrics[0] = all_channel_d_metrics[0]/Y.shape[-1]
-                all_channel_d_metrics[1] = all_channel_d_metrics[1]/Y.shape[-1]
-                all_channel_d_metrics[2] = all_channel_d_metrics[2]/Y.shape[-1]
+                all_channel_d_metrics[0] = all_channel_d_metrics[0]/len(all_points)
+                all_channel_d_metrics[1] = all_channel_d_metrics[1]/len(all_points)
+                all_channel_d_metrics[2] = all_channel_d_metrics[2]/len(all_points)
                 print("Detection metrics: {}".format(["Precision", all_channel_d_metrics[0],
-                                                        "Recall", all_channel_d_metrics[1],
-                                                        "F1", all_channel_d_metrics[2]]))
+                    "Recall", all_channel_d_metrics[1], "F1", all_channel_d_metrics[2]]))
 
                 self.stats[metric_names[0]] += all_channel_d_metrics[0]
                 self.stats[metric_names[1]] += all_channel_d_metrics[1]
                 self.stats[metric_names[2]] += all_channel_d_metrics[2]
-            
+                
+                print("Creating the image with a summary of detected points and false positives with colors . . .")
+                points_pred = np.zeros(pred_shape[:-1]+(3,), dtype=np.uint8)
+                for ch, gt_coords in enumerate(gt_all_coords):
+                    gt_assoc, fn = dfs[ch]
+
+                    # TP and FN
+                    gt_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
+                    for j, cor in enumerate(gt_coords):
+                        z,y,x = cor
+                        z,y,x = int(z),int(y),int(x)
+                        if gt_assoc[gt_assoc['gt_id'] == j+1]["tag"].iloc[0] == "TP":
+                            # Green
+                            points_pred[z,y,x] = (0,255,0)
+                        else:
+                            # Red
+                            points_pred[z,y,x] = (255,0,0)
+
+                        gt_id_img[z,y,x] = j+1
+
+                    # Dilate and save the GT ids for the current class 
+                    for i in range(gt_id_img.shape[0]):      
+                        gt_id_img[i] = dilation(gt_id_img[i], disk(3))
+                    save_tif(np.expand_dims(np.expand_dims(gt_id_img,0),-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                        [os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_ids.csv'], verbose=self.cfg.TEST.VERBOSE)
+
+                    # FP
+                    for cor in zip(fn['axis-0'].tolist(),fn['axis-1'].tolist(),fn['axis-2'].tolist()):
+                        z, y, x =  cor  
+                        z,y,x = int(z),int(y),int(x)
+                        # Blue
+                        points_pred[z,y,x] = (0,0,255)
+
+                # Dilate and save the predicted points for the current class 
+                for i in range(points_pred.shape[0]):      
+                    for j in range(points_pred.shape[-1]):                                                                              
+                        points_pred[i,...,j] = dilation(points_pred[i,...,j], disk(3)) 
+                save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                        filenames, verbose=self.cfg.TEST.VERBOSE)          
+
     def normalize_stats(self, image_counter):
         super().normalize_stats(image_counter)
 
@@ -207,10 +297,12 @@ class Detection(Base_Workflow):
                 self.stats['d_f1'] = self.stats['d_f1'] / image_counter
 
     def after_merge_patches(self, pred, Y, filenames, f_numbers):
-        self.detection_process(pred, Y, filenames, ['d_precision_per_crop', 'd_recall_per_crop', 'd_f1_per_crop'])
+        del Y
+        self.detection_process(pred, filenames, ['d_precision_per_crop', 'd_recall_per_crop', 'd_f1_per_crop'], f_numbers)
 
     def after_full_image(self, pred, Y, filenames):
-        self.detection_process(pred, Y, filenames, ['d_precision', 'd_recall', 'd_f1'])
+        del Y
+        self.detection_process(pred, filenames, ['d_precision', 'd_recall', 'd_f1'])
 
     def after_all_images(self):
         super().after_all_images()
@@ -234,6 +326,7 @@ def prepare_detection_data(cfg):
     print("############################\n"
           "#  PREPARE DETECTION DATA  #\n"
           "############################\n")
+    original_test_mask_path = None
 
     # Create selected channels for train data
     if cfg.TRAIN.ENABLE:
@@ -295,4 +388,8 @@ def prepare_detection_data(cfg):
     if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT:
         print("DATA.TEST.MASK_PATH changed from {} to {}".format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.DETECTION_MASK_DIR))
         opts.extend(['DATA.TEST.MASK_PATH', cfg.DATA.TEST.DETECTION_MASK_DIR])
+        original_test_mask_path = cfg.DATA.TEST.MASK_PATH
     cfg.merge_from_list(opts)
+    
+
+    return original_test_mask_path
