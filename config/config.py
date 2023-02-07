@@ -625,6 +625,7 @@ class Config:
         _C.PATHS.RESULT_DIR.FULL_IMAGE_BIN = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_image_binarized')
         _C.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'as_3d_stack_post_processing')
         _C.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_local_max_check')
+        _C.PATHS.RESULT_DIR.DET_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'point_associations')
 
         # Name of the folder where the charts of the loss and metrics values while training the network are stored.
         # Additionally, MW_TH* variable charts are stored if _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = True
