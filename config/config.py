@@ -60,16 +60,16 @@ class Config:
         # https://github.com/danifranco/BiaPy/blob/a1c46e6b8afaf577794aff9c30b52748490f147d/data/post_processing/post_processing.py#L172
         #
         # This variables are only used when _C.PROBLEM.TYPE = 'INSTANCE_SEG
-        # TH1 controls channel 'B' in the creation of the MW seeds
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH1 = 0.5
-        # TH2 controls channel 'C' in the creation of the MW seeds
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH2 = 0.1
-        # TH3 acts over the channel 'B' and is used to limit how much the seeds can be grow
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH3 = 0.3
-        # TH4 controls channel 'D' in the creation of the MW seeds
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH4 = 1.5
-        # TH5 acts over the channel 'D' and is used to limit how much the seeds can be grow
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH5 = 1.2
+        # TH_BINARY_MASK controls channel 'B' in the creation of the MW seeds
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_BINARY_MASK = 0.5
+        # TH_CONTOUR controls channel 'C' in the creation of the MW seeds
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_CONTOUR = 0.1
+        # TH_FOREGROUND acts over the channel 'B' and is used to limit how much the seeds can be grow
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_FOREGROUND = 0.3
+        # TH_DISTANCE controls channel 'D' in the creation of the MW seeds
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_DISTANCE = 1.5
+        # TH_DIST_FOREGROUND acts over the channel 'D' and is used to limit how much the seeds can be grow
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_DIST_FOREGROUND = 1.2
         # TH_POINTS controls channel 'P' in the creation of the MW seeds
         _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_POINTS = 0.5
         # Size of small objects to be removed after doing watershed

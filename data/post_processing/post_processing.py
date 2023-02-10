@@ -206,9 +206,9 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
            Channel type used. Possible options: ``BC``, ``BCM``, ``BCD``, ``BCDv2``, ``Dv2`` and ``BDv2``.
 
        ths : float, optional
-           Thresholds to be used on each channel. ``TH1`` used in the semantic mask to create watershed seeds;
-           ``TH2`` used in the contours to create watershed seeds; ``TH3`` used in the semantic mask to create the 
-           foreground mask; ``TH4`` used in the distances to create watershed seeds; and ``TH5`` used in the distances 
+           Thresholds to be used on each channel. ``TH_BINARY_MASK`` used in the semantic mask to create watershed seeds;
+           ``TH_CONTOUR`` used in the contours to create watershed seeds; ``TH_FOREGROUND`` used in the semantic mask to create the 
+           foreground mask; ``TH_DISTANCE`` used in the distances to create watershed seeds; and ``TH_DIST_FOREGROUND`` used in the distances 
            to create the foreground mask.
 
        remove_before : bool, optional
@@ -281,8 +281,8 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
             foreground = foreground.squeeze()
 
     if channels in ["BC", "BCM"]:
-        seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH2'])
-        foreground = (data[...,0] > ths['TH3'])
+        seed_map = (data[...,0] > ths['TH_BINARY_MASK']) * (data[...,1] < ths['TH_CONTOUR'])
+        foreground = (data[...,0] > ths['TH_FOREGROUND'])
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
@@ -291,7 +291,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BP"]:
         seed_map = (data[...,1] > ths['TH_POINTS'])
-        foreground = (data[...,0] > ths['TH3'])
+        foreground = (data[...,0] > ths['TH_FOREGROUND'])
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
@@ -300,8 +300,8 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BCD"]:
         semantic = data[...,0]
-        seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH2']) * (data[...,2] > ths['TH4'])
-        foreground = (semantic > ths['TH3']) * (data[...,2] > ths['TH5'])
+        seed_map = (data[...,0] > ths['TH_BINARY_MASK']) * (data[...,1] < ths['TH_CONTOUR']) * (data[...,2] > ths['TH_DISTANCE'])
+        foreground = (semantic > ths['TH_FOREGROUND']) * (data[...,2] > ths['TH_DIST_FOREGROUND'])
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
         seed_map = label(seed_map, connectivity=1)
@@ -309,8 +309,8 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         semantic = data[...,-1]
         foreground = None
         if channels == "BCDv2": # 'BCDv2'
-            seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH2']) * (data[...,1] < ths['TH4'])
-            background_seed = binary_dilation( ((data[...,0]>ths['TH1']) + (data[...,1]>ths['TH2'])).astype(np.uint8), iterations=2)
+            seed_map = (data[...,0] > ths['TH_BINARY_MASK']) * (data[...,1] < ths['TH_CONTOUR']) * (data[...,1] < ths['TH_DISTANCE'])
+            background_seed = binary_dilation( ((data[...,0]>ths['TH_BINARY_MASK']) + (data[...,1]>ths['TH_CONTOUR'])).astype(np.uint8), iterations=2)
             seed_map, num = label(seed_map, connectivity=1, return_num=True)
 
             # Create background seed and label correctly
@@ -319,8 +319,8 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
             seed_map = seed_map + background_seed
             del background_seed
         elif channels == "BDv2": # 'BDv2'
-            seed_map = (data[...,0] > ths['TH1']) * (data[...,1] < ths['TH4'])
-            background_seed = binary_dilation((data[...,1]<ths['TH4']).astype(np.uint8), iterations=2)
+            seed_map = (data[...,0] > ths['TH_BINARY_MASK']) * (data[...,1] < ths['TH_DISTANCE'])
+            background_seed = binary_dilation((data[...,1]<ths['TH_DISTANCE']).astype(np.uint8), iterations=2)
             seed_map = label(seed_map, connectivity=1)
             background_seed = label(background_seed, connectivity=1)
 
@@ -333,7 +333,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
             del background_seed
             seed_map = label(seed_map, connectivity=1) # re-label again
         elif channels == "Dv2": # 'Dv2'
-            seed_map = data[...,0] < ths['TH4']
+            seed_map = data[...,0] < ths['TH_DISTANCE']
             seed_map = label(seed_map, connectivity=1)
 
         if len(seed_morph_sequence) != 0:
@@ -738,7 +738,7 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
            If ``None``, no mask is applied.
 
        use_minimum : bool, optional
-           Return the minimum value of TH1 (and TH4) instead of the mean.
+           Return the minimum value of TH_BINARY_MASK (and TH_DISTANCE) instead of the mean.
 
        chart_dir : str, optional
            Path where the charts are stored.
@@ -748,20 +748,20 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
 
        Returns
        -------
-       global_th1_min_opt: float
-           MW_TH1 optimum value.
+       global_thbinmask_min_opt: float
+           MW_TH_BINARY_MASK optimum value.
 
-       global_th2_opt : float
-           MW_TH2 optimum value.
+       global_thcontour_opt : float
+           MW_TH_CONTOUR optimum value.
 
-       global_th3 : float
-           MW_TH3 optimum value.
+       global_thfore : float
+           MW_TH_FOREGROUND optimum value.
 
-       global_th4_min_opt : float, optional
-           MW_TH4 optimum value.
+       global_thdist_min_opt : float, optional
+           MW_TH_DISTANCE optimum value.
 
-       global_th5 : float, optional
-           MW_TH5 optimum value.
+       global_thdistfore : float, optional
+           MW_TH_DIST_FOREGROUND optimum value.
     """
 
     assert mode in ['BC', 'BCD']
@@ -774,22 +774,22 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
     ths = [1e-06, 5e-06, 1e-05, 5e-05, 1e-04, 5e-04, 1e-03, 5e-03, 1e-02, 5e-02]
     ths.extend(np.round(np.arange(0.1, 1.0, 0.05),3))
 
-    min_th1 = 1
-    g_l_th1 = []
-    l_th1_min = []
-    l_th1_opt = []
-    g_l_th2 = []
-    l_th2_min = []
-    l_th2_opt = []
+    min_thbinmask = 1
+    g_l_thbinmask = []
+    l_thbinmask_min = []
+    l_thbinmask_opt = []
+    g_l_thcontour = []
+    l_thcontour_min = []
+    l_thcontour_opt = []
     ideal_number_obj = []
-    g_l_th3 = []
-    l_th3_max = []
+    g_l_thfore = []
+    l_thfore_max = []
     if mode == 'BCD':
-        g_l_th4 = []
-        l_th4_min = []
-        l_th4_opt = []
-        g_l_th5 = []
-        l_th5_max = []
+        g_l_thdist = []
+        l_thdist_min = []
+        l_thdist_opt = []
+        g_l_thdistfore = []
+        l_thdistfore_max = []
 
     if mode == 'BCD':
         print("Calculating the max distance value first. . ")
@@ -867,50 +867,50 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
                 if bin_mask_path is not None:
                     pred = apply_binary_mask(pred, bin_mask_path)
 
-                # TH3 and TH5:
+                # TH_FOREGROUND and TH_DIST_FOREGROUND:
                 # Look at the best IoU compared with the original label. Only the region that involve the object is taken
                 # into consideration. This is achieved dilating 2 iterations the original object mask. If we do not dilate
                 # that label, decreasing the TH will always ensure a IoU >= than the previous TH. This way, the IoU will
                 # reach a maximum and then it will start to decrease, as more points that are not from the object are added
                 # into it
-                # TH3
-                th3_best = -1
-                th3_max_jac = -1
-                l_th3 = []
+                # TH_FOREGROUND
+                thfore_best = -1
+                thfore_max_jac = -1
+                l_thfore = []
                 for j in range(len(ths)):
                     p = np.expand_dims(pred[...,0] > ths[j],-1).astype(np.uint8)
                     jac = jaccard_index_numpy((mask>0).astype(np.uint8), p)
-                    if jac > th3_max_jac:
-                        th3_max_jac = jac
-                        th3_best = ths[j]
-                    l_th3.append(jac)
-                l_th3_max.append(th3_best)
-                g_l_th3.append(l_th3)
-                # TH5
+                    if jac > thfore_max_jac:
+                        thfore_max_jac = jac
+                        thfore_best = ths[j]
+                    l_thfore.append(jac)
+                l_thfore_max.append(thfore_best)
+                g_l_thfore.append(l_thfore)
+                # TH_DIST_FOREGROUND
                 if mode == 'BCD':
-                    th5_best = -1
-                    th5_max_jac = -1
-                    l_th5 = []
+                    thdistfore_best = -1
+                    thdistfore_max_jac = -1
+                    l_thdistfore = []
                     for j in range(len(ths_dis)):
                         p = np.expand_dims(pred[...,2] > ths_dis[j],-1).astype(np.uint8)
                         jac = jaccard_index_numpy((mask>0).astype(np.uint8), p)
-                        if jac > th5_max_jac:
-                            th5_max_jac = jac
-                            th5_best = ths_dis[j]
-                        l_th5.append(jac)
-                    l_th5_max.append(th5_best)
-                    g_l_th5.append(l_th5)
+                        if jac > thdistfore_max_jac:
+                            thdistfore_max_jac = jac
+                            thdistfore_best = ths_dis[j]
+                        l_thdistfore.append(jac)
+                    l_thdistfore_max.append(thdistfore_best)
+                    g_l_thdistfore.append(l_thdistfore)
 
-                # TH2: obtained the optimum value for the TH3, the TH2 threshold is calculated counting the objects. As this
-                # threshold looks at the contour channels, its purpose is to separed the entangled objects. This way, the TH2
+                # TH_CONTOUR: obtained the optimum value for the TH_FOREGROUND, the TH_CONTOUR threshold is calculated counting the objects. As this
+                # threshold looks at the contour channels, its purpose is to separed the entangled objects. This way, the TH_CONTOUR
                 # optimum should be reached when the number of objects of the prediction match the number of real objects
-                objs_to_divide = (pred[...,0] > th3_best).astype(np.uint8)
-                th2_min = 0
-                th2_last = 0
-                th2_repeat_count = 0
-                th2_op_pos = -1
-                th2_obj_min_diff = sys.maxsize
-                l_th2 = []
+                objs_to_divide = (pred[...,0] > thfore_best).astype(np.uint8)
+                thcontour_min = 0
+                thcontour_last = 0
+                thcontour_repeat_count = 0
+                thcontour_op_pos = -1
+                thcontour_obj_min_diff = sys.maxsize
+                l_thcontour = []
                 for k in range(len(ths)):
                     p = (objs_to_divide * (pred[...,1] < ths[k])).astype(np.uint8)
 
@@ -918,173 +918,173 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
                     if len(np.unique(p)) != 1:
                         p = remove_small_objects(p, thres_small)
                     obj_count = len(np.unique(p))
-                    l_th2.append(obj_count)
+                    l_thcontour.append(obj_count)
 
-                    if abs(obj_count-len(labels)) < th2_obj_min_diff:
-                        th2_obj_min_diff = abs(obj_count-len(labels))
-                        th2_min = ths[k]
-                        th2_op_pos = k
-                        th2_repeat_count = 0
+                    if abs(obj_count-len(labels)) < thcontour_obj_min_diff:
+                        thcontour_obj_min_diff = abs(obj_count-len(labels))
+                        thcontour_min = ths[k]
+                        thcontour_op_pos = k
+                        thcontour_repeat_count = 0
 
-                    if th2_obj_min_diff == th2_last: th2_repeat_count += 1
-                    th2_last = abs(obj_count-len(labels))
+                    if thcontour_obj_min_diff == thcontour_last: thcontour_repeat_count += 1
+                    thcontour_last = abs(obj_count-len(labels))
 
-                g_l_th2.append(l_th2)
-                l_th2_min.append(th2_min)
-                th2_opt_pos = th2_op_pos + int(th2_repeat_count/2) if th2_repeat_count < 10 else th2_op_pos + 2
-                if th2_opt_pos >= len(ths): th2_opt_pos = len(ths)-1
-                l_th2_opt.append(ths[th2_opt_pos])
+                g_l_thcontour.append(l_thcontour)
+                l_thcontour_min.append(thcontour_min)
+                thcontour_opt_pos = thcontour_op_pos + int(thcontour_repeat_count/2) if thcontour_repeat_count < 10 else thcontour_op_pos + 2
+                if thcontour_opt_pos >= len(ths): thcontour_opt_pos = len(ths)-1
+                l_thcontour_opt.append(ths[thcontour_opt_pos])
 
-                # TH1 and TH4:
-                th1_min = 0
-                th1_last = 0
-                th1_repeat_count = 0
-                th1_op_pos = -1
-                th1_obj_min_diff = sys.maxsize
-                l_th1 = []
+                # TH_BINARY_MASK and TH_DISTANCE:
+                thbinmask_min = 0
+                thbinmask_last = 0
+                thbinmask_repeat_count = 0
+                thbinmask_op_pos = -1
+                thbinmask_obj_min_diff = sys.maxsize
+                l_thbinmask = []
                 in_row = False
-                # TH1
+                # TH_BINARY_MASK
                 for k in range(len(ths)):
-                    p = ((pred[...,0] > ths[k])*(pred[...,1] < th2_min)).astype(np.uint8)
+                    p = ((pred[...,0] > ths[k])*(pred[...,1] < thcontour_min)).astype(np.uint8)
 
                     p = label(np.squeeze(p), connectivity=1)
                     obj_count = len(np.unique(p))
-                    l_th1.append(obj_count)
+                    l_thbinmask.append(obj_count)
 
                     diff = abs(obj_count-len(labels))
-                    if diff <= th1_obj_min_diff and th1_repeat_count < 4 and diff != th1_last:
-                        th1_obj_min_diff = diff
-                        th1_min = ths[k]
-                        th1_op_pos = k
-                        th1_repeat_count = 0
+                    if diff <= thbinmask_obj_min_diff and thbinmask_repeat_count < 4 and diff != thbinmask_last:
+                        thbinmask_obj_min_diff = diff
+                        thbinmask_min = ths[k]
+                        thbinmask_op_pos = k
+                        thbinmask_repeat_count = 0
                         in_row = True
 
-                    if diff == th1_last and diff == th1_obj_min_diff and in_row:
-                        th1_repeat_count += 1
-                    elif k != th1_op_pos:
+                    if diff == thbinmask_last and diff == thbinmask_obj_min_diff and in_row:
+                        thbinmask_repeat_count += 1
+                    elif k != thbinmask_op_pos:
                         in_row = False
-                    th1_last = diff
+                    thbinmask_last = diff
 
-                g_l_th1.append(l_th1)
-                l_th1_min.append(th1_min)
-                th1_opt_pos = th1_op_pos + th1_repeat_count
-                if th1_opt_pos >= len(ths): th1_opt_pos = len(ths)-1
-                l_th1_opt.append(ths[th1_opt_pos])
+                g_l_thbinmask.append(l_thbinmask)
+                l_thbinmask_min.append(thbinmask_min)
+                thbinmask_opt_pos = thbinmask_op_pos + thbinmask_repeat_count
+                if thbinmask_opt_pos >= len(ths): thbinmask_opt_pos = len(ths)-1
+                l_thbinmask_opt.append(ths[thbinmask_opt_pos])
 
-                # TH4
+                # TH_DISTANCE
                 if mode == 'BCD':
-                    th4_min = 0
-                    th4_last = 0
-                    th4_repeat_count = 0
-                    th4_op_pos = -1
-                    th4_obj_min_diff = sys.maxsize
-                    l_th4 = []
+                    thdist_min = 0
+                    thdist_last = 0
+                    thdist_repeat_count = 0
+                    thdist_op_pos = -1
+                    thdist_obj_min_diff = sys.maxsize
+                    l_thdist = []
                     for k in range(len(ths_dis)):
-                        p = ((pred[...,2] > ths_dis[k])*(pred[...,1] < th2_min)).astype(np.uint8)
+                        p = ((pred[...,2] > ths_dis[k])*(pred[...,1] < thcontour_min)).astype(np.uint8)
 
                         p = label(np.squeeze(p), connectivity=1)
                         obj_count = len(np.unique(p))
-                        l_th4.append(obj_count)
+                        l_thdist.append(obj_count)
 
                         diff = abs(obj_count-len(labels))
-                        if diff <= th4_obj_min_diff and th4_repeat_count < 4 and diff != th4_last:
-                            th4_obj_min_diff = diff
-                            th4_min = ths_dis[k]
-                            th4_op_pos = k
-                            th4_repeat_count = 0
+                        if diff <= thdist_obj_min_diff and thdist_repeat_count < 4 and diff != thdist_last:
+                            thdist_obj_min_diff = diff
+                            thdist_min = ths_dis[k]
+                            thdist_op_pos = k
+                            thdist_repeat_count = 0
                             in_row = True
 
-                        if diff == th4_last and diff == th4_obj_min_diff and in_row:
-                            th4_repeat_count += 1
-                        elif k != th4_op_pos:
+                        if diff == thdist_last and diff == thdist_obj_min_diff and in_row:
+                            thdist_repeat_count += 1
+                        elif k != thdist_op_pos:
                             in_row = False
-                        th4_last = diff
+                        thdist_last = diff
 
-                    g_l_th4.append(l_th4)
-                    l_th4_min.append(th4_min)
-                    th4_opt_pos = th4_op_pos + th4_repeat_count
-                    if th4_opt_pos >= len(ths_dis): th4_opt_pos = len(ths_dis)-1
-                    l_th4_opt.append(ths_dis[th4_opt_pos])
+                    g_l_thdist.append(l_thdist)
+                    l_thdist_min.append(thdist_min)
+                    thdist_opt_pos = thdist_op_pos + thdist_repeat_count
+                    if thdist_opt_pos >= len(ths_dis): thdist_opt_pos = len(ths_dis)-1
+                    l_thdist_opt.append(ths_dis[thdist_opt_pos])
 
             # Store the number of nucleus
             ideal_number_obj.append(len(labels))
 
     ideal_objects = statistics.mean(ideal_number_obj)
-    create_th_plot(ths, g_l_th1, "TH1", chart_dir)
-    create_th_plot(ths, g_l_th1, "TH1", chart_dir, per_sample=False, ideal_value=ideal_objects)
-    create_th_plot(ths, g_l_th2, "TH2", chart_dir)
-    create_th_plot(ths, g_l_th2, "TH2", chart_dir, per_sample=False, ideal_value=ideal_objects)
-    create_th_plot(ths, g_l_th3, "TH3", chart_dir)
-    create_th_plot(ths, g_l_th3, "TH3", chart_dir, per_sample=False)
+    create_th_plot(ths, g_l_thbinmask, "TH_BINARY_MASK", chart_dir)
+    create_th_plot(ths, g_l_thbinmask, "TH_BINARY_MASK", chart_dir, per_sample=False, ideal_value=ideal_objects)
+    create_th_plot(ths, g_l_thcontour, "TH_CONTOUR", chart_dir)
+    create_th_plot(ths, g_l_thcontour, "TH_CONTOUR", chart_dir, per_sample=False, ideal_value=ideal_objects)
+    create_th_plot(ths, g_l_thfore, "TH_FOREGROUND", chart_dir)
+    create_th_plot(ths, g_l_thfore, "TH_FOREGROUND", chart_dir, per_sample=False)
     if mode == 'BCD':
-        create_th_plot(ths_dis, g_l_th4, "TH4", chart_dir)
-        create_th_plot(ths_dis, g_l_th4, "TH4", chart_dir, per_sample=False, ideal_value=ideal_objects)
-        create_th_plot(ths_dis, g_l_th5, "TH5", chart_dir)
-        create_th_plot(ths_dis, g_l_th5, "TH5", chart_dir, per_sample=False)
+        create_th_plot(ths_dis, g_l_thdist, "TH_DISTANCE", chart_dir)
+        create_th_plot(ths_dis, g_l_thdist, "TH_DISTANCE", chart_dir, per_sample=False, ideal_value=ideal_objects)
+        create_th_plot(ths_dis, g_l_thdistfore, "TH_DIST_FOREGROUND", chart_dir)
+        create_th_plot(ths_dis, g_l_thdistfore, "TH_DIST_FOREGROUND", chart_dir, per_sample=False)
 
     if len(ideal_number_obj) > 1:
-        global_th1 = statistics.mean(l_th1_min)
-        global_th1_std = statistics.stdev(l_th1_min)
-        global_th1_opt = statistics.mean(l_th1_opt)
-        global_th1_opt_std = statistics.stdev(l_th1_opt)
-        global_th2 = statistics.mean(l_th2_min)
-        global_th2_std = statistics.stdev(l_th2_min)
-        global_th2_opt = statistics.mean(l_th2_opt)
-        global_th2_opt_std = statistics.stdev(l_th2_opt)
-        global_th3 = statistics.mean(l_th3_max)
-        global_th3_std = statistics.stdev(l_th3_max)
+        global_thbinmask = statistics.mean(l_thbinmask_min)
+        global_thbinmask_std = statistics.stdev(l_thbinmask_min)
+        global_thbinmask_opt = statistics.mean(l_thbinmask_opt)
+        global_thbinmask_opt_std = statistics.stdev(l_thbinmask_opt)
+        global_thcontour = statistics.mean(l_thcontour_min)
+        global_thcontour_std = statistics.stdev(l_thcontour_min)
+        global_thcontour_opt = statistics.mean(l_thcontour_opt)
+        global_thcontour_opt_std = statistics.stdev(l_thcontour_opt)
+        global_thfore = statistics.mean(l_thfore_max)
+        global_thfore_std = statistics.stdev(l_thfore_max)
         if mode == 'BCD':
-            global_th4 = statistics.mean(l_th4_min)
-            global_th4_std = statistics.stdev(l_th4_min)
-            global_th4_opt = statistics.mean(l_th4_opt)
-            global_th4_opt_std = statistics.stdev(l_th4_opt)
-            global_th5 = statistics.mean(l_th5_max)
-            global_th5_std = statistics.stdev(l_th5_max)
+            global_thdist = statistics.mean(l_thdist_min)
+            global_thdist_std = statistics.stdev(l_thdist_min)
+            global_thdist_opt = statistics.mean(l_thdist_opt)
+            global_thdist_opt_std = statistics.stdev(l_thdist_opt)
+            global_thdistfore = statistics.mean(l_thdistfore_max)
+            global_thdistfore_std = statistics.stdev(l_thdistfore_max)
     else:
-        global_th1 = l_th1_min[0]
-        global_th1_std = 0
-        global_th1_opt = l_th1_opt[0]
-        global_th1_opt_std = 0
-        global_th2 = l_th2_min[0]
-        global_th2_std = 0
-        global_th2_opt = l_th2_opt[0]
-        global_th2_opt_std = 0
-        global_th3 = l_th3_max[0]
-        global_th3_std = 0
+        global_thbinmask = l_thbinmask_min[0]
+        global_thbinmask_std = 0
+        global_thbinmask_opt = l_thbinmask_opt[0]
+        global_thbinmask_opt_std = 0
+        global_thcontour = l_thcontour_min[0]
+        global_thcontour_std = 0
+        global_thcontour_opt = l_thcontour_opt[0]
+        global_thcontour_opt_std = 0
+        global_thfore = l_thfore_max[0]
+        global_thfore_std = 0
         if mode == 'BCD':
-            global_th4 = l_th4_min[0]
-            global_th4_std = 0
-            global_th4_opt = l_th4_opt[0]
-            global_th4_opt_std = 0
-            global_th5 = l_th5_max[0]
-            global_th5_std = 0
+            global_thdist = l_thdist_min[0]
+            global_thdist_std = 0
+            global_thdist_opt = l_thdist_opt[0]
+            global_thdist_opt_std = 0
+            global_thdistfore = l_thdistfore_max[0]
+            global_thdistfore_std = 0
 
     if verbose:
         if not use_minimum:
-            print("MW_TH1 maximum value is {} (std:{}) so the optimum should be {} (std:{})".format(global_th1, global_th1_std, global_th1_opt, global_th1_opt_std))
+            print("MW_TH_BINARY_MASK maximum value is {} (std:{}) so the optimum should be {} (std:{})".format(global_thbinmask, global_thbinmask_std, global_thbinmask_opt, global_thbinmask_opt_std))
         else:
-            print("MW_TH1 minimum value is {}".format(min(l_th1_min)))
-        print("MW_TH2 minimum value is {} (std:{}) and the optimum is {} (std:{})".format(global_th2, global_th2_std, global_th2_opt, global_th2_opt_std))
-        print("MW_TH3 optimum should be {} (std:{})".format(global_th3, global_th3_std))
+            print("MW_TH_BINARY_MASK minimum value is {}".format(min(l_thbinmask_min)))
+        print("MW_TH_CONTOUR minimum value is {} (std:{}) and the optimum is {} (std:{})".format(global_thcontour, global_thcontour_std, global_thcontour_opt, global_thcontour_opt_std))
+        print("MW_TH_FOREGROUND optimum should be {} (std:{})".format(global_thfore, global_thfore_std))
     if mode == 'BCD':
         if verbose:
             if not use_minimum:
-                print("MW_TH4 maximum value is {} (std:{}) so the optimum should be {} (std:{})".format(global_th4, global_th4_std, global_th4_opt, global_th4_opt_std))
+                print("MW_TH_DISTANCE maximum value is {} (std:{}) so the optimum should be {} (std:{})".format(global_thdist, global_thdist_std, global_thdist_opt, global_thdist_opt_std))
             else:
-                print("MW_TH4 minimum value is {}".format(min(l_th4_min)))
-            print("MW_TH5 optimum should be {} (std:{})".format(global_th5, global_th5_std))
+                print("MW_TH_DISTANCE minimum value is {}".format(min(l_thdist_min)))
+            print("MW_TH_DIST_FOREGROUND optimum should be {} (std:{})".format(global_thdistfore, global_thdistfore_std))
         if not use_minimum:
-            return global_th1_opt, global_th2_opt, global_th3, global_th4_opt, global_th5
+            return global_thbinmask_opt, global_thcontour_opt, global_thfore, global_thdist_opt, global_thdistfore
         else:
-            return min(l_th1_min), global_th2_opt, global_th3, min(l_th4_min), global_th5
+            return min(l_thbinmask_min), global_thcontour_opt, global_thfore, min(l_thdist_min), global_thdistfore
     else:
         if not use_minimum:
-            return global_th1_opt, global_th2_opt, global_th3
+            return global_thbinmask_opt, global_thcontour_opt, global_thfore
         else:
-            return min(l_th1_min), global_th2_opt, global_th3
+            return min(l_thbinmask_min), global_thcontour_opt, global_thfore
 
 
-def create_th_plot(ths, y_list, th_name="TH1", chart_dir=None, per_sample=True, ideal_value=None):
+def create_th_plot(ths, y_list, th_name="TH_BINARY_MASK", chart_dir=None, per_sample=True, ideal_value=None):
     """Create plots for threshold value calculation.
 
        Parameters
@@ -1108,7 +1108,7 @@ def create_th_plot(ths, y_list, th_name="TH1", chart_dir=None, per_sample=True, 
            Value that should be the ideal optimum. It is going to be marked with a red line in the chart.
     """
 
-    assert th_name in ['TH1', 'TH2', 'TH3', 'TH4', 'TH5']
+    assert th_name in ['TH_BINARY_MASK', 'TH_CONTOUR', 'TH_FOREGROUND', 'TH_DISTANCE', 'TH_DIST_FOREGROUND']
     fig, ax = plt.subplots(figsize=(25,10))
     ths = [str(i) for i in ths]
     num_points=len(ths)
@@ -1146,7 +1146,7 @@ def create_th_plot(ths, y_list, th_name="TH1", chart_dir=None, per_sample=True, 
 
     plt.title('Threshold '+str(th_name))
     plt.xlabel("Threshold")
-    if th_name == 'TH3' or th_name == 'TH5':
+    if th_name == 'TH_FOREGROUND' or th_name == 'TH_DIST_FOREGROUND':
         plt.ylabel("IoU")
     else:
         plt.ylabel("Number of objects")
@@ -1161,12 +1161,13 @@ def voronoi_on_mask(data, mask, th=0, verbose=False):
 
        Parameters
        ----------
-       data : 4D Numpy array
-           Data to apply Voronoi. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
+       data : 2D/3D Numpy array
+           Data to apply Voronoi. ``(y, x)`` for 2D or ``(z, y, x)`` for 3D. 
+           E.g. ``(397, 1450, 2000)`` for 3D.
 
-       mask : 5D Numpy array
-           Data mask to determine which points need to be proccessed. ``(num_of_images, z, y, x, channels)`` e.g.
-           ``(1, 397, 1450, 2000, 3)``.
+       mask : 3D/4D Numpy array
+           Data mask to determine which points need to be proccessed. ``(z, y, x, channels)`` e.g.
+           ``(397, 1450, 2000, 3)``.
 
        th : float, optional
            Threshold used to binarize the input. If th=0, otsu threshold is used.
@@ -1183,15 +1184,21 @@ def voronoi_on_mask(data, mask, th=0, verbose=False):
            Image with Voronoi applied. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
     """
 
-    if data.ndim != 4:
-        raise ValueError("Data must be 4 dimensional, provided {}".format(data.shape))
-    if mask.ndim != 5:
-        raise ValueError("Data mask must be 5 dimensional, provided {}".format(mask.shape))
+    if data.ndim != 2 and data.ndim != 3:
+        raise ValueError("Data must be 2/3 dimensional, provided {}".format(data.shape))
+    if mask.ndim != 3 and mask.ndim != 4:
+        raise ValueError("Data mask must be 3/4 dimensional, provided {}".format(mask.shape))
     if mask.shape[-1] < 2:
         raise ValueError("Mask needs to have two channels at least, received {}".format(mask.shape[-1]))
 
     if verbose:
-        print("Applying Voronoi 3D . . .")
+        print("Applying Voronoi {}D . . .".format(data.ndim))
+        
+    image3d = False if data.ndim != 2 else True
+
+    if image3d:
+        data = np.expand_dims(data,0)
+        mask = np.expand_dims(mask,0)
 
 	# Extract mask from prediction
     if mask.shape[-1] == 3:
@@ -1200,8 +1207,6 @@ def voronoi_on_mask(data, mask, th=0, verbose=False):
         mask = mask[...,0]+mask[...,1]
 
     mask_shape = np.shape(mask)
-    mask = mask[0]
-    data = data[0]
 
     # Binarize
     if th == 0:
@@ -1223,18 +1228,23 @@ def voronoi_on_mask(data, mask, th=0, verbose=False):
 
     # Define ids to fill where there is mask but no labels
     idsToFill = np.argwhere((closedBinaryMask==1) & (data==0))
-    labelPerId = np.zeros(np.size(idsToFill));
+    labelPerId = np.zeros(np.size(idsToFill))
 
     idsPerim = np.argwhere(cellPerimeter==1)
     labelsPerimIds = voronoiCyst[cellPerimeter==1]
 
     # Generating voronoi
-    for nId in range(1,len(idsToFill)):
+    for nId in tqdm(range(1,len(idsToFill))):
         distCoord = cdist([idsToFill[nId]], idsPerim)
         idSeedMin = np.argwhere(distCoord==np.min(distCoord))
         idSeedMin = idSeedMin[0][1]
         labelPerId[nId] = labelsPerimIds[idSeedMin]
         voronoiCyst[idsToFill[nId][0], idsToFill[nId][1], idsToFill[nId][2]] = labelsPerimIds[idSeedMin]
+
+    if image3d:
+        data = data[0]
+        mask = mask[0]
+        voronoiCyst = voronoiCyst[0]
 
     return voronoiCyst
 

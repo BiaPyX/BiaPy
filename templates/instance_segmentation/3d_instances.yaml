@@ -4,35 +4,30 @@ SYSTEM:
 PROBLEM:
     TYPE: INSTANCE_SEG
     NDIM: 3D
+    INSTANCE_SEG:
+        DATA_CHANNELS: BC
+        DATA_MW_TH_BINARY_MASK: 0.2
+        DATA_MW_TH_CONTOUR: 0.1
+        DATA_MW_TH_FOREGROUND: 0.3
 
-DATA: 
-    CHANNELS: BCD
-    MW_TH1: 0.8
-    MW_TH2: 0.1 
-    MW_TH3: 0.3
-    MW_TH4: 4.5
-    MW_TH5: 2.0
+DATA:
     PATCH_SIZE: (64, 64, 64, 1)
     CHECK_GENERATORS: False
     TRAIN:
         PATH: /path/to/data                                                                                             
         MASK_PATH: /path/to/data
         IN_MEMORY: True
-        PADDING: (0,0,0)
-        OVERLAP: (0,0,0)
     VAL:
         FROM_TRAIN: False
         PATH: /path/to/data                                                                                             
         MASK_PATH: /path/to/data
         IN_MEMORY: True
-        PADDING: (0,0,0)
-        OVERLAP: (0,0,0)
     TEST:
         PATH: /path/to/data                                                                                             
         MASK_PATH: /path/to/data
         IN_MEMORY: False
         LOAD_GT: False
-        PADDING: (16,16,16)
+        PADDING: (0,12,12)
         OVERLAP: (0,0,0)
         
 AUGMENTOR:
@@ -53,12 +48,12 @@ TRAIN:
     OPTIMIZER: ADAM
     LR: 1.E-3
     BATCH_SIZE: 2
-    EPOCHS: 150
-    PATIENCE: 20
+    EPOCHS: 1000
+    PATIENCE: 50
   
 TEST:
     ENABLE: True
-    VERBOSE: True
+    VERBOSE: False
     AUGMENTATION: False
     STATS:
         PER_PATCH: True

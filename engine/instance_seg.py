@@ -16,8 +16,9 @@ class Instance_Segmentation(Base_Workflow):
     def __init__(self, cfg, model, post_processing={}, original_test_mask_path=None):
         super().__init__(cfg, model, post_processing)
 
-        self.original_test_mask_path = original_test_mask_path     
-        self.original_test_mask_ids = sorted(next(os.walk(self.original_test_mask_path))[2])
+        self.original_test_mask_path = original_test_mask_path 
+        if self.cfg.DATA.TEST.LOAD_GT:
+            self.original_test_mask_ids = sorted(next(os.walk(self.original_test_mask_path))[2])
         self.all_matching_stats = []
         self.post_processing = post_processing
 
@@ -25,11 +26,11 @@ class Instance_Segmentation(Base_Workflow):
             self.all_matching_stats_post_processing = []            
 
         self.instance_ths = {}
-        self.instance_ths['TH1'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH1
-        self.instance_ths['TH2'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH2
-        self.instance_ths['TH3'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH3
-        self.instance_ths['TH4'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH4
-        self.instance_ths['TH5'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH5
+        self.instance_ths['TH_BINARY_MASK'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_BINARY_MASK
+        self.instance_ths['TH_CONTOUR'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_CONTOUR
+        self.instance_ths['TH_FOREGROUND'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_FOREGROUND
+        self.instance_ths['TH_DISTANCE'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_DISTANCE
+        self.instance_ths['TH_DIST_FOREGROUND'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_DIST_FOREGROUND
         self.instance_ths['TH_POINTS'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_POINTS
 
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "BCDv2":
@@ -42,9 +43,10 @@ class Instance_Segmentation(Base_Workflow):
                 self.cfg.DATA.VAL.MASK_PATH, self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, bin_mask,
                 chart_dir=self.cfg.PATHS.CHARTS, verbose=self.cfg.TEST.VERBOSE)
             if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCD":
-                self.instance_ths['TH1'], self.instance_ths['TH2'], self.instance_ths['TH3'], self.instance_ths['TH4'], self.instance_ths['TH5'] = obj
+                self.instance_ths['TH_BINARY_MASK'], self.instance_ths['TH_CONTOUR'], self.instance_ths['TH_FOREGROUND']\
+                    self.instance_ths['TH_DISTANCE'], self.instance_ths['TH_DIST_FOREGROUND'] = obj
             else:
-                self.instance_ths['TH1'], self.instance_ths['TH2'], self.instance_ths['TH3'] = obj
+                self.instance_ths['TH_BINARY_MASK'], self.instance_ths['TH_CONTOUR'], self.instance_ths['TH_FOREGROUND'] = obj
             
     def instance_seg_process(self, pred, Y, filenames, f_numbers):
         #############################
@@ -116,7 +118,7 @@ class Instance_Segmentation(Base_Workflow):
             del df
 
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
-            w_pred = voronoi_on_mask(np.expand_dims(w_pred,0), np.expand_dims(pred,0), verbose=self.cfg.TEST.VERBOSE)[0]
+            w_pred = voronoi_on_mask(w_pred, pred, verbose=self.cfg.TEST.VERBOSE)
 
         if self.post_processing['instance_post']:
             save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
