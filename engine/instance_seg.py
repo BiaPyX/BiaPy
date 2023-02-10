@@ -43,7 +43,7 @@ class Instance_Segmentation(Base_Workflow):
                 self.cfg.DATA.VAL.MASK_PATH, self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, bin_mask,
                 chart_dir=self.cfg.PATHS.CHARTS, verbose=self.cfg.TEST.VERBOSE)
             if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCD":
-                self.instance_ths['TH_BINARY_MASK'], self.instance_ths['TH_CONTOUR'], self.instance_ths['TH_FOREGROUND']\
+                self.instance_ths['TH_BINARY_MASK'], self.instance_ths['TH_CONTOUR'], self.instance_ths['TH_FOREGROUND'],\
                     self.instance_ths['TH_DISTANCE'], self.instance_ths['TH_DIST_FOREGROUND'] = obj
             else:
                 self.instance_ths['TH_BINARY_MASK'], self.instance_ths['TH_CONTOUR'], self.instance_ths['TH_FOREGROUND'] = obj
