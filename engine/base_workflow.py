@@ -269,8 +269,8 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def normalize_stats(self, image_counter):
         # Per crop
-        self.stats['loss_per_crop'] = self.stats['loss_per_crop'] / self.stats['patch_counter']
-        self.stats['iou_per_crop'] = self.stats['iou_per_crop'] / self.stats['patch_counter']
+        self.stats['loss_per_crop'] = self.stats['loss_per_crop'] / self.stats['patch_counter'] if self.stats['patch_counter'] != 0 else 0
+        self.stats['iou_per_crop'] = self.stats['iou_per_crop'] / self.stats['patch_counter'] if self.stats['patch_counter'] != 0 else 0
 
         # Merge patches
         self.stats['iou_per_image'] = self.stats['iou_per_image'] / image_counter
