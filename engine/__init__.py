@@ -21,9 +21,9 @@ def prepare_optimizer(cfg, model):
 
     # Select the optimizer
     if cfg.TRAIN.OPTIMIZER == "SGD":
-        opt = tf.keras.optimizers.SGD(lr=cfg.TRAIN.LR, momentum=0.99, decay=0.0, nesterov=False)
+        opt = tf.keras.optimizers.SGD(lr=cfg.TRAIN.LR, momentum=0.99, nesterov=False)
     elif cfg.TRAIN.OPTIMIZER == "ADAM":
-        opt = tf.keras.optimizers.Adam(lr=cfg.TRAIN.LR, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
+        opt = tf.keras.optimizers.Adam(lr=cfg.TRAIN.LR, beta_1=0.9, beta_2=0.999, epsilon=None, amsgrad=False)
 
     # Compile the model
     metric_name = []
