@@ -23,7 +23,7 @@ def prepare_optimizer(cfg, model):
     if cfg.TRAIN.OPTIMIZER == "SGD":
         opt = tf.keras.optimizers.SGD(lr=cfg.TRAIN.LR, momentum=0.99, nesterov=False)
     elif cfg.TRAIN.OPTIMIZER == "ADAM":
-        opt = tf.keras.optimizers.Adam(lr=cfg.TRAIN.LR, beta_1=0.9, beta_2=0.999, epsilon=None, amsgrad=False)
+        opt = tf.keras.optimizers.Adam(lr=cfg.TRAIN.LR, beta_1=0.9, beta_2=0.999, amsgrad=False)
 
     # Compile the model
     metric_name = []
