@@ -242,19 +242,21 @@ class Detection(Base_Workflow):
                 print("Creating the image with a summary of detected points and false positives with colors . . .")
                 points_pred = np.zeros(pred_shape[:-1]+(3,), dtype=np.uint8)
                 for ch, gt_coords in enumerate(gt_all_coords):
-                    gt_assoc, fn = dfs[ch]
+                    if len(dfs) > 0:
+                        gt_assoc, fn = dfs[ch]
 
                     # TP and FN
                     gt_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
                     for j, cor in enumerate(gt_coords):
                         z,y,x = cor
                         z,y,x = int(z),int(y),int(x)
-                        if gt_assoc[gt_assoc['gt_id'] == j+1]["tag"].iloc[0] == "TP":
-                            # Green
-                            points_pred[z,y,x] = (0,255,0)
-                        else:
-                            # Red
-                            points_pred[z,y,x] = (255,0,0)
+                        if len(dfs) > 0:
+                            if gt_assoc[gt_assoc['gt_id'] == j+1]["tag"].iloc[0] == "TP":
+                                points_pred[z,y,x] = (0,255,0)# Green
+                            else:   
+                                points_pred[z,y,x] = (255,0,0)# Red
+                        else:                           
+                            points_pred[z,y,x] = (255,0,0)# Red
 
                         gt_id_img[z,y,x] = j+1
 
@@ -265,11 +267,11 @@ class Detection(Base_Workflow):
                         [os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_ids.csv'], verbose=self.cfg.TEST.VERBOSE)
 
                     # FP
-                    for cor in zip(fn['axis-0'].tolist(),fn['axis-1'].tolist(),fn['axis-2'].tolist()):
-                        z, y, x =  cor  
-                        z,y,x = int(z),int(y),int(x)
-                        # Blue
-                        points_pred[z,y,x] = (0,0,255)
+                    if len(dfs) > 0:
+                        for cor in zip(fn['axis-0'].tolist(),fn['axis-1'].tolist(),fn['axis-2'].tolist()):
+                            z, y, x =  cor  
+                            z,y,x = int(z),int(y),int(x)
+                            points_pred[z,y,x] = (0,0,255) # Blue
 
                 # Dilate and save the predicted points for the current class 
                 for i in range(points_pred.shape[0]):      

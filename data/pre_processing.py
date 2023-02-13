@@ -817,7 +817,7 @@ def norm_range01(x):
     else:
         if np.max(x) > 255:
             x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=np.float32)
-            norm_steps['reduced_{}'.format(a.dtype)] = 1
+            norm_steps['reduced_{}'.format(x.dtype)] = 1
         elif np.max(x) > 2:
             x = x/255
             norm_steps['div_255'] = 1
