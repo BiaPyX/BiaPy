@@ -1,5 +1,5 @@
 SYSTEM:
-    NUM_CPUS: 1
+    NUM_CPUS: -1
 
 PROBLEM:
     TYPE: SEMANTIC_SEG
@@ -12,22 +12,16 @@ DATA:
         PATH: /path/to/data
         MASK_PATH: /path/to/data
         IN_MEMORY: True
-        PADDING: (0,0,0)
-        OVERLAP: (0,0,0)
     VAL:
         PATH: /path/to/data
         MASK_PATH: /path/to/data
         FROM_TRAIN: False
         IN_MEMORY: True
-        PADDING: (0,0,0)
-        OVERLAP: (0,0,0)
     TEST:
         PATH: /path/to/data
         MASK_PATH: /path/to/data
         IN_MEMORY: False
         LOAD_GT: False
-        PADDING: (0,0,0)
-        OVERLAP: (0,0,0)
         
 AUGMENTOR:
     ENABLE: True
@@ -36,19 +30,19 @@ AUGMENTOR:
     HFLIP: True
 
 MODEL:
-    ARCHITECTURE: unet
-    FEATURE_MAPS: [36, 48, 64]
-    DROPOUT_VALUES: [0, 0, 0]
+    ARCHITECTURE: resunet
+    FEATURE_MAPS: [16, 32, 64, 128]
+    DROPOUT_VALUES: [0,0,0,0]
     Z_DOWN: 1
     LOAD_CHECKPOINT: False
 
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAM
-    LR: 1.E-3
+    LR: 1.E-4
     BATCH_SIZE: 2
-    EPOCHS: 1000
-    PATIENCE: 50
+    EPOCHS: 200
+    PATIENCE: 15
   
 TEST:
     ENABLE: True
