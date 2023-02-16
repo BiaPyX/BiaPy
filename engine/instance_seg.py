@@ -141,6 +141,9 @@ class Instance_Segmentation(Base_Workflow):
         super().after_all_images()
         if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
             print("Analysing all images as a 3D stack . . .")    
+            if type(self.all_pred) is list:
+                self.all_pred = np.concatenate(self.all_pred)
+                self.all_gt = np.concatenate(self.all_gt) if self.cfg.DATA.TEST.LOAD_GT else None
             self.instance_seg_process(self.all_pred,  self.all_gt, ["3D_stack.tif"], [])
 
     def normalize_stats(self, image_counter): 

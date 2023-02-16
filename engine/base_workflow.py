@@ -261,7 +261,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.stats['iou'] += score[1]
                 self.stats['ov_iou'] += voc_calculation((Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8), score[1])
 
-            if self.post_processing['all_images']:
+            if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)
                 if self.cfg.DATA.TEST.LOAD_GT: self.all_gt.append(Y)
 
