@@ -52,7 +52,7 @@ def build_model(cfg, job_identifier):
             args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
             del args['last_act']
         else:
-            args['n_classes'] = cfg.MODEL.N_CLASSES
+            args['n_classes'] = cfg.MODEL.N_CLASSES if cfg.PROBLEM.TYPE != 'DENOISING' else cfg.DATA.PATCH_SIZE[-1]
         if cfg.PROBLEM.NDIM == '3D':
             args['z_down'] = cfg.MODEL.Z_DOWN
 
