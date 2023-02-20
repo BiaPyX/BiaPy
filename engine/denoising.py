@@ -8,7 +8,7 @@ from data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_w
 from data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
 from engine.base_workflow import Base_Workflow
 from utils.util import save_tif
-from data.pre_processing import denormalize
+from data.pre_processing import denormalize, undo_norm_range01
 
 
 class Denoising(Base_Workflow):
@@ -92,7 +92,7 @@ class Denoising(Base_Workflow):
         # Undo normalization
         x_norm = norm[0][0]
         if x_norm['type'] == 'div':
-            pred = pred*255
+            pred = undo_norm_range01(pred, x_norm)
         else:
             pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
             

@@ -816,14 +816,24 @@ def norm_range01(x):
         norm_steps['div_255'] = 1
     else:
         if np.max(x) > 255:
-            x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=np.float32)
             norm_steps['reduced_{}'.format(x.dtype)] = 1
+            x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=np.float32)
         elif np.max(x) > 2:
             x = x/255
             norm_steps['div_255'] = 1
 
     x = x.astype(np.float32)
     return x, norm_steps
+
+def undo_norm_range01(x, xnorm):
+    if 'div_255' in xnorm:
+        x = (x*255).astype(np.uint8)
+    reductions = [key for key, value in xnorm.items() if 'reduced' in key.lower()]
+    if len(reductions)>0:
+        reductions = reductions[0]
+        reductions = reductions.replace('reduced_','')
+        x = (x*65535).astype(eval("np.{}".format(reductions) ))
+    return x
 
 def reduce_dtype(x, x_min, x_max, out_min=0, out_max=1, out_type=np.float32):
     return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)
