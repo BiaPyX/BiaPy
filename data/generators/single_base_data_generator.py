@@ -210,6 +210,7 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 self.X_norm['type'] = 'custom'
                 self.X_norm['mean'] = np.mean(sam)
                 self.X_norm['std'] = np.std(sam)
+                self.X_norm['orig_dtype'] = sam.dtype
                 del sam
             else:                
                 self.X_norm['type'] = 'div'
@@ -236,6 +237,7 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 self.X_norm['type'] = 'custom'
                 self.X_norm['mean'] = np.mean(self.X)
                 self.X_norm['std'] = np.std(self.X)
+                self.X_norm['orig_dtype'] = self.X.dtype
 
                 self.X = normalize(self.X, self.X_norm['mean'], self.X_norm['std'])
             else:

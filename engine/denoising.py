@@ -96,6 +96,13 @@ class Denoising(Base_Workflow):
         else:
             pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
             
+            if x_norm['orig_dtype'] not in [np.dtype('float64'), np.dtype('float32'), np.dtype('float16')]:
+                pred = np.round(pred)
+                minpred = np.min(pred)                                                                                                
+                pred = pred+abs(minpred)
+
+            pred = pred.astype(x_norm['orig_dtype'])
+
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
             save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
