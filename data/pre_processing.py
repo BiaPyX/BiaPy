@@ -113,8 +113,9 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
            ``BCD`` stands for binary segmentation+contour+distances.
 
        fb_mode : str, optional
-          Mode of the find_boundaries function from ``scikit-image``. More info in:
-          `find_boundaries() <https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries>`_.
+          Mode of the find_boundaries function from ``scikit-image`` or "dense". More info in:
+          `find_boundaries() <https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries>`_. 
+          Choose "dense" to label as contour every pixel that is not in ``B`` channel. 
 
        save_dir : str, optional
            Path to store samples of the created array just to debug it is correct.
@@ -184,7 +185,10 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
 
         # Contour
         if ('C' in mode or 'Dv2' in mode) and instance_count != 1: 
-            new_mask[img,...,1] = find_boundaries(vol, mode=fb_mode).astype(np.uint8)
+            if fb_mode == "dense" and mode != "BCM":
+                new_mask[img,...,1] = 1-new_mask[img,...,0]
+            else:
+                new_mask[img,...,1] = find_boundaries(vol, mode=fb_mode).astype(np.uint8)
             if 'B' in mode:
                 # Remove contours from segmentation maps
                 new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0

@@ -50,14 +50,14 @@ class Config:
         # Weights to be applied to the channels.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS = (1, 1)
         # Contour creation mode. Corresponds to 'mode' arg of find_boundaries function from ``scikit-image``. More
-        # info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries
+        # info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries.
+        # It can be also set as "dense", to label as contour every pixel that is not in ``B`` channel. 
         _C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE = "thick"
 
         # To convert the model predictions, which are between 0 and 1 range, into instances with marked controlled
         # watershed (MW) a few thresholds need to be set. There can be up to three channels, as explained above and
         # based on 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' value. Each threshold is related to one of these channels. See the details in
-        # bcd_watershed() and bc_watershed() functions:
-        # https://github.com/danifranco/BiaPy/blob/a1c46e6b8afaf577794aff9c30b52748490f147d/data/post_processing/post_processing.py#L172
+        # https://biapy.readthedocs.io/en/latest/workflows/instance_segmentation.html#problem-resolution
         #
         # This variables are only used when _C.PROBLEM.TYPE = 'INSTANCE_SEG
         # TH_BINARY_MASK controls channel 'B' in the creation of the MW seeds
