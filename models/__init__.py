@@ -1,5 +1,6 @@
 import importlib
 import os
+import numpy as np
 from tensorflow.keras.utils import plot_model
 
 
@@ -22,7 +23,7 @@ def build_model(cfg, job_identifier):
     # Import the model
     if cfg.MODEL.ARCHITECTURE in ['fcn32', 'fcn8']:
         modelname = 'fcn_vgg'
-    elif cfg.MODEL.ARCHITECTURE in ['tiramisu', 'nnunet', 'mnet', 'multiresunet', 'simple_cnn', 'EfficientNetB0']:
+    elif cfg.MODEL.ARCHITECTURE in ['tiramisu', 'nnunet', 'mnet', 'multiresunet', 'simple_cnn', 'EfficientNetB0', 'srunet', 'rcan', 'dfcan', 'wdsr']:
         modelname = cfg.MODEL.ARCHITECTURE
     else:
         modelname = cfg.MODEL.ARCHITECTURE if cfg.PROBLEM.NDIM == '2D' else cfg.MODEL.ARCHITECTURE + '_3d'
@@ -86,6 +87,18 @@ def build_model(cfg, job_identifier):
         elif cfg.MODEL.ARCHITECTURE == 'edsr':
             model = EDSR(num_filters=64, num_of_residual_blocks=16, upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, 
                 num_channels=cfg.DATA.PATCH_SIZE[-1])
+        elif cfg.MODEL.ARCHITECTURE == 'srunet':
+            model = preResUNet(cfg.DATA.PATCH_SIZE, activation='elu', kernel_initializer='he_normal',
+                dropout_value=0.2, batchnorm=cfg.MODEL.BATCH_NORMALIZATION, 
+                maxpooling=True, separable=False, numInitChannels=16, depth=4, upsampling_factor=2,
+                upsample_method='UpSampling2D', final_activation=None)
+        elif cfg.MODEL.ARCHITECTURE == 'rcan':
+            model = rcan(filters=16, n_sub_block=int(np.log2(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)), out_channels=1, use_mish=False)
+        elif cfg.MODEL.ARCHITECTURE == 'dfcan':
+            model = DFCAN(cfg.DATA.PATCH_SIZE, scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, n_ResGroup = 4, n_RCAB = 4)
+        elif cfg.MODEL.ARCHITECTURE == 'wdsr':
+            model = wdsr_b(scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, num_filters=32, num_res_blocks=8, res_block_expansion=6, 
+                res_block_scaling=None, out_channels=1)
 
     # Check the network created
     model.summary(line_length=150)

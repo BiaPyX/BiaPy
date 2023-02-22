@@ -1,0 +1,47 @@
+SYSTEM:
+    NUM_CPUS: 1
+
+PROBLEM:
+    TYPE: SUPER_RESOLUTION
+    NDIM: 2D
+    SUPER_RESOLUTION:
+        UPSCALING: 2
+  
+DATA: 
+    PATCH_SIZE: (24, 24, 1)
+    CHECK_GENERATORS: False
+    TRAIN:                                                                                                              
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
+        IN_MEMORY: True
+    VAL:
+        SPLIT_TRAIN: 0.1
+    TEST:                                                                                                               
+        IN_MEMORY: True
+        LOAD_GT: True
+        PATH: /path/to/data
+        MASK_PATH: /path/to/data
+        PADDING: (8,8)
+
+AUGMENTOR:
+    ENABLE: True
+    DA_PROB: 0.5
+    VFLIP: True
+    HFLIP: True
+    ROT90: True
+
+MODEL:
+    ARCHITECTURE: wdsr
+    LOAD_CHECKPOINT: False
+
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAM
+    LR: 5.E-5
+    BATCH_SIZE: 16
+    EPOCHS: 2
+    PATIENCE: 2
+  
+TEST:
+    ENABLE: True
+    AUGMENTATION: False
