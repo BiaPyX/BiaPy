@@ -38,9 +38,9 @@ TRAIN:
     ENABLE: True
     OPTIMIZER: ADAM
     LR: 5.E-5
-    BATCH_SIZE: 16
-    EPOCHS: 2
-    PATIENCE: 2
+    BATCH_SIZE: 12
+    EPOCHS: 400
+    PATIENCE: 50
   
 TEST:
     ENABLE: True

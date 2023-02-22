@@ -90,6 +90,10 @@ class RCANModel(tf.keras.Model):
                 self.out_dtype = tf.uint16
             self.dtype_not_set = True
 
+## RCAN network definition. We follow the code from:
+### [Hoang Trung Hieu](https://github.com/hieubkset/Keras-Image-Super-Resolution/blob/master/model/rcan.py).
+
+https://github.com/hieubkset/Keras-Image-Super-Resolution/blob/master/model/rcan.py
 
 class Mish(tf.keras.layers.Layer):
   '''

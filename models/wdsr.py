@@ -87,6 +87,9 @@ class WDSRModel(tf.keras.Model):
             self.dtype_not_set = True
 
 
+## RCAN network definition. We follow the code from:
+### [Martin Krasser](http://krasserm.github.io/2019/09/04/super-resolution/).
+
 def subpixel_conv2d(scale):
     return lambda x: tf.nn.depth_to_space(x, scale)
 

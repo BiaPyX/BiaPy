@@ -86,17 +86,9 @@ class DFCANModel(tf.keras.Model):
                 self.out_dtype = tf.uint16
             self.dtype_not_set = True
 
-## Loss function definition used in the paper from nature methods
-def loss_dfcan(y_true, y_pred):
-  mse = tf.keras.losses.MeanSquaredError()
-  ssim = tf.image.ssim_multiscale(y_true, y_pred, max_val=1)
-  res = mse(y_true, y_pred) + 0.1*(1-ssim)
-  return res
-
 ## DFCAN network definition. We follow the code from:
 ### [Chang Qiao](https://github.com/qc17-THU/DL-SR/tree/main/src) (MIT license).
 #### Common methods for both DFCAN and DFGAN adapted from `common.py`:
-
 
 def gelu(x):
     cdf = 0.5 * (1.0 + tf.math.erf(x / tf.sqrt(2.0)))
