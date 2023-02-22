@@ -222,8 +222,8 @@ class Engine(object):
             workflow = Semantic_Segmentation(self.cfg, self.model, self.post_processing)
         elif self.cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             # Specific instance segmentation post-processing
-            if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK or self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY or\
-                self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE:
+            if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK or self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1 or\
+                self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
                 self.post_processing['instance_post'] = True
             else:
                 self.post_processing['instance_post'] = False
