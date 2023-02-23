@@ -1,4 +1,4 @@
-'''
+"""
 Super-convergence with one-cycle policy.
 Original code by Andrich van Wyk: https://www.avanwyk.com/tensorflow-2-super-convergence-with-the-1cycle-policy/
 
@@ -15,12 +15,13 @@ Example of application (simply add it as a callback when calling model.fit(...))
 
     model.fit(train_ds,epochs=epochs, callbacks=[lr_schedule])
 
-'''
+"""
 
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 import logging
+import os
 
 logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
@@ -41,22 +42,24 @@ class CosineAnnealer:
 
 
 class OneCycleScheduler(Callback):
-    """ `Callback` that schedules the learning rate on a 1cycle policy as per Leslie Smith's paper(https://arxiv.org/pdf/1803.09820.pdf).
-    If the model supports a momentum parameter, it will also be adapted by the schedule.
-    The implementation adopts additional improvements as per the fastai library: https://docs.fast.ai/callbacks.one_cycle.html, where
-    only two phases are used and the adaptation is done using cosine annealing.
-    In phase 1 the LR increases from `lr_max / div_factor` to `lr_max` and momentum decreases from `mom_max` to `mom_min`.
-    In the second phase the LR decreases from `lr_max` to `lr_max / (div_factor * 1e4)` and momemtum from `mom_max` to `mom_min`.
-    By default the phases are not of equal length, with the phase 1 percentage controlled by the parameter `phase_1_pct`.
+    """ 
+    `Callback` that schedules the learning rate on a 1cycle policy as per `Leslie Smith's paper <https://arxiv.org/pdf/1803.09820.pdf>`_.
+    If the model supports a momentum parameter, it will also be adapted by the schedule. The implementation adopts additional improvements 
+    as per `the fastai library <https://docs.fast.ai/callbacks.one_cycle.html>`_, where only two phases are used and the adaptation is done 
+    using cosine annealing. In phase 1 the LR increases from ``lr_max / div_factor`` to ``lr_max`` and momentum decreases from ``mom_max`` to 
+    ``mom_min``. In the second phase the LR decreases from ``lr_max`` to ``lr_max / (div_factor * 1e4)`` and momemtum from ``mom_max`` to 
+    ``mom_min``. By default the phases are not of equal length, with the phase 1 percentage controlled by the parameter ``phase_1_pct``.
     """
 
-    def __init__(self, lr_max, steps, mom_min=0.85, mom_max=0.95, phase_1_pct=0.3, div_factor=25.):
+    def __init__(self, lr_max, steps, mom_min=0.85, mom_max=0.95, phase_1_pct=0.3, div_factor=25., save_freq=-1, save_dir=None):
         super(OneCycleScheduler, self).__init__()
         lr_min = lr_max / div_factor
         final_lr = lr_max / (div_factor * 1e4)
         phase_1_steps = steps * phase_1_pct
         phase_2_steps = steps - phase_1_steps
         
+        self.save_freq = save_freq
+        self.save_dir = save_dir
         self.phase_1_steps = phase_1_steps
         self.phase_2_steps = phase_2_steps
         self.phase = 0
@@ -86,7 +89,11 @@ class OneCycleScheduler(Callback):
             
         self.set_lr(self.lr_schedule().step())
         self.set_momentum(self.mom_schedule().step())
-        
+
+    def on_epoch_begin(self, epoch, logs=None):
+        if self.save_freq != -1:
+            self.plot()
+
     def get_lr(self):
         try:
             return tf.keras.backend.get_value(self.model.optimizer.lr)
@@ -119,8 +126,10 @@ class OneCycleScheduler(Callback):
     
     def plot(self):
         ax = plt.subplot(1, 2, 1)
-        ax.plot(self.lrs)
-        ax.set_title('Learning Rate')
+        ax.plot(self.lrs[:20])
+        ax.set_title('Learning Rate - One cycle')
         ax = plt.subplot(1, 2, 2)
-        ax.plot(self.moms)
-        ax.set_title('Momentum')
+        ax.plot(self.moms[:20])
+        ax.set_title('Momentum - One cycle')
+        plt.savefig(os.path.join(self.save_dir, 'one_cycle_schel.png'))
+        plt.clf()

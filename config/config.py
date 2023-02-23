@@ -522,8 +522,30 @@ class Config:
 
         # LR Scheduler
         _C.TRAIN.LR_SCHEDULER = CN()
-        _C.TRAIN.LR_SCHEDULER.ENABLE = False
-        _C.TRAIN.LR_SCHEDULER.NAME = '' # Possible options: 'cosine', 'reduceonplateau'
+        _C.TRAIN.LR_SCHEDULER.NAME = '' # Possible options: 'warmupcosine', 'reduceonplateau', 'onecycle'
+        # Lower bound on the learning rate
+        _C.TRAIN.LR_SCHEDULER.MIN_LR = -1.
+        # Frequency to save the plot of the learning reate scheduler in 'warmupcosine' and 'onecycle'
+        _C.TRAIN.LR_SCHEDULER.SAVE_FREQ = -1
+        # Factor by which the learning rate will be reduced
+        _C.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_FACTOR = 0.5 
+        # Number of epochs with no improvement after which learning rate will be reduced. Need to be less than 'TRAIN.PATIENCE' 
+        # otherwise it makes no sense
+        _C.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE = -1
+        # Cosine decay with a warm up consist in 2 phases: 1) a warm up phase which consists of increasing 
+        # the learning rate from TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_LR to TRAIN.LR value by a factor 
+        # during a certain number of epochs defined by 'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_HOLD_EPOCHS' 
+        # 2) after this will began the decay of the learning rate value using the cosine function.
+        # Find a detailed explanation in: https://scorrea92.medium.com/cosine-learning-rate-decay-e8b50aa455b
+        #
+        # Initial learning rate to start the warm up from. You can set it to 0 or a value lower than 'TRAIN.LR'
+        _C.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_LR = -1.
+        # Epochs to do the warming up. 
+        _C.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS = -1
+        # Number of steps to hold base learning rate before decaying
+        _C.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_HOLD_EPOCHS = -1
+        # One cycle step
+        _C.TRAIN.LR_SCHEDULER.ONE_CYCLE_STEP = -1
 
         # Callbacks
         # To determine which value monitor to stop the training

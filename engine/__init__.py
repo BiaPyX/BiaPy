@@ -1,10 +1,12 @@
 import os
 import tensorflow as tf
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
 from utils.callbacks import ModelCheckpoint, TimeHistory
 from engine.metrics import (jaccard_index, jaccard_index_softmax, IoU_instances, instance_segmentation_loss, weighted_bce_dice_loss,
                             masked_bce_loss, masked_jaccard_index, PSNR, n2v_loss_mse, MAE_instances)
+from engine.schedulers.one_cycle import OneCycleScheduler
+from engine.schedulers.cosine_decay import WarmUpCosineDecayScheduler
 
 
 def prepare_optimizer(cfg, model):
@@ -21,9 +23,9 @@ def prepare_optimizer(cfg, model):
 
     # Select the optimizer
     if cfg.TRAIN.OPTIMIZER == "SGD":
-        opt = tf.keras.optimizers.SGD(lr=cfg.TRAIN.LR, momentum=0.99, nesterov=False)
+        opt = tf.keras.optimizers.SGD(learning_rate=cfg.TRAIN.LR, momentum=0.99, nesterov=False)
     elif cfg.TRAIN.OPTIMIZER == "ADAM":
-        opt = tf.keras.optimizers.Adam(lr=cfg.TRAIN.LR, beta_1=0.9, beta_2=0.999, amsgrad=False)
+        opt = tf.keras.optimizers.Adam(learning_rate=cfg.TRAIN.LR, beta_1=0.9, beta_2=0.999, amsgrad=False)
 
     # Compile the model
     metric_name = []
@@ -114,4 +116,18 @@ def build_callbacks(cfg):
                                    save_best_only=True)
     callbacks.append(checkpointer)
 
+    # Learning rate schedulers
+    if cfg.TRAIN.LR_SCHEDULER.NAME != '':
+        if cfg.TRAIN.LR_SCHEDULER.NAME == 'reduceonplateau':
+            lr_schedule = ReduceLROnPlateau(monitor=cfg.TRAIN.EARLYSTOPPING_MONITOR, factor=cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_FACTOR, 
+                patience=cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE, min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR, verbose=1)
+        elif cfg.TRAIN.LR_SCHEDULER.NAME == 'warmupcosine':
+            lr_schedule = WarmUpCosineDecayScheduler(cfg.TRAIN.LR, warmup_learning_rate=cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_LR, 
+                warmup_epochs=cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS, hold_base_rate_steps=cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_HOLD_EPOCHS,
+                min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR, save_freq=cfg.TRAIN.LR_SCHEDULER.SAVE_FREQ, save_dir=cfg.PATHS.CHARTS, verbose=1)
+        elif cfg.TRAIN.LR_SCHEDULER.NAME == 'onecycle':
+            lr_schedule = OneCycleScheduler(cfg.TRAIN.LR, cfg.TRAIN.LR_SCHEDULER.ONE_CYCLE_STEP, save_freq=cfg.TRAIN.LR_SCHEDULER.SAVE_FREQ,
+                save_dir=cfg.PATHS.CHARTS)
+
+        callbacks.append(lr_schedule)
     return callbacks

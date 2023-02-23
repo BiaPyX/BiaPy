@@ -317,7 +317,33 @@ def check_configuration(cfg):
     ### Train ###
     assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM']
     assert cfg.LOSS.TYPE in ['CE', 'W_CE_DICE', 'MASKED_BCE']
+    if cfg.TRAIN.LR_SCHEDULER.NAME != '':
+        if cfg.TRAIN.LR_SCHEDULER.NAME not in ['reduceonplateau', 'warmupcosine', 'onecycle']:
+            raise ValueError("'TRAIN.LR_SCHEDULER.NAME' must be one between ['reduceonplateau', 'warmupcosine', 'onecycle']")
+        if cfg.TRAIN.LR_SCHEDULER.MIN_LR == -1.:
+            raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is set")
+        if cfg.TRAIN.LR_SCHEDULER.SAVE_FREQ == -1:
+            raise ValueError("'TRAIN.LR_SCHEDULER.SAVE_FREQ' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is set")
 
+        if cfg.TRAIN.LR_SCHEDULER.NAME == 'reduceonplateau':
+            if cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE == -1:
+                raise ValueError("'TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'reduceonplateau'")
+            if cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE >= cfg.TRAIN.PATIENCE:
+                raise ValueError("'TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE' need to be less than 'TRAIN.PATIENCE' ")
+      
+        if cfg.TRAIN.LR_SCHEDULER.NAME == 'warmupcosine':
+            if cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_LR == -1.:
+                raise ValueError("'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_LR' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'warmupcosine'")
+            if cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_LR >= cfg.TRAIN.LR:
+                raise ValueError("'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_LR' need to be lower than 'TRAIN.LR'")
+            if cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_HOLD_EPOCHS == -1:
+                raise ValueError("'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_HOLD_EPOCHS' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'warmupcosine'")
+            if cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS == -1:
+                raise ValueError("'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'warmupcosine'")
+       
+        if cfg.TRAIN.LR_SCHEDULER.NAME == 'onecycle':
+            if cfg.TRAIN.LR_SCHEDULER.ONE_CYCLE_STEP == -1:
+                raise ValueError("'TRAIN.LR_SCHEDULER.ONE_CYCLE_STEP' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'onecycle'")       
     #### Augmentation ####
     if cfg.AUGMENTOR.ENABLE:
         if not check_value(cfg.AUGMENTOR.DA_PROB):
