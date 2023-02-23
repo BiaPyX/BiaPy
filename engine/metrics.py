@@ -698,6 +698,17 @@ def PSNR(super_resolution, high_resolution, max_val=255):
     psnr_value = tf.image.psnr(high_resolution, super_resolution, max_val=max_val)[0]
     return psnr_value
 
+## Loss function definition used in the paper from nature methods:
+### [Chang Qiao](https://github.com/qc17-THU/DL-SR/tree/main/src) (MIT license).
+def dfcan_loss(max_val=255):
+	def mse_ssim(y_true, y_pred):
+		mse = tf.keras.losses.MeanSquaredError()
+		ssim = tf.image.ssim(y_true, y_pred, max_val=max_val)
+		res = mse(y_true, y_pred) + 0.1*(1-ssim)
+		return res
+	
+	return mse_ssim
+	
 def n2v_loss_mse():
     def n2v_mse(y_true, y_pred):
         target, mask = tf.split(y_true, 2, axis=len(y_true.shape)-1)
