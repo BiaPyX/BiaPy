@@ -636,7 +636,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             else:
                 self.Y_shape = (self.Y_shape[0], self.Y_shape[1]*random_crop_scale, \
                                 self.Y_shape[2]*random_crop_scale, self.Y_shape[3]) 
-        del _X, _Y
+        if self.in_memory: del _X, _Y
 
         self.prob_map = None
         if random_crops_in_DA and prob_map is not None:
