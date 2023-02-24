@@ -321,10 +321,8 @@ def check_configuration(cfg):
     if cfg.TRAIN.LR_SCHEDULER.NAME != '':
         if cfg.TRAIN.LR_SCHEDULER.NAME not in ['reduceonplateau', 'warmupcosine', 'onecycle']:
             raise ValueError("'TRAIN.LR_SCHEDULER.NAME' must be one between ['reduceonplateau', 'warmupcosine', 'onecycle']")
-        if cfg.TRAIN.LR_SCHEDULER.MIN_LR == -1.:
-            raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is set")
-        if cfg.TRAIN.LR_SCHEDULER.SAVE_FREQ == -1:
-            raise ValueError("'TRAIN.LR_SCHEDULER.SAVE_FREQ' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is set")
+        if cfg.TRAIN.LR_SCHEDULER.MIN_LR == -1. and cfg.TRAIN.LR_SCHEDULER.NAME != 'onecycle':
+            raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is between ['reduceonplateau', 'warmupcosine']")
 
         if cfg.TRAIN.LR_SCHEDULER.NAME == 'reduceonplateau':
             if cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE == -1:

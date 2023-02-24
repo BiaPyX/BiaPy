@@ -523,7 +523,7 @@ class Config:
         # LR Scheduler
         _C.TRAIN.LR_SCHEDULER = CN()
         _C.TRAIN.LR_SCHEDULER.NAME = '' # Possible options: 'warmupcosine', 'reduceonplateau', 'onecycle'
-        # Lower bound on the learning rate
+        # Lower bound on the learning rate used in 'warmupcosine' and 'reduceonplateau'
         _C.TRAIN.LR_SCHEDULER.MIN_LR = -1.
         # Frequency to save the plot of the learning reate scheduler in 'warmupcosine' and 'onecycle'
         _C.TRAIN.LR_SCHEDULER.SAVE_FREQ = -1
