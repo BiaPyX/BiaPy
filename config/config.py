@@ -544,8 +544,6 @@ class Config:
         _C.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS = -1
         # Number of steps to hold base learning rate before decaying
         _C.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_HOLD_EPOCHS = -1
-        # One cycle step
-        _C.TRAIN.LR_SCHEDULER.ONE_CYCLE_STEP = -1
 
         # Callbacks
         # To determine which value monitor to stop the training

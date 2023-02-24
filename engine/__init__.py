@@ -89,13 +89,16 @@ def prepare_optimizer(cfg, model):
         metric_name.append("n2v_mse")
     return metric_name
 
-def build_callbacks(cfg):
+def build_callbacks(cfg, schel_steps):
     """Create training and validation generators.
 
        Parameters
        ----------
        cfg : YACS CN object
            Configuration.
+
+       schel_steps : int 
+           Steps to be done by the scheduler. Used in one-cycle. 
 
        Returns
        -------
@@ -130,7 +133,7 @@ def build_callbacks(cfg):
                 warmup_epochs=cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS, hold_base_rate_steps=cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_HOLD_EPOCHS,
                 min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR, save_freq=cfg.TRAIN.LR_SCHEDULER.SAVE_FREQ, save_dir=cfg.PATHS.CHARTS, verbose=1)
         elif cfg.TRAIN.LR_SCHEDULER.NAME == 'onecycle':
-            lr_schedule = OneCycleScheduler(cfg.TRAIN.LR, cfg.TRAIN.LR_SCHEDULER.ONE_CYCLE_STEP, save_freq=cfg.TRAIN.LR_SCHEDULER.SAVE_FREQ,
+            lr_schedule = OneCycleScheduler(cfg.TRAIN.LR, schel_steps, save_freq=cfg.TRAIN.LR_SCHEDULER.SAVE_FREQ,
                 save_dir=cfg.PATHS.CHARTS)
 
         callbacks.append(lr_schedule)

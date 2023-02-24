@@ -197,7 +197,7 @@ class Engine(object):
             print("Loading model weights from h5_file: {}".format(self.cfg.PATHS.CHECKPOINT_FILE))
             self.model.load_weights(self.cfg.PATHS.CHECKPOINT_FILE)
 
-        self.callbacks = build_callbacks(self.cfg)
+        self.callbacks = build_callbacks(self.cfg, len(self.train_generator)*self.cfg.TRAIN.EPOCHS)
         self.results = self.model.fit(self.train_generator, validation_data=self.val_generator,
             validation_steps=len(self.val_generator), steps_per_epoch=len(self.train_generator),
             epochs=self.cfg.TRAIN.EPOCHS, callbacks=self.callbacks)
@@ -281,10 +281,6 @@ class Engine(object):
                 else:
                     _X = np.expand_dims(X[j], 0)                    
                     _Y = np.expand_dims(Y[j], 0) if self.cfg.DATA.TEST.LOAD_GT else None
-
-                # Save memory if possible
-                if l_X == 1: 
-                    del X
 
                 # Process each image separately
                 workflow.process_sample(_X, _Y, self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], f_numbers=list(range((i*l_X)+j,(i*l_X)+j+1)), 

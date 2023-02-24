@@ -339,10 +339,7 @@ def check_configuration(cfg):
                 raise ValueError("'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_HOLD_EPOCHS' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'warmupcosine'")
             if cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS == -1:
                 raise ValueError("'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'warmupcosine'")
-       
-        if cfg.TRAIN.LR_SCHEDULER.NAME == 'onecycle':
-            if cfg.TRAIN.LR_SCHEDULER.ONE_CYCLE_STEP == -1:
-                raise ValueError("'TRAIN.LR_SCHEDULER.ONE_CYCLE_STEP' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'onecycle'")       
+             
     #### Augmentation ####
     if cfg.AUGMENTOR.ENABLE:
         if not check_value(cfg.AUGMENTOR.DA_PROB):
