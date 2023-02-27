@@ -131,10 +131,9 @@ def build_callbacks(cfg, schel_steps):
         elif cfg.TRAIN.LR_SCHEDULER.NAME == 'warmupcosine':
             lr_schedule = WarmUpCosineDecayScheduler(cfg.TRAIN.LR, warmup_learning_rate=cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_LR, 
                 warmup_epochs=cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS, hold_base_rate_steps=cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_HOLD_EPOCHS,
-                min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR, save_freq=cfg.TRAIN.LR_SCHEDULER.SAVE_FREQ, save_dir=cfg.PATHS.CHARTS, verbose=1)
+                min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR, save_dir=cfg.PATHS.CHARTS, verbose=1)
         elif cfg.TRAIN.LR_SCHEDULER.NAME == 'onecycle':
-            lr_schedule = OneCycleScheduler(cfg.TRAIN.LR, schel_steps, save_freq=cfg.TRAIN.LR_SCHEDULER.SAVE_FREQ,
-                save_dir=cfg.PATHS.CHARTS)
+            lr_schedule = OneCycleScheduler(cfg.TRAIN.LR, schel_steps, save_dir=cfg.PATHS.CHARTS)
 
         callbacks.append(lr_schedule)
     return callbacks

@@ -525,8 +525,6 @@ class Config:
         _C.TRAIN.LR_SCHEDULER.NAME = '' # Possible options: 'warmupcosine', 'reduceonplateau', 'onecycle'
         # Lower bound on the learning rate used in 'warmupcosine' and 'reduceonplateau'
         _C.TRAIN.LR_SCHEDULER.MIN_LR = -1.
-        # Frequency to save the plot of the learning reate scheduler in 'warmupcosine' and 'onecycle'
-        _C.TRAIN.LR_SCHEDULER.SAVE_FREQ = -1
         # Factor by which the learning rate will be reduced
         _C.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_FACTOR = 0.5 
         # Number of epochs with no improvement after which learning rate will be reduced. Need to be less than 'TRAIN.PATIENCE' 

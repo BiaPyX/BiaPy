@@ -11,7 +11,7 @@ from tensorflow.keras.callbacks import Callback, LearningRateScheduler
 class WarmUpCosineDecayScheduler(keras.callbacks.Callback):
     """Cosine decay with warmup learning rate scheduler. """
     def __init__(self, learning_rate_base, global_step_init=0, warmup_learning_rate=0.0, warmup_epochs=0,
-        hold_base_rate_steps=0, min_lr=None, stop_epoch=None, save_freq=-1, save_dir=None, verbose=0):
+        hold_base_rate_steps=0, min_lr=None, stop_epoch=None, save_dir=None, verbose=0):
         """
         Constructor for cosine decay with warmup learning rate scheduler. It consist in 2 phases: 1) a warm up phase 
         which consists of increasing the learning rate from ``warmup_learning_rate`` to ``learning_rate_base`` value 
@@ -42,9 +42,6 @@ class WarmUpCosineDecayScheduler(keras.callbacks.Callback):
         stop_epoch : int, optional
             Epoch to stop the decay.
 
-        save_freq : int, optional
-            Frequency to save the plot of the learning reate scheduler.
-
         save_dir : str, optional
             Path to the directory to save the plots of the scheduler learning rate.
 
@@ -62,7 +59,6 @@ class WarmUpCosineDecayScheduler(keras.callbacks.Callback):
         self.warmup_epochs = warmup_epochs
         self.hold_base_rate_steps = hold_base_rate_steps
         self.learning_rates = []
-        self.save_freq = save_freq
         self.save_dir = save_dir
         self.verbose = verbose
         self.stop_epoch = stop_epoch
@@ -79,9 +75,7 @@ class WarmUpCosineDecayScheduler(keras.callbacks.Callback):
         lr = K.get_value(self.model.optimizer.lr)
         self.learning_rates.append(lr)
         self.lr_changed = False if self.last_lr == lr else True
-        self.last_lr = lr
-        if self.save_freq != -1:
-            self.plot()
+        self.last_lr = lr           
 
     def on_batch_begin(self, batch, logs=None):
         total_steps = int(self.params['epochs'] * self.params['steps'])
@@ -105,6 +99,9 @@ class WarmUpCosineDecayScheduler(keras.callbacks.Callback):
                 K.set_value(self.model.optimizer.lr, self.min_lr)
         else:
             K.set_value(self.model.optimizer.lr, lr)
+
+    def on_train_end():
+        self.plot()
 
     def cosine_decay_with_warmup(self, global_step, learning_rate_base, total_steps, warmup_learning_rate=0.0,
         warmup_steps=0, hold_base_rate_steps=0):

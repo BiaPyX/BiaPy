@@ -51,14 +51,13 @@ class OneCycleScheduler(Callback):
     ``mom_min``. By default the phases are not of equal length, with the phase 1 percentage controlled by the parameter ``phase_1_pct``.
     """
 
-    def __init__(self, lr_max, steps, mom_min=0.85, mom_max=0.95, phase_1_pct=0.3, div_factor=25., save_freq=-1, save_dir=None):
+    def __init__(self, lr_max, steps, mom_min=0.85, mom_max=0.95, phase_1_pct=0.3, div_factor=25., save_dir=None):
         super(OneCycleScheduler, self).__init__()
         lr_min = lr_max / div_factor
         final_lr = lr_max / (div_factor * 1e4)
         phase_1_steps = steps * phase_1_pct
         phase_2_steps = steps - phase_1_steps
         
-        self.save_freq = save_freq
         self.save_dir = save_dir
         self.phase_1_steps = phase_1_steps
         self.phase_2_steps = phase_2_steps
@@ -90,9 +89,8 @@ class OneCycleScheduler(Callback):
         self.set_lr(self.lr_schedule().step())
         self.set_momentum(self.mom_schedule().step())
 
-    def on_epoch_begin(self, epoch, logs=None):
-        if self.save_freq != -1:
-            self.plot()
+    def on_train_end(self, epoch, logs=None):
+        self.plot()
 
     def get_lr(self):
         try:
@@ -126,10 +124,10 @@ class OneCycleScheduler(Callback):
     
     def plot(self):
         ax = plt.subplot(1, 2, 1)
-        ax.plot(self.lrs[:20])
+        ax.plot(self.lrs)
         ax.set_title('Learning Rate - One cycle')
         ax = plt.subplot(1, 2, 2)
-        ax.plot(self.moms[:20])
+        ax.plot(self.moms)
         ax.set_title('Momentum - One cycle')
         plt.savefig(os.path.join(self.save_dir, 'one_cycle_schel.png'))
         plt.clf()
