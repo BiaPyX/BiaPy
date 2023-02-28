@@ -441,7 +441,10 @@ class Config:
         _C.AUGMENTOR.GRID_ROTATE = 1
         # Whether to invert the mask
         _C.AUGMENTOR.GRID_INVERT = False
-
+        # Whether to invert the mask
+        _C.AUGMENTOR.POISSON_NOISE = False
+        # Whether to invert the mask
+        _C.AUGMENTOR.POISSON_NOISE_LAMBDA_RANGE = (0,0.5)
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Model definition

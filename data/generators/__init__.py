@@ -116,10 +116,11 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             missp_iterations=cfg.AUGMENTOR.MISSP_ITERATIONS, grayscale=cfg.AUGMENTOR.GRAYSCALE,
             channel_shuffle=cfg.AUGMENTOR.CHANNEL_SHUFFLE, gridmask=cfg.AUGMENTOR.GRIDMASK,
             grid_ratio=cfg.AUGMENTOR.GRID_RATIO, grid_d_range=cfg.AUGMENTOR.GRID_D_RANGE, grid_rotate=cfg.AUGMENTOR.GRID_ROTATE,
-            grid_invert=cfg.AUGMENTOR.GRID_INVERT, shape=cfg.DATA.PATCH_SIZE, resolution=cfg.DATA.TRAIN.RESOLUTION,
-            random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, prob_map=prob_map, n_classes=cfg.MODEL.N_CLASSES,
-            extra_data_factor=cfg.DATA.TRAIN.REPLICATE, norm_custom_mean=custom_mean, norm_custom_std=custom_std,
-            random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
+            grid_invert=cfg.AUGMENTOR.GRID_INVERT, poisson_noise=cfg.AUGMENTOR.POISSON_NOISE, 
+            poisson_noise_lambda_range=cfg.AUGMENTOR.POISSON_NOISE_LAMBDA_RANGE, shape=cfg.DATA.PATCH_SIZE, 
+            resolution=cfg.DATA.TRAIN.RESOLUTION, random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, prob_map=prob_map, 
+            n_classes=cfg.MODEL.N_CLASSES, extra_data_factor=cfg.DATA.TRAIN.REPLICATE, norm_custom_mean=custom_mean, 
+            norm_custom_std=custom_std, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
 
         if cfg.PROBLEM.NDIM == '3D':
             dic['zflip'] = cfg.AUGMENTOR.ZFLIP

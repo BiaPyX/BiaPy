@@ -260,6 +260,12 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
        channel_shuffle : bool, optional
            Whether to shuflle the channels of the images.
+       
+       poisson_noise : bool, optional
+           To apply poisson noise to the images.
+
+       poisson_noise_lambda_range : tuple of ints, optional
+           Range to choose a poisson scale value from which determines the lambda parameter of the poisson distribution.
 
        random_crops_in_DA : bool, optional
            Decide to make random crops in DA (before transformations).
@@ -338,11 +344,12 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                  cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False,
                  ms_displacement=16, ms_rotate_ratio=0.0, missing_sections=False, missp_iterations=(30, 40),
                  grayscale=False, channel_shuffle=False, gridmask=False, grid_ratio=0.6, grid_d_range=(0.4,1),
-                 grid_rotate=1, grid_invert=False, random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,),
-                 prob_map=None, val=False, n_classes=1, out_number=1, extra_data_factor=1, n2v=False, 
-                 n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', n2v_neighborhood_radius=5, 
-                 n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), norm_custom_mean=None, norm_custom_std=None, 
-                 normalizeY='as_mask', instance_problem=False, random_crop_scale=1):
+                 grid_rotate=1, grid_invert=False, poisson_noise=False, poisson_noise_lambda_range=(0,10), 
+                 random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,), prob_map=None, val=False, 
+                 n_classes=1, out_number=1, extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, 
+                 n2v_manipulator='uniform_withCP', n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), 
+                 norm_custom_mean=None, norm_custom_std=None, normalizeY='as_mask', instance_problem=False, 
+                 random_crop_scale=1):
 
         self.ndim = ndim
         self.z_size = -1 
@@ -712,6 +719,9 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += '_drop'+str(drop_range)
+        if poisson_noise:
+            self.da_options.append(iaa.Sometimes(da_prob, iaa.AdditivePoissonNoise(poisson_noise_lambda_range)))
+            self.trans_made += '_poisnoise'+str(poisson_noise_lambda_range)
 
         if grayscale: self.trans_made += '_gray'
         if gridmask: self.trans_made += '_gridmask'+str(self.grid_ratio)+'+'+str(self.grid_d_range)+'+'+str(self.grid_rotate)+'+'+str(self.grid_invert)
