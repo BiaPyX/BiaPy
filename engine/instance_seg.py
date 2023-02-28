@@ -3,6 +3,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from skimage.io import imread
+from tqdm import tqdm
 
 from data.post_processing.post_processing import (watershed_by_channels, calculate_optimal_mw_thresholds, voronoi_on_mask, 
                                                   remove_instance_by_circularity_central_slice, repare_large_blobs)
@@ -90,8 +91,46 @@ class Instance_Segmentation(Base_Workflow):
             if _Y.dtype == np.float32: _Y = _Y.astype(np.uint32)
             if _Y.dtype == np.float64: _Y = _Y.astype(np.uint64)
 
-            r_stats = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=False)
-            print(r_stats)
+            results = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=True)
+
+            pred_instances = np.unique(w_pred)[1:]
+            gt_instances = np.unique(_Y)[1:]
+            for i in range(len(results)):
+                # Extract TPs, FPs and FNs from the resulting matching data structure 
+                r_stats = results[i] 
+                thr = r_stats['thresh']
+                matched_pairs = r_stats['matched_pairs']
+                matched_scores = list(r_stats['matched_scores'])
+                gt_match = [x[0] for x in matched_pairs]
+                pred_match = [x[1] for x in matched_pairs]
+                tag = ["TP" if score >= thr else "FN" for score in matched_scores]
+                fp_instances = [pred_id for score, pred_id in zip(matched_scores,pred_match) if score < thr ]
+
+                # Save csv files
+                df = pd.DataFrame(zip(gt_match, pred_match, matched_scores, tag), columns =['gt_id', 'pred_id', 'iou', 'tag'])
+                df = df.sort_values(by=['gt_id'])  
+                df_fn = pd.DataFrame(zip(fp_instances), columns =['pred_id'])
+
+                os.makedirs(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, exist_ok=True)
+                df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_th_{}_gt_assoc.csv'.format(thr)), index=False)
+                df_fn.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_th_{}_fn.csv'.format(thr)), index=False)
+                del r_stats['matched_scores']; del r_stats['matched_tps']; del r_stats['matched_pairs']
+                print("DatasetMatching: {}".format(r_stats))
+
+                print("Creating the image with a summary of detected points and false positives with colors . . .")
+                coloured_result = np.zeros(w_pred.shape+(3,), dtype=np.uint8)
+                print("Painting TPs and FNs . . .")
+                for j in tqdm(range(len(gt_match))):
+                    color = (0,255,0) if tag[j] == "TP" else (255,0,0) # Green or red
+                    coloured_result[np.where(_Y == gt_match[j])] = color
+
+                print("Painting FPs . . .")
+                for j in tqdm(range(len(fp_instances))):
+                    coloured_result[np.where(w_pred == fp_instances[j])] = (0,0,255) # Blue
+
+                save_tif(np.expand_dims(coloured_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                        [os.path.splitext(filenames[0])[0]+'_th_{}.tif'.format(thr)], verbose=self.cfg.TEST.VERBOSE)          
+                del coloured_result
             self.all_matching_stats.append(r_stats)
 
 
@@ -126,8 +165,47 @@ class Instance_Segmentation(Base_Workflow):
 
             if self.cfg.TEST.MATCHING_STATS and self.cfg.DATA.TEST.LOAD_GT:
                 print("Calculating matching stats after post-processing . . .")
-                r_stats = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=False)
-                print(r_stats)
+                results = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=True)
+                
+                pred_instances = np.unique(w_pred)[1:]
+                for i in range(len(results)):
+                    # Extract TPs, FPs and FNs from the resulting matching data structure 
+                    r_stats = results[i] 
+                    thr = r_stats['thresh']
+                    matched_pairs = r_stats['matched_pairs']
+                    matched_scores = list(r_stats['matched_scores'])
+                    gt_match = [x[0] for x in matched_pairs]
+                    pred_match = [x[1] for x in matched_pairs]
+                    tag = ["TP" if score >= thr else "FN" for score in matched_scores]
+                    fp_instances = [pred_id for score, pred_id in zip(matched_scores,pred_match) if score < thr]
+
+                    # Save csv files
+                    df = pd.DataFrame(zip(gt_match, pred_match, matched_scores, tag), columns =['gt_id', 'pred_id', 'iou', 'tag'])
+                    df = df.sort_values(by=['gt_id'])  
+                    df_fn = pd.DataFrame(zip(fp_instances), columns =['pred_id'])
+
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, exist_ok=True)
+                    df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_post-proc_th_{}_gt_assoc.csv'.format(thr)), index=False)
+                    df_fn.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_post-proc_th_{}_fn.csv'.format(thr)), index=False)
+                    
+                    del r_stats['matched_scores']; del r_stats['matched_tps']; del r_stats['matched_pairs']
+                    print("DatasetMatching: {}".format(r_stats))
+
+                    print("Creating the image with a summary of detected points and false positives with colors . . .")
+                    coloured_result = np.zeros(w_pred.shape+(3,), dtype=np.uint8)
+                    print("Painting TPs and FNs . . .")
+                    for j in tqdm(range(len(gt_match))):
+                        color = (0,255,0) if tag[j] == "TP" else (255,0,0) # Green or red
+                        coloured_result[np.where(_Y == gt_match[j])] = color
+
+                    print("Painting FPs . . .")
+                    for j in tqdm(range(len(fp_instances))):
+                        coloured_result[np.where(w_pred == fp_instances[j])] = (0,0,255) # Blue
+
+                    save_tif(np.expand_dims(coloured_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                            [os.path.splitext(filenames[0])[0]+'_post-proc_th_{}.tif'.format(thr)], verbose=self.cfg.TEST.VERBOSE)          
+                    del coloured_result
+                    import pdb; pdb.set_trace()    
                 self.all_matching_stats_post_processing.append(r_stats)
 
     def after_merge_patches(self, pred, Y, filenames, f_numbers):

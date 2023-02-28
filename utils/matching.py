@@ -231,7 +231,7 @@ def matching(y_true, y_pred, thresh=0.5, criterion='iou', report_matches=False):
                     matched_scores = (),
                     matched_tps    = (),
                 )
-        return namedtuple('Matching',stats_dict.keys())(*stats_dict.values())
+        return stats_dict
 
     return _single(thresh) if np.isscalar(thresh) else tuple(map(_single,thresh))
 
