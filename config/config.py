@@ -435,16 +435,29 @@ class Config:
         _C.AUGMENTOR.GRIDMASK = False
         # Determines the keep ratio of an input image
         _C.AUGMENTOR.GRID_RATIO = 0.6
-        #  Range to choose a ``d`` value
+        # Range to choose a ``d`` value
         _C.AUGMENTOR.GRID_D_RANGE = (0.4, 1)
         # Rotation of the mask in GridMask. Needs to be between [0,1] where 1 is 360 degrees.
         _C.AUGMENTOR.GRID_ROTATE = 1
         # Whether to invert the mask
         _C.AUGMENTOR.GRID_INVERT = False
-        # Whether to invert the mask
+        # Add Gaussian noise
+        _C.AUGMENTOR.GAUSSIAN_NOISE = False
+        _C.AUGMENTOR.GAUSSIAN_NOISE_MEAN = 0.
+        _C.AUGMENTOR.GAUSSIAN_NOISE_VAR = 0.05
+        _C.AUGMENTOR.GAUSSIAN_NOISE_USE_INPUT_IMG_MEAN_AND_VAR = False
+        # Add Poisson noise
         _C.AUGMENTOR.POISSON_NOISE = False
-        # Whether to invert the mask
-        _C.AUGMENTOR.POISSON_NOISE_LAMBDA_RANGE = (0,0.5)
+        # Add salt (replaces random pixels with 1)
+        _C.AUGMENTOR.SALT = False
+        _C.AUGMENTOR.SALT_AMOUNT = 0.05
+        # Add pepper (replaces random pixels with 0 (for unsigned images) or -1 (for signed images))
+        _C.AUGMENTOR.PEPPER = False
+        _C.AUGMENTOR.PEPPER_AMOUNT = 0.05
+        # Whether to add Poisson noise
+        _C.AUGMENTOR.SALT_AND_PEPPER = False
+        _C.AUGMENTOR.SALT_AND_PEPPER_AMOUNT = 0.05
+        _C.AUGMENTOR.SALT_AND_PEPPER_PROP = 0.5
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Model definition

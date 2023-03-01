@@ -8,6 +8,7 @@ import imgaug as ia
 from tqdm import tqdm
 from imgaug import augmenters as iaa
 from skimage.io import imread
+from skimage.util import random_noise
 from imgaug.augmentables.heatmaps import HeatmapsOnImage
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 
@@ -261,11 +262,42 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
        channel_shuffle : bool, optional
            Whether to shuflle the channels of the images.
        
+       gaussian_noise : bool, optional
+           To apply Gaussian noise to the images.
+
+       gaussian_noise_mean : tuple of ints, optional
+           Mean of the Gaussian noise.
+
+       gaussian_noise_var : tuple of ints, optional
+           Variance of the Gaussian noise.
+
+       gaussian_noise_use_input_img_mean_and_var : bool, optional
+           Whether to use the mean and variance of the input image instead of ``gaussian_noise_mean``
+           and ``gaussian_noise_var``. 
+
        poisson_noise : bool, optional
+           To apply Poisson noise to the images.
+
+       salt : tuple of ints, optional
+           Mean of the gaussian noise.
+
+       salt_amount : tuple of ints, optional
+           Variance of the gaussian noise.
+
+       pepper : bool, optional
            To apply poisson noise to the images.
 
-       poisson_noise_lambda_range : tuple of ints, optional
-           Range to choose a poisson scale value from which determines the lambda parameter of the poisson distribution.
+       pepper_amount : tuple of ints, optional
+           Mean of the gaussian noise.
+
+       salt_and_pepper : bool, optional
+           To apply poisson noise to the images.
+
+       salt_pep_amount : tuple of ints, optional
+           Mean of the gaussian noise.
+
+       salt_pep_proportion : bool, optional
+           To apply poisson noise to the images.
 
        random_crops_in_DA : bool, optional
            Decide to make random crops in DA (before transformations).
@@ -344,12 +376,13 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                  cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False,
                  ms_displacement=16, ms_rotate_ratio=0.0, missing_sections=False, missp_iterations=(30, 40),
                  grayscale=False, channel_shuffle=False, gridmask=False, grid_ratio=0.6, grid_d_range=(0.4,1),
-                 grid_rotate=1, grid_invert=False, poisson_noise=False, poisson_noise_lambda_range=(0,10), 
-                 random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,), prob_map=None, val=False, 
-                 n_classes=1, out_number=1, extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, 
-                 n2v_manipulator='uniform_withCP', n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), 
-                 norm_custom_mean=None, norm_custom_std=None, normalizeY='as_mask', instance_problem=False, 
-                 random_crop_scale=1):
+                 grid_rotate=1, grid_invert=False, gaussian_noise=False, gaussian_noise_mean=0, gaussian_noise_var=0.01,
+                 gaussian_noise_use_input_img_mean_and_var=False, poisson_noise=False, salt=False, salt_amount=0.05, 
+                 pepper=False, pepper_amount=0.05, salt_and_pepper=False, salt_pep_amount=0.05, salt_pep_proportion=0.5, 
+                 random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,), prob_map=None, val=False, n_classes=1, 
+                 out_number=1, extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', 
+                 n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), norm_custom_mean=None, 
+                 norm_custom_std=None, normalizeY='as_mask', instance_problem=False, random_crop_scale=1):
 
         self.ndim = ndim
         self.z_size = -1 
@@ -611,6 +644,18 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         self.grid_invert = grid_invert
         self.grid_d_size = (self.shape[0]*grid_d_range[0], self.shape[1]*grid_d_range[1])
         self.channel_shuffle = channel_shuffle
+        self.gaussian_noise = gaussian_noise
+        self.gaussian_noise_mean = gaussian_noise_mean
+        self.gaussian_noise_var = gaussian_noise_var
+        self.gaussian_noise_use_input_img_mean_and_var = gaussian_noise_use_input_img_mean_and_var
+        self.poisson_noise = poisson_noise
+        self.salt = salt
+        self.salt_amount = salt_amount
+        self.pepper = pepper
+        self.pepper_amount = pepper_amount
+        self.salt_and_pepper = salt_and_pepper
+        self.salt_pep_amount = salt_pep_amount
+        self.salt_pep_proportion = salt_pep_proportion
 
         # Instance segmentation options
         self.instance_problem = instance_problem
@@ -719,9 +764,6 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += '_drop'+str(drop_range)
-        if poisson_noise:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.AdditivePoissonNoise(poisson_noise_lambda_range)))
-            self.trans_made += '_poisnoise'+str(poisson_noise_lambda_range)
 
         if grayscale: self.trans_made += '_gray'
         if gridmask: self.trans_made += '_gridmask'+str(self.grid_ratio)+'+'+str(self.grid_d_range)+'+'+str(self.grid_rotate)+'+'+str(self.grid_invert)
@@ -732,6 +774,11 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if cutnoise: self.trans_made += '_cnoi'+str(cnoise_scale)+'+'+str(cnoise_nb_iterations)+'+'+str(cnoise_size)
         if misalignment: self.trans_made += '_msalg'+str(ms_displacement)+'+'+str(ms_rotate_ratio)
         if missing_sections: self.trans_made += '_missp'+'+'+str(missp_iterations)
+        if gaussian_noise: self.trans_made += '_gausnoise'+'+'+str(gaussian_noise_mean)+'+'+str(gaussian_noise_var)
+        if poisson_noise: self.trans_made += '_poisnoise'
+        if salt: self.trans_made += '_salt'+'+'+str(salt_amount)
+        if pepper: self.trans_made += '_pepper'+'+'+str(pepper_amount)
+        if salt_and_pepper: self.trans_made += '_salt_and_pepper'+'+'+str(salt_pep_amount)+'+'+str(salt_pep_proportion)
 
         self.trans_made = self.trans_made.replace(" ", "")
         self.seq = iaa.Sequential(self.da_options)
@@ -743,7 +790,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         self.len = self.__len__() 
 
     @abstractmethod
-    def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, draw_grid, point_dict):
+    def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, point_dict):
         NotImplementedError
 
     @abstractmethod
@@ -992,6 +1039,23 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             image = GridMask(image, self.X_channels, self.z_size, self.grid_ratio, self.grid_d_size, self.grid_rotate,
                              self.grid_invert)
 
+        if self.gaussian_noise and random.uniform(0, 1) < self.da_prob:
+            mean = np.mean(image) if self.gaussian_noise_use_input_img_mean_and_var else self.gaussian_noise_mean
+            var = np.var(image)*random.uniform(0.9, 1.1) if self.gaussian_noise_use_input_img_mean_and_var else self.gaussian_noise_var
+            image = random_noise(image, mode='gaussian', mean=mean, var=var)
+
+        if self.poisson_noise and random.uniform(0, 1) < self.da_prob:
+            image = random_noise(image, mode='poisson')
+
+        if self.salt and random.uniform(0, 1) < self.da_prob:
+            image = random_noise(image, mode='salt', amount=self.salt_amount)
+
+        if self.pepper and random.uniform(0, 1) < self.da_prob:
+            image = random_noise(image, mode='pepper', amount=self.pepper_amount)
+
+        if self.salt_and_pepper and random.uniform(0, 1) < self.da_prob:
+            image = random_noise(image, mode='s&p', amount=self.salt_pep_amount, salt_vs_pepper=self.salt_pep_proportion)
+
         # Apply transformations to the volume and its mask
         if self.normalizeY == 'as_mask':  
             # Change dtype to supported one by imgaug
@@ -1155,8 +1219,17 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 pos = i
 
             img, mask = self.load_sample(pos)
-            img = np.copy(img)
-            mask = np.copy(mask)
+            if save_to_dir:
+                orig_images = {}
+                orig_images['o_x'] = np.copy(img) 
+                orig_images['o_y'] = np.copy(mask) 
+                orig_images['o_x2'] = np.copy(img) 
+                orig_images['o_y2'] = np.copy(mask) 
+                if draw_grid:
+                    self.draw_grid(orig_images['o_x'])
+                    self.draw_grid(orig_images['o_y'])
+                    self.draw_grid(orig_images['o_x2'])
+                    self.draw_grid(orig_images['o_y2'])
 
             # Apply random crops if it is selected
             if self.random_crops_in_DA:
@@ -1188,13 +1261,6 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 sample_x.append(img)
                 sample_y.append(mask)
 
-            if save_to_dir:
-                orig_images = {}
-                orig_images['o_x'] = np.copy(img)
-                orig_images['o_y'] = np.copy(mask)
-                orig_images['o_x2'] = np.copy(img)
-                orig_images['o_y2'] = np.copy(mask)
-
             # Apply transformations
             if self.da:
                 if not train and draw_grid:
@@ -1215,7 +1281,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 sample_y[i] = mask
 
             if save_to_dir:
-                self.save_aug_samples(sample_x[i], sample_y[i], orig_images, i, pos, out_dir, draw_grid, point_dict)
+                self.save_aug_samples(sample_x[i], sample_y[i], orig_images, i, pos, out_dir, point_dict)
 
 
     def draw_grid(self, im, grid_width=50):
@@ -1229,7 +1295,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
            grid_width : int, optional
                Grid's width.
         """
-        v = 1 if int(np.max(im)) == 0 else int(np.max(im))
+        v = np.max(im)
 
         if self.ndim == 2:
             for i in range(0, im.shape[0], grid_width):

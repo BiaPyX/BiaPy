@@ -116,11 +116,15 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             missp_iterations=cfg.AUGMENTOR.MISSP_ITERATIONS, grayscale=cfg.AUGMENTOR.GRAYSCALE,
             channel_shuffle=cfg.AUGMENTOR.CHANNEL_SHUFFLE, gridmask=cfg.AUGMENTOR.GRIDMASK,
             grid_ratio=cfg.AUGMENTOR.GRID_RATIO, grid_d_range=cfg.AUGMENTOR.GRID_D_RANGE, grid_rotate=cfg.AUGMENTOR.GRID_ROTATE,
-            grid_invert=cfg.AUGMENTOR.GRID_INVERT, poisson_noise=cfg.AUGMENTOR.POISSON_NOISE, 
-            poisson_noise_lambda_range=cfg.AUGMENTOR.POISSON_NOISE_LAMBDA_RANGE, shape=cfg.DATA.PATCH_SIZE, 
-            resolution=cfg.DATA.TRAIN.RESOLUTION, random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, prob_map=prob_map, 
-            n_classes=cfg.MODEL.N_CLASSES, extra_data_factor=cfg.DATA.TRAIN.REPLICATE, norm_custom_mean=custom_mean, 
-            norm_custom_std=custom_std, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
+            grid_invert=cfg.AUGMENTOR.GRID_INVERT, gaussian_noise=cfg.AUGMENTOR.GAUSSIAN_NOISE, 
+            gaussian_noise_mean=cfg.AUGMENTOR.GAUSSIAN_NOISE_MEAN, gaussian_noise_var=cfg.AUGMENTOR.GAUSSIAN_NOISE_VAR,
+            gaussian_noise_use_input_img_mean_and_var=cfg.AUGMENTOR.GAUSSIAN_NOISE_USE_INPUT_IMG_MEAN_AND_VAR, 
+            poisson_noise=cfg.AUGMENTOR.POISSON_NOISE, salt=cfg.AUGMENTOR.SALT, salt_amount=cfg.AUGMENTOR.SALT_AMOUNT,
+            pepper=cfg.AUGMENTOR.PEPPER, pepper_amount=cfg.AUGMENTOR.PEPPER_AMOUNT, salt_and_pepper=cfg.AUGMENTOR.SALT_AND_PEPPER, 
+            salt_pep_amount=cfg.AUGMENTOR.SALT_AND_PEPPER_AMOUNT, salt_pep_proportion=cfg.AUGMENTOR.SALT_AND_PEPPER_PROP,
+            shape=cfg.DATA.PATCH_SIZE, resolution=cfg.DATA.TRAIN.RESOLUTION, random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, 
+            prob_map=prob_map, n_classes=cfg.MODEL.N_CLASSES, extra_data_factor=cfg.DATA.TRAIN.REPLICATE, 
+            norm_custom_mean=custom_mean, norm_custom_std=custom_std, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
 
         if cfg.PROBLEM.NDIM == '3D':
             dic['zflip'] = cfg.AUGMENTOR.ZFLIP
