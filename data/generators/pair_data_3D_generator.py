@@ -6,7 +6,6 @@ from skimage.io import imread
 
 from utils.util import save_tif
 from data.generators.pair_base_data_generator import PairBaseDataGenerator
-from data.pre_processing import denormalize
 
 class Pair3DImageDataGenerator(PairBaseDataGenerator):
     """Custom 3D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own
@@ -70,52 +69,16 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         # x, y, z, c --> z, y, x, c
         return image.transpose((2,1,0,3)), mask.transpose((2,1,0,3))
 
-    def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, draw_grid, point_dict):
-        # Undo X normalization 
-        if self.X_norm['type'] == 'div' and 'div' in self.X_norm: 
-            orig_images['o_x'] = orig_images['o_x']*255
-            orig_images['o_x2'] = orig_images['o_x2']*255
-            img = img*255
-        elif self.X_norm['type'] == 'custom':
-            img = denormalize(img, self.X_norm['mean'], self.X_norm['std'])
-            orig_images['o_x'] = denormalize(orig_images['o_x'], self.X_norm['mean'], self.X_norm['std'])
-            orig_images['o_x2'] = denormalize(orig_images['o_x2'], self.X_norm['mean'], self.X_norm['std'])
-
-        # Undo Y normalization 
-        if self.first_no_bin_channel != -1:
-            if self.div_Y_on_load_bin_channels:
-                orig_images['o_y'][...,:self.first_no_bin_channel] = orig_images['o_y'][...,:self.first_no_bin_channel]*255
-                orig_images['o_y2'][...,:self.first_no_bin_channel] = orig_images['o_y2'][...,:self.first_no_bin_channel]*255
-                mask[...,:self.first_no_bin_channel] = mask[...,:self.first_no_bin_channel]*255
-            if self.div_Y_on_load_no_bin_channels:
-                if self.first_no_bin_channel != 0:
-                    orig_images['o_y'][...,self.first_no_bin_channel:] = orig_images['o_y'][...,self.first_no_bin_channel:]*255
-                    orig_images['o_y2'][...,self.first_no_bin_channel:] = orig_images['o_y2'][...,self.first_no_bin_channel:]*255
-                    mask[...,self.first_no_bin_channel:] = mask[...,self.first_no_bin_channel:]*255
-                else:
-                    orig_images['o_y'] = orig_images['o_y']*255
-                    orig_images['o_y2'] = orig_images['o_y2']*255
-                    mask = mask*255
-        else:
-            if self.div_Y_on_load_bin_channels: 
-                orig_images['o_y'] = orig_images['o_y']*255
-                orig_images['o_y2'] = orig_images['o_y2']*255
-                mask = mask*255
-
-        # Original image/mask
-        if draw_grid: self.draw_grid(orig_images['o_x'])
+    def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, point_dict):
         aux = np.expand_dims(orig_images['o_x'],0).astype(np.float32)
         save_tif(aux, out_dir, [str(i)+"_orig_x_"+str(pos)+"_"+self.trans_made+'.tif'], verbose=False)
 
-        if draw_grid: self.draw_grid(orig_images['o_y'])
         aux = np.expand_dims(orig_images['o_y'],0).astype(np.float32)
         save_tif(aux, out_dir, [str(i)+"_orig_y_"+str(pos)+"_"+self.trans_made+'.tif'], verbose=False)
 
-        # Transformed
+        # Save transformed images/masks
         aux = np.expand_dims(img,0).astype(np.float32)
         save_tif(aux, out_dir, [str(i)+"_x_aug_"+str(pos)+"_"+self.trans_made+'.tif'], verbose=False)
-
-        # Mask
         aux = np.expand_dims(mask,0).astype(np.float32)
         save_tif(aux, out_dir, [str(i)+"_y_aug_"+str(pos)+"_"+self.trans_made+'.tif'], verbose=False)
 

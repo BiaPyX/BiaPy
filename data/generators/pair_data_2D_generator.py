@@ -4,7 +4,6 @@ from PIL import Image
 
 from utils.util import save_tif
 from data.generators.pair_base_data_generator import PairBaseDataGenerator
-from data.pre_processing import denormalize
 
 class Pair2DImageDataGenerator(PairBaseDataGenerator):
     """Custom 2D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
@@ -36,21 +35,16 @@ class Pair2DImageDataGenerator(PairBaseDataGenerator):
 
         return img, mask
 
-    def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, draw_grid, point_dict):
-        if draw_grid:
-            self.draw_grid(orig_images['o_x'])
-            self.draw_grid(orig_images['o_y'])
-        
+    def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, point_dict):    
         aux = np.expand_dims(orig_images['o_x'], 0).astype(np.float32)
         save_tif(aux, out_dir, [str(i)+"_"+str(pos)+'_orig_x'+self.trans_made+".tif"], verbose=False)
 
         aux = np.expand_dims(orig_images['o_y'], 0).astype(np.float32)
         save_tif(aux, out_dir, [str(i)+"_"+str(pos)+'_orig_y'+self.trans_made+".tif"], verbose=False)
  
-        # Save transformed images
+        # Save transformed images/masks
         aux = np.expand_dims(img, 0).astype(np.float32)
         save_tif(aux, out_dir, [str(i)+"_"+str(pos)+'_x'+self.trans_made+".tif"], verbose=False)
-
         aux = np.expand_dims(mask, 0).astype(np.float32)
         save_tif(aux, out_dir, [str(i)+"_"+str(pos)+'_y'+self.trans_made+".tif"], verbose=False)
 
@@ -59,25 +53,7 @@ class Pair2DImageDataGenerator(PairBaseDataGenerator):
         if self.random_crops_in_DA and self.prob_map is not None:
             img, mask = self.load_sample(pos)
 
-            # Undo X normalization 
-            if self.X_norm['type'] == 'div':
-                if 'div' in self.X_norm:
-                    img = img*255
-            elif self.X_norm['type'] == 'custom':
-                img = denormalize(img, self.X_norm['mean'], self.X_norm['std'])
-
-            # Undo Y normalization
-            if self.normalizeY == 'as_mask':
-                if self.div_Y_on_load_bin_channels: 
-                    mask = mask*255
-            elif self.normalizeY == 'as_image':
-                if self.X_norm['type'] == 'div':
-                    if 'div' in self.X_norm:
-                        mask = mask*255
-                elif self.X_norm['type'] == 'custom':
-                    mask = denormalize(mask, self.X_norm['mean'], self.X_norm['std'])
-                    
-            img, mask = img.astype(np.uint8), mask.astype(np.uint8)
+            img, mask = (img).astype(np.uint8), mask.astype(np.uint8)
 
             if self.shape[-1] == 1:
                 im = Image.fromarray(np.repeat(img, 3, axis=2), 'RGB')
