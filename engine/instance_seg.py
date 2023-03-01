@@ -91,6 +91,9 @@ class Instance_Segmentation(Base_Workflow):
             if _Y.dtype == np.float32: _Y = _Y.astype(np.uint32)
             if _Y.dtype == np.float64: _Y = _Y.astype(np.uint64)
 
+            diff_ths_colored_img = abs(len(self.cfg.TEST.MATCHING_STATS_THS_COLORED_IMG) - len(self.cfg.TEST.MATCHING_STATS_THS))
+            colored_img_ths = self.cfg.TEST.MATCHING_STATS_THS_COLORED_IMG+[-1]*diff_ths_colored_img
+
             results = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=True)
 
             pred_instances = np.unique(w_pred)[1:]
@@ -117,20 +120,21 @@ class Instance_Segmentation(Base_Workflow):
                 del r_stats['matched_scores']; del r_stats['matched_tps']; del r_stats['matched_pairs']
                 print("DatasetMatching: {}".format(r_stats))
 
-                print("Creating the image with a summary of detected points and false positives with colors . . .")
-                coloured_result = np.zeros(w_pred.shape+(3,), dtype=np.uint8)
-                print("Painting TPs and FNs . . .")
-                for j in tqdm(range(len(gt_match))):
-                    color = (0,255,0) if tag[j] == "TP" else (255,0,0) # Green or red
-                    coloured_result[np.where(_Y == gt_match[j])] = color
+                if colored_img_ths[i] != -1 and colored_img_ths[i] == thr:
+                    print("Creating the image with a summary of detected points and false positives with colors . . .")
+                    coloured_result = np.zeros(w_pred.shape+(3,), dtype=np.uint8)
+                    print("Painting TPs and FNs . . .")
+                    for j in tqdm(range(len(gt_match))):
+                        color = (0,255,0) if tag[j] == "TP" else (255,0,0) # Green or red
+                        coloured_result[np.where(_Y == gt_match[j])] = color
 
-                print("Painting FPs . . .")
-                for j in tqdm(range(len(fp_instances))):
-                    coloured_result[np.where(w_pred == fp_instances[j])] = (0,0,255) # Blue
+                    print("Painting FPs . . .")
+                    for j in tqdm(range(len(fp_instances))):
+                        coloured_result[np.where(w_pred == fp_instances[j])] = (0,0,255) # Blue
 
-                save_tif(np.expand_dims(coloured_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                        [os.path.splitext(filenames[0])[0]+'_th_{}.tif'.format(thr)], verbose=self.cfg.TEST.VERBOSE)          
-                del coloured_result
+                    save_tif(np.expand_dims(coloured_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                            [os.path.splitext(filenames[0])[0]+'_th_{}.tif'.format(thr)], verbose=self.cfg.TEST.VERBOSE)          
+                    del coloured_result
             self.all_matching_stats.append(r_stats)
 
 
@@ -191,21 +195,21 @@ class Instance_Segmentation(Base_Workflow):
                     del r_stats['matched_scores']; del r_stats['matched_tps']; del r_stats['matched_pairs']
                     print("DatasetMatching: {}".format(r_stats))
 
-                    print("Creating the image with a summary of detected points and false positives with colors . . .")
-                    coloured_result = np.zeros(w_pred.shape+(3,), dtype=np.uint8)
-                    print("Painting TPs and FNs . . .")
-                    for j in tqdm(range(len(gt_match))):
-                        color = (0,255,0) if tag[j] == "TP" else (255,0,0) # Green or red
-                        coloured_result[np.where(_Y == gt_match[j])] = color
+                    if colored_img_ths[i] != -1 and colored_img_ths[i] == thr:
+                        print("Creating the image with a summary of detected points and false positives with colors . . .")
+                        coloured_result = np.zeros(w_pred.shape+(3,), dtype=np.uint8)
+                        print("Painting TPs and FNs . . .")
+                        for j in tqdm(range(len(gt_match))):
+                            color = (0,255,0) if tag[j] == "TP" else (255,0,0) # Green or red
+                            coloured_result[np.where(_Y == gt_match[j])] = color
 
-                    print("Painting FPs . . .")
-                    for j in tqdm(range(len(fp_instances))):
-                        coloured_result[np.where(w_pred == fp_instances[j])] = (0,0,255) # Blue
+                        print("Painting FPs . . .")
+                        for j in tqdm(range(len(fp_instances))):
+                            coloured_result[np.where(w_pred == fp_instances[j])] = (0,0,255) # Blue
 
-                    save_tif(np.expand_dims(coloured_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                            [os.path.splitext(filenames[0])[0]+'_post-proc_th_{}.tif'.format(thr)], verbose=self.cfg.TEST.VERBOSE)          
-                    del coloured_result
-                    import pdb; pdb.set_trace()    
+                        save_tif(np.expand_dims(coloured_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                                [os.path.splitext(filenames[0])[0]+'_post-proc_th_{}.tif'.format(thr)], verbose=self.cfg.TEST.VERBOSE)          
+                        del coloured_result
                 self.all_matching_stats_post_processing.append(r_stats)
 
     def after_merge_patches(self, pred, Y, filenames, f_numbers):

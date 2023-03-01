@@ -578,7 +578,7 @@ class Config:
         _C.TEST.AUGMENTATION = False
         # Whether to evaluate or not
         _C.TEST.EVALUATE = True
-        
+        # 
         _C.TEST.ANALIZE_2D_IMGS_AS_3D_STACK = False
 
         _C.TEST.STATS = CN()
@@ -590,6 +590,7 @@ class Config:
         # Whether to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
         _C.TEST.MATCHING_STATS = True
         _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
+        _C.TEST.MATCHING_STATS_THS_COLORED_IMG = [0.3]
         _C.TEST.MATCHING_SEGCOMPARE = False
 
         ### Detection
