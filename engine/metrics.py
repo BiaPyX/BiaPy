@@ -605,11 +605,20 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc
         _true = np.array(true, dtype=np.float32)
         _pred = np.array(pred, dtype=np.float32)
 
+        # Capture FP coords
         fp_coords = np.zeros((len(fp_preds),_pred.shape[-1]))
         for i in range(len(fp_preds)):
             fp_coords[i] = _pred[fp_preds[i]-1]
-        df = pd.DataFrame(zip(list(range(1,len(_true)+1)), pred_id_assoc, dis, tag, _true[...,0], _true[...,1], _true[...,2]), 
-            columns =['gt_id', 'pred_id', 'distance', 'tag', 'axis-0', 'axis-1', 'axis-2'])
+
+        # Capture prediction coords
+        pred_coords = np.zeros( (len(pred_id_assoc), 3), dtype=np.float32)
+        for i in range(len(pred_id_assoc)):
+            pred_coords[i] = _pred[pred_id_assoc[i]-1]
+
+        df = pd.DataFrame(zip(list(range(1,len(_true)+1)), pred_id_assoc, dis, tag, _true[...,0], 
+            _true[...,1], _true[...,2], pred_coords[...,0], pred_coords[...,1], pred_coords[...,2]), 
+            columns =['gt_id', 'pred_id', 'distance', 'tag', 'axis-0', 'axis-1', 'axis-2', 'pred_axis-0', 
+            'pred_axis-1', 'pred_axis-2'])
         df_fn = pd.DataFrame(zip(fp_preds, fp_coords[...,0], fp_coords[...,1], fp_coords[...,2]), 
             columns =['pred_id', 'axis-0', 'axis-1', 'axis-2'])
 
