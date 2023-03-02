@@ -578,7 +578,8 @@ class Config:
         _C.TEST.AUGMENTATION = False
         # Whether to evaluate or not
         _C.TEST.EVALUATE = True
-        # 
+        # Stack 2D images into a 3D image and then process it entirely instead of going image per image. This stacks
+        # images that have been merged with 'TEST.STATS.MERGE_PATCHES' = True or 'TEST.STATS.FULL_IMG' (priorizes this later)  
         _C.TEST.ANALIZE_2D_IMGS_AS_3D_STACK = False
 
         _C.TEST.STATS = CN()
@@ -589,7 +590,10 @@ class Config:
         ### Instance segmentation
         # Whether to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
         _C.TEST.MATCHING_STATS = True
+        # Theshold of overlap to consider a TP when calculating the metrics. If more than one value is provided 
+        # the process is repeated with each of the threshold values
         _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
+        # Decide in which thresholds to create a colored image of the TPs, FNs and FPs
         _C.TEST.MATCHING_STATS_THS_COLORED_IMG = [0.3]
         _C.TEST.MATCHING_SEGCOMPARE = False
 

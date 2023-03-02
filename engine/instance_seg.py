@@ -8,8 +8,8 @@ from tqdm import tqdm
 from data.post_processing.post_processing import (watershed_by_channels, calculate_optimal_mw_thresholds, voronoi_on_mask, 
                                                   remove_instance_by_circularity_central_slice, repare_large_blobs)
 from data.pre_processing import create_instance_channels, create_test_instance_channels
-from utils.util import save_tif, wrapper_matching_dataset_lazy
-from utils.matching import matching
+from utils.util import save_tif
+from utils.matching import matching, wrapper_matching_dataset_lazy
 
 from engine.base_workflow import Base_Workflow
 
@@ -135,7 +135,7 @@ class Instance_Segmentation(Base_Workflow):
                     save_tif(np.expand_dims(coloured_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
                             [os.path.splitext(filenames[0])[0]+'_th_{}.tif'.format(thr)], verbose=self.cfg.TEST.VERBOSE)          
                     del coloured_result
-            self.all_matching_stats.append(r_stats)
+            self.all_matching_stats.append(results)
 
 
         ###################
@@ -210,7 +210,7 @@ class Instance_Segmentation(Base_Workflow):
                         save_tif(np.expand_dims(coloured_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
                                 [os.path.splitext(filenames[0])[0]+'_post-proc_th_{}.tif'.format(thr)], verbose=self.cfg.TEST.VERBOSE)          
                         del coloured_result
-                self.all_matching_stats_post_processing.append(r_stats)
+                self.all_matching_stats_post_processing.append(results)
 
     def after_merge_patches(self, pred, Y, filenames, f_numbers):
         if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:

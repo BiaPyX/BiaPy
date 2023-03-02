@@ -1368,68 +1368,6 @@ def pad_and_reflect(img, crop_shape, verbose=False):
             if verbose: print("Reflected from {} to {}".format(o_shape, img.shape))
     return img
 
-
-def wrapper_matching_dataset_lazy(stats_all, thresh, criterion='iou', by_image=False):
-
-    expected_keys = set(('fp', 'tp', 'fn', 'precision', 'recall', 'accuracy', 'f1', 'criterion', 'thresh', 'n_true', 'n_pred', 'mean_true_score', 'mean_matched_score', 'panoptic_quality'))
-
-    # accumulate results over all images for each threshold separately
-    n_images, n_threshs = len(stats_all), len(thresh)
-
-    single_thresh = True if n_threshs == 1 else False
-    accumulate = [{} for _ in range(n_threshs)]
-    for stats in stats_all:
-        for i,s in enumerate(stats):
-            acc = accumulate[i]
-            for k,v in s._asdict().items():
-                if k == 'mean_true_score' and not bool(by_image):
-                    # convert mean_true_score to "sum_matched_score"
-                    acc[k] = acc.setdefault(k,0) + v * s.n_true
-                else:
-                    try:
-                        acc[k] = acc.setdefault(k,0) + v
-                    except TypeError:
-                        pass
-
-    # normalize/compute 'precision', 'recall', 'accuracy', 'f1'
-    for thr,acc in zip(thresh,accumulate):
-        acc['criterion'] = criterion
-        acc['thresh'] = thr
-        acc['by_image'] = bool(by_image)
-        if bool(by_image):
-            for k in ('precision', 'recall', 'accuracy', 'f1', 'mean_true_score', 'mean_matched_score', 'panoptic_quality'):
-                acc[k] /= n_images
-        else:
-            tp, fp, fn, n_true = acc['tp'], acc['fp'], acc['fn'], acc['n_true']
-            sum_matched_score = acc['mean_true_score']
-
-            mean_matched_score = _safe_divide(sum_matched_score, tp)
-            mean_true_score    = _safe_divide(sum_matched_score, n_true)
-            panoptic_quality   = _safe_divide(sum_matched_score, tp+fp/2+fn/2)
-
-            acc.update(
-                precision          = precision(tp,fp,fn),
-                recall             = recall(tp,fp,fn),
-                accuracy           = accuracy(tp,fp,fn),
-                f1                 = f1(tp,fp,fn),
-                mean_true_score    = mean_true_score,
-                mean_matched_score = mean_matched_score,
-                panoptic_quality   = panoptic_quality,
-            )
-
-    accumulate = tuple(namedtuple('DatasetMatching',acc.keys())(*acc.values()) for acc in accumulate)
-    return accumulate[0] if single_thresh else accumulate
-
-def wrapper_matching_segCompare(stats_all):
-    expected_keys = ['number_of_cells', 'correct_segmentations', 'oversegmentation_rate', 'undersegmentation_rate', 'missing_rate']
-
-    accumulated_values = dict.fromkeys(expected_keys, 0)
-
-    for key in expected_keys:
-        for stat in stats_all:
-            accumulated_values[key] = accumulated_values[key] + stat[key]
-        accumulated_values[key] = accumulated_values[key]/len(stats_all)
-    return accumulated_values
     
 def check_value(value, value_range=(0,1)):
     """Checks if a value is within a range """

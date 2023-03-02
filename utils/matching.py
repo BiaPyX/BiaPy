@@ -236,53 +236,22 @@ def matching(y_true, y_pred, thresh=0.5, criterion='iou', report_matches=False):
     return _single(thresh) if np.isscalar(thresh) else tuple(map(_single,thresh))
 
 
-
-def matching_dataset(y_true, y_pred, thresh=0.5, criterion='iou', by_image=False, show_progress=True, parallel=False):
-    """matching metrics for list of images, see `stardist.matching.matching`
-    """
-    len(y_true) == len(y_pred) or _raise(ValueError("y_true and y_pred must have the same length."))
-    return matching_dataset_lazy (
-        tuple(zip(y_true,y_pred)), thresh=thresh, criterion=criterion, by_image=by_image, show_progress=show_progress, parallel=parallel,
-    )
-
-
-
-def matching_dataset_lazy(y_gen, thresh=0.5, criterion='iou', by_image=False, show_progress=True, parallel=False):
+def wrapper_matching_dataset_lazy(stats_all, thresh, criterion='iou', by_image=False):
 
     expected_keys = set(('fp', 'tp', 'fn', 'precision', 'recall', 'accuracy', 'f1', 'criterion', 'thresh', 'n_true', 'n_pred', 'mean_true_score', 'mean_matched_score', 'panoptic_quality'))
 
-    single_thresh = False
-    if np.isscalar(thresh):
-        single_thresh = True
-        thresh = (thresh,)
-
-    tqdm_kwargs = {}
-    tqdm_kwargs['disable'] = not bool(show_progress)
-    if int(show_progress) > 1:
-        tqdm_kwargs['total'] = int(show_progress)
-
-    # compute matching stats for every pair of label images
-    if parallel:
-        from concurrent.futures import ThreadPoolExecutor
-        fn = lambda pair: matching(*pair, thresh=thresh, criterion=criterion, report_matches=False)
-        with ThreadPoolExecutor() as pool:
-            stats_all = tuple(pool.map(fn, tqdm(y_gen,**tqdm_kwargs)))
-    else:
-        stats_all = tuple (
-            matching(y_t, y_p, thresh=thresh, criterion=criterion, report_matches=False)
-            for y_t,y_p in tqdm(y_gen,**tqdm_kwargs)
-        )
-
     # accumulate results over all images for each threshold separately
     n_images, n_threshs = len(stats_all), len(thresh)
+    single_thresh = True if n_threshs == 1 else False
     accumulate = [{} for _ in range(n_threshs)]
     for stats in stats_all:
-        for i,s in enumerate(stats):
+        for i, s in enumerate(stats):
             acc = accumulate[i]
-            for k,v in s._asdict().items():
+            for item in s.items():
+                k, v = item
                 if k == 'mean_true_score' and not bool(by_image):
                     # convert mean_true_score to "sum_matched_score"
-                    acc[k] = acc.setdefault(k,0) + v * s.n_true
+                    acc[k] = acc.setdefault(k,0) + v * s['n_true']
                 else:
                     try:
                         acc[k] = acc.setdefault(k,0) + v
@@ -291,7 +260,6 @@ def matching_dataset_lazy(y_gen, thresh=0.5, criterion='iou', by_image=False, sh
 
     # normalize/compute 'precision', 'recall', 'accuracy', 'f1'
     for thr,acc in zip(thresh,accumulate):
-        set(acc.keys()) == expected_keys or _raise(ValueError("unexpected keys"))
         acc['criterion'] = criterion
         acc['thresh'] = thr
         acc['by_image'] = bool(by_image)
@@ -319,7 +287,16 @@ def matching_dataset_lazy(y_gen, thresh=0.5, criterion='iou', by_image=False, sh
     accumulate = tuple(namedtuple('DatasetMatching',acc.keys())(*acc.values()) for acc in accumulate)
     return accumulate[0] if single_thresh else accumulate
 
+def wrapper_matching_segCompare(stats_all):
+    expected_keys = ['number_of_cells', 'correct_segmentations', 'oversegmentation_rate', 'undersegmentation_rate', 'missing_rate']
 
+    accumulated_values = dict.fromkeys(expected_keys, 0)
+
+    for key in expected_keys:
+        for stat in stats_all:
+            accumulated_values[key] = accumulated_values[key] + stat[key]
+        accumulated_values[key] = accumulated_values[key]/len(stats_all)
+    return accumulated_values
 
 # copied from scikit-image master for now (remove when part of a release)
 def relabel_sequential(label_field, offset=1):
