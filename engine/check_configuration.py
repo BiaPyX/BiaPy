@@ -302,8 +302,8 @@ def check_configuration(cfg):
         'fcn8', 'tiramisu', 'mnet', 'multiresunet', 'seunet', 'unetr']:
         raise ValueError("Not implemented pipeline option: semantic segmentation models are ['unet', 'resunet', "
                          "'attention_unet', 'fcn32', 'fcn8', 'tiramisu', 'mnet', 'multiresunet', 'seunet', 'unetr']")
-    if cfg.PROBLEM.TYPE == "INSTANCE_SEG" and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet']:
-        raise ValueError("Not implemented pipeline option: instance segmentation models are ['unet', 'resunet']")    
+    if cfg.PROBLEM.TYPE == "INSTANCE_SEG" and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
+        raise ValueError("Not implemented pipeline option: instance segmentation models are ['unet', 'resunet', 'seunet', 'attention_unet']")    
     if cfg.PROBLEM.TYPE in ['DETECTION', 'DENOISING'] and \
         cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
         raise ValueError("Architectures available for {} are: ['unet', 'resunet', 'seunet', 'attention_unet']"

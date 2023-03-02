@@ -23,11 +23,8 @@ def build_model(cfg, job_identifier):
     # Import the model
     if cfg.MODEL.ARCHITECTURE in ['fcn32', 'fcn8']:
         modelname = 'fcn_vgg'
-    elif cfg.MODEL.ARCHITECTURE in ['tiramisu', 'nnunet', 'mnet', 'multiresunet', 'simple_cnn', 'EfficientNetB0', 'srunet', 'rcan', 'dfcan', 'wdsr']:
-        modelname = cfg.MODEL.ARCHITECTURE
     else:
-        modelname = cfg.MODEL.ARCHITECTURE if cfg.PROBLEM.NDIM == '2D' else cfg.MODEL.ARCHITECTURE + '_3d'
-    if cfg.PROBLEM.TYPE == 'INSTANCE_SEG': modelname = modelname+"_instances"
+        modelname = cfg.MODEL.ARCHITECTURE
     mdl = importlib.import_module('models.'+modelname)
     names = [x for x in mdl.__dict__ if not x.startswith("_")]
     globals().update({k: getattr(mdl, k) for k in names})
@@ -37,23 +34,20 @@ def build_model(cfg, job_identifier):
     # Model building
     if cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'seunet', 'attention_unet']:
         args = dict(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION, feature_maps=cfg.MODEL.FEATURE_MAPS,
-                drop_values=cfg.MODEL.DROPOUT_VALUES, spatial_dropout=cfg.MODEL.SPATIAL_DROPOUT,
-                batch_norm=cfg.MODEL.BATCH_NORMALIZATION, k_init=cfg.MODEL.KERNEL_INIT, k_size=cfg.MODEL.KERNEL_SIZE,
-                upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, last_act=cfg.MODEL.LAST_ACTIVATION)
+            drop_values=cfg.MODEL.DROPOUT_VALUES, spatial_dropout=cfg.MODEL.SPATIAL_DROPOUT,
+            batch_norm=cfg.MODEL.BATCH_NORMALIZATION, k_init=cfg.MODEL.KERNEL_INIT, k_size=cfg.MODEL.KERNEL_SIZE,
+            upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, last_act=cfg.MODEL.LAST_ACTIVATION)
         if cfg.MODEL.ARCHITECTURE == 'unet':
-            f_name = U_Net_3D if cfg.PROBLEM.NDIM == '3D' else U_Net_2D
+            f_name = U_Net
         elif cfg.MODEL.ARCHITECTURE == 'resunet':
-            f_name = ResUNet_3D if cfg.PROBLEM.NDIM == '3D' else ResUNet_2D
+            f_name = ResUNet
         elif cfg.MODEL.ARCHITECTURE == 'attention_unet':
-            f_name = Attention_U_Net_3D if cfg.PROBLEM.NDIM == '3D' else Attention_U_Net_2D
+            f_name = Attention_U_Net
         elif cfg.MODEL.ARCHITECTURE == 'seunet':
-            f_name = SE_U_Net_3D if cfg.PROBLEM.NDIM == '3D' else SE_U_Net_2D
+            f_name = SE_U_Net
 
-        if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-            args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            del args['last_act']
-        else:
-            args['n_classes'] = cfg.MODEL.N_CLASSES if cfg.PROBLEM.TYPE != 'DENOISING' else cfg.DATA.PATCH_SIZE[-1]
+        args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None
+        args['n_classes'] = cfg.MODEL.N_CLASSES if cfg.PROBLEM.TYPE != 'DENOISING' else cfg.DATA.PATCH_SIZE[-1]
         if cfg.PROBLEM.NDIM == '3D':
             args['z_down'] = cfg.MODEL.Z_DOWN
 

@@ -1,87 +1,129 @@
 from tensorflow.keras import Model, Input
-from tensorflow.keras.layers import (Dropout, SpatialDropout2D, Conv2D, Conv2DTranspose, MaxPooling2D,
-                                     Concatenate, Add, BatchNormalization, ELU, Activation, UpSampling2D)
+from tensorflow.keras.layers import Dropout, Concatenate, Add, BatchNormalization, ELU,  Activation, SpatialDropout2D
 
 
-def ResUNet_2D(image_shape, activation='elu', feature_maps=[16,32,64,128,256], drop_values=[0.1,0.1,0.1,0.1,0.1],
-               spatial_dropout=False, batch_norm=False, k_init='he_normal', k_size=3,
-               upsample_layer="convtranspose", n_classes=1, last_act='sigmoid'):
-    """Create 2D Residual_U-Net.
+def ResUNet(image_shape, activation='elu', feature_maps=[16,32,64,128,256], drop_values=[0.1,0.1,0.1,0.1,0.1],
+    spatial_dropout=False, batch_norm=False, z_down=2, k_init='he_normal', k_size=3, upsample_layer="convtranspose", 
+    n_classes=1, last_act='sigmoid', output_channels="BC"):
 
-       Parameters
-       ----------
-       image_shape : 3D tuple
-           Dimensions of the input image. E.g. ``(y, x, channels)``
+    """
+    Create 2D/3D Residual_U-Net. 
 
-       activation : str, optional
-           Keras available activation type.
+    Parameters
+    ----------
+    image_shape : 3D/4D tuple
+        Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
-       feature_maps : array of ints, optional
-           Feature maps to use on each level.
+    activation : str, optional
+        Keras available activation type.
 
-       drop_values : array of floats, optional
-           Dropout value to be fixed.
+    feature_maps : array of ints, optional
+        Feature maps to use on each level.
 
-       spatial_dropout : bool, optional
-           Use spatial dropout instead of the `normal` dropout.
+    drop_values : array of floats, optional
+        Dropout value to be fixed.
 
-       batch_norm : bool, optional
-           Make batch normalization.
+    spatial_dropout : bool, optional
+        Use spatial dropout instead of the `normal` dropout.
 
-       k_init : str, optional
-           Kernel initialization for convolutional layers.
+    batch_norm : bool, optional
+        Make batch normalization.
 
-       k_size : int, optional
-           Kernel size.
+    z_down : int, optional
+        Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
 
-       upsample_layer : str, optional
-           Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
-            
-       n_classes: int, optional
-           Number of classes.
+    k_init : str, optional
+        Keras available kernel initializer type.
 
-       last_act : str, optional
-           Name of the last activation layer.
-           
-       Returns
-       -------
-       model : Keras model
-           Model containing the U-Net.
+    k_size : int, optional
+        Kernel size.
+
+    upsample_layer : str, optional
+        Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
+
+    n_classes: int, optional
+        Number of classes.
+
+    last_act : str, optional
+        Name of the last activation layer.
+
+    output_channels : str, optional
+        Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
+        ``BDv2``, ``Dv2`` and ``BCM``.
+
+    Returns
+    -------
+    Model : Keras model
+        Model containing the U-Net.
 
 
-       Calling this function with its default parameters returns the following network:
+    Calling this function with its default parameters returns the following network:
 
-       .. image:: ../../img/resunet.png
-           :width: 100%
-           :align: center
+    .. image:: img/resunet_3d.png
+        :width: 100%
+        :align: center
 
-       Where each green layer represents a residual block as the following:
+    Where each green layer represents a residual block as the following:
 
-       .. image:: ../../img/res_block.png
-           :width: 45%
-           :align: center
+    .. image:: img/res_block.png
+        :width: 45%
+        :align: center
 
-       Images created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
+    Images created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
     """
 
     depth = len(feature_maps)-1
-
     fm = feature_maps[::-1]
 
-    dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)
-    inputs = Input(dinamic_dim)
+    global conv, convtranspose, maxpooling, mpool, zeropadding, upsampling
+    if len(image_shape) == 4:
+        from tensorflow.keras.layers import (Conv3D, Conv3DTranspose, MaxPooling3D, ZeroPadding3D, UpSampling3D)
+        conv = Conv3D
+        convtranspose = Conv3DTranspose
+        maxpooling = MaxPooling3D
+        mpool = (z_down, 2, 2)
+        zeropadding = ZeroPadding3D
+        upsampling = UpSampling3D
+    else:
+        from tensorflow.keras.layers import (Conv2D, Conv2DTranspose, MaxPooling2D, ZeroPadding2D, UpSampling2D)
+        conv = Conv2D
+        convtranspose = Conv2DTranspose
+        maxpooling = MaxPooling2D
+        mpool = (2, 2)
+        zeropadding = ZeroPadding2D
+        upsampling = UpSampling2D
+
+    inputs = Input(image_shape)
 
     x = level_block(inputs, depth, fm, k_size, activation, k_init, drop_values, spatial_dropout, batch_norm, True,
         upsample_layer)
 
-    outputs = Conv2D(n_classes, (1, 1), activation=last_act) (x)
+    # Instance segmentation
+    if output_channels is not None:
+        if output_channels == "Dv2":
+            outputs = conv(1, 2, activation="linear", padding='same') (x)
+        elif output_channels in ["BC", "BP"]:
+            outputs = conv(2, 2, activation="sigmoid", padding='same') (x)
+        elif output_channels == "BCM":
+            outputs = conv(3, 2, activation="sigmoid", padding='same') (x)
+        elif output_channels == "BDv2":
+            seg = conv(1, 2, activation="sigmoid", padding='same') (x)
+            dis = conv(1, 2, activation="linear", padding='same') (x)
+            outputs = Concatenate()([seg, dis])
+        elif output_channels in ["BCD", "BCDv2"]:
+            seg = conv(2, 2, activation="sigmoid", padding='same') (x)
+            dis = conv(1, 2, activation="linear", padding='same') (x)
+            outputs = Concatenate()([seg, dis])
+    # Other
+    else:
+        outputs = conv(n_classes, 1, activation=last_act) (x)
 
     model = Model(inputs=[inputs], outputs=[outputs])
 
     return model
 
 
-def level_block(x, depth, f_maps, f_size, activation, k_init, drop_values, spatial_dropout, batch_norm, first_block, 
+def level_block(x, depth, f_maps, filter_size, activation, k_init, drop_values, spatial_dropout, batch_norm, first_block,
                 upsample_layer):
     """Produces a level of the network. It calls itself recursively.
 
@@ -90,14 +132,14 @@ def level_block(x, depth, f_maps, f_size, activation, k_init, drop_values, spati
        x : Keras layer
            Input layer of the block.
 
-       depth :int
+       depth : int
            Depth of the network. This value determines how many times the function will be called recursively.
 
        f_maps : array of ints
            Feature maps to use.
 
-       f_size : int
-           Convolution window.
+       filter_size : 3 int tuple
+           Height, width and depth of the convolution window.
 
        activation : str, optional
            Keras available activation type.
@@ -121,7 +163,7 @@ def level_block(x, depth, f_maps, f_size, activation, k_init, drop_values, spati
 
        upsample_layer : str, optional
            Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
-            
+
        Returns
        -------
        x : Keras layer
@@ -129,37 +171,39 @@ def level_block(x, depth, f_maps, f_size, activation, k_init, drop_values, spati
     """
 
     if depth > 0:
-        r = residual_block(x, f_maps[depth], f_size, activation, k_init, drop_values[depth], spatial_dropout,
+        r = residual_block(x, f_maps[depth], filter_size, activation, k_init, drop_values[depth], spatial_dropout,
                            batch_norm, first_block)
-        x = MaxPooling2D((2, 2)) (r)
-        x = level_block(x, depth-1, f_maps, f_size, activation, k_init, drop_values, spatial_dropout, batch_norm, False,
-            upsample_layer)
+        x = maxpooling(mpool) (r)
+        x = level_block(x, depth-1, f_maps, filter_size, activation, k_init, drop_values, spatial_dropout, batch_norm,
+                        False, upsample_layer)
         if upsample_layer == "convtranspose":
-            x = Conv2DTranspose(f_maps[depth], (2, 2), strides=(2, 2), padding='same') (x)
+            x = convtranspose(f_maps[depth], 2, strides=mpool, padding='same') (x)
         else:
-            x = UpSampling2D() (x)
-        x = Concatenate()([r, x])
-        x = residual_block(x, f_maps[depth], f_size, activation, k_init, drop_values[depth], spatial_dropout, batch_norm, False)
+            x = upsampling(size=mpool) (x)
+        x = Concatenate()([x, r])
+
+        x = residual_block(x, f_maps[depth], filter_size, activation, k_init, drop_values[depth], spatial_dropout,
+                           batch_norm, False)
     else:
-        x = residual_block(x, f_maps[depth], f_size, activation, k_init, drop_values[depth], spatial_dropout, batch_norm, False)
+        x = residual_block(x, f_maps[depth], filter_size, activation, k_init, drop_values[depth], spatial_dropout,
+                           batch_norm, False)
     return x
 
 
-def residual_block(x, f_maps, f_size, activation='elu', k_init='he_normal', drop_value=0.0, spatial_dropout=False,
+def residual_block(x, f_maps, filter_size, activation='elu', k_init='he_normal', drop_value=0.0, spatial_dropout=False,
                    bn=False, first_block=False):
     """Residual block.
 
        Parameters
        ----------
-
        x : Keras layer
-           Input layer of the block.
+           iInput layer of the block.
 
        f_maps : array of ints
            Feature maps to use.
 
-       f_size : int
-           Convolution window.
+       filter_size : 3 int tuple
+           Height, width and depth of the convolution window.
 
        activation : str, optional
            Keras available activation type.
@@ -188,16 +232,16 @@ def residual_block(x, f_maps, f_size, activation='elu', k_init='he_normal', drop
     """
 
     # Create shorcut
-    shortcut = Conv2D(f_maps, activation=None, kernel_size=(1, 1), kernel_initializer=k_init)(x)
+    shortcut = conv(f_maps, activation=None, kernel_size=1, kernel_initializer=k_init)(x)
 
     # Main path
     if not first_block:
         x = BatchNormalization()(x) if bn else x
-        if activation == 'elu':
+        if activation == "elu":
             x = ELU(alpha=1.0) (x)
         else:
             x = Activation(activation) (x)
-    x = Conv2D(f_maps, f_size, activation=None, kernel_initializer=k_init, padding='same') (x)
+    x = conv(f_maps, filter_size, activation=None, kernel_initializer=k_init, padding='same') (x)
 
     if drop_value > 0:
         if spatial_dropout:
@@ -205,11 +249,11 @@ def residual_block(x, f_maps, f_size, activation='elu', k_init='he_normal', drop
         else:
             x = Dropout(drop_value) (x)
     x = BatchNormalization()(x) if bn else x
-    if activation == 'elu':
+    if activation == "elu":
         x = ELU(alpha=1.0) (x)
     else:
         x = Activation(activation) (x)
-    x = Conv2D(f_maps, f_size, activation=None, kernel_initializer=k_init, padding='same') (x)
+    x = conv(f_maps, filter_size, activation=None, kernel_initializer=k_init, padding='same') (x)
     x = BatchNormalization()(x) if bn else x
 
     # Add shortcut value to main path
