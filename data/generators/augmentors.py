@@ -316,7 +316,7 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
 
     it = np.random.randint(nb_iterations[0], nb_iterations[1])
 
-    out = img.copy().astype(np.int16)
+    out = img.copy()
     for i in range(it):
         _size = random.uniform(size[0], size[1])
         y_size = int(img.shape[0]*_size)
