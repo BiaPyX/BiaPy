@@ -325,5 +325,5 @@ class Base_Workflow(metaclass=ABCMeta):
             self.all_pred = np.concatenate(self.all_pred)
             self.all_gt = np.concatenate(self.all_gt) if self.cfg.DATA.TEST.LOAD_GT else None
             self.all_pred, self.stats['iou_post'], self.stats['ov_iou_post'] = apply_post_processing(self.cfg, self.all_pred, self.all_gt)
-            save_tif(self.all_pred, self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING, verbose=self.cfg.TEST.VERBOSE)
+            save_tif(np.expand_dims(self.all_pred,0), self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING, verbose=self.cfg.TEST.VERBOSE)
 

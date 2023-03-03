@@ -334,6 +334,8 @@ def create_detection_masks(cfg, data_type='train'):
             if cfg.PROBLEM.NDIM == '3D':
                 df['axis-2'] = df['axis-2'].astype('int')
             
+            df = df.sort_values(by=['axis-0']) 
+
             # Obtain the points 
             z_axis_point = df['axis-0']                                                                       
             y_axis_point = df['axis-1']    
