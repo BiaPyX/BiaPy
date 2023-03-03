@@ -186,7 +186,7 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         # Contour
         if ('C' in mode or 'Dv2' in mode) and instance_count != 1: 
             if fb_mode == "dense" and mode != "BCM":
-                new_mask[img,...,1] = 1-new_mask[img,...,0]
+                new_mask[img,...,1] = dilation(1-new_mask[img,...,0], disk(1)) 
             else:
                 new_mask[img,...,1] = find_boundaries(vol, mode=fb_mode).astype(np.uint8)
             if 'B' in mode:
