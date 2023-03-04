@@ -329,7 +329,7 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
         max_value = np.max(out)
         _scale = random.uniform(scale[0], scale[1])*max_value
         noise = np.random.normal(loc=0, scale=_scale, size=(y_size, x_size))
-        out[cy:cy+y_size, cx:cx+x_size, :] += np.stack((noise,)*out.shape[-1], axis=-1).astype(np.int16)
+        out[cy:cy+y_size, cx:cx+x_size, :] += np.stack((noise,)*out.shape[-1], axis=-1)
     return np.clip(out, 0, max_value)
 
 
