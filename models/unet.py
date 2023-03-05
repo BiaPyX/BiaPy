@@ -4,7 +4,7 @@ from tensorflow.keras.layers import Dropout, concatenate, BatchNormalization, Ac
 
 def U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
     spatial_dropout=False, batch_norm=False, k_init='he_normal', k_size=3, upsample_layer="convtranspose", 
-    z_down=2, n_classes=1, last_act='sigmoid', output_channels="BC"):
+    z_down=[2,2,2,2], n_classes=1, last_act='sigmoid', output_channels="BC"):
     """
     Create 2D/3D U-Net.
 
@@ -37,7 +37,7 @@ def U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_v
     upsample_layer : str, optional
         Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
 
-    z_down : int, optional
+    z_down : List of ints, optional
         Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
 
     n_classes: int, optional
@@ -69,13 +69,12 @@ def U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_v
     x = Input(image_shape)
     inputs = x
 
-    global conv, convtranspose, maxpooling, mpool, zeropadding, upsampling
+    global conv, convtranspose, maxpooling, zeropadding, upsampling
     if len(image_shape) == 4:
         from tensorflow.keras.layers import (Conv3D, Conv3DTranspose, MaxPooling3D, ZeroPadding3D, UpSampling3D)
         conv = Conv3D
         convtranspose = Conv3DTranspose
         maxpooling = MaxPooling3D
-        mpool = (z_down, 2, 2)
         zeropadding = ZeroPadding3D
         upsampling = UpSampling3D
     else:
@@ -83,7 +82,6 @@ def U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_v
         conv = Conv2D
         convtranspose = Conv2DTranspose
         maxpooling = MaxPooling2D
-        mpool = (2, 2)
         zeropadding = ZeroPadding2D
         upsampling = UpSampling2D
 
@@ -106,7 +104,7 @@ def U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_v
         x = Activation(activation) (x)
 
         l.append(x)
-
+        mpool = (z_down[i], 2, 2) if len(image_shape) == 4 else (2, 2)
         x = maxpooling(mpool)(x)
 
     # BOTTLENECK
@@ -124,6 +122,7 @@ def U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_v
 
     # DECODER
     for i in range(depth-1, -1, -1):
+        mpool = (z_down[i], 2, 2) if len(image_shape) == 4 else (2, 2)
         if upsample_layer == "convtranspose":
             x = convtranspose(feature_maps[i], 2, strides=mpool, padding='same') (x)
         else:

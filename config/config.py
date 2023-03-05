@@ -488,7 +488,7 @@ class Config:
         _C.MODEL.N_CLASSES = 1
         # Downsampling to be made in Z. This value will be the third integer of the MaxPooling operation. When facing
         # anysotropic datasets set it to get better performance
-        _C.MODEL.Z_DOWN = 1
+        _C.MODEL.Z_DOWN = [0, 0, 0, 0]
         # Checkpoint: set to True to load previous training weigths (needed for inference or to make fine-tunning)
         _C.MODEL.LOAD_CHECKPOINT = False
 
