@@ -102,8 +102,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < X.shape[0] else X.shape[0]
                     score = self.model.evaluate(
                         X[k*self.cfg.TRAIN.BATCH_SIZE:top], Y[k*self.cfg.TRAIN.BATCH_SIZE:top], verbose=0)
-                    self.stats['loss_per_crop'] += score[0]
-                    self.stats['iou_per_crop'] += score[1]
+                    if isinstance(score, float):
+                        self.stats['loss_per_crop'] += score
+                    else:
+                        self.stats['loss_per_crop'] += score[0]
+                        self.stats['iou_per_crop'] += score[1]
             self.stats['patch_counter'] += X.shape[0]
 
             # Predict each patch
