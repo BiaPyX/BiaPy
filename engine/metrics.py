@@ -619,7 +619,7 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc
             _true[...,1], _true[...,2], pred_coords[...,0], pred_coords[...,1], pred_coords[...,2]), 
             columns =['gt_id', 'pred_id', 'distance', 'tag', 'axis-0', 'axis-1', 'axis-2', 'pred_axis-0', 
             'pred_axis-1', 'pred_axis-2'])
-        df_fn = pd.DataFrame(zip(fp_preds, fp_coords[...,0], fp_coords[...,1], fp_coords[...,2]), 
+        df_fp = pd.DataFrame(zip(fp_preds, fp_coords[...,0], fp_coords[...,1], fp_coords[...,2]), 
             columns =['pred_id', 'axis-0', 'axis-1', 'axis-2'])
 
     try:
@@ -640,7 +640,7 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc
     	print("True positives: {}, False positives: {}, False negatives: {}".format(TP, FP, FN))
     
     if return_assoc:
-        return ["Precision", precision, "Recall", recall, "F1", F1], df, df_fn
+        return ["Precision", precision, "Recall", recall, "F1", F1], df, df_fp
     else:
         return ["Precision", precision, "Recall", recall, "F1", F1]
 

@@ -224,12 +224,16 @@ def matching(y_true, y_pred, thresh=0.5, criterion='iou', report_matches=False):
                     matched_pairs  = tuple((int(map_rev_true[i]),int(map_rev_pred[j])) for i,j in zip(1+true_ind,1+pred_ind)),
                     matched_scores = tuple(scores[true_ind,pred_ind]),
                     matched_tps    = tuple(map(int,np.flatnonzero(match_ok))),
+                    pred_ids       = tuple(map_rev_pred),        
+                    gt_ids         = tuple(map_rev_true),
                 )
             else:
                 stats_dict.update (
                     matched_pairs  = (),
                     matched_scores = (),
                     matched_tps    = (),
+                    pred_ids       = (), 
+                    gt_ids         = (),
                 )
         return stats_dict
 

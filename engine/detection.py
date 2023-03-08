@@ -209,7 +209,7 @@ class Detection(Base_Workflow):
                     # Calculate detection metrics 
                     if len(pred_coordinates) > 0:
                         print("Detection (class "+str(ch+1)+")")
-                        d_metrics, gt_assoc, fn = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
+                        d_metrics, gt_assoc, fp = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
                             voxel_size=v_size, return_assoc=True, verbose=self.cfg.TEST.VERBOSE)
                         print("Detection metrics: {}".format(d_metrics))
                         all_channel_d_metrics[0] += d_metrics[1]
@@ -217,14 +217,14 @@ class Detection(Base_Workflow):
                         all_channel_d_metrics[2] += d_metrics[5]
 
                         # Save csv files with the associations between GT points and predicted ones 
-                        dfs.append([gt_assoc.copy(),fn.copy()])
+                        dfs.append([gt_assoc.copy(),fp.copy()])
                         if self.cfg.PROBLEM.NDIM == "2D":
                             gt_assoc = gt_assoc.drop(columns=['axis-0'])
-                            fn = fn.drop(columns=['axis-0'])
+                            fp = fp.drop(columns=['axis-0'])
                             gt_assoc = gt_assoc.rename(columns={'axis-1': 'axis-0', 'axis-2': 'axis-1'})
-                            fn = fn.rename(columns={'axis-1': 'axis-0', 'axis-2': 'axis-1'})
+                            fp = fp.rename(columns={'axis-1': 'axis-0', 'axis-2': 'axis-1'})
                         gt_assoc.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_assoc.csv'))
-                        fn.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_fn.csv'))             
+                        fp.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_fp.csv'))             
                     else:
                         print("No point found to calculate the metrics!")
 
@@ -243,7 +243,7 @@ class Detection(Base_Workflow):
                 points_pred = np.zeros(pred_shape[:-1]+(3,), dtype=np.uint8)
                 for ch, gt_coords in enumerate(gt_all_coords):
                     if len(dfs) > 0:
-                        gt_assoc, fn = dfs[ch]
+                        gt_assoc, fp = dfs[ch]
 
                     # TP and FN
                     gt_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
@@ -268,7 +268,7 @@ class Detection(Base_Workflow):
 
                     # FP
                     if len(dfs) > 0:
-                        for cor in zip(fn['axis-0'].tolist(),fn['axis-1'].tolist(),fn['axis-2'].tolist()):
+                        for cor in zip(fp['axis-0'].tolist(),fp['axis-1'].tolist(),fp['axis-2'].tolist()):
                             z, y, x =  cor  
                             z,y,x = int(z),int(y),int(x)
                             points_pred[z,y,x] = (0,0,255) # Blue

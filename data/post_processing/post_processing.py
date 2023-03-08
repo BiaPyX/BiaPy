@@ -18,6 +18,7 @@ from scipy.ndimage.morphology import binary_erosion, binary_dilation
 from scipy.ndimage import rotate, grey_dilation, distance_transform_edt
 from scipy.signal import savgol_filter
 from scipy.ndimage.filters import median_filter
+from scipy.ndimage.measurements import center_of_mass
 from skimage import morphology
 from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
 from skimage.segmentation import watershed
@@ -292,6 +293,16 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
     elif channels in ["BP"]:
         seed_map = (data[...,1] > ths['TH_POINTS'])
         foreground = (data[...,0] > ths['TH_FOREGROUND'])
+
+        print("Creating the central points . . .")
+        seed_map = label(seed_map, connectivity=1)
+        instances = np.unique(seed_map)[1:]
+        seed_coordinates = center_of_mass(seed_map, label(seed_map, connectivity=1), instances)
+        seed_coordinates = np.round(seed_coordinates).astype(int)
+        seed_map = np.zeros(data.shape[:-1], dtype=np.uint8) 
+        for sd in tqdm(seed_coordinates, total=len(seed_coordinates)):
+            z,y,x = sd
+            seed_map[z,y,x] = 1
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
