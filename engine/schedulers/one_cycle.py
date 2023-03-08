@@ -1,5 +1,5 @@
 """
-Super-convergence with one-cycle policy.
+Super-convergence with one-cycle policy (as in the fastai2 library).
 Original code by Andrich van Wyk: https://www.avanwyk.com/tensorflow-2-super-convergence-with-the-1cycle-policy/
 
 Example of application (simply add it as a callback when calling model.fit(...)):
@@ -44,17 +44,17 @@ class CosineAnnealer:
 class OneCycleScheduler(Callback):
     """ 
     `Callback` that schedules the learning rate on a 1cycle policy as per `Leslie Smith's paper <https://arxiv.org/pdf/1803.09820.pdf>`_.
-    If the model supports a momentum parameter, it will also be adapted by the schedule. The implementation adopts additional improvements 
-    as per `the fastai library <https://docs.fast.ai/callbacks.one_cycle.html>`_, where only two phases are used and the adaptation is done 
-    using cosine annealing. In phase 1 the LR increases from ``lr_max / div_factor`` to ``lr_max`` and momentum decreases from ``mom_max`` to 
-    ``mom_min``. In the second phase the LR decreases from ``lr_max`` to ``lr_max / (div_factor * 1e4)`` and momemtum from ``mom_max`` to 
+    If the model supports a momentum (or beta_1) parameter, it will also be adapted by the schedule. The implementation adopts additional improvements
+    as per `the fastai2 library <https://docs.fast.ai/callback.schedule.html#learner.fit_one_cycle>`_, where only two phases are used and the adaptation is done
+    using cosine annealing. In phase 1 the LR increases from ``lr_max / div_factor`` to ``lr_max`` and momentum decreases from ``mom_max`` to
+    ``mom_min``. In the second phase the LR decreases from ``lr_max`` to ``lr_max / div_final`` and momemtum from ``mom_max`` to
     ``mom_min``. By default the phases are not of equal length, with the phase 1 percentage controlled by the parameter ``phase_1_pct``.
     """
 
-    def __init__(self, lr_max, steps, mom_min=0.85, mom_max=0.95, phase_1_pct=0.3, div_factor=25., save_dir=None):
+    def __init__(self, lr_max, steps, mom_min=0.85, mom_max=0.95, phase_1_pct=0.3, div_factor=25., div_final=1e5, save_dir=None):
         super(OneCycleScheduler, self).__init__()
         lr_min = lr_max / div_factor
-        final_lr = lr_max / (div_factor * 1e4)
+        final_lr = lr_max / div_final
         phase_1_steps = steps * phase_1_pct
         phase_2_steps = steps - phase_1_steps
         
@@ -100,7 +100,10 @@ class OneCycleScheduler(Callback):
         
     def get_momentum(self):
         try:
-            return tf.keras.backend.get_value(self.model.optimizer.momentum)
+            if hasattr( self.model.optimizer, 'momentum' ):
+                return tf.keras.backend.get_value(self.model.optimizer.momentum)
+            else:
+                return tf.keras.backend.get_value(self.model.optimizer.beta_1)
         except AttributeError:
             return None
         
@@ -112,8 +115,17 @@ class OneCycleScheduler(Callback):
         
     def set_momentum(self, mom):
         try:
-            tf.keras.backend.set_value(self.model.optimizer.momentum, mom)
-        except AttributeError:
+            if hasattr( self.model.optimizer, 'momentum' ):
+                if not tf.is_tensor( self.model.optimizer.momentum ):
+                    self.model.optimizer.momentum = mom
+                else:
+                    tf.keras.backend.set_value(self.model.optimizer.momentum, mom)
+            else:
+                if not tf.is_tensor( self.model.optimizer.beta_1 ):
+                    self.model.optimizer.beta_1 = mom
+                else:
+                    tf.keras.backend.set_value(self.model.optimizer.beta_1, mom)
+        except AttributeError as e:
             pass # ignore
 
     def lr_schedule(self):
