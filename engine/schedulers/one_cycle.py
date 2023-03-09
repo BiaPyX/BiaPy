@@ -51,7 +51,7 @@ class OneCycleScheduler(Callback):
     ``mom_min``. By default the phases are not of equal length, with the phase 1 percentage controlled by the parameter ``phase_1_pct``.
     """
 
-    def __init__(self, lr_max, steps, mom_min=0.85, mom_max=0.95, phase_1_pct=0.3, div_factor=25., div_final=1e5, save_dir=None):
+    def __init__(self, lr_max, steps, mom_min=0.9, mom_max=0.99, phase_1_pct=0.25, div_factor=25., div_final=1e5, save_dir=None):
         super(OneCycleScheduler, self).__init__()
         lr_min = lr_max / div_factor
         final_lr = lr_max / div_final
