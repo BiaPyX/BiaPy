@@ -249,4 +249,5 @@ dependencies:
     - csbdeep==0.6.3
     - fastremap==1.13.3
     - fill-voids==2.0.3
-prefix: /scratch/dfranco/new_anaconda/envs/EM_tools
+    - tensorflow-addons==0.15.0
+    - typeguard==2.13.3
