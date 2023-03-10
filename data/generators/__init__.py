@@ -173,7 +173,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             seed=cfg.SYSTEM.SEED, norm_custom_mean=custom_mean, norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION,
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
 
-        if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+        if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
+            dic['instance_problem'] = True
+        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             dic['normalizeY'] = 'none'
         elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
             dic['normalizeY'] = 'as_image'
@@ -182,6 +184,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             dic['n2v_perc_pix'] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
             dic['n2v_manipulator'] = cfg.PROBLEM.DENOISING.N2V_MANIPULATOR
             dic['n2v_neighborhood_radius'] = cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
+            
         val_generator = f_name(**dic)
     else:
         val_generator = f_name(ndim=ndim, X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, n_classes=cfg.MODEL.N_CLASSES, in_memory=cfg.DATA.VAL.IN_MEMORY,
