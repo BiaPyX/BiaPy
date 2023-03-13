@@ -36,7 +36,7 @@ class Config:
 
         ### INSTANCE_SEG
         _C.PROBLEM.INSTANCE_SEG = CN()
-        # Possible options: 'BC', 'BP', 'BCM', 'BCD', 'BCDv2', 'Dv2' and 'BDv2'. This variable determines the channels to be created 
+        # Possible options: 'BC', 'BP', 'BD', 'BCM', 'BCD', 'BCDv2', 'Dv2' and 'BDv2'. This variable determines the channels to be created 
         # based on input instance masks. These option are composed from these individual options:
         #   - 'B' stands for 'Binary segmentation', containing each instance region without the contour. 
         #   - 'C' stands for 'Contour', containing each instance contour. 

@@ -5,14 +5,14 @@ from tqdm import tqdm
 import pandas as pd
 from skimage.segmentation import clear_border, find_boundaries
 from skimage.io import imread
-from scipy.ndimage.morphology import binary_dilation  
+from scipy.ndimage.morphology import binary_dilation  as binary_dilation_scipy
 from scipy.ndimage.measurements import center_of_mass                                                  
-from skimage.morphology import disk, dilation
-from skimage.measure import label
+from skimage.morphology import disk, dilation, erosion, binary_erosion, binary_dilation
+from skimage.measure import label, regionprops
 from skimage.transform import resize
 from skimage.feature import peak_local_max
 
-from utils.util import load_data_from_dir, load_3d_images_from_dir, save_npy_files, save_tif
+from utils.util import load_data_from_dir, load_3d_images_from_dir, save_tif
 
 
 #########################
@@ -49,13 +49,11 @@ def create_instance_channels(cfg, data_type='train'):
     else:
         Y = labels_into_channels(Y, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
                    fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
-    save_npy_files(Y, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, filenames=filenames,
-                   verbose=cfg.TEST.VERBOSE)
+    save_tif(Y, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, filenames=filenames, verbose=cfg.TEST.VERBOSE)
     X, _, _, filenames = f_name(getattr(cfg.DATA, tag).PATH, return_filenames=True)
     print("Creating X_{} channels . . .".format(data_type))
-    save_npy_files(X, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_DIR, filenames=filenames,
-                   verbose=cfg.TEST.VERBOSE)
-
+    save_tif(X, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_DIR, filenames=filenames, verbose=cfg.TEST.VERBOSE)
+    
     # Save original X data with the labels 
     for i in range(min(3,len(X))):
         if isinstance(X, list):
@@ -84,13 +82,11 @@ def create_test_instance_channels(cfg):
         else:
             Y_test = labels_into_channels(Y_test, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
                                      fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
-        save_npy_files(Y_test, data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR, filenames=test_filenames,
-                       verbose=cfg.TEST.VERBOSE)
+        save_tif(Y_test, data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR, filenames=test_filenames, verbose=cfg.TEST.VERBOSE)
 
     print("Creating X_test channels . . .")
     X_test, _, _, test_filenames = f_name(cfg.DATA.TEST.PATH, return_filenames=True)
-    save_npy_files(X_test, data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_DIR, filenames=test_filenames,
-                   verbose=cfg.TEST.VERBOSE)
+    save_tif(X_test, data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_DIR, filenames=test_filenames, verbose=cfg.TEST.VERBOSE)
     
     # Save original X data with the labels 
     for i in range(min(3,len(X_test))):
@@ -127,14 +123,14 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
     """
 
     assert data_mask.ndim in [5, 4]
-    assert mode in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP']
+    assert mode in ['BC', 'BCM', 'BCD', 'BD', 'BCDv2', 'Dv2', 'BDv2', 'BP']
 
     d_shape = 4 if data_mask.ndim == 5 else 3
     if mode in ['BCDv2', 'Dv2', 'BDv2']:
         c_number = 4
     elif mode in ['BCD', 'BCM']:
         c_number = 3
-    elif mode in ['BC', 'BP']:
+    elif mode in ['BC', 'BP', 'BD']:
         c_number = 2
 
     if 'D' in mode:
@@ -151,8 +147,12 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         # If only have background -> skip
         if ('D' in mode or 'Dv2' in mode) and instance_count != 1:
             # Foreground distance
-            new_mask[img,...,2] = scipy.ndimage.distance_transform_edt(vol>0)
-
+            instances = np.unique(vol)[1:]
+            for ins in tqdm(instances, total=len(instances)):
+                inst_patch = scipy.ndimage.distance_transform_edt((vol==ins)>0)
+                inst_patch = np.where(inst_patch>0, np.max(inst_patch)-inst_patch, inst_patch)
+                new_mask[img,...,-1] += inst_patch
+           
         # Background distance
         if 'Dv2' in mode:
             # Background distance
@@ -185,10 +185,11 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
 
         # Contour
         if ('C' in mode or 'Dv2' in mode) and instance_count != 1: 
+            f = "thick" if fb_mode == "dense" else fb_mode
+            new_mask[img,...,1] = find_boundaries(vol, mode=f).astype(np.uint8)
             if fb_mode == "dense" and mode != "BCM":
-                new_mask[img,...,1] = dilation(1-new_mask[img,...,0], disk(1)) 
-            else:
-                new_mask[img,...,1] = find_boundaries(vol, mode=fb_mode).astype(np.uint8)
+                new_mask[img,...,1] = 1 - binary_dilation(new_mask[img,...,1], disk(1))
+                new_mask[img,...,1] = 1 - ( (vol>0) * new_mask[img,...,1])
             if 'B' in mode:
                 # Remove contours from segmentation maps
                 new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0
@@ -235,7 +236,7 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
                 suffix.append('_binary_mask.tif')
         elif mode == "BP":
             suffix.append('_points.tif')
-        elif mode == "BDv2":
+        elif mode in ["BDv2", "BD"]:
             suffix.append('_distance.tif')
 
         for i in range(min(3,len(new_mask))):
@@ -417,7 +418,7 @@ def create_detection_masks(cfg, data_type='train'):
                 if cfg.PROBLEM.NDIM == '2D': mask = np.expand_dims(mask,0)
                 for k in range(mask.shape[0]): 
                     for ch in range(mask.shape[-1]):                                                                                  
-                        mask[k,...,ch] = binary_dilation(mask[k,...,ch], iterations=1,  structure=disk(cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION))                                                                                                                                                    
+                        mask[k,...,ch] = binary_dilation_scipy(mask[k,...,ch], iterations=1,  structure=disk(cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION))                                                                                                                                                    
                 if cfg.PROBLEM.NDIM == '2D': mask = mask[0]
 
             if cfg.PROBLEM.DETECTION.CHECK_POINTS_CREATED:

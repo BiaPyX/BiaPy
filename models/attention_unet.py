@@ -166,7 +166,7 @@ def Attention_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 25
             outputs = conv(2, 2, activation="sigmoid", padding='same') (x)
         elif output_channels == "BCM":
             outputs = conv(3, 2, activation="sigmoid", padding='same') (x)
-        elif output_channels == "BDv2":
+        elif output_channels in ["BDv2", "BD"]:
             seg = conv(1, 2, activation="sigmoid", padding='same') (x)
             dis = conv(1, 2, activation="linear", padding='same') (x)
             outputs = Concatenate()([seg, dis])

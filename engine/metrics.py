@@ -503,7 +503,7 @@ def instance_segmentation_loss(weights=(1,0.2), out_channels="BC"):
             return weights[0]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,0], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,0],-1))+\
                     weights[1]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,1], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,1],-1))+\
                     weights[2]*K.mean(tf.expand_dims(K.square(tf.cast(y_true[...,2], dtype=tf.float32) - y_pred[...,2]), -1), axis=-1)
-        elif out_channels == "BDv2":
+        elif out_channels in ["BDv2", "BD"]:
             return weights[0]*losses.binary_crossentropy(tf.expand_dims(tf.cast(y_true[...,0], dtype=tf.float32),-1), tf.expand_dims(y_pred[...,0],-1))+\
                    weights[1]*masked_mse(tf.cast(y_true[...,1], dtype=tf.float32), y_pred[...,1], tf.cast(y_true[...,0], dtype=tf.float32))
         elif out_channels == "BP":
