@@ -144,15 +144,6 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         instances = np.unique(vol)
         instance_count = len(instances)
 
-        # If only have background -> skip
-        if ('D' in mode or 'Dv2' in mode) and instance_count != 1:
-            # Foreground distance
-            instances = np.unique(vol)[1:]
-            for ins in tqdm(instances, total=len(instances)):
-                inst_patch = scipy.ndimage.distance_transform_edt((vol==ins)>0)
-                inst_patch = np.where(inst_patch>0, np.max(inst_patch)-inst_patch, inst_patch)
-                new_mask[img,...,-1] += inst_patch
-           
         # Background distance
         if 'Dv2' in mode:
             # Background distance
@@ -195,6 +186,15 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
                 new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0
             if mode == "BCM":
                 new_mask[img,...,2] = (vol>0).astype(np.uint8)
+
+        if ('D' in mode or 'Dv2' in mode) and instance_count != 1:
+            # Foreground distance
+            new_mask[img,...,-1] = scipy.ndimage.distance_transform_edt(new_mask[img,...,0])
+            props = regionprops(vol, new_mask[img,...,-1])
+            max_values = np.zeros(vol.shape)
+            for i in range(len(props)):
+                max_values = np.where(vol==props[i].label, props[i].intensity_max, max_values)     
+            new_mask[img,...,-1] = max_values - new_mask[img,...,-1]
 
     # Normalize and merge distance channels
     if 'Dv2' in mode:
