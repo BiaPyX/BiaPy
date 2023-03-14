@@ -308,7 +308,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
 
-        semantic = distance_transform_edt(foreground)
+        semantic = -distance_transform_edt(1 - seed_map )
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BD"]:
         semantic = data[...,0]
