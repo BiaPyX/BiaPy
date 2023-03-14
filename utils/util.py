@@ -277,17 +277,29 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
         if len(filenames) != len(X):
             raise ValueError("Filenames array and length of X have different shapes: {} vs {}".format(len(filenames),len(X)))
 
-    _dtype = X.dtype if X.dtype in [np.uint8, np.uint16, np.float32] else np.float32
+    if not isinstance(X, list):
+        _dtype = X.dtype if X.dtype in [np.uint8, np.uint16, np.float32] else np.float32
+        ndims = X.ndim
+    else:
+        _dtype = X[0].dtype if X[0].dtype in [np.uint8, np.uint16, np.float32] else np.float32
+        ndims = X[0].ndim
+
     d = len(str(len(X)))
-    for i in tqdm(range(X.shape[0]), leave=False):
+    for i in tqdm(range(len(X)), leave=False):
         if filenames is None:
             f = os.path.join(data_dir, str(i).zfill(d)+'.tif')
         else:
             f = os.path.join(data_dir, os.path.splitext(filenames[i])[0]+'.tif')
-        if X.ndim == 4:
-            aux = np.expand_dims(np.expand_dims(X[i],0).transpose((0,3,1,2)), -1).astype(_dtype)
+        if ndims == 4:
+            if not isinstance(X, list):
+                aux = np.expand_dims(np.expand_dims(X[i],0).transpose((0,3,1,2)), -1).astype(_dtype)
+            else:
+                aux = np.expand_dims(np.expand_dims(X[i][0],0).transpose((0,3,1,2)), -1).astype(_dtype)
         else:
-            aux = np.expand_dims(X[i].transpose((0,3,1,2)), -1).astype(_dtype)
+            if not isinstance(X, list):
+                aux = np.expand_dims(X[i].transpose((0,3,1,2)), -1).astype(_dtype)
+            else:
+                aux = np.expand_dims(X[i][0].transpose((0,3,1,2)), -1).astype(_dtype)
         try:
             imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
         except:
