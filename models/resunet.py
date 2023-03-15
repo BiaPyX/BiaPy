@@ -95,7 +95,8 @@ def ResUNet(image_shape, activation='elu', feature_maps=[16,32,64,128,256], drop
         upsampling = UpSampling2D
         ndim = 2
 
-    inputs = Input(image_shape)
+    dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)
+    inputs = Input(dinamic_dim)
 
     x = level_block(inputs, depth, fm, k_size, activation, k_init, dp, spatial_dropout, batch_norm, True,
         upsample_layer, zd)

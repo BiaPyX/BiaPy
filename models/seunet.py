@@ -70,7 +70,8 @@ def SE_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
     """
 
     depth = len(feature_maps)-1
-    x = Input(image_shape)
+    dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)
+    x = Input(dinamic_dim)
     inputs = x
 
     global conv, convtranspose, maxpooling, zeropadding, upsampling, globalaveragepooling
