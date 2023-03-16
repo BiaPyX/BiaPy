@@ -578,8 +578,9 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc
 
     # Create cost matrix
     distances = distance_matrix(_pred, _true)
-    distances[distances>tolerance] *= 100 
-    pred_ind, true_ind = linear_sum_assignment(distances)
+    n_matched = min(len(_true), len(_pred))
+    costs = -(distances >= tolerance).astype(float) - distances / (2*n_matched)
+    pred_ind, true_ind = linear_sum_assignment(-costs)
 
     TP, FP, FN = 0, 0, 0
     tag = ["FN" for x in _true]
