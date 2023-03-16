@@ -564,6 +564,12 @@ class Config:
         _C.TRAIN.EARLYSTOPPING_MONITOR = 'val_loss'
         # To determine which value monitor to consider which epoch consider the best to save
         _C.TRAIN.CHECKPOINT_MONITOR = 'val_loss'
+        # Add profiler callback to the training
+        _C.TRAIN.PROFILER = False
+        # Batch range to be analyzed
+        _C.TRAIN.PROFILER_BATCH_RANGE='10, 100'
+        # Path to store profiler files
+        _C.TRAIN.PROFILER_PATH = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'profiler')
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Inference phase

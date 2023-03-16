@@ -136,4 +136,9 @@ def build_callbacks(cfg, schel_steps):
             lr_schedule = OneCycleScheduler(cfg.TRAIN.LR, schel_steps, save_dir=cfg.PATHS.CHARTS)
 
         callbacks.append(lr_schedule)
+
+    if cfg.TRAIN.PROFILER:
+        tb_callback = tf.keras.callbacks.TensorBoard(log_dir=cfg.TRAIN.PROFILER_PATH, profile_batch=cfg.TRAIN.PROFILER_BATCH_RANGE)
+        callbacks.append(tb_callback)          
+                                       
     return callbacks
