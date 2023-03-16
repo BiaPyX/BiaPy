@@ -13,7 +13,7 @@ from data.generators.test_pair_data_generators import test_pair_data_generator
 from data.generators.test_single_data_generator import test_single_data_generator
 
 
-def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
+def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
     """Create training and validation generators.
 
        Parameters
@@ -34,6 +34,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
        Y_val : 4D/5D Numpy array
            Validation data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
            in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``. 
+
+       num_gpus : int
+           Number of GPUs to use. 
 
        Returns
        -------
@@ -86,8 +89,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
     
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-        dic = dict(ndim=ndim, X=X_train, Y=Y_train, batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED,
-            shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_TRAIN_DATA_EACH_EPOCH, in_memory=cfg.DATA.TRAIN.IN_MEMORY,
+        dic = dict(ndim=ndim, X=X_train, Y=Y_train, seed=cfg.SYSTEM.SEED, in_memory=cfg.DATA.TRAIN.IN_MEMORY, 
             data_paths=[cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.MASK_PATH], da=cfg.AUGMENTOR.ENABLE,
             da_prob=cfg.AUGMENTOR.DA_PROB, rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT,
             rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE, shear=cfg.AUGMENTOR.SHEAR, shear_range=cfg.AUGMENTOR.SHEAR_RANGE,
@@ -148,8 +150,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             print("Changing patch size from {} to {} to use EfficientNetB0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
 
         dic = dict(ndim=ndim, X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, n_classes=cfg.MODEL.N_CLASSES,
-            batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED, shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_TRAIN_DATA_EACH_EPOCH,
-            da=cfg.AUGMENTOR.ENABLE, in_memory=cfg.DATA.TRAIN.IN_MEMORY, da_prob=cfg.AUGMENTOR.DA_PROB,
+            seed=cfg.SYSTEM.SEED, da=cfg.AUGMENTOR.ENABLE, in_memory=cfg.DATA.TRAIN.IN_MEMORY, da_prob=cfg.AUGMENTOR.DA_PROB,
             rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT, rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE,
             shear=cfg.AUGMENTOR.SHEAR, shear_range=cfg.AUGMENTOR.SHEAR_RANGE, zoom=cfg.AUGMENTOR.ZOOM,
             zoom_range=cfg.AUGMENTOR.ZOOM_RANGE, shift=cfg.AUGMENTOR.SHIFT, shift_range=cfg.AUGMENTOR.SHIFT_RANGE,
@@ -166,8 +167,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
 
     print("Initializing val data generator . . .")
     if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-        dic = dict(ndim=ndim, X=X_val, Y=Y_val, batch_size=cfg.TRAIN.BATCH_SIZE,
-            shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, in_memory=cfg.DATA.VAL.IN_MEMORY,
+        dic = dict(ndim=ndim, X=X_val, Y=Y_val, in_memory=cfg.DATA.VAL.IN_MEMORY,
             data_paths=[cfg.DATA.VAL.PATH, cfg.DATA.VAL.MASK_PATH], da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
             seed=cfg.SYSTEM.SEED, norm_custom_mean=custom_mean, norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION,
@@ -187,9 +187,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
             
         val_generator = f_name(**dic)
     else:
-        val_generator = f_name(ndim=ndim, X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, n_classes=cfg.MODEL.N_CLASSES, in_memory=cfg.DATA.VAL.IN_MEMORY,
-            batch_size=cfg.TRAIN.BATCH_SIZE, seed=cfg.SYSTEM.SEED, shuffle_each_epoch=cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH, da=False,
-            resize_shape=r_shape, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
+        val_generator = f_name(ndim=ndim, X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, n_classes=cfg.MODEL.N_CLASSES, 
+            in_memory=cfg.DATA.VAL.IN_MEMORY, seed=cfg.SYSTEM.SEED, da=False, resize_shape=r_shape, 
+            norm_custom_mean=custom_mean, norm_custom_std=custom_std)
 
     # Generate examples of data augmentation
     if cfg.AUGMENTOR.AUG_SAMPLES:
@@ -218,8 +218,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
         return x, y
     train_index_generator = list(range(len(train_generator))) 
     val_index_generator = list(range(len(val_generator))) 
-    tdataset = tf.data.Dataset.from_generator(lambda: train_index_generator, tf.uint8)
-    vdataset = tf.data.Dataset.from_generator(lambda: val_index_generator, tf.uint8)
+    tdataset = tf.data.Dataset.from_generator(lambda: train_index_generator, tf.uint64)
+    vdataset = tf.data.Dataset.from_generator(lambda: val_index_generator, tf.uint64)
     train_dataset = tdataset.map(lambda i: tf.py_function(
         func=train_func, inp=[i], Tout=[tf.float32, out_dtype]), num_parallel_calls=num_parallel_calls)
     val_dataset = vdataset.map(lambda i: tf.py_function(
@@ -232,13 +232,32 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val):
         else:
             y.set_shape([None, cfg.MODEL.N_CLASSES]) 
         return x, y
-    train_dataset = train_dataset.map(_fixup_shape)
-    val_dataset = val_dataset.map(_fixup_shape)
+
+    global_batch_size = cfg.TRAIN.BATCH_SIZE * num_gpus
+    train_dataset = train_dataset.batch(global_batch_size).map(_fixup_shape)
+    val_dataset = val_dataset.batch(global_batch_size).map(_fixup_shape)
+
+    if cfg.AUGMENTOR.SHUFFLE_TRAIN_DATA_EACH_EPOCH:
+        train_dataset = train_dataset.shuffle(global_batch_size*2, seed=cfg.SYSTEM.SEED)
+
+    if cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH:
+        val_dataset = val_dataset.shuffle(global_batch_size*2, seed=cfg.SYSTEM.SEED)
 
     # Fixing some error with dataset length: https://discuss.tensorflow.org/t/typeerror-dataset-length-is-unknown-tensorflow/948/9
     # Using assert_cardinality to add the number of samples (input)
-    train_dataset = train_dataset.apply(tf.data.experimental.assert_cardinality(len(train_generator)))
-    val_dataset = val_dataset.apply(tf.data.experimental.assert_cardinality(len(val_generator)))
+    len_train = int(np.ceil(len(train_generator)/global_batch_size))
+    len_val = int(np.ceil(len(val_generator)/global_batch_size))
+    train_dataset = train_dataset.apply(tf.data.experimental.assert_cardinality(len_train))
+    val_dataset = val_dataset.apply(tf.data.experimental.assert_cardinality(len_val))
+
+    train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
+    val_dataset = val_dataset.prefetch(tf.data.AUTOTUNE)
+
+    # To avoid sharding swap message from AutoShardPolicy.FILE to AutoShardPolicy.DATA
+    options = tf.data.Options()
+    options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+    train_dataset = train_dataset.with_options(options)
+    val_dataset = val_dataset.with_options(options)
 
     return train_dataset, val_dataset
 
@@ -288,7 +307,7 @@ def create_test_augmentor(cfg, X_test, Y_test):
     
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     dic = dict(ndim=ndim, X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=provide_Y, Y=Y_test,
-        dm_path=cfg.DATA.TEST.MASK_PATH, batch_size=1, seed=cfg.SYSTEM.SEED,
+        dm_path=cfg.DATA.TEST.MASK_PATH, seed=cfg.SYSTEM.SEED,
         instance_problem=instance_problem, norm_custom_mean=custom_mean, 
         norm_custom_std=custom_std)        
         
@@ -327,15 +346,12 @@ def check_generator_consistence(gen, data_out_dir, mask_out_dir, filenames=None)
 
     print("Check generator . . .")
     it = iter(gen)
-    if filenames is None:
-        count = 0
+        
     for i in tqdm(range(len(gen))):
-        batch = next(it)
+        sample = next(it)
+        X_test, Y_test = sample
 
-        X_test, Y_test = batch
-        for j in tqdm(range(X_test.shape[0]), leave=False):
-            fil = filenames[(i*X_test.shape[0])+j:(i*X_test.shape[0])+j+1] if filenames is not None else [str(count)+".tif"]
-            save_tif(np.expand_dims(X_test[j],0), data_out_dir, fil, verbose=False)
-            save_tif(np.expand_dims(Y_test[j],0), mask_out_dir, fil, verbose=False)
-            count += 1
+        fil = filenames[i] if filenames is not None else ["sample_"+str(i)+".tif"]
+        save_tif(np.expand_dims(X_test,0), data_out_dir, fil, verbose=False)
+        save_tif(np.expand_dims(Y_test,0), mask_out_dir, fil, verbose=False)
 

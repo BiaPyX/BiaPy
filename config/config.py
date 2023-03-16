@@ -568,8 +568,7 @@ class Config:
         _C.TRAIN.PROFILER = False
         # Batch range to be analyzed
         _C.TRAIN.PROFILER_BATCH_RANGE='10, 100'
-        # Path to store profiler files
-        _C.TRAIN.PROFILER_PATH = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'profiler')
+
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Inference phase
@@ -672,6 +671,9 @@ class Config:
         _C.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_local_max_check')
         _C.PATHS.RESULT_DIR.DET_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'point_associations')
         _C.PATHS.RESULT_DIR.INST_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'instance_associations')
+        
+        # Path to store profiler files
+        _C.PATHS.PROFILER = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'profiler')
 
         # Name of the folder where the charts of the loss and metrics values while training the network are stored.
         # Additionally, MW_TH* variable charts are stored if _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = True

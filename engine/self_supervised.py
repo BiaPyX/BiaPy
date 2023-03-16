@@ -77,7 +77,7 @@ class Self_supervised(Base_Workflow):
             pred = pred[0]
 
         # Undo normalization
-        x_norm = norm[0][0]
+        x_norm = norm[0]
         if x_norm['type'] == 'div':
             pred = pred*255
             if 'reduced_uint16' in x_norm:

@@ -165,7 +165,7 @@ class Engine(object):
               "#  PREPARE GENERATORS  #\n"
               "########################\n")
         if cfg.TRAIN.ENABLE:
-            self.train_generator, self.val_generator = create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val)
+            self.train_generator, self.val_generator = create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus)
             if cfg.DATA.CHECK_GENERATORS and cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                 check_generator_consistence(
                     self.train_generator, cfg.PATHS.GEN_CHECKS+"_train", cfg.PATHS.GEN_MASK_CHECKS+"_train")
@@ -199,7 +199,6 @@ class Engine(object):
 
         self.callbacks = build_callbacks(self.cfg, len(self.train_generator)*self.cfg.TRAIN.EPOCHS)
         self.results = self.model.fit(self.train_generator, validation_data=self.val_generator,
-            validation_steps=len(self.val_generator), steps_per_epoch=len(self.train_generator),
             epochs=self.cfg.TRAIN.EPOCHS, callbacks=self.callbacks)
 
         create_plots(self.results, self.job_identifier, self.cfg.PATHS.CHARTS, metric=self.metric)

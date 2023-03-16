@@ -32,14 +32,8 @@ class test_pair_data_generator(tf.keras.utils.Sequence):
        dims: str, optional
            Dimension of the data. Possible options: ``2D`` or ``3D``.
 
-       batch_size : int, optional
-           Size of the batches.
-
        seed : int, optional
            Seed for random functions.
-
-       shuffle_each_epoch : bool, optional
-           To shuffle data after each epoch.
 
        instance_problem : bool, optional
            To not divide the labels if being in an instance segmenation problem.
@@ -50,8 +44,8 @@ class test_pair_data_generator(tf.keras.utils.Sequence):
        norm_custom_std : float, optional
            Std of the data used to normalize.
     """
-    def __init__(self, ndim, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, batch_size=1, seed=42,
-                 shuffle_each_epoch=False, instance_problem=False, normalizeY='as_mask', norm_custom_mean=None, 
+    def __init__(self, ndim, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, seed=42,
+                 instance_problem=False, normalizeY='as_mask', norm_custom_mean=None, 
                  norm_custom_std=None):
 
         if X is None and d_path is None:
@@ -69,10 +63,7 @@ class test_pair_data_generator(tf.keras.utils.Sequence):
         self.data_path = sorted(next(os.walk(d_path))[2]) if X is None else None
         if provide_Y:
             self.data_mask_path = sorted(next(os.walk(dm_path))[2]) if Y is None else None
-        self.shuffle_each_epoch = shuffle_each_epoch
         self.seed = seed
-        self.batch_size = batch_size
-        self.total_batches_seen = 0
         self.ndim = ndim
         if X is None:
             self.len = len(self.data_path)
@@ -104,8 +95,6 @@ class test_pair_data_generator(tf.keras.utils.Sequence):
                     self.Y_norm['div'] = 1   
             elif normalizeY == 'as_image':
                 self.Y_norm.update(self.X_norm)
-        self.on_epoch_end()
-
 
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
@@ -187,56 +176,35 @@ class test_pair_data_generator(tf.keras.utils.Sequence):
 
     def __len__(self):
         """Defines the length of the generator"""
-        return int(np.ceil(self.len/self.batch_size))
+        return self.len
 
 
     def __getitem__(self, index):
-        """Generation of one batch of data.
+        """Generation of one pair of data.
 
            Parameters
            ----------
            index : int
-               Batch index counter.
+               Sample index counter.
 
            Returns
            -------
-           batch_x : List of 5D/4D Numpy array
-               Corresponding X elements of the batch.
-
-           batch_y : List of 5D/4D Numpy array
-               Corresponding Y elements of the batch.
+           img : 3D/4D Numpy array
+               X element, for instance, an image. E.g. ``(z, y, x, channels)`` if ``2D`` or 
+               ``(y, x, channels)`` if ``3D``. 
+               
+           mask : 3D/4D Numpy array
+               Y element, for instance, a mask. E.g. ``(z, y, x, channels)`` if ``2D`` or 
+               ``(y, x, channels)`` if ``3D``.
         """
-
-        indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        batch_x = []
-        if self.provide_Y: batch_y = []
-        normx, normy = [], []
-
-        for i, j in zip(range(len(indexes)), indexes):
-            img, mask, norm = self.load_sample(j)
-            
-            if self.provide_Y: 
-                batch_y.append(mask)
-                normy.append(self.Y_norm)
-
-            batch_x.append(img)    
-            if norm is not None:
-                self.X_norm.update(norm)
-            normx.append(self.X_norm)
-            
-        batch_x = np.concatenate(batch_x)
-        if self.provide_Y: batch_y = np.concatenate(batch_y)
-
-        self.total_batches_seen += 1
+        img, mask, norm = self.load_sample(index)
         
+        if norm is not None:
+            self.X_norm.update(norm)
+                    
         if self.provide_Y:
-            return batch_x, normx, batch_y, normy
+            return img, self.X_norm, mask, self.Y_norm
         else:
-            return batch_x, normx
+            return img, normx
 
-    def on_epoch_end(self):
-        """Updates indexes after each epoch."""
-        self.indexes = self.o_indexes
-        if self.shuffle_each_epoch:
-            random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
 

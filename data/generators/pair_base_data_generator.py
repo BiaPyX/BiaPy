@@ -34,14 +34,8 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
        Y : 4D/5D Numpy array
            Mask data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
-       batch_size : int, optional
-           Size of the batches.
-
        seed : int, optional
            Seed for random functions.
-
-       shuffle_each_epoch : bool, optional
-           To decide if the indexes will be shuffled after every epoch.
 
        in_memory : bool, optional
            If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will be loaded directly from disk using
@@ -362,18 +356,17 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
            Advice the class that the workflow is of instance segmentation to divide the labels by channels.
     """
 
-    def __init__(self, ndim, X, Y, batch_size=32, seed=0, shuffle_each_epoch=False, in_memory=True, data_paths=None, da=True,
-                 da_prob=0.5, rotation90=False, rand_rot=False, rnd_rot_range=(-180,180), shear=False,
-                 shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), shift=False, shift_range=(0.1,0.2),
-                 affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), e_sigma=25,
-                 e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), motion_blur=False,
-                 motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), brightness=False, brightness_factor=(1,3),
-                 brightness_mode='2D', contrast=False, contrast_factor=(1,3), contrast_mode='2D', brightness_em=False,
-                 brightness_em_factor=(1,3), brightness_em_mode='2D', contrast_em=False, contrast_em_factor=(1,3),
-                 contrast_em_mode='2D', dropout=False, drop_range=(0, 0.2), cutout=False, cout_nb_iterations=(1,3),
-                 cout_size=(0.2,0.4), cout_cval=0, cout_apply_to_mask=False, cutblur=False, cblur_size=(0.1,0.5),
-                 cblur_down_range=(2,8), cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), cutnoise=False,
-                 cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False,
+    def __init__(self, ndim, X, Y, seed=0, in_memory=True, data_paths=None, da=True, da_prob=0.5, rotation90=False, 
+                 rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
+                 shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, 
+                 e_alpha=(240,250), e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, 
+                 mb_kernel=(3,7), motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), 
+                 brightness=False, brightness_factor=(1,3), brightness_mode='2D', contrast=False, contrast_factor=(1,3), 
+                 contrast_mode='2D', brightness_em=False, brightness_em_factor=(1,3), brightness_em_mode='2D', contrast_em=False, 
+                 contrast_em_factor=(1,3), contrast_em_mode='2D', dropout=False, drop_range=(0, 0.2), cutout=False, 
+                 cout_nb_iterations=(1,3), cout_size=(0.2,0.4), cout_cval=0, cout_apply_to_mask=False, cutblur=False, 
+                 cblur_size=(0.1,0.5), cblur_down_range=(2,8), cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), 
+                 cutnoise=False, cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False,
                  ms_displacement=16, ms_rotate_ratio=0.0, missing_sections=False, missp_iterations=(30, 40),
                  grayscale=False, channel_shuffle=False, gridmask=False, grid_ratio=0.6, grid_d_range=(0.4,1),
                  grid_rotate=1, grid_invert=False, gaussian_noise=False, gaussian_noise_mean=0, gaussian_noise_var=0.01,
@@ -421,8 +414,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
         if not in_memory and not random_crops_in_DA:
             print("WARNING: you are going to load samples from disk (as 'in_memory=False') and "
-                  "'random_crops_in_DA=False' so all samples are expected to have the same shape. If it is not "
-                  "the case set batch_size to 1 or the generator will throw an error")
+                  "'random_crops_in_DA=False' so all samples are expected to have the same shape")
 
         if rotation90 and rand_rot:
             print("Warning: you selected double rotation type. Maybe you should set only 'rand_rot'?")
@@ -430,7 +422,6 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         # Super-resolution options
         self.random_crop_scale = random_crop_scale
 
-        self.batch_size = batch_size
         self.in_memory = in_memory
         self.normalizeY = normalizeY
         if not in_memory:
@@ -606,7 +597,6 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             self.res_relation = (1.0,resolution[0]/resolution[1],resolution[0]/resolution[2])
         self.resolution = resolution
         self.o_indexes = np.arange(self.length)
-        self.shuffle = shuffle_each_epoch
         self.n_classes = n_classes
         self.out_number = out_number
         self.da = da
@@ -705,7 +695,6 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             self.o_indexes = np.concatenate([self.o_indexes]*extra_data_factor)
         else:
             self.extra_data_factor = 1
-        self.total_batches_seen = 0
 
         self.da_options = []
         self.trans_made = ''
@@ -786,7 +775,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         ia.seed(seed)
         
         self.random_crop_func = random_3D_crop_pair if self.ndim == 3 else random_crop_pair
-        self.on_epoch_end()
+        self.indexes = self.o_indexes.copy()
         self.len = self.__len__() 
 
     @abstractmethod
@@ -798,15 +787,8 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         NotImplementedError
 
     def __len__(self):
-        """Defines the number of batches per epoch."""
-        return int(np.ceil((self.length*self.extra_data_factor)/self.batch_size))
-
-    def on_epoch_end(self):
-        """Updates indexes after each epoch."""
-        ia.seed(self.seed + self.total_batches_seen)
-        self.indexes = self.o_indexes
-        if self.shuffle:
-            random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
+        """Defines the number of samples per epoch."""
+        return self.length
 
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
@@ -860,72 +842,61 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         return self.__getitem__(index)
 
     def __getitem__(self, index):
-        """Generation of one batch of data.
+        """Generation of one pair of data.
 
            Parameters
            ----------
            index : int
-               Batch index counter.
+               Index counter.
 
            Returns
            -------
-           batch_x : 4D/5D Numpy array
-               Corresponding X elements of the batch. E.g. ``(batch_size_value, z, y, x, channels)`` if ``2D`` 
-               or ``(batch_size_value, y, x, channels)`` if ``3D``. 
+           img : 3D/4D Numpy array
+               X element, for instance, an image. E.g. ``(z, y, x, channels)`` if ``2D`` or 
+               ``(y, x, channels)`` if ``3D``. 
                
-           batch_y : 4D/5D Numpy array
-               Corresponding Y elements of the batch. E.g. ``(batch_size_value, z, y, x, channels)`` if ``2D`` 
-               or ``(batch_size_value, y, x, channels)`` if ``3D``.
+           mask : 3D/4D Numpy array
+               Y element, for instance, a mask. E.g. ``(z, y, x, channels)`` if ``2D`` or 
+               ``(y, x, channels)`` if ``3D``.
         """
-        indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        batch_x = np.zeros((len(indexes), *self.shape), dtype=np.float32)
-        batch_y = np.zeros((len(indexes), *self.Y_shape), dtype=self.Y_dtype)
+        img, mask =  self.load_sample(index)
 
-        for i, j in zip(range(len(indexes)), indexes):
-            img, mask =  self.load_sample(j)
-
-            # Apply random crops if it is selected
-            if self.random_crops_in_DA:
-                # Capture probability map
-                if self.prob_map is not None:
-                    if isinstance(self.prob_map, list):
-                        img_prob = np.load(self.prob_map[j])
-                    else:
-                        img_prob = self.prob_map[j]
+        # Apply random crops if it is selected
+        if self.random_crops_in_DA:
+            # Capture probability map
+            if self.prob_map is not None:
+                if isinstance(self.prob_map, list):
+                    img_prob = np.load(self.prob_map[j])
                 else:
-                    img_prob = None
-                batch_x[i], batch_y[i] = self.random_crop_func(img, mask, self.shape[:self.ndim], self.val, img_prob=img_prob,
-                    scale=self.random_crop_scale)
+                    img_prob = self.prob_map[j]
             else:
-                batch_x[i], batch_y[i] = img, mask
+                img_prob = None
+            img, mask = self.random_crop_func(img, mask, self.shape[:self.ndim], self.val, img_prob=img_prob,
+                scale=self.random_crop_scale)
 
-            # Apply transformations
-            if self.da:
-                e_img, e_mask = None, None
-                if self.cutmix:
-                    extra_img = np.random.randint(0, self.length-1) if self.length > 2 else 0
-                    e_img, e_mask =  self.load_sample(extra_img)
+        # Apply transformations
+        if self.da:
+            e_img, e_mask = None, None
+            if self.cutmix:
+                extra_img = np.random.randint(0, self.length-1) if self.length > 2 else 0
+                e_img, e_mask =  self.load_sample(extra_img)
 
-                batch_x[i], batch_y[i] = self.apply_transform(batch_x[i], batch_y[i], e_im=e_img, e_mask=e_mask)
+            img, mask = self.apply_transform(img, mask, e_im=e_img, e_mask=e_mask)
 
         # Prepare mask when denoising with Noise2Void
         if self.n2v:
             if not self.val or (self.val and not self.in_memory):
-                batch_y = batch_y.astype(np.float32)
-                self.prepare_n2v(batch_x, batch_y)
+                mask = mask.astype(np.float32)
+                self.prepare_n2v(img, mask)
             
         # One-hot enconde
         if self.n_classes > 1 and (self.n_classes != self.Y_channels):
-            batch_y_ = np.zeros((len(indexes), ) + self.shape[:self.ndim] + (self.n_classes,))
-            for k in range(len(indexes)):
-                batch_y_[i] = np.asarray(img_to_onehot_encoding(batch_y[k][0]))
-            batch_y = batch_y_
-            
-        self.total_batches_seen += 1
+            mask = np.asarray(img_to_onehot_encoding(mask))
+
         if self.out_number == 1:
-            return batch_x, batch_y
+            return img, mask
         else:
-            return ([batch_x], [batch_y]*self.out_number)
+            return ([img], [mask]*self.out_number)
  
 
     def apply_transform(self, image, mask, e_im=None, e_mask=None):
@@ -1132,8 +1103,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                X_train = np.ones((1776, 256, 256, 1))
                Y_train = np.ones((1776, 256, 256, 1))
 
-               data_gen_args = dict(X=X_train, Y=Y_train, batch_size=6, shape=(256, 256, 1), shuffle_each_epoch=True,
-                                    rotation_range=True, vflip=True, hflip=True)
+               data_gen_args = dict(X=X_train, Y=Y_train, shape=(256, 256, 1), rotation_range=True, vflip=True, hflip=True)
 
                train_generator = BaseDataGenerator(**data_gen_args)
 
@@ -1147,9 +1117,8 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
                prob_map = calculate_2D_volume_prob_map(Y_train, 0.94, 0.06, save_file='prob_map.npy')
 
-               data_gen_args = dict(X=X_train, Y=Y_train, batch_size=6, shape=(256, 256, 1), shuffle_each_epoch=True,
-                                    rotation_range=True, vflip=True, hflip=True, random_crops_in_DA=True, prob_map=True,
-                                    prob_map=prob_map)
+               data_gen_args = dict(X=X_train, Y=Y_train, shape=(256, 256, 1), rotation_range=True, vflip=True, hflip=True, r
+                    random_crops_in_DA=True, prob_map=True, prob_map=prob_map)
                train_generator = BaseDataGenerator(**data_gen_args)
 
                train_generator.get_transformed_samples(10, save_to_dir=True, train=False, out_dir='da_dir')
@@ -1320,17 +1289,16 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             np.random.seed(0) 
 
         for c in range(self.Y_channels):
-            for j in range(batch_x.shape[0]):       
-                coords = self.get_stratified_coords(box_size=self.box_size, shape=self.shape)                             
-                indexing = (j,) + coords + (c,)
-                indexing_mask = (j,) + coords + (c + self.Y_channels, )
-                y_val = batch_x[indexing]
-                x_val = self.value_manipulation(batch_x[j, ..., c], coords, self.ndim, self.n2v_structMask)
-                
-                batch_y[indexing] = y_val
-                batch_y[indexing_mask] = 1
-                batch_x[indexing] = x_val
+            coords = self.get_stratified_coords(box_size=self.box_size, shape=self.shape)                             
+            indexing = coords + (c,)
+            indexing_mask = coords + (c + self.Y_channels, )
+            y_val = batch_x[indexing]
+            x_val = self.value_manipulation(batch_x[..., c], coords, self.ndim, self.n2v_structMask)
+            
+            batch_y[indexing] = y_val
+            batch_y[indexing_mask] = 1
+            batch_x[indexing] = x_val
 
-                if self.n2v_structMask is not None:
-                    self.apply_structN2Vmask_func(batch_x[j, ..., c], coords, self.n2v_structMask)
+            if self.n2v_structMask is not None:
+                self.apply_structN2Vmask_func(batch_x[..., c], coords, self.n2v_structMask)
                    

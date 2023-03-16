@@ -33,14 +33,8 @@ class test_single_data_generator(tf.keras.utils.Sequence):
        dims: str, optional
            Dimension of the data. Possible options: ``2D`` or ``3D``.
 
-       batch_size : int, optional
-           Size of the batches.
-
        seed : int, optional
            Seed for random functions.
-
-       shuffle_each_epoch : bool, optional
-           To shuffle data after each epoch.
 
        instance_problem : bool, optional
            Not used here.
@@ -55,8 +49,8 @@ class test_single_data_generator(tf.keras.utils.Sequence):
            Whether to extract a
 
     """
-    def __init__(self, ndim, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, batch_size=1, seed=42,
-                 shuffle_each_epoch=False, instance_problem=False, norm_custom_mean=None, 
+    def __init__(self, ndim, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, seed=42,
+                 instance_problem=False, norm_custom_mean=None, 
                  norm_custom_std=None, crop_center=False, resize_shape=None):
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
@@ -92,10 +86,7 @@ class test_single_data_generator(tf.keras.utils.Sequence):
         else:
             self.len = len(X)
 
-        self.shuffle_each_epoch = shuffle_each_epoch
         self.seed = seed
-        self.batch_size = batch_size
-        self.total_batches_seen = 0
         self.ndim = ndim
         self.o_indexes = np.arange(self.len)
         
@@ -163,58 +154,38 @@ class test_single_data_generator(tf.keras.utils.Sequence):
 
     def __len__(self):
         """Defines the length of the generator"""
-        return int(np.ceil(self.len/self.batch_size))
+        return self.len
 
 
     def __getitem__(self, index):
-        """Generation of one batch of data.
+        """Generation of one sample of data.
 
            Parameters
            ----------
            index : int
-               Batch index counter.
+               Sample index counter.
 
            Returns
            -------
-           batch_x : List of 5D/4D Numpy array
-               Corresponding X elements of the batch.
+           img : 3D Numpy array
+               X element, for instance, an image. E.g. ``(y, x, channels)``.
 
-           batch_y : List of 5D/4D Numpy array
-               Corresponding Y elements of the batch.
+           img_class : ints
+               Y element, for instance, a class number.
         """
 
-        indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        batch_x = []
-        if self.provide_Y: batch_y = []
-        normx = []
+        img, img_class, norm = self.load_sample(index)
+        
+        if self.crop_center and img.shape[:-1] != self.resize_shape[:-1]:
+            img = center_crop_single(img[0], self.resize_shape)
+            img = resize_img(img, self.resize_shape[:-1])
+            img = np.expand_dims(img,0)
 
-        for i, j in zip(range(len(indexes)), indexes):
-            img, img_class, norm = self.load_sample(j)
-            
-            if self.crop_center and img.shape[:-1] != self.resize_shape[:-1]:
-                img = center_crop_single(img[0], self.resize_shape)
-                img = resize_img(img, self.resize_shape[:-1])
-                img = np.expand_dims(img,0)
+        if norm is not None:
+            self.X_norm.update(norm)           
 
-            if self.provide_Y: 
-                batch_y.append(img_class)
-
-            batch_x.append(img)    
-            if norm is not None:
-                self.X_norm.update(norm)
-            normx.append(self.X_norm)
-            
-        batch_x = np.concatenate(batch_x)
-
-        self.total_batches_seen += 1
         if self.provide_Y:
-            return batch_x, normx, batch_y, None
+            return img, self.X_norm, img_class, None
         else:
-            return batch_x, normx
-
-    def on_epoch_end(self):
-        """Updates indexes after each epoch."""
-        self.indexes = self.o_indexes
-        if self.shuffle_each_epoch:
-            random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
+            return img, normx
 

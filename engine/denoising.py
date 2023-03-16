@@ -90,7 +90,7 @@ class Denoising(Base_Workflow):
             pred = pred[0]
 
         # Undo normalization
-        x_norm = norm[0][0]
+        x_norm = norm[0]
         if x_norm['type'] == 'div':
             pred = undo_norm_range01(pred, x_norm)
         else:

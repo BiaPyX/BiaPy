@@ -34,14 +34,8 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
        n_classes : int
            Number of classes to predict.
 
-       batch_size : int, optional
-           Size of the batches.
-
        seed : int, optional
            Seed for random functions.
-
-       shuffle_each_epoch : bool, optional
-           To decide if the indexes will be shuffled after every epoch.
 
        in_memory : bool, optional
            If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will be loaded directly from disk using
@@ -147,17 +141,15 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
            Std of the data used to normalize.
     """
 
-    def __init__(self, ndim, X, Y, data_path, n_classes, batch_size=32, seed=0, shuffle_each_epoch=False, in_memory=False,
-                 da=True, da_prob=0.5, rotation90=False, rand_rot=False, rnd_rot_range=(-180,180), shear=False,
-                 shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), shift=False, shift_range=(0.1,0.2), 
-                 affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), e_sigma=25, 
-                 e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), 
+    def __init__(self, ndim, X, Y, data_path, n_classes, seed=0, in_memory=False, da=True, da_prob=0.5, rotation90=False, 
+                 rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
+                 shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), 
+                 e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), 
                  motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, 
                  drop_range=(0, 0.2), val=False, resize_shape=None, norm_custom_mean=None, norm_custom_std=None):
 
         
         self.ndim = ndim
-        self.batch_size = batch_size
         self.in_memory = in_memory
         self.z_size = -1 
 
@@ -263,13 +255,10 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         self.shape = resize_shape if resize_shape is not None else img.shape
 
         self.o_indexes = np.arange(self.length)
-        self.shuffle = shuffle_each_epoch
         self.n_classes = n_classes
         self.da = da
         self.da_prob = da_prob
         self.val = val
-
-        self.total_batches_seen = 0
 
         self.da_options = []
         self.trans_made = ''
@@ -317,7 +306,7 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         self.seq = iaa.Sequential(self.da_options)
         self.seed = seed
         ia.seed(seed)
-        self.on_epoch_end()
+        self.indexes = self.o_indexes.copy()
         self.len = self.__len__() 
         self.random_crop_func = random_3D_crop_single if self.ndim == 3 else random_crop_single
 
@@ -335,15 +324,8 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         NotImplementedError
 
     def __len__(self):
-        """Defines the number of batches per epoch."""
-        return int(np.ceil(self.length/self.batch_size))
-
-    def on_epoch_end(self):
-        """Updates indexes after each epoch."""
-        ia.seed(self.seed + self.total_batches_seen)
-        self.indexes = self.o_indexes
-        if self.shuffle:
-            random.Random(self.seed + self.total_batches_seen).shuffle(self.indexes)
+        """Defines the number of samples per epoch."""
+        return self.length
 
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
@@ -378,45 +360,33 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         return self.__getitem__(index)
 
     def __getitem__(self, index):
-        """Generation of one batch data.
+        """Generation of one sample data.
 
            Parameters
            ----------
            index : int
-               Batch index counter.
+               Sample index counter.
 
            Returns
            -------
-           batch_x : 4D Numpy array
-               Corresponding X elements of the batch. E.g. ``(batch_size, y, x, channels)``.
+           img : 3D Numpy array
+               X element, for instance, an image. E.g. ``(y, x, channels)``.
 
-           batch_y : List of ints
-               Corresponding classes of X. E.g. ``(batch_size)``.
+           img_class : ints
+               Y element, for instance, a class number.
         """
+        img, img_class =  self.load_sample(index)
 
-        # Generate indexes of the batch
-        indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
+        if img.shape[:-1] != self.shape[:-1]:
+            img = self.random_crop_func(img, self.shape[:-1], self.val)
+            img = resize_img(img, self.shape[:-1])
 
-        batch_x = np.zeros((len(indexes), *self.shape), dtype=np.float32)
-        batch_y = np.zeros(len(indexes), dtype=np.uint8)
+        # Apply transformations
+        if self.da:
+            img = self.apply_transform(img)
 
-        for i, j in zip(range(len(indexes)), indexes):
-            img, img_class =  self.load_sample(j)
-
-            if img.shape[:-1] != self.shape[:-1]:
-                img = self.random_crop_func(img, self.shape[:-1], self.val)
-                img = resize_img(img, self.shape[:-1])
-
-            batch_x[i] = img
-            batch_y[i] = img_class
-
-            # Apply transformations
-            if self.da:
-                batch_x[i] = self.apply_transform(batch_x[i])
-
-        self.total_batches_seen += 1
-        batch_y = tf.keras.utils.to_categorical(batch_y, self.n_classes)
-        return batch_x, batch_y
+        img_class = tf.keras.utils.to_categorical(img_class, self.n_classes)
+        return img, img_class
 
     def apply_transform(self, image):
         """Transform the input image with one of the selected choices based on a probability.
@@ -493,11 +463,8 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
            Returns
            -------
-           batch_x : 4D Numpy array
+           sample_x : 4D Numpy array
                Batch of data. E.g. ``(num_examples, y, x, channels)``.
-
-           batch_y : 4D Numpy array
-               Corresponding classes of X. E.g. ``(batch_size)``.
         """
 
         if random_images == False and num_examples > self.length:
