@@ -205,6 +205,6 @@ class test_pair_data_generator(tf.keras.utils.Sequence):
         if self.provide_Y:
             return img, self.X_norm, mask, self.Y_norm
         else:
-            return img, normx
+            return img, self.X_norm
 
 
