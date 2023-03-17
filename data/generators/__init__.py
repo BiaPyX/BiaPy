@@ -238,10 +238,10 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
     val_dataset = val_dataset.batch(global_batch_size).map(_fixup_shape)
 
     if cfg.AUGMENTOR.SHUFFLE_TRAIN_DATA_EACH_EPOCH:
-        train_dataset = train_dataset.shuffle(global_batch_size*2, seed=cfg.SYSTEM.SEED)
+        train_dataset = train_dataset.shuffle(len(train_generator), seed=cfg.SYSTEM.SEED)
 
     if cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH:
-        val_dataset = val_dataset.shuffle(global_batch_size*2, seed=cfg.SYSTEM.SEED)
+        val_dataset = val_dataset.shuffle(len(val_generator), seed=cfg.SYSTEM.SEED)
 
     # Fixing some error with dataset length: https://discuss.tensorflow.org/t/typeerror-dataset-length-is-unknown-tensorflow/948/9
     # Using assert_cardinality to add the number of samples (input)

@@ -3,6 +3,9 @@ import sys
 import argparse
 import datetime
 import ntpath
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Avoid buffer shuffle messages on each epoch
+
 import tensorflow as tf
 
 from shutil import copyfile
