@@ -614,7 +614,10 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc
         # Capture prediction coords
         pred_coords = np.zeros( (len(pred_id_assoc), 3), dtype=np.float32)
         for i in range(len(pred_id_assoc)):
-            pred_coords[i] = _pred[pred_id_assoc[i]-1]
+            if pred_id_assoc[i] != -1:
+                pred_coords[i] = _pred[pred_id_assoc[i]-1]
+            else:
+                pred_coords[i] = [0,0,0]
 
         df = pd.DataFrame(zip(list(range(1,len(_true)+1)), pred_id_assoc, dis, tag, _true[...,0], 
             _true[...,1], _true[...,2], pred_coords[...,0], pred_coords[...,1], pred_coords[...,2]), 
@@ -626,15 +629,15 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc
     try:
         precision = TP/(TP+FP)
     except:
-        precision = 1
+        precision = 0
     try:
         recall = TP/(TP+FN)
     except:
-        recall = 1
+        recall = 0
     try:
         F1 = 2*((precision*recall)/(precision+recall))
     except:
-        F1 = 1
+        F1 = 0
 
     if verbose:
     	print("Points in ground truth: {}, Points in prediction: {}".format(len(_true), len(_pred)))
