@@ -191,58 +191,69 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
 
 def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_small_before=10, remove_after=False, thres_small_after=128,
     seed_morph_sequence=[], seed_morph_radius=[], erode_and_dilate_foreground=False, fore_erosion_radius=5, fore_dilation_radius=5, 
-    save_dir=None):
-    """Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
-       algorithm.
+    rmv_close_points=False, remove_close_points_radius=-1, resolution=[1,1,1], save_dir=None):
+    """
+    Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
+    algorithm.
 
-       Implementation based on `PyTorch Connectomics' process.py
-       <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py>`_.
+    Implementation based on `PyTorch Connectomics' process.py
+    <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py>`_.
 
-       Parameters
-       ----------
-       data : 4D Numpy array
-           Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
+    Parameters
+    ----------
+    data : 4D Numpy array
+        Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
 
-       channels : str
-           Channel type used. Possible options: ``BC``, ``BCM``, ``BCD``, ``BCDv2``, ``Dv2`` and ``BDv2``.
+    channels : str
+        Channel type used. Possible options: ``BC``, ``BCM``, ``BCD``, ``BCDv2``, ``Dv2`` and ``BDv2``.
 
-       ths : float, optional
-           Thresholds to be used on each channel. ``TH_BINARY_MASK`` used in the semantic mask to create watershed seeds;
-           ``TH_CONTOUR`` used in the contours to create watershed seeds; ``TH_FOREGROUND`` used in the semantic mask to create the 
-           foreground mask; ``TH_DISTANCE`` used in the distances to create watershed seeds; and ``TH_DIST_FOREGROUND`` used in the distances 
-           to create the foreground mask.
+    ths : float, optional
+        Thresholds to be used on each channel. ``TH_BINARY_MASK`` used in the semantic mask to create watershed seeds;
+        ``TH_CONTOUR`` used in the contours to create watershed seeds; ``TH_FOREGROUND`` used in the semantic mask to create the 
+        foreground mask; ``TH_DISTANCE`` used in the distances to create watershed seeds; and ``TH_DIST_FOREGROUND`` used in the distances 
+        to create the foreground mask.
 
-       remove_before : bool, optional
-           To remove objects before watershed. 
+    remove_before : bool, optional
+        To remove objects before watershed. 
 
-       thres_small_before : int, optional
-           Theshold to remove small objects created by the watershed.
+    thres_small_before : int, optional
+        Theshold to remove small objects created by the watershed.
 
-       remove_after : bool, optional
-           To remove objects after watershed. 
+    remove_after : bool, optional
+        To remove objects after watershed. 
 
-       thres_small_after : int, optional
-           Theshold to remove small objects created by the watershed.
-           
-       seed_morph_sequence : List of str, optional
-           List of strings to determine the morphological filters to apply to instance seeds. They will be done in that order.
-           E.g. ``['dilate','erode']``.
+    thres_small_after : int, optional
+        Theshold to remove small objects created by the watershed.
         
-       seed_morph_radius: List of ints, optional
-           List of ints to determine the radius of the erosion or dilation for instance seeds.
-           
-       erode_and_dilate_foreground : bool, optional
-           To erode and dilate the foreground mask before using marker controlled watershed. The idea is to 
-           remove the small holes that may be produced so the instances grow without them.
+    seed_morph_sequence : List of str, optional
+        List of strings to determine the morphological filters to apply to instance seeds. They will be done in that order.
+        E.g. ``['dilate','erode']``.
+    
+    seed_morph_radius: List of ints, optional
+        List of ints to determine the radius of the erosion or dilation for instance seeds.
         
-       fore_erosion_radius: int, optional
-           Radius to erode the foreground mask. 
+    erode_and_dilate_foreground : bool, optional
+        To erode and dilate the foreground mask before using marker controlled watershed. The idea is to 
+        remove the small holes that may be produced so the instances grow without them.
+    
+    fore_erosion_radius: int, optional
+        Radius to erode the foreground mask. 
 
-       fore_dilation_radius: int, optional
-           Radius to dilate the foreground mask. 
+    fore_dilation_radius: int, optional
+        Radius to dilate the foreground mask. 
+    
+    rmv_close_points : bool, optional
+        To remove close points to each other. Used in 'BP' channel configuration. 
 
-       save_dir :  str, optional
-           Directory to save watershed output into.
+    remove_close_points_radius : float, optional
+        Radius from each point to decide what points to keep. Used in 'BP' channel configuration. 
+        E.g. ``10.0`.
+
+    resolution : ndarray of floats
+        Resolution of the data, in `(z,y,x)` to calibrate coordinates. E.g. ``[30,8,8]``.    
+
+    save_dir :  str, optional
+        Directory to save watershed output into.
     """
 
     assert channels in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']
@@ -298,17 +309,23 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         print("Creating the central points . . .")
         seed_map = label(seed_map, connectivity=1)
         instances = np.unique(seed_map)[1:]
-        seed_coordinates = center_of_mass(seed_map, label(seed_map, connectivity=1), instances)
+        seed_coordinates = center_of_mass(seed_map, label(seed_map), instances)
         seed_coordinates = np.round(seed_coordinates).astype(int)
+
+        if rmv_close_points:
+            seed_coordinates = remove_close_points(seed_coordinates, remove_close_points_radius, resolution,
+                ndim=seed_map.ndim)
+
         seed_map = np.zeros(data.shape[:-1], dtype=np.uint8) 
         for sd in tqdm(seed_coordinates, total=len(seed_coordinates)):
             z,y,x = sd
             seed_map[z,y,x] = 1
 
+        semantic = -distance_transform_edt(1 - seed_map)
+
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
 
-        semantic = -distance_transform_edt(1 - seed_map )
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BD"]:
         semantic = data[...,0]
@@ -375,6 +392,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
 
     if save_dir is not None:
         save_tif(np.expand_dims(np.expand_dims(seed_map,-1),0).astype(segm.dtype), save_dir, ["seed_map.tif"], verbose=False)
+        save_tif(np.expand_dims(np.expand_dims(semantic,-1),0).astype(np.float32), save_dir, ["semantic.tif"], verbose=False)
         if channels in ["BC", "BCM", "BCD", "BP"]:
             save_tif(np.expand_dims(np.expand_dims(foreground,-1),0).astype(np.uint8), save_dir, ["foreground.tif"], verbose=False)
     return segm

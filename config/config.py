@@ -635,11 +635,12 @@ class Config:
         # instances.
         _C.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE = -1
 
-        ### Detection
-        # The minimal allowed distance between points
+        ### Detection 
+        # To remove close points to each other. This can also be set when using 'BP' channels for instance segmentation.
         _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = False
         # Distance between points to be considered the same. Only applies when TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = True
-        _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = [10.0]
+        # This can also be set when using 'BP' channels for instance segmentation.
+        _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = [-1.0]
         # Whether to apply a watershed to grow the points detected 
         _C.TEST.POST_PROCESSING.DET_WATERSHED = False
         # Structure per each class to dilate the initial seeds before watershed

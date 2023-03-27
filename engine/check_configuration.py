@@ -413,3 +413,5 @@ def check_configuration(cfg):
         if len(cfg.DATA.TEST.RESOLUTION) != dim_count:
             raise ValueError("'DATA.TEST.RESOLUTION' must match in length to {}, which is the number of "
                              "dimensions".format(dim_count))
+        if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0] == -1:
+            raise ValueError("'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' need to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True")   
