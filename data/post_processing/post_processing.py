@@ -1867,7 +1867,52 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
     print("Removed {} instances by circularity, {} instances left".format(labels_removed, total_labels-labels_removed))
 
     return img, label_list_coords, npixels, areas, circularities, diameters, comment
+    
+def find_neighbors(img, label, neighbors=1):
+    """
+    Find neighbors of a label in a given image. 
+    
+    Parameters
+    ----------
+    img : 2D/3D Numpy array
+        Image with instances. E.g. ``(1450, 2000)`` for 2D and ``(397, 1450, 2000)`` for 3D.
 
+    label : int
+        Label to find the neighbors of. 
+
+    neighbors : int, optional
+        Number of neighbors in each axis to explore.
+
+    Returns
+    ------- 
+    neighbors  : list of ints
+        Neighbors instance ids of the given label. 
+    """ 
+
+    neighbors = []
+    label_points = np.where((img==label)>0) 
+    if img.ndim == 3:
+        for p in range(len(label_points[0])):
+            coord = [label_points[0][p],label_points[1][p],label_points[2][p]]
+            for i in range(-neighbors,neighbors+1):
+                for j in range(-neighbors,neighbors+1):
+                    for k in range(-neighbors,neighbors+1):
+                        z = min(max(coord[0]+i,0),img.shape[0]-1)
+                        y = min(max(coord[1]+j,0),img.shape[1]-1)
+                        x = min(max(coord[2]+k,0),img.shape[2]-1)
+                        if img[z,y,x] not in neighbors and img[z,y,x] != label and img[z,y,x] != 0:
+                            neighbors.append(img[z,y,x]) 
+    else:
+        for p in range(len(label_points[0])):
+            coord = [label_points[0][p],label_points[1][p]]
+            for i in range(-neighbors,neighbors+1):
+                for j in range(-neighbors,neighbors+1):
+                        y = min(max(coord[0]+i,0),img.shape[0]-1)
+                        x = min(max(coord[1]+j,0),img.shape[1]-1)
+                        if img[y,x] not in neighbors and img[y,x] != label and img[y,x] != 0:
+                            neighbors.append(img[y,x])                            
+    return neighbors
+    
 def repare_large_blobs(img, size_th=10000):
     """
     Try to repare large instances by merging neighbors ones with it and by removing possible central holes.  
@@ -1889,32 +1934,6 @@ def repare_large_blobs(img, size_th=10000):
     print("Reparing large instances (more than {} pixels) . . .".format(size_th))
     image3d = True if img.ndim == 3 else False
 
-    # Finds touching instances for a given instance
-    def find_neigbors(img, label, neighbors=1):
-        neigbors = []
-        label_points = np.where((img==label)>0) 
-        if img.ndim == 3:
-            for p in range(len(label_points[0])):
-                coord = [label_points[0][p],label_points[1][p],label_points[2][p]]
-                for i in range(-neighbors,neighbors+1):
-                    for j in range(-neighbors,neighbors+1):
-                        for k in range(-neighbors,neighbors+1):
-                            z = min(max(coord[0]+i,0),img.shape[0]-1)
-                            y = min(max(coord[1]+j,0),img.shape[1]-1)
-                            x = min(max(coord[2]+k,0),img.shape[2]-1)
-                            if img[z,y,x] not in neigbors and img[z,y,x] != label and img[z,y,x] != 0:
-                                neigbors.append(img[z,y,x]) 
-        else:
-            for p in range(len(label_points[0])):
-                coord = [label_points[0][p],label_points[1][p]]
-                for i in range(-neighbors,neighbors+1):
-                    for j in range(-neighbors,neighbors+1):
-                            y = min(max(coord[0]+i,0),img.shape[0]-1)
-                            x = min(max(coord[1]+j,0),img.shape[1]-1)
-                            if img[y,x] not in neigbors and img[y,x] != label and img[y,x] != 0:
-                                neigbors.append(img[y,x])                            
-        return neigbors
-
     props = regionprops_table(img, properties=('label', 'area', 'bbox'))
     for k, l in tqdm(enumerate(props['label']), total=len(props['label']), leave=False):
         if props['area'][k] >= size_th:
@@ -1927,11 +1946,11 @@ def repare_large_blobs(img, size_th=10000):
 
             inst_patches, inst_pixels = np.unique(patch, return_counts=True)
             if len(inst_patches) > 2:
-                neigbors = find_neigbors(patch, l)
+                neighbors = find_neighbors(patch, l)
 
                 # Merge neighbors with the big label
-                for i in range(len(neigbors)):
-                    ind = np.where(props['label'] == neigbors[i])[0] 
+                for i in range(len(neighbors)):
+                    ind = np.where(props['label'] == neighbors[i])[0] 
 
                     # Only merge labels if the small neighbor instance is fully contained in the large one
                     contained_in_large_blob = True
@@ -1941,7 +1960,7 @@ def repare_large_blobs(img, size_th=10000):
                         neig_sx, neig_fx= props['bbox-2'][ind],props['bbox-5'][ind]
 
                         if neig_sz < sz or neig_fz > fz or neig_sy < sy or neig_fy > fy or neig_sx < sx or neig_fx > fx: 
-                            neigbor_ind_in_patch = list(inst_patches).index(neigbors[i])
+                            neigbor_ind_in_patch = list(inst_patches).index(neighbors[i])
                             pixels_in_patch = inst_pixels[neigbor_ind_in_patch]
                             # pixels outside the patch of that neighbor are greater than 30% means that probably it will 
                             # represent another blob so do not merge 
@@ -1954,7 +1973,7 @@ def repare_large_blobs(img, size_th=10000):
                             contained_in_large_blob = False
 
                     if contained_in_large_blob:
-                        img[img==neigbors[i]] = l
+                        img[img==neighbors[i]] = l
                     
             # Fills holes 
             if image3d:
