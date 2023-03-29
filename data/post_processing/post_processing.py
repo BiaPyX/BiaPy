@@ -7,8 +7,8 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
-import numpy_indexed as npi
 import fill_voids
+import edt
 from tqdm import tqdm
 from scipy import ndimage as ndi
 from scipy.signal import find_peaks
@@ -300,7 +300,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
             erode_seed_and_foreground()
 
         # semantic = data[...,0]
-        semantic = distance_transform_edt(foreground)
+        semantic = edt.edt(foreground, anisotropy=resolution, black_border=False, order='C')
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BP"]:
         seed_map = (data[...,1] > ths['TH_POINTS'])
@@ -321,7 +321,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
             z,y,x = sd
             seed_map[z,y,x] = 1
 
-        semantic = -distance_transform_edt(1 - seed_map)
+        semantic = -edt.edt(1 - seed_map, anisotropy=resolution, black_border=False, order='C')
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
