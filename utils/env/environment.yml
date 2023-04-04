@@ -247,6 +247,7 @@ dependencies:
   - zstd=1.4.9=haebb681_0
   - pip:
     - csbdeep==0.6.3
+    - edt==2.3.0
     - fastremap==1.13.3
     - fill-voids==2.0.3
     - tensorflow-addons==0.15.0
