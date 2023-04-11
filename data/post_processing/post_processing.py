@@ -1889,7 +1889,7 @@ def find_neighbors(img, label, neighbors=1):
         Neighbors instance ids of the given label. 
     """ 
 
-    neighbors = []
+    list_of_neighbors = []
     label_points = np.where((img==label)>0) 
     if img.ndim == 3:
         for p in range(len(label_points[0])):
@@ -1900,8 +1900,8 @@ def find_neighbors(img, label, neighbors=1):
                         z = min(max(coord[0]+i,0),img.shape[0]-1)
                         y = min(max(coord[1]+j,0),img.shape[1]-1)
                         x = min(max(coord[2]+k,0),img.shape[2]-1)
-                        if img[z,y,x] not in neighbors and img[z,y,x] != label and img[z,y,x] != 0:
-                            neighbors.append(img[z,y,x]) 
+                        if img[z,y,x] not in list_of_neighbors and img[z,y,x] != label and img[z,y,x] != 0:
+                            list_of_neighbors.append(img[z,y,x]) 
     else:
         for p in range(len(label_points[0])):
             coord = [label_points[0][p],label_points[1][p]]
@@ -1909,9 +1909,9 @@ def find_neighbors(img, label, neighbors=1):
                 for j in range(-neighbors,neighbors+1):
                         y = min(max(coord[0]+i,0),img.shape[0]-1)
                         x = min(max(coord[1]+j,0),img.shape[1]-1)
-                        if img[y,x] not in neighbors and img[y,x] != label and img[y,x] != 0:
-                            neighbors.append(img[y,x])                            
-    return neighbors
+                        if img[y,x] not in list_of_neighbors and img[y,x] != label and img[y,x] != 0:
+                            list_of_neighbors.append(img[y,x])                            
+    return list_of_neighbors
     
 def repare_large_blobs(img, size_th=10000):
     """
