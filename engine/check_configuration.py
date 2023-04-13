@@ -48,7 +48,7 @@ def check_configuration(cfg):
     # Adjust Z_DOWN values to feature maps
     if len(cfg.MODEL.FEATURE_MAPS)-1 != len(cfg.MODEL.Z_DOWN):
         if all(x == 0 for x in cfg.MODEL.Z_DOWN):
-            opts.extend(['MODEL.Z_DOWN', (2.,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
+            opts.extend(['MODEL.Z_DOWN', (2,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
         elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
             raise ValueError("'MODEL.Z_DOWN' need to be 1 or 2")
         else:
