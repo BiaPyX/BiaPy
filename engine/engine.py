@@ -2,6 +2,7 @@ import os
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
+from sklearn.model_selection import StratifiedKFold
 
 from utils.util import check_masks, create_plots, load_data_from_dir, load_3d_images_from_dir
 from data.data_2D_manipulation import load_and_prepare_2D_train_data, load_data_classification
@@ -25,6 +26,7 @@ class Engine(object):
         self.original_test_path = None
         self.original_test_mask_path = None
         self.test_mask_filenames = None
+        self.cross_val_samples_ids = None
         self.post_processing = {}
         self.post_processing['per_image'] = False
         self.post_processing['all_images'] = False
@@ -78,23 +80,21 @@ class Engine(object):
                 if cfg.DATA.TRAIN.IN_MEMORY:
                     mask_path = cfg.DATA.TRAIN.MASK_PATH if cfg.PROBLEM.TYPE != 'DENOISING' else None
                     val_split = cfg.DATA.VAL.SPLIT_TRAIN if cfg.DATA.VAL.FROM_TRAIN else 0.
-                    if cfg.PROBLEM.NDIM == '2D':
-                        objs = load_and_prepare_2D_train_data(cfg.DATA.TRAIN.PATH, mask_path,
-                            val_split=val_split, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
-                            random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
-                            y_upscaling=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, ov=cfg.DATA.TRAIN.OVERLAP, 
-                            padding=cfg.DATA.TRAIN.PADDING, minimum_foreground_perc=cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER,
-                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
-                    else:
-                        objs = load_and_prepare_3D_data(cfg.DATA.TRAIN.PATH, mask_path,
-                            val_split=val_split, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM,
-                            random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE,
-                            y_upscaling=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, ov=cfg.DATA.TRAIN.OVERLAP, 
-                            padding=cfg.DATA.TRAIN.PADDING, minimum_foreground_perc=cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER,
-                            reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                    f_name = load_and_prepare_2D_train_data if cfg.PROBLEM.NDIM == '2D' else load_and_prepare_3D_data
+
+                    objs = f_name(cfg.DATA.TRAIN.PATH, mask_path, cross_val=cfg.DATA.VAL.CROSS_VAL, 
+                        cross_val_nsplits=cfg.DATA.VAL.CROSS_VAL_NFOLD, cross_val_fold=cfg.DATA.VAL.CROSS_VAL_FOLD, 
+                        val_split=val_split, seed=cfg.SYSTEM.SEED, shuffle_val=cfg.DATA.VAL.RANDOM, 
+                        random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=cfg.DATA.PATCH_SIZE, 
+                        y_upscaling=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, ov=cfg.DATA.TRAIN.OVERLAP, 
+                        padding=cfg.DATA.TRAIN.PADDING, minimum_foreground_perc=cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER,
+                        reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
 
                     if cfg.DATA.VAL.FROM_TRAIN:
-                        X_train, Y_train, X_val, Y_val, self.train_filenames = objs
+                        if cfg.DATA.VAL.CROSS_VAL:
+                            X_train, Y_train, X_val, Y_val, self.train_filenames, self.cross_val_samples_ids  = objs
+                        else:
+                            X_train, Y_train, X_val, Y_val, self.train_filenames = objs
                     else:
                         X_train, Y_train, self.train_filenames = objs
                     del objs
@@ -140,22 +140,47 @@ class Engine(object):
         ############
         if cfg.TEST.ENABLE:
             if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']:
-                if cfg.DATA.TEST.IN_MEMORY:
-                    print("2) Loading test images . . .")
-                    f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
-                    X_test, _, _ = f_name(cfg.DATA.TEST.PATH)
-                    if cfg.DATA.TEST.LOAD_GT or cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
-                        print("3) Loading test masks . . .")
-                        Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH, check_channel=False)
+                if not cfg.DATA.TEST.USE_VAL_AS_TEST:
+                    if cfg.DATA.TEST.IN_MEMORY:
+                        print("2) Loading test images . . .")
+                        f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
+                        X_test, _, _ = f_name(cfg.DATA.TEST.PATH)
+                        if cfg.DATA.TEST.LOAD_GT or cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+                            print("3) Loading test masks . . .")
+                            Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH, check_channel=False)
+                        else:
+                            Y_test = None
                     else:
-                        Y_test = None
-                else:
-                    X_test, Y_test = None, None
+                        X_test, Y_test = None, None
 
-                if self.original_test_path is None:
-                    self.test_filenames = sorted(next(os.walk(cfg.DATA.TEST.PATH))[2])
+                    if self.original_test_path is None:
+                        self.test_filenames = sorted(next(os.walk(cfg.DATA.TEST.PATH))[2])
+                    else:
+                        self.test_filenames = sorted(next(os.walk(self.original_test_path))[2])
                 else:
-                    self.test_filenames = sorted(next(os.walk(self.original_test_path))[2])
+                    # The test is the validation, and as it is only available when validation is obtained from train and when 
+                    # cross validation is enabled, the test set files reside in the train folder
+                    self.test_filenames = sorted(next(os.walk(cfg.DATA.TRAIN.PATH))[2])
+                    X_test, Y_test = None, None
+                    if self.cross_val_samples_ids is None:                      
+                        # Split the test as it was the validation when train is not enabled 
+                        skf = StratifiedKFold(n_splits=cfg.DATA.VAL.CROSS_VAL_NFOLD, shuffle=cfg.DATA.VAL.RANDOM,
+                            random_state=cfg.SYSTEM.SEED)
+                        fold = 1
+                        test_index = None
+                        for _, te_index in skf.split(np.zeros(len(self.test_filenames)), np.zeros(len(self.test_filenames))):
+                            if cfg.DATA.VAL.CROSS_VAL_FOLD == fold:
+                                self.cross_val_samples_ids = te_index.copy()
+                                break
+                            fold += 1
+                        if len(self.cross_val_samples_ids) > 5:
+                            print("Fold number {} used for test data. Printing the first 5 ids: {}".format(fold, self.cross_val_samples_ids[:5]))
+                        else:
+                            print("Fold number {}. Indexes used in cross validation: {}".format(fold, self.cross_val_samples_ids))
+                    
+                    self.test_filenames = [x for i, x in enumerate(self.test_filenames) if i in self.cross_val_samples_ids]
+                    self.original_test_path = self.orig_train_path
+                    self.original_test_mask_path = self.orig_train_mask_path
             elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
                 f_name = load_data_classification if cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
                 X_test, Y_test, self.test_filenames, self.class_names = f_name(cfg, test=True)
@@ -172,7 +197,7 @@ class Engine(object):
                 check_generator_consistence(
                     self.val_generator, cfg.PATHS.GEN_CHECKS+"_val", cfg.PATHS.GEN_MASK_CHECKS+"_val")
         if cfg.TEST.ENABLE:
-            self.test_generator = create_test_augmentor(cfg, X_test, Y_test)
+            self.test_generator = create_test_augmentor(cfg, X_test, Y_test, self.cross_val_samples_ids)
 
         print("#################\n"
               "#  BUILD MODEL  #\n"
@@ -282,7 +307,8 @@ class Engine(object):
                     _Y = np.expand_dims(Y[j], 0) if self.cfg.DATA.TEST.LOAD_GT else None
 
                 # Process each image separately
-                workflow.process_sample(_X, _Y, self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], f_numbers=list(range((i*l_X)+j,(i*l_X)+j+1)), 
+                numbers = list(range((i*l_X)+j,(i*l_X)+j+1)) if self.cross_val_samples_ids is None else self.cross_val_samples_ids[(i*l_X)+j:(i*l_X)+j+1]
+                workflow.process_sample(_X, _Y, self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], f_numbers=numbers, 
                     norm=(X_norm, Y_norm))
 
                 image_counter += 1

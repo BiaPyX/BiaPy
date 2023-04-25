@@ -240,8 +240,7 @@ class Config:
         _C.DATA.VAL = CN()
         # Whether to create validation data from training set or read it from a directory
         _C.DATA.VAL.FROM_TRAIN = True
-        # Use a cross validation strategy instead of just split the train data in two. Currently only used if
-        # _C.PROBLEM.TYPE == 'CLASSIFICATION'
+        # Use a cross validation strategy instead of just split the train data in two
         _C.DATA.VAL.CROSS_VAL = False
         # Number of folds. Used when _C.DATA.VAL.CROSS_VAL == True
         _C.DATA.VAL.CROSS_VAL_NFOLD = 5

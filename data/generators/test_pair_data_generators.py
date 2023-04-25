@@ -10,43 +10,48 @@ from data.pre_processing import normalize, norm_range01
 
 
 class test_pair_data_generator(tf.keras.utils.Sequence):
-    """Image data generator without data augmentation. Used only for test data.
+    """
+    Image data generator without data augmentation. Used only for test data.
 
-       Parameters
-       ----------
-       X : Numpy 5D/4D array, optional
-           Data. E.g. ``(num_of_images, z, y, x, channels)`` for ``3D`` or ``(num_of_images, y, x, channels)`` for ``2D``.
+    Parameters
+    ----------
+    X : Numpy 5D/4D array, optional
+        Data. E.g. ``(num_of_images, z, y, x, channels)`` for ``3D`` or ``(num_of_images, y, x, channels)`` for ``2D``.
 
-       d_path : Str, optional
-           Path to load the data from.
+    d_path : Str, optional
+        Path to load the data from.
 
-       provide_Y: bool, optional
-           Whether to return ground truth, using ``Y`` or loading from ``dm_path``.
+    provide_Y: bool, optional
+        Whether to return ground truth, using ``Y`` or loading from ``dm_path``.
 
-       Y : Numpy 5D/4D array, optional
-           Data mask. E.g. ``(num_of_images, z, y, x, channels)`` for ``3D`` or ``(num_of_images, y, x, channels)`` for ``2D``.
+    Y : Numpy 5D/4D array, optional
+        Data mask. E.g. ``(num_of_images, z, y, x, channels)`` for ``3D`` or ``(num_of_images, y, x, channels)`` for ``2D``.
 
-       dm_path : Str, optional
-           Path to load the mask data from.
+    dm_path : Str, optional
+        Path to load the mask data from.
 
-       dims: str, optional
-           Dimension of the data. Possible options: ``2D`` or ``3D``.
+    dims: str, optional
+        Dimension of the data. Possible options: ``2D`` or ``3D``.
 
-       seed : int, optional
-           Seed for random functions.
+    seed : int, optional
+        Seed for random functions.
 
-       instance_problem : bool, optional
-           To not divide the labels if being in an instance segmenation problem.
-           
-       norm_custom_mean : float, optional
-           Mean of the data used to normalize.
+    instance_problem : bool, optional
+        To not divide the labels if being in an instance segmenation problem.
+        
+    norm_custom_mean : float, optional
+        Mean of the data used to normalize.
 
-       norm_custom_std : float, optional
-           Std of the data used to normalize.
+    norm_custom_std : float, optional
+        Std of the data used to normalize.
+
+    sample_ids :  List of ints, optional
+        When cross validation is used specific training samples are passed to the generator.
+    
     """
     def __init__(self, ndim, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, seed=42,
                  instance_problem=False, normalizeY='as_mask', norm_custom_mean=None, 
-                 norm_custom_std=None):
+                 norm_custom_std=None, sample_ids=None):
 
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
@@ -61,8 +66,12 @@ class test_pair_data_generator(tf.keras.utils.Sequence):
         self.dm_path = dm_path
         self.provide_Y = provide_Y
         self.data_path = sorted(next(os.walk(d_path))[2]) if X is None else None
+        if sample_ids is not None and self.data_path is not None:
+            self.data_path = [x for i, x in enumerate(self.data_path) if i in sample_ids]
         if provide_Y:
             self.data_mask_path = sorted(next(os.walk(dm_path))[2]) if Y is None else None
+            if sample_ids is not None and self.data_mask_path is not None:
+                self.data_mask_path = [x for i, x in enumerate(self.data_mask_path) if i in sample_ids]
         self.seed = seed
         self.ndim = ndim
         if X is None:

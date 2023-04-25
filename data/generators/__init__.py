@@ -261,25 +261,29 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
 
     return train_dataset, val_dataset
 
-def create_test_augmentor(cfg, X_test, Y_test):
-    """Create test data generator.
+def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
+    """
+    Create test data generator.
 
-       Parameters
-       ----------
-       cfg : YACS CN object
-           Configuration.
+    Parameters
+    ----------
+    cfg : YACS CN object
+        Configuration.
 
-       X_test : 4D Numpy array
-           Test data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
+    X_test : 4D Numpy array
+        Test data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
-       Y_test : 4D Numpy array
-           Test data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
-           in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``.
+    Y_test : 4D Numpy array
+        Test data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
+        in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``.
 
-       Returns
-       -------
-       test_generator : test_pair_data_generator
-           Test data generator.
+    cross_val_samples_ids : List of ints, optional
+        When cross validation is used training data samples' id are passed. 
+
+    Returns
+    -------
+    test_generator : test_pair_data_generator
+        Test data generator.
     """
     custom_mean, custom_std = None, None
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':
@@ -306,10 +310,10 @@ def create_test_augmentor(cfg, X_test, Y_test):
         provide_Y = True
     
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
-    dic = dict(ndim=ndim, X=X_test, d_path=cfg.DATA.TEST.PATH, provide_Y=provide_Y, Y=Y_test,
-        dm_path=cfg.DATA.TEST.MASK_PATH, seed=cfg.SYSTEM.SEED,
-        instance_problem=instance_problem, norm_custom_mean=custom_mean, 
-        norm_custom_std=custom_std)        
+    dic = dict(ndim=ndim, X=X_test, d_path=cfg.DATA.TEST.PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.PATH, 
+        provide_Y=provide_Y, Y=Y_test, dm_path=cfg.DATA.TEST.MASK_PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.MASK_PATH,
+        seed=cfg.SYSTEM.SEED, instance_problem=instance_problem, norm_custom_mean=custom_mean, norm_custom_std=custom_std,
+        sample_ids=cross_val_samples_ids)        
         
     if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
         gen_name = test_pair_data_generator
@@ -346,12 +350,14 @@ def check_generator_consistence(gen, data_out_dir, mask_out_dir, filenames=None)
 
     print("Check generator . . .")
     it = iter(gen)
-        
+    
+    c = 0
     for i in tqdm(range(len(gen))):
         sample = next(it)
         X_test, Y_test = sample
-
-        fil = filenames[i] if filenames is not None else ["sample_"+str(i)+".tif"]
-        save_tif(np.expand_dims(X_test,0), data_out_dir, fil, verbose=False)
-        save_tif(np.expand_dims(Y_test,0), mask_out_dir, fil, verbose=False)
-
+        
+        for k in range(len(X_test)):
+            fil = filenames[c] if filenames is not None else ["sample_"+str(c)+".tif"]
+            save_tif(np.expand_dims(X_test[k],0), data_out_dir, fil, verbose=False)
+            save_tif(np.expand_dims(Y_test[k],0), mask_out_dir, fil, verbose=False)
+            c += 1

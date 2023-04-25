@@ -75,7 +75,7 @@ class Instance_Segmentation(Base_Workflow):
         if self.cfg.TEST.MATCHING_STATS and self.cfg.DATA.TEST.LOAD_GT:
             print("Calculating matching stats . . .")
 
-            # Need to load instance labels, as Y are binary channel used for IoU calculation
+            # Need to load instance labels, as Y are binary channels used for IoU calculation
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 del Y
                 _Y = np.zeros(w_pred.shape, dtype=w_pred.dtype)
@@ -275,7 +275,7 @@ def prepare_instance_data(cfg):
     original_test_path, original_test_mask_path = None, None
 
     # Create selected channels for train data
-    if cfg.TRAIN.ENABLE and not os.path.isdir(cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR):
+    if (cfg.TRAIN.ENABLE or cfg.DATA.TEST.USE_VAL_AS_TEST) and not os.path.isdir(cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR):
         print("You select to create {} channels from given instance labels and no file is detected in {}. "
                 "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.INSTANCE_CHANNELS_DIR' "
                 "path, this process will be done just once!".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
@@ -291,7 +291,7 @@ def prepare_instance_data(cfg):
         create_instance_channels(cfg, data_type='val')
 
     # Create selected channels for test data once
-    if cfg.TEST.ENABLE and not os.path.isdir(cfg.DATA.TEST.INSTANCE_CHANNELS_DIR):
+    if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST and not os.path.isdir(cfg.DATA.TEST.INSTANCE_CHANNELS_DIR):
         print("You select to create {} channels from given instance labels and no file is detected in {}. "
                 "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.INSTANCE_CHANNELS_DIR' "
                 "path, this process will be done just once!".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,

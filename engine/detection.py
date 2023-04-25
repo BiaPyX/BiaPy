@@ -331,7 +331,7 @@ def prepare_detection_data(cfg):
     original_test_mask_path = None
 
     # Create selected channels for train data
-    if cfg.TRAIN.ENABLE:
+    if cfg.TRAIN.ENABLE or cfg.DATA.TEST.USE_VAL_AS_TEST:
         create_mask = False
         if not os.path.isdir(cfg.DATA.TRAIN.DETECTION_MASK_DIR):
             print("You select to create detection masks from given .csv files but no file is detected in {}. "
@@ -365,7 +365,7 @@ def prepare_detection_data(cfg):
             create_detection_masks(cfg, data_type='val')
 
     # Create selected channels for test data once
-    if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT:
+    if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT and not cfg.DATA.TEST.USE_VAL_AS_TEST:
         create_mask = False
         if not os.path.isdir(cfg.DATA.TEST.DETECTION_MASK_DIR):
             print("You select to create detection masks from given .csv files but no file is detected in {}. "

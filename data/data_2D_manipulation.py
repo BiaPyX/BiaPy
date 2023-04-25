@@ -10,139 +10,139 @@ from PIL import Image
 from utils.util import load_data_from_dir
 from data.pre_processing import normalize
 
-def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, seed=0, shuffle_val=True, e_d_data=[],
-    e_d_mask=[], e_d_data_dim=[], num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, y_upscaling=1,
-    ov=(0,0), padding=(0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False):
-    """Load train and validation images from the given paths to create 2D data.
+def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1,
+    val_split=0.1, seed=0, shuffle_val=True, num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, 
+    y_upscaling=1, ov=(0,0), padding=(0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False):
+    """
+    Load train and validation images from the given paths to create 2D data.
 
-       Parameters
-       ----------
-       train_path : str
-           Path to the training data.
+    Parameters
+    ----------
+    train_path : str
+        Path to the training data.
 
-       train_mask_path : str
-           Path to the training data masks.
+    train_mask_path : str
+        Path to the training data masks.
 
-       val_split : float, optional
-            % of the train data used as validation (value between ``0`` and ``1``).
+    cross_val : bool, optional
+        Whether to use cross validation or not. 
 
-       seed : int, optional
-            Seed value.
+    cross_val_nsplits : int, optional
+        Number of folds for the cross validation. 
+    
+    cross_val_fold : int, optional
+        Number of the fold to be used as validation. 
 
-       shuffle_val : bool, optional
-            Take random training examples to create validation data.
+    val_split : float, optional
+        % of the train data used as validation (value between ``0`` and ``1``).
 
-       e_d_data : list of str, optional
-           List of paths where the extra data of other datasets are stored. If ``make_crops`` is not enabled, these
-           extra datasets must have the same image shape as the main dataset since they are going to be stacked in a
-           unique array.
+    seed : int, optional
+        Seed value.
 
-       e_d_mask : list of str, optional
-           List of paths where the extra data mask of other datasets are stored. Same constraints as ``e_d_data``.
+    shuffle_val : bool, optional
+        Take random training examples to create validation data.
 
-       e_d_data_dim : list of 3D int tuple, optional
-           List of shapes of the extra datasets provided. Same constraints as ``e_d_data``.
+    num_crops_per_dataset : int, optional
+        Number of crops per extra dataset to take into account. Useful to ensure that all the datasets have the same
+        weight during network trainning.
 
-       num_crops_per_dataset : int, optional
-           Number of crops per extra dataset to take into account. Useful to ensure that all the datasets have the same
-           weight during network trainning.
+    random_crops_in_DA : bool, optional
+        To advice the method that not preparation of the data must be done, as random subvolumes will be created on
+        DA, and the whole volume will be used for that.
 
-       random_crops_in_DA : bool, optional
-           To advice the method that not preparation of the data must be done, as random subvolumes will be created on
-           DA, and the whole volume will be used for that.
+    crop_shape : 3D int tuple, optional
+        Shape of the crops. E.g. ``(x, y, channels)``.
 
-       crop_shape : 3D int tuple, optional
-           Shape of the crops. E.g. ``(x, y, channels)``.
+    y_upscaling : int, optional
+        Upscaling to be done when loading Y data. User for super-resolution workflow.
 
-       y_upscaling : int, optional
-           Upscaling to be done when loading Y data. User for super-resolution workflow.
+    ov : 2 floats tuple, optional
+        Amount of minimum overlap on x and y dimensions. The values must be on range ``[0, 1)``, that is, ``0%`` or
+        ``99%`` of overlap. E.g. ``(x, y)``.
 
-       ov : 2 floats tuple, optional
-           Amount of minimum overlap on x and y dimensions. The values must be on range ``[0, 1)``, that is, ``0%`` or
-           ``99%`` of overlap. E.g. ``(x, y)``.
+    padding : tuple of ints, optional
+        Size of padding to be added on each axis ``(x, y)``. E.g. ``(24, 24)``
 
-       padding : tuple of ints, optional
-           Size of padding to be added on each axis ``(x, y)``. E.g. ``(24, 24)``
+    minimum_foreground_perc : float, optional
+        Minimum percetnage of foreground that a sample need to have no not be discarded. 
 
-       minimum_foreground_perc : float, optional
-           Minimum percetnage of foreground that a sample need to have no not be discarded. 
+    reflect_to_complete_shape : bool, optional
+        Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
+        'reflect'.
+        
+    Returns
+    -------
+    X_train : 4D Numpy array
+        Train images. E.g. ``(num_of_images, y, x, channels)``.
 
-       reflect_to_complete_shape : bool, optional
-           Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
-           'reflect'.
-           
-       Returns
-       -------
-       X_train : 4D Numpy array
-           Train images. E.g. ``(num_of_images, y, x, channels)``.
+    Y_train : 4D Numpy array
+        Train images' mask. E.g. ``(num_of_images, y, x, channels)``.
 
-       Y_train : 4D Numpy array
-           Train images' mask. E.g. ``(num_of_images, y, x, channels)``.
+    X_val : 4D Numpy array, optional
+        Validation images (``val_split > 0``). E.g. ``(num_of_images, y, x, channels)``.
 
-       X_val : 4D Numpy array, optional
-           Validation images (``val_split > 0``). E.g. ``(num_of_images, y, x, channels)``.
+    Y_val : 4D Numpy array, optional
+        Validation images' mask (``val_split > 0``). E.g. ``(num_of_images, y, x, channels)``.
 
-       Y_val : 4D Numpy array, optional
-           Validation images' mask (``val_split > 0``). E.g. ``(num_of_images, y, x, channels)``.
+    filenames : List of str
+        Loaded train filenames.
 
-       filenames : List of str
-           Loaded train filenames.
+    Examples
+    --------
+    ::
 
-       Examples
-       --------
-       ::
+        # EXAMPLE 1
+        # Case where we need to load the data (creating a validation split)
+        train_path = "data/train/x"
+        train_mask_path = "data/train/y"
 
-           # EXAMPLE 1
-           # Case where we need to load the data (creating a validation split)
-           train_path = "data/train/x"
-           train_mask_path = "data/train/y"
+        # Original image shape is (1024, 768, 165), so each image shape should be this:
+        img_train_shape = (1024, 768, 1)
 
-           # Original image shape is (1024, 768, 165), so each image shape should be this:
-           img_train_shape = (1024, 768, 1)
-
-           X_train, Y_train, X_val,
-           Y_val, crops_made = load_and_prepare_2D_data(train_path, train_mask_path, img_train_shape, val_split=0.1,
-               shuffle_val=True, make_crops=False)
-
-
-           # The function will print the shapes of the generated arrays. In this example:
-           #     *** Loaded train data shape is: (148, 768, 1024, 1)
-           #     *** Loaded validation data shape is: (17, 768, 1024, 1)
-           #
-           # Notice height and width swap because of Numpy ndarray terminology
+        X_train, Y_train, X_val,
+        Y_val, crops_made = load_and_prepare_2D_data(train_path, train_mask_path, img_train_shape, val_split=0.1,
+            shuffle_val=True, make_crops=False)
 
 
-           # EXAMPLE 2
-           # Same as the first example but creating patches of (256x256)
-           X_train, Y_train, X_val,
-           Y_val, crops_made = load_and_prepare_2D_data(train_path, train_mask_path, img_train_shape, val_split=0.1,
-               shuffle_val=True, make_crops=True, crop_shape=(256, 256, 1))
-
-           # The function will print the shapes of the generated arrays. In this example:
-           #    *** Loaded train data shape is: (1776, 256, 256, 1)
-           #    *** Loaded validation data shape is: (204, 256, 256, 1)
+        # The function will print the shapes of the generated arrays. In this example:
+        #     *** Loaded train data shape is: (148, 768, 1024, 1)
+        #     *** Loaded validation data shape is: (17, 768, 1024, 1)
+        #
+        # Notice height and width swap because of Numpy ndarray terminology
 
 
-           # EXAMPLE 3
-           # Same as the first example but defining extra datasets to be loaded and stacked together
-           # with the main dataset. Extra variables to be defined:
-           extra_datasets_data_list.append('/data2/train/x')
-           extra_datasets_mask_list.append('/data2/train/y')
-           extra_datasets_data_dim_list.append((877, 967, 1))
+        # EXAMPLE 2
+        # Same as the first example but creating patches of (256x256)
+        X_train, Y_train, X_val,
+        Y_val, crops_made = load_and_prepare_2D_data(train_path, train_mask_path, img_train_shape, val_split=0.1,
+            shuffle_val=True, make_crops=True, crop_shape=(256, 256, 1))
 
-           X_train, Y_train, X_val,
-           Y_val, crops_made = load_and_prepare_2D_data(train_path, train_mask_path, img_train_shape, val_split=0.1,
-               shuffle_val=True, make_crops=True, crop_shape=(256, 256, 1), e_d_data=extra_datasets_data_list, 
-               e_d_mask=extra_datasets_mask_list, e_d_data_dim=extra_datasets_data_dim_list)
+        # The function will print the shapes of the generated arrays. In this example:
+        #    *** Loaded train data shape is: (1776, 256, 256, 1)
+        #    *** Loaded validation data shape is: (204, 256, 256, 1)
+
     """
 
     print("### LOAD ###")
 
     # Disable crops when random_crops_in_DA is selected
-    crop = False if random_crops_in_DA else True
+    # Disable crops when random_crops_in_DA is selected
+    if random_crops_in_DA:
+        crop = False  
+    else:
+        if cross_val:
+            crop = False
+            # Delay the crop to be made after cross validation
+            delay_crop = True  
+        else:
+            crop = True
+            delay_crop = False  
 
     # Check validation
-    create_val = True if val_split > 0 else False
+    if val_split > 0 or cross_val:
+        create_val = True  
+    else:
+        create_val = False
 
     print("0) Loading train images . . .")
     X_train, orig_train_shape, _, t_filenames = load_data_from_dir(train_path, crop=crop, crop_shape=crop_shape, overlap=ov,
@@ -215,53 +215,75 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
 
     # Create validation data splitting the train
     if create_val:
-        X_train, X_val, Y_train, Y_val = train_test_split(
-            X_train, Y_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
+        print("Creating validation data")
+        if not cross_val:
+            X_train, X_val, Y_train, Y_val = train_test_split(
+                X_train, Y_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
+        else:
+            skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val,
+                random_state=seed)
+            fold = 1
+            train_index, test_index = None, None
 
-    # Load the extra datasets
-    if e_d_data:
-        print("Loading extra datasets . . .")
-        for i in range(len(e_d_data)):
-            print("{} extra dataset in {} . . .".format(i, e_d_data[i]))
-            train_ids = sorted(next(os.walk(e_d_data[i]))[2])
-            train_mask_ids = sorted(next(os.walk(e_d_mask[i]))[2])
+            for t_index, te_index in skf.split(np.zeros(len(X_train)), np.zeros(len(Y_train))):
+                if cross_val_fold == fold:
+                    X_train, X_val = X_train[t_index], X_train[te_index]
+                    Y_train, Y_val = Y_train[t_index], Y_train[te_index]
+                    train_index, test_index = t_index.copy(), te_index.copy()
+                    break
+                fold+= 1
+            if len(test_index) > 5:
+                print("Fold number {}. Printing the first 5 ids: {}".format(fold, test_index[:5]))
+            else:
+                print("Fold number {}. Indexes used in cross validation: {}".format(fold, test_index))
 
-            d_dim = e_d_data_dim[i]
-            e_X_train = np.zeros((len(train_ids), d_dim[1], d_dim[0], d_dim[2]), dtype=np.float32)
-            e_Y_train = np.zeros((len(train_mask_ids), d_dim[1], d_dim[0], d_dim[2]), dtype=np.float32)
+            # Then crop after cross validation
+            if delay_crop:
+                # X_train
+                data = []
+                for img_num in range(len(X_train)):
+                    if X_train[img_num].shape != crop_shape[:3]+(X_train[img_num].shape[-1],):
+                        img = X_train[img_num]
+                        img = crop_3D_data_with_overlap(X_train[img_num][0] if isinstance(X_train, list) else X_train[img_num], 
+                            crop_shape[:3]+(X_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
+                    data.append(img)
+                X_train = np.concatenate(data)
+                del data
 
-            print("{} Loading data of the extra dataset . . .".format(i))
-            for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
-                im = imread(os.path.join(e_d_data[i], id_))
-                if len(im.shape) == 2:
-                    im = np.expand_dims(im, axis=-1)
-                # Ensure uint8
-                if im.dtype == np.uint16:
-                    if np.max(im) > 255:
-                        im = normalize(im, 0, 65535)
-                    else:
-                        im = im.astype(np.uint8)
-                e_X_train[n] = im
+                # Y_train
+                data_mask = []
+                scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
+                for img_num in range(len(Y_train)):
+                    if Y_train[img_num].shape != scrop[:3]+(Y_train[img_num].shape[-1],):
+                        img = Y_train[img_num]
+                        img = crop_3D_data_with_overlap(Y_train[img_num][0] if isinstance(Y_train, list) else Y_train[img_num],
+                            scrop[:3]+(Y_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
+                    data_mask.append(img)
+                Y_train = np.concatenate(data_mask)
+                del data_mask
+                
+                # X_val
+                data = []
+                for img_num in range(len(X_val)):
+                    if X_val[img_num].shape != crop_shape[:3]+(X_val[img_num].shape[-1],):
+                        img = X_val[img_num]
+                        img = crop_3D_data_with_overlap(X_val[img_num][0] if isinstance(X_val, list) else X_val[img_num], 
+                            crop_shape[:3]+(X_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
+                    data.append(img)
+                X_val = np.concatenate(data)
+                del data
 
-            print("{} Loading masks of the extra dataset . . .".format(i))
-            for n, id_ in tqdm(enumerate(train_mask_ids), total=len(train_mask_ids)):
-                mask = imread(os.path.join(e_d_mask[i], id_))
-                if len(mask.shape) == 2:
-                    mask = np.expand_dims(mask, axis=-1)
-                e_Y_train[n] = mask
-
-            print("{} Cropping the extra dataset . . .".format(i))
-            if crop_shape != e_X_train.shape[1:]:
-                e_X_train, e_Y_train = crop_data_with_overlap(e_X_train, crop_shape, data_mask=e_Y_train,
-                                                              overlap=ov, padding=padding, verbose=False)
-
-            if num_crops_per_dataset != 0:
-                e_X_train = e_X_train[:num_crops_per_dataset]
-                e_Y_train = e_Y_train[:num_crops_per_dataset]
-
-            # Concatenate datasets
-            X_train = np.vstack((X_train, e_X_train))
-            Y_train = np.vstack((Y_train, e_Y_train))
+                # Y_val
+                data_mask = []
+                scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
+                for img_num in range(len(Y_val)):
+                    if Y_val[img_num].shape != scrop[:3]+(Y_val[img_num].shape[-1],):
+                        img = Y_val[img_num]
+                        img = crop_3D_data_with_overlap(Y_val[img_num][0] if isinstance(Y_val, list) else Y_val[img_num],
+                            scrop[:3]+(Y_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
+                    data_mask.append(img)
+                Y_val = np.concatenate(data_mask)
+                del data_mask
 
     s = X_train.shape if not random_crops_in_DA else (len(X_train),)+X_train[0].shape[1:]
     sm = Y_train.shape if not random_crops_in_DA else (len(Y_train),)+Y_train[0].shape[1:]
@@ -274,7 +296,10 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, val_split=0.1, s
         print("*** Loaded validation mask shape is: {}".format(svm))
         print("### END LOAD ###")
 
-        return X_train, Y_train, X_val, Y_val, t_filenames
+        if not cross_val:
+            return X_train, Y_train, X_val, Y_val, t_filenames
+        else:
+            return X_train, Y_train, X_val, Y_val, t_filenames, test_index
     else:
         print("*** Loaded train data shape is: {}".format(s))
         print("### END LOAD ###")

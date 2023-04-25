@@ -215,17 +215,16 @@ def check_configuration(cfg):
 
     #### Data #### 
     if cfg.TRAIN.ENABLE:
-        if not cfg.DATA.TRAIN.IN_MEMORY:
-            if not os.path.exists(cfg.DATA.TRAIN.PATH):
-                raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
-            if not os.path.exists(cfg.DATA.TRAIN.MASK_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION"]:
-                raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.MASK_PATH))
+        if not os.path.exists(cfg.DATA.TRAIN.PATH):
+            raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
+        if not os.path.exists(cfg.DATA.TRAIN.MASK_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION"]:
+            raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.MASK_PATH))
         if not cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.IN_MEMORY:
-            if not os.path.exists(cfg.DATA.TRAIN.PATH):
-                raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
-            if not os.path.exists(cfg.DATA.TRAIN.MASK_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION"]:
-                raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.MASK_PATH))
-    if cfg.TEST.ENABLE:
+            if not os.path.exists(cfg.DATA.VAL.PATH):
+                raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
+            if not os.path.exists(cfg.DATA.VAL.MASK_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION"]:
+                raise ValueError("Validation mask data dir not found: {}".format(cfg.DATA.VAL.MASK_PATH))
+    if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST:
         if not os.path.exists(cfg.DATA.TEST.PATH):
             raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
         if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.MASK_PATH) and cfg.PROBLEM.TYPE not in ["CLASSIFICATION"]:
@@ -237,10 +236,21 @@ def check_configuration(cfg):
 
     if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.CROSS_VAL and cfg.DATA.VAL.SPLIT_TRAIN <= 0:
         raise ValueError("'DATA.VAL.SPLIT_TRAIN' needs to be > 0 when 'DATA.VAL.FROM_TRAIN' == True")
+    
     if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.TRAIN.IN_MEMORY:
-        raise ValueError("Validation can be extracted from train when 'DATA.TRAIN.IN_MEMORY' == False. Please set"
+        raise ValueError("Validation can not be extracted from train when 'DATA.TRAIN.IN_MEMORY' == False. Please set"
                          " 'DATA.VAL.FROM_TRAIN' to False and configure 'DATA.VAL.PATH'/'DATA.VAL.MASK_PATH'")
-                        
+    if cfg.DATA.VAL.CROSS_VAL: 
+        if not cfg.DATA.VAL.FROM_TRAIN:
+            raise ValueError("'DATA.VAL.CROSS_VAL' can only be used when 'DATA.VAL.FROM_TRAIN' is True")
+        if cfg.DATA.VAL.CROSS_VAL_NFOLD < cfg.DATA.VAL.CROSS_VAL_FOLD:
+            raise ValueError("'DATA.VAL.CROSS_VAL_NFOLD' can not be less than 'DATA.VAL.CROSS_VAL_FOLD'")
+        if not cfg.DATA.VAL.IN_MEMORY:
+            print("WARNING: ignoring 'DATA.VAL.IN_MEMORY' as it is always True when 'DATA.VAL.CROSS_VAL' is enabled")
+    if cfg.DATA.TEST.USE_VAL_AS_TEST and not cfg.DATA.VAL.CROSS_VAL:
+        raise ValueError("'DATA.TEST.USE_VAL_AS_TEST' can only be used when 'DATA.VAL.CROSS_VAL' is selected")
+    if cfg.DATA.TEST.USE_VAL_AS_TEST and not cfg.TRAIN.ENABLE and cfg.DATA.TEST.IN_MEMORY:
+        print("WARNING: 'DATA.TEST.IN_MEMORY' is disabled when 'DATA.TEST.USE_VAL_AS_TEST' is enabled")
     if len(cfg.DATA.TRAIN.RESOLUTION) != dim_count:
         raise ValueError("Train resolution needs to be a tuple with {} values".format(dim_count))
     if len(cfg.DATA.VAL.RESOLUTION) != dim_count:
