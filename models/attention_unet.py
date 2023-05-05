@@ -1,5 +1,5 @@
 from tensorflow.keras import Model, Input
-from tensorflow.keras.layers import (Dropout, concatenate, BatchNormalization, Activation, Add, Multiply, SpatialDropout2D)
+from tensorflow.keras.layers import (Dropout, Concatenate, BatchNormalization, Activation, Add, Multiply, SpatialDropout2D)
 
 
 def Attention_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
@@ -145,7 +145,7 @@ def Attention_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 25
         else:
             x = upsampling(size=mpool) (x)
         attn = AttentionBlock(x, l[i], feature_maps[i], batch_norm)
-        x = concatenate([x, attn])
+        x = Concatenate()([x, attn])
         x = conv(feature_maps[i], k_size, activation=None, kernel_initializer=k_init, padding='same') (x)
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)

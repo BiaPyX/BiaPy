@@ -1,5 +1,5 @@
 from tensorflow.keras import backend as K
-from tensorflow.keras.layers import (Dropout, concatenate, BatchNormalization, Activation, Reshape, Dense, multiply, Permute, 
+from tensorflow.keras.layers import (Dropout, Concatenate, BatchNormalization, Activation, Reshape, Dense, multiply, Permute, 
                                     SpatialDropout2D)
 from tensorflow.keras import Model, Input
 
@@ -134,7 +134,7 @@ def SE_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
             x = convtranspose(feature_maps[i], 2, strides=mpool, padding='same') (x)
         else:
             x = upsampling(size=mpool) (x)
-        x = concatenate([x, l[i]])
+        x = Concatenate()([x, l[i]])
         x = conv(feature_maps[i], k_size, activation=None, kernel_initializer=k_init, padding='same') (x)
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
