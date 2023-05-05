@@ -299,7 +299,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
         
-        res = (1,)+resolution if not image3d else resolution
+        res = (1,)+resolution if len(resolution) == 2 else resolution
         semantic = edt.edt(foreground, anisotropy=res, black_border=False, order='C')
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BP"]:
@@ -321,7 +321,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
             z,y,x = sd
             seed_map[z,y,x] = 1
 
-        res = (1,)+resolution if not image3d else resolution
+        res = (1,)+resolution if len(resolution) == 2 else resolution
         semantic = -edt.edt(1 - seed_map, anisotropy=res, black_border=False, order='C')
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
