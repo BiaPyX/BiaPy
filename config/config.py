@@ -75,7 +75,7 @@ class Config:
         # Size of small objects to be removed after doing watershed
         _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_BEFORE = 10
         # Whether to remove objects before watershed 
-        _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW = True
+        _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW = False
         # Size of small objects to be removed after doing watershed
         _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_AFTER = 100
         # Whether to remove objects after watershed 
