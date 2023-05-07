@@ -43,7 +43,7 @@ MODEL:
     ARCHITECTURE: resunet
     FEATURE_MAPS: [52, 68, 84]
     DROPOUT_VALUES: [0.1, 0.1, 0.1]
-    Z_DOWN: 1
+    Z_DOWN: [1,1]
     LOAD_CHECKPOINT: False
   
 TRAIN:

@@ -35,7 +35,7 @@ AUGMENTOR:
 MODEL:
     ARCHITECTURE: unet
     FEATURE_MAPS: [18, 36, 48, 64]
-    Z_DOWN: 1
+    Z_DOWN: [1,1,1]
     LOAD_CHECKPOINT: False
 
 TRAIN:
