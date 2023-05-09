@@ -391,7 +391,7 @@ class Config:
         # Size of the areas in % of the corresponding image size
         _C.AUGMENTOR.COUT_SIZE = (0.05, 0.3)
         # Value to fill the area of cutout
-        _C.AUGMENTOR.COUT_CVAL = 0
+        _C.AUGMENTOR.COUT_CVAL = 0.
         # Apply cutout to the segmentation mask
         _C.AUGMENTOR.COUT_APPLY_TO_MASK = False
         # To apply cutblur operation
@@ -437,7 +437,7 @@ class Config:
         # Range to choose a ``d`` value
         _C.AUGMENTOR.GRID_D_RANGE = (0.4, 1)
         # Rotation of the mask in GridMask. Needs to be between [0,1] where 1 is 360 degrees.
-        _C.AUGMENTOR.GRID_ROTATE = 1
+        _C.AUGMENTOR.GRID_ROTATE = 1.
         # Whether to invert the mask
         _C.AUGMENTOR.GRID_INVERT = False
         # Add Gaussian noise
