@@ -60,17 +60,22 @@ def prepare_optimizer(cfg, model):
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BCM", "BP"]:
             metrics.append(IoU_instances(first_not_binary_channel=len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)))
             metric_name.append("jaccard_index_instances")
-        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", 'BCDv2']:
-            metrics.append(IoU_instances(first_not_binary_channel=2))
-            metrics.append(MAE_instances(distance_channel=-1))
-            metric_name.append("jaccard_index_instances")
-            metric_name.append("mae_distance_channel")
-        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BDv2":
+        elif cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BD":
             metrics.append(IoU_instances(first_not_binary_channel=1))
             metrics.append(MAE_instances(distance_channel=-1))
             metric_name.append("jaccard_index_instances")
             metric_name.append("mae_distance_channel")
-        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
+        elif cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", 'BCDv2']:
+            metrics.append(IoU_instances(first_not_binary_channel=2))
+            metrics.append(MAE_instances(distance_channel=-1))
+            metric_name.append("jaccard_index_instances")
+            metric_name.append("mae_distance_channel")
+        elif cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BDv2":
+            metrics.append(IoU_instances(first_not_binary_channel=1))
+            metrics.append(MAE_instances(distance_channel=-1))
+            metric_name.append("jaccard_index_instances")
+            metric_name.append("mae_distance_channel")
+        elif cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
             metrics.append(MAE_instances(distance_channel=-1))
             metric_name.append("mae_distance_channel")
         model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS),
