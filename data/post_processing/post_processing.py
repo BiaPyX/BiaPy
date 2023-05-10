@@ -331,12 +331,12 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
     elif channels in ["BD"]:
         semantic = data[...,0]
         seed_map = (data[...,0] > ths['TH_BINARY_MASK']) * (data[...,1] < ths['TH_DISTANCE'])
-        foreground = (semantic > ths['TH_FOREGROUND']) * (data[...,1] < ths['TH_DIST_FOREGROUND'])
+        foreground = (semantic > ths['TH_FOREGROUND']) 
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BCD"]:
         semantic = data[...,0]
         seed_map = (data[...,0] > ths['TH_BINARY_MASK']) * (data[...,1] < ths['TH_CONTOUR']) * (data[...,2] < ths['TH_DISTANCE'])
-        foreground = (semantic > ths['TH_FOREGROUND']) * (data[...,2] < ths['TH_DIST_FOREGROUND'])
+        foreground = (semantic > ths['TH_FOREGROUND']) 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
         seed_map = label(seed_map, connectivity=1)

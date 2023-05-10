@@ -67,7 +67,7 @@ class Config:
         # TH_FOREGROUND acts over the channel 'B' and is used to limit how much the seeds can be grow
         _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_FOREGROUND = 0.3
         # TH_DISTANCE controls channel 'D' in the creation of the MW seeds
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_DISTANCE = 1.5
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_DISTANCE = 2.
         # TH_DIST_FOREGROUND acts over the channel 'D' and is used to limit how much the seeds can be grow
         _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_DIST_FOREGROUND = 1.2
         # TH_POINTS controls channel 'P' in the creation of the MW seeds
