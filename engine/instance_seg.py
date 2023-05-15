@@ -275,7 +275,8 @@ def prepare_instance_data(cfg):
     original_test_path, original_test_mask_path = None, None
 
     # Create selected channels for train data
-    if (cfg.TRAIN.ENABLE or cfg.DATA.TEST.USE_VAL_AS_TEST) and not os.path.isdir(cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR):
+    if (cfg.TRAIN.ENABLE or cfg.DATA.TEST.USE_VAL_AS_TEST) and (not os.path.isdir(cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR) or \
+        not os.path.isdir(cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR)):
         print("You select to create {} channels from given instance labels and no file is detected in {}. "
                 "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.INSTANCE_CHANNELS_DIR' "
                 "path, this process will be done just once!".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
@@ -283,7 +284,8 @@ def prepare_instance_data(cfg):
         create_instance_channels(cfg)
 
     # Create selected channels for val data
-    if cfg.TRAIN.ENABLE and not cfg.DATA.VAL.FROM_TRAIN and not os.path.isdir(cfg.DATA.VAL.INSTANCE_CHANNELS_DIR):
+    if cfg.TRAIN.ENABLE and not cfg.DATA.VAL.FROM_TRAIN and (not os.path.isdir(cfg.DATA.VAL.INSTANCE_CHANNELS_DIR) or \
+        not os.path.isdir(cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR)):
         print("You select to create {} channels from given instance labels and no file is detected in {}. "
                 "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.INSTANCE_CHANNELS_DIR' "
                 "path, this process will be done just once!".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
@@ -291,18 +293,20 @@ def prepare_instance_data(cfg):
         create_instance_channels(cfg, data_type='val')
 
     # Create selected channels for test data once
-    if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST and not os.path.isdir(cfg.DATA.TEST.INSTANCE_CHANNELS_DIR):
+    if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST and (not os.path.isdir(cfg.DATA.TEST.INSTANCE_CHANNELS_DIR) or \
+        (not os.path.isdir(cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR) and cfg.DATA.TEST.LOAD_GT)):
         print("You select to create {} channels from given instance labels and no file is detected in {}. "
                 "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.INSTANCE_CHANNELS_DIR' "
                 "path, this process will be done just once!".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
+                cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
         create_test_instance_channels(cfg)
 
     opts = []
-    print("DATA.TRAIN.PATH changed from {} to {}".format(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
-    print("DATA.TRAIN.MASK_PATH changed from {} to {}".format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR))
-    opts.extend(['DATA.TRAIN.PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR,
-                 'DATA.TRAIN.MASK_PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR])
+    if cfg.TRAIN.ENABLE:
+        print("DATA.TRAIN.PATH changed from {} to {}".format(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
+        print("DATA.TRAIN.MASK_PATH changed from {} to {}".format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR))
+        opts.extend(['DATA.TRAIN.PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR,
+                    'DATA.TRAIN.MASK_PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR])
     if not cfg.DATA.VAL.FROM_TRAIN:
         print("DATA.VAL.PATH changed from {} to {}".format(cfg.DATA.VAL.PATH, cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
         print("DATA.VAL.MASK_PATH changed from {} to {}".format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR))
