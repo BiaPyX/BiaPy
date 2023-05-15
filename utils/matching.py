@@ -2,7 +2,6 @@
 
 import numpy as np
 
-from numba import jit
 from tqdm import tqdm
 from scipy.optimize import linear_sum_assignment
 from collections import namedtuple
@@ -50,7 +49,6 @@ def label_overlap(x, y, check=True):
         x.shape == y.shape or _raise(ValueError("x and y must have the same shape"))
     return _label_overlap(x, y)
 
-@jit(nopython=True)
 def _label_overlap(x, y):
     x = x.ravel()
     y = y.ravel()
