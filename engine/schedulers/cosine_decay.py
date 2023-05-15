@@ -9,50 +9,64 @@ from tensorflow.keras.callbacks import Callback, LearningRateScheduler
 
 
 class WarmUpCosineDecayScheduler(keras.callbacks.Callback):
-    """Cosine decay with warmup learning rate scheduler. """
+    """
+    Cosine decay with warmup learning rate scheduler. It consist in 2 phases: 1) a warm up phase 
+    which consists of increasing the learning rate from ``warmup_learning_rate`` to ``learning_rate_base`` value 
+    by a factor during a certain number of epochs defined by ``hold_base_rate_steps`` ; 2) after this will began  
+    the decay of the learning rate value using the cosine function. Find a detailed explanation in: 
+    https://scorrea92.medium.com/cosine-learning-rate-decay-e8b50aa455b
+
+    Parameters
+    ----------
+    learning_rate_base : float
+        Base learning rate.
+
+    global_step_init : int, optional
+        Initial global step, e.g. from previous checkpoint.
+
+    warmup_learning_rate : float, optional
+        Initial learning rate to start the warm up from.
+
+    warmup_epochs : int, optional
+        Epochs to do the warming up. 
+
+    hold_base_rate_steps : int, optional 
+        Number of steps to hold base learning rate before decaying.
+
+    min_lr : float, optional
+        Lower bound on the learning rate.
+    
+    stop_epoch : int, optional
+        Epoch to stop the decay.
+
+    save_dir : str, optional
+        Path to the directory to save the plots of the scheduler learning rate.
+
+    verbose : int, optional 
+        ``0``: quiet, ``1``: update messages. 
+
+    Examples
+    --------
+    
+    The expected learning rate behaviour is depicted in the following pictures. Both charts are the same but 
+    the first one uses the nomenclature to construct this scheduler whereas in the right one BiaPy config
+    parameters are depicted :
+
+    +---------------------------------------------------------------------------+------------------------------------------------------------------------+
+    | .. figure:: ../../../img/schel/warmup_cosine_decay_schel_overview.png     | .. figure:: ../../../img/schel/warmup_cosine_decay_schel_overview2.png |
+    |   :width: 80%                                                             |   :width: 80%                                                          |
+    |   :align: center                                                          |   :align: center                                                       |
+    |                                                                           |                                                                        |
+    |   Input image                                                             |   Corresponding mask                                                   |
+    +---------------------------------------------------------------------------+------------------------------------------------------------------------+
+    """
     def __init__(self, learning_rate_base, global_step_init=0, warmup_learning_rate=0.0, warmup_epochs=0,
         hold_base_rate_steps=0, min_lr=None, stop_epoch=None, save_dir=None, verbose=0):
-        """
-        Constructor for cosine decay with warmup learning rate scheduler. It consist in 2 phases: 1) a warm up phase 
-        which consists of increasing the learning rate from ``warmup_learning_rate`` to ``learning_rate_base`` value 
-        by a factor during a certain number of epochs defined by ``hold_base_rate_steps`` ; 2) after this will began  
-        the decay of the learning rate value using the cosine function. Find a detailed explanation in: 
-        https://scorrea92.medium.com/cosine-learning-rate-decay-e8b50aa455b
-
-        Parameters
-        ----------
-        learning_rate_base : float
-            Base learning rate.
-
-        global_step_init : int, optional
-            Initial global step, e.g. from previous checkpoint.
-
-        warmup_learning_rate : float, optional
-            Initial learning rate to start the warm up from.
-
-        warmup_epochs : int, optional
-            Epochs to do the warming up. 
-
-        hold_base_rate_steps : int, optional 
-            Number of steps to hold base learning rate before decaying.
-
-        min_lr : float, optional
-            Lower bound on the learning rate.
-        
-        stop_epoch : int, optional
-            Epoch to stop the decay.
-
-        save_dir : str, optional
-            Path to the directory to save the plots of the scheduler learning rate.
-
-        verbose : int, optional 
-            ``0``: quiet, ``1``: update messages. 
-        """
 
         super(WarmUpCosineDecayScheduler, self).__init__()
         self.learning_rate_base = learning_rate_base
         self.last_lr = learning_rate_base
-        self.lr_changed = False
+        self.lr_changed = Falses
         self.phase = "Warm-up"
         self.global_step = global_step_init
         self.warmup_learning_rate = warmup_learning_rate
@@ -66,11 +80,28 @@ class WarmUpCosineDecayScheduler(keras.callbacks.Callback):
         self.epoch = 0
 
     def on_epoch_begin(self, epoch, logs=None):
+        """
+        Actions to be done at each epoch start.   
+        
+        Parameters
+        ----------
+        epoch : int
+            Current epoch.
+        """
         self.epoch = epoch
         if self.verbose > 0 and self.lr_changed:
             print("\n{} phase: setting learning rate to {}".format(self.phase, self.last_lr))
 
     def on_batch_end(self, batch, logs=None):
+        """
+        Actions to be done at each epoch end.
+        
+        Parameters
+        ----------
+        batch : int
+            Current batch.
+
+        """
         self.global_step = self.global_step + 1
         lr = K.get_value(self.model.optimizer.lr)
         self.learning_rates.append(lr)
@@ -78,6 +109,14 @@ class WarmUpCosineDecayScheduler(keras.callbacks.Callback):
         self.last_lr = lr           
 
     def on_batch_begin(self, batch, logs=None):
+        """
+        Actions to be done at each batch process start.
+        
+        Parameters
+        ----------
+        batch : int
+            Current batch.
+        """
         total_steps = int(self.params['epochs'] * self.params['steps'])
         warmup_steps = int(self.warmup_epochs * self.params['steps'])
         hold_steps = int(self.hold_base_rate_steps * self.params['steps'])
@@ -101,7 +140,14 @@ class WarmUpCosineDecayScheduler(keras.callbacks.Callback):
             K.set_value(self.model.optimizer.lr, lr)
 
     def on_train_end(self, logs=None):
-
+        """
+        Actions to be done when the training is done.
+        
+        Parameters
+        ----------
+        logs : int
+            Logs.
+        """
         self.plot()
 
     def cosine_decay_with_warmup(self, global_step, learning_rate_base, total_steps, warmup_learning_rate=0.0,
@@ -154,9 +200,10 @@ class WarmUpCosineDecayScheduler(keras.callbacks.Callback):
         return np.where(global_step > total_steps, 0.0, learning_rate)
     
     def plot(self):
+        """Plot the learning rate curve """
         plt.plot(self.learning_rates)
-        plt.title('Learning Rate')
-        plt.ylabel('Value')
+        plt.title('Warmup cosine decay scheduler')
+        plt.ylabel('Learning rate')
         plt.xlabel('Epoch')
         plt.savefig(os.path.join(self.save_dir, 'warmup_cosine_decay_schel.png'))
         plt.clf()

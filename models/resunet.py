@@ -59,13 +59,13 @@ def ResUNet(image_shape, activation='elu', feature_maps=[16,32,64,128,256], drop
 
     Calling this function with its default parameters returns the following network:
 
-    .. image:: img/resunet_3d.png
+    .. image:: ../../img/models/resunet.png
         :width: 100%
         :align: center
 
     Where each green layer represents a residual block as the following:
 
-    .. image:: img/res_block.png
+    .. image:: ../../img/models/res_block.png
         :width: 45%
         :align: center
 

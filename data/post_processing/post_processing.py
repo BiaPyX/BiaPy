@@ -247,10 +247,10 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
 
     remove_close_points_radius : float, optional
         Radius from each point to decide what points to keep. Used in 'BP' channel configuration. 
-        E.g. ``10.0`.
+        E.g. ``10.0``.
 
     resolution : ndarray of floats
-        Resolution of the data, in `(z,y,x)` to calibrate coordinates. E.g. ``[30,8,8]``.    
+        Resolution of the data, in ``(z,y,x)`` to calibrate coordinates. E.g. ``[30,8,8]``.    
 
     save_dir :  str, optional
         Directory to save watershed output into.
@@ -1295,10 +1295,10 @@ def remove_close_points(points, radius, resolution, classes=None, ndim=3):
            List of 3D points. E.g. ``((0,0,0), (1,1,1)``.
 
        radius : float
-           Radius from each point to decide what points to keep. E.g. ``10.0`.
+           Radius from each point to decide what points to keep. E.g. ``10.0``.
 
        resolution : ndarray of floats
-           Resolution of the data, in `(z,y,x)` to calibrate coordinates.
+           Resolution of the data, in ``(z,y,x)`` to calibrate coordinates.
            E.g. ``[30,8,8]``.    
 
        ndim : int, optional

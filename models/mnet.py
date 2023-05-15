@@ -29,7 +29,7 @@ def MNet(input_shape):
 
        Here is a picture of the network extracted from the original paper:
 
-       .. image:: ../../img/MNet.jpg
+       .. image:: ../../img/models/MNet.jpg
            :width: 100%
            :align: center
     """
