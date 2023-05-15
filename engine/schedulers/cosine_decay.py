@@ -100,7 +100,8 @@ class WarmUpCosineDecayScheduler(keras.callbacks.Callback):
         else:
             K.set_value(self.model.optimizer.lr, lr)
 
-    def on_train_end():
+    def on_train_end(self, logs=None):
+
         self.plot()
 
     def cosine_decay_with_warmup(self, global_step, learning_rate_base, total_steps, warmup_learning_rate=0.0,
