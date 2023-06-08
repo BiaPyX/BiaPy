@@ -119,7 +119,7 @@ class Config:
         _C.PROBLEM.DENOISING.N2V_MANIPULATOR = 'uniform_withCP'
         # This variable corresponds to n2v_neighborhood_radius from Noise2Void. Size of the neighborhood to compute the replacement
         _C.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS = 5
-        # To apply a structured mask as is proposed in Noise2Void to alleviate the limitation of the method of not removing efectively 
+        # To apply a structured mask as is proposed in Noise2Void to alleviate the limitation of the method of not removing effectively 
         # the structured noise (section 4.4 of their paper). 
         _C.PROBLEM.DENOISING.N2V_STRUCTMASK = False
 
@@ -207,11 +207,11 @@ class Config:
         # Whether to load ground truth (GT)
         _C.DATA.TEST.LOAD_GT = False
         # Whether to use validation data as test instead of trying to load test from _C.DATA.TEST.PATH and
-        # _C.DATA.TEST.MASK_PATH. Currently only used if _C.PROBLEM.TYPE == 'CLASSIFICATION'
+        # _C.DATA.TEST.MASK_PATH. _C.DATA.VAL.CROSS_VAL needs to be True.
         _C.DATA.TEST.USE_VAL_AS_TEST = False
-        # Path to load the test data from. Not used when _C.DATA.TEST.USE_VAL == True
+        # Path to load the test data from. Not used when _C.DATA.TEST.USE_VAL_AS_TEST == True
         _C.DATA.TEST.PATH = os.path.join("user_data", 'test', 'x')
-        # Path to load the test data masks from. Not used when _C.DATA.TEST.USE_VAL == True
+        # Path to load the test data masks from. Not used when _C.DATA.TEST.USE_VAL_AS_TEST == True
         _C.DATA.TEST.MASK_PATH = os.path.join("user_data", 'test', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
@@ -266,12 +266,12 @@ class Config:
         _C.DATA.VAL.SSL_SOURCE_DIR = os.path.join("user_data", 'val', 'x_ssl_source')
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
-        # 3D tuple when using _C.PROBLEM.NDIM='3D'
+        # 3D tuple when using _C.PROBLEM.NDIM='3D'. This is only used when the validation is loaded from disk, and thus, 
+        # not extracted from training. 
         _C.DATA.VAL.OVERLAP = (0,0)
-        # Padding to be done in (y,x)/(z,y,x) when reconstructing validation data. Useful to avoid patch 'border effect'
+        # Padding to be done in (y,x)/(z,y,x) when cropping validation data. Useful to avoid patch 'border effect'. This 
+        # is only used when the validation is loaded from disk, and thus, not extracted from training. 
         _C.DATA.VAL.PADDING = (0,0)
-        # Whether to use median values to fill padded pixels or zeros
-        _C.DATA.VAL.MEDIAN_PADDING = False
         # Directory where validation binary masks should be located. This binary mask will be applied only when MW_TH*
         # optimized values are find, that is, when _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = True and _C.TEST.POST_PROCESSING.APPLY_MASK = True
         _C.DATA.VAL.BINARY_MASKS = os.path.join("user_data", 'val', 'bin_mask')
