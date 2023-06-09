@@ -173,7 +173,7 @@ class Config:
         _C.DATA.TRAIN.CHECK_DATA = True
         _C.DATA.TRAIN.IN_MEMORY = True
         _C.DATA.TRAIN.PATH = os.path.join("user_data", 'train', 'x')
-        _C.DATA.TRAIN.MASK_PATH = os.path.join("user_data", 'train', 'y')
+        _C.DATA.TRAIN.GT_PATH = os.path.join("user_data", 'train', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = os.path.join("user_data", 'train', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
@@ -207,12 +207,12 @@ class Config:
         # Whether to load ground truth (GT)
         _C.DATA.TEST.LOAD_GT = False
         # Whether to use validation data as test instead of trying to load test from _C.DATA.TEST.PATH and
-        # _C.DATA.TEST.MASK_PATH. _C.DATA.VAL.CROSS_VAL needs to be True.
+        # _C.DATA.TEST.GT_PATH. _C.DATA.VAL.CROSS_VAL needs to be True.
         _C.DATA.TEST.USE_VAL_AS_TEST = False
         # Path to load the test data from. Not used when _C.DATA.TEST.USE_VAL_AS_TEST == True
         _C.DATA.TEST.PATH = os.path.join("user_data", 'test', 'x')
         # Path to load the test data masks from. Not used when _C.DATA.TEST.USE_VAL_AS_TEST == True
-        _C.DATA.TEST.MASK_PATH = os.path.join("user_data", 'test', 'y')
+        _C.DATA.TEST.GT_PATH = os.path.join("user_data", 'test', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.TEST.INSTANCE_CHANNELS_DIR = os.path.join("user_data", 'test', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
@@ -255,7 +255,7 @@ class Config:
         # Path to the validation data. Used when _C.DATA.VAL.FROM_TRAIN = False
         _C.DATA.VAL.PATH = os.path.join("user_data", 'val', 'x')
         # Path to the validation data mask. Used when _C.DATA.VAL.FROM_TRAIN = False
-        _C.DATA.VAL.MASK_PATH = os.path.join("user_data", 'val', 'y')
+        _C.DATA.VAL.GT_PATH = os.path.join("user_data", 'val', 'y')
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.VAL.INSTANCE_CHANNELS_DIR = os.path.join("user_data", 'val', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
@@ -714,31 +714,31 @@ class Config:
         """
         # Remove possible / characters at the end of the paths
         self._C.DATA.TRAIN.PATH = self._C.DATA.TRAIN.PATH if self._C.DATA.TRAIN.PATH[-1] != '/' else self._C.DATA.TRAIN.PATH[:-1]
-        self._C.DATA.TRAIN.MASK_PATH = self._C.DATA.TRAIN.MASK_PATH if self._C.DATA.TRAIN.MASK_PATH[-1] != '/' else self._C.DATA.TRAIN.MASK_PATH[:-1]
+        self._C.DATA.TRAIN.GT_PATH = self._C.DATA.TRAIN.GT_PATH if self._C.DATA.TRAIN.GT_PATH[-1] != '/' else self._C.DATA.TRAIN.GT_PATH[:-1]
         self._C.DATA.VAL.PATH = self._C.DATA.VAL.PATH if self._C.DATA.VAL.PATH[-1] != '/' else self._C.DATA.VAL.PATH[:-1]
-        self._C.DATA.VAL.MASK_PATH = self._C.DATA.VAL.MASK_PATH if self._C.DATA.VAL.MASK_PATH[-1] != '/' else self._C.DATA.VAL.MASK_PATH[:-1]
+        self._C.DATA.VAL.GT_PATH = self._C.DATA.VAL.GT_PATH if self._C.DATA.VAL.GT_PATH[-1] != '/' else self._C.DATA.VAL.GT_PATH[:-1]
         self._C.DATA.TEST.PATH = self._C.DATA.TEST.PATH if self._C.DATA.TEST.PATH[-1] != '/' else self._C.DATA.TEST.PATH[:-1]
-        self._C.DATA.TEST.MASK_PATH = self._C.DATA.TEST.MASK_PATH if self._C.DATA.TEST.MASK_PATH[-1] != '/' else self._C.DATA.TEST.MASK_PATH[:-1]
+        self._C.DATA.TEST.GT_PATH = self._C.DATA.TEST.GT_PATH if self._C.DATA.TEST.GT_PATH[-1] != '/' else self._C.DATA.TEST.GT_PATH[:-1]
 
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = self._C.DATA.TRAIN.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-        self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-        self._C.DATA.TRAIN.DETECTION_MASK_DIR = self._C.DATA.TRAIN.MASK_PATH+'_detection_masks'
+        self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TRAIN.GT_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        self._C.DATA.TRAIN.DETECTION_MASK_DIR = self._C.DATA.TRAIN.GT_PATH+'_detection_masks'
         self._C.DATA.TRAIN.SSL_SOURCE_DIR = self._C.DATA.TRAIN.PATH+'_ssl_source'
         self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = self._C.DATA.VAL.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-        self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.GT_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         # If value is not the default
         if self._C.DATA.VAL.BINARY_MASKS == os.path.join("user_data", 'val', 'bin_mask'):
             self._C.DATA.VAL.BINARY_MASKS = os.path.join(self._C.DATA.VAL.PATH, '..', 'bin_mask')
-        self._C.DATA.VAL.DETECTION_MASK_DIR = self._C.DATA.VAL.MASK_PATH+'_detection_masks'
+        self._C.DATA.VAL.DETECTION_MASK_DIR = self._C.DATA.VAL.GT_PATH+'_detection_masks'
         self._C.DATA.VAL.SSL_SOURCE_DIR = self._C.DATA.VAL.PATH+'_ssl_source'
         self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-        self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.TEST.GT_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         # If value is not the default
         if self._C.DATA.TEST.BINARY_MASKS == os.path.join("user_data", 'test', 'bin_mask'):
             self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, '..', 'bin_mask')
-        self._C.DATA.TEST.DETECTION_MASK_DIR = self._C.DATA.TEST.MASK_PATH+'_detection_masks'
+        self._C.DATA.TEST.DETECTION_MASK_DIR = self._C.DATA.TEST.GT_PATH+'_detection_masks'
         self._C.DATA.TEST.SSL_SOURCE_DIR = self._C.DATA.TEST.PATH+'_ssl_source'
-        self._C.PATHS.TEST_FULL_GT_H5 = os.path.join(self._C.DATA.TEST.MASK_PATH, 'h5')
+        self._C.PATHS.TEST_FULL_GT_H5 = os.path.join(self._C.DATA.TEST.GT_PATH, 'h5')
 
         self._C.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(self._C.PATHS.RESULT_DIR.PATH, 'train_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_instance_channels')
         self._C.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(self._C.PATHS.RESULT_DIR.PATH, 'val_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_instance_channels')

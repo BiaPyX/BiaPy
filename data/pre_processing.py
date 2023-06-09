@@ -40,7 +40,7 @@ def create_instance_channels(cfg, data_type='train'):
 
     f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
     tag = "TRAIN" if data_type == "train" else "VAL"
-    Y, _, _, filenames = f_name(getattr(cfg.DATA, tag).MASK_PATH, return_filenames=True)
+    Y, _, _, filenames = f_name(getattr(cfg.DATA, tag).GT_PATH, return_filenames=True)
     print("Creating Y_{} channels . . .".format(data_type))
     if isinstance(Y, list):
         for i in tqdm(range(len(Y))):
@@ -73,7 +73,7 @@ def create_test_instance_channels(cfg):
     f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
 
     if cfg.DATA.TEST.LOAD_GT:
-        Y_test, _, _, test_filenames = f_name(cfg.DATA.TEST.MASK_PATH, return_filenames=True)
+        Y_test, _, _, test_filenames = f_name(cfg.DATA.TEST.GT_PATH, return_filenames=True)
         print("Creating Y_test channels . . .")
         if isinstance(Y_test, list):
             for i in tqdm(range(len(Y_test))):
@@ -271,7 +271,7 @@ def create_detection_masks(cfg, data_type='train'):
     else:
         tag = "TEST"
     img_dir = getattr(cfg.DATA, tag).PATH
-    label_dir = getattr(cfg.DATA, tag).MASK_PATH
+    label_dir = getattr(cfg.DATA, tag).GT_PATH
     out_dir = getattr(cfg.DATA, tag).DETECTION_MASK_DIR
     img_ids = sorted(next(os.walk(img_dir))[2])
     img_ext = '.'+img_ids[0].split('.')[-1]

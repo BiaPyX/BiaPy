@@ -33,9 +33,9 @@ class Engine(object):
 
         # Save paths in case we need them in a future
         self.orig_train_path = cfg.DATA.TRAIN.PATH
-        self.orig_train_mask_path = cfg.DATA.TRAIN.MASK_PATH
+        self.orig_train_mask_path = cfg.DATA.TRAIN.GT_PATH
         self.orig_val_path = cfg.DATA.VAL.PATH
-        self.orig_val_mask_path = cfg.DATA.VAL.MASK_PATH
+        self.orig_val_mask_path = cfg.DATA.VAL.GT_PATH
 
         print("####################\n"
               "#  PRE-PROCESSING  #\n"
@@ -44,19 +44,19 @@ class Engine(object):
             
             if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
                 if cfg.LOSS.TYPE == 'MASKED_BCE':
-                    check_masks(cfg.DATA.TRAIN.MASK_PATH, n_classes=3)
+                    check_masks(cfg.DATA.TRAIN.GT_PATH, n_classes=3)
                 else:
-                    check_masks(cfg.DATA.TRAIN.MASK_PATH, n_classes=cfg.MODEL.N_CLASSES+1)
+                    check_masks(cfg.DATA.TRAIN.GT_PATH, n_classes=cfg.MODEL.N_CLASSES+1)
                 if not cfg.DATA.VAL.FROM_TRAIN:
                     if cfg.LOSS.TYPE == 'MASKED_BCE':
-                        check_masks(cfg.DATA.VAL.MASK_PATH, n_classes=3)
+                        check_masks(cfg.DATA.VAL.GT_PATH, n_classes=3)
                     else:
-                        check_masks(cfg.DATA.VAL.MASK_PATH, n_classes=cfg.MODEL.N_CLASSES+1)
+                        check_masks(cfg.DATA.VAL.GT_PATH, n_classes=cfg.MODEL.N_CLASSES+1)
             if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT and cfg.DATA.TEST.CHECK_DATA:
                 if cfg.LOSS.TYPE == 'MASKED_BCE':
-                    check_masks(cfg.DATA.TEST.MASK_PATH, n_classes=3)
+                    check_masks(cfg.DATA.TEST.GT_PATH, n_classes=3)
                 else:
-                    check_masks(cfg.DATA.TEST.MASK_PATH, n_classes=cfg.MODEL.N_CLASSES+1)
+                    check_masks(cfg.DATA.TEST.GT_PATH, n_classes=cfg.MODEL.N_CLASSES+1)
         elif cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             self.original_test_path, self.original_test_mask_path = prepare_instance_data(cfg)
         elif cfg.PROBLEM.TYPE == 'DETECTION':
@@ -78,7 +78,7 @@ class Engine(object):
         if cfg.TRAIN.ENABLE:
             if cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']:
                 if cfg.DATA.TRAIN.IN_MEMORY:
-                    mask_path = cfg.DATA.TRAIN.MASK_PATH if cfg.PROBLEM.TYPE != 'DENOISING' else None
+                    mask_path = cfg.DATA.TRAIN.GT_PATH if cfg.PROBLEM.TYPE != 'DENOISING' else None
                     val_split = cfg.DATA.VAL.SPLIT_TRAIN if cfg.DATA.VAL.FROM_TRAIN else 0.
                     f_name = load_and_prepare_2D_train_data if cfg.PROBLEM.NDIM == '2D' else load_and_prepare_3D_data
 
@@ -117,7 +117,7 @@ class Engine(object):
                             else:
                                 crop_shape = (cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
                                     cfg.DATA.PATCH_SIZE[2]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, cfg.DATA.PATCH_SIZE[3])
-                            Y_val, _, _ = f_name(cfg.DATA.VAL.MASK_PATH, crop=True, crop_shape=crop_shape,
+                            Y_val, _, _ = f_name(cfg.DATA.VAL.GT_PATH, crop=True, crop_shape=crop_shape,
                                                  overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
                                                  reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
                                                  check_channel=False)
@@ -147,7 +147,7 @@ class Engine(object):
                         X_test, _, _ = f_name(cfg.DATA.TEST.PATH)
                         if cfg.DATA.TEST.LOAD_GT or cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
                             print("3) Loading test masks . . .")
-                            Y_test, _, _ = f_name(cfg.DATA.TEST.MASK_PATH, check_channel=False)
+                            Y_test, _, _ = f_name(cfg.DATA.TEST.GT_PATH, check_channel=False)
                         else:
                             Y_test = None
                     else:

@@ -339,9 +339,9 @@ def prepare_detection_data(cfg):
                   "path, this process will be done just once!".format(cfg.DATA.TRAIN.DETECTION_MASK_DIR))
             create_mask = True
         else:
-            if len(next(os.walk(cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(next(os.walk(cfg.DATA.TRAIN.MASK_PATH))[2]):
+            if len(next(os.walk(cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(next(os.walk(cfg.DATA.TRAIN.GT_PATH))[2]):
                 print("Different number of files found in {} and {}. Trying to create the the rest again"
-                       .format(cfg.DATA.TRAIN.MASK_PATH,cfg.DATA.TRAIN.DETECTION_MASK_DIR))
+                       .format(cfg.DATA.TRAIN.GT_PATH,cfg.DATA.TRAIN.DETECTION_MASK_DIR))
                 create_mask = True    
 
         if create_mask:
@@ -356,9 +356,9 @@ def prepare_detection_data(cfg):
                 "path, this process will be done just once!".format(cfg.DATA.VAL.DETECTION_MASK_DIR))
             create_mask = True
         else:
-            if len(next(os.walk(cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(next(os.walk(cfg.DATA.VAL.MASK_PATH))[2]):
+            if len(next(os.walk(cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(next(os.walk(cfg.DATA.VAL.GT_PATH))[2]):
                 print("Different number of files found in {} and {}. Trying to create the the rest again"
-                       .format(cfg.DATA.VAL.MASK_PATH,cfg.DATA.VAL.DETECTION_MASK_DIR))
+                       .format(cfg.DATA.VAL.GT_PATH,cfg.DATA.VAL.DETECTION_MASK_DIR))
                 create_mask = True 
                 
         if create_mask:
@@ -373,24 +373,24 @@ def prepare_detection_data(cfg):
                 "path, this process will be done just once!".format(cfg.DATA.TEST.DETECTION_MASK_DIR))
             create_mask = True
         else:
-            if len(next(os.walk(cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(next(os.walk(cfg.DATA.TEST.MASK_PATH))[2]):
+            if len(next(os.walk(cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(next(os.walk(cfg.DATA.TEST.GT_PATH))[2]):
                 print("Different number of files found in {} and {}. Trying to create the the rest again"
-                       .format(cfg.DATA.TEST.MASK_PATH,cfg.DATA.TEST.DETECTION_MASK_DIR))
+                       .format(cfg.DATA.TEST.GT_PATH,cfg.DATA.TEST.DETECTION_MASK_DIR))
                 create_mask = True 
         if create_mask:
             create_detection_masks(cfg, data_type='test')
 
     opts = []
     if cfg.TRAIN.ENABLE:
-        print("DATA.TRAIN.MASK_PATH changed from {} to {}".format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.DETECTION_MASK_DIR))
-        opts.extend(['DATA.TRAIN.MASK_PATH', cfg.DATA.TRAIN.DETECTION_MASK_DIR])
+        print("DATA.TRAIN.GT_PATH changed from {} to {}".format(cfg.DATA.TRAIN.GT_PATH, cfg.DATA.TRAIN.DETECTION_MASK_DIR))
+        opts.extend(['DATA.TRAIN.GT_PATH', cfg.DATA.TRAIN.DETECTION_MASK_DIR])
         if not cfg.DATA.VAL.FROM_TRAIN:
-            print("DATA.VAL.MASK_PATH changed from {} to {}".format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.DETECTION_MASK_DIR))
-            opts.extend(['DATA.VAL.MASK_PATH', cfg.DATA.VAL.DETECTION_MASK_DIR])
+            print("DATA.VAL.GT_PATH changed from {} to {}".format(cfg.DATA.VAL.GT_PATH, cfg.DATA.VAL.DETECTION_MASK_DIR))
+            opts.extend(['DATA.VAL.GT_PATH', cfg.DATA.VAL.DETECTION_MASK_DIR])
     if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT:
-        print("DATA.TEST.MASK_PATH changed from {} to {}".format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.DETECTION_MASK_DIR))
-        opts.extend(['DATA.TEST.MASK_PATH', cfg.DATA.TEST.DETECTION_MASK_DIR])
-        original_test_mask_path = cfg.DATA.TEST.MASK_PATH
+        print("DATA.TEST.GT_PATH changed from {} to {}".format(cfg.DATA.TEST.GT_PATH, cfg.DATA.TEST.DETECTION_MASK_DIR))
+        opts.extend(['DATA.TEST.GT_PATH', cfg.DATA.TEST.DETECTION_MASK_DIR])
+        original_test_mask_path = cfg.DATA.TEST.GT_PATH
     cfg.merge_from_list(opts)
     
 

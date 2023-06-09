@@ -12,18 +12,18 @@ DATA:
     EXTRACT_RANDOM_PATCH: False
     TRAIN:
         PATH: /data2/dfranco/datasets/Stardist/detection/data/train/x
-        MASK_PATH: /data2/dfranco/datasets/Stardist/detection/data/train/y
+        GT_PATH: /data2/dfranco/datasets/Stardist/detection/data/train/y
         IN_MEMORY: True
     VAL:
         FROM_TRAIN: True
         PATH: /data2/dfranco/datasets/demo3D/detection/data/train/x
-        MASK_PATH: /data2/dfranco/datasets/demo3D/detection/data/train/y
+        GT_PATH: /data2/dfranco/datasets/demo3D/detection/data/train/y
         SPLIT_TRAIN: 0.2
         IN_MEMORY: True
     TEST:
         RESOLUTION: (1,1)
         PATH: /data2/dfranco/datasets/Stardist/detection/data/test/x
-        MASK_PATH: /data2/dfranco/datasets/Stardist/detection/data/test/y
+        GT_PATH: /data2/dfranco/datasets/Stardist/detection/data/test/y
         IN_MEMORY: False
         LOAD_GT: True
         PADDING: (32,32)

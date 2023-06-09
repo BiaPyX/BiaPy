@@ -129,7 +129,7 @@ def prepare_ssl_data(cfg):
         else:
             if len(next(os.walk(cfg.DATA.TRAIN.SSL_SOURCE_DIR))[2]) != len(next(os.walk(cfg.DATA.TRAIN.PATH))[2]):
                 print("Different number of files found in {} and {}. Trying to create the the rest again"
-                      .format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.SSL_SOURCE_DIR))
+                      .format(cfg.DATA.TRAIN.GT_PATH, cfg.DATA.TRAIN.SSL_SOURCE_DIR))
                 create_mask = True 
             else:
                 print("Train source data found in {}".format(cfg.DATA.TRAIN.SSL_SOURCE_DIR))   
@@ -147,7 +147,7 @@ def prepare_ssl_data(cfg):
         else:
             if len(next(os.walk(cfg.DATA.VAL.SSL_SOURCE_DIR))[2]) != len(next(os.walk(cfg.DATA.VAL.PATH))[2]):
                 print("Different number of files found in {} and {}. Trying to create the the rest again"
-                      .format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.SSL_SOURCE_DIR))
+                      .format(cfg.DATA.VAL.GT_PATH, cfg.DATA.VAL.SSL_SOURCE_DIR))
                 create_mask = True   
             else:
                 print("Validation source data found in {}".format(cfg.DATA.VAL.SSL_SOURCE_DIR)) 
@@ -165,7 +165,7 @@ def prepare_ssl_data(cfg):
         else:
             if len(next(os.walk(cfg.DATA.TEST.SSL_SOURCE_DIR))[2]) != len(next(os.walk(cfg.DATA.TEST.PATH))[2]):
                 print("Different number of files found in {} and {}. Trying to create the the rest again"
-                      .format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.SSL_SOURCE_DIR))
+                      .format(cfg.DATA.TEST.GT_PATH, cfg.DATA.TEST.SSL_SOURCE_DIR))
                 create_mask = True    
             else:
                 print("Test source data found in {}".format(cfg.DATA.TEST.SSL_SOURCE_DIR))
@@ -175,14 +175,14 @@ def prepare_ssl_data(cfg):
     opts = []
     if cfg.TRAIN.ENABLE:
         print("DATA.TRAIN.PATH changed from {} to {}".format(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.SSL_SOURCE_DIR))
-        print("DATA.TRAIN.MASK_PATH changed from {} to {}".format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.PATH))
-        opts.extend(['DATA.TRAIN.PATH', cfg.DATA.TRAIN.SSL_SOURCE_DIR, 'DATA.TRAIN.MASK_PATH', cfg.DATA.TRAIN.PATH])
+        print("DATA.TRAIN.GT_PATH changed from {} to {}".format(cfg.DATA.TRAIN.GT_PATH, cfg.DATA.TRAIN.PATH))
+        opts.extend(['DATA.TRAIN.PATH', cfg.DATA.TRAIN.SSL_SOURCE_DIR, 'DATA.TRAIN.GT_PATH', cfg.DATA.TRAIN.PATH])
         if not cfg.DATA.VAL.FROM_TRAIN:
             print("DATA.VAL.PATH changed from {} to {}".format(cfg.DATA.VAL.PATH, cfg.DATA.VAL.SSL_SOURCE_DIR))
-            print("DATA.VAL.MASK_PATH changed from {} to {}".format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.PATH))
-            opts.extend(['DATA.VAL.PATH', cfg.DATA.VAL.SSL_SOURCE_DIR, 'DATA.VAL.MASK_PATH', cfg.DATA.VAL.PATH])
+            print("DATA.VAL.GT_PATH changed from {} to {}".format(cfg.DATA.VAL.GT_PATH, cfg.DATA.VAL.PATH))
+            opts.extend(['DATA.VAL.PATH', cfg.DATA.VAL.SSL_SOURCE_DIR, 'DATA.VAL.GT_PATH', cfg.DATA.VAL.PATH])
     if cfg.TEST.ENABLE:
         print("DATA.TEST.PATH changed from {} to {}".format(cfg.DATA.TEST.PATH, cfg.DATA.TEST.SSL_SOURCE_DIR))
-        print("DATA.TEST.MASK_PATH changed from {} to {}".format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.PATH))
-        opts.extend(['DATA.TEST.PATH', cfg.DATA.TEST.SSL_SOURCE_DIR, 'DATA.TEST.MASK_PATH', cfg.DATA.TEST.PATH]) 
+        print("DATA.TEST.GT_PATH changed from {} to {}".format(cfg.DATA.TEST.GT_PATH, cfg.DATA.TEST.PATH))
+        opts.extend(['DATA.TEST.PATH', cfg.DATA.TEST.SSL_SOURCE_DIR, 'DATA.TEST.GT_PATH', cfg.DATA.TEST.PATH]) 
     cfg.merge_from_list(opts)

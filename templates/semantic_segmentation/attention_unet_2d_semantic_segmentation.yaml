@@ -10,13 +10,13 @@ DATA:
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data
-        MASK_PATH: /path/to/data
+        GT_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
         PATH: /path/to/data
-        MASK_PATH: /path/to/data
+        GT_PATH: /path/to/data
         IN_MEMORY: True
         LOAD_GT: True
 

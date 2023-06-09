@@ -14,15 +14,15 @@ DATA:
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data                                                                                             
-        MASK_PATH: /path/to/data
+        GT_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
         PATH: /path/to/data                                                                                             
-        MASK_PATH: /path/to/data
+        GT_PATH: /path/to/data
         FROM_TRAIN: False
     TEST:                       
         PATH: /path/to/data                                                                                             
-        MASK_PATH: /path/to/data                                                                                        
+        GT_PATH: /path/to/data                                                                                        
         PADDING: (32,32)
         IN_MEMORY: False
         LOAD_GT: False

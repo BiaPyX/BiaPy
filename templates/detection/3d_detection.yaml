@@ -11,7 +11,7 @@ DATA:
     EXTRACT_RANDOM_PATCH: False
     TRAIN:
         PATH: /path/to/data
-        MASK_PATH: /path/to/data
+        GT_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
         FROM_TRAIN: True
@@ -20,7 +20,7 @@ DATA:
     TEST:
         RESOLUTION: (1,1,1)
         PATH: /path/to/data
-        MASK_PATH: /path/to/data
+        GT_PATH: /path/to/data
         IN_MEMORY: True
         LOAD_GT: True
         PADDING: (0,32,32)

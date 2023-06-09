@@ -16,16 +16,16 @@ DATA:
     PATCH_SIZE: (80, 80, 80, 1)
     TRAIN:
         PATH: /home/user/train/x
-        MASK_PATH: /home/user/train/y
+        GT_PATH: /home/user/train/y
         IN_MEMORY: True
     VAL:
         FROM_TRAIN: False
         IN_MEMORY: True
         PATH: /home/user/val/x
-        MASK_PATH: /home/user/val/y
+        GT_PATH: /home/user/val/y
     TEST:
         PATH: /home/user/test/x
-        MASK_PATH: /home/user/test/y
+        GT_PATH: /home/user/test/y
         IN_MEMORY: True
         PADDING: (16,16,16)
         

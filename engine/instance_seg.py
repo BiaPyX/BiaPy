@@ -41,7 +41,7 @@ class Instance_Segmentation(Base_Workflow):
                 bin_mask = None
             obj = calculate_optimal_mw_thresholds(self.model, self.cfg.DATA.VAL.PATH,
                 self.orig_val_mask_path, self.cfg.DATA.PATCH_SIZE, self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                self.cfg.DATA.VAL.MASK_PATH, self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, bin_mask,
+                self.cfg.DATA.VAL.GT_PATH, self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, bin_mask,
                 chart_dir=self.cfg.PATHS.CHARTS, verbose=self.cfg.TEST.VERBOSE)
             if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCD":
                 self.instance_ths['TH_BINARY_MASK'], self.instance_ths['TH_CONTOUR'], self.instance_ths['TH_FOREGROUND'],\
@@ -304,22 +304,22 @@ def prepare_instance_data(cfg):
     opts = []
     if cfg.TRAIN.ENABLE:
         print("DATA.TRAIN.PATH changed from {} to {}".format(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
-        print("DATA.TRAIN.MASK_PATH changed from {} to {}".format(cfg.DATA.TRAIN.MASK_PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR))
+        print("DATA.TRAIN.GT_PATH changed from {} to {}".format(cfg.DATA.TRAIN.GT_PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR))
         opts.extend(['DATA.TRAIN.PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR,
-                    'DATA.TRAIN.MASK_PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR])
+                    'DATA.TRAIN.GT_PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR])
     if not cfg.DATA.VAL.FROM_TRAIN:
         print("DATA.VAL.PATH changed from {} to {}".format(cfg.DATA.VAL.PATH, cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
-        print("DATA.VAL.MASK_PATH changed from {} to {}".format(cfg.DATA.VAL.MASK_PATH, cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR))
+        print("DATA.VAL.GT_PATH changed from {} to {}".format(cfg.DATA.VAL.GT_PATH, cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR))
         opts.extend(['DATA.VAL.PATH', cfg.DATA.VAL.INSTANCE_CHANNELS_DIR,
-                     'DATA.VAL.MASK_PATH', cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR])
+                     'DATA.VAL.GT_PATH', cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR])
     if cfg.TEST.ENABLE:
         print("DATA.TEST.PATH changed from {} to {}".format(cfg.DATA.TEST.PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
         opts.extend(['DATA.TEST.PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_DIR])
         original_test_path = cfg.DATA.TEST.PATH
         if cfg.DATA.TEST.LOAD_GT:
-            print("DATA.TEST.MASK_PATH changed from {} to {}".format(cfg.DATA.TEST.MASK_PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
-            opts.extend(['DATA.TEST.MASK_PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR])
-        original_test_mask_path = cfg.DATA.TEST.MASK_PATH
+            print("DATA.TEST.GT_PATH changed from {} to {}".format(cfg.DATA.TEST.GT_PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
+            opts.extend(['DATA.TEST.GT_PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR])
+        original_test_mask_path = cfg.DATA.TEST.GT_PATH
     cfg.merge_from_list(opts)
 
     return original_test_path, original_test_mask_path

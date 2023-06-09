@@ -15,13 +15,13 @@ DATA:
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: edit_trainx_path_here 
-        MASK_PATH: edit_trainy_path_here
+        GT_PATH: edit_trainy_path_here
         IN_MEMORY: True
     VAL:
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
         PATH: edit_testx_path_here
-        MASK_PATH: edit_testy_path_here
+        GT_PATH: edit_testy_path_here
         IN_MEMORY: True
         LOAD_GT: True
 

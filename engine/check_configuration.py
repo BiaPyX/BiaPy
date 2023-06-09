@@ -217,18 +217,18 @@ def check_configuration(cfg):
     if cfg.TRAIN.ENABLE:
         if not os.path.exists(cfg.DATA.TRAIN.PATH):
             raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
-        if not os.path.exists(cfg.DATA.TRAIN.MASK_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION"]:
-            raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.MASK_PATH))
+        if not os.path.exists(cfg.DATA.TRAIN.GT_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION"]:
+            raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.GT_PATH))
         if not cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.IN_MEMORY:
             if not os.path.exists(cfg.DATA.VAL.PATH):
                 raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
-            if not os.path.exists(cfg.DATA.VAL.MASK_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION"]:
-                raise ValueError("Validation mask data dir not found: {}".format(cfg.DATA.VAL.MASK_PATH))
+            if not os.path.exists(cfg.DATA.VAL.GT_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION"]:
+                raise ValueError("Validation mask data dir not found: {}".format(cfg.DATA.VAL.GT_PATH))
     if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST:
         if not os.path.exists(cfg.DATA.TEST.PATH):
             raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
-        if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.MASK_PATH) and cfg.PROBLEM.TYPE not in ["CLASSIFICATION"]:
-            raise ValueError("Test data mask not found: {}".format(cfg.DATA.TEST.MASK_PATH))
+        if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.GT_PATH) and cfg.PROBLEM.TYPE not in ["CLASSIFICATION"]:
+            raise ValueError("Test data mask not found: {}".format(cfg.DATA.TEST.GT_PATH))
 
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if not cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
@@ -239,7 +239,7 @@ def check_configuration(cfg):
     
     if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.TRAIN.IN_MEMORY:
         raise ValueError("Validation can not be extracted from train when 'DATA.TRAIN.IN_MEMORY' == False. Please set"
-                         " 'DATA.VAL.FROM_TRAIN' to False and configure 'DATA.VAL.PATH'/'DATA.VAL.MASK_PATH'")
+                         " 'DATA.VAL.FROM_TRAIN' to False and configure 'DATA.VAL.PATH'/'DATA.VAL.GT_PATH'")
     if cfg.DATA.VAL.CROSS_VAL: 
         if not cfg.DATA.VAL.FROM_TRAIN:
             raise ValueError("'DATA.VAL.CROSS_VAL' can only be used when 'DATA.VAL.FROM_TRAIN' is True")
