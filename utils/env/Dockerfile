@@ -1,13 +1,15 @@
 FROM nvidia/cuda:11.4.0-base-ubuntu20.04
 
-#SHELL ["/bin/bash", "-c"]
+MAINTAINER Daniel Franco-Barranco "daniel.franco@dipc.org"
 
+ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     graphviz \
     wget \
     ffmpeg \
     libsm6 \
-    libxext6
+    libxext6 \
+    git
 
 # Download and prepare conda
 RUN wget -q -P /tmp \
@@ -23,11 +25,20 @@ RUN conda update --all
 ENV PATH="/opt/conda/bin:$PATH"
 RUN ls -al /installations/miniconda3/etc/profile.d/conda.sh
 RUN . /installations/miniconda3/etc/profile.d/conda.sh
-COPY utils/env/environment.yml /tmp/environment.yml
 RUN conda update -qy conda \
-    && conda env create -f /tmp/environment.yml \
-    && conda init bash \
-    && rm /tmp/environment.yml
-COPY . /installations/BiaPy
+    && conda create -n BiaPy_env \
+    && conda init bash
+
+# Set up shell to use the created env
+SHELL ["conda", "run", "-n", "BiaPy_env", "/bin/bash", "-c"]
+
+# Install dependencies 
+COPY requirements.txt /tmp/requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt 
+
+# Copy BiaPy
+#RUN git clone --depth 1 https://github.com/danifranco/BiaPy.git /installations/BiaPy
+RUN ls /installations
+COPY BiaPy /installations/BiaPy
 
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "/installations/BiaPy/main.py"]
