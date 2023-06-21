@@ -37,9 +37,10 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt 
 
 # Copy BiaPy
-#RUN git clone --depth 1 https://github.com/danifranco/BiaPy.git /installations/BiaPy
-# Create .dockerignore containing .git folder
-RUN ls /installations
-COPY BiaPy /installations/BiaPy
+RUN git clone --depth 1 https://github.com/danifranco/BiaPy.git /installations/BiaPy
+
+## For the following lines create .dockerignore containing .git folder
+#RUN ls /installations
+#COPY BiaPy /installations/BiaPy
 
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "/installations/BiaPy/main.py"]
