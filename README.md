@@ -1,4 +1,17 @@
+<img src="img/biapy_logo.svg" width="450"></a>
+
 # BiaPy: Bioimage analysis pipelines in Python
+
+<p align="left">
+    <a href="https://www.python.org/">
+      <img src="https://img.shields.io/badge/Python-3.10-blue.svg" /></a>
+    <a href= "https://tensorflow.org/">
+      <img src="https://img.shields.io/badge/Tensorflow-2.11-orange.svg" /></a>
+    <a href= "https://github.com/danifranco/BiaPy/blob/master/LICENSE">
+      <img src="https://img.shields.io/badge/License-MIT-blue.svg" /></a>
+    <a href= "https://biapy.readthedocs.io/en/latest/">
+      <img src="https://img.shields.io/badge/Doc-Latest-2BAF2B.svg" /></a>
+</p>
 
 [BiaPy](https://github.com/danifranco/BiaPy) is an open source Python library for building bioimage analysis pipelines. This repository is actively under development by the Biomedical Computer Vision group at the [University of the Basque Country](https://www.ehu.eus/en/en-home) and the [Donostia International Physics Center](http://dipc.ehu.es/). 
 
@@ -6,19 +19,13 @@ The library provides an easy way to create image processing pipelines that are t
 ![BiaPy workflows](./img/BiaPy-workflow-readme.svg)                                                                                                                                   
      
 ## Citation                                                                                                             
-                                                                                                                        
-This repository is the base of the following work:                                                                      
-                                                                                                                        
+                                                                                                                                                                                                                           
 ```bibtex
-@Article{Franco-Barranco2021,
-    author={Franco-Barranco, Daniel and Mu\~{n}oz-Barrutia, Arrate and Arganda-Carreras, Ignacio},
-    title={Stable Deep Neural Network Architectures for Mitochondria Segmentation on Electron Microscopy Volumes},
-    journal={Neuroinformatics},
-    year={2021},
-    month={Dec},
-    day={02},
-    issn={1559-0089},
-    doi={10.1007/s12021-021-09556-1},
-    url={https://doi.org/10.1007/s12021-021-09556-1}
+@inproceedings{franco-barranco2023biapy,
+    author = {Daniel Franco-Barranco and Jes{\'{u}}s A. Andr{\'{e}}s-San Rom{\'{a}}n and Pedro G{\'{o}}mez-G{\'{a}}lvez and Luis M. Escudero and Arrate Mu{\~n}oz-Barrutia and Ignacio Arganda-Carreras},
+    title = {{BiaPy: a ready-to-use library for Bioimage Analysis Pipelines}},
+    booktitle={2023 IEEE 20th International Symposium on Biomedical Imaging (ISBI 2023)},
+    year={2023},
+    organization={IEEE}
 }
 ``` 
