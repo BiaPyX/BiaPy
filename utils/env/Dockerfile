@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     libsm6 \
     libxext6 \
-    git
+    git 
 
 # Download and prepare conda
 RUN wget -q -P /tmp \
@@ -21,26 +21,33 @@ RUN wget -q -P /tmp \
 ENV PATH /installations/miniconda3/bin:$PATH
 RUN conda update --all
 
+# Copy BiaPy
+RUN git clone --depth 1 https://github.com/danifranco/BiaPy.git /installations/BiaPy
+
 # Create the environment
 ENV PATH="/opt/conda/bin:$PATH"
 RUN ls -al /installations/miniconda3/etc/profile.d/conda.sh
 RUN . /installations/miniconda3/etc/profile.d/conda.sh
 RUN conda update -qy conda \
-    && conda create -n BiaPy_env \
+    && conda create -n BiaPy_env python=3.10.10 \
     && conda init bash
 
 # Set up shell to use the created env
 SHELL ["conda", "run", "-n", "BiaPy_env", "/bin/bash", "-c"]
 
 # Install dependencies 
-COPY requirements.txt /tmp/requirements.txt
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt 
+RUN conda install -c conda-forge cudatoolkit=11.8.0
+RUN python3 -m pip install nvidia-cudnn-cu11==8.6.0.163 tensorflow==2.12.0
+RUN mkdir -p $CONDA_PREFIX/etc/conda/activate.d
+RUN echo 'CUDNN_PATH=$(dirname $(python -c "import nvidia.cudnn;print(nvidia.cudnn.__file__)"))' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+RUN echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/:$CUDNN_PATH/lib' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+RUN conda install -c nvidia cuda-nvcc=11.3.58
+RUN printf 'export XLA_FLAGS=--xla_gpu_cuda_data_dir=$CONDA_PREFIX/lib/\n' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+RUN source $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
 
-# Copy BiaPy
-RUN git clone --depth 1 https://github.com/danifranco/BiaPy.git /installations/BiaPy
+RUN mkdir -p $CONDA_PREFIX/lib/nvvm/libdevice
+RUN cp $CONDA_PREFIX/lib/libdevice.10.bc $CONDA_PREFIX/lib/nvvm/libdevice/
 
-## For the following lines create .dockerignore containing .git folder
-#RUN ls /installations
-#COPY BiaPy /installations/BiaPy
+RUN pip install imgaug matplotlib scikit-learn pydot yacs tqdm scikit-image edt fill-voids opencv-python pandas
 
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "/installations/BiaPy/main.py"]
