@@ -490,7 +490,10 @@ class Config:
         _C.MODEL.Z_DOWN = [0, 0, 0, 0]
         # Checkpoint: set to True to load previous training weigths (needed for inference or to make fine-tunning)
         _C.MODEL.LOAD_CHECKPOINT = False
-
+        # Create a png with the model's architecture. You must install pydot (`pip install pydot`) and install graphviz 
+        # (in the OS, see instructions at https://graphviz.gitlab.io/download/) for plot_model to work
+        _C.MODEL.MAKE_PLOT = False
+        
         # TIRAMISU
         # Depth of the network. Only used when MODEL.ARCHITECTURE = 'tiramisu'. For the rest options it is inferred.
         _C.MODEL.TIRAMISU_DEPTH = 3

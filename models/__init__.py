@@ -98,6 +98,7 @@ def build_model(cfg, job_identifier):
     model.summary(line_length=150)
     os.makedirs(cfg.PATHS.CHARTS, exist_ok=True)
     model_name = os.path.join(cfg.PATHS.CHARTS, "model_plot_" + job_identifier + ".png")
-    plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
+    if cfg.MODEL.MAKE_PLOT:
+        plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
     return model
