@@ -65,7 +65,7 @@ class Super_resolution(Base_Workflow):
             save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
     
         # Calculate PSNR
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             m_val = 255 if Y.dtype != np.uint16 else 65535
             psnr_per_image = PSNR(pred, Y, m_val)
             self.stats['psnr_per_image'] += psnr_per_image
@@ -85,7 +85,7 @@ class Super_resolution(Base_Workflow):
     def print_stats(self, image_counter):
         self.normalize_stats(image_counter)
 
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             print("Test PSNR (merge patches): {}".format(self.stats['psnr_per_image']))
             print(" ")
 

@@ -23,13 +23,13 @@ class Denoising(Base_Workflow):
             if self.cfg.PROBLEM.NDIM == '2D':
                 obj = crop_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
                     padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
-                if self.cfg.DATA.TEST.LOAD_GT:
+                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
                     X, Y = obj
                 else:
                     X = obj
                 del obj
             else:
-                if self.cfg.DATA.TEST.LOAD_GT: Y = Y[0]
+                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST: Y = Y[0]
                 if self.cfg.TEST.REDUCE_MEMORY:
                     X = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
                         padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
@@ -41,7 +41,7 @@ class Denoising(Base_Workflow):
                     obj = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
                         padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
                         median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
-                    if self.cfg.DATA.TEST.LOAD_GT:
+                    if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
                         X, Y = obj
                     else:
                         X = obj
@@ -81,7 +81,7 @@ class Denoising(Base_Workflow):
                 obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=Y,
                     padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
                     verbose=self.cfg.TEST.VERBOSE)
-                if self.cfg.DATA.TEST.LOAD_GT:
+                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
                     pred, Y = obj
                 else:
                     pred = obj

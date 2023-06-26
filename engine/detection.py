@@ -17,7 +17,7 @@ class Detection(Base_Workflow):
         super().__init__(cfg, model, post_processing)
 
         self.original_test_mask_path = original_test_mask_path    
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             self.csv_files = sorted(next(os.walk(original_test_mask_path))[2])
         self.cell_count_file = os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, 'cell_counter.csv')
         self.cell_count_lines = []
@@ -84,16 +84,16 @@ class Detection(Base_Workflow):
             print("Creating the images with detected points . . .")   
             points_pred = np.zeros(pred.shape[:-1], dtype=np.uint8)
             for n, pred_coordinates in enumerate(all_points):
-                if self.cfg.DATA.TEST.LOAD_GT:
+                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
                     pred_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
                 for j, coord in enumerate(pred_coordinates):
                     z,y,x = coord
                     points_pred[z,y,x] = n+1
-                    if self.cfg.DATA.TEST.LOAD_GT:
+                    if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
                         pred_id_img[z,y,x] = j+1
                 
                 # Dilate and save the prediction ids for the current class 
-                if self.cfg.DATA.TEST.LOAD_GT:
+                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
                     for i in range(pred_id_img.shape[0]):                                                                                  
                         pred_id_img[i] = dilation(pred_id_img[i], disk(3))
                     save_tif(np.expand_dims(np.expand_dims(pred_id_img,0),-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
@@ -101,7 +101,7 @@ class Detection(Base_Workflow):
 
                 self.cell_count_lines.append([filenames, len(pred_coordinates)])
 
-            if self.cfg.DATA.TEST.LOAD_GT: del pred_id_img
+            if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST: del pred_id_img
 
             # Dilate and save the detected point image
             if len(pred_coordinates) > 0:
@@ -177,7 +177,7 @@ class Detection(Base_Workflow):
                 del df
 
             # Calculate detection metrics
-            if self.cfg.DATA.TEST.LOAD_GT:
+            if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
                 all_channel_d_metrics = [0,0,0]
                 dfs = []
                 gt_all_coords = []
@@ -288,7 +288,7 @@ class Detection(Base_Workflow):
             csvwriter.writerow(['filename', 'cells'])
             for nr in range(len(self.cell_count_lines)):
                 csvwriter.writerow([nr+1] + self.cell_count_lines[nr])
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             if self.cfg.TEST.STATS.PER_PATCH:
                 self.stats['d_precision_per_crop'] = self.stats['d_precision_per_crop'] / image_counter
                 self.stats['d_recall_per_crop'] = self.stats['d_recall_per_crop'] / image_counter
@@ -314,7 +314,7 @@ class Detection(Base_Workflow):
         super().print_post_processing_stats()
 
         print("Detection specific metrics:")
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             if self.cfg.TEST.STATS.PER_PATCH:
                 print("Detection - Test Precision (merge patches): {}".format(self.stats['d_precision_per_crop']))
                 print("Detection - Test Recall (merge patches): {}".format(self.stats['d_recall_per_crop']))

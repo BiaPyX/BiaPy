@@ -18,7 +18,7 @@ class Instance_Segmentation(Base_Workflow):
         super().__init__(cfg, model, post_processing)
 
         self.original_test_mask_path = original_test_mask_path 
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             self.original_test_mask_ids = sorted(next(os.walk(self.original_test_mask_path))[2])
         self.all_matching_stats = []
         self.post_processing = post_processing
@@ -72,7 +72,7 @@ class Instance_Segmentation(Base_Workflow):
         if w_pred.ndim == 2:
             w_pred = np.expand_dims(w_pred,0)
 
-        if self.cfg.TEST.MATCHING_STATS and self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
             print("Calculating matching stats . . .")
 
             # Need to load instance labels, as Y are binary channels used for IoU calculation
@@ -176,7 +176,7 @@ class Instance_Segmentation(Base_Workflow):
             save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                 filenames, verbose=self.cfg.TEST.VERBOSE)
 
-            if self.cfg.TEST.MATCHING_STATS and self.cfg.DATA.TEST.LOAD_GT:
+            if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
                 print("Calculating matching stats after post-processing . . .")
                 results = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=True)
                 
@@ -243,13 +243,13 @@ class Instance_Segmentation(Base_Workflow):
             print("Analysing all images as a 3D stack . . .")    
             if type(self.all_pred) is list:
                 self.all_pred = np.concatenate(self.all_pred)
-                self.all_gt = np.concatenate(self.all_gt) if self.cfg.DATA.TEST.LOAD_GT else None
+                self.all_gt = np.concatenate(self.all_gt) if (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST) else None
             self.instance_seg_process(self.all_pred,  self.all_gt, ["3D_stack.tif"], [])
 
     def normalize_stats(self, image_counter): 
         super().normalize_stats(image_counter) 
 
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
             if self.cfg.TEST.MATCHING_STATS:
                 self.stats['inst_stats'] = wrapper_matching_dataset_lazy(self.all_matching_stats, self.cfg.TEST.MATCHING_STATS_THS)
                 if self.post_processing['instance_post']:
@@ -260,7 +260,7 @@ class Instance_Segmentation(Base_Workflow):
         super().print_post_processing_stats()
 
         print("Instance segmentation specific metrics:")
-        if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.MATCHING_STATS:
+        if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST) :
             for i in range(len(self.cfg.TEST.MATCHING_STATS_THS)):
                 print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                 print(self.stats['inst_stats'][i])

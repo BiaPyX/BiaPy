@@ -108,7 +108,7 @@ class Self_supervised(Base_Workflow):
     def print_stats(self, image_counter):
         self.normalize_stats(image_counter)
 
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             print("Test PSNR (merge patches): {}".format(self.stats['psnr_per_image']))
             print(" ")
 
