@@ -26,7 +26,6 @@ RUN git clone --depth 1 https://github.com/danifranco/BiaPy.git /installations/B
 
 # Create the environment
 ENV PATH="/opt/conda/bin:$PATH"
-RUN ls -al /installations/miniconda3/etc/profile.d/conda.sh
 RUN . /installations/miniconda3/etc/profile.d/conda.sh
 RUN conda update -qy conda \
     && conda create -n BiaPy_env python=3.10.10 \
@@ -48,6 +47,6 @@ RUN source $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
 RUN mkdir -p $CONDA_PREFIX/lib/nvvm/libdevice
 RUN cp $CONDA_PREFIX/lib/libdevice.10.bc $CONDA_PREFIX/lib/nvvm/libdevice/
 
-RUN pip install imgaug matplotlib scikit-learn pydot yacs tqdm scikit-image edt fill-voids opencv-python pandas
+RUN cd /installations/BiaPy/ && pip install --editable .
 
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "/installations/BiaPy/main.py"]
