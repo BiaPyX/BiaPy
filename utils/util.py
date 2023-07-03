@@ -1009,8 +1009,9 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
     same_shape = True
     s = data[0].shape
     dtype = data[0].dtype
+    drange = data_range(data[0])
     for i in range(1,len(data)):
-        if dtype != data[i].dtype:
+        if dtype != data[i].dtype and drange != data_range(data[i]):
             raise ValueError("Data type mismatch {} and {} found in the dataset. Please check it and ensure all"
                              " images have same data type".format(dtype,data[i].dtype))
         if s != data[i].shape:
@@ -1236,8 +1237,9 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
     same_shape = True
     s = data[0].shape
     dtype = data[0].dtype
+    drange = data_range(data[0])
     for i in range(1,len(data)):
-        if dtype != data[i].dtype:
+        if dtype != data[i].dtype and drange != data_range(data[i]):
             raise ValueError("Data type mismatch {} and {} found in the dataset. Please check it and ensure all"
                              " images have same data type".format(dtype,data[i].dtype))
         if s != data[i].shape:
@@ -1385,10 +1387,30 @@ def check_value(value, value_range=(0,1)):
     """Checks if a value is within a range """
     if isinstance(value, list) or isinstance(value, tuple):
         for i in range(len(value)):
-            if not (value_range[0] <= value[i] <= value_range[1]):    
-                return False
+            if isinstance(value[i], np.ndarray):
+                if value_range[0] <= np.min(value[i]) or np.max(value[i]) <= value_range[1]:
+                    return False
+            else:
+                if not (value_range[0] <= value[i] <= value_range[1]):    
+                    return False
         return True 
-    else:   
-        if value_range[0] <= value <= value_range[1]:
-            return True
+    else:
+        if isinstance(value, np.ndarray):
+            if value_range[0] <= np.min(value) and np.max(value) <= value_range[1]:
+                return True
+        else:  
+            if value_range[0] <= value <= value_range[1]:
+                return True
         return False
+
+def data_range(x):
+    if not isinstance(x, np.ndarray):
+        raise ValueError("Input array of type {} and not numpy array".format(type(x)))
+    if check_value(x, (0,1)):
+        return "01 range"
+    elif check_value(x, (0,255)):
+        return "uint8 range"
+    elif check_value(x, (0,65535)):
+        return "uint16 range"
+    else:
+        return "none_range"
