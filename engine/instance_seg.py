@@ -170,7 +170,7 @@ class Instance_Segmentation(Base_Workflow):
             del df
 
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
-            w_pred = voronoi_on_mask(w_pred, pred, verbose=self.cfg.TEST.VERBOSE)
+            w_pred = voronoi_on_mask(w_pred, pred, th=self.cfg.TEST.POST_PROCESSING.VORONOI_TH, verbose=self.cfg.TEST.VERBOSE)
 
         if self.post_processing['instance_post']:
             save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,

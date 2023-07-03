@@ -631,6 +631,9 @@ class Config:
         ### Instance segmentation
         # Whether to apply Voronoi using 'BC' or 'M' channels need to be present
         _C.TEST.POST_PROCESSING.VORONOI_ON_MASK = False
+        # Threshold to be applied to the 'M' channel when expanding the instances with Voronoi. Need to be in [0,1] range.
+        # Leave it to 0 to adjust the threhold with Otsu
+        _C.TEST.POST_PROCESSING.VORONOI_TH = 0.
         # Set it to try to repare large instances by merging their neighbors with them and removing possible central holes.  
         # Its value determines which instances are going to be repared by size (number of pixels that compose the instance)
         # This option is useful when PROBLEM.INSTANCE_SEG.DATA_CHANNELS is 'BP', as multiple central seeds may appear in big 
