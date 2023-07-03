@@ -340,7 +340,7 @@ def check_configuration(cfg):
         raise ValueError("'TEST.STATS.FULL_IMG' can not be activate when using UNETR") 
 
     ### Train ###
-    assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM']
+    assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM', 'ADAMW']
     assert cfg.LOSS.TYPE in ['CE', 'W_CE_DICE', 'MASKED_BCE']
     if cfg.TRAIN.LR_SCHEDULER.NAME != '':
         if cfg.TRAIN.LR_SCHEDULER.NAME not in ['reduceonplateau', 'warmupcosine', 'onecycle']:

@@ -527,7 +527,7 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.TRAIN = CN()
         _C.TRAIN.ENABLE = False
-        # Optimizer to use. Possible values: "SGD" or "ADAM"
+        # Optimizer to use. Possible values: "SGD", "ADAM" or "ADAMW"
         _C.TRAIN.OPTIMIZER = 'SGD'
         # Learning rate 
         _C.TRAIN.LR = 1.E-4
