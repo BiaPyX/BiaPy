@@ -24,7 +24,7 @@ class Single2DImageDataGenerator(SingleBaseDataGenerator):
         return img 
 
     def save_aug_samples(self, img, orig_image, i, pos, out_dir, draw_grid):
-        if draw_grid: self.draw_grid(orig_images['o_x'])
+        if draw_grid: self.draw_grid(orig_image['o_x'])
         aux = np.expand_dims(orig_image['o_x'], 0).astype(np.float32)
         save_tif(aux, out_dir, [str(i)+"_"+str(pos)+'_orig_x'+self.trans_made+".tif"], verbose=False)
         # Save transformed images
