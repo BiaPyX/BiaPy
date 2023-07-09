@@ -1020,7 +1020,9 @@ def GridMask(img, channels, z_size, ratio=0.6, d_range=(30,60), rotate=1, invert
 
 def random_crop_pair(image, mask, random_crop_size, val=False, draw_prob_map_points=False, img_prob=None, weight_map=None,
         scale=1):
-    """Random crop for an image and its mask.
+    """Random crop for an image and its mask. No crop is done in those dimensions that ``random_crop_size`` is greater than
+       the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size``
+       is ``224x224`` the resulting image will be ``224x150``.
 
        Parameters
        ----------
@@ -1109,8 +1111,8 @@ def random_crop_pair(image, mask, random_crop_size, val=False, draw_prob_map_poi
                 x -= int(random_crop_size[1]/2)
         else:
             oy, ox = 0, 0
-            x = np.random.randint(0, width - dx + 1)
-            y = np.random.randint(0, height - dy + 1)
+            x = np.random.randint(0, width - dx + 1) if width - dx +1 > 0 else 0
+            y = np.random.randint(0, height - dy + 1) if height - dy +1 > 0 else 0
 
     if draw_prob_map_points == True:
         return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], oy, ox, y, x
@@ -1123,7 +1125,9 @@ def random_crop_pair(image, mask, random_crop_size, val=False, draw_prob_map_poi
 
 def random_3D_crop_pair(image, mask, random_crop_size, val=False, img_prob=None, weight_map=None, draw_prob_map_points=False,
         scale=1):
-    """Extracts a random 3D patch from the given image and mask.
+    """Extracts a random 3D patch from the given image and mask. No crop is done in those dimensions that ``random_crop_size`` is 
+       greater than the input image shape in those dimensions. For instance, if an input image is ``10x400x150`` and ``random_crop_size``
+       is ``10x224x224`` the resulting image will be ``10x224x150``.
 
        Parameters
        ----------
@@ -1189,9 +1193,6 @@ def random_3D_crop_pair(image, mask, random_crop_size, val=False, img_prob=None,
 
     deep, cols, rows = vol.shape[0], vol.shape[1], vol.shape[2]
     dz, dy, dx = random_crop_size
-    assert rows >= dx
-    assert cols >= dy
-    assert deep >= dz
     if val:
         x, y, z, ox, oy, oz = 0, 0, 0, 0, 0, 0
     else:
@@ -1235,9 +1236,9 @@ def random_3D_crop_pair(image, mask, random_crop_size, val=False, img_prob=None,
             ox = 0
             oy = 0
             oz = 0
-            z = np.random.randint(0, deep - dz + 1)
-            y = np.random.randint(0, cols - dy + 1)
-            x = np.random.randint(0, rows - dx + 1)
+            z = np.random.randint(0, deep - dz + 1) if deep - dz +1 > 0 else 0
+            y = np.random.randint(0, cols - dy + 1) if cols - dy +1 > 0 else 0
+            x = np.random.randint(0, rows - dx + 1) if rows - dx +1 > 0 else 0
 
     if draw_prob_map_points:
         return vol[z:(z+dz), y:(y+dy), x:(x+dx)], mask[z*scale:(z+dz)*scale, y*scale:(y+dy)*scale, x*scale:(x+dx)*scale],\
@@ -1251,7 +1252,7 @@ def random_3D_crop_pair(image, mask, random_crop_size, val=False, img_prob=None,
 
 
 def random_crop_single(image, random_crop_size, val=False, draw_prob_map_points=False, weight_map=None):
-    """Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater that
+    """Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater than
        the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size``
        is ``224x224`` the resulting image will be ``224x150``.
 
@@ -1301,8 +1302,6 @@ def random_crop_single(image, random_crop_size, val=False, draw_prob_map_points=
 
     height, width  = img.shape[0], img.shape[1]
     dy, dx = random_crop_size
-    assert height >= dy
-    assert width >= dx
     if val:
         x, y, z, ox, oy, oz = 0, 0, 0, 0, 0, 0
     else:
@@ -1320,7 +1319,7 @@ def random_crop_single(image, random_crop_size, val=False, draw_prob_map_points=
 
 
 def random_3D_crop_single(image, random_crop_size, val=False, draw_prob_map_points=False, weight_map=None):
-    """Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater that
+    """Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater than
        the input image shape in those dimensions. For instance, if an input image is ``50x400x150`` and ``random_crop_size``
        is ``30x224x224`` the resulting image will be ``30x224x150``.
 
@@ -1376,9 +1375,6 @@ def random_3D_crop_single(image, random_crop_size, val=False, draw_prob_map_poin
 
     deep, cols, rows = img.shape[0], img.shape[1], img.shape[2]
     dz, dy, dx = random_crop_size
-    assert rows >= dx
-    assert cols >= dy
-    assert deep >= dz
     if val:
         x, y, z, ox, oy, oz = 0, 0, 0, 0, 0, 0
     else:
@@ -1422,9 +1418,9 @@ def random_3D_crop_single(image, random_crop_size, val=False, draw_prob_map_poin
             ox = 0
             oy = 0
             oz = 0
-            z = np.random.randint(0, deep - dz + 1)
-            y = np.random.randint(0, cols - dy + 1)
-            x = np.random.randint(0, rows - dx + 1)
+            z = np.random.randint(0, deep - dz + 1) if deep - dz +1 > 0 else 0
+            y = np.random.randint(0, cols - dy + 1) if cols - dy + 1 > 0 else 0
+            x = np.random.randint(0, rows - dx + 1) if rows - dx + 1 > 0 else 0
 
     if draw_prob_map_points:
         return img[z:(z+dz), y:(y+dy), x:(x+dx)], oz, oy, ox, z, y, x
