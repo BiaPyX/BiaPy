@@ -351,7 +351,6 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                     img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
 
             img_class = self.class_numbers[sample_class_dir]
-
         img = self.ensure_shape(img)
 
         return img, img_class
@@ -385,7 +384,6 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if self.da:
             img = self.apply_transform(img)
 
-        img_class = tf.keras.utils.to_categorical(img_class, self.n_classes)
         return img, img_class
 
     def apply_transform(self, image):

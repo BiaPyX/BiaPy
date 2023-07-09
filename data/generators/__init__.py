@@ -201,10 +201,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
     # Decide number of processes
     num_parallel_calls = tf.data.AUTOTUNE if cfg.SYSTEM.NUM_CPUS == -1 else cfg.SYSTEM.NUM_CPUS
     
-    if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-        out_dtype = tf.uint8
-    else:
-        out_dtype = tf.float32
+    out_dtype = tf.uint16 if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else tf.float32
 
     # Paralelize as explained in: 
     # https://medium.com/@acordier/tf-data-dataset-generators-with-parallelization-the-easy-way-b5c5f7d2a18
@@ -230,7 +227,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
         if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
             y.set_shape([None, ]*(len(cfg.DATA.PATCH_SIZE)+1)) 
         else:
-            y.set_shape([None, cfg.MODEL.N_CLASSES]) 
+            y.set_shape([None]) 
         return x, y
 
     global_batch_size = cfg.TRAIN.BATCH_SIZE * num_gpus

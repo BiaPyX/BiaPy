@@ -33,7 +33,10 @@ def prepare_optimizer(cfg, model):
     metric_name = []
     if cfg.PROBLEM.TYPE == "CLASSIFICATION":
         metric_name.append("accuracy")
-        model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=[metric_name])
+        metric_name.append("top-5-accuracy")
+        model.compile(optimizer=opt, loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True), 
+            metrics=[tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy"),
+                     tf.keras.metrics.SparseTopKCategoricalAccuracy(5, name="top-5-accuracy")])
     elif cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", 'DETECTION']:
         if cfg.LOSS.TYPE == "CE": 
             if cfg.MODEL.N_CLASSES == 1 or cfg.MODEL.N_CLASSES == 2: # Binary case
