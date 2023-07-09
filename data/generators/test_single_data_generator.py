@@ -48,10 +48,13 @@ class test_single_data_generator(tf.keras.utils.Sequence):
        crop_center : bool, optional
            Whether to extract a
 
+       sample_ids :  List of ints, optional
+           When cross validation is used specific training samples are passed to the generator. 
+           Not used in this generator. 
     """
     def __init__(self, ndim, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, seed=42,
-                 instance_problem=False, norm_custom_mean=None, 
-                 norm_custom_std=None, crop_center=False, resize_shape=None):
+                 instance_problem=False, norm_custom_mean=None, norm_custom_std=None, crop_center=False, 
+                 resize_shape=None, sample_ids=None):
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
         if provide_Y and Y is None:

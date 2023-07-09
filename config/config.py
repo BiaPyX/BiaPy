@@ -463,7 +463,7 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.MODEL = CN()
         # Architecture of the network. Possible values are: 'unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'nnunet', 'tiramisu', 
-        # 'mnet', 'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr'
+        # 'mnet', 'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr', 'ViT'
         _C.MODEL.ARCHITECTURE = 'unet'
         # Number of feature maps on each level of the network.
         _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]
@@ -498,20 +498,23 @@ class Config:
         # Depth of the network. Only used when MODEL.ARCHITECTURE = 'tiramisu'. For the rest options it is inferred.
         _C.MODEL.TIRAMISU_DEPTH = 3
 
-        # UNETR
+        # TRANSFORMERS MODELS
         # Size of the patches that are extracted from the input image.
-        _C.MODEL.UNETR_TOKEN_SIZE = 16
+        _C.MODEL.VIT_TOKEN_SIZE = 16
         # Dimension of the embedding space
-        _C.MODEL.UNETR_EMBED_DIM = 768
+        _C.MODEL.VIT_EMBED_DIM = 64
         # Number of transformer encoder layers
-        _C.MODEL.UNETR_DEPTH = 12
-        # Number of units in the MLP blocks. 
-        _C.MODEL.UNETR_MLP_HIDDEN_UNITS = [3072, 768]
+        _C.MODEL.VIT_DEPTH = 12
         # Number of heads in the multi-head attention layer.
-        _C.MODEL.UNETR_NUM_HEADS = 4
+        _C.MODEL.VIT_NUM_HEADS = 4
+        # Size of the dense layers of the final classifier
+        _C.MODEL.VIT_MLP_HEAD_UNITS = [2048, 1024] 
+
+        # UNETR
         # Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted
         _C.MODEL.UNETR_VIT_HIDD_MULT = 3
-        
+        # Number of filters in the first UNETR's layer of the decoder. In each layer the previous number of filters is doubled.
+        _C.MODEL.UNETR_VIT_NUM_FILTERS = 16
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss

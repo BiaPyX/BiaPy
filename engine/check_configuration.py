@@ -308,12 +308,9 @@ def check_configuration(cfg):
     ### Model ###
     assert cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'tiramisu', 'mnet',
                                       'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr',
-                                      'srunet', 'rcan', 'dfcan', 'wdsr']
+                                      'srunet', 'rcan', 'dfcan', 'wdsr', 'ViT']
     if cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet'] and cfg.PROBLEM.NDIM == '3D' and cfg.PROBLEM.TYPE != "CLASSIFICATION":
         raise ValueError("For 3D these models are available: {}".format(['unet', 'resunet', 'seunet', 'attention_unet']))
-    if cfg.MODEL.ARCHITECTURE == "unetr":
-        if cfg.MODEL.UNETR_EMBED_DIM != cfg.MODEL.UNETR_MLP_HIDDEN_UNITS[1]:
-            raise ValueError("'MODEL.UNETR_EMBED_DIM' and 'MODEL.UNETR_MLP_HIDDEN_UNITS[1]' need to ")
     if cfg.MODEL.N_CLASSES > 1 and cfg.PROBLEM.TYPE != "CLASSIFICATION" and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
         raise ValueError("'MODEL.N_CLASSES' > 1 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'seunet', 'attention_unet']")
     if cfg.MODEL.LAST_ACTIVATION not in ['softmax', 'sigmoid', 'linear']:
@@ -334,8 +331,8 @@ def check_configuration(cfg):
                          .format(cfg.PROBLEM.TYPE))
     if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION' and cfg.MODEL.ARCHITECTURE not in ['edsr', 'srunet', 'rcan', 'dfcan', 'wdsr']:
         raise ValueError("Architectures available for 'SUPER_RESOLUTION' are: ['edsr', 'srunet', 'rcan', 'dfcan', 'wdsr']")
-    if cfg.PROBLEM.TYPE == 'CLASSIFICATION' and cfg.MODEL.ARCHITECTURE not in ['simple_cnn', 'EfficientNetB0']:
-        raise ValueError("Architectures available for 'CLASSIFICATION' are: ['simple_cnn', 'EfficientNetB0']")
+    if cfg.PROBLEM.TYPE == 'CLASSIFICATION' and cfg.MODEL.ARCHITECTURE not in ['simple_cnn', 'EfficientNetB0', 'ViT']:
+        raise ValueError("Architectures available for 'CLASSIFICATION' are: ['simple_cnn', 'EfficientNetB0', 'ViT']")
     if cfg.MODEL.ARCHITECTURE == "unetr" and cfg.TEST.STATS.FULL_IMG:
         raise ValueError("'TEST.STATS.FULL_IMG' can not be activate when using UNETR") 
 

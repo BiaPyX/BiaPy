@@ -24,7 +24,7 @@ def build_model(cfg, job_identifier):
     if cfg.MODEL.ARCHITECTURE in ['fcn32', 'fcn8']:
         modelname = 'fcn_vgg'
     else:
-        modelname = cfg.MODEL.ARCHITECTURE
+        modelname = str(cfg.MODEL.ARCHITECTURE).lower()
     mdl = importlib.import_module('models.'+modelname)
     names = [x for x in mdl.__dict__ if not x.startswith("_")]
     globals().update({k: getattr(mdl, k) for k in names})
@@ -58,6 +58,14 @@ def build_model(cfg, job_identifier):
         elif cfg.MODEL.ARCHITECTURE == 'EfficientNetB0':
             shape = (224, 224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.DATA.PATCH_SIZE[:-1] != (224, 224) else cfg.DATA.PATCH_SIZE
             model = efficientnetb0(shape, n_classes=cfg.MODEL.N_CLASSES)
+        elif cfg.MODEL.ARCHITECTURE == 'ViT':
+            num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.VIT_TOKEN_SIZE)**2
+            transformer_units = [cfg.MODEL.VIT_EMBED_DIM * 2, cfg.MODEL.VIT_EMBED_DIM]  # Size of the transformer layers
+            args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, num_patches=num_patches,
+                projection_dim=cfg.MODEL.VIT_EMBED_DIM, transformer_layers=cfg.MODEL.VIT_DEPTH, num_heads=cfg.MODEL.VIT_NUM_HEADS,
+                transformer_units=transformer_units, mlp_head_units=cfg.MODEL.VIT_MLP_HEAD_UNITS, num_classes=cfg.MODEL.N_CLASSES, 
+                dropout=cfg.MODEL.DROPOUT_VALUES)
+            model = ViT(**args)
         elif cfg.MODEL.ARCHITECTURE == 'fcn32':
             model = FCN32_VGG16(cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
         elif cfg.MODEL.ARCHITECTURE == 'fcn8':
@@ -71,11 +79,12 @@ def build_model(cfg, job_identifier):
         elif cfg.MODEL.ARCHITECTURE == 'multiresunet':
             model = MultiResUnet(None, None, cfg.DATA.PATCH_SIZE[-1])
         elif cfg.MODEL.ARCHITECTURE == 'unetr':
-            num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.UNETR_TOKEN_SIZE)**2
-            args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.UNETR_TOKEN_SIZE, num_patches=num_patches,
-                projection_dim=cfg.MODEL.UNETR_EMBED_DIM, transformer_layers=cfg.MODEL.UNETR_DEPTH, num_heads=cfg.MODEL.UNETR_NUM_HEADS,
-                transformer_units=cfg.MODEL.UNETR_MLP_HIDDEN_UNITS, data_augmentation = None, num_filters = 16, 
-                num_classes=cfg.MODEL.N_CLASSES, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
+            num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.VIT_TOKEN_SIZE)**2
+            transformer_units = [projection_dim * 2, projection_dim]  # Size of the transformer layers
+            args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, num_patches=num_patches,
+                projection_dim=cfg.MODEL.VIT_EMBED_DIM, transformer_layers=cfg.MODEL.VIT_DEPTH, num_heads=cfg.MODEL.VIT_NUM_HEADS,
+                transformer_units=transformer_units, mlp_head_units=cfg.MODEL.VIT_MLP_HEAD_UNITS, num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS, 
+                num_classes=cfg.MODEL.N_CLASSES, decoder_activation='relu', decoder_kernel_init='he_normal',
                 ViT_hidd_mult = cfg.MODEL.UNETR_VIT_HIDD_MULT, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES)
             model = UNETR_2D(**args)
         elif cfg.MODEL.ARCHITECTURE == 'edsr':
