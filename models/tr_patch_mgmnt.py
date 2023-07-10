@@ -3,20 +3,29 @@ from tensorflow.keras import layers
 
 class Patches(layers.Layer):
     # It takes a batch of images and returns a batch of patches
-    def __init__(self, patch_size, patch_dims):
+    def __init__(self, patch_size, patch_dims, ndim):
         super(Patches, self).__init__()
         self.patch_size = patch_size
         self.patch_dims = patch_dims
+        self.ndim = ndim
 
     def call(self, images):
         batch_size = tf.shape(images)[0]
-        patches = tf.image.extract_patches(
-            images=images,
-            sizes=[1, self.patch_size, self.patch_size, 1],
-            strides=[1, self.patch_size, self.patch_size, 1],
-            rates=[1, 1, 1, 1],
-            padding="VALID",
-        )
+        if self.ndim == 2:
+            patches = tf.image.extract_patches(
+                images=images,
+                sizes=[1, self.patch_size, self.patch_size, 1],
+                strides=[1, self.patch_size, self.patch_size, 1],
+                rates=[1, 1, 1, 1],
+                padding="VALID",
+            )
+        else:
+            patches = tf.extract_volume_patches(
+                input=images,
+                ksizes=[1, self.patch_size, self.patch_size, self.patch_size, 1],
+                strides=[1, self.patch_size, self.patch_size, self.patch_size, 1],
+                padding="VALID",
+            )
         patches = tf.reshape(patches, [
             batch_size if batch_size is not None else -1, 
             -1,
@@ -28,6 +37,7 @@ class Patches(layers.Layer):
         config.update({
             'patch_size': self.patch_size,
             'patch_dims': self.patch_dims,
+            'ndim': self.ndim,
         })
         return config
 

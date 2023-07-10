@@ -309,7 +309,7 @@ def check_configuration(cfg):
     assert cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'tiramisu', 'mnet',
                                       'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr',
                                       'srunet', 'rcan', 'dfcan', 'wdsr', 'ViT']
-    if cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet'] and cfg.PROBLEM.NDIM == '3D' and cfg.PROBLEM.TYPE != "CLASSIFICATION":
+    if cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet', 'unetr'] and cfg.PROBLEM.NDIM == '3D' and cfg.PROBLEM.TYPE != "CLASSIFICATION":
         raise ValueError("For 3D these models are available: {}".format(['unet', 'resunet', 'seunet', 'attention_unet']))
     if cfg.MODEL.N_CLASSES > 1 and cfg.PROBLEM.TYPE != "CLASSIFICATION" and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
         raise ValueError("'MODEL.N_CLASSES' > 1 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'seunet', 'attention_unet']")
@@ -333,9 +333,15 @@ def check_configuration(cfg):
         raise ValueError("Architectures available for 'SUPER_RESOLUTION' are: ['edsr', 'srunet', 'rcan', 'dfcan', 'wdsr']")
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' and cfg.MODEL.ARCHITECTURE not in ['simple_cnn', 'EfficientNetB0', 'ViT']:
         raise ValueError("Architectures available for 'CLASSIFICATION' are: ['simple_cnn', 'EfficientNetB0', 'ViT']")
-    if cfg.MODEL.ARCHITECTURE == "unetr" and cfg.TEST.STATS.FULL_IMG:
-        raise ValueError("'TEST.STATS.FULL_IMG' can not be activate when using UNETR") 
-
+    if cfg.MODEL.ARCHITECTURE == "unetr":
+        if cfg.TEST.STATS.FULL_IMG:
+            raise ValueError("'TEST.STATS.FULL_IMG' can not be activate when using UNETR") 
+    if cfg.MODEL.ARCHITECTURE in ["unetr", 'ViT']:    
+        if len(cfg.MODEL.VIT_MLP_HEAD_UNITS) != 2:
+            raise ValueError("'MODEL.VIT_MLP_HEAD_UNITS' need to be a 2D tuple") 
+        if cfg.MODEL.VIT_MLP_HEAD_UNITS[1] != cfg.MODEL.VIT_EMBED_DIM:
+            raise ValueError("'MODEL.VIT_MLP_HEAD_UNITS[1]' need to be equal to 'cfg.MODEL.VIT_EMBED_DIM', given {} vs {} ."
+            .format(cfg.MODEL.VIT_MLP_HEAD_UNITS[1], cfg.MODEL.VIT_EMBED_DIM)) 
     ### Train ###
     assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM', 'ADAMW']
     assert cfg.LOSS.TYPE in ['CE', 'W_CE_DICE', 'MASKED_BCE']
