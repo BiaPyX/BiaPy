@@ -163,9 +163,9 @@ def two_yellow(x, filters, conv, activation='relu', kernel_initializer='glorot_u
     return x
 
 
-def UNETR(input_shape, patch_size, num_patches, projection_dim, transformer_layers, num_heads, transformer_units, 
+def UNETR(input_shape, patch_size, num_patches, hidden_size, transformer_layers, num_heads, transformer_units, 
           mlp_head_units, num_filters = 16, num_classes = 1, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
-          ViT_hidd_mult = 3, batch_norm = True, dropout = 0.0):
+          ViT_hidd_mult = 3, batch_norm = True, dropout = 0.0, last_act='sigmoid', output_channels="BC"):
     """
     UNETR architecture. It combines a ViT with U-Net, replaces the convolutional encoder 
     with the ViT and adapt each skip connection signal to their layer's spatial dimensionality. 
@@ -186,7 +186,7 @@ def UNETR(input_shape, patch_size, num_patches, projection_dim, transformer_laye
     num_patches : int
         Number of patches to extract from the image. Take into account that each patch must be of specified patch_size.
 
-    projection_dim : int
+    hidden_size : int
         Dimension of the embedding space.
 
     transformer_layers : int
@@ -225,6 +225,13 @@ def UNETR(input_shape, patch_size, num_patches, projection_dim, transformer_laye
     dropout : bool, optional
         Dropout rate for the decoder (can be a list of dropout rates for each layer).
     
+    last_act : str, optional
+        Name of the last activation layer.
+
+    output_channels : str, optional
+        Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
+        ``BDv2``, ``Dv2`` and ``BCM``.
+
     Returns
     -------
     model : Keras model
@@ -243,7 +250,7 @@ def UNETR(input_shape, patch_size, num_patches, projection_dim, transformer_laye
         conv = Conv2D
         convtranspose = Conv2DTranspose
 
-    vit_input, hidden_states_out, encoded_patches = ViT(input_shape, patch_size, num_patches, projection_dim, 
+    vit_input, hidden_states_out, encoded_patches = ViT(input_shape, patch_size, num_patches, hidden_size, 
         transformer_layers, num_heads, transformer_units, mlp_head_units, dropout=dropout, use_as_backbone=True)
 
     # UNETR Part (bottom_up, from the bottle-neck, to the output)
@@ -254,18 +261,18 @@ def UNETR(input_shape, patch_size, num_patches, projection_dim, transformer_laye
     
     # bottleneck
     if ndim == 2:
-        z = Reshape([ input_shape[0]//patch_size, input_shape[1]//patch_size, projection_dim ])(encoded_patches) 
+        z = Reshape([ input_shape[0]//patch_size, input_shape[1]//patch_size, hidden_size ])(encoded_patches) 
     else:
-        z = Reshape([ input_shape[0]//patch_size, input_shape[1]//patch_size, input_shape[2]//patch_size, projection_dim ])(encoded_patches) 
+        z = Reshape([ input_shape[0]//patch_size, input_shape[1]//patch_size, input_shape[2]//patch_size, hidden_size ])(encoded_patches) 
     x = up_green_block(z, num_filters * (2**(total_upscale_factor-1)), convtranspose)
 
     for layer in reversed(range(1, total_upscale_factor)):
         # skips (with blue blocks)
         if ndim == 2:
-            z = Reshape([ input_shape[0]//patch_size, input_shape[1]//patch_size, projection_dim ])( hidden_states_out[ (ViT_hidd_mult * layer) - 1 ] )
+            z = Reshape([ input_shape[0]//patch_size, input_shape[1]//patch_size, hidden_size ])( hidden_states_out[ (ViT_hidd_mult * layer) - 1 ] )
         else:
             z = Reshape([ input_shape[0]//patch_size, input_shape[1]//patch_size, input_shape[2]//patch_size, \
-                projection_dim ])( hidden_states_out[ (ViT_hidd_mult * layer) - 1 ] )
+                hidden_size ])( hidden_states_out[ (ViT_hidd_mult * layer) - 1 ] )
         for _ in range(total_upscale_factor - layer):
             z = mid_blue_block(z, num_filters * (2**layer), conv, convtranspose, activation=decoder_activation, kernel_initializer=decoder_kernel_init, 
                 batch_norm=batch_norm, dropout=dropout[layer])
@@ -283,7 +290,26 @@ def UNETR(input_shape, patch_size, num_patches, projection_dim, transformer_laye
     # UNETR output 
     x = two_yellow(x, num_filters, conv, activation=decoder_activation, kernel_initializer=decoder_kernel_init, batch_norm=batch_norm, 
         dropout=dropout[0] )
-    output = conv(num_classes, 1, activation='sigmoid', name="mask") (x) # semantic segmentation -- ORIGINAL: softmax
 
-    model = Model(inputs=vit_input, outputs=output)
+    # Instance segmentation
+    if output_channels is not None:
+        if output_channels == "Dv2":
+            outputs = conv(1, 2, activation="linear", padding='same') (x)
+        elif output_channels in ["BC", "BP"]:
+            outputs = conv(2, 2, activation="sigmoid", padding='same') (x)
+        elif output_channels == "BCM":
+            outputs = conv(3, 2, activation="sigmoid", padding='same') (x)
+        elif output_channels in ["BDv2", "BD"]:
+            seg = conv(1, 2, activation="sigmoid", padding='same') (x)
+            dis = conv(1, 2, activation="linear", padding='same') (x)
+            outputs = Concatenate()([seg, dis])
+        elif output_channels in ["BCD", "BCDv2"]:
+            seg = conv(2, 2, activation="sigmoid", padding='same') (x)
+            dis = conv(1, 2, activation="linear", padding='same') (x)
+            outputs = Concatenate()([seg, dis])
+    # Other
+    else:
+        outputs = conv(n_classes, 1, activation=last_act) (x)
+
+    model = Model(inputs=vit_input, outputs=outputs)
     return model

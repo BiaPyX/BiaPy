@@ -17,7 +17,8 @@ requirements = [
      'opencv-python>=4.7.0.72',
      'pandas>=2.0.2',
      'nvidia-cudnn-cu11==8.6.0.163',
-     'tensorflow==2.12.0'
+     'tensorflow==2.12.0',
+     'tensorflow-addons==0.20.0',
 ]
 
 

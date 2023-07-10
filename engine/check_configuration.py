@@ -323,7 +323,7 @@ def check_configuration(cfg):
         'fcn8', 'tiramisu', 'mnet', 'multiresunet', 'seunet', 'unetr']:
         raise ValueError("Not implemented pipeline option: semantic segmentation models are ['unet', 'resunet', "
                          "'attention_unet', 'fcn32', 'fcn8', 'tiramisu', 'mnet', 'multiresunet', 'seunet', 'unetr']")
-    if cfg.PROBLEM.TYPE == "INSTANCE_SEG" and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
+    if cfg.PROBLEM.TYPE == "INSTANCE_SEG" and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet', 'unetr']:
         raise ValueError("Not implemented pipeline option: instance segmentation models are ['unet', 'resunet', 'seunet', 'attention_unet']")    
     if cfg.PROBLEM.TYPE in ['DETECTION', 'DENOISING'] and \
         cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
@@ -337,11 +337,9 @@ def check_configuration(cfg):
         if cfg.TEST.STATS.FULL_IMG:
             raise ValueError("'TEST.STATS.FULL_IMG' can not be activate when using UNETR") 
     if cfg.MODEL.ARCHITECTURE in ["unetr", 'ViT']:    
-        if len(cfg.MODEL.VIT_MLP_HEAD_UNITS) != 2:
-            raise ValueError("'MODEL.VIT_MLP_HEAD_UNITS' need to be a 2D tuple") 
-        if cfg.MODEL.VIT_MLP_HEAD_UNITS[1] != cfg.MODEL.VIT_EMBED_DIM:
-            raise ValueError("'MODEL.VIT_MLP_HEAD_UNITS[1]' need to be equal to 'cfg.MODEL.VIT_EMBED_DIM', given {} vs {} ."
-            .format(cfg.MODEL.VIT_MLP_HEAD_UNITS[1], cfg.MODEL.VIT_EMBED_DIM)) 
+        if cfg.MODEL.VIT_HIDDEN_SIZE % cfg.MODEL.VIT_NUM_HEADS != 0:
+            raise ValueError("'MODEL.VIT_HIDDEN_SIZE' should be divisible by 'MODEL.VIT_NUM_HEADS'")
+            
     ### Train ###
     assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM', 'ADAMW']
     assert cfg.LOSS.TYPE in ['CE', 'W_CE_DICE', 'MASKED_BCE']

@@ -61,13 +61,13 @@ def build_model(cfg, job_identifier):
         elif cfg.MODEL.ARCHITECTURE == 'ViT':
             if cfg.PROBLEM.NDIM == '3D':
                 num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.VIT_TOKEN_SIZE)**3
-                transformer_units = [cfg.MODEL.VIT_EMBED_DIM * 3, cfg.MODEL.VIT_EMBED_DIM]  
+                transformer_units = [cfg.MODEL.VIT_HIDDEN_SIZE * 3, cfg.MODEL.VIT_HIDDEN_SIZE]  
             else:
                 num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.VIT_TOKEN_SIZE)**2
-                transformer_units = [cfg.MODEL.VIT_EMBED_DIM * 2, cfg.MODEL.VIT_EMBED_DIM] 
+                transformer_units = [cfg.MODEL.VIT_HIDDEN_SIZE * 2, cfg.MODEL.VIT_HIDDEN_SIZE] 
             args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, num_patches=num_patches,
-                projection_dim=cfg.MODEL.VIT_EMBED_DIM, transformer_layers=cfg.MODEL.VIT_DEPTH, num_heads=cfg.MODEL.VIT_NUM_HEADS,
-                transformer_units=transformer_units, mlp_head_units=cfg.MODEL.VIT_MLP_HEAD_UNITS, num_classes=cfg.MODEL.N_CLASSES, 
+                hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS,
+                transformer_units=transformer_units, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, num_classes=cfg.MODEL.N_CLASSES, 
                 dropout=cfg.MODEL.DROPOUT_VALUES)
             model = ViT(**args)
         elif cfg.MODEL.ARCHITECTURE == 'fcn32':
@@ -85,16 +85,18 @@ def build_model(cfg, job_identifier):
         elif cfg.MODEL.ARCHITECTURE == 'unetr':
             if cfg.PROBLEM.NDIM == '3D':
                 num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.VIT_TOKEN_SIZE)**3
-                transformer_units = [cfg.MODEL.VIT_EMBED_DIM * 3, cfg.MODEL.VIT_EMBED_DIM] 
+                transformer_units = [cfg.MODEL.VIT_HIDDEN_SIZE * 3, cfg.MODEL.VIT_HIDDEN_SIZE] 
             else:
                 num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.VIT_TOKEN_SIZE)**2
-                transformer_units = [cfg.MODEL.VIT_EMBED_DIM * 2, cfg.MODEL.VIT_EMBED_DIM] 
+                transformer_units = [cfg.MODEL.VIT_HIDDEN_SIZE * 2, cfg.MODEL.VIT_HIDDEN_SIZE] 
             args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, num_patches=num_patches,
-                projection_dim=cfg.MODEL.VIT_EMBED_DIM, transformer_layers=cfg.MODEL.VIT_DEPTH, num_heads=cfg.MODEL.VIT_NUM_HEADS,
-                transformer_units=transformer_units, mlp_head_units=cfg.MODEL.VIT_MLP_HEAD_UNITS, 
+                hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS,
+                transformer_units=transformer_units, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
                 num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS, num_classes=cfg.MODEL.N_CLASSES, 
                 decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION, decoder_kernel_init=cfg.MODEL.UNETR_DEC_KERNEL_INIT,
-                ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES)
+                ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES,
+                last_act=cfg.MODEL.LAST_ACTIVATION)
+            args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None
             model = UNETR(**args)
         elif cfg.MODEL.ARCHITECTURE == 'edsr':
             model = EDSR(num_filters=64, num_of_residual_blocks=16, upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, 

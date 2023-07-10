@@ -502,13 +502,13 @@ class Config:
         # Size of the patches that are extracted from the input image.
         _C.MODEL.VIT_TOKEN_SIZE = 16
         # Dimension of the embedding space
-        _C.MODEL.VIT_EMBED_DIM = 256
+        _C.MODEL.VIT_HIDDEN_SIZE = 768
         # Number of transformer encoder layers
-        _C.MODEL.VIT_DEPTH = 12
+        _C.MODEL.VIT_NUM_LAYERS = 12
         # Number of heads in the multi-head attention layer.
         _C.MODEL.VIT_NUM_HEADS = 12
         # Size of the dense layers of the final classifier
-        _C.MODEL.VIT_MLP_HEAD_UNITS = [1024, 256] 
+        _C.MODEL.VIT_MLP_DIMS = 3072
 
         # UNETR
         # Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted
