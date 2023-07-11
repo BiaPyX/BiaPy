@@ -27,7 +27,7 @@ def prepare_optimizer(cfg, model):
     elif cfg.TRAIN.OPTIMIZER == "ADAM":
         opt = tf.keras.optimizers.Adam(learning_rate=cfg.TRAIN.LR, beta_1=0.9, beta_2=0.999, amsgrad=False)
     elif cfg.TRAIN.OPTIMIZER == "ADAMW":
-        opt = tf.keras.optimizers.AdamW(learning_rate=cfg.TRAIN.LR, weight_decay=0.004, beta_1=0.9, beta_2=0.999)
+        opt = tf.keras.optimizers.AdamW(learning_rate=cfg.TRAIN.LR, weight_decay=cfg.TRAIN.W_DECAY, beta_1=0.9, beta_2=0.999)
 
     # Compile the model
     metric_name = []

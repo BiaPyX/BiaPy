@@ -539,6 +539,8 @@ class Config:
         _C.TRAIN.OPTIMIZER = 'SGD'
         # Learning rate 
         _C.TRAIN.LR = 1.E-4
+        # Weight decay (AdamW)
+        _C.TRAIN.W_DECAY = 0.004
         # Batch size
         _C.TRAIN.BATCH_SIZE = 2
         # Number of epochs to train the model
