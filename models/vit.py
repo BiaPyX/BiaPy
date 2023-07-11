@@ -1,4 +1,3 @@
-import math
 import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras import Model, Input
@@ -10,8 +9,9 @@ from .mlp import mlp
 from .tr_layers import TransformerBlock, ClassToken, AddPositionEmbs
 
 
-def ViT(input_shape, patch_size, num_patches, hidden_size, transformer_layers, num_heads,
-        transformer_units, mlp_head_units, n_classes=1, dropout=0.0, use_as_backbone=False):
+def ViT(input_shape, patch_size, num_patches, hidden_size, transformer_layers, num_heads, transformer_units, 
+        mlp_head_units, n_classes=1, dropout=0.0, include_class_token=True, representation_size=None, include_top=True, 
+        use_as_backbone=False):
     """
     ViT architecture. `ViT paper <https://arxiv.org/abs/2010.11929>`__.
 
@@ -48,9 +48,20 @@ def ViT(input_shape, patch_size, num_patches, hidden_size, transformer_layers, n
     dropout : bool, optional
         Dropout rate for the decoder (can be a list of dropout rates for each layer).
 
-    batch_norm : bool, optional
+    include_class_token : bool, optional
+        Whether to include or not the class token.
+
+    representation_size : int, optional
+        The size of the representation prior to the classification layer. If None, no Dense layer is inserted.
+        Not used but added to mimic vit-keras. 
+
+    include_top : bool, optional
+        Whether to include the final classification layer. If not, the output will have dimensions 
+        ``(batch_size, hidden_size)``.
+
+    use_as_backbone : bool, optional
         Whether to use the model as a backbone so its components are returned instead of a composed model.
-    
+
     Returns
     -------
     model : Keras model, optional
@@ -77,14 +88,24 @@ def ViT(input_shape, patch_size, num_patches, hidden_size, transformer_layers, n
 
     # Patch creation 
     y = conv(filters=hidden_size, kernel_size=patch_size, strides=patch_size, padding="valid", name="embedding")(inputs)
+    # 2D: (B, patch_size, patch_size, projection_dim)
+    # 3D: (B, patch_size, patch_size, patch_size, projection_dim)
+
     if dims == 2:
         y = tf.keras.layers.Reshape((y.shape[1] * y.shape[2], hidden_size))(y)
     else:
         y = tf.keras.layers.Reshape((y.shape[1] * y.shape[2]* y.shape[3], hidden_size))(y)
+    # 2D: (B, patch_size^2, projection_dim)
+    # 3D: (B, patch_size^3, projection_dim)
 
-    if not use_as_backbone:
+    if include_class_token:
         y = ClassToken(name="class_token")(y)
+        # 2D: (B, (patch_size^2)+1, projection_dim)
+        # 3D: (B, (patch_size^3)+1, projection_dim)
+
     y = AddPositionEmbs(name="Transformer/posembed_input")(y)
+    # 2D: (B, patch_size^2, projection_dim)
+    # 3D: (B, patch_size^3, projection_dim)
 
     if use_as_backbone:
         hidden_states_out = []
@@ -97,6 +118,8 @@ def ViT(input_shape, patch_size, num_patches, hidden_size, transformer_layers, n
             dropout=0.1,
             name=f"Transformer/encoderblock_{i}",
         )(y)
+        # 2D: (B, patch_size^2, projection_dim)
+        # 3D: (B, patch_size^3, projection_dim)
 
         if use_as_backbone:
             hidden_states_out.append(y)
@@ -106,10 +129,13 @@ def ViT(input_shape, patch_size, num_patches, hidden_size, transformer_layers, n
 
     # Create a [batch_size, hidden_size] tensor.
     y = layers.LayerNormalization(epsilon=1e-6)(y)
-    y = tf.keras.layers.Lambda(lambda v: v[:, 0], name="ExtractToken")(y)
-    y = tf.keras.layers.Dense(hidden_size, name="pre_logits", activation="tanh")(y)
-    logits = tf.keras.layers.Dense(n_classes, name="head", activation="linear")(y)
-
-    model = Model(inputs=inputs, outputs=logits)
+    if include_class_token:
+        y = tf.keras.layers.Lambda(lambda v: v[:, 0], name="ExtractToken")(y)
+    if representation_size is not None:
+        y = tf.keras.layers.Dense(hidden_size, name="pre_logits", activation="tanh")(y)
+    if include_top:
+        y = tf.keras.layers.Dense(n_classes, name="head", activation="linear")(y)
+    
+    model = Model(inputs=inputs, outputs=y)
 
     return model

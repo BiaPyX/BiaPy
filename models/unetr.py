@@ -251,7 +251,8 @@ def UNETR(input_shape, patch_size, num_patches, hidden_size, transformer_layers,
         convtranspose = Conv2DTranspose
 
     vit_input, hidden_states_out, encoded_patches = ViT(input_shape, patch_size, num_patches, hidden_size, 
-        transformer_layers, num_heads, transformer_units, mlp_head_units, dropout=dropout, use_as_backbone=True)
+        transformer_layers, num_heads, transformer_units, mlp_head_units, dropout=dropout, include_top=False,
+        include_class_token=False, use_as_backbone=True)
 
     # UNETR Part (bottom_up, from the bottle-neck, to the output)
     total_upscale_factor = int(math.log2(patch_size))
