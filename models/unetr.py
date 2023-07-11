@@ -164,7 +164,7 @@ def two_yellow(x, filters, conv, activation='relu', kernel_initializer='glorot_u
 
 
 def UNETR(input_shape, patch_size, num_patches, hidden_size, transformer_layers, num_heads, transformer_units, 
-          mlp_head_units, num_filters = 16, num_classes = 1, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
+          mlp_head_units, num_filters = 16, n_classes = 1, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
           ViT_hidd_mult = 3, batch_norm = True, dropout = 0.0, last_act='sigmoid', output_channels="BC"):
     """
     UNETR architecture. It combines a ViT with U-Net, replaces the convolutional encoder 
@@ -205,7 +205,7 @@ def UNETR(input_shape, patch_size, num_patches, hidden_size, transformer_layers,
         Number of filters in the first UNETR's layer of the decoder. In each layer the previous number of filters is 
         doubled.
 
-    num_classes : int, optional
+    n_classes : int, optional
         Number of classes to predict. Is the number of channels in the output tensor.
 
     decoder_activation : str, optional

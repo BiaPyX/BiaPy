@@ -11,7 +11,7 @@ from .tr_layers import TransformerBlock, ClassToken, AddPositionEmbs
 
 
 def ViT(input_shape, patch_size, num_patches, hidden_size, transformer_layers, num_heads,
-        transformer_units, mlp_head_units, num_classes=1, dropout=0.0, use_as_backbone=False):
+        transformer_units, mlp_head_units, n_classes=1, dropout=0.0, use_as_backbone=False):
     """
     ViT architecture. `ViT paper <https://arxiv.org/abs/2010.11929>`__.
 
@@ -42,7 +42,7 @@ def ViT(input_shape, patch_size, num_patches, hidden_size, transformer_layers, n
     mlp_head_units : int
         Size of the dense layer of the final classifier. 
 
-    num_classes : int, optional
+    n_classes : int, optional
         Number of classes to predict. Is the number of channels in the output tensor.
 
     dropout : bool, optional
@@ -108,7 +108,7 @@ def ViT(input_shape, patch_size, num_patches, hidden_size, transformer_layers, n
     y = layers.LayerNormalization(epsilon=1e-6)(y)
     y = tf.keras.layers.Lambda(lambda v: v[:, 0], name="ExtractToken")(y)
     y = tf.keras.layers.Dense(hidden_size, name="pre_logits", activation="tanh")(y)
-    logits = tf.keras.layers.Dense(num_classes, name="head", activation="linear")(y)
+    logits = tf.keras.layers.Dense(n_classes, name="head", activation="linear")(y)
 
     model = Model(inputs=inputs, outputs=logits)
 

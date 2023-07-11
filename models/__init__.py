@@ -67,7 +67,7 @@ def build_model(cfg, job_identifier):
                 transformer_units = [cfg.MODEL.VIT_HIDDEN_SIZE * 2, cfg.MODEL.VIT_HIDDEN_SIZE] 
             args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, num_patches=num_patches,
                 hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS,
-                transformer_units=transformer_units, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, num_classes=cfg.MODEL.N_CLASSES, 
+                transformer_units=transformer_units, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, n_classes=cfg.MODEL.N_CLASSES, 
                 dropout=cfg.MODEL.DROPOUT_VALUES)
             model = ViT(**args)
         elif cfg.MODEL.ARCHITECTURE == 'fcn32':
@@ -92,7 +92,7 @@ def build_model(cfg, job_identifier):
             args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, num_patches=num_patches,
                 hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS,
                 transformer_units=transformer_units, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
-                num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS, num_classes=cfg.MODEL.N_CLASSES, 
+                num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS, n_classes=cfg.MODEL.N_CLASSES, 
                 decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION, decoder_kernel_init=cfg.MODEL.UNETR_DEC_KERNEL_INIT,
                 ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES,
                 last_act=cfg.MODEL.LAST_ACTIVATION)
