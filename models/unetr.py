@@ -163,9 +163,9 @@ def two_yellow(x, filters, conv, activation='relu', kernel_initializer='glorot_u
     return x
 
 
-def UNETR(input_shape, patch_size, num_patches, hidden_size, transformer_layers, num_heads, transformer_units, 
-          mlp_head_units, num_filters = 16, n_classes = 1, decoder_activation = 'relu', decoder_kernel_init = 'he_normal',
-          ViT_hidd_mult = 3, batch_norm = True, dropout = 0.0, last_act='sigmoid', output_channels="BC"):
+def UNETR(input_shape, patch_size, hidden_size, transformer_layers, num_heads, mlp_head_units, num_filters = 16, n_classes = 1, 
+          decoder_activation = 'relu', decoder_kernel_init = 'he_normal', ViT_hidd_mult = 3, batch_norm = True, dropout = 0.0, 
+          last_act='sigmoid', output_channels="BC"):
     """
     UNETR architecture. It combines a ViT with U-Net, replaces the convolutional encoder 
     with the ViT and adapt each skip connection signal to their layer's spatial dimensionality. 
@@ -183,9 +183,6 @@ def UNETR(input_shape, patch_size, num_patches, hidden_size, transformer_layers,
         Size of the patches that are extracted from the input image. As an example, to use ``16x16`` 
         patches, set ``patch_size = 16``.
 
-    num_patches : int
-        Number of patches to extract from the image. Take into account that each patch must be of specified patch_size.
-
     hidden_size : int
         Dimension of the embedding space.
 
@@ -194,9 +191,6 @@ def UNETR(input_shape, patch_size, num_patches, hidden_size, transformer_layers,
 
     num_heads : int
         Number of heads in the multi-head attention layer.
-
-    transformer_units : int
-        Number of units in the MLP blocks.
 
     mlp_head_units : 2D tuple
         Size of the dense layers of the final classifier. 
@@ -250,9 +244,8 @@ def UNETR(input_shape, patch_size, num_patches, hidden_size, transformer_layers,
         conv = Conv2D
         convtranspose = Conv2DTranspose
 
-    vit_input, hidden_states_out, encoded_patches = ViT(input_shape, patch_size, num_patches, hidden_size, 
-        transformer_layers, num_heads, transformer_units, mlp_head_units, dropout=dropout, include_top=False,
-        include_class_token=False, use_as_backbone=True)
+    vit_input, hidden_states_out, encoded_patches = ViT(input_shape, patch_size, hidden_size, transformer_layers, num_heads, mlp_head_units, 
+        dropout=dropout, include_top=False, include_class_token=False, use_as_backbone=True)
 
     # UNETR Part (bottom_up, from the bottle-neck, to the output)
     total_upscale_factor = int(math.log2(patch_size))

@@ -9,8 +9,8 @@ from .mlp import mlp
 from .tr_layers import TransformerBlock, ClassToken, AddPositionEmbs
 
 
-def ViT(input_shape, patch_size, num_patches, hidden_size, transformer_layers, num_heads, transformer_units, 
-        mlp_head_units, n_classes=1, dropout=0.0, include_class_token=True, representation_size=None, include_top=True, 
+def ViT(input_shape, patch_size, hidden_size, transformer_layers, num_heads, mlp_head_units, n_classes=1, 
+        dropout=0.0, include_class_token=True, representation_size=None, include_top=True, 
         use_as_backbone=False):
     """
     ViT architecture. `ViT paper <https://arxiv.org/abs/2010.11929>`__.
@@ -24,9 +24,6 @@ def ViT(input_shape, patch_size, num_patches, hidden_size, transformer_layers, n
         Size of the patches that are extracted from the input image. As an example, to use ``16x16`` 
         patches, set ``patch_size = 16``.
 
-    num_patches : int
-        Number of patches to extract from the image. Take into account that each patch must be of specified patch_size.
-
     hidden_size : int
         Dimension of the embedding space.
 
@@ -35,9 +32,6 @@ def ViT(input_shape, patch_size, num_patches, hidden_size, transformer_layers, n
 
     num_heads : int
         Number of heads in the multi-head attention layer.
-
-    transformer_units : int
-        Number of units in the MLP blocks.
 
     mlp_head_units : int
         Size of the dense layer of the final classifier. 

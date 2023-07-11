@@ -59,16 +59,9 @@ def build_model(cfg, job_identifier):
             shape = (224, 224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.DATA.PATCH_SIZE[:-1] != (224, 224) else cfg.DATA.PATCH_SIZE
             model = efficientnetb0(shape, n_classes=cfg.MODEL.N_CLASSES)
         elif cfg.MODEL.ARCHITECTURE == 'ViT':
-            if cfg.PROBLEM.NDIM == '3D':
-                num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.VIT_TOKEN_SIZE)**3
-                transformer_units = [cfg.MODEL.VIT_HIDDEN_SIZE * 3, cfg.MODEL.VIT_HIDDEN_SIZE]  
-            else:
-                num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.VIT_TOKEN_SIZE)**2
-                transformer_units = [cfg.MODEL.VIT_HIDDEN_SIZE * 2, cfg.MODEL.VIT_HIDDEN_SIZE] 
-            args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, num_patches=num_patches,
-                hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS,
-                transformer_units=transformer_units, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, n_classes=cfg.MODEL.N_CLASSES, 
-                dropout=cfg.MODEL.DROPOUT_VALUES)
+            args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, 
+                transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
+                n_classes=cfg.MODEL.N_CLASSES, dropout=cfg.MODEL.DROPOUT_VALUES)
             model = ViT(**args)
         elif cfg.MODEL.ARCHITECTURE == 'fcn32':
             model = FCN32_VGG16(cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
@@ -83,19 +76,11 @@ def build_model(cfg, job_identifier):
         elif cfg.MODEL.ARCHITECTURE == 'multiresunet':
             model = MultiResUnet(None, None, cfg.DATA.PATCH_SIZE[-1])
         elif cfg.MODEL.ARCHITECTURE == 'unetr':
-            if cfg.PROBLEM.NDIM == '3D':
-                num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.VIT_TOKEN_SIZE)**3
-                transformer_units = [cfg.MODEL.VIT_HIDDEN_SIZE * 3, cfg.MODEL.VIT_HIDDEN_SIZE] 
-            else:
-                num_patches = (cfg.DATA.PATCH_SIZE[0]//cfg.MODEL.VIT_TOKEN_SIZE)**2
-                transformer_units = [cfg.MODEL.VIT_HIDDEN_SIZE * 2, cfg.MODEL.VIT_HIDDEN_SIZE] 
-            args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, num_patches=num_patches,
-                hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS,
-                transformer_units=transformer_units, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
-                num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS, n_classes=cfg.MODEL.N_CLASSES, 
-                decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION, decoder_kernel_init=cfg.MODEL.UNETR_DEC_KERNEL_INIT,
-                ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES,
-                last_act=cfg.MODEL.LAST_ACTIVATION)
+            args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, 
+                transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
+                num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS, n_classes=cfg.MODEL.N_CLASSES, decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION, 
+                decoder_kernel_init=cfg.MODEL.UNETR_DEC_KERNEL_INIT, ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT, 
+                batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES, last_act=cfg.MODEL.LAST_ACTIVATION)
             args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None
             model = UNETR(**args)
         elif cfg.MODEL.ARCHITECTURE == 'edsr':
@@ -113,6 +98,10 @@ def build_model(cfg, job_identifier):
         elif cfg.MODEL.ARCHITECTURE == 'wdsr':
             model = wdsr_b(scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, num_filters=32, num_res_blocks=8, res_block_expansion=6, 
                 res_block_scaling=None, out_channels=1)
+        elif cfg.MODEL.ARCHITECTURE == 'mae':
+            model = MAE(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, 
+                transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
+                n_classes=cfg.MODEL.N_CLASSES, dropout=cfg.MODEL.DROPOUT_VALUES)
 
     # Check the network created
     model.summary(line_length=150)
