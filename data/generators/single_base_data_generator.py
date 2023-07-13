@@ -22,6 +22,9 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
        Parameters
        ----------
+       ndim : int
+           Dimensions of the data (``2`` for 2D and ``3`` for 3D).
+
        X : 4D/5D Numpy array
            Data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
@@ -30,6 +33,9 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
        data_path : List of str, optional
           If ``in_memory`` is ``True`` this should contain the path to load images.
+
+       ptype : str
+           Problem type. Options ['mae','classification'].
 
        n_classes : int
            Number of classes to predict.
@@ -141,50 +147,55 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
            Std of the data used to normalize.
     """
 
-    def __init__(self, ndim, X, Y, data_path, n_classes, seed=0, in_memory=False, da=True, da_prob=0.5, rotation90=False, 
+    def __init__(self, ndim, X, Y, data_path, ptype, n_classes, seed=0, in_memory=False, da=True, da_prob=0.5, rotation90=False, 
                  rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
                  shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), 
                  e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), 
                  motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, 
                  drop_range=(0, 0.2), val=False, resize_shape=None, norm_custom_mean=None, norm_custom_std=None):
 
-        
-        self.ndim = ndim
-        self.in_memory = in_memory
-        self.z_size = -1 
-
         if in_memory:
-            if X.ndim != (self.ndim+2):
-                raise ValueError("X must be a {}D Numpy array".format((self.ndim+1)))
+            if X.ndim != (ndim+2):
+                raise ValueError("X must be a {}D Numpy array".format((ndim+1)))
 
         if in_memory and (X is None or Y is None):
             raise ValueError("'X' and 'Y' need to be provided together with 'in_memory'")
 
+        assert ptype in ['mae','classification']
+
+        self.ptype = ptype
+        self.ndim = ndim
+        self.in_memory = in_memory
+        self.z_size = -1 
+
         # Save paths where the data is stored
         if not in_memory:
             self.data_path = data_path
-            self.class_names = sorted(next(os.walk(data_path))[1])
-            self.class_numbers = {}
-            for i, c_name in enumerate(self.class_names):
-                self.class_numbers[c_name] = i
-            self.classes = {}
-            self.all_samples = []
-            print("Collecting data ids . . .")
-            for folder in self.class_names:
-                print("Analizing folder {}".format(os.path.join(data_path,folder)))
-                ids = sorted(next(os.walk(os.path.join(data_path,folder)))[2])
-                print("Found {} samples".format(len(ids)))
-                for i in range(len(ids)):
-                    self.classes[ids[i]] = folder
-                    self.all_samples.append(ids[i])
-            temp = random.shuffle(list(zip(self.all_samples, self.classes)) )
-            self.all_samples, self.classes = zip(*temp)
-            self.all_samples, self.classes = list(self.all_samples), list(self.classes)
+            if ptype == "mae":
+                self.all_samples = sorted(next(os.walk(data_path))[2])
+            else:    
+                self.class_names = sorted(next(os.walk(data_path))[1])
+                self.class_numbers = {}
+                for i, c_name in enumerate(self.class_names):
+                    self.class_numbers[c_name] = i
+                self.classes = {}
+                self.all_samples = []
+                print("Collecting data ids . . .")
+                for folder in self.class_names:
+                    print("Analizing folder {}".format(os.path.join(data_path,folder)))
+                    ids = sorted(next(os.walk(os.path.join(data_path,folder)))[2])
+                    print("Found {} samples".format(len(ids)))
+                    for i in range(len(ids)):
+                        self.classes[ids[i]] = folder
+                        self.all_samples.append(ids[i])
+                temp = random.shuffle(list(zip(self.all_samples, self.classes)) )
+                self.all_samples, self.classes = zip(*temp)
+                self.all_samples, self.classes = list(self.all_samples), list(self.classes)
 
-            present_classes = np.unique(np.array(self.classes))
-            if len(present_classes) != n_classes:
-                raise ValueError("MODEL.N_CLASSES is {} but {} classes found: {}"
-                    .format(n_classes, len(present_classes),present_classes))
+                present_classes = np.unique(np.array(self.classes))
+                if len(present_classes) != n_classes:
+                    raise ValueError("MODEL.N_CLASSES is {} but {} classes found: {}"
+                        .format(n_classes, len(present_classes),present_classes))
 
             self.length = len(self.all_samples)
 
@@ -333,16 +344,19 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if self.in_memory:
             img = self.X[idx]
             img = np.squeeze(img)
-            img_class = self.Y[idx]
+            img_class = self.Y[idx] if self.ptype == "classification" else 0
         else:
             sample_id = self.all_samples[idx]
-            sample_class_dir = self.classes[sample_id]
-            if sample_id.endswith('.npy'):
-                img = np.load(os.path.join(self.data_path, sample_class_dir, sample_id))
-            else:
-                img = imread(os.path.join(self.data_path, sample_class_dir, sample_id))
+            if self.ptype == "classification":
+                sample_class_dir = self.classes[sample_id] 
+                f = os.path.join(self.data_path, sample_class_dir, sample_id) 
+                img_class = self.class_numbers[sample_class_dir]
+            else:            
+                f = os.path.join(self.data_path, sample_id)
+                img_class = 0
+            img = np.load(f) if sample_id.endswith('.npy') else imread(f)
             img = np.squeeze(img)
-
+            
             # X normalization
             if self.X_norm:
                 if self.X_norm['type'] == 'div':
@@ -350,7 +364,6 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 elif self.X_norm['type'] == 'custom':
                     img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
 
-            img_class = self.class_numbers[sample_class_dir]
         img = self.ensure_shape(img)
 
         return img, img_class
@@ -384,7 +397,10 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if self.da:
             img = self.apply_transform(img)
 
-        return img, img_class
+        if self.ptype == "classification":
+            return img, img_class
+        else: # SSL - MAE
+            return img
 
     def apply_transform(self, image):
         """Transform the input image with one of the selected choices based on a probability.

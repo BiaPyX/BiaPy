@@ -114,6 +114,10 @@ class Self_supervised(Base_Workflow):
 
 
 def prepare_ssl_data(cfg):
+    if cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+        print("No SSL data needs to be prepared for masking, as it will be generated on the fly")
+        return
+
     print("#############################\n"
           "#  PREPARE DETECTION DATA  #\n"
           "############################\n")

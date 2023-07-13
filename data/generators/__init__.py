@@ -83,12 +83,39 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
         print("Train/Val normalization: using mean {} and std: {}".format(custom_mean, custom_std))
 
     if cfg.PROBLEM.NDIM == '2D':
-        f_name = Single2DImageDataGenerator if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else Pair2DImageDataGenerator
+        if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
+            (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
+            f_name = Single2DImageDataGenerator 
+        else:
+            f_name = Pair2DImageDataGenerator
     else:
-        f_name = Single3DImageDataGenerator if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else Pair3DImageDataGenerator
+        if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
+            (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
+            f_name = Single3DImageDataGenerator 
+        else:
+            f_name = Pair3DImageDataGenerator
     
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
-    if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+    if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
+        (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
+        r_shape = cfg.DATA.PATCH_SIZE
+        if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' and cfg.DATA.PATCH_SIZE[:-1] != (224,224):
+            r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) 
+            print("Changing patch size from {} to {} to use EfficientNetB0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
+        ptype = "classification" if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else "mae"
+        dic = dict(ndim=ndim, X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, ptype=ptype, n_classes=cfg.MODEL.N_CLASSES,
+            seed=cfg.SYSTEM.SEED, da=cfg.AUGMENTOR.ENABLE, in_memory=cfg.DATA.TRAIN.IN_MEMORY, da_prob=cfg.AUGMENTOR.DA_PROB,
+            rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT, rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE,
+            shear=cfg.AUGMENTOR.SHEAR, shear_range=cfg.AUGMENTOR.SHEAR_RANGE, zoom=cfg.AUGMENTOR.ZOOM,
+            zoom_range=cfg.AUGMENTOR.ZOOM_RANGE, shift=cfg.AUGMENTOR.SHIFT, shift_range=cfg.AUGMENTOR.SHIFT_RANGE,
+            affine_mode=cfg.AUGMENTOR.AFFINE_MODE, vflip=cfg.AUGMENTOR.VFLIP, hflip=cfg.AUGMENTOR.HFLIP,
+            elastic=cfg.AUGMENTOR.ELASTIC, e_alpha=cfg.AUGMENTOR.E_ALPHA, e_sigma=cfg.AUGMENTOR.E_SIGMA,
+            e_mode=cfg.AUGMENTOR.E_MODE, g_blur=cfg.AUGMENTOR.G_BLUR, g_sigma=cfg.AUGMENTOR.G_SIGMA,
+            median_blur=cfg.AUGMENTOR.MEDIAN_BLUR, mb_kernel=cfg.AUGMENTOR.MB_KERNEL, motion_blur=cfg.AUGMENTOR.MOTION_BLUR,
+            motb_k_range=cfg.AUGMENTOR.MOTB_K_RANGE, gamma_contrast=cfg.AUGMENTOR.GAMMA_CONTRAST,
+            gc_gamma=cfg.AUGMENTOR.GC_GAMMA, dropout=cfg.AUGMENTOR.DROPOUT, drop_range=cfg.AUGMENTOR.DROP_RANGE,
+            resize_shape=r_shape, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
+    else:
         dic = dict(ndim=ndim, X=X_train, Y=Y_train, seed=cfg.SYSTEM.SEED, in_memory=cfg.DATA.TRAIN.IN_MEMORY, 
             data_paths=[cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.GT_PATH], da=cfg.AUGMENTOR.ENABLE,
             da_prob=cfg.AUGMENTOR.DA_PROB, rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT,
@@ -143,30 +170,18 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
             dic['n2v_manipulator'] = cfg.PROBLEM.DENOISING.N2V_MANIPULATOR
             dic['n2v_neighborhood_radius'] = cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
             dic['n2v_structMask'] = np.array([[0,1,1,1,1,1,1,1,1,1,0]]) if cfg.PROBLEM.DENOISING.N2V_STRUCTMASK else None
-    else:
-        r_shape = cfg.DATA.PATCH_SIZE
-        if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' and cfg.DATA.PATCH_SIZE[:-1] != (224,224):
-            r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) 
-            print("Changing patch size from {} to {} to use EfficientNetB0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
-
-        dic = dict(ndim=ndim, X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, n_classes=cfg.MODEL.N_CLASSES,
-            seed=cfg.SYSTEM.SEED, da=cfg.AUGMENTOR.ENABLE, in_memory=cfg.DATA.TRAIN.IN_MEMORY, da_prob=cfg.AUGMENTOR.DA_PROB,
-            rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT, rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE,
-            shear=cfg.AUGMENTOR.SHEAR, shear_range=cfg.AUGMENTOR.SHEAR_RANGE, zoom=cfg.AUGMENTOR.ZOOM,
-            zoom_range=cfg.AUGMENTOR.ZOOM_RANGE, shift=cfg.AUGMENTOR.SHIFT, shift_range=cfg.AUGMENTOR.SHIFT_RANGE,
-            affine_mode=cfg.AUGMENTOR.AFFINE_MODE, vflip=cfg.AUGMENTOR.VFLIP, hflip=cfg.AUGMENTOR.HFLIP,
-            elastic=cfg.AUGMENTOR.ELASTIC, e_alpha=cfg.AUGMENTOR.E_ALPHA, e_sigma=cfg.AUGMENTOR.E_SIGMA,
-            e_mode=cfg.AUGMENTOR.E_MODE, g_blur=cfg.AUGMENTOR.G_BLUR, g_sigma=cfg.AUGMENTOR.G_SIGMA,
-            median_blur=cfg.AUGMENTOR.MEDIAN_BLUR, mb_kernel=cfg.AUGMENTOR.MB_KERNEL, motion_blur=cfg.AUGMENTOR.MOTION_BLUR,
-            motb_k_range=cfg.AUGMENTOR.MOTB_K_RANGE, gamma_contrast=cfg.AUGMENTOR.GAMMA_CONTRAST,
-            gc_gamma=cfg.AUGMENTOR.GC_GAMMA, dropout=cfg.AUGMENTOR.DROPOUT, drop_range=cfg.AUGMENTOR.DROP_RANGE,
-            resize_shape=r_shape, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
 
     print("Initializing train data generator . . .")
     train_generator = f_name(**dic)
 
     print("Initializing val data generator . . .")
-    if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+    if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
+        (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
+        ptype = "classification" if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else "mae"
+        val_generator = f_name(ndim=ndim, X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, ptype=ptype, n_classes=cfg.MODEL.N_CLASSES, 
+            in_memory=cfg.DATA.VAL.IN_MEMORY, seed=cfg.SYSTEM.SEED, da=False, resize_shape=r_shape, 
+            norm_custom_mean=custom_mean, norm_custom_std=custom_std)
+    else:
         dic = dict(ndim=ndim, X=X_val, Y=Y_val, in_memory=cfg.DATA.VAL.IN_MEMORY,
             data_paths=[cfg.DATA.VAL.PATH, cfg.DATA.VAL.GT_PATH], da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
@@ -186,10 +201,6 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
             dic['n2v_neighborhood_radius'] = cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
             
         val_generator = f_name(**dic)
-    else:
-        val_generator = f_name(ndim=ndim, X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, n_classes=cfg.MODEL.N_CLASSES, 
-            in_memory=cfg.DATA.VAL.IN_MEMORY, seed=cfg.SYSTEM.SEED, da=False, resize_shape=r_shape, 
-            norm_custom_mean=custom_mean, norm_custom_std=custom_std)
 
     # Generate examples of data augmentation
     if cfg.AUGMENTOR.AUG_SAMPLES:
@@ -205,30 +216,54 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
 
     # Paralelize as explained in: 
     # https://medium.com/@acordier/tf-data-dataset-generators-with-parallelization-the-easy-way-b5c5f7d2a18
-    def train_func(i):
-        i = i.numpy() 
-        x, y = train_generator.getitem(i)
-        return x, y
-    def val_func(i):
-        i = i.numpy() 
-        x, y = val_generator.getitem(i)
-        return x, y
-    train_index_generator = list(range(len(train_generator))) 
-    val_index_generator = list(range(len(val_generator))) 
-    tdataset = tf.data.Dataset.from_generator(lambda: train_index_generator, tf.uint64)
-    vdataset = tf.data.Dataset.from_generator(lambda: val_index_generator, tf.uint64)
-    train_dataset = tdataset.map(lambda i: tf.py_function(
-        func=train_func, inp=[i], Tout=[tf.float32, out_dtype]), num_parallel_calls=num_parallel_calls)
-    val_dataset = vdataset.map(lambda i: tf.py_function(
-        func=val_func, inp=[i], Tout=[tf.float32, out_dtype]), num_parallel_calls=num_parallel_calls)
+    # Single item generators
+    if cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+        def train_func(i):
+            i = i.numpy() 
+            x = train_generator.getitem(i)
+            return x
+        def val_func(i):
+            i = i.numpy() 
+            x = val_generator.getitem(i)
+            return x
+        train_index_generator = list(range(len(train_generator))) 
+        val_index_generator = list(range(len(val_generator))) 
+        tdataset = tf.data.Dataset.from_generator(lambda: train_index_generator, tf.uint64)
+        vdataset = tf.data.Dataset.from_generator(lambda: val_index_generator, tf.uint64)
+        train_dataset = tdataset.map(lambda i: tf.py_function(
+            func=train_func, inp=[i], Tout=[tf.float32]), num_parallel_calls=num_parallel_calls)
+        val_dataset = vdataset.map(lambda i: tf.py_function(
+            func=val_func, inp=[i], Tout=[tf.float32]), num_parallel_calls=num_parallel_calls)
 
-    def _fixup_shape(x, y):
-        x.set_shape([None, ]*(len(cfg.DATA.PATCH_SIZE)+1)) 
-        if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-            y.set_shape([None, ]*(len(cfg.DATA.PATCH_SIZE)+1)) 
-        else:
-            y.set_shape([None]) 
-        return x, y
+        def _fixup_shape(x):
+            x.set_shape((None, )+cfg.DATA.PATCH_SIZE) 
+            return x
+    # Double item generators
+    else:
+        def train_func(i):
+            i = i.numpy() 
+            x, y = train_generator.getitem(i)
+            return x, y
+        def val_func(i):
+            i = i.numpy() 
+            x, y = val_generator.getitem(i)
+            return x, y
+        train_index_generator = list(range(len(train_generator))) 
+        val_index_generator = list(range(len(val_generator))) 
+        tdataset = tf.data.Dataset.from_generator(lambda: train_index_generator, tf.uint64)
+        vdataset = tf.data.Dataset.from_generator(lambda: val_index_generator, tf.uint64)
+        train_dataset = tdataset.map(lambda i: tf.py_function(
+            func=train_func, inp=[i], Tout=[tf.float32, out_dtype]), num_parallel_calls=num_parallel_calls)
+        val_dataset = vdataset.map(lambda i: tf.py_function(
+            func=val_func, inp=[i], Tout=[tf.float32, out_dtype]), num_parallel_calls=num_parallel_calls)
+
+        def _fixup_shape(x, y):
+            x.set_shape((None, )+cfg.DATA.PATCH_SIZE) 
+            if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+                y.set_shape((None, )+cfg.DATA.PATCH_SIZE) 
+            else:
+                y.set_shape((None)) 
+            return x, y
 
     global_batch_size = cfg.TRAIN.BATCH_SIZE * num_gpus
     train_dataset = train_dataset.batch(global_batch_size).map(_fixup_shape)
@@ -304,7 +339,7 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
         normalizeY = 'none'
     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
         normalizeY = 'as_image'
-        provide_Y = True
+        provide_Y = True if cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "crappify" else False
     
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     dic = dict(ndim=ndim, X=X_test, d_path=cfg.DATA.TEST.PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.PATH, 
@@ -312,17 +347,23 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
         seed=cfg.SYSTEM.SEED, instance_problem=instance_problem, norm_custom_mean=custom_mean, norm_custom_std=custom_std,
         sample_ids=cross_val_samples_ids)        
         
-    if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-        gen_name = test_pair_data_generator
-        dic['normalizeY'] = normalizeY 
-    else:
+    if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
+        (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
         gen_name = test_single_data_generator 
         r_shape = cfg.DATA.PATCH_SIZE
         if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' and cfg.DATA.PATCH_SIZE[:-1] != (224,224):
             r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) 
             print("Changing patch size from {} to {} to use EfficientNetB0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
-        dic['crop_center'] = True
-        dic['resize_shape'] = r_shape
+        if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+            dic['crop_center'] = True
+            dic['resize_shape'] = r_shape
+            dic['ptype'] = "classification"
+        else: # SSL
+            dic['ptype'] = "mae"
+    else:
+        gen_name = test_pair_data_generator
+        dic['normalizeY'] = normalizeY 
+        
     test_generator = gen_name(**dic)
     return test_generator
 

@@ -89,6 +89,9 @@ def prepare_optimizer(cfg, model):
         if cfg.MODEL.ARCHITECTURE == 'dfcan':
             print("Overriding 'LOSS.TYPE' to set it to DFCAN loss")
             model.compile(optimizer=opt, loss=[dfcan_loss()], metrics=[PSNR])
+        elif cfg.MODEL.ARCHITECTURE == 'mae':
+            print("Overriding 'LOSS.TYPE' to set it to MSE loss")
+            model.compile(optimizer=opt, loss=tf.keras.losses.MeanSquaredError(), metrics=["mae"])
         else:
             print("Overriding 'LOSS.TYPE' to set it to MAE")
             model.compile(optimizer=opt, loss="mae", metrics=[PSNR])
@@ -130,7 +133,7 @@ def build_callbacks(cfg, schel_steps):
     # Save the best model into a h5 file in case one need again the weights learned
     os.makedirs(cfg.PATHS.CHECKPOINT, exist_ok=True)
     checkpointer = ModelCheckpoint(cfg.PATHS.CHECKPOINT_FILE, monitor=cfg.TRAIN.CHECKPOINT_MONITOR, verbose=1,
-                                   save_best_only=True)
+                                   save_best_only=True, save_weights_only=True)
     callbacks.append(checkpointer)
 
     # Learning rate schedulers

@@ -99,15 +99,16 @@ def build_model(cfg, job_identifier):
             model = wdsr_b(scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, num_filters=32, num_res_blocks=8, res_block_expansion=6, 
                 res_block_scaling=None, out_channels=1)
         elif cfg.MODEL.ARCHITECTURE == 'mae':
-            model = MAE(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, 
-                transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
-                n_classes=cfg.MODEL.N_CLASSES, dropout=cfg.MODEL.DROPOUT_VALUES)
+            model = MAE(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, enc_hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, 
+                enc_transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, enc_num_heads=cfg.MODEL.VIT_NUM_HEADS, enc_mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
+                enc_dropout=cfg.MODEL.DROPOUT_VALUES, dec_hidden_size=128, dec_num_layers=2, dec_num_heads=4, dec_mlp_head_units=4, 
+                dec_dropout=cfg.MODEL.DROPOUT_VALUES)
 
     # Check the network created
     model.summary(line_length=150)
-    os.makedirs(cfg.PATHS.CHARTS, exist_ok=True)
-    model_name = os.path.join(cfg.PATHS.CHARTS, "model_plot_" + job_identifier + ".png")
     if cfg.MODEL.MAKE_PLOT:
+        os.makedirs(cfg.PATHS.CHARTS, exist_ok=True)
+        model_name = os.path.join(cfg.PATHS.CHARTS, "model_plot_" + job_identifier + ".png")
         plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
 
     return model

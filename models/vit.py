@@ -2,11 +2,7 @@ import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras import Model, Input
 
-from tensorflow.keras.layers import (Dropout, Conv3D, Conv2D, concatenate,
-                                     BatchNormalization, Activation, Reshape)
-
-from .mlp import mlp 
-from .tr_layers import TransformerBlock, ClassToken, AddPositionEmbs
+from .tr_layers import TransformerBlock, ClassToken, Patches, PatchEncoder
 
 
 def ViT(input_shape, patch_size, hidden_size, transformer_layers, num_heads, mlp_head_units, n_classes=1, 
@@ -74,61 +70,55 @@ def ViT(input_shape, patch_size, hidden_size, transformer_layers, num_heads, mlp
     if len(input_shape) == 4:
         dims = 3   
         patch_dims = patch_size*patch_size*patch_size*input_shape[-1]
-        conv = Conv3D
     else:
         dims = 2
         patch_dims = patch_size*patch_size*input_shape[-1]
-        conv = Conv2D
+    num_patches = (input_shape[0]//patch_size)**dims
 
     # Patch creation 
-    y = conv(filters=hidden_size, kernel_size=patch_size, strides=patch_size, padding="valid", name="embedding")(inputs)
-    # 2D: (B, patch_size, patch_size, projection_dim)
-    # 3D: (B, patch_size, patch_size, patch_size, projection_dim)
+    # 2D: (B, num_patches^2, patch_dims)
+    # 3D: (B, num_patches^3, patch_dims)
+    y = Patches(patch_size, patch_dims, dims)(inputs)
 
-    if dims == 2:
-        y = tf.keras.layers.Reshape((y.shape[1] * y.shape[2], hidden_size))(y)
-    else:
-        y = tf.keras.layers.Reshape((y.shape[1] * y.shape[2]* y.shape[3], hidden_size))(y)
-    # 2D: (B, patch_size^2, projection_dim)
-    # 3D: (B, patch_size^3, projection_dim)
+    # Patch encoder
+    # 2D: (B, num_patches^2, hidden_size)
+    # 3D: (B, num_patches^3, hidden_size)
+    y = PatchEncoder(num_patches=num_patches, hidden_size=hidden_size)(y)
 
     if include_class_token:
         y = ClassToken(name="class_token")(y)
-        # 2D: (B, (patch_size^2)+1, projection_dim)
-        # 3D: (B, (patch_size^3)+1, projection_dim)
-
-    y = AddPositionEmbs(name="Transformer/posembed_input")(y)
-    # 2D: (B, patch_size^2, projection_dim)
-    # 3D: (B, patch_size^3, projection_dim)
+        # 2D: (B, (num_patches^2)+1, hidden_size)
+        # 3D: (B, (num_patches^3)+1, hidden_size)
 
     if use_as_backbone:
         hidden_states_out = []
 
     # Create multiple layers of the Transformer block.
     for i in range(transformer_layers):
+        
+        # TransformerBlock
+        # 2D: (B, num_patches^2, hidden_size)
+        # 3D: (B, num_patches^3, hidden_size)
         y, _ = TransformerBlock(
             num_heads=num_heads,
             mlp_dim=mlp_head_units,
-            dropout=0.1,
+            dropout=dropout,
             name=f"Transformer/encoderblock_{i}",
         )(y)
-        # 2D: (B, patch_size^2, projection_dim)
-        # 3D: (B, patch_size^3, projection_dim)
-
+        
         if use_as_backbone:
             hidden_states_out.append(y)
 
     if use_as_backbone:
         return inputs, hidden_states_out, y
 
-    # Create a [batch_size, hidden_size] tensor.
     y = layers.LayerNormalization(epsilon=1e-6)(y)
     if include_class_token:
-        y = tf.keras.layers.Lambda(lambda v: v[:, 0], name="ExtractToken")(y)
+        y = layers.Lambda(lambda v: v[:, 0], name="ExtractToken")(y)
     if representation_size is not None:
-        y = tf.keras.layers.Dense(hidden_size, name="pre_logits", activation="tanh")(y)
+        y = layers.Dense(hidden_size, name="pre_logits", activation="tanh")(y)
     if include_top:
-        y = tf.keras.layers.Dense(n_classes, name="head", activation="linear")(y)
+        y = layers.Dense(n_classes, name="head", activation="linear")(y)
     
     model = Model(inputs=inputs, outputs=y)
 

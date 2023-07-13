@@ -196,11 +196,16 @@ def check_configuration(cfg):
 
     #### Self-supervision ####
     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
-        if cfg.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR not in [2,4,6]:
-            raise ValueError("PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR not in [2,4,6]")
-        if not check_value(cfg.PROBLEM.SELF_SUPERVISED.NOISE):
-            raise ValueError("PROBLEM.SELF_SUPERVISED.NOISE not in [0, 1] range")
-
+        if cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "crappify":
+            if cfg.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR not in [2,4,6]:
+                raise ValueError("PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR not in [2,4,6]")
+            if not check_value(cfg.PROBLEM.SELF_SUPERVISED.NOISE):
+                raise ValueError("PROBLEM.SELF_SUPERVISED.NOISE not in [0, 1] range")
+        elif cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+            if cfg.MODEL.ARCHITECTURE != 'mae':
+                raise ValueError("'MODEL.ARCHITECTURE' need to be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'masking'")  
+        else:
+            raise ValueError("'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' need to be among these options: ['crappify', 'masking']")
     #### Denoising ####
     elif cfg.PROBLEM.TYPE == 'DENOISING':
         if cfg.DATA.TEST.LOAD_GT:
@@ -220,17 +225,17 @@ def check_configuration(cfg):
     if cfg.TRAIN.ENABLE:
         if not os.path.exists(cfg.DATA.TRAIN.PATH):
             raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
-        if not os.path.exists(cfg.DATA.TRAIN.GT_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION"]:
+        if not os.path.exists(cfg.DATA.TRAIN.GT_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION", "SELF_SUPERVISED"]:
             raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.GT_PATH))
         if not cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.IN_MEMORY:
             if not os.path.exists(cfg.DATA.VAL.PATH):
                 raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
-            if not os.path.exists(cfg.DATA.VAL.GT_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION"]:
+            if not os.path.exists(cfg.DATA.VAL.GT_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION", "SELF_SUPERVISED"]:
                 raise ValueError("Validation mask data dir not found: {}".format(cfg.DATA.VAL.GT_PATH))
     if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST:
         if not os.path.exists(cfg.DATA.TEST.PATH):
             raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
-        if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.GT_PATH) and cfg.PROBLEM.TYPE not in ["CLASSIFICATION"]:
+        if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.GT_PATH) and cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SELF_SUPERVISED"]:
             raise ValueError("Test data mask not found: {}".format(cfg.DATA.TEST.GT_PATH))
 
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
@@ -308,7 +313,7 @@ def check_configuration(cfg):
     ### Model ###
     assert cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'tiramisu', 'mnet',
                                       'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr',
-                                      'srunet', 'rcan', 'dfcan', 'wdsr', 'ViT']
+                                      'srunet', 'rcan', 'dfcan', 'wdsr', 'ViT', 'mae']
     if cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet', 'unetr'] and cfg.PROBLEM.NDIM == '3D' and cfg.PROBLEM.TYPE != "CLASSIFICATION":
         raise ValueError("For 3D these models are available: {}".format(['unet', 'resunet', 'seunet', 'attention_unet']))
     if cfg.MODEL.N_CLASSES > 1 and cfg.PROBLEM.TYPE != "CLASSIFICATION" and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
@@ -336,7 +341,7 @@ def check_configuration(cfg):
     if cfg.MODEL.ARCHITECTURE == "unetr":
         if cfg.TEST.STATS.FULL_IMG:
             raise ValueError("'TEST.STATS.FULL_IMG' can not be activate when using UNETR") 
-    if cfg.MODEL.ARCHITECTURE in ["unetr", 'ViT']:    
+    if cfg.MODEL.ARCHITECTURE in ["unetr", 'ViT', 'mae']:    
         if cfg.MODEL.VIT_HIDDEN_SIZE % cfg.MODEL.VIT_NUM_HEADS != 0:
             raise ValueError("'MODEL.VIT_HIDDEN_SIZE' should be divisible by 'MODEL.VIT_NUM_HEADS'")
             

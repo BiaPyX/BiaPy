@@ -129,6 +129,13 @@ class Config:
 
         ### SELF_SUPERVISED
         _C.PROBLEM.SELF_SUPERVISED = CN()
+        # Pretext task to do. Options are as follows:
+        #   - 'crappify': crappifies input image by adding Gaussian noise and downsampling and upsampling it so the resolution
+        #                 gets worsen. Then, the model is trained to recover the original images.  
+        #   - 'masking': mask input image and the model needs to recover the original image. This option can only
+        #                be done with 'mae' transformer. This strategy follows the one proposed in: 
+        #                Masked Autoencoders Are Scalable Vision Learners (https://arxiv.org/pdf/2111.06377.pdf)
+        _C.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK = 'crappify'
         # Downsizing factor to reshape the image. It will be downsampled and upsampled again by this factor so the 
         # quality of the image is worsens
         _C.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR = 4
