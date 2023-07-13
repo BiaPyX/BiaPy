@@ -28,6 +28,9 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
        Parameters
        ----------
+       ndim : int
+           Dimensions of the data (``2`` for 2D and ``3`` for 3D).
+
        X : 4D/5D Numpy array
            Data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
@@ -413,8 +416,9 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                         raise ValueError("When 'random_crops_in_DA' is selected the shape given must be square, e.g. (256, 256, 1)")
 
         if not in_memory and not random_crops_in_DA:
-            print("WARNING: you are going to load samples from disk (as 'in_memory=False') and "
-                  "'random_crops_in_DA=False' so all samples are expected to have the same shape")
+            m = "TRAIN" if not val else "VAL"
+            print("WARNING: you are going to load samples from disk (as 'DATA.{}.IN_MEMORY' = False) and "
+                  "'DATA.EXTRACT_RANDOM_PATCH' = False so all samples are expected to have the same shape".format(m))
 
         if rotation90 and rand_rot:
             print("Warning: you selected double rotation type. Maybe you should set only 'rand_rot'?")
