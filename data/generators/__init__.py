@@ -258,9 +258,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
             func=val_func, inp=[i], Tout=[tf.float32, out_dtype]), num_parallel_calls=num_parallel_calls)
 
         def _fixup_shape(x, y):
-            x.set_shape((None, )+cfg.DATA.PATCH_SIZE) 
+            x.set_shape([None, ]*(len(cfg.DATA.PATCH_SIZE)+1)) 
             if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-                y.set_shape((None, )+cfg.DATA.PATCH_SIZE) 
+                y.set_shape([None, ]*(len(cfg.DATA.PATCH_SIZE)+1)) 
             else:
                 y.set_shape((None)) 
             return x, y
