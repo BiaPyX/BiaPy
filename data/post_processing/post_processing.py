@@ -210,8 +210,8 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
     ths : float, optional
         Thresholds to be used on each channel. ``TH_BINARY_MASK`` used in the semantic mask to create watershed seeds;
         ``TH_CONTOUR`` used in the contours to create watershed seeds; ``TH_FOREGROUND`` used in the semantic mask to create the 
-        foreground mask; ``TH_DISTANCE`` used in the distances to create watershed seeds; and ``TH_DIST_FOREGROUND`` used in the distances 
-        to create the foreground mask.
+        foreground mask; ``TH_POINTS`` used in the point mask to create watershed seeds; ``TH_DISTANCE`` used in the 
+        distances to create watershed seeds.
 
     remove_before : bool, optional
         To remove objects before watershed. 
@@ -293,9 +293,13 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
             foreground = foreground.squeeze()
 
     if channels in ["BC", "BCM"]:
+        if ths['TYPE'] == "auto":
+            ths['TH_BINARY_MASK'] = threshold_otsu(data[...,0])
+            ths['TH_CONTOUR'] = threshold_otsu(data[...,1])
+            ths['TH_FOREGROUND'] = ths['TH_BINARY_MASK']/2
         seed_map = (data[...,0] > ths['TH_BINARY_MASK']) * (data[...,1] < ths['TH_CONTOUR'])
         foreground = (data[...,0] > ths['TH_FOREGROUND'])
-
+        
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
         
@@ -303,6 +307,10 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         semantic = edt.edt(foreground, anisotropy=res, black_border=False, order='C')
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BP"]:
+        if ths['TYPE'] == "auto":
+            ths['TH_POINTS'] = threshold_otsu(data[...,1])
+            ths['TH_FOREGROUND'] = threshold_otsu(data[...,0])
+
         seed_map = (data[...,1] > ths['TH_POINTS'])
         foreground = (data[...,0] > ths['TH_FOREGROUND'])
 
@@ -330,13 +338,22 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BD"]:
         semantic = data[...,0]
+        if ths['TYPE'] == "auto":
+            ths['TH_BINARY_MASK'] = threshold_otsu(data[...,0])
+            ths['TH_FOREGROUND'] = ths['TH_BINARY_MASK']/2
         seed_map = (data[...,0] > ths['TH_BINARY_MASK']) * (data[...,1] < ths['TH_DISTANCE'])
         foreground = (semantic > ths['TH_FOREGROUND']) 
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BCD"]:
         semantic = data[...,0]
+        if ths['TYPE'] == "auto":
+            ths['TH_BINARY_MASK'] = threshold_otsu(data[...,0])
+            ths['TH_CONTOUR'] = threshold_otsu(data[...,1])
+            ths['TH_FOREGROUND'] = ths['TH_BINARY_MASK']/2
+        
         seed_map = (data[...,0] > ths['TH_BINARY_MASK']) * (data[...,1] < ths['TH_CONTOUR']) * (data[...,2] < ths['TH_DISTANCE'])
         foreground = (semantic > ths['TH_FOREGROUND']) 
+
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
         seed_map = label(seed_map, connectivity=1)
@@ -344,6 +361,9 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         semantic = data[...,-1]
         foreground = None
         if channels == "BCDv2": # 'BCDv2'
+            if ths['TYPE'] == "auto":
+                ths['TH_BINARY_MASK'] = threshold_otsu(data[...,0])
+                ths['TH_CONTOUR'] = threshold_otsu(data[...,1])
             seed_map = (data[...,0] > ths['TH_BINARY_MASK']) * (data[...,1] < ths['TH_CONTOUR']) * (data[...,1] < ths['TH_DISTANCE'])
             background_seed = binary_dilation( ((data[...,0]>ths['TH_BINARY_MASK']) + (data[...,1]>ths['TH_CONTOUR'])).astype(np.uint8), iterations=2)
             seed_map, num = label(seed_map, connectivity=1, return_num=True)
@@ -354,6 +374,8 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
             seed_map = seed_map + background_seed
             del background_seed
         elif channels == "BDv2": # 'BDv2'
+            if ths['TYPE'] == "auto":
+                ths['TH_BINARY_MASK'] = threshold_otsu(data[...,0])
             seed_map = (data[...,0] > ths['TH_BINARY_MASK']) * (data[...,1] < ths['TH_DISTANCE'])
             background_seed = binary_dilation((data[...,1]<ths['TH_DISTANCE']).astype(np.uint8), iterations=2)
             seed_map = label(seed_map, connectivity=1)
@@ -373,6 +395,10 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
 
         if len(seed_morph_sequence) != 0:
             erode_seed_and_foreground()
+    
+    # Print the thresholds used in automatic case 
+    if ths['TYPE'] == "auto":
+        print("Thresholds used: {}".format(ths))
 
     if remove_before:
         seed_map = remove_small_objects(seed_map, thres_small_before)
@@ -795,9 +821,6 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
 
        global_thdist_min_opt : float, optional
            MW_TH_DISTANCE optimum value.
-
-       global_thdistfore : float, optional
-           MW_TH_DIST_FOREGROUND optimum value.
     """
 
     assert mode in ['BC', 'BCD']
@@ -824,8 +847,6 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
         g_l_thdist = []
         l_thdist_min = []
         l_thdist_opt = []
-        g_l_thdistfore = []
-        l_thdistfore_max = []
 
     if mode == 'BCD':
         print("Calculating the max distance value first. . ")
@@ -903,7 +924,7 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
                 if bin_mask_path is not None:
                     pred = apply_binary_mask(pred, bin_mask_path)
 
-                # TH_FOREGROUND and TH_DIST_FOREGROUND:
+                # TH_FOREGROUND:
                 # Look at the best IoU compared with the original label. Only the region that involve the object is taken
                 # into consideration. This is achieved dilating 2 iterations the original object mask. If we do not dilate
                 # that label, decreasing the TH will always ensure a IoU >= than the previous TH. This way, the IoU will
@@ -922,20 +943,6 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
                     l_thfore.append(jac)
                 l_thfore_max.append(thfore_best)
                 g_l_thfore.append(l_thfore)
-                # TH_DIST_FOREGROUND
-                if mode == 'BCD':
-                    thdistfore_best = -1
-                    thdistfore_max_jac = -1
-                    l_thdistfore = []
-                    for j in range(len(ths_dis)):
-                        p = np.expand_dims(pred[...,2] > ths_dis[j],-1).astype(np.uint8)
-                        jac = jaccard_index_numpy((mask>0).astype(np.uint8), p)
-                        if jac > thdistfore_max_jac:
-                            thdistfore_max_jac = jac
-                            thdistfore_best = ths_dis[j]
-                        l_thdistfore.append(jac)
-                    l_thdistfore_max.append(thdistfore_best)
-                    g_l_thdistfore.append(l_thdistfore)
 
                 # TH_CONTOUR: obtained the optimum value for the TH_FOREGROUND, the TH_CONTOUR threshold is calculated counting the objects. As this
                 # threshold looks at the contour channels, its purpose is to separed the entangled objects. This way, the TH_CONTOUR
@@ -1055,8 +1062,6 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
     if mode == 'BCD':
         create_th_plot(ths_dis, g_l_thdist, "TH_DISTANCE", chart_dir)
         create_th_plot(ths_dis, g_l_thdist, "TH_DISTANCE", chart_dir, per_sample=False, ideal_value=ideal_objects)
-        create_th_plot(ths_dis, g_l_thdistfore, "TH_DIST_FOREGROUND", chart_dir)
-        create_th_plot(ths_dis, g_l_thdistfore, "TH_DIST_FOREGROUND", chart_dir, per_sample=False)
 
     if len(ideal_number_obj) > 1:
         global_thbinmask = statistics.mean(l_thbinmask_min)
@@ -1074,8 +1079,6 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
             global_thdist_std = statistics.stdev(l_thdist_min)
             global_thdist_opt = statistics.mean(l_thdist_opt)
             global_thdist_opt_std = statistics.stdev(l_thdist_opt)
-            global_thdistfore = statistics.mean(l_thdistfore_max)
-            global_thdistfore_std = statistics.stdev(l_thdistfore_max)
     else:
         global_thbinmask = l_thbinmask_min[0]
         global_thbinmask_std = 0
@@ -1092,8 +1095,6 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
             global_thdist_std = 0
             global_thdist_opt = l_thdist_opt[0]
             global_thdist_opt_std = 0
-            global_thdistfore = l_thdistfore_max[0]
-            global_thdistfore_std = 0
 
     if verbose:
         if not use_minimum:
@@ -1108,11 +1109,10 @@ def calculate_optimal_mw_thresholds(model, data_path, data_mask_path, patch_size
                 print("MW_TH_DISTANCE maximum value is {} (std:{}) so the optimum should be {} (std:{})".format(global_thdist, global_thdist_std, global_thdist_opt, global_thdist_opt_std))
             else:
                 print("MW_TH_DISTANCE minimum value is {}".format(min(l_thdist_min)))
-            print("MW_TH_DIST_FOREGROUND optimum should be {} (std:{})".format(global_thdistfore, global_thdistfore_std))
         if not use_minimum:
-            return global_thbinmask_opt, global_thcontour_opt, global_thfore, global_thdist_opt, global_thdistfore
+            return global_thbinmask_opt, global_thcontour_opt, global_thfore, global_thdist_opt
         else:
-            return min(l_thbinmask_min), global_thcontour_opt, global_thfore, min(l_thdist_min), global_thdistfore
+            return min(l_thbinmask_min), global_thcontour_opt, global_thfore, min(l_thdist_min)
     else:
         if not use_minimum:
             return global_thbinmask_opt, global_thcontour_opt, global_thfore

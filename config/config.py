@@ -52,7 +52,11 @@ class Config:
         # Contour creation mode. Corresponds to 'mode' arg of find_boundaries function from ``scikit-image``. More
         # info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries.
         # It can be also set as "dense", to label as contour every pixel that is not in ``B`` channel. 
-        _C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE = "thick"
+        _C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE = "thick" 
+        # Whether if the threshold are going to be set as automaticaly (with Otsu thresholding) or manually. 
+        # Options available: 'auto' or 'manual'. If this last is used PROBLEM.INSTANCE_SEG.DATA_MW_TH_* need to be set.
+        # In case 'auto' was selected you will still need to set 
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE = "auto" 
 
         # To convert the model predictions, which are between 0 and 1 range, into instances with marked controlled
         # watershed (MW) a few thresholds need to be set. There can be up to three channels, as explained above and
@@ -67,9 +71,7 @@ class Config:
         # TH_FOREGROUND acts over the channel 'B' and is used to limit how much the seeds can be grow
         _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_FOREGROUND = 0.3
         # TH_DISTANCE controls channel 'D' in the creation of the MW seeds
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_DISTANCE = 2.
-        # TH_DIST_FOREGROUND acts over the channel 'D' and is used to limit how much the seeds can be grow
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_DIST_FOREGROUND = 1.2
+        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_DISTANCE = 1.
         # TH_POINTS controls channel 'P' in the creation of the MW seeds
         _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_POINTS = 0.5
         # Size of small objects to be removed after doing watershed
