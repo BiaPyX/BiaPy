@@ -205,6 +205,6 @@ class test_single_data_generator(tf.keras.utils.Sequence):
             if self.provide_Y:
                 return img, self.X_norm, img_class, None
             else:
-                return img, normx
+                return img, self.X_norm
         else: # SSL - MAE
-            return img, normx
+            return img, self.X_norm
