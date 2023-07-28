@@ -37,11 +37,11 @@ def check_configuration(cfg):
                 opts.extend(['PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS', (1,)*channels_provided])    
         
     # Adjust dropout to feature maps
-    if cfg.MODEL.ARCHITECTURE in ['ViT', 'unetr', 'tiramisu']:
+    if cfg.MODEL.ARCHITECTURE in ['ViT', 'unetr', 'tiramisu', 'mae']:
         if all(x == 0 for x in cfg.MODEL.DROPOUT_VALUES):
             opts.extend(['MODEL.DROPOUT_VALUES', (0.,)])
         elif len(cfg.MODEL.DROPOUT_VALUES) != 1:
-            raise ValueError("'MODEL.DROPOUT_VALUES' must be list of an unique number when 'MODEL.ARCHITECTURE' is one among ['ViT', 'unetr', 'tiramisu']")
+            raise ValueError("'MODEL.DROPOUT_VALUES' must be list of an unique number when 'MODEL.ARCHITECTURE' is one among ['ViT', 'mae', 'unetr', 'tiramisu']")
         elif not check_value(cfg.MODEL.DROPOUT_VALUES[0]):
             raise ValueError("'MODEL.DROPOUT_VALUES' not in [0, 1] range")
     else:
@@ -349,10 +349,12 @@ def check_configuration(cfg):
     if cfg.MODEL.ARCHITECTURE == "unetr":
         if cfg.TEST.STATS.FULL_IMG:
             raise ValueError("'TEST.STATS.FULL_IMG' can not be activate when using UNETR") 
-    if cfg.MODEL.ARCHITECTURE in ["unetr", 'ViT', 'mae']:    
+    if cfg.MODEL.ARCHITECTURE in ['unetr', 'ViT', 'mae']:    
         if cfg.MODEL.VIT_HIDDEN_SIZE % cfg.MODEL.VIT_NUM_HEADS != 0:
             raise ValueError("'MODEL.VIT_HIDDEN_SIZE' should be divisible by 'MODEL.VIT_NUM_HEADS'")
-            
+        if not all([i == cfg.DATA.PATCH_SIZE[0] for i in cfg.DATA.PATCH_SIZE[:-1]]):      
+            raise ValueError("'unetr', 'ViT' 'mae' models need to have same shape in all dimensions (e.g. DATA.PATCH_SIZE = (80,80,80,1) )")
+
     ### Train ###
     assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM', 'ADAMW']
     assert cfg.LOSS.TYPE in ['CE', 'W_CE_DICE', 'MASKED_BCE']
