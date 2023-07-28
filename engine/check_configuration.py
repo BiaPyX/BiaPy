@@ -37,13 +37,21 @@ def check_configuration(cfg):
                 opts.extend(['PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS', (1,)*channels_provided])    
         
     # Adjust dropout to feature maps
-    if len(cfg.MODEL.FEATURE_MAPS) != len(cfg.MODEL.DROPOUT_VALUES):
+    if cfg.MODEL.ARCHITECTURE in ['ViT', 'unetr', 'tiramisu']:
         if all(x == 0 for x in cfg.MODEL.DROPOUT_VALUES):
-            opts.extend(['MODEL.DROPOUT_VALUES', (0.,)*len(cfg.MODEL.FEATURE_MAPS)])
-        elif any(not check_value(x) for x in cfg.MODEL.DROPOUT_VALUES):
+            opts.extend(['MODEL.DROPOUT_VALUES', (0.,)])
+        elif len(cfg.MODEL.DROPOUT_VALUES) != 1:
+            raise ValueError("'MODEL.DROPOUT_VALUES' must be list of an unique number when 'MODEL.ARCHITECTURE' is one among ['ViT', 'unetr', 'tiramisu']")
+        elif not check_value(cfg.MODEL.DROPOUT_VALUES[0]):
             raise ValueError("'MODEL.DROPOUT_VALUES' not in [0, 1] range")
-        else:
-            raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.DROPOUT_VALUES' lengths must be equal")
+    else:
+        if len(cfg.MODEL.FEATURE_MAPS) != len(cfg.MODEL.DROPOUT_VALUES):
+            if all(x == 0 for x in cfg.MODEL.DROPOUT_VALUES):
+                opts.extend(['MODEL.DROPOUT_VALUES', (0.,)*len(cfg.MODEL.FEATURE_MAPS)])
+            elif any(not check_value(x) for x in cfg.MODEL.DROPOUT_VALUES):
+                raise ValueError("'MODEL.DROPOUT_VALUES' not in [0, 1] range")
+            else:
+                raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.DROPOUT_VALUES' lengths must be equal")
 
     # Adjust Z_DOWN values to feature maps
     if len(cfg.MODEL.FEATURE_MAPS)-1 != len(cfg.MODEL.Z_DOWN):

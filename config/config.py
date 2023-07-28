@@ -478,7 +478,8 @@ class Config:
         _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]
         # To activate the Spatial Dropout instead of use the "normal" dropout layer
         _C.MODEL.SPATIAL_DROPOUT = False
-        # Values to make the dropout with. Set to 0 to prevent dropout
+        # Values to make the dropout with. Set to 0 to prevent dropout. When using it with 'ViT', 'unetr' or 'tiramisu' 
+        # a list with just one number must be provided 
         _C.MODEL.DROPOUT_VALUES = [0., 0., 0., 0., 0.]
         # To active batch normalization
         _C.MODEL.BATCH_NORMALIZATION = False

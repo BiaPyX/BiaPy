@@ -61,7 +61,7 @@ def build_model(cfg, job_identifier):
         elif cfg.MODEL.ARCHITECTURE == 'ViT':
             args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, 
                 transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
-                n_classes=cfg.MODEL.N_CLASSES, dropout=cfg.MODEL.DROPOUT_VALUES)
+                n_classes=cfg.MODEL.N_CLASSES, dropout=cfg.MODEL.DROPOUT_VALUES[0])
             model = ViT(**args)
         elif cfg.MODEL.ARCHITECTURE == 'fcn32':
             model = FCN32_VGG16(cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
@@ -80,7 +80,7 @@ def build_model(cfg, job_identifier):
                 transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
                 num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS, n_classes=cfg.MODEL.N_CLASSES, decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION, 
                 decoder_kernel_init=cfg.MODEL.UNETR_DEC_KERNEL_INIT, ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT, 
-                batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES, last_act=cfg.MODEL.LAST_ACTIVATION)
+                batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES[0], last_act=cfg.MODEL.LAST_ACTIVATION)
             args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None
             model = UNETR(**args)
         elif cfg.MODEL.ARCHITECTURE == 'edsr':
