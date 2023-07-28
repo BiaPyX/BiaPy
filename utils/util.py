@@ -892,7 +892,7 @@ def onehot_encoding_to_img(encoded_image):
 
 
 def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), padding=(0,0), return_filenames=False,
-                       reflect_to_complete_shape=False, check_channel=True):
+                       reflect_to_complete_shape=False, check_channel=True, check_drange=True):
     """Load data from a directory. If ``crop=False`` all the data is suposed to have the same shape.
 
        Parameters
@@ -924,6 +924,9 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
        check_channel : bool, optional
            Whether to check if the crop_shape channel matches with the loaded images' one. 
            
+       check_drange : bool, optional
+           Whether to check if the data loaded is in the same range. 
+
        Returns
        -------
        data : 4D Numpy array or list of 3D Numpy arrays
@@ -1011,9 +1014,10 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
     dtype = data[0].dtype
     drange = data_range(data[0])
     for i in range(1,len(data)):
-        if dtype != data[i].dtype and drange != data_range(data[i]):
-            raise ValueError("Data type mismatch {} and {} found in the dataset. Please check it and ensure all"
-                             " images have same data type".format(dtype,data[i].dtype))
+        if check_drange and dtype != data[i].dtype and drange != data_range(data[i]):
+            raise ValueError("Input images seem to have different data types ({} and {} found) and different "
+                "data ranges ({} and {} found). Please check it and ensure all images have same data type"
+                .format(dtype,data[i].dtype,drange,data_range(data[i])))
         if s != data[i].shape:
             same_shape = False
 
@@ -1095,7 +1099,7 @@ def load_ct_data_from_dir(data_dir, shape=None):
 
 
 def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False, overlap=(0,0,0), padding=(0,0,0),
-                            median_padding=False, reflect_to_complete_shape=False, check_channel=True,
+                            median_padding=False, reflect_to_complete_shape=False, check_channel=True, check_drange=True,
                             return_filenames=False):
     """Load data from a directory.
 
@@ -1130,6 +1134,9 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
        check_channel : bool, optional
            Whether to check if the crop_shape channel matches with the loaded images' one.
            
+       check_drange : bool, optional
+           Whether to check if the data loaded is in the same range. 
+
        return_filenames : bool, optional
            Return a list with the loaded filenames. Useful when you need to save them afterwards with the same names as
            the original ones.
@@ -1239,9 +1246,10 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
     dtype = data[0].dtype
     drange = data_range(data[0])
     for i in range(1,len(data)):
-        if dtype != data[i].dtype and drange != data_range(data[i]):
-            raise ValueError("Data type mismatch {} and {} found in the dataset. Please check it and ensure all"
-                             " images have same data type".format(dtype,data[i].dtype))
+        if check_drange and dtype != data[i].dtype and drange != data_range(data[i]):
+            raise ValueError("Input images seem to have different data types ({} and {} found) and different "
+                "data ranges ({} and {} found). Please check it and ensure all images have same data type"
+                .format(dtype,data[i].dtype,drange,data_range(data[i])))
         if s != data[i].shape:
             same_shape = False
 

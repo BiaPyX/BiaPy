@@ -40,7 +40,7 @@ def create_instance_channels(cfg, data_type='train'):
 
     f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
     tag = "TRAIN" if data_type == "train" else "VAL"
-    Y, _, _, filenames = f_name(getattr(cfg.DATA, tag).GT_PATH, return_filenames=True)
+    Y, _, _, filenames = f_name(getattr(cfg.DATA, tag).GT_PATH, check_drange=False, return_filenames=True)
     print("Creating Y_{} channels . . .".format(data_type))
     if isinstance(Y, list):
         for i in tqdm(range(len(Y))):
@@ -73,7 +73,7 @@ def create_test_instance_channels(cfg):
     f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
 
     if cfg.DATA.TEST.LOAD_GT:
-        Y_test, _, _, test_filenames = f_name(cfg.DATA.TEST.GT_PATH, return_filenames=True)
+        Y_test, _, _, test_filenames = f_name(cfg.DATA.TEST.GT_PATH, check_drange=False, return_filenames=True)
         print("Creating Y_test channels . . .")
         if isinstance(Y_test, list):
             for i in tqdm(range(len(Y_test))):
@@ -96,7 +96,7 @@ def create_test_instance_channels(cfg):
             save_tif(np.expand_dims(X_test[i],0), cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK, filenames=['vol'+str(i)+".tif"], verbose=True)
 
 def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
-    """Coverts input semantic or instance segmentation data masks into different binary channels to train an instance segmentation
+    """Converts input semantic or instance segmentation data masks into different binary channels to train an instance segmentation
        problem. 
 
        Parameters
