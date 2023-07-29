@@ -454,6 +454,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 self.X_norm['type'] = 'custom'
                 self.X_norm['mean'] = np.mean(sam)
                 self.X_norm['std'] = np.std(sam)
+                self.X_norm['orig_dtype'] = img.dtype
                 del sam
             else:                
                 self.X_norm['type'] = 'div'
@@ -667,11 +668,8 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
             if val and self.in_memory:
                 self.Y = np.zeros(_X.shape[:-1] + (_X.shape[-1]*2,), dtype=np.float32)
-                if type(self.X) != list: 
-                    self.prepare_n2v(self.X, self.Y)
-                else:
-                    for i in range(len(self.X)):
-                        self.prepare_n2v(self.X[i], self.Y[i])    
+                for i in range(len(self.X)):
+                    self.prepare_n2v(self.X[i], self.Y[i])    
 
             self.Y_shape = self.shape[:self.ndim] + (self.Y_channels*2,)
         else:
@@ -1250,7 +1248,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
 
             if self.n2v and not self.val:
                 mask = np.repeat(sample_y[i], self.Y_channels*2, axis=-1).astype(np.float32)
-                self.prepare_n2v(np.expand_dims(img,0), np.expand_dims(mask,0))
+                self.prepare_n2v(img, mask)
                 sample_y[i] = mask
 
             if save_to_dir:
@@ -1288,7 +1286,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                     else:
                         im[k,j] = [v]*im.shape[-1]
         
-    def prepare_n2v(self, batch_x, batch_y):
+    def prepare_n2v(self, img, mask):
         if self.val and not self.in_memory:
             np.random.seed(0) 
 
@@ -1296,13 +1294,13 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             coords = self.get_stratified_coords(box_size=self.box_size, shape=self.shape)                             
             indexing = coords + (c,)
             indexing_mask = coords + (c + self.Y_channels, )
-            y_val = batch_x[indexing]
-            x_val = self.value_manipulation(batch_x[..., c], coords, self.ndim, self.n2v_structMask)
+            y_val = img[indexing]
+            x_val = self.value_manipulation(img[..., c], coords, self.ndim, self.n2v_structMask)
             
-            batch_y[indexing] = y_val
-            batch_y[indexing_mask] = 1
-            batch_x[indexing] = x_val
+            mask[indexing] = y_val
+            mask[indexing_mask] = 1
+            img[indexing] = x_val
 
             if self.n2v_structMask is not None:
-                self.apply_structN2Vmask_func(batch_x[..., c], coords, self.n2v_structMask)
+                self.apply_structN2Vmask_func(img[..., c], coords, self.n2v_structMask)
                    

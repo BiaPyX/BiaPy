@@ -93,6 +93,7 @@ class test_pair_data_generator(tf.keras.utils.Sequence):
             self.X_norm['type'] = 'custom'
             self.X_norm['mean'] = norm_custom_mean
             self.X_norm['std'] = norm_custom_std
+            self.X_norm['orig_dtype'] = img.dtype
         else:
             self.X_norm.update(xnorm)
 

@@ -818,6 +818,7 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
 ###########
 def norm_range01(x):
     norm_steps = {}
+    norm_steps['orig_dtype'] = x.dtype
     if x.dtype == np.uint8:
         x = x/255
         norm_steps['div_255'] = 1

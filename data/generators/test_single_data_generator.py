@@ -105,12 +105,14 @@ class test_single_data_generator(tf.keras.utils.Sequence):
         # Check if a division is required
         self.X_norm = {}
         self.X_norm['type'] = 'div'
-        _, _, xnorm = self.load_sample(0)
+        img, _, xnorm = self.load_sample(0)
 
         if norm_custom_mean is not None and norm_custom_std is not None:
             self.X_norm['type'] = 'custom'
             self.X_norm['mean'] = norm_custom_mean
             self.X_norm['std'] = norm_custom_std
+            self.X_norm['orig_dtype'] = img.dtype
+            del img
         else:
             self.X_norm.update(xnorm)
 
