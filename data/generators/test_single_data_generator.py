@@ -63,8 +63,6 @@ class test_single_data_generator(tf.keras.utils.Sequence):
                  resize_shape=None, sample_ids=None):
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
-        if provide_Y and Y is None:
-            raise ValueError("'Y' must be provided")
         if crop_center and resize_shape is None:
             raise ValueError("'resize_shape' need to be provided if 'crop_center' is enabled")
         assert ptype in ['mae', 'classification']

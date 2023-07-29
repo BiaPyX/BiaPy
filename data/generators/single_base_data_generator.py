@@ -178,7 +178,7 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                 self.class_numbers = {}
                 for i, c_name in enumerate(self.class_names):
                     self.class_numbers[c_name] = i
-                self.classes = {}
+                self.classes = []
                 self.all_samples = []
                 print("Collecting data ids . . .")
                 for folder in self.class_names:
@@ -186,12 +186,12 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                     ids = sorted(next(os.walk(os.path.join(data_path,folder)))[2])
                     print("Found {} samples".format(len(ids)))
                     for i in range(len(ids)):
-                        self.classes[ids[i]] = folder
+                        self.classes.append(folder)
                         self.all_samples.append(ids[i])
-                temp = random.shuffle(list(zip(self.all_samples, self.classes)) )
+                temp = list(zip(self.all_samples, self.classes))
+                random.shuffle(temp)
                 self.all_samples, self.classes = zip(*temp)
-                self.all_samples, self.classes = list(self.all_samples), list(self.classes)
-
+                del temp
                 present_classes = np.unique(np.array(self.classes))
                 if len(present_classes) != n_classes:
                     raise ValueError("MODEL.N_CLASSES is {} but {} classes found: {}"
@@ -348,7 +348,7 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         else:
             sample_id = self.all_samples[idx]
             if self.ptype == "classification":
-                sample_class_dir = self.classes[sample_id] 
+                sample_class_dir = self.classes[idx] 
                 f = os.path.join(self.data_path, sample_class_dir, sample_id) 
                 img_class = self.class_numbers[sample_class_dir]
             else:            
