@@ -976,7 +976,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
     data = []
     data_shape = []
     c_shape = []
-    if return_filenames: filenames = []
+    filenames = []
 
     if len(ids) == 0:
         raise ValueError("No images found in dir {}".format(data_dir))
@@ -987,7 +987,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
         else:
             img = imread(os.path.join(data_dir, id_))
 
-        if return_filenames: filenames.append(id_)
+        filenames.append(id_)
 
         if img.ndim == 2:
             img = np.expand_dims(img, -1)
@@ -1014,10 +1014,10 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
     dtype = data[0].dtype
     drange = data_range(data[0])
     for i in range(1,len(data)):
-        if check_drange and dtype != data[i].dtype and drange != data_range(data[i]):
-            raise ValueError("Input images seem to have different data types ({} and {} found) and different "
-                "data ranges ({} and {} found). Please check it and ensure all images have same data type"
-                .format(dtype,data[i].dtype,drange,data_range(data[i])))
+        if check_drange and drange != data_range(data[i]):
+            raise ValueError("Input images ({} vs {}) seem to have different data ranges ({} and {} found) Please check it "
+                "and ensure all images have same data type"
+                .format(filenames[0], filenames[i], drange, data_range(data[i])))
         if s != data[i].shape:
             same_shape = False
 
@@ -1200,7 +1200,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
     data = []
     data_shape = []
     c_shape = []
-    if return_filenames: filenames = []
+    filenames = []
     ax = None
 
     # Read images
@@ -1223,7 +1223,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
                 new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
                 img = img.transpose(new_pos)
 
-        if return_filenames: filenames.append(id_)
+        filenames.append(id_)
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=verbose)
         
         if crop_shape is not None and check_channel:
@@ -1246,10 +1246,10 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
     dtype = data[0].dtype
     drange = data_range(data[0])
     for i in range(1,len(data)):
-        if check_drange and dtype != data[i].dtype and drange != data_range(data[i]):
-            raise ValueError("Input images seem to have different data types ({} and {} found) and different "
-                "data ranges ({} and {} found). Please check it and ensure all images have same data type"
-                .format(dtype,data[i].dtype,drange,data_range(data[i])))
+        if check_drange and drange != data_range(data[i]):
+            raise ValueError("Input images ({} vs {}) seem to have different data ranges ({} and {} found) Please check it "
+                "and ensure all images have same data type"
+                .format(filenames[0], filenames[i], drange, data_range(data[i])))
         if s != data[i].shape:
             same_shape = False
 
