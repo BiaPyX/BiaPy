@@ -123,8 +123,9 @@ def check_configuration(cfg):
         cfg.merge_from_list(opts)
 
     #### General checks ####
-    assert cfg.PROBLEM.NDIM in ['2D', '3D']
-    assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']
+    assert cfg.PROBLEM.NDIM in ['2D', '3D'], "Problem need to be '2D' or '3D'"
+    assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED'],\
+        "PROBLEM.TYPE not in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']"
 
     if cfg.PROBLEM.NDIM == "2D" and not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.FULL_IMG:
         raise ValueError("At least one between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.FULL_IMG' need to be True")
@@ -154,7 +155,8 @@ def check_configuration(cfg):
                     
     #### Instance segmentation ####
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-        assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']
+        assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD'],\
+            "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']"
         if cfg.MODEL.N_CLASSES > 1:
             raise ValueError("Not implemented pipeline option for INSTANCE_SEGMENTATION")
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
@@ -196,7 +198,7 @@ def check_configuration(cfg):
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
         if cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING == 1:
             raise ValueError("Resolution scale must be provided with 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable")
-        assert cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING in [2, 4]
+        assert cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING in [2, 4], "PROBLEM.SUPER_RESOLUTION.UPSCALING not in [2, 4]"
         if cfg.DATA.NORMALIZATION.TYPE == 'custom':
             raise NotImplementedError
         if cfg.PROBLEM.NDIM == '3D':
@@ -310,7 +312,7 @@ def check_configuration(cfg):
     if len(cfg.DATA.TEST.RESOLUTION) != 1 and len(cfg.DATA.TEST.RESOLUTION) != dim_count:
         raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.RESOLUTION tuple must be lenght {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TEST.RESOLUTION))
-    assert cfg.DATA.NORMALIZATION.TYPE in ['div', 'custom']
+    assert cfg.DATA.NORMALIZATION.TYPE in ['div', 'custom'], "DATA.NORMALIZATION.TYPE not in ['div', 'custom']"
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':
         if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
             if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
@@ -321,7 +323,10 @@ def check_configuration(cfg):
     ### Model ###
     assert cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'tiramisu', 'mnet',
                                       'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr',
-                                      'srunet', 'rcan', 'dfcan', 'wdsr', 'ViT', 'mae']
+                                      'srunet', 'rcan', 'dfcan', 'wdsr', 'ViT', 'mae'],\
+        "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'tiramisu', 'mnet',\
+        'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr', 'srunet', 'rcan', 'dfcan', \
+        'wdsr', 'ViT', 'mae']"
     if cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet', 'unetr'] and cfg.PROBLEM.NDIM == '3D' and cfg.PROBLEM.TYPE != "CLASSIFICATION":
         raise ValueError("For 3D these models are available: {}".format(['unet', 'resunet', 'seunet', 'attention_unet']))
     if cfg.MODEL.N_CLASSES > 1 and cfg.PROBLEM.TYPE != "CLASSIFICATION" and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
@@ -353,8 +358,8 @@ def check_configuration(cfg):
             raise ValueError("'unetr', 'ViT' 'mae' models need to have same shape in all dimensions (e.g. DATA.PATCH_SIZE = (80,80,80,1) )")
 
     ### Train ###
-    assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM', 'ADAMW']
-    assert cfg.LOSS.TYPE in ['CE', 'W_CE_DICE', 'MASKED_BCE']
+    assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM', 'ADAMW'], "TRAIN.OPTIMIZER not in ['SGD', 'ADAM', 'ADAMW']"
+    assert cfg.LOSS.TYPE in ['CE', 'W_CE_DICE', 'MASKED_BCE'], "LOSS.TYPE not in ['CE', 'W_CE_DICE', 'MASKED_BCE']"
     if cfg.TRAIN.LR_SCHEDULER.NAME != '':
         if cfg.TRAIN.LR_SCHEDULER.NAME not in ['reduceonplateau', 'warmupcosine', 'onecycle']:
             raise ValueError("'TRAIN.LR_SCHEDULER.NAME' must be one between ['reduceonplateau', 'warmupcosine', 'onecycle']")
