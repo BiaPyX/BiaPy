@@ -27,11 +27,13 @@ class Pair2DImageDataGenerator(PairBaseDataGenerator):
         else:
             if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
 
-        # Super-resolution check
-        s = [img.shape[0]*self.random_crop_scale, img.shape[1]*self.random_crop_scale]
-        if all(x!=y for x,y in zip(s,mask.shape[:-1])):
-            raise ValueError("Images loaded need to be LR and its HR version. LR shape:"
-                " {} vs HR shape {} is not x{} larger".format(img.shape[:-1], mask.shape[:-1], self.random_crop_scale))
+        # Super-resolution check. if random_crops_in_DA is activated the images have not been cropped yet,
+        # so this check can not be done 
+        if not self.random_crops_in_DA:
+            s = [img.shape[0]*self.random_crop_scale, img.shape[1]*self.random_crop_scale]
+            if all(x!=y for x,y in zip(s,mask.shape[:-1])):
+                raise ValueError("Images loaded need to be LR and its HR version. LR shape:"
+                    " {} vs HR shape {} is not x{} larger".format(img.shape[:-1], mask.shape[:-1], self.random_crop_scale))
 
         return img, mask
 

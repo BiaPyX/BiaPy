@@ -136,7 +136,7 @@ class ESPCNCallback(tf.keras.callbacks.Callback):
         self.psnr = []
 
     def on_epoch_end(self, epoch, logs=None):
-        print("Mean PSNR for epoch: %.2f" % (np.mean(self.psnr)))
+        print("\n\nMean PSNR for epoch: %.3f\n\n" % (np.mean(self.psnr)))
 
     def on_test_batch_end(self, batch, logs=None):
         self.psnr.append(10 * math.log10(1 / logs["loss"]))

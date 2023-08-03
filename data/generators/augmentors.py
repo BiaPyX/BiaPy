@@ -1114,6 +1114,16 @@ def random_crop_pair(image, mask, random_crop_size, val=False, draw_prob_map_poi
             x = np.random.randint(0, width - dx + 1) if width - dx +1 > 0 else 0
             y = np.random.randint(0, height - dy + 1) if height - dy +1 > 0 else 0
 
+    # Super-resolution check
+    if scale != 1:
+        img_out_shape = img[y:(y+dy), x:(x+dx)].shape
+        mask_out_shape = mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale].shape
+        s = [img_out_shape[0]*scale, img_out_shape[1]*scale]
+        if all(x!=y for x,y in zip(s,mask_out_shape)):
+            raise ValueError("Images can not be cropped to a PATCH_SIZE of {}. Inputs: LR image shape={} "
+                "and HR image shape={}. When cropping the output shapes are {} and {}, for LR and HR images respectively. "
+                "Try to reduce DATA.PATCH_SIZE".format(random_crop_size, img.shape, mask.shape, img_out_shape, mask_out_shape))
+
     if draw_prob_map_points == True:
         return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], oy, ox, y, x
     else:
@@ -1239,6 +1249,16 @@ def random_3D_crop_pair(image, mask, random_crop_size, val=False, img_prob=None,
             z = np.random.randint(0, deep - dz + 1) if deep - dz +1 > 0 else 0
             y = np.random.randint(0, cols - dy + 1) if cols - dy +1 > 0 else 0
             x = np.random.randint(0, rows - dx + 1) if rows - dx +1 > 0 else 0
+
+     # Super-resolution check
+    if scale != 1:
+        img_out_shape = vol[z:(z+dz), y:(y+dy), x:(x+dx)].shape
+        mask_out_shape = mask[z*scale:(z+dz)*scale, y*scale:(y+dy)*scale, x*scale:(x+dx)*scale].shape
+        s = [img_out_shape[0]*scale, img_out_shape[1]*scale, img_out_shape[2]*scale]
+        if all(x!=y for x,y in zip(s,mask_out_shape)):
+            raise ValueError("Images can not be cropped to a PATCH_SIZE of {}. Inputs: LR image shape={} "
+                "and HR image shape={}. When cropping the output shapes are {} and {}, for LR and HR images respectively. "
+                "Try to reduce DATA.PATCH_SIZE".format(random_crop_size, vol.shape, mask.shape, img_out_shape, mask_out_shape))
 
     if draw_prob_map_points:
         return vol[z:(z+dz), y:(y+dy), x:(x+dx)], mask[z*scale:(z+dz)*scale, y*scale:(y+dy)*scale, x*scale:(x+dx)*scale],\

@@ -135,7 +135,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
         overlap=ov, padding=padding, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape)
 
     if train_mask_path is not None:
-        print("1) Loading train masks . . .")
+        print("1) Loading train GT . . .")
         scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
         Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov,
             padding=padding, reflect_to_complete_shape=reflect_to_complete_shape, check_channel=False, check_drange=False)
@@ -284,16 +284,16 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
 
     if create_val:
         print("*** Loaded train data shape is: {}".format(X_train.shape))
-        print("*** Loaded train mask shape is: {}".format(Y_train.shape))
+        print("*** Loaded train GT shape is: {}".format(Y_train.shape))
         print("*** Loaded validation data shape is: {}".format(X_val.shape))
-        print("*** Loaded validation mask shape is: {}".format(Y_val.shape))
+        print("*** Loaded validation GT shape is: {}".format(Y_val.shape))
         if not cross_val:
             return X_train, Y_train, X_val, Y_val, t_filenames
         else:
             return X_train, Y_train, X_val, Y_val, t_filenames, test_index
     else:
         print("*** Loaded train data shape is: {}".format(X_train.shape))
-        print("*** Loaded train mask shape is: {}".format(Y_train.shape))
+        print("*** Loaded train GT shape is: {}".format(Y_train.shape))
         return X_train, Y_train, t_filenames
 
 

@@ -151,7 +151,7 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
     X_train, orig_train_shape, _, t_filenames = load_data_from_dir(train_path, crop=crop, crop_shape=crop_shape, overlap=ov,
         padding=padding, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape)
     if train_mask_path is not None:                                            
-        print("1) Loading train masks . . .")
+        print("1) Loading train GT . . .")
         scrop = (crop_shape[0]*y_upscaling, crop_shape[1]*y_upscaling, crop_shape[2])
         Y_train, _, _, _ = load_data_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov, padding=padding, 
             return_filenames=True, check_channel=False, check_drange=False, reflect_to_complete_shape=reflect_to_complete_shape)
@@ -288,15 +288,17 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
                 Y_val = np.concatenate(data_mask)
                 del data_mask
 
-    s = X_train.shape if not random_crops_in_DA else (len(X_train),)+X_train[0].shape[1:]
-    sm = Y_train.shape if not random_crops_in_DA else (len(Y_train),)+Y_train[0].shape[1:]
+    s = X_train.shape if not isinstance(X_train, list) else (len(X_train),)+X_train[0].shape[1:]
+    sm = Y_train.shape if not isinstance(Y_train, list) else (len(Y_train),)+Y_train[0].shape[1:]
     if create_val:
-        sv = X_val.shape if not random_crops_in_DA else (len(X_val),)+X_val[0].shape[1:]
-        svm = Y_val.shape if not random_crops_in_DA else (len(Y_val),)+Y_val[0].shape[1:]
+        sv = X_val.shape if not isinstance(X_val, list) else (len(X_val),)+X_val[0].shape[1:]
+        svm = Y_val.shape if not isinstance(Y_val, list) else (len(Y_val),)+Y_val[0].shape[1:]
+        if not isinstance(X_train, list):
+            print("Not all samples seem to have the same shape. Number of samples: {}".format(len(X_train)))
         print("*** Loaded train data shape is: {}".format(s))
-        print("*** Loaded train mask shape is: {}".format(sm))
+        print("*** Loaded train GT shape is: {}".format(sm))
         print("*** Loaded validation data shape is: {}".format(sv))
-        print("*** Loaded validation mask shape is: {}".format(svm))
+        print("*** Loaded validation GT shape is: {}".format(svm))
         print("### END LOAD ###")
 
         if not cross_val:

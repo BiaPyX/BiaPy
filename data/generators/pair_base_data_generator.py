@@ -574,7 +574,11 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             elif self.normalizeY == 'as_image':
                 self.Y_dtype = np.float32
                 if self.X_norm['type'] == 'div':
-                    self.Y, _ = norm_range01(self.Y)
+                    if type(X) != list:
+                        self.Y, _ = norm_range01(self.Y)
+                    else:
+                        for i in range(len(self.Y)):
+                            self.Y[i], _ = norm_range01(self.Y[i])    
                 elif self.X_norm['type'] == 'custom':
                     self.Y = normalize(self.Y, self.X_norm['mean'], self.X_norm['std'])
             else:

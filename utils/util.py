@@ -1025,7 +1025,8 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
         data = np.concatenate(data)
         print("*** Loaded data shape is {}".format(data.shape))
     else:
-        print("*** Loaded data shape is {}".format((len(data),)+data[0].shape[1:]))
+        print("Not all samples seem to have the same shape. Number of samples: {}".format(len(data)))
+        print("*** First sample shape is {}".format(data[0].shape[1:]))
 
     if return_filenames:
         return data, data_shape, c_shape, filenames
@@ -1257,7 +1258,8 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
         data = np.concatenate(data)
         print("*** Loaded data shape is {}".format(data.shape))
     else:
-        print("*** Loaded data[0] shape is {}".format(data[0].shape))
+        print("Not all samples seem to have the same shape. Number of samples: {}".format(len(data)))
+        print("*** First sample shape is {}".format(data[0].shape))
 
     if return_filenames:
         return data, data_shape, c_shape, filenames
