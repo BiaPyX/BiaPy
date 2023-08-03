@@ -472,7 +472,8 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.MODEL = CN()
         # Architecture of the network. Possible values are: 'unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'nnunet', 'tiramisu', 
-        # 'mnet', 'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr', 'ViT'
+        # 'mnet', 'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr', 'srunet', 'rcan', 'dfcan', 'wdsr', 'ViT'
+        # 'mae'
         _C.MODEL.ARCHITECTURE = 'unet'
         # Number of feature maps on each level of the network.
         _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]

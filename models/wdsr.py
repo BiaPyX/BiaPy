@@ -4,34 +4,20 @@ from tensorflow.keras.models import Model
 import tensorflow_addons as tfa
 
 
-class WDSRModel(tf.keras.Model):
+class WDSRModel(tf.keras.Model): 
     """
-    	Code copied from https://keras.io/examples/vision/edsr
+    Code copied from https://keras.io/examples/vision/edsr
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.dtype_not_set = False
-        self.max_value = 255
-        self.out_dtype = tf.uint8
 
     def train_step(self, data):
         # Unpack the data. Its structure depends on your model and
         # on what you pass to `fit()`.
         x, y = data
 
-        if not self.dtype_not_set:
-            if y.dtype == tf.uint16:
-                self.max_value = 65535 
-            self.out_dtype = y.dtype 
-            self.dtype_not_set = True
-
         with tf.GradientTape() as tape:
             y_pred = self(x, training=True)  # Forward pass 
-            y_pred = y_pred*255
-
-            # Compare always in [0-255] range
-            if y.dtype == tf.uint16:
-                y = tf.cast((y/65535)*255, tf.uint8)
             
             # Compute the loss value
             # (the loss function is configured in `compile()`)
@@ -52,11 +38,6 @@ class WDSRModel(tf.keras.Model):
         x, y = data
         # Compute predictions
         y_pred = self(x, training=False)
-        y_pred = y_pred*255
-
-        # Compare always in [0-255] range
-        if y.dtype == tf.uint16:
-            y = tf.cast((y/65535)*255, tf.uint8)
 
         # Updates the metrics tracking the loss
         self.compiled_loss(y, y_pred, regularization_losses=self.losses)
@@ -67,25 +48,9 @@ class WDSRModel(tf.keras.Model):
         return {m.name: m.result() for m in self.metrics}
 
     def predict_step(self, x):
-        # Always return the same image dtype and value range of the ground truth
-        # if gt is uint16 -> return uint16 image with values between [0,65535]
-        # if gt is uint8 -> return uint8 image with values between [0,255]
-
-        # Passing low resolution image to model
         super_resolution_img = self(x, training=False)  
-        super_resolution_img = tf.clip_by_value(super_resolution_img, 0, 1)
-        super_resolution_img = super_resolution_img*self.max_value
-        super_resolution_img = tf.cast(super_resolution_img, self.out_dtype)
-        
+        super_resolution_img = tf.clip_by_value(super_resolution_img, 0, 1)     
         return super_resolution_img 
- 
-    def set_dtype(self, img):
-        if not self.dtype_not_set:
-            if img.dtype == np.uint16:
-                self.max_value = 65535
-                self.out_dtype = tf.uint16
-            self.dtype_not_set = True
-
 
 ## RCAN network definition. We follow the code from:
 ### [Martin Krasser](http://krasserm.github.io/2019/09/04/super-resolution/).

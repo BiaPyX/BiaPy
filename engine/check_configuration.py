@@ -140,8 +140,6 @@ def check_configuration(cfg):
     if cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE not in ['SEMANTIC_SEG', 'DETECTION']:
         raise ValueError("Not implemented pipeline option: LOSS.TYPE != 'CE' only available in 'SEMANTIC_SEG' and 'DETECTION'")
     
-    if cfg.PROBLEM.TYPE != 'SUPER_RESOLUTION' and cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING != 1:
-        raise ValueError("'PROBLEM.SUPER_RESOLUTION.UPSCALING' can only be 1 if the problem is not 'SUPER_RESOLUTION'")
     if cfg.TEST.ENABLE and cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and cfg.PROBLEM.NDIM == "3D":
         raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' makes no sense when the problem is 3D. Disable it.")
 
@@ -199,10 +197,6 @@ def check_configuration(cfg):
         if cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING == 1:
             raise ValueError("Resolution scale must be provided with 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable")
         assert cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING in [2, 4], "PROBLEM.SUPER_RESOLUTION.UPSCALING not in [2, 4]"
-        if cfg.DATA.NORMALIZATION.TYPE == 'custom':
-            raise NotImplementedError
-        if cfg.PROBLEM.NDIM == '3D':
-            raise NotImplementedError
 
     #### Self-supervision ####
     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':

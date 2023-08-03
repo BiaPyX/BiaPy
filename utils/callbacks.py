@@ -4,6 +4,7 @@ import time
 import warnings
 import tensorflow as tf
 import numpy as np
+import math
 
 class ModelCheckpoint(tf.keras.callbacks.Callback):
     """Save the model after every epochimport tensorflow.keras.callbacks.Callback .
@@ -126,3 +127,16 @@ class TimeHistory(tf.keras.callbacks.Callback):
     def on_epoch_end(self, batch, logs={}):
         self.times.append(time.time() - self.epoch_time_start)
 
+class ESPCNCallback(tf.keras.callbacks.Callback):
+    def __init__(self):
+        super().__init__()
+
+    # Store PSNR value in each epoch.
+    def on_epoch_begin(self, epoch, logs=None):
+        self.psnr = []
+
+    def on_epoch_end(self, epoch, logs=None):
+        print("Mean PSNR for epoch: %.2f" % (np.mean(self.psnr)))
+
+    def on_test_batch_end(self, batch, logs=None):
+        self.psnr.append(10 * math.log10(1 / logs["loss"]))

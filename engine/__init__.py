@@ -2,7 +2,7 @@ import os
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
-from utils.callbacks import ModelCheckpoint, TimeHistory
+from utils.callbacks import ModelCheckpoint, TimeHistory, ESPCNCallback
 from engine.metrics import (jaccard_index, jaccard_index_softmax, IoU_instances, instance_segmentation_loss, weighted_bce_dice_loss,
                             masked_bce_loss, masked_jaccard_index, PSNR, dfcan_loss, n2v_loss_mse, MAE_instances)
 from engine.schedulers.one_cycle import OneCycleScheduler
@@ -85,17 +85,22 @@ def prepare_optimizer(cfg, model):
             metric_name.append("mae_distance_channel")
         model.compile(optimizer=opt, loss=instance_segmentation_loss(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS),
                       metrics=metrics)   
-    elif cfg.PROBLEM.TYPE in ["SUPER_RESOLUTION", "SELF_SUPERVISED"]:
+    elif cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
         if cfg.MODEL.ARCHITECTURE == 'dfcan':
             print("Overriding 'LOSS.TYPE' to set it to DFCAN loss")
-            model.compile(optimizer=opt, loss=[dfcan_loss()], metrics=[PSNR])
-        elif cfg.MODEL.ARCHITECTURE == 'mae':
+            model.compile(optimizer=opt, loss=[dfcan_loss()])
+        else:
+            print("Overriding 'LOSS.TYPE' to set it to MAE")
+            model.compile(optimizer=opt, loss="mae")
+    elif cfg.PROBLEM.TYPE  == "SELF_SUPERVISED":
+        if cfg.MODEL.ARCHITECTURE == 'mae':
             print("Overriding 'LOSS.TYPE' to set it to MSE loss")
             model.compile(optimizer=opt, loss=tf.keras.losses.MeanSquaredError(), metrics=["mae"])
+            metric_name.append("mae")
         else:
             print("Overriding 'LOSS.TYPE' to set it to MAE")
             model.compile(optimizer=opt, loss="mae", metrics=[PSNR])
-        metric_name.append("PSNR")
+            metric_name.append("PSNR")
     elif cfg.PROBLEM.TYPE == "DENOISING":
         print("Overriding 'LOSS.TYPE' to set it to N2V loss (masked MSE)")
         model.compile(optimizer=opt, loss=n2v_loss_mse(), metrics=[n2v_loss_mse()])
@@ -153,5 +158,8 @@ def build_callbacks(cfg, schel_steps):
     if cfg.TRAIN.PROFILER:
         tb_callback = tf.keras.callbacks.TensorBoard(log_dir=cfg.PATHS.PROFILER, profile_batch=cfg.TRAIN.PROFILER_BATCH_RANGE)
         callbacks.append(tb_callback)          
-                                       
+
+    if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":  
+        callbacks.append(ESPCNCallback())
+        
     return callbacks

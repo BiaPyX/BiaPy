@@ -8,7 +8,7 @@ from data.post_processing.post_processing import ensemble8_2d_predictions, ensem
 from utils.util import save_tif
 from engine.base_workflow import Base_Workflow
 from engine.metrics import PSNR
-from data.pre_processing import denormalize
+from data.pre_processing import denormalize, undo_norm_range01
 
 class Super_resolution(Base_Workflow):
     def __init__(self, cfg, model, post_processing={}):
@@ -29,7 +29,6 @@ class Super_resolution(Base_Workflow):
                     padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
 
         # Predict each patch
-        self.model.set_dtype(Y[0])
         pred = []
         if self.cfg.TEST.AUGMENTATION:
             for k in tqdm(range(X.shape[0]), leave=False):
@@ -59,14 +58,28 @@ class Super_resolution(Base_Workflow):
                 overlap=ov, verbose=self.cfg.TEST.VERBOSE)
         else:
             pred = pred[0]
+
+        # Undo normalization
+        x_norm = norm[0]
+        if x_norm['type'] == 'div':
+            pred = undo_norm_range01(pred, x_norm)
+        else:
+            pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
             
+            if x_norm['orig_dtype'] not in [np.dtype('float64'), np.dtype('float32'), np.dtype('float16')]:
+                pred = np.round(pred)
+                minpred = np.min(pred)                                                                                                
+                pred = pred+abs(minpred)
+
+            pred = pred.astype(x_norm['orig_dtype'])
+
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
             save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
     
         # Calculate PSNR
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            m_val = 255 if Y.dtype != np.uint16 else 65535
+            m_val = 255 if np.max(Y) <= 255 else 65535
             psnr_per_image = PSNR(pred, Y, m_val)
             self.stats['psnr_per_image'] += psnr_per_image
 

@@ -160,9 +160,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             dic['instance_problem'] = True
-        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-            dic['normalizeY'] = 'none'
-        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+        elif cfg.PROBLEM.TYPE in ['SUPER_RESOLUTION','SELF_SUPERVISED']:
             dic['normalizeY'] = 'as_image'
         elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v']=True
@@ -187,12 +185,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
             seed=cfg.SYSTEM.SEED, norm_custom_mean=custom_mean, norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION,
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
-
-        if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
+        if cfg.PROBLEM.TYPE == 'INSTANCE_SEG': 
             dic['instance_problem'] = True
-        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-            dic['normalizeY'] = 'none'
-        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+        elif cfg.PROBLEM.TYPE in ['SUPER_RESOLUTION', 'SELF_SUPERVISED']:
             dic['normalizeY'] = 'as_image'
         elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v'] = True
@@ -336,7 +331,7 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     normalizeY='as_mask'
     provide_Y=cfg.DATA.TEST.LOAD_GT
     if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-        normalizeY = 'none'
+        normalizeY = 'as_image'
     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
         normalizeY = 'as_image'
         provide_Y = True if cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "crappify" else False

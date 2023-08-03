@@ -31,7 +31,8 @@ class Engine(object):
         self.post_processing['per_image'] = False
         self.post_processing['all_images'] = False
         self.test_filenames = None 
-
+        self.metric = []
+        
         # Save paths in case we need them in a future
         self.orig_train_path = cfg.DATA.TRAIN.PATH
         self.orig_train_mask_path = cfg.DATA.TRAIN.GT_PATH
