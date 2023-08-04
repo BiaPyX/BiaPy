@@ -668,7 +668,8 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             self.value_manipulation = get_value_manipulation(n2v_manipulator, n2v_neighborhood_radius)
             self.n2v_structMask = n2v_structMask 
             self.apply_structN2Vmask_func = apply_structN2Vmask if self.ndim == 2 else apply_structN2Vmask3D
-            self.Y_channels = self.Y_channels//2
+            if self.Y_channels != 1:
+                self.Y_channels = self.Y_channels//2 
 
             if val and self.in_memory:
                 self.Y = np.zeros(_X.shape[:-1] + (_X.shape[-1]*2,), dtype=np.float32)
@@ -892,7 +893,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         # Prepare mask when denoising with Noise2Void
         if self.n2v:
             if not self.val or (self.val and not self.in_memory):
-                mask = mask.astype(np.float32)
+                mask = np.repeat(mask, self.Y_channels*2, axis=-1).astype(np.float32)
                 self.prepare_n2v(img, mask)
             
         # One-hot enconde
