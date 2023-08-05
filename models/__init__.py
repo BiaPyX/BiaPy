@@ -51,6 +51,10 @@ def build_model(cfg, job_identifier, data_norm):
         if cfg.PROBLEM.NDIM == '3D':
             args['z_down'] = cfg.MODEL.Z_DOWN
 
+        if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+            args['upsampling_factor'] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
+            args['upsampling_position'] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION
+            args['n_classes'] = cfg.DATA.PATCH_SIZE[-1]
         model = f_name(**args)
     else:
         if cfg.MODEL.ARCHITECTURE == 'simple_cnn':
@@ -86,11 +90,6 @@ def build_model(cfg, job_identifier, data_norm):
         elif cfg.MODEL.ARCHITECTURE == 'edsr':
             model = EDSR(num_filters=64, num_of_residual_blocks=16, upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, 
                 num_channels=cfg.DATA.PATCH_SIZE[-1], x_norm=data_norm)
-        elif cfg.MODEL.ARCHITECTURE == 'srunet':
-            model = preResUNet(cfg.DATA.PATCH_SIZE, data_norm, activation='elu', kernel_initializer='he_normal',
-                dropout_value=cfg.MODEL.DROPOUT_VALUES[0], batchnorm=cfg.MODEL.BATCH_NORMALIZATION, 
-                maxpooling=True, separable=False, numInitChannels=16, depth=4, upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
-                upsample_method='UpSampling2D', final_activation=None)
         elif cfg.MODEL.ARCHITECTURE == 'rcan':
             model = rcan(data_norm, filters=16, n_sub_block=int(np.log2(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)), num_channels=cfg.DATA.PATCH_SIZE[-1], use_mish=False)
         elif cfg.MODEL.ARCHITECTURE == 'dfcan':

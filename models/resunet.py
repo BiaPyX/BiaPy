@@ -4,7 +4,7 @@ from tensorflow.keras.layers import Dropout, Concatenate, Add, BatchNormalizatio
 
 def ResUNet(image_shape, activation='elu', feature_maps=[16,32,64,128,256], drop_values=[0.1,0.1,0.1,0.1,0.1],
     spatial_dropout=False, batch_norm=False, z_down=[2,2,2,2,2], k_init='he_normal', k_size=3, upsample_layer="convtranspose", 
-    n_classes=1, last_act='sigmoid', output_channels="BC"):
+    n_classes=1, last_act='sigmoid', output_channels="BC", upsampling_factor=1, upsampling_position="pre"):
 
     """
     Create 2D/3D Residual_U-Net. 
@@ -50,6 +50,13 @@ def ResUNet(image_shape, activation='elu', feature_maps=[16,32,64,128,256], drop
     output_channels : str, optional
         Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
         ``BDv2``, ``Dv2`` and ``BCM``.
+    
+    upsampling_factor : int, optional
+        Factor of upsampling for super resolution workflow. 
+
+    upsampling_position : str, optional
+        Whether the upsampling is going to be made previously (``pre`` option) to the model 
+        or after the model (``post`` option).
 
     Returns
     -------
@@ -98,8 +105,20 @@ def ResUNet(image_shape, activation='elu', feature_maps=[16,32,64,128,256], drop
     dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)
     inputs = Input(dinamic_dim)
 
-    x = level_block(inputs, depth, fm, k_size, activation, k_init, dp, spatial_dropout, batch_norm, True,
+    if upsampling_factor > 1 and upsampling_position =="pre":
+        s = convtranspose(fm[-1], 2, strides=2, padding='same') (inputs)
+        x = s 
+    else:
+        x = inputs 
+        
+    x = level_block(x, depth, fm, k_size, activation, k_init, dp, spatial_dropout, batch_norm, True,
         upsample_layer, zd)
+
+    if upsampling_factor > 1:
+        if upsampling_position =="pre":
+            x = Add()([s,x]) # long shortcut
+        else:
+            x = convtranspose(fm[-1], 2, strides=2, padding='same') (x)
 
     # Instance segmentation
     if output_channels is not None:

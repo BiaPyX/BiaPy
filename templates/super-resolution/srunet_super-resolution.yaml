@@ -31,7 +31,7 @@ AUGMENTOR:
     ROT90: True
 
 MODEL:
-    ARCHITECTURE: srunet
+    ARCHITECTURE: unet
     LOAD_CHECKPOINT: False
 
 TRAIN:

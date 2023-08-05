@@ -317,9 +317,9 @@ def check_configuration(cfg):
     ### Model ###
     assert cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'tiramisu', 'mnet',
                                       'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr',
-                                      'srunet', 'rcan', 'dfcan', 'wdsr', 'ViT', 'mae'],\
+                                      'rcan', 'dfcan', 'wdsr', 'ViT', 'mae'],\
         "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'tiramisu', 'mnet',\
-        'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr', 'srunet', 'rcan', 'dfcan', \
+        'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr', 'rcan', 'dfcan', \
         'wdsr', 'ViT', 'mae']"
     if cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet', 'unetr', 'ViT', 'mae'] and cfg.PROBLEM.NDIM == '3D' and cfg.PROBLEM.TYPE != "CLASSIFICATION":
         raise ValueError("For 3D these models are available: {}".format(['unet', 'resunet', 'seunet', 'attention_unet']))
@@ -341,8 +341,13 @@ def check_configuration(cfg):
         cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
         raise ValueError("Architectures available for {} are: ['unet', 'resunet', 'seunet', 'attention_unet']"
                          .format(cfg.PROBLEM.TYPE))
-    if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION' and cfg.MODEL.ARCHITECTURE not in ['edsr', 'srunet', 'rcan', 'dfcan', 'wdsr']:
-        raise ValueError("Architectures available for 'SUPER_RESOLUTION' are: ['edsr', 'srunet', 'rcan', 'dfcan', 'wdsr']")
+    if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+        if cfg.PROBLEM.NDIM == '2D' and cfg.MODEL.ARCHITECTURE not in ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'seunet', 'attention_unet']:
+            raise ValueError("Architectures available for 2D 'SUPER_RESOLUTION' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'seunet', 'attention_unet']")
+        elif cfg.PROBLEM.NDIM == '3D':
+            if cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
+                raise ValueError("Architectures available for 3D 'SUPER_RESOLUTION' are: ['unet', 'resunet', 'seunet', 'attention_unet']")
+            assert cfg.MODEL.UNET_SR_UPSAMPLE_POSITION in ["pre", "post"], "'MODEL.UNET_SR_UPSAMPLE_POSITION' not in ['pre', 'post']"
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' and cfg.MODEL.ARCHITECTURE not in ['simple_cnn', 'EfficientNetB0', 'ViT']:
         raise ValueError("Architectures available for 'CLASSIFICATION' are: ['simple_cnn', 'EfficientNetB0', 'ViT']")
     if cfg.MODEL.ARCHITECTURE in ['unetr', 'ViT', 'mae']:    

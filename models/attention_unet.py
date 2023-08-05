@@ -4,7 +4,8 @@ from tensorflow.keras.layers import (Dropout, Concatenate, BatchNormalization, A
 
 def Attention_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
     spatial_dropout=False, batch_norm=False, k_init='he_normal', k_size=3, upsample_layer="convtranspose", 
-    z_down=[2,2,2,2], n_classes=1, last_act='sigmoid', output_channels="BC"):
+    z_down=[2,2,2,2], n_classes=1, last_act='sigmoid', output_channels="BC", upsampling_factor=1,
+    upsampling_position="pre"):
     """
     Create 2D/3D U-Net with Attention blocks. Based on `Attention U-Net: Learning Where to Look for the 
     Pancreas <https://arxiv.org/abs/1804.03999>`_.
@@ -50,6 +51,13 @@ def Attention_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 25
     output_channels : str, optional
         Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
         ``BDv2``, ``Dv2`` and ``BCM``.
+    
+    upsampling_factor : int, optional
+        Factor of upsampling for super resolution workflow. 
+
+    upsampling_position : str, optional
+        Whether the upsampling is going to be made previously (``pre`` option) to the model 
+        or after the model (``post`` option).
 
     Returns
     -------
@@ -103,6 +111,9 @@ def Attention_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 25
 
     # List used to access layers easily to make the skip connections of the U-Net
     l=[]
+
+    if upsampling_factor > 1 and upsampling_position =="pre":
+        x = convtranspose(image_shape[-1], 2, strides=2, padding='same') (x)
 
     # ENCODER
     for i in range(depth):
@@ -159,7 +170,10 @@ def Attention_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 25
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
 
-        # Instance segmentation
+    if upsampling_factor > 1 and upsampling_position == "post":
+        x = convtranspose(n_classes, 2, strides=2, padding='same') (x)
+
+    # Instance segmentation
     if output_channels is not None:
         if output_channels == "Dv2":
             outputs = conv(1, 2, activation="linear", padding='same') (x)

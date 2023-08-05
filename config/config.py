@@ -472,7 +472,7 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.MODEL = CN()
         # Architecture of the network. Possible values are: 'unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'nnunet', 'tiramisu', 
-        # 'mnet', 'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr', 'srunet', 'rcan', 'dfcan', 'wdsr', 'ViT'
+        # 'mnet', 'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'ViT'
         # 'mae'
         _C.MODEL.ARCHITECTURE = 'unet'
         # Number of feature maps on each level of the network.
@@ -531,6 +531,8 @@ class Config:
         # Kernel type to use on convolution layers
         _C.MODEL.UNETR_DEC_KERNEL_INIT = 'he_normal'
 
+        # Specific for SR models based on U-Net architectures. Options are ["pre", "post"]
+        _C.MODEL.UNET_SR_UPSAMPLE_POSITION = "pre"
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss

@@ -1,12 +1,13 @@
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import (Dropout, Concatenate, BatchNormalization, Activation, Reshape, Dense, multiply, Permute, 
-                                    SpatialDropout2D)
+                                    SpatialDropout2D, Add)
 from tensorflow.keras import Model, Input
 
 
 def SE_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
     spatial_dropout=False, batch_norm=False, k_init='he_normal', k_size=3, upsample_layer="convtranspose", 
-    z_down=[2,2,2,2], n_classes=1, last_act='sigmoid', output_channels="BC"):
+    z_down=[2,2,2,2], n_classes=1, last_act='sigmoid', output_channels="BC", upsampling_factor=1, 
+    upsampling_position="pre"):
     """
     Create 2D/3D U-Net with squeeze-excite blocks. Reference `Squeeze and Excitation 
     Networks <https://arxiv.org/abs/1709.01507>`_.
@@ -52,6 +53,13 @@ def SE_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
     output_channels : str, optional
         Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
         ``BDv2``, ``Dv2`` and ``BCM``.
+    
+    upsampling_factor : int, optional
+        Factor of upsampling for super resolution workflow. 
+
+    upsampling_position : str, optional
+        Whether the upsampling is going to be made previously (``pre`` option) to the model 
+        or after the model (``post`` option).
 
     Returns
     -------
@@ -94,6 +102,9 @@ def SE_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
 
     # List used to access layers easily to make the skip connections of the U-Net
     l=[]
+
+    if upsampling_factor > 1 and upsampling_position =="pre":
+        x = convtranspose(image_shape[-1], 2, strides=2, padding='same') (x)
 
     # ENCODER
     for i in range(depth):
@@ -147,6 +158,9 @@ def SE_U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], dro
         x = BatchNormalization() (x) if batch_norm else x
         x = Activation(activation) (x)
         x = squeeze_excite_block(x)
+
+    if upsampling_factor > 1 and upsampling_position == "post":
+        x = convtranspose(n_classes, 2, strides=2, padding='same') (x)
 
     # Instance segmentation
     if output_channels is not None:
