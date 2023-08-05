@@ -6,10 +6,11 @@ from tensorflow.keras.models import Model
 
 class DFCANModel(tf.keras.Model):
     """
-    	Code copied from https://keras.io/examples/vision/edsr
+    Code adapted from https://keras.io/examples/vision/edsr
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, x_norm, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.x_norm = x_norm
 
     def train_step(self, data):
         # Unpack the data. Its structure depends on your model and
@@ -19,6 +20,14 @@ class DFCANModel(tf.keras.Model):
         with tf.GradientTape() as tape:
             y_pred = self(x, training=True)  # Forward pass 
 
+            # Denormalization to calculate PSNR with original range values 
+            if self.x_norm['type'] == 'div':
+                y_pred = y_pred*255 if len([x for x in list(self.x_norm.keys()) if not 'reduced' in x]) > 0 else y_pred*65535
+            else:
+                y_pred = (y_pred * self.x_norm['std']) + self.x_norm['mean']
+                y_pred = tf.round(y_pred)                                                                 
+                y_pred = y_pred+abs(tf.reduce_min(y_pred))
+                    
             # Compute the loss value
             # (the loss function is configured in `compile()`)
             loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
@@ -38,6 +47,14 @@ class DFCANModel(tf.keras.Model):
         x, y = data
         # Compute predictions
         y_pred = self(x, training=False)
+
+        # Denormalization to calculate PSNR with original range values 
+        if self.x_norm['type'] == 'div':
+            y_pred = y_pred*255 if len([x for x in list(self.x_norm.keys()) if not 'reduced' in x]) > 0 else y_pred*65535
+        else:
+            y_pred = (y_pred * self.x_norm['std']) + self.x_norm['mean']
+            y_pred = tf.round(y_pred)                                                                 
+            y_pred = y_pred+abs(tf.reduce_min(y_pred))
 
         # Updates the metrics tracking the loss
         self.compiled_loss(y, y_pred, regularization_losses=self.losses)
@@ -232,7 +249,7 @@ def ResidualGroup(input, channel, size_psc, n_RCAB = 4):
     return conv
 
 
-def DFCAN(input_shape, scale=4, n_ResGroup = 4, n_RCAB = 4, pretrained_weights=None):
+def DFCAN(input_shape, x_norm, scale=4, n_ResGroup = 4, n_RCAB = 4, pretrained_weights=None):
     inputs = layers.Input(input_shape)
     size_psc = input_shape[0]
     conv = layers.Conv2D(64, kernel_size=3, padding='same')(inputs)
@@ -242,9 +259,9 @@ def DFCAN(input_shape, scale=4, n_ResGroup = 4, n_RCAB = 4, pretrained_weights=N
     conv = layers.Conv2D(64 * (scale ** 2), kernel_size=3, padding='same')(conv)
     conv = layers.Lambda(gelu)(conv)
     upsampled = layers.Lambda(pixel_shuffle, arguments={'scale': scale})(conv)
-    conv = layers.Conv2D(1, kernel_size=3, padding='same')(upsampled)
+    conv = layers.Conv2D(input_shape[-1], kernel_size=3, padding='same')(upsampled)
     output = layers.Activation('sigmoid')(conv)
-    model = DFCANModel(inputs=inputs, outputs=output)
+    model = DFCANModel(x_norm=x_norm, inputs=inputs, outputs=output)
     return model
 
 

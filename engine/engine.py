@@ -32,7 +32,8 @@ class Engine(object):
         self.post_processing['all_images'] = False
         self.test_filenames = None 
         self.metric = []
-        
+        self.data_norm = None
+
         # Save paths in case we need them in a future
         self.orig_train_path = cfg.DATA.TRAIN.PATH
         self.orig_train_mask_path = cfg.DATA.TRAIN.GT_PATH
@@ -214,14 +215,14 @@ class Engine(object):
               "#  PREPARE GENERATORS  #\n"
               "########################\n")
         if cfg.TRAIN.ENABLE:
-            self.train_generator, self.val_generator = create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus)
+            self.train_generator, self.val_generator, self.data_norm = create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus)
             if cfg.DATA.CHECK_GENERATORS and cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                 check_generator_consistence(
                     self.train_generator, cfg.PATHS.GEN_CHECKS+"_train", cfg.PATHS.GEN_MASK_CHECKS+"_train")
                 check_generator_consistence(
                     self.val_generator, cfg.PATHS.GEN_CHECKS+"_val", cfg.PATHS.GEN_MASK_CHECKS+"_val")
         if cfg.TEST.ENABLE:
-            self.test_generator = create_test_augmentor(cfg, X_test, Y_test, self.cross_val_samples_ids)
+            self.test_generator, self.data_norm = create_test_augmentor(cfg, X_test, Y_test, self.cross_val_samples_ids)
 
         print("#################\n"
               "#  BUILD MODEL  #\n"
@@ -232,10 +233,10 @@ class Engine(object):
 
             # Open a strategy scope.
             with strategy.scope():
-                self.model = build_model(cfg, self.job_identifier)
+                self.model = build_model(cfg, self.job_identifier, self.data_norm)
                 self.metric = prepare_optimizer(cfg, self.model)
         else:
-            self.model = build_model(cfg, self.job_identifier)
+            self.model = build_model(cfg, self.job_identifier, self.data_norm)
             self.metric = prepare_optimizer(cfg, self.model)
 
     def train(self):

@@ -217,4 +217,5 @@ class test_pair_data_generator(tf.keras.utils.Sequence):
         else:
             return img, self.X_norm
 
-
+    def get_data_normalization(self):
+        return self.X_norm

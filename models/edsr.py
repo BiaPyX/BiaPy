@@ -4,10 +4,11 @@ from tensorflow.keras import layers
 
 class EDSRModel(tf.keras.Model):
     """
-    Code copied from https://keras.io/examples/vision/edsr
+    Code adapted from https://keras.io/examples/vision/edsr
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, x_norm, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.x_norm = x_norm
 
     def train_step(self, data):
         # Unpack the data. Its structure depends on your model and
@@ -17,6 +18,14 @@ class EDSRModel(tf.keras.Model):
         with tf.GradientTape() as tape:
             y_pred = self(x, training=True)  # Forward pass 
 
+            # Denormalization to calculate PSNR with original range values 
+            if self.x_norm['type'] == 'div':
+                y_pred = y_pred*255 if len([x for x in list(self.x_norm.keys()) if not 'reduced' in x]) > 0 else y_pred*65535
+            else:
+                y_pred = (y_pred * self.x_norm['std']) + self.x_norm['mean']
+                y_pred = tf.round(y_pred)                                                                 
+                y_pred = y_pred+abs(tf.reduce_min(y_pred))
+                    
             # Compute the loss value
             # (the loss function is configured in `compile()`)
             loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
@@ -36,7 +45,15 @@ class EDSRModel(tf.keras.Model):
         x, y = data
         # Compute predictions
         y_pred = self(x, training=False)
-        
+
+        # Denormalization to calculate PSNR with original range values 
+        if self.x_norm['type'] == 'div':
+            y_pred = y_pred*255 if len([x for x in list(self.x_norm.keys()) if not 'reduced' in x]) > 0 else y_pred*65535
+        else:
+            y_pred = (y_pred * self.x_norm['std']) + self.x_norm['mean']
+            y_pred = tf.round(y_pred)                                                                 
+            y_pred = y_pred+abs(tf.reduce_min(y_pred))
+
         # Updates the metrics tracking the loss
         self.compiled_loss(y, y_pred, regularization_losses=self.losses)
         # Update the metrics.
@@ -49,13 +66,6 @@ class EDSRModel(tf.keras.Model):
         super_resolution_img = self(x, training=False)  
         super_resolution_img = tf.clip_by_value(super_resolution_img, 0, 1)     
         return super_resolution_img 
- 
-    def set_dtype(self, img):
-        if not self.dtype_not_set:
-            if img.dtype == np.uint16:
-                self.max_value = 65535
-                self.out_dtype = tf.uint16
-            self.dtype_not_set = True
 
 # Residual Block
 def ResBlock(inputs):
@@ -76,7 +86,7 @@ def Upsampling(inputs, factor=2, **kwargs):
     return x
 
 
-def EDSR(num_filters, num_of_residual_blocks, upsampling_factor, num_channels):
+def EDSR(num_filters, num_of_residual_blocks, upsampling_factor, num_channels, x_norm):
     # Flexible Inputs to input_layer
     input_layer = layers.Input(shape=(None, None, num_channels))
     x = x_new = layers.Conv2D(num_filters, 3, padding="same")(input_layer)
@@ -90,4 +100,4 @@ def EDSR(num_filters, num_of_residual_blocks, upsampling_factor, num_channels):
 
     x = Upsampling(x, factor=upsampling_factor)
     output_layer = layers.Conv2D(num_channels, 3, padding="same")(x)
-    return EDSRModel(input_layer, output_layer)
+    return EDSRModel(x_norm=x_norm, inputs=input_layer, outputs=output_layer)

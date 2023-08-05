@@ -2,7 +2,7 @@ import os
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
-from utils.callbacks import ModelCheckpoint, TimeHistory, ESPCNCallback
+from utils.callbacks import ModelCheckpoint, TimeHistory
 from engine.metrics import (jaccard_index, jaccard_index_softmax, IoU_instances, instance_segmentation_loss, weighted_bce_dice_loss,
                             masked_bce_loss, masked_jaccard_index, PSNR, dfcan_loss, n2v_loss_mse, MAE_instances)
 from engine.schedulers.one_cycle import OneCycleScheduler
@@ -88,10 +88,11 @@ def prepare_optimizer(cfg, model):
     elif cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
         if cfg.MODEL.ARCHITECTURE == 'dfcan':
             print("Overriding 'LOSS.TYPE' to set it to DFCAN loss")
-            model.compile(optimizer=opt, loss=[dfcan_loss()])
+            model.compile(optimizer=opt, loss=[dfcan_loss()], metrics=[PSNR])
         else:
             print("Overriding 'LOSS.TYPE' to set it to MAE")
-            model.compile(optimizer=opt, loss="mae")
+            model.compile(optimizer=opt, loss="mae", metrics=[PSNR])
+        metric_name.append("PSNR")
     elif cfg.PROBLEM.TYPE  == "SELF_SUPERVISED":
         if cfg.MODEL.ARCHITECTURE == 'mae':
             print("Overriding 'LOSS.TYPE' to set it to MSE loss")
@@ -158,8 +159,5 @@ def build_callbacks(cfg, schel_steps):
     if cfg.TRAIN.PROFILER:
         tb_callback = tf.keras.callbacks.TensorBoard(log_dir=cfg.PATHS.PROFILER, profile_batch=cfg.TRAIN.PROFILER_BATCH_RANGE)
         callbacks.append(tb_callback)          
-
-    if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":  
-        callbacks.append(ESPCNCallback())
         
     return callbacks

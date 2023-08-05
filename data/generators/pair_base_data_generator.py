@@ -1309,3 +1309,5 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             if self.n2v_structMask is not None:
                 self.apply_structN2Vmask_func(img[..., c], coords, self.n2v_structMask)
                    
+    def get_data_normalization(self):
+        return self.X_norm

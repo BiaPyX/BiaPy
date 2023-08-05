@@ -516,3 +516,5 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         print("### END TR-SAMPLES ###")
         return sample_x
 
+    def get_data_normalization(self):
+        return self.X_norm

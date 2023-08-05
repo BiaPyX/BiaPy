@@ -4,7 +4,7 @@ import numpy as np
 from tensorflow.keras.utils import plot_model
 
 
-def build_model(cfg, job_identifier):
+def build_model(cfg, job_identifier, data_norm):
     """Build selected model
 
        Parameters
@@ -85,19 +85,19 @@ def build_model(cfg, job_identifier):
             model = UNETR(**args)
         elif cfg.MODEL.ARCHITECTURE == 'edsr':
             model = EDSR(num_filters=64, num_of_residual_blocks=16, upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, 
-                num_channels=cfg.DATA.PATCH_SIZE[-1])
+                num_channels=cfg.DATA.PATCH_SIZE[-1], x_norm=data_norm)
         elif cfg.MODEL.ARCHITECTURE == 'srunet':
-            model = preResUNet(cfg.DATA.PATCH_SIZE, activation='elu', kernel_initializer='he_normal',
-                dropout_value=0.2, batchnorm=cfg.MODEL.BATCH_NORMALIZATION, 
-                maxpooling=True, separable=False, numInitChannels=16, depth=4, upsampling_factor=2,
+            model = preResUNet(cfg.DATA.PATCH_SIZE, data_norm, activation='elu', kernel_initializer='he_normal',
+                dropout_value=cfg.MODEL.DROPOUT_VALUES[0], batchnorm=cfg.MODEL.BATCH_NORMALIZATION, 
+                maxpooling=True, separable=False, numInitChannels=16, depth=4, upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
                 upsample_method='UpSampling2D', final_activation=None)
         elif cfg.MODEL.ARCHITECTURE == 'rcan':
-            model = rcan(filters=16, n_sub_block=int(np.log2(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)), out_channels=1, use_mish=False)
+            model = rcan(data_norm, filters=16, n_sub_block=int(np.log2(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)), num_channels=cfg.DATA.PATCH_SIZE[-1], use_mish=False)
         elif cfg.MODEL.ARCHITECTURE == 'dfcan':
-            model = DFCAN(cfg.DATA.PATCH_SIZE, scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, n_ResGroup = 4, n_RCAB = 4)
+            model = DFCAN(cfg.DATA.PATCH_SIZE, data_norm, scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, n_ResGroup = 4, n_RCAB = 4)
         elif cfg.MODEL.ARCHITECTURE == 'wdsr':
-            model = wdsr_b(scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, num_filters=32, num_res_blocks=8, res_block_expansion=6, 
-                res_block_scaling=None, out_channels=1)
+            model = wdsr_b(x_norm=data_norm, scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, num_filters=32, num_res_blocks=8, res_block_expansion=6, 
+                res_block_scaling=None, num_channels=cfg.DATA.PATCH_SIZE[-1])
         elif cfg.MODEL.ARCHITECTURE == 'mae':
             model = MAE(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, enc_hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, 
                 enc_transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, enc_num_heads=cfg.MODEL.VIT_NUM_HEADS, enc_mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 

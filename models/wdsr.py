@@ -6,10 +6,11 @@ import tensorflow_addons as tfa
 
 class WDSRModel(tf.keras.Model): 
     """
-    Code copied from https://keras.io/examples/vision/edsr
+    Code adapted from https://keras.io/examples/vision/edsr
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, x_norm, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.x_norm = x_norm
 
     def train_step(self, data):
         # Unpack the data. Its structure depends on your model and
@@ -18,7 +19,15 @@ class WDSRModel(tf.keras.Model):
 
         with tf.GradientTape() as tape:
             y_pred = self(x, training=True)  # Forward pass 
-            
+
+            # Denormalization to calculate PSNR with original range values 
+            if self.x_norm['type'] == 'div':
+                y_pred = y_pred*255 if len([x for x in list(self.x_norm.keys()) if not 'reduced' in x]) > 0 else y_pred*65535
+            else:
+                y_pred = (y_pred * self.x_norm['std']) + self.x_norm['mean']
+                y_pred = tf.round(y_pred)                                                                 
+                y_pred = y_pred+abs(tf.reduce_min(y_pred))
+                    
             # Compute the loss value
             # (the loss function is configured in `compile()`)
             loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
@@ -38,6 +47,14 @@ class WDSRModel(tf.keras.Model):
         x, y = data
         # Compute predictions
         y_pred = self(x, training=False)
+
+        # Denormalization to calculate PSNR with original range values 
+        if self.x_norm['type'] == 'div':
+            y_pred = y_pred*255 if len([x for x in list(self.x_norm.keys()) if not 'reduced' in x]) > 0 else y_pred*65535
+        else:
+            y_pred = (y_pred * self.x_norm['std']) + self.x_norm['mean']
+            y_pred = tf.round(y_pred)                                                                 
+            y_pred = y_pred+abs(tf.reduce_min(y_pred))
 
         # Updates the metrics tracking the loss
         self.compiled_loss(y, y_pred, regularization_losses=self.losses)
@@ -59,33 +76,33 @@ def subpixel_conv2d(scale):
     return lambda x: tf.nn.depth_to_space(x, scale)
 
 
-def wdsr_a(scale, num_filters=32, num_res_blocks=8, res_block_expansion=4, res_block_scaling=None, out_channels=1):
-    return wdsr(scale, num_filters, num_res_blocks, res_block_expansion, res_block_scaling, res_block_a, out_channels)
+def wdsr_a(x_norm, scale, num_filters=32, num_res_blocks=8, res_block_expansion=4, res_block_scaling=None, num_channels=1):
+    return wdsr(x_norm, scale, num_filters, num_res_blocks, res_block_expansion, res_block_scaling, res_block_a, num_channels)
 
 
-def wdsr_b(scale, num_filters=32, num_res_blocks=8, res_block_expansion=6, res_block_scaling=None, out_channels=1):
-    return wdsr(scale, num_filters, num_res_blocks, res_block_expansion, res_block_scaling, res_block_b, out_channels)
+def wdsr_b(x_norm, scale, num_filters=32, num_res_blocks=8, res_block_expansion=6, res_block_scaling=None, num_channels=1):
+    return wdsr(x_norm ,scale, num_filters, num_res_blocks, res_block_expansion, res_block_scaling, res_block_b, num_channels)
 
 
-def wdsr(scale, num_filters, num_res_blocks, res_block_expansion, res_block_scaling, res_block, out_channels=1):
-    x_in = Input(shape=(None, None, out_channels))
+def wdsr(x_norm, scale, num_filters, num_res_blocks, res_block_expansion, res_block_scaling, res_block, num_channels=1):
+    x_in = Input(shape=(None, None, num_channels))
     x = x_in
     # main branch
     m = conv2d_weightnorm(num_filters, 3, padding='same')(x)
     for i in range(num_res_blocks):
         m = res_block(m, num_filters, res_block_expansion, kernel_size=3, scaling=res_block_scaling)
-    m = conv2d_weightnorm(out_channels * scale ** 2, 3, padding='same', name=f'conv2d_main_scale_{scale}')(m)
+    m = conv2d_weightnorm(num_channels * scale ** 2, 3, padding='same', name=f'conv2d_main_scale_{scale}')(m)
     m = Lambda(subpixel_conv2d(scale))(m)
 
     # skip branch
-    s = conv2d_weightnorm(out_channels * scale ** 2, 5, padding='same', name=f'conv2d_skip_scale_{scale}')(x)
+    s = conv2d_weightnorm(num_channels * scale ** 2, 5, padding='same', name=f'conv2d_skip_scale_{scale}')(x)
     s = Lambda(subpixel_conv2d(scale))(s)
 
     x = Add()([m, s])
     # final convolution with sigmoid activation ?
-    #x = Conv2D(out_channels, 3, padding='same', activation='sigmoid')(x)
+    #x = Conv2D(num_channels, 3, padding='same', activation='sigmoid')(x)
 
-    return WDSRModel(x_in, x, name="wdsr")
+    return WDSRModel(x_norm=x_norm, inputs=x_in, outputs=x, name="wdsr")
 
 
 def res_block_a(x_in, num_filters, expansion, kernel_size, scaling):

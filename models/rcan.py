@@ -10,10 +10,11 @@ warnings.filterwarnings('ignore')
 
 class RCANModel(tf.keras.Model):
     """
-    Code copied from https://keras.io/examples/vision/edsr
+    Code adapted from https://keras.io/examples/vision/edsr
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, x_norm, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.x_norm = x_norm
 
     def train_step(self, data):
         # Unpack the data. Its structure depends on your model and
@@ -23,6 +24,14 @@ class RCANModel(tf.keras.Model):
         with tf.GradientTape() as tape:
             y_pred = self(x, training=True)  # Forward pass 
 
+            # Denormalization to calculate PSNR with original range values 
+            if self.x_norm['type'] == 'div':
+                y_pred = y_pred*255 if len([x for x in list(self.x_norm.keys()) if not 'reduced' in x]) > 0 else y_pred*65535
+            else:
+                y_pred = (y_pred * self.x_norm['std']) + self.x_norm['mean']
+                y_pred = tf.round(y_pred)                                                                 
+                y_pred = y_pred+abs(tf.reduce_min(y_pred))
+                    
             # Compute the loss value
             # (the loss function is configured in `compile()`)
             loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
@@ -42,7 +51,15 @@ class RCANModel(tf.keras.Model):
         x, y = data
         # Compute predictions
         y_pred = self(x, training=False)
-       
+
+        # Denormalization to calculate PSNR with original range values 
+        if self.x_norm['type'] == 'div':
+            y_pred = y_pred*255 if len([x for x in list(self.x_norm.keys()) if not 'reduced' in x]) > 0 else y_pred*65535
+        else:
+            y_pred = (y_pred * self.x_norm['std']) + self.x_norm['mean']
+            y_pred = tf.round(y_pred)                                                                 
+            y_pred = y_pred+abs(tf.reduce_min(y_pred))
+
         # Updates the metrics tracking the loss
         self.compiled_loss(y, y_pred, regularization_losses=self.losses)
         # Update the metrics.
@@ -58,8 +75,7 @@ class RCANModel(tf.keras.Model):
 
 ## RCAN network definition. We follow the code from:
 ### [Hoang Trung Hieu](https://github.com/hieubkset/Keras-Image-Super-Resolution/blob/master/model/rcan.py).
-
-https://github.com/hieubkset/Keras-Image-Super-Resolution/blob/master/model/rcan.py
+### https://github.com/hieubkset/Keras-Image-Super-Resolution/blob/master/model/rcan.py
 
 class Mish(tf.keras.layers.Layer):
   '''
@@ -152,8 +168,8 @@ def rir(input_tensor, filters, n_rg=10, use_mish=False):
     return x
 
 
-def rcan(filters=64, n_sub_block=2, out_channels=1, use_mish=False):
-  inputs = Input(shape=(None, None, out_channels))
+def rcan(x_norm, filters=64, n_sub_block=2, num_channels=1, use_mish=False):
+  inputs = Input(shape=(None, None, num_channels))
 
   x = x_1 = Conv2D(filters=filters, kernel_size=3, strides=1, padding='same')(inputs)
   x = rir(x, filters=filters, use_mish=use_mish)
@@ -162,8 +178,8 @@ def rcan(filters=64, n_sub_block=2, out_channels=1, use_mish=False):
 
   for _ in range(n_sub_block):
     x = upsample(x, filters, use_mish=use_mish)
-  x = Conv2D(filters=out_channels, kernel_size=3, strides=1, padding='same')(x)
+  x = Conv2D(filters=num_channels, kernel_size=3, strides=1, padding='same')(x)
 
-  return RCANModel(inputs=inputs, outputs=x)
+  return RCANModel(x_norm=x_norm, inputs=inputs, outputs=x)
 
 

@@ -160,7 +160,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             dic['instance_problem'] = True
-        elif cfg.PROBLEM.TYPE in ['SUPER_RESOLUTION','SELF_SUPERVISED']:
+        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+            dic['normalizeY'] = 'none'
+        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
             dic['normalizeY'] = 'as_image'
         elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v']=True
@@ -171,6 +173,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
 
     print("Initializing train data generator . . .")
     train_generator = f_name(**dic)
+    data_norm = train_generator.get_data_normalization()
 
     print("Initializing val data generator . . .")
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
@@ -187,7 +190,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG': 
             dic['instance_problem'] = True
-        elif cfg.PROBLEM.TYPE in ['SUPER_RESOLUTION', 'SELF_SUPERVISED']:
+        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+            dic['normalizeY'] = 'none'
+        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
             dic['normalizeY'] = 'as_image'
         elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v'] = True
@@ -286,7 +291,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
     train_dataset = train_dataset.with_options(options)
     val_dataset = val_dataset.with_options(options)
 
-    return train_dataset, val_dataset
+    return train_dataset, val_dataset, data_norm
 
 def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     """
@@ -331,7 +336,7 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     normalizeY='as_mask'
     provide_Y=cfg.DATA.TEST.LOAD_GT
     if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-        normalizeY = 'as_image'
+        normalizeY = 'none'
     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
         normalizeY = 'as_image'
         provide_Y = True if cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "crappify" else False
@@ -360,7 +365,8 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
         dic['normalizeY'] = normalizeY 
         
     test_generator = gen_name(**dic)
-    return test_generator
+    data_norm = test_generator.get_data_normalization()
+    return test_generator, data_norm
 
 
 def check_generator_consistence(gen, data_out_dir, mask_out_dir, filenames=None):
