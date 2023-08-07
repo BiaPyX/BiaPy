@@ -208,3 +208,6 @@ class test_single_data_generator(tf.keras.utils.Sequence):
                 return img, self.X_norm
         else: # SSL - MAE
             return img, self.X_norm
+            
+    def get_data_normalization(self):
+        return self.X_norm
