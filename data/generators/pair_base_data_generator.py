@@ -433,6 +433,9 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             self.paths = data_paths
             self.data_paths = sorted(next(os.walk(data_paths[0]))[2])
             self.data_mask_path = sorted(next(os.walk(data_paths[1]))[2])
+            if len(self.data_paths) != len(self.data_mask_path):
+                raise ValueError("Different number of raw and ground truth images ({} vs {}). "
+                    "Please check the data!".format(len(self.data_paths), len(self.data_mask_path)))
             self.length = len(self.data_paths)
 
             self.first_no_bin_channel = -1

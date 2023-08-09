@@ -136,6 +136,10 @@ class Engine(object):
                     else: # Classification
                         f_name = load_data_classification if cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
                         X_val, Y_val, _ = f_name(cfg.DATA.VAL.PATH, cfg.MODEL.N_CLASSES, val_split=0) 
+
+                    if len(X_val) != len(Y_val):
+                        raise ValueError("Different number of raw and ground truth items ({} vs {}). "
+                            "Please check the data!".format(len(X_val), len(Y_val)))
                 else:
                     X_val, Y_val = None, None
 
@@ -152,6 +156,9 @@ class Engine(object):
                         if cfg.DATA.TEST.LOAD_GT or cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
                             print("3) Loading test masks . . .")
                             Y_test, _, _ = f_name(cfg.DATA.TEST.GT_PATH, check_channel=False)
+                            if len(X_test) != len(Y_test):
+                                raise ValueError("Different number of raw and ground truth items ({} vs {}). "
+                                    "Please check the data!".format(len(X_test), len(Y_test)))
                         else:
                             Y_test = None
                     else: # CLASSIFICATION

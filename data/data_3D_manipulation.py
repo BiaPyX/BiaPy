@@ -202,6 +202,10 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 raise ValueError("0 or 1 sample left to train, which is insufficent. "
                 "Please, decrease the percentage to be more permissive")
 
+    if len(X_train) != len(Y_train):
+        raise ValueError("Different number of raw and ground truth items ({} vs {}). "
+            "Please check the data!".format(len(X_train), len(Y_train)))
+            
     # Create validation data splitting the train
     if create_val:
         print("Creating validation data")

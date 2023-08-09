@@ -72,6 +72,11 @@ class test_pair_data_generator(tf.keras.utils.Sequence):
             self.data_mask_path = sorted(next(os.walk(dm_path))[2]) if Y is None else None
             if sample_ids is not None and self.data_mask_path is not None:
                 self.data_mask_path = [x for i, x in enumerate(self.data_mask_path) if i in sample_ids]
+                
+            if self.data_path is not None and self.data_mask_path is not None:
+                if len(self.data_path) != len(self.data_mask_path):
+                    raise ValueError("Different number of raw and ground truth items ({} vs {}). "
+                        "Please check the data!".format(len(self.data_path), len(self.data_mask_path)))
         self.seed = seed
         self.ndim = ndim
         if X is None:

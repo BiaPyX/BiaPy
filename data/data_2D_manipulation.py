@@ -216,6 +216,10 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
         X_train = X_train[:num_crops_per_dataset]
         Y_train = Y_train[:num_crops_per_dataset]
 
+    if len(X_train) != len(Y_train):
+        raise ValueError("Different number of raw and ground truth items ({} vs {}). "
+            "Please check the data!".format(len(X_train), len(Y_train)))
+    
     # Create validation data splitting the train
     if create_val:
         print("Creating validation data")
