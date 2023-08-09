@@ -1,33 +1,34 @@
 SYSTEM:
-    NUM_CPUS: 1
+    NUM_CPUS: -1
 
 PROBLEM:
-    TYPE: SEMANTIC_SEG
+    TYPE: SELF_SUPERVISED
     NDIM: 2D
   
 DATA: 
     PATCH_SIZE: (256, 256, 1)
+    EXTRACT_RANDOM_PATCH: False
+    PROBABILITY_MAP: True
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
-        PATH: /path/to/data
-        GT_PATH: /path/to/data
+        PATH: /path/to/data                                                                                             
         IN_MEMORY: True
     VAL:
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
-        PATH: /path/to/data
-        GT_PATH: /path/to/data
         IN_MEMORY: True
-        LOAD_GT: True
+        PATH: /path/to/data                                                                                             
+        PADDING: (16,16)
 
 AUGMENTOR:
     ENABLE: True
+    DA_PROB: 0.5
     RANDOM_ROT: True
     VFLIP: True
     HFLIP: True
 
 MODEL:
-    ARCHITECTURE: attention_unet
+    ARCHITECTURE: unet
     FEATURE_MAPS: [16, 32, 64, 128, 256]
     DROPOUT_VALUES: [0.1, 0.1, 0.2, 0.2, 0.3]
     LOAD_CHECKPOINT: False
@@ -36,17 +37,14 @@ TRAIN:
     ENABLE: True
     OPTIMIZER: SGD
     LR: 2.E-3
-    BATCH_SIZE: 6
-    EPOCHS: 360
-    PATIENCE: 50
+    BATCH_SIZE: 12
+    EPOCHS: 100
+    PATIENCE: 20
   
 TEST:
     ENABLE: True
-    AUGMENTATION: True
+    AUGMENTATION: False
     STATS:
         PER_PATCH: True
         MERGE_PATCHES: True
-        FULL_IMG: True
-    POST_PROCESSING:
-        YZ_FILTERING: False
-
+        FULL_IMG: False

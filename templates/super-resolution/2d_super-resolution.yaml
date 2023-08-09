@@ -1,5 +1,5 @@
 SYSTEM:
-    NUM_CPUS: 1
+    NUM_CPUS: -1
 
 PROBLEM:
     TYPE: SUPER_RESOLUTION
@@ -8,7 +8,7 @@ PROBLEM:
         UPSCALING: 2
   
 DATA: 
-    PATCH_SIZE: (24, 24, 1)
+    PATCH_SIZE: (48, 48, 3)
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data
@@ -31,7 +31,7 @@ AUGMENTOR:
     ROT90: True
 
 MODEL:
-    ARCHITECTURE: rcan
+    ARCHITECTURE: edsr
     LOAD_CHECKPOINT: False
 
 TRAIN:

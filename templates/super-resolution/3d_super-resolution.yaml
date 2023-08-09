@@ -1,14 +1,14 @@
 SYSTEM:
-    NUM_CPUS: 1
+    NUM_CPUS: -1
 
 PROBLEM:
     TYPE: SUPER_RESOLUTION
-    NDIM: 2D
+    NDIM: 3D
     SUPER_RESOLUTION:
         UPSCALING: 2
   
 DATA: 
-    PATCH_SIZE: (24, 24, 1)
+    PATCH_SIZE: (10, 48, 48, 1)
     CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data
@@ -21,7 +21,7 @@ DATA:
         LOAD_GT: True
         PATH: /path/to/data
         GT_PATH: /path/to/data
-        PADDING: (8,8)
+        PADDING: (8,8,8)
 
 AUGMENTOR:
     ENABLE: True
@@ -31,7 +31,7 @@ AUGMENTOR:
     ROT90: True
 
 MODEL:
-    ARCHITECTURE: wdsr
+    ARCHITECTURE: edsr
     LOAD_CHECKPOINT: False
 
 TRAIN:
