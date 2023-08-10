@@ -35,32 +35,6 @@ def check_configuration(cfg):
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
             if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1):
                 opts.extend(['PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS', (1,)*channels_provided])    
-        
-    # Adjust dropout to feature maps
-    if cfg.MODEL.ARCHITECTURE in ['ViT', 'unetr', 'tiramisu', 'mae']:
-        if all(x == 0 for x in cfg.MODEL.DROPOUT_VALUES):
-            opts.extend(['MODEL.DROPOUT_VALUES', (0.,)])
-        elif len(cfg.MODEL.DROPOUT_VALUES) != 1:
-            raise ValueError("'MODEL.DROPOUT_VALUES' must be list of an unique number when 'MODEL.ARCHITECTURE' is one among ['ViT', 'mae', 'unetr', 'tiramisu']")
-        elif not check_value(cfg.MODEL.DROPOUT_VALUES[0]):
-            raise ValueError("'MODEL.DROPOUT_VALUES' not in [0, 1] range")
-    else:
-        if len(cfg.MODEL.FEATURE_MAPS) != len(cfg.MODEL.DROPOUT_VALUES):
-            if all(x == 0 for x in cfg.MODEL.DROPOUT_VALUES):
-                opts.extend(['MODEL.DROPOUT_VALUES', (0.,)*len(cfg.MODEL.FEATURE_MAPS)])
-            elif any(not check_value(x) for x in cfg.MODEL.DROPOUT_VALUES):
-                raise ValueError("'MODEL.DROPOUT_VALUES' not in [0, 1] range")
-            else:
-                raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.DROPOUT_VALUES' lengths must be equal")
-
-    # Adjust Z_DOWN values to feature maps
-    if len(cfg.MODEL.FEATURE_MAPS)-1 == len(cfg.MODEL.Z_DOWN):
-        if all(x == 0 for x in cfg.MODEL.Z_DOWN):
-            opts.extend(['MODEL.Z_DOWN', (2,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
-        elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
-            raise ValueError("'MODEL.Z_DOWN' need to be 1 or 2")
-    else:
-        raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
 
     if cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER != -1:
         if not check_value(cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER):
@@ -325,6 +299,33 @@ def check_configuration(cfg):
         raise ValueError("For 3D these models are available: {}".format(['unet', 'resunet', 'seunet', 'attention_unet']))
     if cfg.MODEL.N_CLASSES > 1 and cfg.PROBLEM.TYPE != "CLASSIFICATION" and cfg.MODEL.ARCHITECTURE not in ['unet', 'resunet', 'seunet', 'attention_unet']:
         raise ValueError("'MODEL.N_CLASSES' > 1 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'seunet', 'attention_unet']")
+    
+    # Adjust dropout to feature maps
+    if cfg.MODEL.ARCHITECTURE in ['ViT', 'unetr', 'tiramisu', 'mae']:
+        if all(x == 0 for x in cfg.MODEL.DROPOUT_VALUES):
+            opts.extend(['MODEL.DROPOUT_VALUES', (0.,)])
+        elif len(cfg.MODEL.DROPOUT_VALUES) != 1:
+            raise ValueError("'MODEL.DROPOUT_VALUES' must be list of an unique number when 'MODEL.ARCHITECTURE' is one among ['ViT', 'mae', 'unetr', 'tiramisu']")
+        elif not check_value(cfg.MODEL.DROPOUT_VALUES[0]):
+            raise ValueError("'MODEL.DROPOUT_VALUES' not in [0, 1] range")
+    else:
+        if len(cfg.MODEL.FEATURE_MAPS) != len(cfg.MODEL.DROPOUT_VALUES):
+            if all(x == 0 for x in cfg.MODEL.DROPOUT_VALUES):
+                opts.extend(['MODEL.DROPOUT_VALUES', (0.,)*len(cfg.MODEL.FEATURE_MAPS)])
+            elif any(not check_value(x) for x in cfg.MODEL.DROPOUT_VALUES):
+                raise ValueError("'MODEL.DROPOUT_VALUES' not in [0, 1] range")
+            else:
+                raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.DROPOUT_VALUES' lengths must be equal")
+
+    # Adjust Z_DOWN values to feature maps
+    if len(cfg.MODEL.FEATURE_MAPS)-1 == len(cfg.MODEL.Z_DOWN):
+        if all(x == 0 for x in cfg.MODEL.Z_DOWN):
+            opts.extend(['MODEL.Z_DOWN', (2,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
+        elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
+            raise ValueError("'MODEL.Z_DOWN' need to be 1 or 2")
+    else:
+        raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
+
     if cfg.MODEL.LAST_ACTIVATION not in ['softmax', 'sigmoid', 'linear']:
         raise ValueError("'MODEL.LAST_ACTIVATION' need to be in ['softmax','sigmoid','linear']. Provided {}"
                          .format(cfg.MODEL.LAST_ACTIVATION))
@@ -355,6 +356,14 @@ def check_configuration(cfg):
             raise ValueError("'MODEL.VIT_HIDDEN_SIZE' should be divisible by 'MODEL.VIT_NUM_HEADS'")
         if not all([i == cfg.DATA.PATCH_SIZE[0] for i in cfg.DATA.PATCH_SIZE[:-1]]):      
             raise ValueError("'unetr', 'ViT' 'mae' models need to have same shape in all dimensions (e.g. DATA.PATCH_SIZE = (80,80,80,1) )")
+    # Check that the input patch size is divisible in every level of the U-Net's like architectures, as the model
+    # will throw an error not very clear for users
+    if cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'seunet', 'attention_unet']:
+        for i in range(len(cfg.MODEL.FEATURE_MAPS)-1):
+            sizes = cfg.DATA.PATCH_SIZE[1:-1] if cfg.MODEL.Z_DOWN[i] == 1 else cfg.DATA.PATCH_SIZE[:-1]
+            if not all([False for x in sizes if x%(np.power(2,(i+1))) != 0 or x == 0]):
+                raise ValueError("The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the U-Net's levels. You can reduce the number "
+                "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length) or increase the 'DATA.PATCH_SIZE'")
 
     ### Train ###
     assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM', 'ADAMW'], "TRAIN.OPTIMIZER not in ['SGD', 'ADAM', 'ADAMW']"

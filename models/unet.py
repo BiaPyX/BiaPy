@@ -98,7 +98,8 @@ def U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_v
     l=[]
 
     if upsampling_factor > 1 and upsampling_position =="pre":
-        x = convtranspose(image_shape[-1], 2, strides=2, padding='same') (x)
+        mpool = (1, 2, 2) if len(image_shape) == 4 else (2, 2)
+        x = convtranspose(image_shape[-1], 2, strides=mpool, padding='same') (x)
 
     # ENCODER
     for i in range(depth):
@@ -156,7 +157,8 @@ def U_Net(image_shape, activation='elu', feature_maps=[32, 64, 128, 256], drop_v
         x = Activation(activation) (x)
 
     if upsampling_factor > 1 and upsampling_position == "post":
-        x = convtranspose(n_classes, 2, strides=2, padding='same') (x)
+        mpool = (1, 2, 2) if len(image_shape) == 4 else (2, 2)
+        x = convtranspose(n_classes, 2, strides=mpool, padding='same') (x)
 
     # Instance segmentation
     if output_channels is not None:

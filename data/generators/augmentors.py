@@ -1253,19 +1253,19 @@ def random_3D_crop_pair(image, mask, random_crop_size, val=False, img_prob=None,
      # Super-resolution check
     if scale != 1:
         img_out_shape = vol[z:(z+dz), y:(y+dy), x:(x+dx)].shape
-        mask_out_shape = mask[z*scale:(z+dz)*scale, y*scale:(y+dy)*scale, x*scale:(x+dx)*scale].shape
-        s = [img_out_shape[0]*scale, img_out_shape[1]*scale, img_out_shape[2]*scale]
+        mask_out_shape = mask[z:(z+dz), y*scale:(y+dy)*scale, x*scale:(x+dx)*scale].shape
+        s = [img_out_shape[0], img_out_shape[1]*scale, img_out_shape[2]*scale]
         if all(x!=y for x,y in zip(s,mask_out_shape)):
             raise ValueError("Images can not be cropped to a PATCH_SIZE of {}. Inputs: LR image shape={} "
                 "and HR image shape={}. When cropping the output shapes are {} and {}, for LR and HR images respectively. "
                 "Try to reduce DATA.PATCH_SIZE".format(random_crop_size, vol.shape, mask.shape, img_out_shape, mask_out_shape))
 
     if draw_prob_map_points:
-        return vol[z:(z+dz), y:(y+dy), x:(x+dx)], mask[z*scale:(z+dz)*scale, y*scale:(y+dy)*scale, x*scale:(x+dx)*scale],\
+        return vol[z:(z+dz), y:(y+dy), x:(x+dx)], mask[z:(z+dz), y*scale:(y+dy)*scale, x*scale:(x+dx)*scale],\
                oz, oy, ox, z, y, x
     else:
         if weight_map is not None:
-            return vol[z:(z+dz), y:(y+dy), x:(x+dx)], mask[z*scale:(z+dz)*scale, y*scale:(y+dy)*scale, x*scale:(x+dx)*scale],\
+            return vol[z:(z+dz), y:(y+dy), x:(x+dx)], mask[z:(z+dz), y*scale:(y+dy)*scale, x*scale:(x+dx)*scale],\
                    weight_map[z:(z+dz), y:(y+dy), x:(x+dx)]
         else:
             return vol[z:(z+dz), y:(y+dy), x:(x+dx)], mask[z:(z+dz), y:(y+dy), x:(x+dx)]

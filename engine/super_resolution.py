@@ -25,7 +25,7 @@ class Super_resolution(Base_Workflow):
                 X = crop_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
                     padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
             else:
-                X = crop_3D_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                X = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
                     padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
 
         # Predict each patch
@@ -36,7 +36,7 @@ class Super_resolution(Base_Workflow):
                     p = ensemble8_2d_predictions(X[k], n_classes=self.cfg.MODEL.N_CLASSES,
                             pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
                 else:
-                    p = ensemble16_3d_predictions(X[k], batch_size_value=1,
+                    p = ensemble16_3d_predictions(X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                             pred_func=(lambda img_batch_subdiv: self.model.predict(img_batch_subdiv)))
                 pred.append(np.expand_dims(p,0))
         else:

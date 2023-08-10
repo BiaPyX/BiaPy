@@ -28,7 +28,7 @@ class Pair2DImageDataGenerator(PairBaseDataGenerator):
             if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
 
         # Super-resolution check. if random_crops_in_DA is activated the images have not been cropped yet,
-        # so this check can not be done 
+        # so this check can not be done and it will be done in the random crop
         if not self.random_crops_in_DA:
             s = [img.shape[0]*self.random_crop_scale, img.shape[1]*self.random_crop_scale]
             if all(x!=y for x,y in zip(s,mask.shape[:-1])):

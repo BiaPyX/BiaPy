@@ -106,7 +106,8 @@ def ResUNet(image_shape, activation='elu', feature_maps=[16,32,64,128,256], drop
     inputs = Input(dinamic_dim)
 
     if upsampling_factor > 1 and upsampling_position =="pre":
-        s = convtranspose(fm[-1], 2, strides=2, padding='same') (inputs)
+        mpool = (1, 2, 2) if len(image_shape) == 4 else (2, 2)
+        s = convtranspose(fm[-1], 2, strides=mpool, padding='same') (inputs)
         x = s 
     else:
         x = inputs 
@@ -118,7 +119,8 @@ def ResUNet(image_shape, activation='elu', feature_maps=[16,32,64,128,256], drop
         if upsampling_position =="pre":
             x = Add()([s,x]) # long shortcut
         else:
-            x = convtranspose(fm[-1], 2, strides=2, padding='same') (x)
+            mpool = (1, 2, 2) if len(image_shape) == 4 else (2, 2)
+            x = convtranspose(fm[-1], 2, strides=mpool, padding='same') (x)
 
     # Instance segmentation
     if output_channels is not None:
