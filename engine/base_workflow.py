@@ -62,20 +62,19 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.PROBLEM.NDIM != '3D': 
                     X_original = X.copy()
 
+                if self.cfg.DATA.TEST.LOAD_GT and X.shape[:-1] != Y.shape[:-1]:
+                    raise ValueError("Image {} and mask {} differ in shape (without considering the channels, i.e. last dimension)"
+                                     .format(X.shape,Y.shape))
+
                 if self.cfg.PROBLEM.NDIM == '2D':
                     obj = crop_data_with_overlap(X, self.cfg.DATA.PATCH_SIZE, data_mask=Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
                         padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
                     if self.cfg.DATA.TEST.LOAD_GT:
                         X, Y = obj
-                        if X.shape[:-1] != Y.shape[:-1]:
-                            raise ValueError("Image {} and mask {} differ in shape".format(X.shape,Y.shape))
                     else:
                         X = obj
                     del obj
                 else:
-                    if self.cfg.DATA.TEST.LOAD_GT and X.shape[:-1] != Y.shape[:-1]:
-                        raise ValueError("Image {} and mask {} differ in shape (without considering the channels, last dimension)"
-                            .format(X[0].shape,Y[0].shape))
                     if self.cfg.TEST.REDUCE_MEMORY:
                         X = crop_3D_data_with_overlap(X[0], self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
                             padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
