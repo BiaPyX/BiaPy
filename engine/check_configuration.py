@@ -323,8 +323,8 @@ def check_configuration(cfg, check_data_paths=True):
             opts.extend(['MODEL.Z_DOWN', (2,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
         elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
             raise ValueError("'MODEL.Z_DOWN' need to be 1 or 2")
-    else:
-        raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
+        else:
+            raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
 
     if cfg.MODEL.LAST_ACTIVATION not in ['softmax', 'sigmoid', 'linear']:
         raise ValueError("'MODEL.LAST_ACTIVATION' need to be in ['softmax','sigmoid','linear']. Provided {}"
