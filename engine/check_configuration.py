@@ -3,7 +3,7 @@ import numpy as np
 
 from utils.util import check_value
 
-def check_configuration(cfg):
+def check_configuration(cfg, check_data_paths=True):
     """
     Check if the configuration is good. 
     """
@@ -200,7 +200,7 @@ def check_configuration(cfg):
             raise ValueError("cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND need to sum 1. E.g. 0.94 and 0.06 respectively.")
 
     #### Data #### 
-    if cfg.TRAIN.ENABLE:
+    if cfg.TRAIN.ENABLE and check_data_paths:
         if not os.path.exists(cfg.DATA.TRAIN.PATH):
             raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
         if not os.path.exists(cfg.DATA.TRAIN.GT_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION", "SELF_SUPERVISED"]:
@@ -210,7 +210,7 @@ def check_configuration(cfg):
                 raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
             if not os.path.exists(cfg.DATA.VAL.GT_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION", "SELF_SUPERVISED"]:
                 raise ValueError("Validation mask data dir not found: {}".format(cfg.DATA.VAL.GT_PATH))
-    if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST:
+    if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST and check_data_paths:
         if not os.path.exists(cfg.DATA.TEST.PATH):
             raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
         if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.GT_PATH) and cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SELF_SUPERVISED"]:
