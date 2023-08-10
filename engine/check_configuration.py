@@ -54,13 +54,13 @@ def check_configuration(cfg):
                 raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.DROPOUT_VALUES' lengths must be equal")
 
     # Adjust Z_DOWN values to feature maps
-    if len(cfg.MODEL.FEATURE_MAPS)-1 != len(cfg.MODEL.Z_DOWN):
+    if len(cfg.MODEL.FEATURE_MAPS)-1 == len(cfg.MODEL.Z_DOWN):
         if all(x == 0 for x in cfg.MODEL.Z_DOWN):
             opts.extend(['MODEL.Z_DOWN', (2,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
         elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
             raise ValueError("'MODEL.Z_DOWN' need to be 1 or 2")
-        else:
-            raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
+    else:
+        raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
 
     if cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER != -1:
         if not check_value(cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER):
