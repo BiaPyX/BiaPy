@@ -1,29 +1,27 @@
 SYSTEM:
-    NUM_CPUS: 1
+    NUM_CPUS: -1
 
 PROBLEM:
     TYPE: INSTANCE_SEG
     NDIM: 2D
     INSTANCE_SEG:
         DATA_CHANNELS: BC
-        DATA_MW_TH_BINARY_MASK: 0.2
-        DATA_MW_TH_CONTOUR: 0.1
-        DATA_MW_TH_FOREGROUND: 0.3
+        DATA_MW_TH_TYPE: "auto"
   
 DATA: 
     PATCH_SIZE: (256, 256, 1)  
-    CHECK_GENERATORS: False
     TRAIN:                                                                                                              
-        PATH: edit_trainx_path_here 
-        GT_PATH: edit_trainy_path_here
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
-        PATH: edit_testx_path_here
-        GT_PATH: edit_testy_path_here
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
         IN_MEMORY: True
         LOAD_GT: True
+        PADDING: (32,32)
 
 AUGMENTOR:
     ENABLE: True
@@ -37,8 +35,8 @@ MODEL:
 
 TRAIN:
     ENABLE: True
-    OPTIMIZER: SGD
-    LR: 2.E-3
+    OPTIMIZER: ADAMW
+    LR: 1.E-4
     BATCH_SIZE: 6
     EPOCHS: 360
     PATIENCE: 50

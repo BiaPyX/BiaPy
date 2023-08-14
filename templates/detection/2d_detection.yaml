@@ -8,22 +8,17 @@ PROBLEM:
 DATA:
     PATCH_SIZE: (256, 256, 1)
     REFLECT_TO_COMPLETE_SHAPE: True
-    CHECK_GENERATORS: False
-    EXTRACT_RANDOM_PATCH: False
     TRAIN:
-        PATH: /data2/dfranco/datasets/Stardist/detection/data/train/x
-        GT_PATH: /data2/dfranco/datasets/Stardist/detection/data/train/y
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
         FROM_TRAIN: True
-        PATH: /data2/dfranco/datasets/demo3D/detection/data/train/x
-        GT_PATH: /data2/dfranco/datasets/demo3D/detection/data/train/y
         SPLIT_TRAIN: 0.2
-        IN_MEMORY: True
     TEST:
         RESOLUTION: (1,1)
-        PATH: /data2/dfranco/datasets/Stardist/detection/data/test/x
-        GT_PATH: /data2/dfranco/datasets/Stardist/detection/data/test/y
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
         IN_MEMORY: False
         LOAD_GT: True
         PADDING: (32,32)
@@ -33,12 +28,9 @@ AUGMENTOR:
     ENABLE: True
     VFLIP: True
     HFLIP: True
-    ZFLIP: True
 
 MODEL:
     ARCHITECTURE: resunet
-    FEATURE_MAPS: [36, 48, 64]
-    DROPOUT_VALUES: [0, 0, 0]
     LOAD_CHECKPOINT: False
 
 LOSS:
@@ -46,11 +38,11 @@ LOSS:
 
 TRAIN:
     ENABLE: True
-    OPTIMIZER: ADAM
+    OPTIMIZER: ADAMW
     LR: 1.E-4
     BATCH_SIZE: 4
-    EPOCHS: 40
-    PATIENCE: 10
+    EPOCHS: 360
+    PATIENCE: 50
 
 TEST:
     ENABLE: True                                                                                                        

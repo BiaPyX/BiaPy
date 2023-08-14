@@ -2,48 +2,46 @@ SYSTEM:
     NUM_CPUS: -1
 
 PROBLEM:
-    TYPE: SELF_SUPERVISED
-    NDIM: 3D
-    SELF_SUPERVISED:
-        PRETEXT_TASK: 'crappify'
+    TYPE: SUPER_RESOLUTION
+    NDIM: 2D
+    SUPER_RESOLUTION:
+        UPSCALING: 2
   
 DATA: 
-    PATCH_SIZE: (40, 128, 128, 1)
+    PATCH_SIZE: (48, 48, 3)
     TRAIN:                                                                                                              
         PATH: /path/to/data
+        GT_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
+        FROM_TRAIN: True
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
         IN_MEMORY: True
+        LOAD_GT: True
         PATH: /path/to/data
-        PADDING: (5,32,32)
+        GT_PATH: /path/to/data
+        PADDING: (8,8)
 
 AUGMENTOR:
     ENABLE: True
     DA_PROB: 0.5
-    RANDOM_ROT: True
     VFLIP: True
     HFLIP: True
-    ZFLIP: True
-    
+    ROT90: True
+
 MODEL:
-    ARCHITECTURE: unet
-    Z_DOWN: [1,1,1,1]
+    ARCHITECTURE: edsr
     LOAD_CHECKPOINT: False
 
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
     LR: 1.E-4
-    BATCH_SIZE: 12
+    BATCH_SIZE: 24
     EPOCHS: 360
     PATIENCE: 50
   
 TEST:
     ENABLE: True
     AUGMENTATION: False
-    STATS:
-        PER_PATCH: True
-        MERGE_PATCHES: True
-        FULL_IMG: False

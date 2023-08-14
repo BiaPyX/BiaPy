@@ -130,7 +130,7 @@ class Engine(object):
                             Y_val, _, _ = f_name(cfg.DATA.VAL.GT_PATH, crop=True, crop_shape=crop_shape,
                                                 overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
                                                 reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
-                                                check_channel=False)
+                                                check_channel=False, check_drange=False)
                         else:
                             Y_val = np.zeros(X_val.shape, dtype=np.float32) # Fake mask val
                     else: # Classification
@@ -155,7 +155,7 @@ class Engine(object):
                         X_test, _, _ = f_name(cfg.DATA.TEST.PATH)
                         if cfg.DATA.TEST.LOAD_GT or cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
                             print("3) Loading test masks . . .")
-                            Y_test, _, _ = f_name(cfg.DATA.TEST.GT_PATH, check_channel=False)
+                            Y_test, _, _ = f_name(cfg.DATA.TEST.GT_PATH, check_channel=False, check_drange=False)
                             if len(X_test) != len(Y_test):
                                 raise ValueError("Different number of raw and ground truth items ({} vs {}). "
                                     "Please check the data!".format(len(X_test), len(Y_test)))

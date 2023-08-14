@@ -4,26 +4,25 @@ SYSTEM:
 PROBLEM:
     TYPE: DETECTION
     NDIM: 3D
+    DETECTION: 
+        CENTRAL_POINT_DILATION: 1
 
 DATA: 
-    PATCH_SIZE: (26, 128, 128, 3)
-    REFLECT_TO_COMPLETE_SHAPE: True
-    EXTRACT_RANDOM_PATCH: False
+    PATCH_SIZE: (64, 64, 64, 1)
     TRAIN:
         PATH: /path/to/data
         GT_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
         FROM_TRAIN: True
-        SPLIT_TRAIN: 0.2
-        IN_MEMORY: True
+        SPLIT_TRAIN: 0.1
     TEST:
         RESOLUTION: (1,1,1)
         PATH: /path/to/data
         GT_PATH: /path/to/data
         IN_MEMORY: True
         LOAD_GT: True
-        PADDING: (0,32,32)
+        PADDING: (18,18,18)
                 
 AUGMENTOR:
     DA_PROB: 0.5
@@ -35,27 +34,26 @@ AUGMENTOR:
 MODEL:
     ARCHITECTURE: unet
     FEATURE_MAPS: [18, 36, 48, 64]
-    Z_DOWN: [1,1,1]
     LOAD_CHECKPOINT: False
 
 TRAIN:
     ENABLE: True
-    OPTIMIZER: ADAM
+    OPTIMIZER: ADAMW
     LR: 1.E-4
     BATCH_SIZE: 6
-    EPOCHS: 800
-    PATIENCE: 200
+    EPOCHS: 360
+    PATIENCE: 50
   
 TEST:
     ENABLE: True
     VERBOSE: True
     AUGMENTATION: False
     DET_LOCAL_MAX_COORDS: True
-    DET_TOLERANCE: [10]
-    DET_MIN_TH_TO_BE_PEAK: [0.30]
+    DET_TOLERANCE: [5]
+    DET_MIN_TH_TO_BE_PEAK: [0.50]
     STATS:
         PER_PATCH: True
         MERGE_PATCHES: True
     POST_PROCESSING:
         REMOVE_CLOSE_POINTS: True
-        REMOVE_CLOSE_POINTS_RADIUS: [10.0]
+        REMOVE_CLOSE_POINTS_RADIUS: [4.0]

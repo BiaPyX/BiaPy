@@ -7,16 +7,15 @@ PROBLEM:
   
 DATA: 
     PATCH_SIZE: (28, 28, 28, 1)
-    CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data
         IN_MEMORY: True
     VAL:
-        FROM_TRAIN: False
-        PATH: /path/to/data
+        FROM_TRAIN: True
+        SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
-        IN_MEMORY: False
-        LOAD_GT: False
+        IN_MEMORY: True
+        LOAD_GT: True
         PATH: /path/to/data
 
 AUGMENTOR:
@@ -24,6 +23,7 @@ AUGMENTOR:
     RANDOM_ROT: True
     VFLIP: True
     HFLIP: True
+    ZFLIP: True
 
 MODEL:
     ARCHITECTURE: simple_cnn
@@ -32,11 +32,11 @@ MODEL:
 
 TRAIN:
     ENABLE: True
-    OPTIMIZER: ADAM
+    OPTIMIZER: ADAMW
     LR: 1.E-4
     BATCH_SIZE: 6
-    EPOCHS: 100
-    PATIENCE: 20
+    EPOCHS: 360
+    PATIENCE: 50
   
 TEST:
     ENABLE: True

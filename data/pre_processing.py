@@ -294,8 +294,8 @@ def create_detection_masks(cfg, data_type='train'):
         if not os.path.exists(os.path.join(out_dir, img_filename)):
             print("Attempting to create mask from CSV file: {}".format(os.path.join(label_dir, ids[i])))
             if not os.path.exists(os.path.join(img_dir, img_filename)):
-                print("WARNING: The image seems to have different name than the CSV file. Using the image "
-                    "with the same position as the CSV in the directory. Check if it is correct!")
+                print("WARNING: The image seems to have different name than its CSV file. Using the CSV file that's "
+                "in the same spot (within the CSV files list) where the image is in its own list of images. Check if it is correct!")
                 img_filename = img_ids[i]
             print("Its respective image seems to be: {}".format(os.path.join(img_dir, img_filename)))
             

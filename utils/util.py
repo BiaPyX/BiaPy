@@ -986,6 +986,10 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
             img = np.load(os.path.join(data_dir, id_))
         else:
             img = imread(os.path.join(data_dir, id_))
+        img = np.squeeze(img)
+
+        if img.ndim > 3:
+            raise ValueError("Read image seems to be 3D: {}. Path: {}".format(img.shape, os.path.join(data_dir, id_)))
 
         filenames.append(id_)
 

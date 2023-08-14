@@ -1,60 +1,52 @@
 SYSTEM:
-    NUM_CPUS: 1
+    NUM_CPUS: -1
 
 PROBLEM:
     TYPE: INSTANCE_SEG
     NDIM: 3D
     INSTANCE_SEG:
         DATA_CHANNELS: BC
-        DATA_MW_TH_BINARY_MASK: 0.2
-        DATA_MW_TH_CONTOUR: 0.1
-        DATA_MW_TH_FOREGROUND: 0.3
-
-DATA:
-    PATCH_SIZE: (64, 64, 64, 1)
-    CHECK_GENERATORS: False
-    TRAIN:
-        PATH: /path/to/data                                                                                             
+        DATA_MW_TH_TYPE: "auto"
+  
+DATA: 
+    PATCH_SIZE: (20, 128, 128, 1)
+    TRAIN:                                                                                                              
+        PATH: /path/to/data
         GT_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
-        FROM_TRAIN: False
-        PATH: /path/to/data                                                                                             
+        SPLIT_TRAIN: 0.1
+    TEST:                                                                                                               
+        PATH: /path/to/data
         GT_PATH: /path/to/data
         IN_MEMORY: True
-    TEST:
-        PATH: /path/to/data                                                                                             
-        GT_PATH: /path/to/data
-        IN_MEMORY: False
-        LOAD_GT: False
-        PADDING: (0,12,12)
-        OVERLAP: (0,0,0)
-        
+        LOAD_GT: True
+        PADDING: (4,16,16)
+
 AUGMENTOR:
     ENABLE: True
     RANDOM_ROT: True
     VFLIP: True
     HFLIP: True
+    ZFLIP: True
 
 MODEL:
-    ARCHITECTURE: resunet
-    FEATURE_MAPS: [36, 48, 64]
-    DROPOUT_VALUES: [0, 0, 0]
-    Z_DOWN: [1,1]
+    ARCHITECTURE: unet
+    FEATURE_MAPS: [16, 32, 64, 128, 256]
+    Z_DOWN: [1,1,1,1]
     LOAD_CHECKPOINT: False
 
 TRAIN:
     ENABLE: True
-    OPTIMIZER: ADAM
-    LR: 1.E-3
-    BATCH_SIZE: 2
-    EPOCHS: 1000
+    OPTIMIZER: ADAMW
+    LR: 1.E-4
+    BATCH_SIZE: 6
+    EPOCHS: 360
     PATIENCE: 50
   
 TEST:
     ENABLE: True
-    VERBOSE: False
-    AUGMENTATION: False
+    AUGMENTATION: True
     STATS:
         PER_PATCH: True
         MERGE_PATCHES: True

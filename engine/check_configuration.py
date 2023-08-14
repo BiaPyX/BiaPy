@@ -91,10 +91,11 @@ def check_configuration(cfg, check_data_paths=True):
         and cfg.PROBLEM.TYPE not in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']:
         raise ValueError("'TEST.POST_PROCESSING.YZ_FILTERING' or 'TEST.POST_PROCESSING.Z_FILTERING' can only be enabled "
             "when 'PROBLEM.TYPE' is among ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']")
- 
 
+    # First update is done here as some checks from this point need to have those updates 
     if len(opts) > 0:
         cfg.merge_from_list(opts)
+        opts = []
 
     #### General checks ####
     assert cfg.PROBLEM.NDIM in ['2D', '3D'], "Problem need to be '2D' or '3D'"
@@ -318,12 +319,12 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.DROPOUT_VALUES' lengths must be equal")
 
     # Adjust Z_DOWN values to feature maps
-    if len(cfg.MODEL.FEATURE_MAPS)-1 == len(cfg.MODEL.Z_DOWN):
-        if all(x == 0 for x in cfg.MODEL.Z_DOWN):
-            opts.extend(['MODEL.Z_DOWN', (2,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
-        elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
-            raise ValueError("'MODEL.Z_DOWN' need to be 1 or 2")
-        else:
+    if all(x == 0 for x in cfg.MODEL.Z_DOWN):
+        opts.extend(['MODEL.Z_DOWN', (2,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
+    elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
+        raise ValueError("'MODEL.Z_DOWN' need to be 1 or 2")
+    else:
+        if len(cfg.MODEL.FEATURE_MAPS)-1 != len(cfg.MODEL.Z_DOWN):
             raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
 
     if cfg.MODEL.LAST_ACTIVATION not in ['softmax', 'sigmoid', 'linear']:
@@ -454,3 +455,6 @@ def check_configuration(cfg, check_data_paths=True):
                              "dimensions".format(dim_count))
         if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0] == -1:
             raise ValueError("'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' need to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True")   
+
+    if len(opts) > 0:
+        cfg.merge_from_list(opts)

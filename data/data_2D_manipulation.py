@@ -862,7 +862,8 @@ def load_data_classification(data_dir, expected_classes=None, cross_val=False, c
         print("Creating validation data")
         if not cross_val:
             X_data, X_val, Y_data, Y_val = train_test_split(
-                X_data, Y_data, test_size=val_split, shuffle=shuffle_val, random_state=seed)
+                X_data, Y_data, test_size=val_split, shuffle=shuffle_val, random_state=seed,
+                stratify=Y_data)
         else:
             skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val,
                 random_state=seed)

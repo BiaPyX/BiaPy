@@ -1,3 +1,5 @@
+# We try to mimic here N2Void project parameters 
+
 SYSTEM:
     NUM_CPUS: -1
 
@@ -9,7 +11,6 @@ PROBLEM:
   
 DATA: 
     PATCH_SIZE: (32, 64, 64, 1)
-    CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data
         IN_MEMORY: True
@@ -18,8 +19,7 @@ DATA:
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
         IN_MEMORY: True
-        LOAD_GT: False
-        PADDING: (2,12,12)
+        PADDING: (6,12,12)
         PATH: /path/to/data
     NORMALIZATION:
         TYPE: 'custom'
@@ -29,6 +29,7 @@ AUGMENTOR:
     DRAW_GRID: False
     VFLIP: True
     HFLIP: True
+    ZFLIP: True
 
 MODEL:
     ARCHITECTURE: unet
@@ -47,8 +48,8 @@ TRAIN:
     OPTIMIZER: ADAM
     LR: 4.E-4
     BATCH_SIZE: 4
-    EPOCHS: 100
-    PATIENCE: 20
+    EPOCHS: 360
+    PATIENCE: 50
   
 TEST:
     ENABLE: True

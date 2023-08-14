@@ -11,7 +11,6 @@ PROBLEM:
         DATA_MW_TH_FOREGROUND: 0.1
 DATA: 
     PATCH_SIZE: (256, 256, 1)
-    CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data                                                                                             
         GT_PATH: /path/to/data

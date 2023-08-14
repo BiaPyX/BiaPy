@@ -1,3 +1,4 @@
+# We try to mimic here N2Void project parameters 
 SYSTEM:
     NUM_CPUS: -1
 
@@ -8,17 +9,14 @@ PROBLEM:
         N2V_STRUCTMASK: True
 DATA: 
     PATCH_SIZE: (64, 64, 1)
-    CHECK_GENERATORS: False
     TRAIN:                                                                                                              
         PATH: /path/to/data
         IN_MEMORY: True
     VAL:
-        IN_MEMORY: True
         FROM_TRAIN: True
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
         IN_MEMORY: True
-        LOAD_GT: False
         PADDING: (12,12)
         PATH: /path/to/data
     NORMALIZATION:
@@ -47,8 +45,8 @@ TRAIN:
     OPTIMIZER: ADAM
     LR: 4.E-4
     BATCH_SIZE: 128
-    EPOCHS: 100
-    PATIENCE: 20
+    EPOCHS: 360
+    PATIENCE: 50
   
 TEST:
     ENABLE: True

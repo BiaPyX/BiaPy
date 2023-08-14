@@ -8,13 +8,13 @@ PROBLEM:
         UPSCALING: 2
   
 DATA: 
-    PATCH_SIZE: (48, 48, 3)
-    CHECK_GENERATORS: False
+    PATCH_SIZE: (48, 48, 1)
     TRAIN:                                                                                                              
         PATH: /path/to/data
         GT_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
+        FROM_TRAIN: True
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
         IN_MEMORY: True
@@ -36,10 +36,10 @@ MODEL:
 
 TRAIN:
     ENABLE: True
-    OPTIMIZER: ADAM
-    LR: 5.E-5
-    BATCH_SIZE: 12
-    EPOCHS: 400
+    OPTIMIZER: ADAMW
+    LR: 1.E-4
+    BATCH_SIZE: 24
+    EPOCHS: 360
     PATIENCE: 50
   
 TEST:
