@@ -21,21 +21,25 @@ class Pair2DImageDataGenerator(PairBaseDataGenerator):
         if img.ndim == 2:
             img = np.expand_dims(img, -1)
         else:
-            if img.shape[0] <= 3: img = img.transpose((1,2,0))     
-        if mask.ndim == 2: 
-            mask = np.expand_dims(mask, -1)
-        else:
-            if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
+            if img.shape[0] <= 3: img = img.transpose((1,2,0)) 
+        if self.Y_provided:    
+            if mask.ndim == 2: 
+                mask = np.expand_dims(mask, -1)
+            else:
+                if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
 
         # Super-resolution check. if random_crops_in_DA is activated the images have not been cropped yet,
         # so this check can not be done and it will be done in the random crop
-        if not self.random_crops_in_DA:
+        if not self.random_crops_in_DA and self.Y_provided:
             s = [img.shape[0]*self.random_crop_scale, img.shape[1]*self.random_crop_scale]
             if all(x!=y for x,y in zip(s,mask.shape[:-1])):
                 raise ValueError("Images loaded need to be LR and its HR version. LR shape:"
                     " {} vs HR shape {} is not x{} larger".format(img.shape[:-1], mask.shape[:-1], self.random_crop_scale))
 
-        return img, mask
+        if self.Y_provided:
+            return img, mask
+        else: 
+            return img
 
     def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, point_dict):    
         aux = np.expand_dims(orig_images['o_x'], 0).astype(np.float32)

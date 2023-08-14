@@ -157,11 +157,15 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if in_memory:
             if X.ndim != (ndim+2):
                 raise ValueError("X must be a {}D Numpy array".format((ndim+1)))
+        
+        assert ptype in ['mae', 'classification']
 
-        if in_memory and (X is None or Y is None):
-            raise ValueError("'X' and 'Y' need to be provided together with 'in_memory'")
-
-        assert ptype in ['mae','classification']
+        if ptype == "classification":
+            if in_memory and (X is None or Y is None):
+                raise ValueError("'X' and 'Y' need to be provided together with 'in_memory'")
+        else:
+            if in_memory and X is None:
+                raise ValueError("'X' needs to be provided together with 'in_memory'")
 
         self.ptype = ptype
         self.ndim = ndim
@@ -225,12 +229,13 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                                     "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
         else:
             self.X = X
-            self.Y = Y
+            if ptype == "classification":
+                self.Y = Y
 
-            present_classes = np.unique(np.array(self.Y))
-            if len(present_classes) != n_classes:
-                raise ValueError("MODEL.N_CLASSES is {} but {} classes found: {}"
-                    .format(n_classes, len(present_classes), present_classes))
+                present_classes = np.unique(np.array(self.Y))
+                if len(present_classes) != n_classes:
+                    raise ValueError("MODEL.N_CLASSES is {} but {} classes found: {}"
+                        .format(n_classes, len(present_classes), present_classes))
 
             self.length = len(self.X)
     

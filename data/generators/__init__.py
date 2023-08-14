@@ -96,6 +96,10 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
             f_name = Pair3DImageDataGenerator
     
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
+    if cfg.PROBLEM.TYPE != 'DENOISING':
+        data_paths = [cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.GT_PATH] 
+    else:
+        data_paths = [cfg.DATA.TRAIN.PATH] 
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
         r_shape = cfg.DATA.PATCH_SIZE
@@ -117,7 +121,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
             resize_shape=r_shape, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
     else:
         dic = dict(ndim=ndim, X=X_train, Y=Y_train, seed=cfg.SYSTEM.SEED, in_memory=cfg.DATA.TRAIN.IN_MEMORY, 
-            data_paths=[cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.GT_PATH], da=cfg.AUGMENTOR.ENABLE,
+            data_paths=data_paths, da=cfg.AUGMENTOR.ENABLE,
             da_prob=cfg.AUGMENTOR.DA_PROB, rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT,
             rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE, shear=cfg.AUGMENTOR.SHEAR, shear_range=cfg.AUGMENTOR.SHEAR_RANGE,
             zoom=cfg.AUGMENTOR.ZOOM, zoom_range=cfg.AUGMENTOR.ZOOM_RANGE, shift=cfg.AUGMENTOR.SHIFT,
@@ -183,8 +187,12 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
             in_memory=cfg.DATA.VAL.IN_MEMORY, seed=cfg.SYSTEM.SEED, da=False, resize_shape=r_shape, 
             norm_custom_mean=custom_mean, norm_custom_std=custom_std)
     else:
+        if cfg.PROBLEM.TYPE != 'DENOISING':
+            data_paths = [cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.GT_PATH] 
+        else:
+            data_paths = [cfg.DATA.TRAIN.PATH] 
         dic = dict(ndim=ndim, X=X_val, Y=Y_val, in_memory=cfg.DATA.VAL.IN_MEMORY,
-            data_paths=[cfg.DATA.VAL.PATH, cfg.DATA.VAL.GT_PATH], da=False, shape=cfg.DATA.PATCH_SIZE,
+            data_paths=data_paths, da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
             seed=cfg.SYSTEM.SEED, norm_custom_mean=custom_mean, norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION,
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)

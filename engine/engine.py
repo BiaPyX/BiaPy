@@ -80,7 +80,11 @@ class Engine(object):
         #############
         if cfg.TRAIN.ENABLE:
             if cfg.DATA.TRAIN.IN_MEMORY:
-                mask_path = cfg.DATA.TRAIN.GT_PATH if cfg.PROBLEM.TYPE != 'DENOISING' else None
+                if cfg.PROBLEM.TYPE == 'DENOISING' or \
+                    (cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == 'masking'):
+                    mask_path = None
+                else:
+                    mask_path = cfg.DATA.TRAIN.GT_PATH  
                 val_split = cfg.DATA.VAL.SPLIT_TRAIN if cfg.DATA.VAL.FROM_TRAIN else 0.
                 if cfg.PROBLEM.TYPE != "CLASSIFICATION":
                     f_name = load_and_prepare_2D_train_data if cfg.PROBLEM.NDIM == '2D' else load_and_prepare_3D_data
@@ -120,7 +124,10 @@ class Engine(object):
                         X_val, _, _ = f_name(cfg.DATA.VAL.PATH, crop=True, crop_shape=cfg.DATA.PATCH_SIZE,
                                             overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
                                             reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
-                        if cfg.PROBLEM.TYPE != 'DENOISING':
+                        if cfg.PROBLEM.TYPE == 'DENOISING' or \
+                          (cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == 'masking'):
+                            Y_val = None
+                        else:
                             if cfg.PROBLEM.NDIM == '2D':
                                 crop_shape = (cfg.DATA.PATCH_SIZE[0]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
                                     cfg.DATA.PATCH_SIZE[1]*cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, cfg.DATA.PATCH_SIZE[2])
@@ -130,14 +137,13 @@ class Engine(object):
                             Y_val, _, _ = f_name(cfg.DATA.VAL.GT_PATH, crop=True, crop_shape=crop_shape,
                                                 overlap=cfg.DATA.VAL.OVERLAP, padding=cfg.DATA.VAL.PADDING,
                                                 reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
-                                                check_channel=False, check_drange=False)
-                        else:
-                            Y_val = np.zeros(X_val.shape, dtype=np.float32) # Fake mask val
+                                                check_channel=False, check_drange=False)                            
+                       
                     else: # Classification
                         f_name = load_data_classification if cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
                         X_val, Y_val, _ = f_name(cfg.DATA.VAL.PATH, cfg.MODEL.N_CLASSES, val_split=0) 
 
-                    if len(X_val) != len(Y_val):
+                    if Y_val is not None and len(X_val) != len(Y_val):
                         raise ValueError("Different number of raw and ground truth items ({} vs {}). "
                             "Please check the data!".format(len(X_val), len(Y_val)))
                 else:
@@ -153,7 +159,8 @@ class Engine(object):
                     if cfg.PROBLEM.TYPE != "CLASSIFICATION":
                         f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
                         X_test, _, _ = f_name(cfg.DATA.TEST.PATH)
-                        if cfg.DATA.TEST.LOAD_GT or cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+                        if cfg.DATA.TEST.LOAD_GT or \
+                            (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK != 'masking'):
                             print("3) Loading test masks . . .")
                             Y_test, _, _ = f_name(cfg.DATA.TEST.GT_PATH, check_channel=False, check_drange=False)
                             if len(X_test) != len(Y_test):
@@ -309,7 +316,8 @@ class Engine(object):
         it = iter(self.test_generator)
         for i in tqdm(range(len(self.test_generator))):
             batch = next(it)
-            if self.cfg.DATA.TEST.LOAD_GT or self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+            if self.cfg.DATA.TEST.LOAD_GT or \
+                (self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK != 'masking'):
                 X, X_norm, Y, Y_norm = batch
             else:
                 X, X_norm = batch
@@ -324,13 +332,15 @@ class Engine(object):
                 if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                     if type(X) is tuple:
                         _X = X[j]
-                        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+                        if self.cfg.DATA.TEST.LOAD_GT or \
+                            (self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK != 'masking'):
                             _Y = Y[j]  
                         else:
                             _Y = None
                     else:
                         _X = np.expand_dims(X[j],0)
-                        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+                        if self.cfg.DATA.TEST.LOAD_GT or \
+                            (self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK != 'masking'):
                             _Y = np.expand_dims(Y[j],0)  
                         else:
                             _Y = None

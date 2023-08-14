@@ -140,7 +140,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
         Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov,
             padding=padding, reflect_to_complete_shape=reflect_to_complete_shape, check_channel=False, check_drange=False)
     else:
-        Y_train = np.zeros(X_train.shape, dtype=np.float32) # Fake mask val
+        Y_train = None
 
     if isinstance(X_train, list):
         raise NotImplementedError("If you arrived here means that your images are not all of the same shape, and you "
@@ -149,7 +149,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                                   "can use one of the script from here to crop: https://github.com/danifranco/BiaPy/tree/master/utils/scripts)")
 
     # Discard images that do not surpass the foreground percentage threshold imposed 
-    if minimum_foreground_perc != -1:
+    if minimum_foreground_perc != -1 and Y_train is not None:
         print("Data that do not have {}% of foreground is discarded".format(minimum_foreground_perc))
 
         X_train_keep = []
@@ -202,29 +202,42 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 raise ValueError("0 or 1 sample left to train, which is insufficent. "
                 "Please, decrease the percentage to be more permissive")
 
-    if len(X_train) != len(Y_train):
+    if Y_train is not None and len(X_train) != len(Y_train):
         raise ValueError("Different number of raw and ground truth items ({} vs {}). "
             "Please check the data!".format(len(X_train), len(Y_train)))
             
     # Create validation data splitting the train
     if create_val:
         print("Creating validation data")
+        Y_val = None
         if not cross_val:
-            X_train, X_val, Y_train, Y_val = train_test_split(
-                X_train, Y_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
+            if Y_train is not None:
+                X_train, X_val, Y_train, Y_val = train_test_split(
+                    X_train, Y_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
+            else:
+                X_train, X_val = train_test_split(
+                    X_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
         else:
             skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val,
                 random_state=seed)
             fold = 1
             train_index, test_index = None, None
 
-            for t_index, te_index in skf.split(np.zeros(len(X_train)), np.zeros(len(Y_train))):
-                if cross_val_fold == fold:
-                    X_train, X_val = X_train[t_index], X_train[te_index]
-                    Y_train, Y_val = Y_train[t_index], Y_train[te_index]
-                    train_index, test_index = t_index.copy(), te_index.copy()
-                    break
-                fold+= 1
+            if Y_train is not None:
+                for t_index, te_index in skf.split(np.zeros(len(X_train)), np.zeros(len(Y_train))):
+                    if cross_val_fold == fold:
+                        X_train, X_val = X_train[t_index], X_train[te_index]
+                        Y_train, Y_val = Y_train[t_index], Y_train[te_index]
+                        train_index, test_index = t_index.copy(), te_index.copy()
+                        break
+                    fold+= 1
+            else:
+                for t_index, te_index in skf.split(np.zeros(len(X_train))):
+                    if cross_val_fold == fold:
+                        X_train, X_val = X_train[t_index], X_train[te_index]
+                        train_index, test_index = t_index.copy(), te_index.copy()
+                        break
+                    fold+= 1
             if len(test_index) > 5:
                 print("Fold number {}. Printing the first 5 ids: {}".format(fold, test_index[:5]))
             else:
@@ -244,17 +257,18 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 del data
 
                 # Y_train
-                data_mask = []
-                scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
-                for img_num in range(len(Y_train)):
-                    if Y_train[img_num].shape != scrop[:3]+(Y_train[img_num].shape[-1],):
-                        img = Y_train[img_num]
-                        img = crop_3D_data_with_overlap(Y_train[img_num][0] if isinstance(Y_train, list) else Y_train[img_num],
-                            scrop[:3]+(Y_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
-                    data_mask.append(img)
-                Y_train = np.concatenate(data_mask)
-                del data_mask
-                
+                if Y_train is not None:
+                    data_mask = []
+                    scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
+                    for img_num in range(len(Y_train)):
+                        if Y_train[img_num].shape != scrop[:3]+(Y_train[img_num].shape[-1],):
+                            img = Y_train[img_num]
+                            img = crop_3D_data_with_overlap(Y_train[img_num][0] if isinstance(Y_train, list) else Y_train[img_num],
+                                scrop[:3]+(Y_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
+                        data_mask.append(img)
+                    Y_train = np.concatenate(data_mask)
+                    del data_mask
+                    
                 # X_val
                 data = []
                 for img_num in range(len(X_val)):
@@ -267,37 +281,43 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 del data
 
                 # Y_val
-                data_mask = []
-                scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
-                for img_num in range(len(Y_val)):
-                    if Y_val[img_num].shape != scrop[:3]+(Y_val[img_num].shape[-1],):
-                        img = Y_val[img_num]
-                        img = crop_3D_data_with_overlap(Y_val[img_num][0] if isinstance(Y_val, list) else Y_val[img_num],
-                            scrop[:3]+(Y_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
-                    data_mask.append(img)
-                Y_val = np.concatenate(data_mask)
-                del data_mask
+                if Y_val is not None:
+                    data_mask = []
+                    scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
+                    for img_num in range(len(Y_val)):
+                        if Y_val[img_num].shape != scrop[:3]+(Y_val[img_num].shape[-1],):
+                            img = Y_val[img_num]
+                            img = crop_3D_data_with_overlap(Y_val[img_num][0] if isinstance(Y_val, list) else Y_val[img_num],
+                                scrop[:3]+(Y_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
+                        data_mask.append(img)
+                    Y_val = np.concatenate(data_mask)
+                    del data_mask
 
     # Convert the original volumes as they were a unique subvolume
     if random_crops_in_DA and X_train.ndim == 4:
         X_train = np.expand_dims(X_train, axis=0)
-        Y_train = np.expand_dims(Y_train, axis=0)
+        if Y_train is not None:
+            Y_train = np.expand_dims(Y_train, axis=0)
         if create_val:
             X_val = np.expand_dims(X_val, axis=0)
-            Y_val = np.expand_dims(Y_val, axis=0)
+            if Y_val is not None:
+                Y_val = np.expand_dims(Y_val, axis=0)
 
     if create_val:
         print("*** Loaded train data shape is: {}".format(X_train.shape))
-        print("*** Loaded train GT shape is: {}".format(Y_train.shape))
+        if Y_train is not None:
+            print("*** Loaded train GT shape is: {}".format(Y_train.shape))
         print("*** Loaded validation data shape is: {}".format(X_val.shape))
-        print("*** Loaded validation GT shape is: {}".format(Y_val.shape))
+        if Y_val is not None:
+            print("*** Loaded validation GT shape is: {}".format(Y_val.shape))
         if not cross_val:
             return X_train, Y_train, X_val, Y_val, t_filenames
         else:
             return X_train, Y_train, X_val, Y_val, t_filenames, test_index
     else:
         print("*** Loaded train data shape is: {}".format(X_train.shape))
-        print("*** Loaded train GT shape is: {}".format(Y_train.shape))
+        if Y_train is not None:
+            print("*** Loaded train GT shape is: {}".format(Y_train.shape))
         return X_train, Y_train, t_filenames
 
 

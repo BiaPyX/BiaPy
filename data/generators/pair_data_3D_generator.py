@@ -37,25 +37,29 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
             if channel_pos != 3 and img.shape[channel_pos] <= 4:
                 new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
                 img = img.transpose(new_pos)
-        if mask.ndim == 3: 
-            mask = np.expand_dims(mask, -1)
-        else:
-            min_val = min(mask.shape)
-            channel_pos = mask.shape.index(min_val)
-            if channel_pos != 3 and mask.shape[channel_pos] <= 4:
-                new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
-                mask = mask.transpose(new_pos)
-        
+        if self.Y_provided:
+            if mask.ndim == 3: 
+                mask = np.expand_dims(mask, -1)
+            else:
+                min_val = min(mask.shape)
+                channel_pos = mask.shape.index(min_val)
+                if channel_pos != 3 and mask.shape[channel_pos] <= 4:
+                    new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
+                    mask = mask.transpose(new_pos)
+            
         # Super-resolution check. if random_crops_in_DA is activated the images have not been cropped yet,
         # so this check can not be done and it will be done in the random crop
-        if not self.random_crops_in_DA:
+        if not self.random_crops_in_DA and self.Y_provided:
             s = [img.shape[1]*self.random_crop_scale, img.shape[2]*self.random_crop_scale]
             if all(x!=y for x,y in zip(s,mask.shape[1:-1])):
                 raise ValueError("Images loaded need to be LR and its HR version. LR shape:"
                     " {} vs HR shape {} is not x{} larger (z axis not taken into account)"
                     .format(img.shape[:-1], mask.shape[:-1], self.random_crop_scale))
 
-        return img, mask
+        if self.Y_provided:
+            return img, mask
+        else:
+            return img
 
     def apply_transform(self, image, mask, e_im=None, e_mask=None):
         # Transpose them so we can merge the z and c channels easily. 
