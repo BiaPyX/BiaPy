@@ -317,7 +317,13 @@ def check_configuration(cfg, check_data_paths=True):
 
     # Adjust Z_DOWN values to feature maps
     if all(x == 0 for x in cfg.MODEL.Z_DOWN):
-        opts.extend(['MODEL.Z_DOWN', (2,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
+        if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION' and cfg.PROBLEM.NDIM == '3D':
+            opts.extend(['MODEL.Z_DOWN', (1,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
+        else:
+            opts.extend(['MODEL.Z_DOWN', (2,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
+    elif (cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION' and cfg.PROBLEM.NDIM == '3D') and \
+        any(x != 1 for x in cfg.MODEL.Z_DOWN):
+        raise ValueError("'MODEL.Z_DOWN' != 1 not allowed in super-resolution workflow")
     elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
         raise ValueError("'MODEL.Z_DOWN' need to be 1 or 2")
     else:
@@ -358,7 +364,10 @@ def check_configuration(cfg, check_data_paths=True):
     # will throw an error not very clear for users
     if cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'seunet', 'attention_unet']:
         for i in range(len(cfg.MODEL.FEATURE_MAPS)-1):
-            sizes = cfg.DATA.PATCH_SIZE[1:-1] if cfg.MODEL.Z_DOWN[i] == 1 else cfg.DATA.PATCH_SIZE[:-1]
+            if cfg.MODEL.Z_DOWN[i] == 1 or (cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION' and cfg.PROBLEM.NDIM == '3D'):
+                sizes = cfg.DATA.PATCH_SIZE[1:-1] 
+            else:
+                sizes = cfg.DATA.PATCH_SIZE[:-1]
             if not all([False for x in sizes if x%(np.power(2,(i+1))) != 0 or x == 0]):
                 raise ValueError("The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the U-Net's levels. You can reduce the number "
                 "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length) or increase the 'DATA.PATCH_SIZE'")
