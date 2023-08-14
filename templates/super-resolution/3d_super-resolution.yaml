@@ -3,25 +3,24 @@ SYSTEM:
 
 PROBLEM:
     TYPE: SUPER_RESOLUTION
-    NDIM: 2D
+    NDIM: 3D
     SUPER_RESOLUTION:
         UPSCALING: 2
   
 DATA: 
-    PATCH_SIZE: (48, 48, 1)
+    PATCH_SIZE: (10, 48, 48, 1)
     TRAIN:                                                                                                              
         PATH: /path/to/data
         GT_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
-        FROM_TRAIN: True
         SPLIT_TRAIN: 0.1
     TEST:                                                                                                               
         IN_MEMORY: True
         LOAD_GT: True
         PATH: /path/to/data
         GT_PATH: /path/to/data
-        PADDING: (8,8)
+        PADDING: (2,8,8)
 
 AUGMENTOR:
     ENABLE: True
@@ -31,17 +30,20 @@ AUGMENTOR:
     ZFLIP: True
 
 MODEL:
-    ARCHITECTURE: edsr
+    ARCHITECTURE: unet
     LOAD_CHECKPOINT: False
 
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
     LR: 1.E-4
-    BATCH_SIZE: 24
-    EPOCHS: 360
+    BATCH_SIZE: 12
+    EPOCHS: 400
     PATIENCE: 50
   
 TEST:
     ENABLE: True
     AUGMENTATION: False
+    STATS:
+        PER_PATCH: True
+        MERGE_PATCHES: True
