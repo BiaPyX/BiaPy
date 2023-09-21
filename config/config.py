@@ -19,10 +19,14 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.SYSTEM = CN()
         # Number of CPUs to use
-        _C.SYSTEM.NUM_CPUS = -1
+        _C.SYSTEM.NUM_CPUS = 10
+        # This will be calculated based in --gpu input arg
+        _C.SYSTEM.NUM_GPUS = 0
+
         # Math seed
         _C.SYSTEM.SEED = 0
-
+        # Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.
+        _C.SYSTEM.PIN_MEM = True
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Problem specification
@@ -33,6 +37,11 @@ class Config:
         _C.PROBLEM.TYPE = 'SEMANTIC_SEG'
         # Possible options: '2D' and '3D'
         _C.PROBLEM.NDIM = '2D'
+
+        ### INSTANCE_SEG
+        _C.PROBLEM.SEMANTIC_SEG = CN()
+        # Class id to ignore when MODEL.N_CLASSES > 2 
+        _C.PROBLEM.SEMANTIC_SEG.IGNORE_CLASS_ID = 0
 
         ### INSTANCE_SEG
         _C.PROBLEM.INSTANCE_SEG = CN()
@@ -46,6 +55,9 @@ class Config:
         #   - 'Dv2' stands for 'Distance V2', which is an updated version of 'D' channel calculating background distance as well.
         #   - 'P' stands for 'Points' and contains the central points of an instance (as in Detection workflow) 
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = 'BC'
+        # Whether to mask the distance channel to only calculate the loss in those regions where the binary mask
+        # defined by B channel is present
+        _C.PROBLEM.INSTANCE_SEG.DISTANCE_CHANNEL_MASK = True
 
         # Weights to be applied to the channels.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS = (1, 1)
@@ -94,10 +106,6 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.FORE_EROSION_RADIUS = 5
         # Radius to dilate the foreground mask
         _C.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS = 5
-
-        # Whether to find an optimum value for each threshold with the validation data. If True the previous MW_TH*
-        # variables will be replaced by the optimum values found
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = False
         # Whether to save watershed check files
         _C.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW = True
         
@@ -175,7 +183,7 @@ class Config:
         _C.DATA.NORMALIZATION.TYPE = 'div'
         _C.DATA.NORMALIZATION.CUSTOM_MEAN = -1.0
         _C.DATA.NORMALIZATION.CUSTOM_STD = -1.0
-
+        
         # Train
         _C.DATA.TRAIN = CN()
         # Whether to check if the data mask contains correct values, e.g. same classes as defined
@@ -247,6 +255,8 @@ class Config:
 
         # Validation
         _C.DATA.VAL = CN()
+        # Enabling distributed evaluation (recommended during training)
+        _C.DATA.VAL.DIST_EVAL = True
         # Whether to create validation data from training set or read it from a directory
         _C.DATA.VAL.FROM_TRAIN = True
         # Use a cross validation strategy instead of just split the train data in two
@@ -471,55 +481,65 @@ class Config:
         # Model definition
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.MODEL = CN()
-        # Architecture of the network. Possible values are: 'unet', 'resunet', 'attention_unet', 'fcn32', 'fcn8', 'nnunet', 'tiramisu', 
-        # 'mnet', 'multiresunet', 'seunet', 'simple_cnn', 'EfficientNetB0', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'ViT'
+        # Architecture of the network. Possible values are: 'unet', 'resunet', 'attention_unet', 'nnunet',  
+        # 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'ViT'
         # 'mae'
         _C.MODEL.ARCHITECTURE = 'unet'
         # Number of feature maps on each level of the network.
         _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]
-        # To activate the Spatial Dropout instead of use the "normal" dropout layer
-        _C.MODEL.SPATIAL_DROPOUT = False
-        # Values to make the dropout with. Set to 0 to prevent dropout. When using it with 'ViT', 'unetr' or 'tiramisu' 
+        # Values to make the dropout with. Set to 0 to prevent dropout. When using it with 'ViT' or 'unetr' 
         # a list with just one number must be provided 
         _C.MODEL.DROPOUT_VALUES = [0., 0., 0., 0., 0.]
         # To active batch normalization
-        _C.MODEL.BATCH_NORMALIZATION = False
-        # Kernel type to use on convolution layers
-        _C.MODEL.KERNEL_INIT = 'he_normal'
+        _C.MODEL.BATCH_NORMALIZATION = True
         # Kernel size
         _C.MODEL.KERNEL_SIZE = 3
         # Upsampling layer to use in the model
         _C.MODEL.UPSAMPLE_LAYER = "convtranspose"
         # Activation function to use along the model
-        _C.MODEL.ACTIVATION = 'elu'
+        _C.MODEL.ACTIVATION = 'ELU'
         # Las activation to use. Options 'sigmoid', 'softmax' or 'linear'
         _C.MODEL.LAST_ACTIVATION = 'sigmoid' 
         # Number of classes without counting the background class (that should be using 0 label)
-        _C.MODEL.N_CLASSES = 1
+        _C.MODEL.N_CLASSES = 2
         # Downsampling to be made in Z. This value will be the third integer of the MaxPooling operation. When facing
         # anysotropic datasets set it to get better performance
         _C.MODEL.Z_DOWN = [0, 0, 0, 0]
         # Checkpoint: set to True to load previous training weigths (needed for inference or to make fine-tunning)
         _C.MODEL.LOAD_CHECKPOINT = False
-        # Create a png with the model's architecture. You must install pydot (`pip install pydot`) and install graphviz 
-        # (in the OS, see instructions at https://graphviz.gitlab.io/download/) for plot_model to work
-        _C.MODEL.MAKE_PLOT = False
-        
-        # TIRAMISU
-        # Depth of the network. Only used when MODEL.ARCHITECTURE = 'tiramisu'. For the rest options it is inferred.
-        _C.MODEL.TIRAMISU_DEPTH = 3
+        # When loading checkpoints whether if only model's weights are going to be loaded or optimizer, epochs and loss_scaler. 
+        _C.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS = True
+        # Decide which checkpoint to load from job's dir if PATHS.CHECKPOINT_FILE is ''. 
+        # Options: 'best_on_val' or 'last_on_train'
+        _C.MODEL.LOAD_CHECKPOINT_EPOCH = 'best_on_val' 
+        # Epochs to save a checkpoint of the model (apart from any callbacks)
+        _C.MODEL.SAVE_CKPT_FREQ = 5
 
         # TRANSFORMERS MODELS
+        # Type of model. Options are "custom", "vit_base_patch16", "vit_large_patch16" and "vit_huge_patch16". On custom setting 
+        # the rest of the ViT parameters can be modified as other options will set them automatically. 
+        _C.MODEL.VIT_MODEL = "custom"
         # Size of the patches that are extracted from the input image.
         _C.MODEL.VIT_TOKEN_SIZE = 16
         # Dimension of the embedding space
-        _C.MODEL.VIT_HIDDEN_SIZE = 768
+        _C.MODEL.VIT_EMBED_DIM = 768
         # Number of transformer encoder layers
         _C.MODEL.VIT_NUM_LAYERS = 12
         # Number of heads in the multi-head attention layer.
         _C.MODEL.VIT_NUM_HEADS = 12
+        # Size of the dense layers of the final classifier. This value will mutiply 'VIT_EMBED_DIM'
+        _C.MODEL.VIT_MLP_RATIO = 4.
+        # Normalization layer epsion
+        _C.MODEL.VIT_NORM_EPS = 1e-6
+
+        # Dimension of the embedding space for the MAE decoder 
+        _C.MODEL.MAE_DEC_HIDDEN_SIZE = 512
+        # Number of transformer encoder layers
+        _C.MODEL.MAE_DEC_NUM_LAYERS = 8
+        # Number of heads in the multi-head attention layer.
+        _C.MODEL.MAE_DEC_NUM_HEADS = 16
         # Size of the dense layers of the final classifier
-        _C.MODEL.VIT_MLP_DIMS = 3072
+        _C.MODEL.MAE_DEC_MLP_DIMS = 2048
 
         # UNETR
         # Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted
@@ -528,11 +548,10 @@ class Config:
         _C.MODEL.UNETR_VIT_NUM_FILTERS = 16
         # Decoder activation
         _C.MODEL.UNETR_DEC_ACTIVATION = 'relu'
-        # Kernel type to use on convolution layers
-        _C.MODEL.UNETR_DEC_KERNEL_INIT = 'he_normal'
 
         # Specific for SR models based on U-Net architectures. Options are ["pre", "post"]
         _C.MODEL.UNET_SR_UPSAMPLE_POSITION = "pre"
+
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss
@@ -552,15 +571,19 @@ class Config:
         _C.TRAIN.OPTIMIZER = 'SGD'
         # Learning rate 
         _C.TRAIN.LR = 1.E-4
-        # Weight decay (AdamW)
-        _C.TRAIN.W_DECAY = 0.004
+        # Weight decay
+        _C.TRAIN.W_DECAY = 0.05
         # Batch size
         _C.TRAIN.BATCH_SIZE = 2
+        # Here the effective batch size is 64 (batch_size per gpu) * 8 (nodes) * 8 (gpus per node) = 4096. 
+        # If memory or # gpus is limited, use --accum_iter to maintain the effective batch size, which is 
+        # batch_size (per gpu) * nodes * 8 (gpus per node) * accum_iter.
+        _C.TRAIN.ACCUM_ITER = 1
         # Number of epochs to train the model
         _C.TRAIN.EPOCHS = 360
         # Epochs to wait with no validation data improvement until the training is stopped
         _C.TRAIN.PATIENCE = 50
-
+        
         # LR Scheduler
         _C.TRAIN.LR_SCHEDULER = CN()
         _C.TRAIN.LR_SCHEDULER.NAME = '' # Possible options: 'warmupcosine', 'reduceonplateau', 'onecycle'
@@ -572,28 +595,23 @@ class Config:
         # otherwise it makes no sense
         _C.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE = -1
         # Cosine decay with a warm up consist in 2 phases: 1) a warm up phase which consists of increasing 
-        # the learning rate from TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_LR to TRAIN.LR value by a factor 
-        # during a certain number of epochs defined by 'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_HOLD_EPOCHS' 
+        # the learning rate from TRAIN.LR_SCHEDULER.MIN_LR to TRAIN.LR value by a factor 
+        # during a certain number of epochs defined by 'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS' 
         # 2) after this will began the decay of the learning rate value using the cosine function.
         # Find a detailed explanation in: https://scorrea92.medium.com/cosine-learning-rate-decay-e8b50aa455b
         #
-        # Initial learning rate to start the warm up from. You can set it to 0 or a value lower than 'TRAIN.LR'
-        _C.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_LR = -1.
         # Epochs to do the warming up. 
         _C.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS = -1
-        # Number of steps to hold base learning rate before decaying
-        _C.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_HOLD_EPOCHS = -1
 
         # Callbacks
-        # To determine which value monitor to stop the training
-        _C.TRAIN.EARLYSTOPPING_MONITOR = 'val_loss'
         # To determine which value monitor to consider which epoch consider the best to save
         _C.TRAIN.CHECKPOINT_MONITOR = 'val_loss'
         # Add profiler callback to the training
-        _C.TRAIN.PROFILER = False
-        # Batch range to be analyzed
-        _C.TRAIN.PROFILER_BATCH_RANGE='10, 100'
+        # _C.TRAIN.PROFILER = False
+        # # Batch range to be analyzed
+        # _C.TRAIN.PROFILER_BATCH_RANGE='10, 100'
 
+        # _C.TRAIN.MAE_CALLBACK_EPOCHS = 5
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Inference phase
@@ -720,7 +738,7 @@ class Config:
         # Name of the folder where weights files will be stored/loaded from.
         _C.PATHS.CHECKPOINT = os.path.join(job_dir, 'checkpoints')
         # Checkpoint file to load/store the model weights
-        _C.PATHS.CHECKPOINT_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'model_weights_' + job_identifier + '.h5')
+        _C.PATHS.CHECKPOINT_FILE = ''
         # Name of the folder to store the probability map to avoid recalculating it on every run
         _C.PATHS.PROB_MAP_DIR = os.path.join(job_dir, 'prob_map')
         _C.PATHS.PROB_MAP_FILENAME = 'prob_map.npy'
@@ -728,6 +746,17 @@ class Config:
         _C.PATHS.WATERSHED_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'watershed')
         _C.PATHS.MEAN_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_mean_value.npy')
         _C.PATHS.STD_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_std_value.npy')
+        # mae CALLBACK PATH
+        _C.PATHS.MAE_CALLBACK_OUT_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'MAE_checks')
+        
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Logging
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        _C.LOG = CN()
+        _C.LOG.LOG_DIR = os.path.join(job_dir, 'train_logs')
+        _C.LOG.TENSORBOARD_LOG_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'tensorboard')
+        _C.LOG.LOG_FILE_PREFIX = job_identifier
+        _C.LOG.CHART_CREATION_FREQ = 5
 
         self._C = _C
 

@@ -1,125 +1,105 @@
-import tensorflow as tf
-from tensorflow.keras import layers
-from tensorflow.keras import Model, Input
+### Adapted from https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer.py#L380
 
-from .tr_layers import TransformerBlock, ClassToken, Patches, PatchEncoder
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
 
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+# --------------------------------------------------------
+# References:
+# timm: https://github.com/rwightman/pytorch-image-models/tree/master/timm
+# DeiT: https://github.com/facebookresearch/deit
+# --------------------------------------------------------
 
-def ViT(input_shape, patch_size, hidden_size, transformer_layers, num_heads, mlp_head_units, n_classes=1, 
-        dropout=0.0, include_class_token=True, representation_size=None, include_top=True, 
-        use_as_backbone=False):
-    """
-    ViT architecture. `ViT paper <https://arxiv.org/abs/2010.11929>`__.
+from functools import partial
 
-    Parameters
-    ----------
-    input_shape : 3D/4D tuple
-        Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+import torch
+import torch.nn as nn
+import timm.models.vision_transformer
+from typing import Union, Tuple
+
+from models.tr_layers import PatchEmbed
+
+class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
+    def __init__(self, ndim=2, global_pool = False, **kwargs):
+        """
+        Mask autoenconder (MAE) with VisionTransformer (ViT) backbone. 
+        Reference: `Masked Autoencoders Are Scalable Vision Learners <https://arxiv.org/abs/2111.06377>`_.
         
-    patch_size : int
-        Size of the patches that are extracted from the input image. As an example, to use ``16x16`` 
-        patches, set ``patch_size = 16``.
+        Parameters
+        ----------
+        ndim : int, optional
+            Number of input dimensions.
 
-    hidden_size : int
-        Dimension of the embedding space.
+        global_pool : bool, optional
+            Whether to use global pooling or not. 
 
-    transformer_layers : int
-        Number of transformer encoder layers.
+        Returns
+        -------
+        model : Torch model
+            ViT model.
+        """
+        super(VisionTransformer, self).__init__( **kwargs)
+        self.ndim = ndim
+        self.global_pool = global_pool
 
-    num_heads : int
-        Number of heads in the multi-head attention layer.
+        if self.global_pool:
+            norm_layer = kwargs['norm_layer']
+            embed_dim = kwargs['embed_dim']
+            self.fc_norm = norm_layer(embed_dim)
 
-    mlp_head_units : int
-        Size of the dense layer of the final classifier. 
-
-    n_classes : int, optional
-        Number of classes to predict. Is the number of channels in the output tensor.
-
-    dropout : bool, optional
-        Dropout rate for the decoder (can be a list of dropout rates for each layer).
-
-    include_class_token : bool, optional
-        Whether to include or not the class token.
-
-    representation_size : int, optional
-        The size of the representation prior to the classification layer. If None, no Dense layer is inserted.
-        Not used but added to mimic vit-keras. 
-
-    include_top : bool, optional
-        Whether to include the final classification layer. If not, the output will have dimensions 
-        ``(batch_size, hidden_size)``.
-
-    use_as_backbone : bool, optional
-        Whether to use the model as a backbone so its components are returned instead of a composed model.
-
-    Returns
-    -------
-    model : Keras model, optional
-        Model containing the ViT .
+            del self.norm  # remove the original norm
         
-    inputs : Tensorflow layer, optional
-        Input layer.
+        # Replace with our PatchEmbed implementation and re-define all dependant variables 
+        self.patch_embed = PatchEmbed(
+            img_size=kwargs['img_size'],
+            patch_size=kwargs['patch_size'],
+            in_chans=kwargs['in_chans'],
+            ndim=self.ndim,
+            embed_dim=kwargs['embed_dim'],
+            bias=True,  
+        )
+        num_patches = self.patch_embed.num_patches
+        embed_len = num_patches if self.no_embed_class else num_patches + self.num_prefix_tokens
+        self.pos_embed = nn.Parameter(torch.randn(1, embed_len, kwargs['embed_dim']) * .02)
 
-    hidden_states_out : List of Tensorflow layers, optional 
-        Layers of the transformer. 
+    def forward_features(self, x):
+        B = x.shape[0]  
+        x = self.patch_embed(x)
 
-    encoded_patches : PatchEncoder, optional 
-        Patch enconder.
-    """
-    inputs = layers.Input(shape=input_shape)
-    if len(input_shape) == 4:
-        dims = 3   
-        patch_dims = patch_size*patch_size*patch_size*input_shape[-1]
-    else:
-        dims = 2
-        patch_dims = patch_size*patch_size*input_shape[-1]
-    num_patches = (input_shape[0]//patch_size)**dims
+        cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        x = torch.cat((cls_tokens, x), dim=1)
+        x = x + self.pos_embed
+        x = self.pos_drop(x)
 
-    # Patch creation 
-    # 2D: (B, num_patches^2, patch_dims)
-    # 3D: (B, num_patches^3, patch_dims)
-    y = Patches(patch_size, patch_dims, dims)(inputs)
+        for blk in self.blocks:
+            x = blk(x)
 
-    # Patch encoder
-    # 2D: (B, num_patches^2, hidden_size)
-    # 3D: (B, num_patches^3, hidden_size)
-    y = PatchEncoder(num_patches=num_patches, hidden_size=hidden_size)(y)
+        if self.global_pool:
+            x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
+            outcome = self.fc_norm(x)
+        else:
+            x = self.norm(x)
+            outcome = x[:, 0]
 
-    if include_class_token:
-        y = ClassToken(name="class_token")(y)
-        # 2D: (B, (num_patches^2)+1, hidden_size)
-        # 3D: (B, (num_patches^3)+1, hidden_size)
+        return outcome
 
-    if use_as_backbone:
-        hidden_states_out = []
+def vit_base_patch16(**kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    return model
 
-    # Create multiple layers of the Transformer block.
-    for i in range(transformer_layers):
-        
-        # TransformerBlock
-        # 2D: (B, num_patches^2, hidden_size)
-        # 3D: (B, num_patches^3, hidden_size)
-        y, _ = TransformerBlock(
-            num_heads=num_heads,
-            mlp_dim=mlp_head_units,
-            dropout=dropout,
-            name=f"Transformer/encoderblock_{i}",
-        )(y)
-        
-        if use_as_backbone:
-            hidden_states_out.append(y)
 
-    if use_as_backbone:
-        return inputs, hidden_states_out, y
+def vit_large_patch16(**kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    return model
 
-    y = layers.LayerNormalization(epsilon=1e-6)(y)
-    if include_class_token:
-        y = layers.Lambda(lambda v: v[:, 0], name="ExtractToken")(y)
-    if representation_size is not None:
-        y = layers.Dense(hidden_size, name="pre_logits", activation="tanh")(y)
-    if include_top:
-        y = layers.Dense(n_classes, name="head", activation="linear")(y)
-    
-    model = Model(inputs=inputs, outputs=y)
 
+def vit_huge_patch14(**kwargs):
+    model = VisionTransformer(
+        patch_size=14, embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model

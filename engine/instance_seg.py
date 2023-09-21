@@ -1,30 +1,27 @@
 import os
-import h5py
+import torch
 import numpy as np
 import pandas as pd
 from skimage.io import imread
 from tqdm import tqdm
 
-from data.post_processing.post_processing import (watershed_by_channels, calculate_optimal_mw_thresholds, voronoi_on_mask, 
-                                                  remove_instance_by_circularity_central_slice, repare_large_blobs)
+from data.post_processing.post_processing import (watershed_by_channels, voronoi_on_mask, 
+    remove_instance_by_circularity_central_slice, repare_large_blobs)
 from data.pre_processing import create_instance_channels, create_test_instance_channels
 from utils.util import save_tif
 from utils.matching import matching, wrapper_matching_dataset_lazy
-
+from engine.metrics import jaccard_index, instance_segmentation_loss
 from engine.base_workflow import Base_Workflow
 
-class Instance_Segmentation(Base_Workflow):
-    def __init__(self, cfg, model, post_processing={}, original_test_mask_path=None):
-        super().__init__(cfg, model, post_processing)
+class Instance_Segmentation_Workflow(Base_Workflow):
+    def __init__(self, cfg, job_identifier, device, rank, **kwargs):
+        super(Instance_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, rank, **kwargs)
 
-        self.original_test_mask_path = original_test_mask_path 
+        self.original_test_path, self.original_test_mask_path = self.prepare_instance_data()
+
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             self.original_test_mask_ids = sorted(next(os.walk(self.original_test_mask_path))[2])
         self.all_matching_stats = []
-        self.post_processing = post_processing
-
-        if self.post_processing['instance_post']:
-            self.all_matching_stats_post_processing = []            
 
         self.instance_ths = {}
         self.instance_ths['TYPE'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE
@@ -32,24 +29,88 @@ class Instance_Segmentation(Base_Workflow):
         self.instance_ths['TH_CONTOUR'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_CONTOUR
         self.instance_ths['TH_FOREGROUND'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_FOREGROUND
         self.instance_ths['TH_DISTANCE'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_DISTANCE
-        self.instance_ths['TH_POINTS'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_POINTS
+        self.instance_ths['TH_POINTS'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_POINTS 
 
-        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "BCDv2":
-            if self.cfg.TEST.POST_PROCESSING.APPLY_MASK and os.path.isdir(self.cfg.DATA.VAL.BINARY_MASKS):
-                bin_mask = self.cfg.DATA.VAL.BINARY_MASKS
+        # From now on, no modification of the cfg will be allowed
+        self.cfg.freeze()
+
+        # Activations for each output channel:
+        # channel number : 'activation'
+        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE == "Dv2":
+            self.activations = {'0': 'Linear'}
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE in ["BC", "BP", "BCM"]:
+            self.activations = {':': 'Sigmoid'}
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE in ["BDv2", "BD"]:
+            self.activations = {'0': 'Sigmoid', '1': 'Linear'}
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE in ["BCD", "BCDv2"]:
+            self.activations = {'0': 'Sigmoid', '1': 'Sigmoid', '2': 'Linear'}
+
+        # Workflow specific training variables
+        self.mask_path = cfg.DATA.TRAIN.GT_PATH
+        self.load_Y_val = True
+
+        # Specific instance segmentation post-processing
+        if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK or self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1 or\
+            self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
+            self.post_processing['instance_post'] = True
+            self.all_matching_stats_post_processing = []   
+        else:
+            self.post_processing['instance_post'] = False            
+
+    def define_metrics(self):
+        self.metrics = []
+        self.metric_names = []
+        self.loss = instance_segmentation_loss(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
+            self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, 
+            self.cfg.PROBLEM.INSTANCE_SEG.DISTANCE_CHANNEL_MASK)
+        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BCM", "BP"]:
+            self.metrics.append(jaccard_index)
+            self.first_not_binary_channel = len(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+            self.metric_names.append("jaccard_index")
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BD":
+            self.metrics.append(jaccard_index)
+            self.first_not_binary_channel = 1 
+            self.metric_names.append("jaccard_index")
+            self.metrics.append(torch.nn.L1Loss())
+            self.metric_names.append("L1_distance_channel")
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", 'BCDv2']:
+            self.metrics.append(jaccard_index)
+            self.first_not_binary_channel = 2
+            self.metric_names.append("jaccard_index")
+            self.metrics.append(torch.nn.L1Loss())
+            self.metric_names.append("L1_distance_channel")
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BDv2":
+            self.metrics.append(jaccard_index)
+            self.first_not_binary_channel = 1
+            self.metrics.append(torch.nn.L1Loss())
+            self.metric_names.append("jaccard_index")
+            self.metric_names.append("L1_distance_channel")
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
+            self.metrics.append(torch.nn.L1Loss())
+            self.metric_names.append("L1_distance_channel")
+
+    def metric_calculation(self, output, targets, device, metric_logger=None):
+        with torch.no_grad():
+            train_iou = []
+            train_dis = []
+            for i in range(len(self.metric_names)):
+                if self.metric_names[i] == "jaccard_index":
+                    iou = self.metrics[i](output, targets, device, num_classes=1, 
+                        first_not_binary_channel=self.first_not_binary_channel)
+                    iou = iou.item() if not torch.isnan(iou) else 0
+                    train_iou.append(iou)
+                elif self.metric_names[i] == "L1_distance_channel":
+                    train_dis.append(self.metrics[i](output, targets).item())
+            train_iou = np.mean(train_iou)
+            train_dis = np.mean(train_dis)
+            if metric_logger is not None:
+                metric_logger.meters[self.metric_names[0]].update(train_iou)
+                if len(self.metric_names) > 1:
+                    metric_logger.meters[self.metric_names[1]].update(train_dis)
             else:
-                bin_mask = None
-            obj = calculate_optimal_mw_thresholds(self.model, self.cfg.DATA.VAL.PATH,
-                self.orig_val_mask_path, self.cfg.DATA.PATCH_SIZE, self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                self.cfg.DATA.VAL.GT_PATH, self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ, bin_mask,
-                chart_dir=self.cfg.PATHS.CHARTS, verbose=self.cfg.TEST.VERBOSE)
-            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCD":
-                self.instance_ths['TH_BINARY_MASK'], self.instance_ths['TH_CONTOUR'], self.instance_ths['TH_FOREGROUND'],\
-                    self.instance_ths['TH_DISTANCE'], self.instance_ths['TH_DIST_FOREGROUND'] = obj
-            else:
-                self.instance_ths['TH_BINARY_MASK'], self.instance_ths['TH_CONTOUR'], self.instance_ths['TH_FOREGROUND'] = obj
-            
-    def instance_seg_process(self, pred, Y, filenames, f_numbers):
+                return train_iou
+
+    def instance_seg_process(self, pred, filenames):
         #############################
         ### INSTANCE SEGMENTATION ###
         #############################
@@ -77,13 +138,13 @@ class Instance_Segmentation(Base_Workflow):
 
             # Need to load instance labels, as Y are binary channels used for IoU calculation
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-                del Y
+                del self.Y
                 _Y = np.zeros(w_pred.shape, dtype=w_pred.dtype)
                 for i in range(len(self.original_test_mask_ids)):
                     test_file = os.path.join(self.original_test_mask_path, self.original_test_mask_ids[i])
                     _Y[i] = imread(test_file).squeeze()
             else:
-                test_file = os.path.join(self.original_test_mask_path, self.original_test_mask_ids[f_numbers[0]])
+                test_file = os.path.join(self.original_test_mask_path, self.original_test_mask_ids[self.f_numbers[0]])
                 _Y = imread(test_file).squeeze()
 
             if _Y.ndim == 2: _Y = np.expand_dims(_Y,0)
@@ -230,11 +291,11 @@ class Instance_Segmentation(Base_Workflow):
                         del colored_result
                 self.all_matching_stats_post_processing.append(results)
 
-    def after_merge_patches(self, pred, Y, filenames, f_numbers):
+    def after_merge_patches(self, pred, filenames):
         if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-            self.instance_seg_process(pred, Y, filenames, f_numbers)        
+            self.instance_seg_process(pred, filenames)        
 
-    def after_full_image(self, pred, Y, filenames):
+    def after_full_image(self, pred, filenames):
         pass
 
     def after_all_images(self):
@@ -268,59 +329,59 @@ class Instance_Segmentation(Base_Workflow):
                     print("IoU (post-processing) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                     print(self.stats['inst_stats_vor'][i])
 
-def prepare_instance_data(cfg):
-    print("###########################\n"
-           "#  PREPARE INSTANCE DATA  #\n"
-           "###########################\n")
-    original_test_path, original_test_mask_path = None, None
+    def prepare_instance_data(self):
+        print("###########################")
+        print("#  PREPARE INSTANCE DATA  #")
+        print("###########################")
+        original_test_path, original_test_mask_path = None, None
 
-    # Create selected channels for train data
-    if (cfg.TRAIN.ENABLE or cfg.DATA.TEST.USE_VAL_AS_TEST) and (not os.path.isdir(cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR) or \
-        not os.path.isdir(cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR)):
-        print("You select to create {} channels from given instance labels and no file is detected in {}. "
-                "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.INSTANCE_CHANNELS_DIR' "
-                "path, this process will be done just once!".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
-        create_instance_channels(cfg)
+        # Create selected channels for train data
+        if (self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST) and (not os.path.isdir(self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR) or \
+            not os.path.isdir(self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR)):
+            print("You select to create {} channels from given instance labels and no file is detected in {}. "
+                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.INSTANCE_CHANNELS_DIR' "
+                    "path, this process will be done just once!".format(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                    self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
+            create_instance_channels(self.cfg)
 
-    # Create selected channels for val data
-    if cfg.TRAIN.ENABLE and not cfg.DATA.VAL.FROM_TRAIN and (not os.path.isdir(cfg.DATA.VAL.INSTANCE_CHANNELS_DIR) or \
-        not os.path.isdir(cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR)):
-        print("You select to create {} channels from given instance labels and no file is detected in {}. "
-                "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.INSTANCE_CHANNELS_DIR' "
-                "path, this process will be done just once!".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
-        create_instance_channels(cfg, data_type='val')
+        # Create selected channels for val data
+        if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN and (not os.path.isdir(self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR) or \
+            not os.path.isdir(self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR)):
+            print("You select to create {} channels from given instance labels and no file is detected in {}. "
+                    "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.INSTANCE_CHANNELS_DIR' "
+                    "path, this process will be done just once!".format(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                    self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
+            create_instance_channels(self.cfg, data_type='val')
 
-    # Create selected channels for test data once
-    if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST and (not os.path.isdir(cfg.DATA.TEST.INSTANCE_CHANNELS_DIR) or \
-        (not os.path.isdir(cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR) and cfg.DATA.TEST.LOAD_GT)):
-        print("You select to create {} channels from given instance labels and no file is detected in {}. "
-                "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.INSTANCE_CHANNELS_DIR' "
-                "path, this process will be done just once!".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
-        create_test_instance_channels(cfg)
+        # Create selected channels for test data once
+        if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.USE_VAL_AS_TEST and (not os.path.isdir(self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR) or \
+            (not os.path.isdir(self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR) and self.cfg.DATA.TEST.LOAD_GT)):
+            print("You select to create {} channels from given instance labels and no file is detected in {}. "
+                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.INSTANCE_CHANNELS_DIR' "
+                    "path, this process will be done just once!".format(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                    self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
+            create_test_instance_channels(self.cfg)
 
-    opts = []
-    if cfg.TRAIN.ENABLE:
-        print("DATA.TRAIN.PATH changed from {} to {}".format(cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
-        print("DATA.TRAIN.GT_PATH changed from {} to {}".format(cfg.DATA.TRAIN.GT_PATH, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR))
-        opts.extend(['DATA.TRAIN.PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR,
-                    'DATA.TRAIN.GT_PATH', cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR])
-    if not cfg.DATA.VAL.FROM_TRAIN:
-        print("DATA.VAL.PATH changed from {} to {}".format(cfg.DATA.VAL.PATH, cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
-        print("DATA.VAL.GT_PATH changed from {} to {}".format(cfg.DATA.VAL.GT_PATH, cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR))
-        opts.extend(['DATA.VAL.PATH', cfg.DATA.VAL.INSTANCE_CHANNELS_DIR,
-                     'DATA.VAL.GT_PATH', cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR])
-    if cfg.TEST.ENABLE:
-        print("DATA.TEST.PATH changed from {} to {}".format(cfg.DATA.TEST.PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
-        opts.extend(['DATA.TEST.PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_DIR])
-        original_test_path = cfg.DATA.TEST.PATH
-        if cfg.DATA.TEST.LOAD_GT:
-            print("DATA.TEST.GT_PATH changed from {} to {}".format(cfg.DATA.TEST.GT_PATH, cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
-            opts.extend(['DATA.TEST.GT_PATH', cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR])
-        original_test_mask_path = cfg.DATA.TEST.GT_PATH
-    cfg.merge_from_list(opts)
+        opts = []
+        if self.cfg.TRAIN.ENABLE:
+            print("DATA.TRAIN.PATH changed from {} to {}".format(self.cfg.DATA.TRAIN.PATH, self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
+            print("DATA.TRAIN.GT_PATH changed from {} to {}".format(self.cfg.DATA.TRAIN.GT_PATH, self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR))
+            opts.extend(['DATA.TRAIN.PATH', self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR,
+                        'DATA.TRAIN.GT_PATH', self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR])
+        if not self.cfg.DATA.VAL.FROM_TRAIN:
+            print("DATA.VAL.PATH changed from {} to {}".format(self.cfg.DATA.VAL.PATH, self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
+            print("DATA.VAL.GT_PATH changed from {} to {}".format(self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR))
+            opts.extend(['DATA.VAL.PATH', self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR,
+                        'DATA.VAL.GT_PATH', self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR])
+        if self.cfg.TEST.ENABLE:
+            print("DATA.TEST.PATH changed from {} to {}".format(self.cfg.DATA.TEST.PATH, self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
+            opts.extend(['DATA.TEST.PATH', self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR])
+            original_test_path = self.cfg.DATA.TEST.PATH
+            if self.cfg.DATA.TEST.LOAD_GT:
+                print("DATA.TEST.GT_PATH changed from {} to {}".format(self.cfg.DATA.TEST.GT_PATH, self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
+                opts.extend(['DATA.TEST.GT_PATH', self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR])
+            original_test_mask_path = self.cfg.DATA.TEST.GT_PATH
+        self.cfg.merge_from_list(opts)
 
-    return original_test_path, original_test_mask_path
+        return original_test_path, original_test_mask_path
 

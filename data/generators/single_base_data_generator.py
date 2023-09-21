@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod
-import tensorflow as tf
+import torch
+from torch.utils.data import Dataset
 import numpy as np
 import random
 import os
@@ -12,7 +13,7 @@ from imgaug import augmenters as iaa
 from data.pre_processing import normalize, norm_range01
 from data.generators.augmentors import random_crop_single, random_3D_crop_single, resize_img
 
-class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
+class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
        and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
        transformations.
@@ -323,7 +324,6 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         self.seed = seed
         ia.seed(seed)
         self.indexes = self.o_indexes.copy()
-        self.len = self.__len__() 
         self.random_crop_func = random_3D_crop_single if self.ndim == 3 else random_crop_single
 
     @abstractmethod
@@ -402,10 +402,9 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         if self.da:
             img = self.apply_transform(img)
 
-        if self.ptype == "classification":
-            return img, img_class
-        else: # SSL - MAE
-            return img
+        img = torch.from_numpy(img.copy())
+
+        return img, img_class
 
     def apply_transform(self, image):
         """Transform the input image with one of the selected choices based on a probability.
@@ -452,6 +451,8 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             im[i] = v
         for j in range(0, im.shape[1], grid_width):
             im[:, j] = v
+        
+        return im 
 
     def get_transformed_samples(self, num_examples, random_images=True, save_to_dir=True, out_dir='aug', train=False,
                                 draw_grid=True):
@@ -509,7 +510,7 @@ class SingleBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             # Apply transformations
             if self.da:
                 if not train and draw_grid:
-                    self.draw_grid(img)
+                    img = self.draw_grid(np.copy(img))
 
                 img = self.apply_transform(img)
 

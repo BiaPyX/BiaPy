@@ -1,10 +1,16 @@
 import importlib
 import os
+import torch
 import numpy as np
-from tensorflow.keras.utils import plot_model
+import torch.nn as nn
+# from torchsummary import summary
+from torchinfo import summary # New
 
+from utils.misc import is_main_process
+from engine import prepare_optimizer
+from models.blocks import get_activation
 
-def build_model(cfg, job_identifier, data_norm):
+def build_model(cfg, job_identifier, device):
     """Build selected model
 
        Parameters
@@ -21,8 +27,8 @@ def build_model(cfg, job_identifier, data_norm):
            Selected model.
     """
     # Import the model
-    if cfg.MODEL.ARCHITECTURE in ['fcn32', 'fcn8']:
-        modelname = 'fcn_vgg'
+    if 'efficientnet' in cfg.MODEL.ARCHITECTURE.lower():
+        modelname = 'efficientnet'
     else:
         modelname = str(cfg.MODEL.ARCHITECTURE).lower()
     mdl = importlib.import_module('models.'+modelname)
@@ -32,22 +38,21 @@ def build_model(cfg, job_identifier, data_norm):
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
 
     # Model building
-    if cfg.MODEL.ARCHITECTURE in ['unet', 'resunet', 'seunet', 'attention_unet']:
-        args = dict(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION, feature_maps=cfg.MODEL.FEATURE_MAPS,
-            drop_values=cfg.MODEL.DROPOUT_VALUES, spatial_dropout=cfg.MODEL.SPATIAL_DROPOUT,
-            batch_norm=cfg.MODEL.BATCH_NORMALIZATION, k_init=cfg.MODEL.KERNEL_INIT, k_size=cfg.MODEL.KERNEL_SIZE,
-            upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, last_act=cfg.MODEL.LAST_ACTIVATION)
-        if cfg.MODEL.ARCHITECTURE == 'unet':
+    if modelname in ['unet', 'resunet', 'seunet', 'attention_unet']:
+        args = dict(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION.lower(), feature_maps=cfg.MODEL.FEATURE_MAPS, 
+            drop_values=cfg.MODEL.DROPOUT_VALUES, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, k_size=cfg.MODEL.KERNEL_SIZE,
+            upsample_layer=cfg.MODEL.UPSAMPLE_LAYER)
+        if modelname == 'unet':
             f_name = U_Net
-        elif cfg.MODEL.ARCHITECTURE == 'resunet':
+        elif modelname == 'resunet':
             f_name = ResUNet
-        elif cfg.MODEL.ARCHITECTURE == 'attention_unet':
+        elif modelname == 'attention_unet':
             f_name = Attention_U_Net
-        elif cfg.MODEL.ARCHITECTURE == 'seunet':
+        elif modelname == 'seunet':
             f_name = SE_U_Net
 
         args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None
-        args['n_classes'] = cfg.MODEL.N_CLASSES if cfg.PROBLEM.TYPE != 'DENOISING' else cfg.DATA.PATCH_SIZE[-1]
+        
         if cfg.PROBLEM.NDIM == '3D':
             args['z_down'] = cfg.MODEL.Z_DOWN
 
@@ -55,59 +60,68 @@ def build_model(cfg, job_identifier, data_norm):
             args['upsampling_factor'] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
             args['upsampling_position'] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION
             args['n_classes'] = cfg.DATA.PATCH_SIZE[-1]
+        else:
+            args['n_classes'] = cfg.MODEL.N_CLASSES if cfg.PROBLEM.TYPE != 'DENOISING' else cfg.DATA.PATCH_SIZE[-1]
         model = f_name(**args)
     else:
-        if cfg.MODEL.ARCHITECTURE == 'simple_cnn':
-            model = simple_CNN(image_shape=cfg.DATA.PATCH_SIZE, ndim=ndim, n_classes=cfg.MODEL.N_CLASSES)
-        elif cfg.MODEL.ARCHITECTURE == 'EfficientNetB0':
+        if modelname == 'simple_cnn':
+            model = simple_CNN(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION.lower(), n_classes=cfg.MODEL.N_CLASSES)
+        elif 'efficientnet' in modelname:
             shape = (224, 224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.DATA.PATCH_SIZE[:-1] != (224, 224) else cfg.DATA.PATCH_SIZE
-            model = efficientnetb0(shape, n_classes=cfg.MODEL.N_CLASSES)
-        elif cfg.MODEL.ARCHITECTURE == 'ViT':
-            args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, 
-                transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
-                n_classes=cfg.MODEL.N_CLASSES, dropout=cfg.MODEL.DROPOUT_VALUES[0])
-            model = ViT(**args)
-        elif cfg.MODEL.ARCHITECTURE == 'fcn32':
-            model = FCN32_VGG16(cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
-        elif cfg.MODEL.ARCHITECTURE == 'fcn8':
-            model = FCN8_VGG16(cfg.DATA.PATCH_SIZE, n_classes=cfg.MODEL.N_CLASSES)
-        elif cfg.MODEL.ARCHITECTURE == 'tiramisu':
-            model = FC_DenseNet103(cfg.DATA.PATCH_SIZE, n_filters_first_conv=cfg.MODEL.FEATURE_MAPS[0],
-                n_pool=cfg.MODEL.TIRAMISU_DEPTH, growth_rate=12, n_layers_per_block=5,
-                dropout_p=cfg.MODEL.DROPOUT_VALUES[0])
-        elif cfg.MODEL.ARCHITECTURE == 'mnet':
-            model = MNet((None, None, cfg.DATA.PATCH_SIZE[-1]))
-        elif cfg.MODEL.ARCHITECTURE == 'multiresunet':
-            model = MultiResUnet(None, None, cfg.DATA.PATCH_SIZE[-1])
-        elif cfg.MODEL.ARCHITECTURE == 'unetr':
-            args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, 
-                transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
-                num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS, n_classes=cfg.MODEL.N_CLASSES, decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION, 
-                decoder_kernel_init=cfg.MODEL.UNETR_DEC_KERNEL_INIT, ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT, 
-                batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES[0], last_act=cfg.MODEL.LAST_ACTIVATION)
+            model = efficientnet(cfg.MODEL.ARCHITECTURE.lower(), shape, n_classes=cfg.MODEL.N_CLASSES)
+        elif modelname == 'vit':
+            args = dict(img_size=cfg.DATA.PATCH_SIZE[0], patch_size=cfg.MODEL.VIT_TOKEN_SIZE, in_chans=cfg.DATA.PATCH_SIZE[-1],  
+                ndim=ndim, num_classes=cfg.MODEL.N_CLASSES, norm_layer=partial(nn.LayerNorm, eps=1e-6))
+            if cfg.MODEL.VIT_MODEL == "custom":
+                args2 = dict(embed_dim=cfg.MODEL.VIT_EMBED_DIM, depth=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, 
+                    mlp_ratio=cfg.MODEL.VIT_MLP_RATIO, drop_rate=cfg.MODEL.DROPOUT_VALUES[0])
+                args.update(args2)
+                model = VisionTransformer(**args)
+            else:
+                model = eval(cfg.MODEL.VIT_MODEL)(**args)
+        elif modelname == 'multiresunet':
+            args = dict(input_channels=cfg.DATA.PATCH_SIZE[-1], ndim=ndim, alpha=1.67)
+            args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None
+            if cfg.PROBLEM.NDIM == '3D':
+                args['z_down'] = cfg.MODEL.Z_DOWN
+            if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+                args['upsampling_factor'] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
+                args['upsampling_position'] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION
+                args['n_classes'] = cfg.DATA.PATCH_SIZE[-1]
+            else:
+                args['n_classes'] = cfg.MODEL.N_CLASSES if cfg.PROBLEM.TYPE != 'DENOISING' else cfg.DATA.PATCH_SIZE[-1]
+            model = MultiResUnet(**args)
+        elif modelname == 'unetr':
+            args = dict(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, embed_dim=cfg.MODEL.VIT_EMBED_DIM,
+                depth=cfg.MODEL.VIT_NUM_LAYERS, transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, 
+                mlp_ratio=cfg.MODEL.VIT_MLP_RATIO, num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS, n_classes=cfg.MODEL.N_CLASSES, 
+                decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION, ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT, 
+                batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES[0])
             args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None
             model = UNETR(**args)
-        elif cfg.MODEL.ARCHITECTURE == 'edsr':
-            model = EDSR(num_filters=64, num_of_residual_blocks=16, upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, 
-                num_channels=cfg.DATA.PATCH_SIZE[-1], x_norm=data_norm)
-        elif cfg.MODEL.ARCHITECTURE == 'rcan':
-            model = rcan(data_norm, filters=16, n_sub_block=int(np.log2(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)), num_channels=cfg.DATA.PATCH_SIZE[-1], use_mish=False)
-        elif cfg.MODEL.ARCHITECTURE == 'dfcan':
-            model = DFCAN(cfg.DATA.PATCH_SIZE, data_norm, scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, n_ResGroup = 4, n_RCAB = 4)
-        elif cfg.MODEL.ARCHITECTURE == 'wdsr':
-            model = wdsr_b(x_norm=data_norm, scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, num_filters=32, num_res_blocks=8, res_block_expansion=6, 
-                res_block_scaling=None, num_channels=cfg.DATA.PATCH_SIZE[-1])
-        elif cfg.MODEL.ARCHITECTURE == 'mae':
-            model = MAE(input_shape=cfg.DATA.PATCH_SIZE, patch_size=cfg.MODEL.VIT_TOKEN_SIZE, enc_hidden_size=cfg.MODEL.VIT_HIDDEN_SIZE, 
-                enc_transformer_layers=cfg.MODEL.VIT_NUM_LAYERS, enc_num_heads=cfg.MODEL.VIT_NUM_HEADS, enc_mlp_head_units=cfg.MODEL.VIT_MLP_DIMS, 
-                enc_dropout=cfg.MODEL.DROPOUT_VALUES, dec_hidden_size=128, dec_num_layers=2, dec_num_heads=4, dec_mlp_head_units=4, 
-                dec_dropout=cfg.MODEL.DROPOUT_VALUES)
-
+        elif modelname == 'edsr':
+            model = EDSR(ndim=ndim, num_filters=64, num_of_residual_blocks=16, upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, 
+                num_channels=cfg.DATA.PATCH_SIZE[-1])
+        elif modelname == 'rcan':
+            model = rcan(ndim=ndim, filters=16, n_sub_block=int(np.log2(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)), num_channels=cfg.DATA.PATCH_SIZE[-1])
+        elif modelname == 'dfcan':
+            model = DFCAN(ndim=ndim, input_shape=cfg.DATA.PATCH_SIZE, scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, n_ResGroup = 4, n_RCAB = 4)
+        elif modelname == 'wdsr':
+            model = wdsr(scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, num_filters=32, num_res_blocks=8, res_block_expansion=6, 
+                num_channels=cfg.DATA.PATCH_SIZE[-1])
+        elif modelname == 'mae':
+            model = MaskedAutoencoderViT(
+                img_size=cfg.DATA.PATCH_SIZE[0], patch_size=cfg.MODEL.VIT_TOKEN_SIZE, in_chans=cfg.DATA.PATCH_SIZE[-1],  
+                ndim=ndim, norm_layer=partial(nn.LayerNorm, eps=1e-6), embed_dim=cfg.MODEL.VIT_EMBED_DIM, 
+                depth=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, decoder_embed_dim=512, decoder_depth=8, 
+                decoder_num_heads=16, mlp_ratio=cfg.MODEL.VIT_MLP_RATIO)
+                 
     # Check the network created
-    model.summary(line_length=150)
-    if cfg.MODEL.MAKE_PLOT:
-        os.makedirs(cfg.PATHS.CHARTS, exist_ok=True)
-        model_name = os.path.join(cfg.PATHS.CHARTS, "model_plot_" + job_identifier + ".png")
-        plot_model(model, to_file=model_name, show_shapes=True, show_layer_names=True)
-
+    model.to(device)
+    if cfg.PROBLEM.NDIM == '2D':
+        sample_size = (1,cfg.DATA.PATCH_SIZE[2], cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1])
+    else:
+        sample_size = (1,cfg.DATA.PATCH_SIZE[3], cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1], cfg.DATA.PATCH_SIZE[2])
+    summary(model, input_size=sample_size, col_names=("input_size", "output_size", "num_params"), depth=10,
+        device="cpu" if "cuda" not in device.type else "cuda")
     return model

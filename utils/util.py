@@ -5,7 +5,6 @@ import random
 import matplotlib
 import matplotlib.pyplot as plt
 import scipy.ndimage
-import tensorflow as tf
 import copy
 from PIL import Image
 from tqdm import tqdm
@@ -13,51 +12,9 @@ from skimage.io import imsave, imread
 from skimage import measure
 from collections import namedtuple
 
-from engine.metrics import jaccard_index_numpy, voc_calculation, DET_calculation
-from utils.matching import _safe_divide, precision, recall, accuracy, f1
+from engine.metrics import jaccard_index_numpy, voc_calculation
 
-matplotlib.use('pdf')
-
-def limit_threads(threads_number='1'):
-    """Limits the number of threads for a python process.
-
-       Parameters
-       ----------
-       threads_number : int, optional
-           Number of threads.
-    """
-
-    print("Python process limited to {} thread".format(threads_number))
-
-    os.environ['MKL_NUM_THREADS'] = '1'
-    os.environ['OPENBLAS_NUM_THREADS'] = '1'
-    os.environ["MKL_DYNAMIC"]="FALSE";
-    os.environ["NUMEXPR_NUM_THREADS"]='1';
-    os.environ["VECLIB_MAXIMUM_THREADS"]='1';
-    os.environ["OMP_NUM_THREADS"] = '1';
-
-
-def set_seed(seedValue=42, determinism=False):
-    """Sets the seed on multiple python modules to obtain results as reproducible as possible.
-
-       Parameters
-       ----------
-       seedValue : int, optional
-           Seed value.
-
-       determinism : bool, optional
-           To force determism.
-    """
-
-    random.seed = seedValue
-    np.random.seed(seed=seedValue)
-    tf.random.set_seed(seedValue)
-    os.environ["PYTHONHASHSEED"]=str(seedValue);
-    if determinism:
-        os.environ['TF_DETERMINISTIC_OPS'] = '1'
-
-
-def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
+def create_plots(results, metrics, job_id, chartOutDir):
     """Create loss and main metric plots with the given results.
 
        Parameters
@@ -66,14 +23,14 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
            Record of training loss values and metrics values at successive epochs. History object is returned by Keras
            `fit() <https://keras.io/api/models/model_training_apis/#fit-method>`_ method.
 
+       metrics : List of str
+           Metrics used.
+
        job_id : str
            Jod identifier.
 
        chartOutDir : str
            Path where the charts will be stored into.
-
-       metric : List of str, optional
-           Metrics used.
 
        Examples
        --------
@@ -87,36 +44,38 @@ def create_plots(results, job_id, chartOutDir, metric='jaccard_index'):
     """
 
     print("Creating training plots . . .")
-
     os.makedirs(chartOutDir, exist_ok=True)
 
     # For matplotlib errors in display
     os.environ['QT_QPA_PLATFORM']='offscreen'
 
     # Loss
-    plt.plot(results.history['loss'])
-    plt.plot(results.history['val_loss'])
+    plt.plot(results['loss'])
+    if 'val_loss' in results:
+        plt.plot(results['val_loss'])
     plt.title('Model JOBID=' + job_id + ' loss')
     plt.ylabel('Value')
     plt.xlabel('Epoch')
-    plt.legend(['Train loss', 'Val. loss'], loc='upper left')
+    if 'val_loss' in results:
+        plt.legend(['Train loss', 'Val. loss'], loc='upper left')
+    else:
+        plt.legend(['Train loss'], loc='upper left')
     plt.savefig(os.path.join(chartOutDir, job_id + '_loss.png'))
     plt.clf()
 
     # Metric
-    for i in range(len(metric)):
-        plt.plot(results.history[metric[i]])
-        plt.plot(results.history['val_' + metric[i]])
-        plt.title('Model JOBID=' + job_id + " " + metric[i])
+    for i in range(len(metrics)):
+        plt.plot(results[metrics[i]])
+        plt.plot(results['val_' + metrics[i]])
+        plt.title('Model JOBID=' + job_id + " " + metrics[i])
         plt.ylabel('Value')
         plt.xlabel('Epoch')
-        plt.legend(['Train metric', 'Val. metric'], loc='upper left')
-        plt.savefig(os.path.join(chartOutDir, job_id + '_' + metric[i] +'.png'))
+        plt.legend([f'Train {metrics[i]}', f'Val. {metrics[i]}'], loc='upper left')
+        plt.savefig(os.path.join(chartOutDir, job_id + '_' + metrics[i] +'.png'))
         plt.clf()
 
 
-def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin, n_dig, job_id, job_file, char_dir,
-                    r_val=0.5):
+def threshold_plots(preds_test, Y_test, n_dig, job_id, job_file, char_dir, r_val=0.5):
     """Create a plot with the different metric values binarizing the prediction with different thresholds, from ``0.1``
        to ``0.9``.
 
@@ -127,15 +86,6 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin
 
        Y_test : 4D Numpy array
            Ground truth of the data. E.g. ``(num_of_images, y, x, channels)``.
-
-       det_eval_ge_path : str
-           Path where the ground truth is stored for the DET calculation.
-
-       det_eval_path : str
-           Path where the evaluation of the metric will be done.
-
-       det_bin : str
-           Path to the DET binary.
 
        n_dig : int
            The number of digits used for encoding temporal indices (e.g. ``3``). Used by the DET calculation binary.
@@ -160,18 +110,15 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin
        t_voc : float
            Value of VOC when the threshold is ``r_val``.
 
-       t_det : float
-           Value of DET when the threshold is ``r_val``.
-
        Examples
        --------
        ::
 
-           jac, voc, det = threshold_plots(
+           jac, voc = threshold_plots(
                preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin,
                n_dig, args.job_id, '278_3', char_dir)
 
-       Will generate 3 charts, one per each metric: IoU, VOC and DET. In the x axis represents the 9 different
+       Will generate 3 charts, one per each metric: IoU and VOC. In the x axis represents the 9 different
        thresholds applied, that is: ``0.1, 0.2, 0.3, ..., 0.9``. The y axis is the value of the metric in each chart. For
        instance, the Jaccard/IoU chart will look like this:
 
@@ -186,7 +133,6 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin
 
     t_jac = np.zeros(9)
     t_voc = np.zeros(9)
-    t_det = np.zeros(9)
     objects = []
     r_val_pos = 0
 
@@ -200,15 +146,13 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin
         # Threshold images
         bin_preds_test = (preds_test > t).astype(np.uint8)
 
-        # Metrics (Jaccard + VOC + DET)
+        # Metrics (Jaccard + VOC)
         print("Calculate metrics . . .")
         t_jac[i] = jaccard_index_numpy(Y_test, bin_preds_test)
         t_voc[i] = voc_calculation(Y_test, bin_preds_test, t_jac[i])
-        t_det[i] = DET_calculation(Y_test, bin_preds_test, det_eval_ge_path, det_eval_path, det_bin, n_dig, job_id)
 
         print("t_jac[{}]: {}".format(i, t_jac[i]))
         print("t_voc[{}]: {}".format(i, t_voc[i]))
-        print("t_det[{}]: {}".format(i, t_det[i]))
 
     # For matplotlib errors in display
     os.environ['QT_QPA_PLATFORM']='offscreen'
@@ -236,17 +180,7 @@ def threshold_plots(preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin
     plt.savefig(os.path.join(char_dir, job_file + '_threshold_VOC.png'))
     plt.clf()
 
-    # Plot DET values
-    plt.plot(objects, t_det)
-    plt.title('Model JOBID=' + job_file + ' DET', y=1.08)
-    plt.ylabel('Value')
-    plt.xlabel('Threshold')
-    for k, point in enumerate(zip(objects, t_det)):
-        plt.text(point[0], point[1], '%.3f' % float(t_det[k]))
-    plt.savefig(os.path.join(char_dir, job_file + '_threshold_DET.png'))
-    plt.clf()
-
-    return  t_jac[r_val_pos], t_voc[r_val_pos], t_det[r_val_pos]
+    return  t_jac[r_val_pos], t_voc[r_val_pos]
 
 
 def save_tif(X, data_dir=None, filenames=None, verbose=True):
@@ -301,9 +235,9 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
             else:
                 aux = np.expand_dims(X[i][0].transpose((0,3,1,2)), -1).astype(_dtype)
         try:
-            imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+            imsave(f, aux, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
         except:
-            imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+            imsave(f, aux, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
 
 def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discard=True, verbose=True):

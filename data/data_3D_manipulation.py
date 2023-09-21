@@ -682,7 +682,7 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
         return merged_data
 
 
-def load_3d_data_classification(data_dir, expected_classes=None, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
+def load_3d_data_classification(data_dir, patch_shape, expected_classes=None, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
     val_split=0.1, seed=0, shuffle_val=True):
     """
     Load 3D data to train classification methods.
@@ -691,6 +691,9 @@ def load_3d_data_classification(data_dir, expected_classes=None, cross_val=False
     ----------
     data_dir : str
         Path to the training data.
+
+    patch_shape: Tuple of ints
+        Shape of the patch. E.g. ``(z, y, x, channels)``.
 
     expected_classes : int, optional
         Expected number of classes to be loaded. 
@@ -764,7 +767,7 @@ def load_3d_data_classification(data_dir, expected_classes=None, cross_val=False
             print("Found {} samples".format(len(ids)))
 
         # Loading images 
-        images, _, _, image_ids = load_3d_images_from_dir(f, return_filenames=True)
+        images, _, _, image_ids = load_3d_images_from_dir(f, return_filenames=True, crop_shape=patch_shape)
 
         X_data.append(images)
         Y_data.append((c_num,)*len(ids))

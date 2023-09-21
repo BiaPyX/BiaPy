@@ -1,55 +1,98 @@
-from tensorflow.keras import Input, Model
-from tensorflow.keras.layers import Conv2D, Conv3D, Dropout, BatchNormalization, Flatten, Dense
+import torch
+import torch.nn as nn
+from models.blocks import get_activation
 
+class simple_CNN(nn.Module):
+    def __init__(self, image_shape, activation="ReLU", n_classes=2):
+        """
+        Create simple CNN.
 
-def simple_CNN(image_shape, ndim=2, n_classes=2):
-    """Create simple CNN.
+        Parameters
+        ----------
+        image_shape : 2D tuple
+            Dimensions of the input image.
+            
+        activation : str, optional
+            Activation layer to use in the model.  
 
-       Parameters
-       ----------
-       image_shape : 2D tuple
-           Dimensions of the input image.
+        n_classes: int, optional
+            Number of classes.
 
-       n_classes: int, optional
-           Number of classes.
+        Returns
+        -------
+        model : Torch model
+            Model containing the simple CNN.
+        """
+        super(simple_CNN, self).__init__()
+        self.ndim = 3 if len(image_shape) == 4 else 2 
 
-       Returns
-       -------
-       model : Keras model
-           Model containing the simple CNN.
-    """
+        if self.ndim == 3:
+            conv = nn.Conv3d
+            convtranspose = nn.ConvTranspose3d
+            batchnorm_layer = nn.BatchNorm3d
+            pool = nn.MaxPool3d
+        else:
+            conv = nn.Conv2d
+            convtranspose = nn.ConvTranspose2d
+            batchnorm_layer = nn.BatchNorm2d
+            pool = nn.MaxPool2d
 
-    conv = Conv2D if ndim == 2 else Conv3D
+        firt_block_features = 32
+        second_block_features = 64 
 
-    #dinamic_dim = (None,)*(len(image_shape)-1) + (image_shape[-1],)
-    #inputs = Input(dinamic_dim, name="input")
-    inputs = Input(image_shape, name="input")
+        # Block 1
+        activation = get_activation(activation)
+        self.block1 = nn.Sequential(
+            conv(image_shape[-1], firt_block_features, kernel_size=3, padding='same'),
+            batchnorm_layer(firt_block_features),
+            activation,
+            conv(firt_block_features, firt_block_features, kernel_size=3, padding='same'),
+            batchnorm_layer(firt_block_features),
+            activation,
+            conv(firt_block_features, firt_block_features, kernel_size=5, padding='same'),
+            pool(2),
+            batchnorm_layer(firt_block_features),
+            activation,
+            nn.Dropout(0.4)
+        )
 
-    # Block 1
-    x = conv(32, kernel_size=3, activation='relu', padding='same')(inputs)
-    x = BatchNormalization()(x)
-    x = conv(32, kernel_size=3, activation='relu', padding='same')(x)
-    x = BatchNormalization()(x)
-    x = conv(32, kernel_size=5, strides=2, padding='same', activation='relu')(x)
-    x = BatchNormalization()(x)
-    x = Dropout(0.4)(x)
+        # Block 2
+        self.block2 = nn.Sequential(
+            conv(firt_block_features, second_block_features, kernel_size=3, padding='same'),
+            activation,
+            batchnorm_layer(second_block_features),
+            conv(second_block_features, second_block_features, kernel_size=3, padding='same'),
+            activation,
+            batchnorm_layer(second_block_features),
+            conv(second_block_features, second_block_features, kernel_size=5, padding='same'),
+            pool(2),
+            activation,
+            batchnorm_layer(second_block_features),
+            nn.Dropout(0.4)
+        )
 
-    # Block 2
-    x = conv(64, kernel_size=3, activation='relu', padding='same')(x)
-    x = BatchNormalization()(x)
-    x = conv(64, kernel_size=3, activation='relu', padding='same')(x)
-    x = BatchNormalization()(x)
-    x = conv(64, kernel_size=5, strides=2, padding='same', activation='relu')(x)
-    x = BatchNormalization()(x)
-    x = Dropout(0.4)(x)
+        # Last convolutional block
+        if self.ndim == 2:
+            h = image_shape[0]//4
+            w = image_shape[1]//4
+            f = h*w*second_block_features
+        else:
+            z = image_shape[0]//4
+            h = image_shape[1]//4
+            w = image_shape[2]//4
+            f=z*h*w*second_block_features
 
-    # Last convolutional block
-    x = Flatten() (x)
-    x = Dropout(0.5)(x)
-    outputs = Dense(n_classes, activation='softmax')(x)
+        self.last_block = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(0.5),
+            nn.Linear(f, n_classes), 
+            nn.Softmax(dim=1),
+        )
 
-    model = Model(inputs=[inputs], outputs=[outputs])
-
-    return model
+    def forward(self, x):
+        out = self.block1(x)
+        out = self.block2(out)
+        out = self.last_block(out)
+        return out
 
 

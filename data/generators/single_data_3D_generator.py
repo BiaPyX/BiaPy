@@ -1,4 +1,3 @@
-import tensorflow as tf
 import numpy as np
 import random
 import os
@@ -27,14 +26,14 @@ class Single3DImageDataGenerator(SingleBaseDataGenerator):
     """
     def __init__(self, zflip=False, **kwars):
         super().__init__(**kwars)
-        self.z_size = self.X.shape[1]
+        #self.z_size = self.X.shape[1]
         self.zflip = zflip
 
     def ensure_shape(self, img):
         # Shape adjustment
-        if img.ndim == 3: 
+        if img.ndim == 3:
             img = np.expand_dims(img, -1)
-        else:                    
+        else:
             min_val = min(img.shape)
             channel_pos = img.shape.index(min_val)
             if channel_pos != 3 and img.shape[channel_pos] <= 4:
@@ -43,7 +42,7 @@ class Single3DImageDataGenerator(SingleBaseDataGenerator):
         return img
 
     def apply_transform(self, image):
-        # Transpose them so we can merge the z and c channels easily. 
+        # Transpose them so we can merge the z and c channels easily.
         # z, y, x, c --> x, y, z, c
         image = image.transpose((2,1,0,3))
 
@@ -60,8 +59,8 @@ class Single3DImageDataGenerator(SingleBaseDataGenerator):
         return image.transpose((2,1,0,3))
 
     def save_aug_samples(self, img, orig_images, i, pos, out_dir, draw_grid):
-        # Undo X normalization 
-        if self.X_norm['type'] == 'div' and 'div' in self.X_norm: 
+        # Undo X normalization
+        if self.X_norm['type'] == 'div' and 'div' in self.X_norm:
             orig_images['o_x'] = orig_images['o_x']*255
             img = img*255
         elif self.X_norm['type'] == 'custom':

@@ -1,10 +1,10 @@
 import math
-import tensorflow as tf
-from tensorflow.keras import layers
-from tensorflow.keras import Model
-from tensorflow.keras.layers import Dropout, concatenate, BatchNormalization, Activation, Reshape
+import torch
+import torch.nn as nn
+from timm.models.vision_transformer import Block
 
-from .vit import ViT 
+from models.blocks import DoubleConvBlock, ConvBlock, get_activation
+from models.tr_layers import PatchEmbed
 
 '''
 UNETR BLOCKS
@@ -13,297 +13,221 @@ To make easier to read, same blocks described in the UNETR architecture are defi
     `UNETR paper <https://openaccess.thecvf.com/content/WACV2022/papers/Hatamizadeh_UNETR_Transformers_for_3D_Medical_Image_Segmentation_WACV_2022_paper.pdf>`__.
 '''
 
-def basic_yellow_block(x, filters, conv, activation='relu', kernel_initializer='glorot_uniform', batch_norm=True, 
-    dropout=0.0):
-    """
-    This function takes in an input tensor, applies a convolutional layer with the specified number of
-    filters, applies batch normalization, applies an activation function, and applies dropout if
-    specified.
-    
-    Parameters
-    ----------
-    x : Tensor
-        Input tensor.
+class UNETR(nn.Module):
+    def __init__(self, input_shape, patch_size, embed_dim, depth, transformer_layers, num_heads, mlp_ratio=4., num_filters = 16, 
+        norm_layer=nn.LayerNorm, n_classes = 1, decoder_activation = 'relu', ViT_hidd_mult = 3, batch_norm = True, 
+        dropout = 0.0, output_channels="BC"):
+        """
+        UNETR architecture. It combines a ViT with U-Net, replaces the convolutional encoder 
+        with the ViT and adapt each skip connection signal to their layer's spatial dimensionality. 
 
-    filters : int
-        Number of filters in the convolutional layer.
+        Note: Unlike the original UNETR, the sigmoid activation function is used in the last convolutional layer.
 
-    conv : Tensorflow's convolution layer
-        Convolution to be made (2D or 3D).
+        `UNETR paper <https://openaccess.thecvf.com/content/WACV2022/papers/Hatamizadeh_UNETR_Transformers_for_3D_Medical_Image_Segmentation_WACV_2022_paper.pdf>`__.
 
-    activation : str, optional 
-        Activation function to use.
+        Parameters
+        ----------
+        input_shape : 3D/4D tuple
+            Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+            
+        patch_size : int
+            Size of the patches that are extracted from the input image. As an example, to use ``16x16`` 
+            patches, set ``patch_size = 16``.
 
-    kernel_initializer : int, optional
-        Initializer for the kernel weights matrix. 
+        embed_dim : int
+            Dimension of the embedding space.
 
-    batch_norm : bool, optional
-        Whether to use batch normalization or not.
+        depth : int
+            Number of layer of ViT backbone. 
 
-    dropout : float, optional
-        Dropout rate. 
-    
-    Returns
-    -------
-    x : Tensor
-        Last layer in the block.
-    """
-    x = conv(filters, 3, padding = 'same', kernel_initializer = kernel_initializer)(x)
-    x = BatchNormalization() (x) if batch_norm else x
-    x = Activation(activation) (x)
-    x = Dropout(dropout)(x) if dropout > 0.0 else x
-    return x
+        transformer_layers : int
+            Number of transformer encoder layers.
 
-def up_green_block(x, filters, convtranspose, name=None):
-    """
-    This function takes in a tensor and a number of filters and returns a tensor that is the result of
-    applying a 2x2 transpose convolution with the given number of filters.
-    
-    Parameters
-    ----------
-    x : Tensor
-        Input tensor.
+        num_heads : int
+            Number of heads in the multi-head attention layer.
 
-    filters : int
-        Number of filters for the transpose convolutional layer.
+        mlp_ratio : float, optional
+            Ratio to multiply ``embed_dim`` to obtain the dense layers of the final classifier. 
 
-    convtranspose : Tensorflow's tranpose convolution layer
-        Convolution to be made (2D or 3D).
+        num_filters: int, optional
+            Number of filters in the first UNETR's layer of the decoder. In each layer the previous number of filters is 
+            doubled.
 
-    name : str, optional
-        Name of the layer.
-    
-    Returns
-    -------
-      The output of the convolution layer.
-    """
-    x = convtranspose(filters, 2, strides=2, padding='same', name=name) (x)
-    return x
+        norm_layer : Torch layer, optional
+            Nomarlization layer to use in ViT backbone.
 
-def mid_blue_block(x, filters, conv, convtranspose, activation='relu', kernel_initializer='glorot_uniform', batch_norm=True, 
-    dropout=0.0):
-    """
-    This function takes in an input tensor and returns an output tensor after applying a transpose convolution 
-    which upscale x2 the spatial size, and applies a convolutional layer.
-    
-    Parameters
-    ----------
-    x : Tensor
-        Input tensor.
+        n_classes : int, optional
+            Number of classes to predict. Is the number of channels in the output tensor.
 
-    filters : int
-        Number of filters in the convolutional layers
+        decoder_activation : str, optional
+            Activation function for the decoder.
 
-    conv : Tensorflow's convolution layer
-        Convolution to be made (2D or 3D).
+        ViT_hidd_mult : int, optional
+            Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted.
+            E.g. if we have ``12`` transformer encoder layers, and we set ``ViT_hidd_mult = 3``, we are going to take
+            ``[1*ViT_hidd_mult, 2*ViT_hidd_mult, 3*ViT_hidd_mult]`` -> ``[Z3, Z6, Z9]`` encoder's signals. 
 
-    convtranspose : Tensorflow's tranpose convolution layer
-        Convolution to be made (2D or 3D).
+        batch_norm : bool, optional
+            Whether to use batch normalization or not.
 
-    activation: str, optional
-        Activation function to use. 
+        dropout : bool, optional
+            Dropout rate for the decoder (can be a list of dropout rates for each layer).
 
-    kernel_initializer: str, optional
-        Initializer for the convolutional kernel weights matrix.
+        output_channels : str, optional
+            Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
+            ``BDv2``, ``Dv2`` and ``BCM``.
 
-    batch_norm : bool, optional
-        Whether to use batch normalization or not.
-
-    dropout : float, optional
-        Dropout rate.
-    
-    Returns
-    -------
-    x : Tensor
-        The output of the last layer of the block.
-    """
-    x = up_green_block(x, filters, convtranspose)
-    x = basic_yellow_block(x, filters, conv, activation=activation, kernel_initializer=kernel_initializer, 
-        batch_norm=batch_norm, dropout=dropout)
-    return x
-    
-def two_yellow(x, filters, conv, activation='relu', kernel_initializer='glorot_uniform', batch_norm=True, 
-    dropout=0.0):
-    """
-    This function takes in an input tensor, and returns an output tensor that is the result of
-    applying two basic yellow blocks to the input tensor.
-    
-    Parameters
-    ----------
-    x : Tensor
-        Input tensor.
-
-    filters : int, optional
-        Number of filters in the convolutional layer.
-
-    conv : Tensorflow's convolution layer
-        Convolution to be made (2D or 3D).
-
-    activation : str, optional
-        Activation function to use.
-
-    kernel_initializer : str, optionañ
-        Initializer for the kernel weights matrix.
-
-    batch_norm : bool, optional
-        Whether to use batch normalization or not.
-
-    dropout: bool, optional
-        The dropout rate.
-    
-    Returns
-    -------
-    x : Tensor
-        The output of the second basic_yellow_block.
-    """
-    x = basic_yellow_block(x, filters, conv, activation=activation, kernel_initializer=kernel_initializer, 
-        batch_norm=batch_norm, dropout=dropout)
-    x = basic_yellow_block(x, filters, conv, activation=activation, kernel_initializer=kernel_initializer, 
-        batch_norm=batch_norm, dropout=0.0)
-    return x
-
-
-def UNETR(input_shape, patch_size, hidden_size, transformer_layers, num_heads, mlp_head_units, num_filters = 16, n_classes = 1, 
-          decoder_activation = 'relu', decoder_kernel_init = 'he_normal', ViT_hidd_mult = 3, batch_norm = True, dropout = 0.0, 
-          last_act='sigmoid', output_channels="BC"):
-    """
-    UNETR architecture. It combines a ViT with U-Net, replaces the convolutional encoder 
-    with the ViT and adapt each skip connection signal to their layer's spatial dimensionality. 
-
-    Note: Unlike the original UNETR, the sigmoid activation function is used in the last convolutional layer.
-
-   `UNETR paper <https://openaccess.thecvf.com/content/WACV2022/papers/Hatamizadeh_UNETR_Transformers_for_3D_Medical_Image_Segmentation_WACV_2022_paper.pdf>`__.
-
-    Parameters
-    ----------
-    input_shape : 3D/4D tuple
-        Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+        Returns
+        -------
+        model : Torch model
+            UNETR model.
+        """
+        super().__init__()
         
-    patch_size : int
-        Size of the patches that are extracted from the input image. As an example, to use ``16x16`` 
-        patches, set ``patch_size = 16``.
-
-    hidden_size : int
-        Dimension of the embedding space.
-
-    transformer_layers : int
-        Number of transformer encoder layers.
-
-    num_heads : int
-        Number of heads in the multi-head attention layer.
-
-    mlp_head_units : 2D tuple
-        Size of the dense layers of the final classifier. 
-
-    num_filters: int, optional
-        Number of filters in the first UNETR's layer of the decoder. In each layer the previous number of filters is 
-        doubled.
-
-    n_classes : int, optional
-        Number of classes to predict. Is the number of channels in the output tensor.
-
-    decoder_activation : str, optional
-        Activation function for the decoder.
-
-    decoder_kernel_init : str, optional
-        Initializer for the kernel weights matrix of the convolutional layers in the decoder.
-
-    ViT_hidd_mult : int, optional
-        Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted.
-        E.g. if we have ``12`` transformer encoder layers, and we set ``ViT_hidd_mult = 3``, we are going to take
-        ``[1*ViT_hidd_mult, 2*ViT_hidd_mult, 3*ViT_hidd_mult]`` -> ``[Z3, Z6, Z9]`` encoder's signals. 
-
-    batch_norm : bool, optional
-        Whether to use batch normalization or not.
-
-    dropout : bool, optional
-        Dropout rate for the decoder (can be a list of dropout rates for each layer).
-    
-    last_act : str, optional
-        Name of the last activation layer.
-
-    output_channels : str, optional
-        Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
-        ``BDv2``, ``Dv2`` and ``BCM``.
-
-    Returns
-    -------
-    model : Keras model
-        Model containing the UNETR .
-    """
-    
-    global conv, convtranspose, maxpooling, zeropadding, upsampling
-    if len(input_shape) == 4:
-        ndim = 3
-        from tensorflow.keras.layers import Conv3D, Conv3DTranspose
-        conv = Conv3D
-        convtranspose = Conv3DTranspose
-    else:
-        ndim = 2
-        from tensorflow.keras.layers import Conv2D, Conv2DTranspose
-        conv = Conv2D
-        convtranspose = Conv2DTranspose
-
-    vit_input, hidden_states_out, encoded_patches = ViT(input_shape, patch_size, hidden_size, transformer_layers, num_heads, mlp_head_units, 
-        dropout=dropout, include_top=False, include_class_token=False, use_as_backbone=True)
-
-    # UNETR Part (bottom_up, from the bottle-neck, to the output)
-    total_upscale_factor = int(math.log2(patch_size))
-    # make a list of dropout values if needed
-    if type( dropout ) is float: 
-        dropout = [dropout,]*total_upscale_factor
-    
-    # bottleneck
-    if ndim == 2:
-        z = Reshape([ input_shape[0]//patch_size, input_shape[1]//patch_size, hidden_size ])(encoded_patches) 
-    else:
-        z = Reshape([ input_shape[0]//patch_size, input_shape[1]//patch_size, input_shape[2]//patch_size, hidden_size ])(encoded_patches) 
-    x = up_green_block(z, num_filters * (2**(total_upscale_factor-1)), convtranspose)
-
-    for layer in reversed(range(1, total_upscale_factor)):
-        # skips (with blue blocks)
-        if ndim == 2:
-            z = Reshape([ input_shape[0]//patch_size, input_shape[1]//patch_size, hidden_size ])( hidden_states_out[ (ViT_hidd_mult * layer) - 1 ] )
+        self.input_shape = input_shape
+        self.embed_dim = embed_dim
+        self.patch_size = patch_size
+        self.ViT_hidd_mult = ViT_hidd_mult
+        self.ndim = 3 if len(input_shape) == 4 else 2 
+        if self.ndim == 3:
+            conv = nn.Conv3d
+            convtranspose = nn.ConvTranspose3d
+            batchnorm_layer = nn.BatchNorm3d if batch_norm else None
+            self.reshape_shape = (
+                self.embed_dim,
+                self.input_shape[0]//self.patch_size, 
+                self.input_shape[1]//self.patch_size, 
+                self.input_shape[2]//self.patch_size, 
+            )          
         else:
-            z = Reshape([ input_shape[0]//patch_size, input_shape[1]//patch_size, input_shape[2]//patch_size, \
-                hidden_size ])( hidden_states_out[ (ViT_hidd_mult * layer) - 1 ] )
-        for _ in range(total_upscale_factor - layer):
-            z = mid_blue_block(z, num_filters * (2**layer), conv, convtranspose, activation=decoder_activation, kernel_initializer=decoder_kernel_init, 
-                batch_norm=batch_norm, dropout=dropout[layer])
-        # decoder
-        x = concatenate([x, z])
-        x = two_yellow(x, num_filters * (2**(layer)), conv, activation=decoder_activation, kernel_initializer=decoder_kernel_init, 
-            batch_norm=batch_norm, dropout=dropout[layer])
-        x = up_green_block(x, num_filters * (2**(layer-1)), convtranspose)
+            conv = nn.Conv2d
+            convtranspose = nn.ConvTranspose2d
+            batchnorm_layer = nn.BatchNorm2d if batch_norm else None
+            self.reshape_shape = (
+                self.embed_dim,
+                self.input_shape[0]//self.patch_size, 
+                self.input_shape[1]//self.patch_size, 
+                self.input_shape[2]//self.patch_size, 
+            )    
 
-    # first skip connection (out of transformer)
-    first_skip = two_yellow(vit_input, num_filters, conv, activation=decoder_activation, kernel_initializer=decoder_kernel_init, 
-        batch_norm=batch_norm, dropout=dropout[0]) 
-    x = concatenate([first_skip, x])
+        # ViT part
+        self.patch_embed = PatchEmbed(img_size=input_shape[0], patch_size=patch_size, in_chans=input_shape[-1],
+            ndim=self.ndim, embed_dim=embed_dim)
+        num_patches = self.patch_embed.num_patches
 
-    # UNETR output 
-    x = two_yellow(x, num_filters, conv, activation=decoder_activation, kernel_initializer=decoder_kernel_init, batch_norm=batch_norm, 
-        dropout=dropout[0] )
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim), requires_grad=False)  # fixed sin-cos embedding
 
-    # Instance segmentation
-    if output_channels is not None:
-        if output_channels == "Dv2":
-            outputs = conv(1, 2, activation="linear", padding='same') (x)
-        elif output_channels in ["BC", "BP"]:
-            outputs = conv(2, 2, activation="sigmoid", padding='same') (x)
-        elif output_channels == "BCM":
-            outputs = conv(3, 2, activation="sigmoid", padding='same') (x)
-        elif output_channels in ["BDv2", "BD"]:
-            seg = conv(1, 2, activation="sigmoid", padding='same') (x)
-            dis = conv(1, 2, activation="linear", padding='same') (x)
-            outputs = Concatenate()([seg, dis])
-        elif output_channels in ["BCD", "BCDv2"]:
-            seg = conv(2, 2, activation="sigmoid", padding='same') (x)
-            dis = conv(1, 2, activation="linear", padding='same') (x)
-            outputs = Concatenate()([seg, dis])
-    # Other
-    else:
-        outputs = conv(n_classes, 1, activation=last_act) (x)
+        self.blocks = nn.ModuleList([
+            Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
+            for i in range(depth)])
+        self.norm = norm_layer(embed_dim)
 
-    model = Model(inputs=vit_input, outputs=outputs)
-    return model
+        # UNETR Part (bottom_up, from the bottle-neck, to the output)
+        self.total_upscale_factor = int(math.log2(patch_size))
+        # make a list of dropout values if needed
+        if type( dropout ) is float: 
+            dropout = [dropout,]*self.total_upscale_factor
+        
+        self.bottleneck = convtranspose(embed_dim, num_filters * (2**(self.total_upscale_factor-1)), kernel_size=2, stride=2, bias=False)
+
+        self.mid_blue_block = nn.ModuleList()
+        self.two_yellow_layers = nn.ModuleList()
+        self.up_green_layers = nn.ModuleList()
+        for layer in reversed(range(1, self.total_upscale_factor)):
+            block = [] 
+            in_size = embed_dim
+            for _ in range(self.total_upscale_factor - layer):
+                block.append(
+                    convtranspose(in_size, num_filters * (2**layer), kernel_size=2, stride=2, bias=False)
+                )
+                block.append(
+                    ConvBlock(conv, in_size=num_filters * (2**layer), out_size=num_filters * (2**layer), k_size=3, 
+                        act=decoder_activation, batch_norm=batchnorm_layer, dropout=dropout[layer])
+                )
+                in_size = num_filters * (2**layer)
+            self.mid_blue_block.append(nn.Sequential(*block))
+            self.two_yellow_layers.append(
+                DoubleConvBlock(conv, in_size*2, in_size, k_size=3, act=decoder_activation, batch_norm=batchnorm_layer,
+                    dropout=dropout[layer]))
+            self.up_green_layers.append(
+                convtranspose(in_size, num_filters * (2**(layer-1)), kernel_size=2, stride=2, bias=False))
+        
+        # Last two yellow block for the first skip connection 
+        self.two_yellow_layers.append(
+            DoubleConvBlock(conv, input_shape[-1], num_filters, k_size=3, act=decoder_activation, batch_norm=batchnorm_layer,
+                dropout=dropout[layer]))
+
+        # Last convolutions 
+        self.two_yellow_layers.append(
+            DoubleConvBlock(conv, num_filters*2, num_filters, k_size=3, act=decoder_activation, batch_norm=batchnorm_layer,
+                dropout=dropout[layer]))
+
+        # Instance segmentation
+        if output_channels is not None:
+            if output_channels == "Dv2":
+                self.last_block = conv(num_filters, 1, kernel_size=1, padding='same')
+            elif output_channels in ["BC", "BP"]:
+                self.last_block = conv(num_filters, 2, kernel_size=1, padding='same')
+            elif output_channels in ["BDv2", "BD"]:
+                self.last_block = conv(num_filters, 2, kernel_size=1, padding='same')
+            elif output_channels in ["BCM", "BCD", "BCDv2"]:
+                self.last_block = conv(num_filters, 3, kernel_size=1, padding='same')
+        # Other
+        else:
+            self.last_block = conv(num_filters, n_classes, kernel_size=1, padding='same')
+
+        self.apply(self._init_weights)
+        
+    def proj_feat(self, x):
+        x = x.view((x.size(0),) + self.reshape_shape)
+        return x
+
+    def forward(self, input):
+        # Vit part
+        B = input.shape[0]  
+        x = self.patch_embed(input)
+
+        cls_tokens = self.cls_token.expand(B, -1, -1) 
+        x = torch.cat((cls_tokens, x), dim=1)
+        x = x + self.pos_embed
+
+        skip_connection_index = [3, 6, 9, 12]
+        skip_connections = []
+        for i, blk in enumerate(self.blocks):
+            x = blk(x)    
+            if (i+1) in skip_connection_index:
+                skip_connections.append(x[:, 1:, :])
+
+        # CNN Decoder 
+        x = self.bottleneck(self.proj_feat(skip_connections[-1]))
+
+        for i in range(self.total_upscale_factor-1):
+            z = self.proj_feat(skip_connections[i])
+            z = self.mid_blue_block[i](z)
+            x = torch.cat([x, z], dim=1)
+            x = self.two_yellow_layers[i](x)
+            x = self.up_green_layers[i](x)
+            
+        # first skip connection (out of transformer)
+        first_skip = self.two_yellow_layers[-2](input)
+        x = torch.cat([first_skip, x], dim=1)
+        
+        # UNETR output 
+        x = self.two_yellow_layers[-1](x)
+        x = self.last_block(x)
+        return x
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.Linear):
+            nn.init.xavier_uniform_(m.weight)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+

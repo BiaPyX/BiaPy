@@ -1,7 +1,8 @@
 import random
+import torch
+from torch.utils.data import Dataset
 import os
 import numpy as np
-import tensorflow as tf
 from skimage.io import imread
 from PIL import Image
 from PIL.TiffTags import TAGS
@@ -9,7 +10,7 @@ from PIL.TiffTags import TAGS
 from data.pre_processing import normalize, norm_range01
 
 
-class test_pair_data_generator(tf.keras.utils.Sequence):
+class test_pair_data_generator(Dataset):
     """
     Image data generator without data augmentation. Used only for test data.
 

@@ -846,8 +846,8 @@ def undo_norm_range01(x, xnorm):
 def reduce_dtype(x, x_min, x_max, out_min=0, out_max=1, out_type=np.float32):
     return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)
 
-def normalize(data, means, stds):
-    return (data - means) / stds
+def normalize(data, means, stds, out_type=np.float32):
+    return ((data - means) / stds).astype(out_type)
 
-def denormalize(data, means, stds):
-    return (data * stds) + means
+def denormalize(data, means, stds, out_type=np.float32):
+    return ((data * stds) + means).astype(out_type)

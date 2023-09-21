@@ -1,7 +1,8 @@
 import random
 import os
+import torch
 import numpy as np
-import tensorflow as tf
+from torch.utils.data import Dataset
 from skimage.io import imread
 from PIL import Image
 from PIL.TiffTags import TAGS
@@ -10,7 +11,7 @@ from data.pre_processing import normalize, norm_range01
 from data.generators.augmentors import center_crop_single, resize_img
 
 
-class test_single_data_generator(tf.keras.utils.Sequence):
+class test_single_data_generator(Dataset):
     """Image data generator without data augmentation. Used only for test data.
 
        Parameters
@@ -115,8 +116,6 @@ class test_single_data_generator(tf.keras.utils.Sequence):
             del img
         else:
             self.X_norm.update(xnorm)
-
-        self.on_epoch_end()
 
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""

@@ -1,243 +1,331 @@
-"""
-Code fully extracted from `MultiResUNet <https://github.com/nibtehaz/MultiResUNet>`_.
-"""
+# Adapted from https://github.com/nibtehaz/MultiResUNet
 
-from tensorflow.keras.layers import (Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, BatchNormalization, 
-                                     Activation, add)
-from tensorflow.keras.models import Model
+import torch
+import torch.nn as nn
 
+class Conv_batchnorm(torch.nn.Module):
+    def __init__(self, conv, batchnorm, num_in_filters, num_out_filters, kernel_size, stride = 1, activation = 'relu'):
+        """
+        Convolutional layers
 
-def conv2d_bn(x, filters, num_row, num_col, padding='same', strides=(1, 1), activation='relu', name=None):
-    """2D Convolutional layers.
+        Parameters
+        ----------
+        conv : Torch conv layer
+            Convolutional layer to use.
+
+        batchnorm : Torch batch normalization layer
+            Convolutional layer to use.
+
+        num_in_filters : int
+            Number of input filters.
+
+        num_out_filters : int
+            Number of output filters.
+
+        kernel_size : Tuple of ints
+            Size of the convolving kernel.
+
+        stride : Tuple of ints, optional
+            Stride of the convolution.
+
+        activation : str, optional
+            Activation function.
+        """
+        super().__init__()
+        self.activation = activation
+        self.conv1 = conv(in_channels=num_in_filters, out_channels=num_out_filters, kernel_size=kernel_size, stride=stride, padding = 'same')
+        self.batchnorm = batchnorm(num_out_filters)
     
-       Parameters
-       ----------
-       x : Keras layer
-           Input layer.
+    def forward(self,x):
+        x = self.conv1(x)
+        x = self.batchnorm(x)
+        
+        if self.activation == 'relu':
+            return torch.nn.functional.relu(x)
+        else:
+            return x
 
-       filters : int
-           Number of filters.
+class Multiresblock(torch.nn.Module):
+    def __init__(self, conv, batchnorm, num_in_channels, num_filters, alpha=1.67):
+        """
+        MultiRes Block.
 
-       num_row : int
-           Number of rows in filters.
+        Parameters
+        ----------
+        conv : Torch conv layer
+            Convolutional layer to use.
 
-       num_col : int
-           Number of columns in filters.
+        batchnorm : Torch batch normalization layer
+            Convolutional layer to use.
 
-       padding : str, optional
-           Mode of padding. 
+        num_in_channels : int
+            Number of channels coming into multires block
 
-       strides : tuple, optional
-           Stride of convolution operation.
+        num_filters : int
+            Number of output filters.
 
-       activation : str, optional
-           Activation function.
-  
-       name : str, optional
-           Name of the layer.
+        alpha : str, optional
+            Alpha hyperparameter.
+        """
+        super().__init__()
+        self.alpha = alpha
+        self.W = num_filters * alpha
+        
+        filt_cnt_3x3 = int(self.W*0.167)
+        filt_cnt_5x5 = int(self.W*0.333)
+        filt_cnt_7x7 = int(self.W*0.5)
+        num_out_filters = filt_cnt_3x3 + filt_cnt_5x5 + filt_cnt_7x7
+        
+        self.shortcut = Conv_batchnorm(conv, batchnorm, num_in_channels, num_out_filters, kernel_size = 1, activation='None')
+
+        self.conv_3x3 = Conv_batchnorm(conv, batchnorm,  num_in_channels, filt_cnt_3x3, kernel_size = 3, activation='relu')
+
+        self.conv_5x5 = Conv_batchnorm(conv, batchnorm,  filt_cnt_3x3, filt_cnt_5x5, kernel_size = 3, activation='relu')
+        
+        self.conv_7x7 = Conv_batchnorm(conv, batchnorm,  filt_cnt_5x5, filt_cnt_7x7, kernel_size = 3, activation='relu')
+
+        self.batch_norm1 = batchnorm(num_out_filters)
+        self.batch_norm2 = batchnorm(num_out_filters)
+
+    def forward(self,x):
+        shrtct = self.shortcut(x)
+        
+        a = self.conv_3x3(x) 
+        b = self.conv_5x5(a)
+        c = self.conv_7x7(b)
+
+        x = torch.cat([a,b,c],axis=1)
+        x = self.batch_norm1(x)
+
+        x = x + shrtct
+        x = self.batch_norm2(x)
+        x = torch.nn.functional.relu(x)
     
-       Returns
-       -------
-       x : Keras layer
-           Output layer.
-    """
-
-    x = Conv2D(filters, (num_row, num_col), strides=strides, padding=padding, use_bias=False)(x)
-    x = BatchNormalization(axis=3, scale=False)(x)
-
-    if(activation == None):
         return x
 
-    x = Activation(activation, name=name)(x)
+class Respath(torch.nn.Module):
+    def __init__(self, conv, batchnorm, num_in_filters, num_out_filters, respath_length):
+        """
+        ResPath.
+        
+        Parameters
+        ----------
+        conv : Torch conv layer
+            Convolutional layer to use.
 
-    return x
+        batchnorm : Torch batch normalization layer
+            Convolutional layer to use.
 
+        num_in_filters : int
+            Number of output filters.
 
-def trans_conv2d_bn(x, filters, num_row, num_col, padding='same', strides=(2, 2), name=None):
-    """2D Transposed Convolutional layers.
+        num_out_filters : int
+            Number of filters going out the respath.
+
+        respath_length : str, optional
+            length of ResPath.
+        """
+        super().__init__()
+
+        self.respath_length = respath_length
+        self.shortcuts = torch.nn.ModuleList([])
+        self.convs = torch.nn.ModuleList([])
+        self.bns = torch.nn.ModuleList([])
+
+        for i in range(self.respath_length):
+            if(i==0):
+                self.shortcuts.append(Conv_batchnorm(conv, batchnorm, num_in_filters, num_out_filters, kernel_size = 1, activation='None'))
+                self.convs.append(Conv_batchnorm(conv, batchnorm, num_in_filters, num_out_filters, kernel_size = 3,activation='relu'))
+            else:
+                self.shortcuts.append(Conv_batchnorm(conv, batchnorm, num_out_filters, num_out_filters, kernel_size = 1, activation='None'))
+                self.convs.append(Conv_batchnorm(conv, batchnorm, num_out_filters, num_out_filters, kernel_size = 3, activation='relu'))
+
+            self.bns.append(batchnorm(num_out_filters))
+        
     
-       Parameters
-       ----------
-       x : keras layer
-           Input layer.
+    def forward(self,x):
+        for i in range(self.respath_length):
 
-       filters : int                                                            
-           Number of filters.                                                   
-                                                                                
-       num_row : int                                                            
-           Number of rows in filters.                                           
-                                                                                
-       num_col : int                                                            
-           Number of columns in filters.                                        
-                                                                                
-       padding : str, optional                                                  
-           Mode of padding.                                                     
-                                                                                
-       strides : tuple, optional                                                
-           Stride of convolution operation.                                     
-                                                                                
-       name : str, optional                                                     
-           Name of the layer.
+            shortcut = self.shortcuts[i](x)
+
+            x = self.convs[i](x)
+            x = self.bns[i](x)
+            x = torch.nn.functional.relu(x)
+
+            x = x + shortcut
+            x = self.bns[i](x)
+            x = torch.nn.functional.relu(x)
+
+        return x
+
+class MultiResUnet(torch.nn.Module):
+    def __init__(self, ndim, input_channels, alpha=1.67, n_classes=1, z_down=[2,2,2,2], output_channels="BC", 
+        upsampling_factor=1, upsampling_position="pre"):
+        """
+        MultiResUNet
+        
+        Parameters
+        ----------
+        ndim : int
+            Number of dimensions of the input data.
+
+        input_channels: int
+            Number of channels in image.
+
+        alpha: float, optional
+            Alpha hyperparameter (default: 1.67)
+
+        n_classes: int, optional
+            Number of segmentation classes.
+
+        z_down : List of ints, optional
+            Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
+
+        output_channels : str, optional
+            Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
+            ``BDv2``, ``Dv2`` and ``BCM``.
+
+        upsampling_factor : int, optional
+            Factor of upsampling for super resolution workflow. 
+
+        upsampling_position : str, optional
+            Whether the upsampling is going to be made previously (``pre`` option) to the model 
+            or after the model (``post`` option).
+        """
+        super().__init__()
+        self.ndim = ndim
+        self.alpha = alpha
+        self.n_classes = 1 if n_classes <= 2 else n_classes
+
+        if self.ndim == 3:
+            conv = nn.Conv3d
+            convtranspose = nn.ConvTranspose3d
+            batchnorm_layer = nn.BatchNorm3d 
+            pooling = nn.MaxPool3d
+        else:
+            conv = nn.Conv2d
+            convtranspose = nn.ConvTranspose2d
+            batchnorm_layer = nn.BatchNorm2d 
+            pooling = nn.MaxPool2d
+
+        # Super-resolution   
+        self.pre_upsampling = None
+        if upsampling_factor > 1 and upsampling_position == "pre":
+            mpool = (1, 2, 2) if self.ndim == 3 else (2, 2)
+            self.pre_upsampling = convtranspose(input_channels, input_channels, kernel_size=mpool, stride=mpool)
+
+        # Encoder Path
+        self.multiresblock1 = Multiresblock(conv, batchnorm_layer, input_channels,32)
+        self.in_filters1 = int(32*self.alpha*0.167)+int(32*self.alpha*0.333)+int(32*self.alpha* 0.5)
+        mpool = (z_down[0], 2, 2) if self.ndim == 3 else (2, 2)
+        self.pool1 = pooling(mpool)
+        self.respath1 = Respath(conv, batchnorm_layer, self.in_filters1,32,respath_length=4)
+
+        self.multiresblock2 = Multiresblock(conv, batchnorm_layer, self.in_filters1,32*2)
+        self.in_filters2 = int(32*2*self.alpha*0.167)+int(32*2*self.alpha*0.333)+int(32*2*self.alpha* 0.5)
+        mpool = (z_down[1], 2, 2) if self.ndim == 3 else (2, 2)
+        self.pool2 = pooling(mpool)
+        self.respath2 = Respath(conv, batchnorm_layer,  self.in_filters2,32*2,respath_length=3)
     
-       Returns
-       -------
-       x : Keras layer
-           Output layer.
-    """
-
-    x = Conv2DTranspose(filters, (num_row, num_col), strides=strides, padding=padding)(x)
-    x = BatchNormalization(axis=3, scale=False)(x)
+        self.multiresblock3 =  Multiresblock(conv, batchnorm_layer, self.in_filters2,32*4)
+        self.in_filters3 = int(32*4*self.alpha*0.167)+int(32*4*self.alpha*0.333)+int(32*4*self.alpha* 0.5)
+        mpool = (z_down[2], 2, 2) if self.ndim == 3 else (2, 2)
+        self.pool3 = pooling(mpool)
+        self.respath3 = Respath(conv, batchnorm_layer, self.in_filters3,32*4,respath_length=2)
     
-    return x
+        self.multiresblock4 = Multiresblock(conv, batchnorm_layer, self.in_filters3,32*8)
+        self.in_filters4 = int(32*8*self.alpha*0.167)+int(32*8*self.alpha*0.333)+int(32*8*self.alpha* 0.5)
+        mpool = (z_down[3], 2, 2) if self.ndim == 3 else (2, 2)
+        self.pool4 = pooling(mpool)
+        self.respath4 = Respath(conv, batchnorm_layer, self.in_filters4,32*8,respath_length=1)
+     
+        self.multiresblock5 = Multiresblock(conv, batchnorm_layer, self.in_filters4,32*16)
+        self.in_filters5 = int(32*16*self.alpha*0.167)+int(32*16*self.alpha*0.333)+int(32*16*self.alpha* 0.5)
+     
+        # Decoder path
+        mpool = (z_down[3], 2, 2) if self.ndim == 3 else (2, 2)
+        self.upsample6 = convtranspose(self.in_filters5,32*8,kernel_size=mpool,stride=mpool)  
+        self.concat_filters1 = 32*8 *2
+        self.multiresblock6 = Multiresblock(conv, batchnorm_layer, self.concat_filters1,32*8)
+        self.in_filters6 = int(32*8*self.alpha*0.167)+int(32*8*self.alpha*0.333)+int(32*8*self.alpha* 0.5)
 
-
-def MultiResBlock(U, inp, alpha = 1.67):
-    """MultiRes Block.
+        mpool = (z_down[2], 2, 2) if self.ndim == 3 else (2, 2)
+        self.upsample7 = convtranspose(self.in_filters6,32*4,kernel_size=mpool,stride=mpool)  
+        self.concat_filters2 = 32*4 *2
+        self.multiresblock7 = Multiresblock(conv, batchnorm_layer, self.concat_filters2,32*4)
+        self.in_filters7 = int(32*4*self.alpha*0.167)+int(32*4*self.alpha*0.333)+int(32*4*self.alpha* 0.5)
     
-       Parameters
-       ----------
-       U : int
-           Number of filters in a corrsponding UNet stage.
-
-       inp : Keras layer
-           Input layer.
-
-       Returns
-       -------
-       out : Keras layer
-           Output layer.
-    """
-
-    W = alpha * U
-
-    shortcut = inp
-
-    shortcut = conv2d_bn(shortcut, int(W*0.167) + int(W*0.333) +
-                         int(W*0.5), 1, 1, activation=None, padding='same')
-
-    conv3x3 = conv2d_bn(inp, int(W*0.167), 3, 3,
-                        activation='relu', padding='same')
-
-    conv5x5 = conv2d_bn(conv3x3, int(W*0.333), 3, 3,
-                        activation='relu', padding='same')
-
-    conv7x7 = conv2d_bn(conv5x5, int(W*0.5), 3, 3,
-                        activation='relu', padding='same')
-
-    out = concatenate([conv3x3, conv5x5, conv7x7], axis=3)
-    out = BatchNormalization(axis=3)(out)
-
-    out = add([shortcut, out])
-    out = Activation('relu')(out)
-    out = BatchNormalization(axis=3)(out)
-
-    return out
-
-
-def ResPath(filters, length, inp):
-    """ResPath.
+        mpool = (z_down[1], 2, 2) if self.ndim == 3 else (2, 2)
+        self.upsample8 = convtranspose(self.in_filters7,32*2,kernel_size=mpool,stride=mpool)
+        self.concat_filters3 = 32*2 *2
+        self.multiresblock8 = Multiresblock(conv, batchnorm_layer, self.concat_filters3,32*2)
+        self.in_filters8 = int(32*2*self.alpha*0.167)+int(32*2*self.alpha*0.333)+int(32*2*self.alpha* 0.5)
     
-       Parameters
-       ----------
-       filters : int
-           Description.
+        mpool = (z_down[0], 2, 2) if self.ndim == 3 else (2, 2)
+        self.upsample9 = convtranspose(self.in_filters8,32,kernel_size=mpool,stride=mpool)
+        self.concat_filters4 = 32 *2
+        self.multiresblock9 = Multiresblock(conv, batchnorm_layer, self.concat_filters4,32)
+        self.in_filters9 = int(32*self.alpha*0.167)+int(32*self.alpha*0.333)+int(32*self.alpha* 0.5)
 
-       length : int
-           Length of ResPath.
+        # Super-resolution
+        self.post_upsampling = None
+        if upsampling_factor > 1 and upsampling_position == "post":
+            mpool = (1, 2, 2) if self.ndim == 3 else (2, 2)
+            self.post_upsampling = convtranspose(self.in_filters9, self.n_classes, kernel_size=mpool, stride=mpool)
 
-       inp : Keras layer
-           Input layer.
-    
-       Returns
-       -------
-       out : Keras layer
-           Output layer.
-    """
+        # Instance segmentation
+        if output_channels is not None:
+            if output_channels == "Dv2":
+                self.last_block = conv(self.in_filters9, 1, kernel_size=1, padding='same')
+            elif output_channels in ["BC", "BP"]:
+                self.last_block = conv(self.in_filters9, 2, kernel_size=1, padding='same')
+            elif output_channels in ["BDv2", "BD"]:
+                self.last_block = conv(self.in_filters9, 2, kernel_size=1, padding='same')
+            elif output_channels in ["BCM", "BCD", "BCDv2"]:
+                self.last_block = conv(self.in_filters9, 3, kernel_size=1, padding='same')
+        # Other
+        else:
+            self.last_block = Conv_batchnorm(conv, batchnorm_layer, self.in_filters9, self.n_classes, kernel_size = 1, activation='None')
 
-    shortcut = inp
-    shortcut = conv2d_bn(shortcut, filters, 1, 1,
-                         activation=None, padding='same')
+    def forward(self, x : torch.Tensor)-> torch.Tensor:
+        # Super-resolution
+        if self.pre_upsampling is not None:
+            x = self.pre_upsampling(x)
 
-    out = conv2d_bn(inp, filters, 3, 3, activation='relu', padding='same')
+        x_multires1 = self.multiresblock1(x)
+        x_pool1 = self.pool1(x_multires1)
+        x_multires1 = self.respath1(x_multires1)
+        
+        x_multires2 = self.multiresblock2(x_pool1)
+        x_pool2 = self.pool2(x_multires2)
+        x_multires2 = self.respath2(x_multires2)
 
-    out = add([shortcut, out])
-    out = Activation('relu')(out)
-    out = BatchNormalization(axis=3)(out)
+        x_multires3 = self.multiresblock3(x_pool2)
+        x_pool3 = self.pool3(x_multires3)
+        x_multires3 = self.respath3(x_multires3)
 
-    for i in range(length-1):
+        x_multires4 = self.multiresblock4(x_pool3)
+        x_pool4 = self.pool4(x_multires4)
+        x_multires4 = self.respath4(x_multires4)
 
-        shortcut = out
-        shortcut = conv2d_bn(shortcut, filters, 1, 1,
-                             activation=None, padding='same')
+        x_multires5 = self.multiresblock5(x_pool4)
 
-        out = conv2d_bn(out, filters, 3, 3, activation='relu', padding='same')
+        up6 = torch.cat([self.upsample6(x_multires5),x_multires4],axis=1)
+        x_multires6 = self.multiresblock6(up6)
 
-        out = add([shortcut, out])
-        out = Activation('relu')(out)
-        out = BatchNormalization(axis=3)(out)
+        up7 = torch.cat([self.upsample7(x_multires6),x_multires3],axis=1)
+        x_multires7 = self.multiresblock7(up7)
 
-    return out
+        up8 = torch.cat([self.upsample8(x_multires7),x_multires2],axis=1)
+        x_multires8 = self.multiresblock8(up8)
 
+        up9 = torch.cat([self.upsample9(x_multires8),x_multires1],axis=1)
+        x_multires9 = self.multiresblock9(up9)
 
-def MultiResUnet(height, width, n_channels):
-    """MultiResUNet.
-    
-       Parameters
-       ----------
-       height : int
-           Height of image.
+        # Super-resolution
+        if self.post_upsampling is not None:
+            x_multires9 = self.post_upsampling(x_multires9)
 
-       width : int
-           Width of image.
-
-       n_channels : int
-           Number of channels in image.
-    
-       Returns
-       -------
-       model : Keras model
-           MultiResUNet model.
-    """
-
-    inputs = Input((height, width, n_channels))
-
-    mresblock1 = MultiResBlock(32, inputs)
-    pool1 = MaxPooling2D(pool_size=(2, 2))(mresblock1)
-    mresblock1 = ResPath(32, 4, mresblock1)
-
-    mresblock2 = MultiResBlock(32*2, pool1)
-    pool2 = MaxPooling2D(pool_size=(2, 2))(mresblock2)
-    mresblock2 = ResPath(32*2, 3, mresblock2)
-
-    mresblock3 = MultiResBlock(32*4, pool2)
-    pool3 = MaxPooling2D(pool_size=(2, 2))(mresblock3)
-    mresblock3 = ResPath(32*4, 2, mresblock3)
-
-    mresblock4 = MultiResBlock(32*8, pool3)
-    pool4 = MaxPooling2D(pool_size=(2, 2))(mresblock4)
-    mresblock4 = ResPath(32*8, 1, mresblock4)
-
-    mresblock5 = MultiResBlock(32*16, pool4)
-
-    up6 = concatenate([Conv2DTranspose(
-        32*8, (2, 2), strides=(2, 2), padding='same')(mresblock5), mresblock4], axis=3)
-    mresblock6 = MultiResBlock(32*8, up6)
-
-    up7 = concatenate([Conv2DTranspose(
-        32*4, (2, 2), strides=(2, 2), padding='same')(mresblock6), mresblock3], axis=3)
-    mresblock7 = MultiResBlock(32*4, up7)
-
-    up8 = concatenate([Conv2DTranspose(
-        32*2, (2, 2), strides=(2, 2), padding='same')(mresblock7), mresblock2], axis=3)
-    mresblock8 = MultiResBlock(32*2, up8)
-
-    up9 = concatenate([Conv2DTranspose(32, (2, 2), strides=(
-        2, 2), padding='same')(mresblock8), mresblock1], axis=3)
-    mresblock9 = MultiResBlock(32, up9)
-
-    conv10 = conv2d_bn(mresblock9, 1, 1, 1, activation='sigmoid')
-    
-    model = Model(inputs=[inputs], outputs=[conv10])
-
-    return model
-   
+        out =  self.last_block(x_multires9)
+        
+        return out

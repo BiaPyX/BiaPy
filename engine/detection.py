@@ -1,27 +1,28 @@
 import os
 import csv
+import torch 
+import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops_table
-from data.post_processing.post_processing import remove_close_points, detection_watershed, remove_instance_by_circularity_central_slice
-from data.pre_processing import create_detection_masks
-from skimage.morphology import disk, dilation                                                    
+from skimage.morphology import disk, dilation        
 
+from data.data_2D_manipulation import load_and_prepare_2D_train_data
+from data.data_3D_manipulation import load_and_prepare_3D_data
+
+from data.post_processing.post_processing import (remove_close_points, detection_watershed, 
+    remove_instance_by_circularity_central_slice)
+from data.pre_processing import create_detection_masks
 from utils.util import save_tif
-from engine.metrics import detection_metrics
+from engine.metrics import detection_metrics, jaccard_index, weighted_bce_dice_loss
 from engine.base_workflow import Base_Workflow
 
-class Detection(Base_Workflow):
-    def __init__(self, cfg, model, post_processing={}, original_test_mask_path=None):
-        super().__init__(cfg, model, post_processing)
+class Detection_Workflow(Base_Workflow):
+    def __init__(self, cfg, job_identifier, device, rank, **kwargs):
+        super(Detection_Workflow, self).__init__(cfg, job_identifier, device, rank, **kwargs)
 
-        self.original_test_mask_path = original_test_mask_path    
-        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            self.csv_files = sorted(next(os.walk(original_test_mask_path))[2])
-        self.cell_count_file = os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, 'cell_counter.csv')
-        self.cell_count_lines = []
-
+        # Detection stats
         self.stats['d_precision'] = 0
         self.stats['d_recall'] = 0
         self.stats['d_f1'] = 0
@@ -29,6 +30,53 @@ class Detection(Base_Workflow):
         self.stats['d_precision_per_crop'] = 0
         self.stats['d_recall_per_crop'] = 0
         self.stats['d_f1_per_crop'] = 0
+
+        print("####################\n"
+              "#  PRE-PROCESSING  #\n"
+              "####################\n")
+
+        self.original_test_mask_path = self.prepare_detection_data()
+
+        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+            self.csv_files = sorted(next(os.walk(self.original_test_mask_path))[2])
+        self.cell_count_file = os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, 'cell_counter.csv')
+        self.cell_count_lines = []
+
+        # From now on, no modification of the cfg will be allowed
+        self.cfg.freeze()
+
+        # Activations for each output channel:
+        # channel number : 'activation'
+        self.activations = {'0': 'Sigmoid'}
+
+        # Workflow specific training variables
+        self.mask_path = cfg.DATA.TRAIN.GT_PATH
+        self.load_Y_val = True
+
+        # Workflow specific test variables
+        if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED or self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+            self.post_processing['detection_post'] = True
+        else:
+            self.post_processing['detection_post'] = False    
+
+    def define_metrics(self):
+        if self.cfg.LOSS.TYPE == "CE": 
+            self.metrics = [jaccard_index]
+            self.metric_names = ["jaccard_index"]
+            self.loss = torch.nn.BCEWithLogitsLoss()
+        elif self.cfg.LOSS.TYPE == "W_CE_DICE":
+            self.metrics = [jaccard_index]
+            self.metric_names = ["jaccard_index"]
+            self.loss = weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33)
+
+    def metric_calculation(self, output, targets, device, metric_logger=None):
+        with torch.no_grad():
+            train_iou = self.metrics[0](output, targets, device, num_classes=self.cfg.MODEL.N_CLASSES)
+            train_iou = train_iou.item() if not torch.isnan(train_iou) else 0
+            if metric_logger is not None:
+                metric_logger.meters[self.metric_names[0]].update(train_iou)
+            else:
+                return train_iou
 
     def detection_process(self, pred, filenames, metric_names=[], f_numbers=0):
         ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
@@ -44,7 +92,7 @@ class Detection(Base_Workflow):
                     min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[0]
                 else:
                     min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[channel]
-                pred_coordinates = peak_local_max(pred[...,channel], threshold_abs=min_th_peak, exclude_border=False)
+                pred_coordinates = peak_local_max(pred[...,channel].astype(np.float32), threshold_abs=min_th_peak, exclude_border=False)
 
                 # Remove close points per class as post-processing method
                 if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
@@ -62,7 +110,8 @@ class Detection(Base_Workflow):
 
             # Remove close points again seeing all classes together, as it can be that a point is detected in both classes
             # if there is not clear distinction between them
-            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.cfg.MODEL.N_CLASSES > 1:
+            classes = 1 if self.cfg.MODEL.N_CLASSES <= 2 else self.cfg.MODEL.N_CLASSES
+            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and classes > 1:
                 print("All classes together")
                 radius = np.min(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS)
  
@@ -74,12 +123,11 @@ class Detection(Base_Workflow):
                 
                 # Create again list of arrays of all points
                 all_points = []
-                for i in range(self.cfg.MODEL.N_CLASSES):
+                for i in range(classes):
                     all_points.append([])
                 for i, c in enumerate(all_classes):
                     all_points[c].append(new_points[i])
                 del new_points
-
             # Create a file with detected point and other image with predictions ids (if GT given)
             print("Creating the images with detected points . . .")   
             points_pred = np.zeros(pred.shape[:-1], dtype=np.uint8)
@@ -115,9 +163,8 @@ class Detection(Base_Workflow):
                 data_filename = os.path.join(self.cfg.DATA.TEST.PATH, filenames[0])
                 w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
                 check_wa = w_dir if self.cfg.PROBLEM.DETECTION.DATA_CHECK_MW else None
-
                 points_pred = detection_watershed(points_pred, all_points, data_filename, self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION,
-                    self.cfg.MODEL.N_CLASSES, ndim=ndim, donuts_classes=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES,
+                    clases, ndim=ndim, donuts_classes=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES,
                     donuts_patch=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH, 
                     donuts_nucleus_diameter=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER, save_dir=check_wa)
                 
@@ -298,12 +345,10 @@ class Detection(Base_Workflow):
                 self.stats['d_recall'] = self.stats['d_recall'] / image_counter
                 self.stats['d_f1'] = self.stats['d_f1'] / image_counter
 
-    def after_merge_patches(self, pred, Y, filenames, f_numbers):
-        del Y
-        self.detection_process(pred, filenames, ['d_precision_per_crop', 'd_recall_per_crop', 'd_f1_per_crop'], f_numbers)
+    def after_merge_patches(self, pred, filenames):
+        self.detection_process(pred, filenames, ['d_precision_per_crop', 'd_recall_per_crop', 'd_f1_per_crop'])
 
-    def after_full_image(self, pred, Y, filenames):
-        del Y
+    def after_full_image(self, pred, filenames):
         self.detection_process(pred, filenames, ['d_precision', 'd_recall', 'd_f1'])
 
     def after_all_images(self):
@@ -324,74 +369,74 @@ class Detection(Base_Workflow):
                 print("Detection - Test Recall (per image): {}".format(self.stats['d_recall']))
                 print("Detection - Test F1 (per image): {}".format(self.stats['d_f1']))
 
-def prepare_detection_data(cfg):
-    print("############################\n"
-          "#  PREPARE DETECTION DATA  #\n"
-          "############################\n")
-    original_test_mask_path = None
+    def prepare_detection_data(self):
+        print("############################")
+        print("#  PREPARE DETECTION DATA  #")
+        print("############################")
+        original_test_mask_path = None
 
-    # Create selected channels for train data
-    if cfg.TRAIN.ENABLE or cfg.DATA.TEST.USE_VAL_AS_TEST:
-        create_mask = False
-        if not os.path.isdir(cfg.DATA.TRAIN.DETECTION_MASK_DIR):
-            print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                  "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.DETECTION_MASK_DIR' "
-                  "path, this process will be done just once!".format(cfg.DATA.TRAIN.DETECTION_MASK_DIR))
-            create_mask = True
-        else:
-            if len(next(os.walk(cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(next(os.walk(cfg.DATA.TRAIN.GT_PATH))[2]):
-                print("Different number of files found in {} and {}. Trying to create the the rest again"
-                       .format(cfg.DATA.TRAIN.GT_PATH,cfg.DATA.TRAIN.DETECTION_MASK_DIR))
-                create_mask = True    
+        # Create selected channels for train data
+        if self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+            create_mask = False
+            if not os.path.isdir(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR):
+                print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.DETECTION_MASK_DIR' "
+                    "path, this process will be done just once!".format(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))
+                create_mask = True
+            else:
+                if len(next(os.walk(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TRAIN.GT_PATH))[2]):
+                    print("Different number of files found in {} and {}. Trying to create the the rest again"
+                        .format(self.cfg.DATA.TRAIN.GT_PATH,self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))
+                    create_mask = True    
 
-        if create_mask:
-            create_detection_masks(cfg)
+            if create_mask:
+                create_detection_masks(self.cfg)
 
-    # Create selected channels for val data
-    if cfg.TRAIN.ENABLE and not cfg.DATA.VAL.FROM_TRAIN:
-        create_mask = False
-        if not os.path.isdir(cfg.DATA.VAL.DETECTION_MASK_DIR):
-            print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.DETECTION_MASK_DIR' "
-                "path, this process will be done just once!".format(cfg.DATA.VAL.DETECTION_MASK_DIR))
-            create_mask = True
-        else:
-            if len(next(os.walk(cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(next(os.walk(cfg.DATA.VAL.GT_PATH))[2]):
-                print("Different number of files found in {} and {}. Trying to create the the rest again"
-                       .format(cfg.DATA.VAL.GT_PATH,cfg.DATA.VAL.DETECTION_MASK_DIR))
-                create_mask = True 
-                
-        if create_mask:
-            create_detection_masks(cfg, data_type='val')
+        # Create selected channels for val data
+        if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN:
+            create_mask = False
+            if not os.path.isdir(self.cfg.DATA.VAL.DETECTION_MASK_DIR):
+                print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                    "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.DETECTION_MASK_DIR' "
+                    "path, this process will be done just once!".format(self.cfg.DATA.VAL.DETECTION_MASK_DIR))
+                create_mask = True
+            else:
+                if len(next(os.walk(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.VAL.GT_PATH))[2]):
+                    print("Different number of files found in {} and {}. Trying to create the the rest again"
+                        .format(self.cfg.DATA.VAL.GT_PATH,self.cfg.DATA.VAL.DETECTION_MASK_DIR))
+                    create_mask = True 
+                    
+            if create_mask:
+                create_detection_masks(self.cfg, data_type='val')
 
-    # Create selected channels for test data once
-    if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT and not cfg.DATA.TEST.USE_VAL_AS_TEST:
-        create_mask = False
-        if not os.path.isdir(cfg.DATA.TEST.DETECTION_MASK_DIR):
-            print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.DETECTION_MASK_DIR' "
-                "path, this process will be done just once!".format(cfg.DATA.TEST.DETECTION_MASK_DIR))
-            create_mask = True
-        else:
-            if len(next(os.walk(cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(next(os.walk(cfg.DATA.TEST.GT_PATH))[2]):
-                print("Different number of files found in {} and {}. Trying to create the the rest again"
-                       .format(cfg.DATA.TEST.GT_PATH,cfg.DATA.TEST.DETECTION_MASK_DIR))
-                create_mask = True 
-        if create_mask:
-            create_detection_masks(cfg, data_type='test')
+        # Create selected channels for test data once
+        if self.cfg.TEST.ENABLE and self.cfg.DATA.TEST.LOAD_GT and not self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+            create_mask = False
+            if not os.path.isdir(self.cfg.DATA.TEST.DETECTION_MASK_DIR):
+                print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.DETECTION_MASK_DIR' "
+                    "path, this process will be done just once!".format(self.cfg.DATA.TEST.DETECTION_MASK_DIR))
+                create_mask = True
+            else:
+                if len(next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]):
+                    print("Different number of files found in {} and {}. Trying to create the the rest again"
+                        .format(self.cfg.DATA.TEST.GT_PATH,self.cfg.DATA.TEST.DETECTION_MASK_DIR))
+                    create_mask = True 
+            if create_mask:
+                create_detection_masks(self.cfg, data_type='test')
 
-    opts = []
-    if cfg.TRAIN.ENABLE:
-        print("DATA.TRAIN.GT_PATH changed from {} to {}".format(cfg.DATA.TRAIN.GT_PATH, cfg.DATA.TRAIN.DETECTION_MASK_DIR))
-        opts.extend(['DATA.TRAIN.GT_PATH', cfg.DATA.TRAIN.DETECTION_MASK_DIR])
-        if not cfg.DATA.VAL.FROM_TRAIN:
-            print("DATA.VAL.GT_PATH changed from {} to {}".format(cfg.DATA.VAL.GT_PATH, cfg.DATA.VAL.DETECTION_MASK_DIR))
-            opts.extend(['DATA.VAL.GT_PATH', cfg.DATA.VAL.DETECTION_MASK_DIR])
-    if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT:
-        print("DATA.TEST.GT_PATH changed from {} to {}".format(cfg.DATA.TEST.GT_PATH, cfg.DATA.TEST.DETECTION_MASK_DIR))
-        opts.extend(['DATA.TEST.GT_PATH', cfg.DATA.TEST.DETECTION_MASK_DIR])
-        original_test_mask_path = cfg.DATA.TEST.GT_PATH
-    cfg.merge_from_list(opts)
-    
+        opts = []
+        if self.cfg.TRAIN.ENABLE:
+            print("DATA.TRAIN.GT_PATH changed from {} to {}".format(self.cfg.DATA.TRAIN.GT_PATH, self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))
+            opts.extend(['DATA.TRAIN.GT_PATH', self.cfg.DATA.TRAIN.DETECTION_MASK_DIR])
+            if not self.cfg.DATA.VAL.FROM_TRAIN:
+                print("DATA.VAL.GT_PATH changed from {} to {}".format(self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.DETECTION_MASK_DIR))
+                opts.extend(['DATA.VAL.GT_PATH', self.cfg.DATA.VAL.DETECTION_MASK_DIR])
+        if self.cfg.TEST.ENABLE and self.cfg.DATA.TEST.LOAD_GT:
+            print("DATA.TEST.GT_PATH changed from {} to {}".format(self.cfg.DATA.TEST.GT_PATH, self.cfg.DATA.TEST.DETECTION_MASK_DIR))
+            opts.extend(['DATA.TEST.GT_PATH', self.cfg.DATA.TEST.DETECTION_MASK_DIR])
+            original_test_mask_path = self.cfg.DATA.TEST.GT_PATH
+        self.cfg.merge_from_list(opts)
+        
 
-    return original_test_mask_path
+        return original_test_mask_path

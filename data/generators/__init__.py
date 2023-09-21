@@ -1,9 +1,9 @@
 import os
-import tensorflow as tf
+import torch
 import numpy as np
 from tqdm import tqdm
 
-from utils.util import  save_tif
+from utils.util import save_tif
 from data.pre_processing import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif
 from data.generators.pair_data_2D_generator import Pair2DImageDataGenerator
 from data.generators.pair_data_3D_generator import Pair3DImageDataGenerator
@@ -13,7 +13,7 @@ from data.generators.test_pair_data_generators import test_pair_data_generator
 from data.generators.test_single_data_generator import test_single_data_generator
 
 
-def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
+def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size, global_rank, dist=False):
     """Create training and validation generators.
 
        Parameters
@@ -34,9 +34,6 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
        Y_val : 4D/5D Numpy array
            Validation data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
            in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``. 
-
-       num_gpus : int
-           Number of GPUs to use. 
 
        Returns
        -------
@@ -103,9 +100,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
         r_shape = cfg.DATA.PATCH_SIZE
-        if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' and cfg.DATA.PATCH_SIZE[:-1] != (224,224):
+        if cfg.MODEL.ARCHITECTURE == 'efficientnet_b0' and cfg.DATA.PATCH_SIZE[:-1] != (224,224):
             r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) 
-            print("Changing patch size from {} to {} to use EfficientNetB0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
+            print("Changing patch size from {} to {} to use efficientnet_b0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
         ptype = "classification" if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else "mae"
         dic = dict(ndim=ndim, X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, ptype=ptype, n_classes=cfg.MODEL.N_CLASSES,
             seed=cfg.SYSTEM.SEED, da=cfg.AUGMENTOR.ENABLE, in_memory=cfg.DATA.TRAIN.IN_MEMORY, da_prob=cfg.AUGMENTOR.DA_PROB,
@@ -217,89 +214,37 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, num_gpus):
             cfg.AUGMENTOR.AUG_NUM_SAMPLES, save_to_dir=True, train=False, out_dir=cfg.PATHS.DA_SAMPLES,
             draw_grid=cfg.AUGMENTOR.DRAW_GRID)
 
-    # Decide number of processes
-    num_parallel_calls = tf.data.AUTOTUNE if cfg.SYSTEM.NUM_CPUS == -1 else cfg.SYSTEM.NUM_CPUS
-    
-    out_dtype = tf.uint16 if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else tf.float32
+    num_workers = max(cfg.SYSTEM.NUM_CPUS // cfg.SYSTEM.NUM_GPUS, 1) if dist else cfg.SYSTEM.NUM_CPUS
 
-    # Paralelize as explained in: 
-    # https://medium.com/@acordier/tf-data-dataset-generators-with-parallelization-the-easy-way-b5c5f7d2a18
-    # Single item generators
-    if cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
-        def train_func(i):
-            i = i.numpy() 
-            x = train_generator.getitem(i)
-            return x
-        def val_func(i):
-            i = i.numpy() 
-            x = val_generator.getitem(i)
-            return x
-        train_index_generator = list(range(len(train_generator))) 
-        val_index_generator = list(range(len(val_generator))) 
-        tdataset = tf.data.Dataset.from_generator(lambda: train_index_generator, tf.uint64)
-        vdataset = tf.data.Dataset.from_generator(lambda: val_index_generator, tf.uint64)
-        train_dataset = tdataset.map(lambda i: tf.py_function(
-            func=train_func, inp=[i], Tout=[tf.float32]), num_parallel_calls=num_parallel_calls)
-        val_dataset = vdataset.map(lambda i: tf.py_function(
-            func=val_func, inp=[i], Tout=[tf.float32]), num_parallel_calls=num_parallel_calls)
+    # Training dataset
+    total_batch_size = cfg.TRAIN.BATCH_SIZE * world_size * cfg.TRAIN.ACCUM_ITER
+    training_samples = len(train_generator)
+    num_training_steps_per_epoch = training_samples // total_batch_size
+    print("Accumulate grad iterations: %d" % cfg.TRAIN.ACCUM_ITER)
+    print("Effective batch size: %d" % total_batch_size)
+    sampler_train = torch.utils.data.DistributedSampler(
+        train_generator, num_replicas=world_size, rank=global_rank, shuffle=True
+    )    
+    print("Sampler_train = %s" % str(sampler_train))
+    train_dataset = torch.utils.data.DataLoader(train_generator, sampler=sampler_train, batch_size=cfg.TRAIN.BATCH_SIZE,
+        num_workers=num_workers, pin_memory=cfg.SYSTEM.PIN_MEM, drop_last=False)
 
-        def _fixup_shape(x):
-            x.set_shape((None, )+cfg.DATA.PATCH_SIZE) 
-            return x
-    # Double item generators
+    # Validation dataset
+    sampler_val = None
+    if cfg.DATA.VAL.DIST_EVAL:
+        if len(val_generator) % world_size != 0:
+            print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
+                  'This will slightly alter validation results as extra duplicate entries are added to achieve '
+                  'equal num of samples per-process.')
+        sampler_val = torch.utils.data.DistributedSampler(
+            val_generator, num_replicas=world_size, rank=global_rank, shuffle=False)
     else:
-        def train_func(i):
-            i = i.numpy() 
-            x, y = train_generator.getitem(i)
-            return x, y
-        def val_func(i):
-            i = i.numpy() 
-            x, y = val_generator.getitem(i)
-            return x, y
-        train_index_generator = list(range(len(train_generator))) 
-        val_index_generator = list(range(len(val_generator))) 
-        tdataset = tf.data.Dataset.from_generator(lambda: train_index_generator, tf.uint64)
-        vdataset = tf.data.Dataset.from_generator(lambda: val_index_generator, tf.uint64)
-        train_dataset = tdataset.map(lambda i: tf.py_function(
-            func=train_func, inp=[i], Tout=[tf.float32, out_dtype]), num_parallel_calls=num_parallel_calls)
-        val_dataset = vdataset.map(lambda i: tf.py_function(
-            func=val_func, inp=[i], Tout=[tf.float32, out_dtype]), num_parallel_calls=num_parallel_calls)
+        sampler_val = torch.utils.data.SequentialSampler(val_generator)
+    
+    val_dataset = torch.utils.data.DataLoader(val_generator, sampler=sampler_val, batch_size=cfg.TRAIN.BATCH_SIZE, 
+        num_workers=num_workers, pin_memory=cfg.SYSTEM.PIN_MEM, drop_last=False)
 
-        def _fixup_shape(x, y):
-            x.set_shape([None, ]*(len(cfg.DATA.PATCH_SIZE)+1)) 
-            if cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-                y.set_shape([None, ]*(len(cfg.DATA.PATCH_SIZE)+1)) 
-            else:
-                y.set_shape((None)) 
-            return x, y
-
-    global_batch_size = cfg.TRAIN.BATCH_SIZE * num_gpus
-    train_dataset = train_dataset.batch(global_batch_size).map(_fixup_shape)
-    val_dataset = val_dataset.batch(global_batch_size).map(_fixup_shape)
-
-    if cfg.AUGMENTOR.SHUFFLE_TRAIN_DATA_EACH_EPOCH:
-        train_dataset = train_dataset.shuffle(len(train_generator), seed=cfg.SYSTEM.SEED)
-
-    if cfg.AUGMENTOR.SHUFFLE_VAL_DATA_EACH_EPOCH:
-        val_dataset = val_dataset.shuffle(len(val_generator), seed=cfg.SYSTEM.SEED)
-
-    # Fixing some error with dataset length: https://discuss.tensorflow.org/t/typeerror-dataset-length-is-unknown-tensorflow/948/9
-    # Using assert_cardinality to add the number of samples (input)
-    len_train = int(np.ceil(len(train_generator)/global_batch_size))
-    len_val = int(np.ceil(len(val_generator)/global_batch_size))
-    train_dataset = train_dataset.apply(tf.data.experimental.assert_cardinality(len_train))
-    val_dataset = val_dataset.apply(tf.data.experimental.assert_cardinality(len_val))
-
-    train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
-    val_dataset = val_dataset.prefetch(tf.data.AUTOTUNE)
-
-    # To avoid sharding swap message from AutoShardPolicy.FILE to AutoShardPolicy.DATA
-    options = tf.data.Options()
-    options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
-    train_dataset = train_dataset.with_options(options)
-    val_dataset = val_dataset.with_options(options)
-
-    return train_dataset, val_dataset, data_norm
+    return train_dataset, val_dataset, data_norm, num_training_steps_per_epoch
 
 def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     """
@@ -359,9 +304,9 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
         gen_name = test_single_data_generator 
         r_shape = cfg.DATA.PATCH_SIZE
-        if cfg.MODEL.ARCHITECTURE == 'EfficientNetB0' and cfg.DATA.PATCH_SIZE[:-1] != (224,224):
+        if cfg.MODEL.ARCHITECTURE == 'efficientnet_b0' and cfg.DATA.PATCH_SIZE[:-1] != (224,224):
             r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) 
-            print("Changing patch size from {} to {} to use EfficientNetB0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
+            print("Changing patch size from {} to {} to use efficientnet_b0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
         if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
             dic['crop_center'] = True
             dic['resize_shape'] = r_shape

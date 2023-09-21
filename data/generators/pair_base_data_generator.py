@@ -1,7 +1,8 @@
 from abc import ABCMeta, abstractmethod
-import tensorflow as tf
+from torch.utils.data import Dataset
 import numpy as np
 import random
+import torch
 import os
 import sys
 import imgaug as ia
@@ -11,14 +12,12 @@ from skimage.io import imread
 from skimage.util import random_noise
 from imgaug.augmentables.heatmaps import HeatmapsOnImage
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
-
-from engine.denoising import (get_stratified_coords2D, get_stratified_coords3D, get_value_manipulation,                         
-                              apply_structN2Vmask, apply_structN2Vmask3D)                    
+                 
 from utils.util import img_to_onehot_encoding
 from data.generators.augmentors import *
 from data.pre_processing import normalize, norm_range01
 
-class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
+class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
        and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
        transformations. 
@@ -316,9 +315,6 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
        n_classes : int, optional
            Number of classes. If ``> 1`` one-hot encoding will be done on the ground truth.
 
-       out_number : int, optional
-           Number of output returned by the network. Used to produce same number of ground truth data on each batch.
-
        extra_data_factor : int, optional
            Factor to multiply the batches yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated
            ``extra_data_factor`` times.
@@ -376,7 +372,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                  gaussian_noise_use_input_img_mean_and_var=False, poisson_noise=False, salt=False, salt_amount=0.05, 
                  pepper=False, pepper_amount=0.05, salt_and_pepper=False, salt_pep_amount=0.05, salt_pep_proportion=0.5, 
                  random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,), prob_map=None, val=False, n_classes=1, 
-                 out_number=1, extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', 
+                 extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', 
                  n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), norm_custom_mean=None, 
                  norm_custom_std=None, normalizeY='as_mask', instance_problem=False, random_crop_scale=1):
 
@@ -648,7 +644,6 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         self.resolution = resolution
         self.o_indexes = np.arange(self.length)
         self.n_classes = n_classes
-        self.out_number = out_number
         self.da = da
         self.da_prob = da_prob
         self.cutout = cutout
@@ -703,7 +698,9 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         self.n2v = n2v
         self.val = val
         if self.n2v:
-            self.box_size = np.round(np.sqrt(100/n2v_perc_pix)).astype(np.int)
+            from engine.denoising import (get_stratified_coords2D, get_stratified_coords3D, get_value_manipulation,                         
+                apply_structN2Vmask, apply_structN2Vmask3D)   
+            self.box_size = int(np.round(np.sqrt(100/n2v_perc_pix)))
             self.get_stratified_coords = get_stratified_coords2D if self.ndim == 2 else get_stratified_coords3D
             self.value_manipulation = get_value_manipulation(n2v_manipulator, n2v_neighborhood_radius)
             self.n2v_structMask = n2v_structMask 
@@ -818,7 +815,6 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
         
         self.random_crop_func = random_3D_crop_pair if self.ndim == 3 else random_crop_pair
         self.indexes = self.o_indexes.copy()
-        self.len = self.__len__() 
 
     @abstractmethod
     def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, point_dict):
@@ -937,15 +933,10 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             if not self.val or (self.val and not self.in_memory):
                 mask = np.repeat(mask, self.Y_channels*2, axis=-1).astype(np.float32)
                 self.prepare_n2v(img, mask)
-            
-        # One-hot enconde
-        if self.n_classes > 1 and (self.n_classes != self.Y_channels):
-            mask = np.asarray(img_to_onehot_encoding(mask))
 
-        if self.out_number == 1:
-            return img, mask
-        else:
-            return ([img], [mask]*self.out_number)
+        img = torch.from_numpy(img.copy())
+        mask = torch.from_numpy(mask.copy().astype(np.float32))
+        return img, mask
  
 
     def apply_transform(self, image, mask, e_im=None, e_mask=None):
@@ -1282,8 +1273,8 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
             # Apply transformations
             if self.da:
                 if not train and draw_grid:
-                    self.draw_grid(sample_x[i])
-                    self.draw_grid(sample_y[i])
+                    sample_x[i] = self.draw_grid(np.copy(sample_x[i]))
+                    sample_y[i] = self.draw_grid(np.copy(sample_y[i]))
 
                 e_img, e_mask = None, None
                 if self.cutmix:
@@ -1332,6 +1323,7 @@ class PairBaseDataGenerator(tf.keras.utils.Sequence, metaclass=ABCMeta):
                         im[k,j] = v
                     else:
                         im[k,j] = [v]*im.shape[-1]
+        return im
         
     def prepare_n2v(self, img, mask):
         if self.val and not self.in_memory:

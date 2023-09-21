@@ -51,17 +51,17 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
         DA, and the whole volume will be used for that.
 
     crop_shape : 3D int tuple, optional
-        Shape of the crops. E.g. ``(x, y, channels)``.
+        Shape of the crops. E.g. ``(y, x, channels)``.
 
     y_upscaling : int, optional
         Upscaling to be done when loading Y data. User for super-resolution workflow.
 
     ov : 2 floats tuple, optional
         Amount of minimum overlap on x and y dimensions. The values must be on range ``[0, 1)``, that is, ``0%`` or
-        ``99%`` of overlap. E.g. ``(x, y)``.
+        ``99%`` of overlap. E.g. ``(y, x)``.
 
     padding : tuple of ints, optional
-        Size of padding to be added on each axis ``(x, y)``. E.g. ``(24, 24)``
+        Size of padding to be added on each axis ``(y, x)``. E.g. ``(24, 24)``
 
     minimum_foreground_perc : float, optional
         Minimum percetnage of foreground that a sample need to have no not be discarded. 
@@ -348,17 +348,17 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
            Data to crop. E.g. ``(num_of_images, y, x, channels)``.
 
        crop_shape : 3 int tuple
-           Shape of the crops to create. E.g. ``(x, y, channels)``.
+           Shape of the crops to create. E.g. ``(y, x, channels)``.
 
        data_mask : 4D Numpy array, optional
            Data mask to crop. E.g. ``(num_of_images, y, x, channels)``.
 
        overlap : Tuple of 2 floats, optional
            Amount of minimum overlap on x and y dimensions. The values must be on range ``[0, 1)``, that is, ``0%`` or
-           ``99%`` of overlap. E. g. ``(x, y)``.
+           ``99%`` of overlap. E. g. ``(y, x)``.
 
        padding : tuple of ints, optional
-           Size of padding to be added on each axis ``(x, y)``. E.g. ``(24, 24)``.
+           Size of padding to be added on each axis ``(y, x)``. E.g. ``(24, 24)``.
 
        verbose : bool, optional
             To print information about the crop to be made.
@@ -784,7 +784,7 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
         return merged_data
 
 
-def load_data_classification(data_dir, expected_classes=None, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
+def load_data_classification(data_dir, patch_shape, expected_classes=None, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
     val_split=0.1, seed=0, shuffle_val=True):
     """
     Load data to train classification methods.
@@ -793,6 +793,9 @@ def load_data_classification(data_dir, expected_classes=None, cross_val=False, c
     ----------
     data_dir : str
         Path to the training data.
+
+    patch_shape: Tuple of ints
+        Shape of the patch. E.g. ``(y, x, channels)``.
 
     expected_classes : int, optional
         Expected number of classes to be loaded. 
@@ -866,7 +869,7 @@ def load_data_classification(data_dir, expected_classes=None, cross_val=False, c
             print("Found {} samples".format(len(ids)))
 
         # Loading images 
-        images, _, _, image_ids = load_data_from_dir(f, return_filenames=True)
+        images, _, _, image_ids = load_data_from_dir(f, return_filenames=True, crop_shape=patch_shape)
 
         X_data.append(images)
         Y_data.append((c_num,)*len(ids))
