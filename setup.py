@@ -16,8 +16,10 @@ requirements = [
      'fill-voids>=2.0.5',
      'opencv-python>=4.7.0.72',
      'pandas>=2.0.2',
-     'nvidia-cudnn-cu11==8.6.0.163',
-     'tensorflow==2.12.0',
+     'torchinfo>=1.8.0',
+     'torchmetrics>=1.0.3',
+     'tensorboardX>=2.6.2.2',
+     'timm>=0.9.5'
 ]
 
 
