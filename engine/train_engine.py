@@ -47,9 +47,8 @@ def train_one_epoch(cfg, model, loss_function, metric_function, prepare_targets,
 
         # Forward pass scaling the loss
         loss /= cfg.TRAIN.ACCUM_ITER
-        loss_scaler(loss, optimizer, parameters=model.parameters(),
-            update_grad=(step + 1) % cfg.TRAIN.ACCUM_ITER == 0)
         if (step + 1) % cfg.TRAIN.ACCUM_ITER == 0:
+            loss.backward()
             optimizer.step() #update weight        
             optimizer.zero_grad()
             if lr_scheduler is not None and cfg.TRAIN.LR_SCHEDULER.NAME == 'onecycle':
