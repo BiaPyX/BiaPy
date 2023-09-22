@@ -41,7 +41,7 @@ def build_model(cfg, job_identifier, device):
     if modelname in ['unet', 'resunet', 'seunet', 'attention_unet']:
         args = dict(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION.lower(), feature_maps=cfg.MODEL.FEATURE_MAPS, 
             drop_values=cfg.MODEL.DROPOUT_VALUES, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, k_size=cfg.MODEL.KERNEL_SIZE,
-            upsample_layer=cfg.MODEL.UPSAMPLE_LAYER)
+            upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, z_down=cfg.MODEL.Z_DOWN)
         if modelname == 'unet':
             f_name = U_Net
         elif modelname == 'resunet':
@@ -51,11 +51,7 @@ def build_model(cfg, job_identifier, device):
         elif modelname == 'seunet':
             f_name = SE_U_Net
 
-        args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None
-        
-        if cfg.PROBLEM.NDIM == '3D':
-            args['z_down'] = cfg.MODEL.Z_DOWN
-
+        args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None        
         if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             args['upsampling_factor'] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
             args['upsampling_position'] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION
@@ -80,10 +76,8 @@ def build_model(cfg, job_identifier, device):
             else:
                 model = eval(cfg.MODEL.VIT_MODEL)(**args)
         elif modelname == 'multiresunet':
-            args = dict(input_channels=cfg.DATA.PATCH_SIZE[-1], ndim=ndim, alpha=1.67)
+            args = dict(input_channels=cfg.DATA.PATCH_SIZE[-1], ndim=ndim, alpha=1.67, z_down=cfg.MODEL.Z_DOWN)
             args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None
-            if cfg.PROBLEM.NDIM == '3D':
-                args['z_down'] = cfg.MODEL.Z_DOWN
             if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
                 args['upsampling_factor'] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
                 args['upsampling_position'] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION

@@ -329,6 +329,9 @@ def check_configuration(cfg, check_data_paths=True):
         elif len(cfg.MODEL.FEATURE_MAPS)-1 != len(cfg.MODEL.Z_DOWN):
             raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
 
+    if len(opts) > 0:
+        cfg.merge_from_list(opts)
+
     assert cfg.MODEL.LAST_ACTIVATION.lower() in ["relu", "tanh", "leaky_relu", "elu", "gelu", "silu", "sigmoid","softmax", "linear", "none"], \
         "Get unknown activation key {}".format(activation)
  
@@ -455,6 +458,3 @@ def check_configuration(cfg, check_data_paths=True):
                              "dimensions".format(dim_count))
         if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0] == -1:
             raise ValueError("'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' need to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True")   
-
-    if len(opts) > 0:
-        cfg.merge_from_list(opts)
