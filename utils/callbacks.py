@@ -1,5 +1,3 @@
-"Code copied from `Tensorflow/keras/callbacks.py <https://github.com/tensorflow/tensorflow/blob/b36436b087bd8e8701ef51718179037cccdfc26e/tensorflow/python/keras/callbacks.py#L1057>`_ just inserting a few lines on the prints to avoid this `error <https://github.com/tensorflow/tensorflow/issues/35100>`_."
-
 import os
 import time
 import warnings

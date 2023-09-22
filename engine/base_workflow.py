@@ -338,8 +338,8 @@ class Base_Workflow(metaclass=ABCMeta):
                                              time_text((e_end - start_time)+(t_epoch*(self.cfg.TRAIN.EPOCHS-epoch)))))
             
         total_time = time.time() - start_time
-        total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        print('Training time {}'.format(total_time_str))
+        self.total_training_time_str = str(datetime.timedelta(seconds=int(total_time)))
+        print('Training time {}'.format(self.total_training_time_str))
 
         print("Train loss: {}".format(train_stats['loss']))
         for i in range(len(self.metric_names)):
@@ -503,21 +503,20 @@ class Base_Workflow(metaclass=ABCMeta):
         print("#############")
 
         if self.cfg.TRAIN.ENABLE:
-            print("Epoch average time: {}".format(np.mean(self.callbacks[0].times)))
-            print("Epoch number: {}".format(len(self.results.history['val_loss'])))
-            print("Train time (s): {}".format(np.sum(self.callbacks[0].times)))
-            print("Train loss: {}".format(np.min(self.results.history['loss'])))
-            for i in range(len(self.metrics)):
-                if self.metrics[i] == "IoU":
-                    print("Train Foreground {}: {}".format(self.metrics[i], np.max(self.results.history[self.metrics[i]])))
+            print("Epoch number: {}".format(len(self.plot_values['val_loss'])))
+            print("Train time (s): {}".format(self.total_training_time_str))
+            print("Train loss: {}".format(np.min(self.plot_values['loss'])))
+            for i in range(len(self.metric_names)):
+                if self.metric_names[i] == "IoU":
+                    print("Train Foreground {}: {}".format(self.metric_names[i], np.max(self.plot_values[self.metric_names[i]])))
                 else:
-                    print("Train {}: {}".format(self.metrics[i], np.max(self.results.history[self.metrics[i]])))
-            print("Validation loss: {}".format(np.min(self.results.history['val_loss'])))
-            for i in range(len(self.metrics)):
-                if self.metrics[i] == "IoU":
-                    print("Validation Foreground {}: {}".format(self.metrics[i], np.max(self.results.history['val_'+self.metrics[i]])))
+                    print("Train {}: {}".format(self.metric_names[i], np.max(self.plot_values[self.metric_names[i]])))
+            print("Validation loss: {}".format(np.min(self.plot_values['val_loss'])))
+            for i in range(len(self.metric_names)):
+                if self.metric_names[i] == "IoU":
+                    print("Validation Foreground {}: {}".format(self.metric_names[i], np.max(self.plot_values['val_'+self.metric_names[i]])))
                 else:
-                    print("Validation {}: {}".format(self.metrics[i], np.max(self.results.history['val_'+self.metrics[i]])))
+                    print("Validation {}: {}".format(self.metric_names[i], np.max(self.plot_values['val_'+self.metric_names[i]])))
         self.print_stats(image_counter)
 
     def process_sample(self, filenames, norm):
