@@ -110,6 +110,9 @@ class MaskedAutoencoderViT(nn.Module):
         self.initialize_weights()
 
     def initialize_weights(self):
+        """
+        Initialize layer weigths.
+        """
         torch.nn.init.trunc_normal_(self.pos_embed, std=0.02)
         torch.nn.init.trunc_normal_(self.decoder_pos_embed, std=0.02)
 
@@ -125,6 +128,9 @@ class MaskedAutoencoderViT(nn.Module):
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
+        """
+        Initialize nn.Linear and nn.LayerNor layer's weights. 
+        """
         if isinstance(m, nn.Linear):
             # we use xavier_uniform following official JAX ViT:
             torch.nn.init.xavier_uniform_(m.weight)
@@ -136,12 +142,21 @@ class MaskedAutoencoderViT(nn.Module):
 
     def patchify(self, imgs):
         """
-        in 2D:
-            imgs: (N, C, H, W)
-            x: (N, L, patch_size**2 *C) 
-        in 3D:
-            imgs: (N, C, Z, H, W)
-            x: (N, L, patch_size**3 *C) in 3D
+        Create patches from input image. Opposite function of :func:`~unpatchify`.
+
+        Parameters
+        ----------
+        imgs : Tensor
+            Input images. In 2D: ``(N, C, H, W)``, in 3D: ``(N, C, Z, H, W)``. 
+            Where ``N`` is the batch size, ``C`` are the channels, ``Z`` imge depth,
+            ``H`` image height and ``W`` image's width. 
+
+        Returns
+        -------
+        x : Torch tensor
+            MAE model. in 2D: ``(N, L, patch_size**2 *C)`` in 3D: ``(N, L, patch_size**3 *C)``.
+            Where ``N`` is the batch size, ``L`` is the multiplication of dimension (i.e. ``Z``, 
+            ``H`` and ``W``) and ``C`` are the channels.
         """
         p = self.patch_embed.patch_size[0]
         
@@ -161,8 +176,20 @@ class MaskedAutoencoderViT(nn.Module):
 
     def unpatchify(self, x):
         """
-        x: (N, L, patch_size**2 *C)
-        imgs: (N, self.in_chans, H, W)
+        Create original image shape from input patches. Opposite function of :func:`~patchify`.
+        
+        Parameters
+        ----------
+        x : Tensor
+            Input images. In 2D: ``(N, L, patch_size**2 *C)``, in 3D: ``(N, L, patch_size**3 *C)``.
+            Where ``N`` is the batch size, ``L`` is the multiplication of dimension (i.e. ``Z``, 
+            ``H`` and ``W``) and ``C`` are the channels.
+
+        Returns
+        -------
+        imgs : Torch tensor
+            MAE model. in 2D: ``(N, C, H, W)`` in 3D: ``(N, C, Z, H, W)``. Where ``N`` is the batch size, 
+            ``C`` are the channels, ``Z`` imge depth, ``H`` image height and ``W`` image's width. 
         """
         p = self.patch_embed.patch_size[0]
         if self.ndim == 2:
@@ -184,7 +211,16 @@ class MaskedAutoencoderViT(nn.Module):
         """
         Perform per-sample random masking by per-sample shuffling.
         Per-sample shuffling is done by argsort random noise.
-        x: [N, L, D], sequence
+
+        Parameters
+        ----------
+        x : Tensor
+            Input images. Is shape is ``(N, L, D)`` shape. Where ``N`` is the batch size, 
+            ``L`` is the multiplication of dimension (i.e. ``Z``, ``H`` and ``W``) and 
+            ``D`` is ``embed_dim``.
+        
+        mask_ratio : float
+            Percentage of the input image to mask. Value between 0 and 1. 
         """
         N, L, D = x.shape  # batch, length, dim
         len_keep = int(L * (1 - mask_ratio))
@@ -208,6 +244,9 @@ class MaskedAutoencoderViT(nn.Module):
         return x_masked, mask, ids_restore
 
     def forward_encoder(self, x, mask_ratio):
+        """
+        Encoder forward pass. 
+        """
         # embed patches
         x = self.patch_embed(x)
 
@@ -230,6 +269,9 @@ class MaskedAutoencoderViT(nn.Module):
         return x, mask, ids_restore
 
     def forward_decoder(self, x, ids_restore):
+        """
+        Decoder forward pass.
+        """
         # embed tokens
         x = self.decoder_embed(x)
 
@@ -257,9 +299,27 @@ class MaskedAutoencoderViT(nn.Module):
 
     def forward_loss(self, imgs, pred, mask):
         """
-        imgs: [N, 3, H, W]
-        pred: [N, L, p*p*C]
-        mask: [N, L], 0 is keep, 1 is remove, 
+        MAE loss calculation.
+
+        Parameters
+        ----------
+        imgs : Tensor
+            Input images. In 2D: ``(N, C, H, W)``, in 3D: ``(N, C, Z, H, W)``. Where ``N`` is the batch size, 
+            ``C`` are the channels, ``Z`` imge depth, ``H`` image height and ``W`` image's width. 
+        
+        pred : Tensor
+            Predictions. In 2D: ``(N, L, patch_size**2 *C)``, in 3D: ``(N, L, patch_size**3 *C)``.
+            Where ``N`` is the batch size, ``L`` is the multiplication of dimension (i.e. ``Z``, 
+            ``H`` and ``W``) and ``C`` are the channels.
+
+        mask : 2d array
+            Information of which patches will be retain and masked. Shape is: ``(N, L)`` where ``0`` is keep 
+            and ``1`` is remove.
+
+        Returns
+        -------
+        loss : Tensor
+            Calculated loss on masked patches only. 
         """
         target = self.patchify(imgs)
         if self.norm_pix_loss:

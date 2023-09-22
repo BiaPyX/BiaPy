@@ -12,7 +12,6 @@ import numpy as np
 import scipy.signal
 from tqdm import tqdm
 import gc
-from tensorflow.keras.preprocessing.image import ImageDataGenerator as kerasDA
 import math
 
 if __name__ == '__main__':
@@ -100,7 +99,6 @@ def _unpad_img(padded_img, window_size, subdivisions):
     ]
     # gc.collect()
     return ret
-
 
 def _rotate_mirror_do(im):
     """
@@ -193,73 +191,6 @@ def _windowed_subdivs(padded_img, window_size, subdivisions, n_classes, pred_fun
     # Such 5D array:
     subdivs = subdivs.reshape(a, b, c, d, n_classes)
     gc.collect()
-
-    return subdivs
-
-def _windowed_subdivs_weighted(padded_img, padded_mask, weight_map, batch_size_value, window_size, subdivisions, n_classes, pred_func):
-    """
-    Create tiled overlapping patches with weights.
-
-    Returns:
-        5D numpy array of shape = (
-            nb_patches_along_X,
-            nb_patches_along_Y,
-            patches_resolution_along_X,
-            patches_resolution_along_Y,
-            nb_output_channels
-        )
-
-    Note:
-        patches_resolution_along_X == patches_resolution_along_Y == window_size
-    """
-    WINDOW_SPLINE_2D = _window_2D(window_size=window_size, power=2)
-
-    step = int(window_size/subdivisions)
-    padx_len = padded_img.shape[0]
-    pady_len = padded_img.shape[1]
-    subdivs = []
-    subdivs_m = []
-    subdivs_w = []
-
-    for i in range(0, padx_len-window_size+1, step):
-        subdivs.append([])
-        subdivs_m.append([])
-        subdivs_w.append([])
-        for j in range(0, pady_len-window_size+1, step):
-            patch = padded_img[i:i+window_size, j:j+window_size, :]
-            subdivs[-1].append(patch)
-            patch = padded_mask[i:i+window_size, j:j+window_size, :]
-            subdivs_m[-1].append(patch)
-            patch = weight_map[i:i+window_size, j:j+window_size, :]
-            subdivs_w[-1].append(patch)
-    
-    # Here, `gc.collect()` clears RAM between operations.
-    # It should run faster if they are removed, if enough memory is available.
-    subdivs = np.array(subdivs)
-    subdivs_m = np.array(subdivs_m)
-    subdivs_w = np.array(subdivs_w)
-    a, b, c, d, e = subdivs.shape
-    subdivs = subdivs.reshape(a * b, c, d, e)
-    subdivs_m = subdivs_m.reshape(a * b, c, d, e)
-    subdivs_w = subdivs_w.reshape(a * b, c, d, e)
-    r = np.zeros((a * b, c, d, e))
-
-    # merge images and weights to predict
-    X_datagen = kerasDA()
-    Y_datagen = kerasDA()
-    W_datagen = kerasDA()
-
-    X_aug = X_datagen.flow(subdivs, batch_size=batch_size_value, shuffle=False)
-    Y_aug = Y_datagen.flow(subdivs_m, batch_size=batch_size_value, shuffle=False)
-    W_aug = W_datagen.flow(subdivs_w, batch_size=batch_size_value, shuffle=False)
-
-    gen = create_gen(X_aug, Y_aug, W_aug)
-    r = pred_func(gen, steps=math.ceil(X_aug.n/batch_size_value))
-            
-    subdivs = np.array([patch * WINDOW_SPLINE_2D for patch in r])
-
-    # Such 5D array:
-    subdivs = subdivs.reshape(a, b, c, d, n_classes)
 
     return subdivs
 
@@ -359,88 +290,3 @@ def predict_img_with_overlap(input_img, window_size, subdivisions, n_classes, pr
         plt.title("Smoothly Merged Patches that were Tiled Tighter")
         plt.show()
     return prd
-
-def predict_img_with_overlap_weighted(input_img, input_mask, weight_map, batch_size_value, window_size, subdivisions, n_classes, pred_func):
-    """Based on predict_img_with_smooth_windowing but works just with the
-       original image (adding a weight map) instead of creating 8 new ones.
-    """
-    pad = _pad_img(input_img, window_size, subdivisions)
-    pad_mask = _pad_img(input_mask, window_size, subdivisions)
-    pad_w = _pad_img(weight_map, window_size, subdivisions)
-
-    sd = _windowed_subdivs_weighted(pad, pad_mask, pad_w, batch_size_value, window_size, subdivisions, n_classes, pred_func)
-    one_padded_result = _recreate_from_subdivs(sd, window_size, subdivisions,
-                                               padded_out_shape=list(pad.shape[:-1])+[n_classes])
-
-    prd = _unpad_img(one_padded_result, window_size, subdivisions)
-
-    prd = prd[:input_img.shape[0], :input_img.shape[1], :]
-
-    if PLOT_PROGRESS:
-        plt.imshow(prd)
-        plt.title("Smoothly Merged Patches that were Tiled Tighter")
-        plt.show()
-    return prd
-
-def cheap_tiling_prediction(img, window_size, n_classes, pred_func):
-    """
-    Does predictions on an image without tiling.
-    """
-    original_shape = img.shape
-    full_border = img.shape[0] + (window_size - (img.shape[0] % window_size))
-    prd = np.zeros((full_border, full_border, n_classes))
-    tmp = np.zeros((full_border, full_border, original_shape[-1]))
-    tmp[:original_shape[0], :original_shape[1], :] = img
-    img = tmp
-    print(img.shape, tmp.shape, prd.shape)
-    for i in tqdm(range(0, prd.shape[0], window_size)):
-        for j in range(0, prd.shape[0], window_size):
-            im = img[i:i+window_size, j:j+window_size]
-            prd[i:i+window_size, j:j+window_size] = pred_func([im])
-    prd = prd[:original_shape[0], :original_shape[1]]
-    if PLOT_PROGRESS:
-        plt.imshow(prd)
-        plt.title("Cheaply Merged Patches")
-        plt.show()
-    return prd
-
-
-def get_dummy_img(xy_size=128, nb_channels=3):
-    """
-    Create a random image with different luminosity in the corners.
-
-    Returns an array of shape (xy_size, xy_size, nb_channels).
-    """
-    x = np.random.random((xy_size, xy_size, nb_channels))
-    x = x + np.ones((xy_size, xy_size, 1))
-    lin = np.expand_dims(
-        np.expand_dims(
-            np.linspace(0, 1, xy_size),
-            nb_channels),
-        nb_channels)
-    x = x * lin
-    x = x * lin.transpose(1, 0, 2)
-    x = x + x[::-1, ::-1, :]
-    x = x - np.min(x)
-    x = x / np.max(x) / 2
-    gc.collect()
-    if PLOT_PROGRESS:
-        plt.imshow(x)
-        plt.title("Random image for a test")
-        plt.show()
-    return x
-
-
-def round_predictions(prd, nb_channels_out, thresholds):
-    """
-    From a threshold list `thresholds` containing one threshold per output
-    channel for comparison, the predictions are converted to a binary mask.
-    """
-    assert (nb_channels_out == len(thresholds))
-    prd = np.array(prd)
-    for i in range(nb_channels_out):
-        # Per-pixel and per-channel comparison on a threshold to
-        # binarize prediction masks:
-        prd[:, :, i] = prd[:, :, i] > thresholds[i]
-    return prd
-
