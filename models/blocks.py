@@ -333,7 +333,7 @@ class DoubleResConvBlock(nn.Module):
 
         if not first_block:
             if batch_norm is not None:
-                block.append(batch_norm(out_size))
+                block.append(batch_norm(in_size))
             if act is not None:
                 block.append(get_activation(act))
 
