@@ -14,7 +14,7 @@ from timm.utils import accuracy
 
 from utils.misc import MetricLogger, SmoothedValue, all_reduce_mean, to_pytorch_format
 
-def train_one_epoch(cfg, model, loss_function, metric_function, prepare_targets, data_loader, optimizer, 
+def train_one_epoch(cfg, model, loss_function, activations, metric_function, prepare_targets, data_loader, optimizer, 
     device, loss_scaler, epoch, log_writer=None, lr_scheduler=None, start_steps=0, axis_order=(0,3,1,2)):
 
     model.train(True)
@@ -33,8 +33,9 @@ def train_one_epoch(cfg, model, loss_function, metric_function, prepare_targets,
         targets = prepare_targets(targets, batch)
 
         # Pass the images through the model
-        with torch.amp.autocast(device_type=device.type):
-            outputs = model(batch)
+        # TODO: control autocast and mixed precision
+        with torch.cuda.amp.autocast(enabled=False):
+            outputs = activations(model(batch))
             loss = loss_function(outputs, targets)
 
         loss_value = loss.item()
@@ -83,7 +84,7 @@ def train_one_epoch(cfg, model, loss_function, metric_function, prepare_targets,
 
 
 @torch.no_grad()
-def evaluate(cfg, model, loss_function, metric_function, prepare_targets, device, epoch, 
+def evaluate(cfg, model, loss_function, activations, metric_function, prepare_targets, device, epoch, 
     data_loader, lr_scheduler, axis_order=(0,3,1,2)):
     metric_logger = MetricLogger(delimiter="  ")
     header = 'Epoch: [{}]'.format(epoch+1)
@@ -99,8 +100,9 @@ def evaluate(cfg, model, loss_function, metric_function, prepare_targets, device
         targets = prepare_targets(targets, images)
 
         # Pass the images through the model
-        with torch.cuda.amp.autocast():  
-            outputs = model(images) 
+        # TODO: control autocast and mixed precision
+        with torch.cuda.amp.autocast(enabled=False):  
+            outputs = activations(model(images))
             loss = loss_function(outputs, targets)
         
         # Calculate the metrics

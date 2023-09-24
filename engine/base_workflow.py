@@ -39,6 +39,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.test_filenames = None 
         self.metrics = []
         self.data_norm = None
+        self.model_prepared = False 
 
         # Save paths in case we need them in a future
         self.orig_train_path = self.cfg.DATA.TRAIN.PATH
@@ -202,7 +203,8 @@ class Base_Workflow(metaclass=ABCMeta):
             self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids=[self.args.gpu], 
                 find_unused_parameters=True)
             self.model_without_ddp = self.model.module
-            
+        self.model_prepared = True
+
     def prepare_logging_tool(self):
         print("#######################")
         print("# Prepare loggin tool #")
@@ -233,7 +235,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.prepare_model()
         self.optimizer, self.lr_scheduler, self.loss_scaler = prepare_optimizer(self.cfg, self.model_without_ddp, 
             len(self.train_generator))
-
+ 
         # Load checkpoint if necessary
         if self.cfg.MODEL.LOAD_CHECKPOINT:
             self.start_epoch = load_model_checkpoint(cfg=self.cfg, model_without_ddp=self.model_without_ddp,
@@ -259,10 +261,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.log_writer.set_step(epoch * self.num_training_steps_per_epoch)
 
             # Train
-            train_stats = train_one_epoch(self.cfg, model=self.model, loss_function=self.loss, metric_function=self.metric_calculation,
-                prepare_targets=self.prepare_targets, data_loader=self.train_generator, optimizer=self.optimizer, device=self.device, 
-                loss_scaler=self.loss_scaler, epoch=epoch, log_writer=self.log_writer, lr_scheduler=self.lr_scheduler, 
-                start_steps=epoch * self.num_training_steps_per_epoch, axis_order=self.axis_order)
+            train_stats = train_one_epoch(self.cfg, model=self.model, loss_function=self.loss, activations=self.apply_model_activations, 
+                metric_function=self.metric_calculation, prepare_targets=self.prepare_targets, data_loader=self.train_generator, 
+                optimizer=self.optimizer, device=self.device, loss_scaler=self.loss_scaler, epoch=epoch, log_writer=self.log_writer, 
+                lr_scheduler=self.lr_scheduler, start_steps=epoch * self.num_training_steps_per_epoch, axis_order=self.axis_order)
 
             # Save checkpoint
             if (epoch + 1) % self.cfg.MODEL.SAVE_CKPT_FREQ == 0 or epoch + 1 == self.cfg.TRAIN.EPOCHS and is_main_process():
@@ -275,9 +277,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 
             # Validation
             if self.val_generator is not None:
-                test_stats = evaluate(self.cfg, model=self.model, loss_function=self.loss, metric_function=self.metric_calculation,
-                    prepare_targets=self.prepare_targets, epoch=epoch, data_loader=self.val_generator, device=self.device, 
-                    lr_scheduler=self.lr_scheduler, axis_order=self.axis_order)
+                test_stats = evaluate(self.cfg, model=self.model, loss_function=self.loss, activations=self.apply_model_activations,
+                    metric_function=self.metric_calculation, prepare_targets=self.prepare_targets, epoch=epoch, 
+                    data_loader=self.val_generator, device=self.device, lr_scheduler=self.lr_scheduler, axis_order=self.axis_order)
 
                 # Save checkpoint is val loss improved 
                 if test_stats['loss'] < val_best_loss:
@@ -441,7 +443,8 @@ class Base_Workflow(metaclass=ABCMeta):
     def test(self):
         self.load_test_data()
         self.prepare_test_generators()
-        self.prepare_model()
+        if not self.model_prepared:
+            self.prepare_model()
 
         # Load checkpoint
         self.start_epoch = load_model_checkpoint(cfg=self.cfg, model_without_ddp=self.model_without_ddp)
