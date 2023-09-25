@@ -36,16 +36,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         # Activations for each output channel:
         # channel number : 'activation'
-        # Replace Sigmoids with Linear as torch.nn.BCEWithLogitsLoss will apply it to have more 
-        # numericall stability
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
             self.activations = {'0': 'Linear'}
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BP", "BCM"]:
-            self.activations = {':': 'Linear'}
+            self.activations = {':': 'BCE_Sigmoid'}
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BDv2", "BD"]:
-            self.activations = {'0': 'Linear', '1': 'Linear'}
+            self.activations = {'0': 'BCE_Sigmoid', '1': 'Linear'}
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2"]:
-            self.activations = {'0': 'Linear', '1': 'Linear', '2': 'Linear'}
+            self.activations = {'0': 'BCE_Sigmoid', '1': 'BCE_Sigmoid', '2': 'Linear'}
 
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH

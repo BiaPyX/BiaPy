@@ -34,7 +34,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
         # Activations for each output channel:
         # channel number : 'activation'
-        self.activations = {':': 'Sigmoid'}
+        self.activations = {':': 'BCE_Sigmoid'}
 
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
