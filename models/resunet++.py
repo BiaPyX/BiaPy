@@ -1,16 +1,18 @@
 import torch
 import torch.nn as nn
 
-from models.blocks import ResConvBlock, ResUpBlock
+from models.blocks import ResConvBlock, ResUpBlock, SqExBlock, ASPP, ResUNetPlusPlus_AttentionBlock
 
-class ResUNet(nn.Module):
+class ResUNetPlusPlus2(nn.Module):
     def __init__(self, image_shape=(256, 256, 1), activation="ELU", feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
         batch_norm=False, k_size=3, upsample_layer="convtranspose", z_down=[2,2,2,2], n_classes=1, 
         output_channels="BC", upsampling_factor=1, upsampling_position="pre"):
         """
-        Create 2D/3D Residual U-Net.
+        Create 2D/3D ResUNet++.
 
         `Road Extraction by Deep Residual U-Net <https://arxiv.org/pdf/1711.10684.pdf>`_.
+
+        `ResUNet++: An Advanced Architecture for Medical Image Segmentation <https://arxiv.org/pdf/1911.07067.pdf>`_.
 
         Parameters
         ----------
@@ -55,7 +57,7 @@ class ResUNet(nn.Module):
         Returns
         -------
         model : Torch model
-            Residual U-Net model.
+            ResUNet++ model.
 
 
         Calling this function with its default parameters returns the following network:
@@ -67,9 +69,9 @@ class ResUNet(nn.Module):
         Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
         """
         
-        super(ResUNet, self).__init__()
+        super(ResUNetPlusPlus2, self).__init__()
 
-        self.depth = len(feature_maps)-1
+        self.depth = len(feature_maps)-2
         self.ndim = 3 if len(image_shape) == 4 else 2 
         self.z_down = z_down
         self.n_classes = 1 if n_classes <= 2 else n_classes
@@ -90,29 +92,46 @@ class ResUNet(nn.Module):
             mpool = (1, 2, 2) if self.ndim == 3 else (2, 2)
             self.pre_upsampling = convtranspose(image_shape[-1], image_shape[-1], kernel_size=mpool, stride=mpool)
 
+        self.down_path = nn.ModuleList()
+
         # ENCODER
         self.down_path = nn.ModuleList()
-        in_channels = image_shape[-1]
+        self.sqex_blocks = nn.ModuleList()
+        self.down_path.append( 
+                ResConvBlock(conv=conv, in_size=image_shape[-1], out_size=feature_maps[0], k_size=k_size, act=activation, 
+                    batch_norm=batchnorm_layer, dropout=drop_values[0], skip_k_size=k_size, skip_batch_norm=batchnorm_layer, 
+                    first_block=True)
+            )
+        self.sqex_blocks.append(SqExBlock(feature_maps[0], ndim=self.ndim))
+        in_channels = feature_maps[0]
         for i in range(self.depth):
             self.down_path.append( 
-                ResConvBlock(conv=conv, in_size=in_channels, out_size=feature_maps[i], k_size=k_size, act=activation, 
-                    batch_norm=batchnorm_layer, dropout=drop_values[i], first_block=True if i==0 else False)
+                ResConvBlock(conv=conv, in_size=in_channels, out_size=feature_maps[i+1], k_size=k_size, act=activation, 
+                    batch_norm=batchnorm_layer, dropout=drop_values[i], skip_k_size=k_size, skip_batch_norm=batchnorm_layer, 
+                    first_block=False)
             )
-            in_channels = feature_maps[i]
+            in_channels = feature_maps[i+1]
+            if i != self.depth-1:
+                self.sqex_blocks.append(SqExBlock(in_channels, ndim=self.ndim))
 
-        self.bottleneck = ResConvBlock(conv=conv, in_size=in_channels, out_size=feature_maps[-1], k_size=k_size, 
-            act=activation, batch_norm=batchnorm_layer, dropout=drop_values[-1])
+        self.aspp_bridge = ASPP(conv=conv, in_dims=in_channels, out_dims=feature_maps[-1], batch_norm=batchnorm_layer)
 
         # DECODER
         self.up_path = nn.ModuleList()
-        in_channels = feature_maps[-1]
+        self.attentions = nn.ModuleList()
         for i in range(self.depth-1, -1, -1):
-            self.up_path.append( 
-                ResUpBlock(ndim=self.ndim, convtranspose=convtranspose, in_size=in_channels, out_size=feature_maps[i], 
-                    in_size_bridge=feature_maps[i], z_down=z_down[i], up_mode=upsample_layer, 
-                    conv=conv, k_size=k_size, act=activation, batch_norm=batchnorm_layer, dropout=drop_values[i])
+            self.attentions.append(
+                ResUNetPlusPlus_AttentionBlock(conv=conv, maxpool=self.pooling, input_encoder=feature_maps[i], 
+                    input_decoder=feature_maps[i+2], output_dim=feature_maps[i+2], batch_norm=batchnorm_layer,
+                    z_down=z_down[i+1])
             )
-            in_channels = feature_maps[i]
+            self.up_path.append( 
+                ResUpBlock(ndim=self.ndim, convtranspose=convtranspose, in_size=feature_maps[i+2], out_size=feature_maps[i+1], 
+                    in_size_bridge=feature_maps[i], z_down=z_down[i+1], up_mode=upsample_layer, 
+                    conv=conv, k_size=k_size, act=activation, batch_norm=batchnorm_layer, dropout=drop_values[i+2], 
+                    skip_k_size=k_size, skip_batch_norm=batchnorm_layer)
+            )
+        self.aspp_out = ASPP(conv=conv, in_dims=feature_maps[1], out_dims=feature_maps[0], batch_norm=batchnorm_layer)
         
         # Super-resolution
         self.post_upsampling = None
@@ -145,16 +164,22 @@ class ResUNet(nn.Module):
         blocks = []
         for i, down in enumerate(self.down_path):
             x = down(x)
+            if i < len(self.down_path)-1: #Avoid last block
+                x = self.sqex_blocks[i](x)
             if i != len(self.down_path):
-                blocks.append(x)
                 mpool = (self.z_down[i], 2, 2) if self.ndim == 3 else (2, 2)
-                x = self.pooling(mpool)(x) 
+                if i != 0: # First level is not downsampled
+                    x = self.pooling(mpool)(x) 
+                blocks.append(x)
 
-        x = self.bottleneck(x) 
+        x = self.aspp_bridge(x) 
 
         # Up
         for i, up in enumerate(self.up_path):
-            x = up(x, blocks[-i - 1])
+            x = self.attentions[i](blocks[-i - 2], x)
+            x = up(x, blocks[-i - 2])
+
+        x = self.aspp_out(x)
 
         # Super-resolution
         if self.post_upsampling is not None:

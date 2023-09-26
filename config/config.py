@@ -481,7 +481,7 @@ class Config:
         # Model definition
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.MODEL = CN()
-        # Architecture of the network. Possible values are: 'unet', 'resunet', 'attention_unet', 'nnunet',  
+        # Architecture of the network. Possible values are: 'unet', 'resunet', 'resunet++', 'attention_unet', 'nnunet',  
         # 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'ViT'
         # 'mae'
         _C.MODEL.ARCHITECTURE = 'unet'
@@ -494,7 +494,7 @@ class Config:
         _C.MODEL.BATCH_NORMALIZATION = True
         # Kernel size
         _C.MODEL.KERNEL_SIZE = 3
-        # Upsampling layer to use in the model
+        # Upsampling layer to use in the model. Options: ["upsampling", "convtranspose"]
         _C.MODEL.UPSAMPLE_LAYER = "convtranspose"
         # Activation function to use along the model
         _C.MODEL.ACTIVATION = 'ELU'

@@ -38,7 +38,7 @@ def build_model(cfg, job_identifier, device):
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
 
     # Model building
-    if modelname in ['unet', 'resunet', 'seunet', 'attention_unet']:
+    if modelname in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet']:
         args = dict(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION.lower(), feature_maps=cfg.MODEL.FEATURE_MAPS, 
             drop_values=cfg.MODEL.DROPOUT_VALUES, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, k_size=cfg.MODEL.KERNEL_SIZE,
             upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, z_down=cfg.MODEL.Z_DOWN)
@@ -46,6 +46,8 @@ def build_model(cfg, job_identifier, device):
             f_name = U_Net
         elif modelname == 'resunet':
             f_name = ResUNet
+        elif modelname == 'resunet++':
+            f_name = ResUNetPlusPlus2
         elif modelname == 'attention_unet':
             f_name = Attention_U_Net
         elif modelname == 'seunet':
@@ -59,6 +61,7 @@ def build_model(cfg, job_identifier, device):
         else:
             args['n_classes'] = cfg.MODEL.N_CLASSES if cfg.PROBLEM.TYPE != 'DENOISING' else cfg.DATA.PATCH_SIZE[-1]
         model = f_name(**args)
+        # model = ResUNetPlusPlus()
     else:
         if modelname == 'simple_cnn':
             model = simple_CNN(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION.lower(), n_classes=cfg.MODEL.N_CLASSES)
