@@ -433,7 +433,7 @@ class Base_Workflow(metaclass=ABCMeta):
         for key, value in self.activations.items():
             # Ignore BCE_Sigmoids as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way 
             # that is more stable numerically (ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html)
-            if not ["Linear", "BCE_Sigmoid"]:
+            if value not in ["Linear", "BCE_Sigmoid"]:
                 act = getattr(torch.nn, value)()
                 if key == ':':
                     pred = act(pred)
