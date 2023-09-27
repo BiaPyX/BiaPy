@@ -429,11 +429,12 @@ class Base_Workflow(metaclass=ABCMeta):
             print("############################")
             self.test_generator, self.data_norm = create_test_augmentor(self.cfg, self.X_test, self.Y_test, self.cross_val_samples_ids)
 
-    def apply_model_activations(self, pred):
+    def apply_model_activations(self, pred, training=False):
         for key, value in self.activations.items():
-            # Ignore BCE_Sigmoids as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way 
+            # Ignore CE_Sigmoid as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way 
             # that is more stable numerically (ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html)
-            if value not in ["Linear", "BCE_Sigmoid"]:
+            if (training and value not in ["Linear", "CE_Sigmoid"]) or (not training and value != "Linear"):
+                value = "Sigmoid" if value == "CE_Sigmoid" else value
                 act = getattr(torch.nn, value)()
                 if key == ':':
                     pred = act(pred)

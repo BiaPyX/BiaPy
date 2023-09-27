@@ -35,7 +35,7 @@ def train_one_epoch(cfg, model, loss_function, activations, metric_function, pre
         # Pass the images through the model
         # TODO: control autocast and mixed precision
         with torch.cuda.amp.autocast(enabled=False):
-            outputs = activations(model(batch))
+            outputs = activations(model(batch), training=True)
             loss = loss_function(outputs, targets)
 
         loss_value = loss.item()
@@ -102,7 +102,7 @@ def evaluate(cfg, model, loss_function, activations, metric_function, prepare_ta
         # Pass the images through the model
         # TODO: control autocast and mixed precision
         with torch.cuda.amp.autocast(enabled=False):  
-            outputs = activations(model(images))
+            outputs = activations(model(images), training=True)
             loss = loss_function(outputs, targets)
         
         # Calculate the metrics

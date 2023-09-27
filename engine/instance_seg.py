@@ -39,11 +39,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
             self.activations = {'0': 'Linear'}
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BP", "BCM"]:
-            self.activations = {':': 'BCE_Sigmoid'}
+            self.activations = {':': 'CE_Sigmoid'}
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BDv2", "BD"]:
-            self.activations = {'0': 'BCE_Sigmoid', '1': 'Linear'}
+            self.activations = {'0': 'CE_Sigmoid', '1': 'Linear'}
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2"]:
-            self.activations = {'0': 'BCE_Sigmoid', '1': 'BCE_Sigmoid', '2': 'Linear'}
+            self.activations = {'0': 'CE_Sigmoid', '1': 'CE_Sigmoid', '2': 'Linear'}
 
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH

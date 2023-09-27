@@ -47,7 +47,7 @@ class Detection_Workflow(Base_Workflow):
 
         # Activations for each output channel:
         # channel number : 'activation'
-        self.activations = {'0': 'BCE_Sigmoid'}
+        self.activations = {'0': 'CE_Sigmoid'}
 
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
