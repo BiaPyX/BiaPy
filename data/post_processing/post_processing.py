@@ -580,7 +580,7 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=1):
     arr = []
     for c in range(_decoded_aug_img.shape[-1]):
         # Remove the last channel to make the transformations correctly
-        decoded_aug_img = _decoded_aug_img[...,c]
+        decoded_aug_img = _decoded_aug_img[...,c].astype(np.float32) 
 
         # Undo the combinations of the image
         out_img = []
@@ -726,8 +726,7 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
     arr = []
     for c in range(_decoded_aug_vols.shape[-1]):
         # Remove the last channel to make the transformations correctly
-        decoded_aug_vols = _decoded_aug_vols[...,c]
-
+        decoded_aug_vols = _decoded_aug_vols[...,c].astype(np.float32)        
         # Undo the combinations of the volume
         out_vols = []
         out_vols.append(np.array(decoded_aug_vols[0]))

@@ -743,7 +743,7 @@ def check_masks(path, n_classes=2):
            Maximum classes that the masks must contain.
     """
 
-    print("Checking Whether the images in {} are binary . . .".format(path))
+    print("Checking ground truth classes in {} . . .".format(path))
 
     ids = sorted(next(os.walk(path))[2])
 
