@@ -710,7 +710,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         loss = self.loss(output, self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top])
 
                     # Calculate the metrics
-                    train_iou = self.metric_calculation(output, self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.device)
+                    train_iou = self.metric_calculation(output, self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top])
                     
                     self.stats['loss_per_crop'] += loss.item()
                     self.stats['iou_per_crop'] += train_iou
