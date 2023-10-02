@@ -43,7 +43,7 @@ class ConvBlock(nn.Module):
         if act is not None:
             block.append(get_activation(act))
         if dropout > 0:
-            block.append(nn.Dropout(drop_values[i]))
+            block.append(nn.Dropout(dropout))
         if se_block:
             block.append(SqExBlock(out_size, ndim=2 if conv == nn.Conv2d else 3))
 
