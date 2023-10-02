@@ -512,8 +512,9 @@ class Config:
         # Decide which checkpoint to load from job's dir if PATHS.CHECKPOINT_FILE is ''. 
         # Options: 'best_on_val' or 'last_on_train'
         _C.MODEL.LOAD_CHECKPOINT_EPOCH = 'best_on_val' 
-        # Epochs to save a checkpoint of the model (apart from any callbacks)
-        _C.MODEL.SAVE_CKPT_FREQ = 5
+        # Epochs to save a checkpoint of the model apart from the ones that achieves best validation value. Set it to -1 to 
+        # not do it.
+        _C.MODEL.SAVE_CKPT_FREQ = -1
 
         # TRANSFORMERS MODELS
         # Type of model. Options are "custom", "vit_base_patch16", "vit_large_patch16" and "vit_huge_patch16". On custom setting 

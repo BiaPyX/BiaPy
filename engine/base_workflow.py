@@ -346,9 +346,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 lr_scheduler=self.lr_scheduler, start_steps=epoch * self.num_training_steps_per_epoch, axis_order=self.axis_order)
 
             # Save checkpoint
-            if (epoch + 1) % self.cfg.MODEL.SAVE_CKPT_FREQ == 0 or epoch + 1 == self.cfg.TRAIN.EPOCHS and is_main_process():
-                save_model(cfg=self.cfg, model=self.model, model_without_ddp=self.model_without_ddp, optimizer=self.optimizer,
-                    loss_scaler=self.loss_scaler, epoch=epoch+1)
+            if self.cfg.MODEL.SAVE_CKPT_FREQ != -1:
+                if (epoch + 1) % self.cfg.MODEL.SAVE_CKPT_FREQ == 0 or epoch + 1 == self.cfg.TRAIN.EPOCHS and is_main_process():
+                    save_model(cfg=self.cfg, jobname=self.job_identifier, model=self.model, model_without_ddp=self.model_without_ddp, 
+                        optimizer=self.optimizer, loss_scaler=self.loss_scaler, epoch=epoch+1)
 
             # Apply warmup cosine decay scheduler
             if epoch % self.cfg.TRAIN.ACCUM_ITER == 0 and self.cfg.TRAIN.LR_SCHEDULER.NAME == 'warmupcosine':
@@ -362,8 +363,8 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Save checkpoint is val loss improved 
                 if test_stats['loss'] < val_best_loss:
-                    print("Val loss improved from {} to {}, saving model to {}"
-                          .format(val_best_loss, test_stats['loss'], os.path.join(self.cfg.PATHS.CHECKPOINT,'checkpoint-best.pth')))
+                    f = os.path.join(self.cfg.PATHS.CHECKPOINT,"{}-checkpoint-best.pth".format(self.job_identifier))
+                    print("Val loss improved from {} to {}, saving model to {}".format(val_best_loss, test_stats['loss'], f))
                     m = " "
                     for i in range(len(val_best_metric)):
                         val_best_metric[i] = test_stats[self.metric_names[i]]
@@ -371,8 +372,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     val_best_loss = test_stats['loss']
 
                     if is_main_process():
-                        save_model(cfg=self.cfg, model=self.model, model_without_ddp=self.model_without_ddp, optimizer=self.optimizer,
-                            loss_scaler=self.loss_scaler, epoch="best")
+                        save_model(cfg=self.cfg, jobname=self.job_identifier, model=self.model, model_without_ddp=self.model_without_ddp, 
+                            optimizer=self.optimizer, loss_scaler=self.loss_scaler, epoch="best")
                 print(f'[Val] best loss: {val_best_loss:.4f} best '+m)
 
                 # Store validation stats 
