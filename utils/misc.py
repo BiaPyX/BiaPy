@@ -139,13 +139,13 @@ def save_model(cfg, jobname, epoch, model, model_without_ddp, optimizer, loss_sc
             save_on_master(to_save, checkpoint_path)
     else:
         client_state = {'epoch': epoch}
-        model.save_checkpoint(save_dir=output_dir, tag="checkpoint-%s" % epoch_name, client_state=client_state)
+        model.save_checkpoint(save_dir=output_dir, tag="{}-checkpoint-{}".format(jobname, epoch_name), client_state=client_state)
 
 def save_on_master(*args, **kwargs):
     if is_main_process():
         torch.save(*args, **kwargs)
 
-def load_model_checkpoint(cfg, model_without_ddp, optimizer=None, loss_scaler=None):
+def load_model_checkpoint(cfg, jobname, model_without_ddp, optimizer=None, loss_scaler=None):
     checkpoint_dir = Path(cfg.PATHS.CHECKPOINT)
     start_epoch = 0
 
@@ -154,16 +154,16 @@ def load_model_checkpoint(cfg, model_without_ddp, optimizer=None, loss_scaler=No
         resume = cfg.PATHS.CHECKPOINT_FILE
     else:
         if cfg.MODEL.LOAD_CHECKPOINT_EPOCH == 'last_on_train':
-            all_checkpoints = glob.glob(os.path.join(checkpoint_dir, 'checkpoint-*.pth'))
+            all_checkpoints = glob.glob(os.path.join(checkpoint_dir, "{}-checkpoint-*.pth".format(jobname)))
             latest_ckpt = -1
             for ckpt in all_checkpoints:
                 t = ckpt.split('-')[-1].split('.')[0]
                 if t.isdigit():
                     latest_ckpt = max(int(t), latest_ckpt)
             if latest_ckpt >= 0:
-                resume = os.path.join(checkpoint_dir, 'checkpoint-%d.pth' % latest_ckpt)
+                resume = os.path.join(checkpoint_dir, "{}-checkpoint-{}.pth".format(jobname, latest_ckpt))
         elif cfg.MODEL.LOAD_CHECKPOINT_EPOCH == 'best_on_val':
-            resume = os.path.join(checkpoint_dir, 'checkpoint-best.pth')
+            resume = os.path.join(checkpoint_dir, '{}-checkpoint-best.pth'.format(jobname))
         else:
             NotImplementedError
 

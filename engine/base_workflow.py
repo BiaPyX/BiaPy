@@ -317,7 +317,7 @@ class Base_Workflow(metaclass=ABCMeta):
  
         # Load checkpoint if necessary
         if self.cfg.MODEL.LOAD_CHECKPOINT:
-            self.start_epoch = load_model_checkpoint(cfg=self.cfg, model_without_ddp=self.model_without_ddp,
+            self.start_epoch = load_model_checkpoint(cfg=self.cfg, jobname=self.job_identifier, model_without_ddp=self.model_without_ddp,
                     optimizer=self.optimizer, loss_scaler=self.loss_scaler)
         else:
             self.start_epoch = 0      
@@ -559,7 +559,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.prepare_model()
 
         # Load checkpoint
-        self.start_epoch = load_model_checkpoint(cfg=self.cfg, model_without_ddp=self.model_without_ddp)
+        self.start_epoch = load_model_checkpoint(cfg=self.cfg, jobname=self.job_identifier, model_without_ddp=self.model_without_ddp)
         if self.start_epoch == -1:
             raise ValueError("There was a problem loading the checkpoint. Test phase aborted!")
 
