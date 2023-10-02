@@ -3,26 +3,26 @@ import torch.nn as nn
 from models.blocks import get_activation
 
 class simple_CNN(nn.Module):
+    """
+    Create simple CNN.
+
+    Parameters
+    ----------
+    image_shape : 2D tuple
+        Dimensions of the input image.
+        
+    activation : str, optional
+        Activation layer to use in the model.  
+
+    n_classes: int, optional
+        Number of classes.
+
+    Returns
+    -------
+    model : Torch model
+        Model containing the simple CNN.
+    """
     def __init__(self, image_shape, activation="ReLU", n_classes=2):
-        """
-        Create simple CNN.
-
-        Parameters
-        ----------
-        image_shape : 2D tuple
-            Dimensions of the input image.
-            
-        activation : str, optional
-            Activation layer to use in the model.  
-
-        n_classes: int, optional
-            Number of classes.
-
-        Returns
-        -------
-        model : Torch model
-            Model containing the simple CNN.
-        """
         super(simple_CNN, self).__init__()
         self.ndim = 3 if len(image_shape) == 4 else 2 
 

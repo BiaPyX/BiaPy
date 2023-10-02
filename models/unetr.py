@@ -6,82 +6,74 @@ from timm.models.vision_transformer import Block
 from models.blocks import DoubleConvBlock, ConvBlock, get_activation
 from models.tr_layers import PatchEmbed
 
-'''
-UNETR BLOCKS
-
-To make easier to read, same blocks described in the UNETR architecture are defined below:
-    `UNETR paper <https://openaccess.thecvf.com/content/WACV2022/papers/Hatamizadeh_UNETR_Transformers_for_3D_Medical_Image_Segmentation_WACV_2022_paper.pdf>`__.
-'''
-
 class UNETR(nn.Module):
+    """
+    UNETR architecture. It combines a ViT with U-Net, replaces the convolutional encoder 
+    with the ViT and adapt each skip connection signal to their layer's spatial dimensionality. 
+
+    Reference: `UNETR: Transformers for 3D Medical Image Segmentation 
+    <https://openaccess.thecvf.com/content/WACV2022/html/Hatamizadeh_UNETR_Transformers_for_3D_Medical_Image_Segmentation_WACV_2022_paper.html>`_.
+
+    Parameters
+    ----------
+    input_shape : 3D/4D tuple
+        Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+        
+    patch_size : int
+        Size of the patches that are extracted from the input image. As an example, to use ``16x16`` 
+        patches, set ``patch_size = 16``.
+
+    embed_dim : int
+        Dimension of the embedding space.
+
+    depth : int
+        Number of layer of ViT backbone. 
+
+    transformer_layers : int
+        Number of transformer encoder layers.
+
+    num_heads : int
+        Number of heads in the multi-head attention layer.
+
+    mlp_ratio : float, optional
+        Ratio to multiply ``embed_dim`` to obtain the dense layers of the final classifier. 
+
+    num_filters: int, optional
+        Number of filters in the first UNETR's layer of the decoder. In each layer the previous number of filters is 
+        doubled.
+
+    norm_layer : Torch layer, optional
+        Nomarlization layer to use in ViT backbone.
+
+    n_classes : int, optional
+        Number of classes to predict. Is the number of channels in the output tensor.
+
+    decoder_activation : str, optional
+        Activation function for the decoder.
+
+    ViT_hidd_mult : int, optional
+        Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted.
+        E.g. if we have ``12`` transformer encoder layers, and we set ``ViT_hidd_mult = 3``, we are going to take
+        ``[1*ViT_hidd_mult, 2*ViT_hidd_mult, 3*ViT_hidd_mult]`` -> ``[Z3, Z6, Z9]`` encoder's signals. 
+
+    batch_norm : bool, optional
+        Whether to use batch normalization or not.
+
+    dropout : bool, optional
+        Dropout rate for the decoder (can be a list of dropout rates for each layer).
+
+    output_channels : str, optional
+        Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
+        ``BDv2``, ``Dv2`` and ``BCM``.
+
+    Returns
+    -------
+    model : Torch model
+        UNETR model.
+    """
     def __init__(self, input_shape, patch_size, embed_dim, depth, transformer_layers, num_heads, mlp_ratio=4., num_filters = 16, 
         norm_layer=nn.LayerNorm, n_classes = 1, decoder_activation = 'relu', ViT_hidd_mult = 3, batch_norm = True, 
         dropout = 0.0, output_channels="BC"):
-        """
-        UNETR architecture. It combines a ViT with U-Net, replaces the convolutional encoder 
-        with the ViT and adapt each skip connection signal to their layer's spatial dimensionality. 
-
-        Note: Unlike the original UNETR, the sigmoid activation function is used in the last convolutional layer.
-
-        `UNETR paper <https://openaccess.thecvf.com/content/WACV2022/papers/Hatamizadeh_UNETR_Transformers_for_3D_Medical_Image_Segmentation_WACV_2022_paper.pdf>`__.
-
-        Parameters
-        ----------
-        input_shape : 3D/4D tuple
-            Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
-            
-        patch_size : int
-            Size of the patches that are extracted from the input image. As an example, to use ``16x16`` 
-            patches, set ``patch_size = 16``.
-
-        embed_dim : int
-            Dimension of the embedding space.
-
-        depth : int
-            Number of layer of ViT backbone. 
-
-        transformer_layers : int
-            Number of transformer encoder layers.
-
-        num_heads : int
-            Number of heads in the multi-head attention layer.
-
-        mlp_ratio : float, optional
-            Ratio to multiply ``embed_dim`` to obtain the dense layers of the final classifier. 
-
-        num_filters: int, optional
-            Number of filters in the first UNETR's layer of the decoder. In each layer the previous number of filters is 
-            doubled.
-
-        norm_layer : Torch layer, optional
-            Nomarlization layer to use in ViT backbone.
-
-        n_classes : int, optional
-            Number of classes to predict. Is the number of channels in the output tensor.
-
-        decoder_activation : str, optional
-            Activation function for the decoder.
-
-        ViT_hidd_mult : int, optional
-            Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted.
-            E.g. if we have ``12`` transformer encoder layers, and we set ``ViT_hidd_mult = 3``, we are going to take
-            ``[1*ViT_hidd_mult, 2*ViT_hidd_mult, 3*ViT_hidd_mult]`` -> ``[Z3, Z6, Z9]`` encoder's signals. 
-
-        batch_norm : bool, optional
-            Whether to use batch normalization or not.
-
-        dropout : bool, optional
-            Dropout rate for the decoder (can be a list of dropout rates for each layer).
-
-        output_channels : str, optional
-            Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
-            ``BDv2``, ``Dv2`` and ``BCM``.
-
-        Returns
-        -------
-        model : Torch model
-            UNETR model.
-        """
         super().__init__()
         
         self.input_shape = input_shape

@@ -10,7 +10,6 @@ from skimage.morphology import disk, dilation
 
 from data.data_2D_manipulation import load_and_prepare_2D_train_data
 from data.data_3D_manipulation import load_and_prepare_3D_data
-
 from data.post_processing.post_processing import (remove_close_points, detection_watershed, 
     remove_instance_by_circularity_central_slice)
 from data.pre_processing import create_detection_masks
@@ -19,8 +18,26 @@ from engine.metrics import detection_metrics, jaccard_index, weighted_bce_dice_l
 from engine.base_workflow import Base_Workflow
 
 class Detection_Workflow(Base_Workflow):
-    def __init__(self, cfg, job_identifier, device, rank, **kwargs):
-        super(Detection_Workflow, self).__init__(cfg, job_identifier, device, rank, **kwargs)
+    """
+    Detection workflow where the goal is to localize objects in the input image, not requiring a pixel-level class.
+    More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/detection.html>`_.  
+
+    Parameters
+    ----------
+    cfg : YACS configuration
+        Running configuration.
+    
+    Job_identifier : str
+        Complete name of the running job.
+
+    device : Torch device
+        Device used. 
+
+    args : argpase class
+        Arguments used in BiaPy's call. 
+    """
+    def __init__(self, cfg, job_identifier, device, args, **kwargs):
+        super(Detection_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         # Detection stats
         self.stats['d_precision'] = 0
@@ -60,6 +77,9 @@ class Detection_Workflow(Base_Workflow):
             self.post_processing['detection_post'] = False    
 
     def define_metrics(self):
+        """
+        Definition of self.metrics, self.metric_names and self.loss variables.
+        """
         if self.cfg.LOSS.TYPE == "CE": 
             self.metrics = [jaccard_index]
             self.metric_names = ["jaccard_index"]
@@ -69,9 +89,28 @@ class Detection_Workflow(Base_Workflow):
             self.metric_names = ["jaccard_index"]
             self.loss = weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33)
 
-    def metric_calculation(self, output, targets, device, metric_logger=None):
+    def metric_calculation(self, output, targets, metric_logger=None):
+        """
+        Execution of the metrics defined in :func:`~define_metrics` function. 
+
+        Parameters
+        ----------
+        output : Torch Tensor
+            Prediction of the model. 
+
+        targets : Torch Tensor
+            Ground truth to compare the prediction with. 
+
+        metric_logger : MetricLogger, optional
+            Class to be updated with the new metric(s) value(s) calculated. 
+        
+        Returns
+        -------
+        value : float
+            Value of the metric for the given prediction. 
+        """
         with torch.no_grad():
-            train_iou = self.metrics[0](output, targets, device, num_classes=self.cfg.MODEL.N_CLASSES)
+            train_iou = self.metrics[0](output, targets, self.device, num_classes=self.cfg.MODEL.N_CLASSES)
             train_iou = train_iou.item() if not torch.isnan(train_iou) else 0
             if metric_logger is not None:
                 metric_logger.meters[self.metric_names[0]].update(train_iou)
@@ -79,6 +118,27 @@ class Detection_Workflow(Base_Workflow):
                 return train_iou
 
     def detection_process(self, pred, filenames, metric_names=[], f_numbers=0):
+        """
+        Detection workflow engine for test/inference. Process model's prediction to prepare detection output and 
+        calculate metrics. 
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model predictions.
+        
+        filenames : List of str
+            Predicted image's filenames.
+
+        metric_names : List of str
+            Metrics names.
+
+        f_numbers : List of ints
+            Number of the processed images. If the images used for prediction and the ground truth files do not 
+            share the same names, this value can be helpful for loading ground truth files that correspond to 
+            the same position in the file list as the input images. A warning message will appear to alert the 
+            user, ensuring awareness in case the ground truth data does not truly match the input images.
+        """
         ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
         pred_shape = pred.shape
         
@@ -328,6 +388,14 @@ class Detection_Workflow(Base_Workflow):
                         filenames, verbose=self.cfg.TEST.VERBOSE)          
 
     def normalize_stats(self, image_counter):
+        """
+        Normalize statistics.  
+
+        Parameters
+        ----------
+        image_counter : int
+            Number of images to average the metrics.
+        """
         super().normalize_stats(image_counter)
 
         with open(self.cell_count_file, 'w', newline="") as file:
@@ -346,15 +414,48 @@ class Detection_Workflow(Base_Workflow):
                 self.stats['d_f1'] = self.stats['d_f1'] / image_counter
 
     def after_merge_patches(self, pred, filenames):
+        """
+        Steps need to be done after merging all predicted patches into the original image.
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model prediction.
+
+        filenames : List of str
+            Filenames of the predicted images.  
+        """
         self.detection_process(pred, filenames, ['d_precision_per_crop', 'd_recall_per_crop', 'd_f1_per_crop'])
 
     def after_full_image(self, pred, filenames):
+        """
+        Steps that must be executed after generating the prediction by supplying the entire image to the model.
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model prediction.
+
+        filenames : List of str
+            Filenames of the predicted images.  
+        """
         self.detection_process(pred, filenames, ['d_precision', 'd_recall', 'd_f1'])
 
     def after_all_images(self):
+        """
+        Steps that must be done after predicting all images. 
+        """
         super().after_all_images()
 
     def print_stats(self, image_counter):
+        """
+        Print statistics.  
+
+        Parameters
+        ----------
+        image_counter : int
+            Number of images to call ``normalize_stats``.
+        """
         super().print_stats(image_counter)
         super().print_post_processing_stats()
 
@@ -370,6 +471,10 @@ class Detection_Workflow(Base_Workflow):
                 print("Detection - Test F1 (per image): {}".format(self.stats['d_f1']))
 
     def prepare_detection_data(self):
+        """
+        Creates detection ground truth images to train the model based on the ground truth coordinates provided.
+        They will be saved in a separate folder in the root path of the ground truth. 
+        """
         print("############################")
         print("#  PREPARE DETECTION DATA  #")
         print("############################")

@@ -20,7 +20,7 @@ class Config:
         _C.SYSTEM = CN()
         # Number of CPUs to use
         _C.SYSTEM.NUM_CPUS = 10
-        # This will be calculated based in --gpu input arg
+        # Do not set it as its value will be calculated based in --gpu input arg
         _C.SYSTEM.NUM_GPUS = 0
 
         # Math seed

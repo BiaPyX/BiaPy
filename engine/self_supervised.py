@@ -15,8 +15,28 @@ from data.pre_processing import create_ssl_source_data_masks, denormalize
 from engine.metrics import MaskedAutoencoderViT_loss
 
 class Self_supervised_Workflow(Base_Workflow):
-    def __init__(self, cfg, job_identifier, device, rank, **kwargs):
-        super(Self_supervised_Workflow, self).__init__(cfg, job_identifier, device, rank, **kwargs)
+    """
+    Self supervised workflow where the goal is to pretrain the backbone model by solving a so-called 
+    pretext task without labels. This way, the model learns a representation that can be later transferred 
+    to solve a downstream task in a labeled (but smaller) dataset. More details in `our documentation 
+    <https://biapy.readthedocs.io/en/latest/workflows/self_supervision.html>`_.  
+
+    Parameters
+    ----------
+    cfg : YACS configuration
+        Running configuration.
+    
+    Job_identifier : str
+        Complete name of the running job.
+
+    device : Torch device
+        Device used. 
+
+    args : argpase class
+        Arguments used in BiaPy's call. 
+    """
+    def __init__(self, cfg, job_identifier, device, args, **kwargs):
+        super(Self_supervised_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
         
         self.stats['psnr_per_image'] = 0
 
@@ -36,11 +56,10 @@ class Self_supervised_Workflow(Base_Workflow):
         else:
             self.load_Y_val = True
 
-    def prepare_targets(self, targets, batch):
-        # Swap with original images so we can calculate PSNR metric afterwards
-        return batch
-
     def define_metrics(self):
+        """
+        Definition of self.metrics, self.metric_names and self.loss variables.
+        """
         self.metrics = [PeakSignalNoiseRatio()]
         self.metric_names = ["PSNR"]
         if self.cfg.MODEL.ARCHITECTURE == 'mae':
@@ -51,11 +70,33 @@ class Self_supervised_Workflow(Base_Workflow):
             self.loss = torch.nn.L1Loss()
 
     def MaskedAutoencoderViT_loss_wrapper(self, output, targets):
+        """
+        Unravel MAE loss.
+        """
         # Targets not used because the loss has been already calculated
         loss, pred, mask = output
         return loss
 
-    def metric_calculation(self, output, targets, device=None, metric_logger=None):
+    def metric_calculation(self, output, targets, metric_logger=None):
+        """
+        Execution of the metrics defined in :func:`~define_metrics` function. 
+
+        Parameters
+        ----------
+        output : Torch Tensor
+            Prediction of the model. 
+
+        targets : Torch Tensor
+            Ground truth to compare the prediction with. 
+
+        metric_logger : MetricLogger, optional
+            Class to be updated with the new metric(s) value(s) calculated. 
+        
+        Returns
+        -------
+        value : float
+            Value of the metric for the given prediction. 
+        """
         # Calculate PSNR 
         _, pred, _ = output
         pred = self.model_without_ddp.unpatchify(pred).to(torch.float32).detach().cpu()
@@ -68,7 +109,39 @@ class Self_supervised_Workflow(Base_Workflow):
             else:
                 return train_psnr
 
+    def prepare_targets(self, targets, batch):
+        """
+        Location to perform any necessary data transformations to ``targets``
+        before inputting it into the model.
+
+        Parameters
+        ----------
+        targets : Torch Tensor
+            Ground truth to compare the prediction with.
+
+        batch : Torch Tensor
+            Prediction of the model. 
+
+        Returns
+        -------
+        targets : Torch tensor
+            Resulting targets. 
+        """
+        # Swap with original images so we can calculate PSNR metric afterwards
+        return batch
+
     def process_sample(self, filenames, norm): 
+        """
+        Function to process a sample in the inference phase. 
+
+        Parameters
+        ----------
+        filenames : List of str
+            Filenames fo the samples to process. 
+
+        norm : List of dicts
+            Normalization used during training. Required to denormalize the predictions of the model.
+        """
         original_data_shape = self._X.shape
     
         # Crop if necessary
@@ -166,18 +239,59 @@ class Self_supervised_Workflow(Base_Workflow):
         self.stats['psnr_per_image'] += psnr_per_image
 
     def after_merge_patches(self, pred,filenames):
+        """
+        Steps need to be done after merging all predicted patches into the original image.
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model prediction.
+
+        filenames : List of str
+            Filenames of the predicted images.  
+        """
         pass
 
     def after_full_image(self, pred, filenames):
+        """
+        Steps that must be executed after generating the prediction by supplying the entire image to the model.
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model prediction.
+
+        filenames : List of str
+            Filenames of the predicted images.  
+        """
         pass
 
     def after_all_images(self):
+        """
+        Steps that must be done after predicting all images. 
+        """
         pass
     
     def normalize_stats(self, image_counter):
+        """
+        Normalize statistics.  
+
+        Parameters
+        ----------
+        image_counter : int
+            Number of images to average the metrics.
+        """
         self.stats['psnr_per_image'] = self.stats['psnr_per_image'] / image_counter
 
     def print_stats(self, image_counter):
+        """
+        Print statistics.  
+
+        Parameters
+        ----------
+        image_counter : int
+            Number of images to call ``normalize_stats``.
+        """
         self.normalize_stats(image_counter)
 
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
@@ -186,6 +300,10 @@ class Self_supervised_Workflow(Base_Workflow):
 
 
     def prepare_ssl_data(self):
+        """
+        Creates self supervised "ground truth" images, if ``crappify`` was selected, to train the model based 
+        on the input images provided. They will be saved in a separate folder in the root path of the inout images. 
+        """
         if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
             print("No SSL data needs to be prepared for masking, as it will be generated on the fly")
             return

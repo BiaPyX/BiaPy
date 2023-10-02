@@ -4,6 +4,10 @@ import numpy as np
 
 class EDSR(nn.Module):
     """
+    Enhanced Deep Residual Networks for Single Image Super-Resolution (EDSR) model. 
+
+    Reference: `Enhanced Deep Residual Networks for Single Image Super-Resolution <https://arxiv.org/abs/1707.02921>`_.
+
     Code adapted from https://keras.io/examples/vision/edsr
     """
     def __init__(self, ndim=2, num_filters=64, num_of_residual_blocks=16, upsampling_factor=2, num_channels=3):
@@ -40,18 +44,18 @@ class EDSR(nn.Module):
         return out
 
 class SR_convblock(nn.Module):
+    """
+    Super-resolution upsampling block.
+
+    Parameters
+    ----------
+    conv : Torch convolutional layer
+        Convolutional layer to use.
+
+    num_filters : Int
+        Number of filter to apply in the convolutional layer. 
+    """ 
     def __init__(self, conv, num_filters):
-        """
-        Super-resolution upsampling block.
-
-        Parameters
-        ----------
-        conv : Torch convolutional layer
-            Convolutional layer to use.
-
-        num_filters : Int
-            Number of filter to apply in the convolutional layer. 
-        """ 
         super(SR_convblock, self).__init__()
         self.conv1 = conv(num_filters, num_filters, kernel_size=3, padding='same')
         self.conv2 = conv(num_filters, num_filters, kernel_size=3, padding='same')
@@ -63,21 +67,21 @@ class SR_convblock(nn.Module):
         return out
 
 class SR_upsampling(nn.Module):
+    """
+    Super-resolution upsampling block.
+
+    Parameters
+    ----------
+    conv : Torch convolutional layer
+        Convolutional layer to use.
+
+    num_filters : Int
+        Number of filter to apply in the convolutional layer. 
+
+    factor : int, optional
+        Upscaling factor to be made to the input image. 
+    """ 
     def __init__(self, conv, num_filters, factor=2):
-        """
-        Super-resolution upsampling block.
-
-        Parameters
-        ----------
-        conv : Torch convolutional layer
-            Convolutional layer to use.
-
-        num_filters : Int
-            Number of filter to apply in the convolutional layer. 
-
-        factor : int, optional
-            Upscaling factor to be made to the input image. 
-        """ 
         super(SR_upsampling, self).__init__()
         self.f = 2 if factor == 4 else factor
         self.conv1 = conv(num_filters, num_filters * (self.f ** 2), kernel_size=3, padding='same')

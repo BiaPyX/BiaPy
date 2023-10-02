@@ -1,4 +1,3 @@
-# Adapted from https://github.com/yjn870/RCAN-pytorch
 
 from torch import nn
 
@@ -41,6 +40,14 @@ class RG(nn.Module):
         return x + self.module(x)
 
 class rcan(nn.Module):
+    """
+    Deep residual channel attention networks (RCAN) model.
+    
+    Reference: `Image Super-Resolution Using Very Deep Residual Channel Attention Networks 
+    <https://openaccess.thecvf.com/content_ECCV_2018/html/Yulun_Zhang_Image_Super-Resolution_Using_ECCV_2018_paper.html>`_.
+
+    Adapted from `here <https://github.com/yjn870/RCAN-pytorch>`_.
+    """
     def __init__(self, ndim, num_channels=3, filters=64, scale=2, n_sub_block=2, num_rcab=20, reduction=16):
       super(rcan, self).__init__()
       self.ndim = ndim 

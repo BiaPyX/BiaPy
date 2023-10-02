@@ -70,6 +70,12 @@ class ResGroup(nn.Module):
         return x
 
 class DFCAN(nn.Module):
+    """
+    Fourier channel attention network (DFCAN) for super-resolution.
+     
+    References: `Evaluation and development of deep neural networks for image super-resolution in optical 
+    microscopy <https://www.nature.com/articles/s41592-020-01048-5>`_.
+    """
     def __init__(self, ndim, input_shape, scale=2, n_ResGroup = 4, n_RCAB = 4): 
         super().__init__()
         self.ndim = ndim

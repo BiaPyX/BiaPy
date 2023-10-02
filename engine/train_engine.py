@@ -1,10 +1,3 @@
-# --------------------------------------------------------
-# Based on BEiT, timm, DINO and DeiT code bases
-# https://github.com/microsoft/unilm/tree/master/beit
-# https://github.com/rwightman/pytorch-image-models/tree/master/timm
-# https://github.com/facebookresearch/deit
-# https://github.com/facebookresearch/dino
-# --------------------------------------------------------'
 import torch
 import math
 import sys
@@ -44,7 +37,7 @@ def train_one_epoch(cfg, model, loss_function, activations, metric_function, pre
             sys.exit(1)
 
         # Calculate the metrics
-        metric_function(outputs, targets, device, metric_logger)
+        metric_function(outputs, targets, metric_logger)
 
         # Forward pass scaling the loss
         loss /= cfg.TRAIN.ACCUM_ITER
@@ -106,7 +99,7 @@ def evaluate(cfg, model, loss_function, activations, metric_function, prepare_ta
             loss = loss_function(outputs, targets)
         
         # Calculate the metrics
-        metric_function(outputs, targets, device, metric_logger)
+        metric_function(outputs, targets, metric_logger)
     
         metric_logger.update(loss=loss.item())
 

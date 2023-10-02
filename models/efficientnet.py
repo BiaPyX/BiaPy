@@ -5,6 +5,8 @@ def efficientnet(efficientnet_name, image_shape, n_classes=2, load_imagenet_weig
     """
     Create EfficientNet.
 
+    Reference: `EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks <https://arxiv.org/abs/1905.11946>`_. 
+
     Parameters
     ----------
     efficientnet_name : str, optional

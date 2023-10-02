@@ -24,6 +24,23 @@ from data.post_processing import apply_post_processing
 
 
 class Base_Workflow(metaclass=ABCMeta):
+    """
+    Base workflow class. A new workflow should extend this class. 
+
+    Parameters
+    ----------
+    cfg : YACS configuration
+        Running configuration.
+    
+    Job_identifier : str
+        Complete name of the running job.
+
+    device : Torch device
+        Device used. 
+
+    args : argpase class
+        Arguments used in BiaPy's call. 
+    """
     def __init__(self, cfg, job_identifier, device, args):
         self.cfg = cfg
         self.args = args
@@ -90,18 +107,68 @@ class Base_Workflow(metaclass=ABCMeta):
 
     @abstractmethod
     def define_metrics(self):
+        """
+        This function must define the following variables:
+
+        self.metrics : List of functions
+            Metrics to be calculated during model's training and inference. 
+
+        self.metric_names : List of str
+            Names of the metrics calculated. 
+    
+        self.loss : Function
+            Loss function used during training. 
+        """
         NotImplementedError
 
     @abstractmethod
     def metric_calculation(self, output, targets, metric_logger=None):
+        """
+        Execution of the metrics defined in :func:`~define_metrics` function. 
+
+        Parameters
+        ----------
+        output : Torch Tensor
+            Prediction of the model. 
+
+        targets : Torch Tensor
+            Ground truth to compare the prediction with. 
+
+        metric_logger : MetricLogger, optional
+            Class to be updated with the new metric(s) value(s) calculated. 
+        
+        Returns
+        -------
+        value : float
+            Value of the metric for the given prediction. 
+        """
         NotImplementedError
 
     def prepare_targets(self, targets, batch):
+        """
+        Location to perform any necessary data transformations to ``targets``
+        before inputting it into the model.
+
+        Parameters
+        ----------
+        targets : Torch Tensor
+            Ground truth to compare the prediction with.
+
+        batch : Torch Tensor
+            Prediction of the model. Only used in SSL workflow. 
+
+        Returns
+        -------
+        targets : Torch tensor
+            Resulting targets. 
+        """
         # We do not use 'batch' input but in SSL workflow
         return to_pytorch_format(targets, self.axis_order, self.device)
         
     def load_train_data(self):
-        """ Load training and validation data """
+        """ 
+        Load training and validation data.
+        """
         if self.cfg.TRAIN.ENABLE:
             print("##########################")
             print("#   LOAD TRAINING DATA   #")
@@ -159,7 +226,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.X_val, self.Y_val = None, None
 
     def destroy_train_data(self):
-        """Delete training variable to release memory"""
+        """
+        Delete training variable to release memory.
+        """
         print("Releasing memory . . .")
         if 'X_train' in locals() or 'X_train' in globals():
             del self.X_train
@@ -175,7 +244,9 @@ class Base_Workflow(metaclass=ABCMeta):
             del self.val_generator
 
     def prepare_train_generators(self):
-        """Build train and val generators"""
+        """
+        Build train and val generators.
+        """
         if self.cfg.TRAIN.ENABLE:
             print("##############################")
             print("#  PREPARE TRAIN GENERATORS  #")
@@ -192,7 +263,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.val_generator, self.cfg.PATHS.GEN_CHECKS+"_val", self.cfg.PATHS.GEN_MASK_CHECKS+"_val")
                     
     def prepare_model(self):
-        """Build the model"""
+        """
+        Build the model.
+        """
         print("###############")
         print("# Build model #")
         print("###############")
@@ -206,6 +279,9 @@ class Base_Workflow(metaclass=ABCMeta):
         self.model_prepared = True
 
     def prepare_logging_tool(self):
+        """
+        Prepare looging tool.
+        """
         print("#######################")
         print("# Prepare loggin tool #")
         print("#######################")
@@ -228,6 +304,9 @@ class Base_Workflow(metaclass=ABCMeta):
             self.plot_values['val_'+self.metric_names[i]] = []
 
     def train(self):
+        """
+        Training phase.
+        """
         self.load_train_data()
         self.prepare_train_generators()
         self.prepare_logging_tool()
@@ -356,7 +435,9 @@ class Base_Workflow(metaclass=ABCMeta):
         self.destroy_train_data()
 
     def load_test_data(self):
-        """ Load test data """
+        """
+        Load test data.
+        """
         if self.cfg.TEST.ENABLE:
             print("######################")
             print("#   LOAD TEST DATA   #")
@@ -409,7 +490,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.original_test_mask_path = self.orig_train_mask_path  
 
     def destroy_test_data(self):
-        """Delete test variable to release memory"""
+        """
+        Delete test variable to release memory.
+        """
         print("Releasing memory . . .")
         if 'X_test' in locals() or 'X_test' in globals():
             del self.self.X_test
@@ -423,6 +506,9 @@ class Base_Workflow(metaclass=ABCMeta):
             del self._Y
 
     def prepare_test_generators(self):
+        """
+        Prepare test data generator.
+        """
         if self.cfg.TEST.ENABLE:
             print("############################")
             print("#  PREPARE TEST GENERATOR  #")
@@ -430,6 +516,25 @@ class Base_Workflow(metaclass=ABCMeta):
             self.test_generator, self.data_norm = create_test_augmentor(self.cfg, self.X_test, self.Y_test, self.cross_val_samples_ids)
 
     def apply_model_activations(self, pred, training=False):
+        """
+        Function that apply the last activation (if any) to the model's output. 
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Predictions of the model.
+
+        training : bool, optional
+            To advice the function if this is being applied during training of inference. During training, 
+            ``CE_Sigmoid`` activations will NOT be applied, as ``torch.nn.BCEWithLogitsLoss`` will apply 
+            ``Sigmoid`` automatically in a way that is more stable numerically 
+            (`ref <https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html>`_).
+
+        Returns
+        -------
+        pred : Torch tensor
+            Resulting predictions after applying last activation(s). 
+        """
         for key, value in self.activations.items():
             # Ignore CE_Sigmoid as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way 
             # that is more stable numerically (ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html)
@@ -444,6 +549,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
     @torch.no_grad()
     def test(self):
+        """
+        Test/Inference step.
+        """
         self.load_test_data()
         self.prepare_test_generators()
         if not self.model_prepared:
@@ -526,6 +634,17 @@ class Base_Workflow(metaclass=ABCMeta):
         self.print_stats(image_counter)
 
     def process_sample(self, filenames, norm):
+        """
+        Function to process a sample in the inference phase. 
+
+        Parameters
+        ----------
+        filenames : List of str
+            Filenames fo the samples to process. 
+
+        norm : List of dicts
+            Normalization used during training. Required to denormalize the predictions of the model.
+        """
         #################
         ### PER PATCH ###
         #################
@@ -807,6 +926,14 @@ class Base_Workflow(metaclass=ABCMeta):
             self.after_full_image(pred, filenames)
 
     def normalize_stats(self, image_counter):
+        """
+        Normalize statistics.  
+
+        Parameters
+        ----------
+        image_counter : int
+            Number of images to average the metrics.
+        """
         # Per crop
         self.stats['loss_per_crop'] = self.stats['loss_per_crop'] / self.stats['patch_counter'] if self.stats['patch_counter'] != 0 else 0
         self.stats['iou_per_crop'] = self.stats['iou_per_crop'] / self.stats['patch_counter'] if self.stats['patch_counter'] != 0 else 0
@@ -825,6 +952,14 @@ class Base_Workflow(metaclass=ABCMeta):
             self.stats['ov_iou_post'] = self.stats['ov_iou_post'] / image_counter
 
     def print_stats(self, image_counter):
+        """
+        Print statistics.  
+
+        Parameters
+        ----------
+        image_counter : int
+            Number of images to call ``normalize_stats``.
+        """
         self.normalize_stats(image_counter)
         if self.cfg.DATA.TEST.LOAD_GT:
             if self.cfg.TEST.STATS.PER_PATCH:
@@ -842,6 +977,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 print(" ")
 
     def print_post_processing_stats(self):
+        """
+        Print post-processing statistics.
+        """
         if self.post_processing['per_image'] or self.post_processing['all_images']:
             print("Test Foreground IoU (post-processing): {}".format(self.stats['iou_post']))
             print("Test Overall IoU (post-processing): {}".format(self.stats['ov_iou_post']))
@@ -850,13 +988,40 @@ class Base_Workflow(metaclass=ABCMeta):
 
     @abstractmethod
     def after_merge_patches(self, pred, filenames):
+        """
+        Place any code that needs to be done after merging all predicted patches into the original image.
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model prediction.
+
+        filenames : List of str
+            Filenames of the predicted images.  
+        """
         raise NotImplementedError
 
     @abstractmethod
-    def after_full_image(self):
+    def after_full_image(self, pred, filenames):
+        """
+        Place here any code that must be executed after generating the prediction by supplying the entire image to the model. 
+        To enable this, the model should be convolutional, and the image(s) should be in a 2D format. Using 3D images as 
+        direct inputs to the model is not feasible due to their large size.
+        
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model prediction.
+
+        filenames : List of str
+            Filenames of the predicted images.  
+        """
         raise NotImplementedError
 
     def after_all_images(self):
+        """
+        Place here any code that must be done after predicting all images. 
+        """
         ############################
         ### POST-PROCESSING (2D) ###
         ############################

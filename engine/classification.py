@@ -13,9 +13,26 @@ from data.data_3D_manipulation import load_3d_data_classification
 from utils.misc import to_pytorch_format, to_numpy_format
 
 class Classification_Workflow(Base_Workflow):
-    def __init__(self, cfg, job_identifier, device, rank, **kwargs):
-        super(Classification_Workflow, self).__init__(cfg, job_identifier, device, rank, **kwargs)
-        
+    """
+    Classification workflow where the goal of this workflow is to assing a label to the input image.
+    More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/classification.html>`_. 
+
+    Parameters
+    ----------
+    cfg : YACS configuration
+        Running configuration.
+    
+    Job_identifier : str
+        Complete name of the running job.
+
+    device : Torch device
+        Device used. 
+
+    args : argpase class
+        Arguments used in BiaPy's call. 
+    """
+    def __init__(self, cfg, job_identifier, device, args, **kwargs):
+        super(Classification_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
         self.stats['test_accuracy'] = 0
         self.stats['cm'] = None
         self.all_pred = [] 
@@ -36,6 +53,9 @@ class Classification_Workflow(Base_Workflow):
         self.load_Y_val = True
 
     def define_metrics(self):
+        """
+        Definition of self.metrics, self.metric_names and self.loss variables.
+        """
         self.metrics = [Accuracy(task="multiclass", num_classes=self.cfg.MODEL.N_CLASSES)]
         self.metric_names = ["accuracy"]
         if self.cfg.MODEL.N_CLASSES > 5:
@@ -43,7 +63,26 @@ class Classification_Workflow(Base_Workflow):
             self.metric_names.append("top-5-accuracy")
         self.loss = torch.nn.CrossEntropyLoss()
 
-    def metric_calculation(self, output, targets, device=None, metric_logger=None):
+    def metric_calculation(self, output, targets, metric_logger=None):
+        """
+        Execution of the metrics defined in :func:`~define_metrics` function. 
+
+        Parameters
+        ----------
+        output : Torch Tensor
+            Prediction of the model. 
+
+        targets : Torch Tensor
+            Ground truth to compare the prediction with. 
+
+        metric_logger : MetricLogger, optional
+            Class to be updated with the new metric(s) value(s) calculated. 
+        
+        Returns
+        -------
+        value : float
+            Value of the metric for the given prediction. 
+        """
         with torch.no_grad():
             train_acc = self.metrics[0](output.to(torch.float32).detach().cpu(), targets.to(torch.float32).detach().cpu())
             train_acc = train_acc.item() if not torch.isnan(train_acc) else 0
@@ -58,10 +97,29 @@ class Classification_Workflow(Base_Workflow):
                 return train_acc
 
     def prepare_targets(self, targets, batch):
+        """
+        Location to perform any necessary data transformations to ``targets``
+        before inputting it into the model.
+
+        Parameters
+        ----------
+        targets : Torch Tensor
+            Ground truth to compare the prediction with.
+
+        batch : Torch Tensor
+            Prediction of the model. Not used here.
+
+        Returns
+        -------
+        targets : Torch tensor
+            Resulting targets. 
+        """
         return targets.to(self.device, non_blocking=True)
 
     def load_train_data(self):
-        """ Load training and validation data """
+        """ 
+        Load training and validation data.
+        """
         if self.cfg.TRAIN.ENABLE:
             print("##########################\n"
                   "#   LOAD TRAINING DATA   #\n"
@@ -103,7 +161,9 @@ class Classification_Workflow(Base_Workflow):
                     self.X_val, self.Y_val = None, None
 
     def load_test_data(self):
-        """ Load test data """
+        """
+        Load test data.
+        """
         if self.cfg.TEST.ENABLE:
             print("######################\n"
                   "#   LOAD TEST DATA   #\n"
@@ -158,6 +218,17 @@ class Classification_Workflow(Base_Workflow):
                 self.original_test_mask_path = self.orig_train_mask_path  
 
     def process_sample(self, filenames, norm):   
+        """
+        Function to process a sample in the inference phase. 
+
+        Parameters
+        ----------
+        filenames : List of str
+            Filenames fo the samples to process. 
+
+        norm : List of dicts
+            Normalization used during training. Required to denormalize the predictions of the model.
+        """
         self.stats['patch_counter'] += self._X.shape[0]
 
         # Predict each patch
@@ -174,6 +245,9 @@ class Classification_Workflow(Base_Workflow):
             self.all_gt.append(self._Y)
 
     def after_all_images(self):
+        """
+        Steps that must be done after predicting all images. 
+        """
         # Save predictions in a csv file
         df = pd.DataFrame(self.test_filenames, columns=['filename'])
         df['class'] = np.array(self.all_pred)
@@ -186,6 +260,14 @@ class Classification_Workflow(Base_Workflow):
             self.stats['cm'] = confusion_matrix(self.all_gt, self.all_pred)
     
     def print_stats(self, image_counter):
+        """
+        Print statistics.  
+
+        Parameters
+        ----------
+        image_counter : int
+            Number of images to call ``normalize_stats``.
+        """
         if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
             print('Test Accuracy: ', round((self.stats['test_accuracy'] * 100), 2), "%")
             print("Confusion matrix: ")
@@ -197,10 +279,40 @@ class Classification_Workflow(Base_Workflow):
             print(classification_report(self.all_gt, self.all_pred, target_names=display_labels))
 
     def after_merge_patches(self, pred, filenames):
+        """
+        Steps need to be done after merging all predicted patches into the original image.
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model prediction.
+
+        filenames : List of str
+            Filenames of the predicted images.  
+        """
         pass
 
     def after_full_image(self, pred, filenames):
+        """
+        Steps that must be executed after generating the prediction by supplying the entire image to the model.
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model prediction.
+
+        filenames : List of str
+            Filenames of the predicted images.  
+        """
         pass
         
     def normalize_stats(self, image_counter):
+        """
+        Normalize statistics.  
+
+        Parameters
+        ----------
+        image_counter : int
+            Number of images to average the metrics.
+        """
         pass

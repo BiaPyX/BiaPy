@@ -17,59 +17,60 @@ from timm.models.vision_transformer import Block
 from models.tr_layers import PatchEmbed
 
 class MaskedAutoencoderViT(nn.Module):
+    """
+    Mask autoenconder (MAE) with VisionTransformer (ViT) backbone. 
+    
+    Reference: `Masked Autoencoders Are Scalable Vision Learners <https://arxiv.org/abs/2111.06377>`_.
+    
+    Parameters
+    ----------
+    img_size : int, optional
+        Size of the input image. 
+
+    patch_size : int, optional
+        Size of the input size or token size for the transformer. 
+
+    in_chans : int, optional
+        Number of channels.
+
+    ndim : int, optional
+        Number of input dimensions.
+
+    embed_dim : int, optional
+        Size of the transformer embedding. 
+
+    depth : int, optional
+        Number of layers of the transformer. 
+
+    num_heads : int, optional
+        Number of heads in the multi-head attention layer.
+    
+    mlp_ratio : float, optional
+        Size of the dense layers of the final classifier. This value will mutiply ``embed_dim``. 
+
+    decoder_embed_dim : int, optional
+        Size of the transformer embedding in the decoder. 
+
+    decoder_depth: int, optional
+        Number of layers of the decoder. 
+
+    decoder_num_heads : int, optional
+        Number of heads in the multi-head attention layer in the decoder.
+
+    norm_layer : Torch layer, optional
+        Normalization layer to use in the model. 
+
+    norm_pix_loss : bool, optional
+        Use (per-patch) normalized pixels as targets for computing loss
+
+    Returns
+    -------
+    model : Torch model
+        MAE model.
+    """
     def __init__(self, img_size=224, patch_size=16, in_chans=3, ndim=2, embed_dim=1024, depth=24, num_heads=16,
         mlp_ratio=4., decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16, norm_layer=nn.LayerNorm, 
         norm_pix_loss=False):
-        """
-        Mask autoenconder (MAE) with VisionTransformer (ViT) backbone. 
-        Reference: `Masked Autoencoders Are Scalable Vision Learners <https://arxiv.org/abs/2111.06377>`_.
-        
-        Parameters
-        ----------
-        img_size : int, optional
-            Size of the input image. 
-
-        patch_size : int, optional
-            Size of the input size or token size for the transformer. 
-
-        in_chans : int, optional
-            Number of channels.
-
-        ndim : int, optional
-            Number of input dimensions.
-
-        embed_dim : int, optional
-            Size of the transformer embedding. 
-
-        depth : int, optional
-            Number of layers of the transformer. 
-
-        num_heads : int, optional
-            Number of heads in the multi-head attention layer.
-        
-        mlp_ratio : float, optional
-            Size of the dense layers of the final classifier. This value will mutiply ``embed_dim``. 
-
-        decoder_embed_dim : int, optional
-            Size of the transformer embedding in the decoder. 
-
-        decoder_depth: int, optional
-            Number of layers of the decoder. 
-
-        decoder_num_heads : int, optional
-            Number of heads in the multi-head attention layer in the decoder.
-
-        norm_layer : Torch layer, optional
-            Normalization layer to use in the model. 
-
-        norm_pix_loss : bool, optional
-            Use (per-patch) normalized pixels as targets for computing loss
-
-        Returns
-        -------
-        model : Torch model
-            MAE model.
-        """
         super().__init__()
         self.ndim = ndim
         self.in_chans = in_chans

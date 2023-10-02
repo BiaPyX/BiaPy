@@ -14,8 +14,26 @@ from engine.metrics import dfcan_loss
 from data.pre_processing import denormalize, undo_norm_range01
 
 class Super_resolution_Workflow(Base_Workflow):
-    def __init__(self, cfg, job_identifier, device, rank, **kwargs):
-        super(Super_resolution_Workflow, self).__init__(cfg, job_identifier, device, rank, **kwargs)
+    """
+    Semantic segmentation workflow where the goal is to assign a class to each pixel of the input image. 
+    More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/super_resolution.html>`_.  
+
+    Parameters
+    ----------
+    cfg : YACS configuration
+        Running configuration.
+    
+    Job_identifier : str
+        Complete name of the running job.
+
+    device : Torch device
+        Device used. 
+
+    args : argpase class
+        Arguments used in BiaPy's call. 
+    """
+    def __init__(self, cfg, job_identifier, device, args, **kwargs):
+        super(Super_resolution_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
         self.stats['psnr_per_image'] = 0
 
         # From now on, no modification of the cfg will be allowed
@@ -30,6 +48,9 @@ class Super_resolution_Workflow(Base_Workflow):
         self.load_Y_val = True
 
     def define_metrics(self):
+        """
+        Definition of self.metrics, self.metric_names and self.loss variables.
+        """
         self.metrics = [PeakSignalNoiseRatio()]
         self.metric_names = ["PSNR"]
         if self.cfg.MODEL.ARCHITECTURE == 'dfcan':
@@ -39,7 +60,26 @@ class Super_resolution_Workflow(Base_Workflow):
             print("Overriding 'LOSS.TYPE' to set it to MAE")
             self.loss = torch.nn.L1Loss()
 
-    def metric_calculation(self, output, targets, device, metric_logger=None):
+    def metric_calculation(self, output, targets, metric_logger=None):
+        """
+        Execution of the metrics defined in :func:`~define_metrics` function. 
+
+        Parameters
+        ----------
+        output : Torch Tensor
+            Prediction of the model. 
+
+        targets : Torch Tensor
+            Ground truth to compare the prediction with. 
+
+        metric_logger : MetricLogger, optional
+            Class to be updated with the new metric(s) value(s) calculated. 
+        
+        Returns
+        -------
+        value : float
+            Value of the metric for the given prediction. 
+        """
         # Denormalization to calculate PSNR with original range values 
         output = output.to(torch.float32).detach().cpu()
         targets = targets.to(torch.float32).detach().cpu()
@@ -69,6 +109,23 @@ class Super_resolution_Workflow(Base_Workflow):
                 return train_psnr
 
     def prepare_targets(self, targets, batch):
+        """
+        Location to perform any necessary data transformations to ``targets``
+        before inputting it into the model.
+
+        Parameters
+        ----------
+        targets : Torch Tensor
+            Ground truth to compare the prediction with.
+
+        batch : Torch Tensor
+            Prediction of the model. Not used here. 
+
+        Returns
+        -------
+        targets : Torch tensor
+            Resulting targets. 
+        """
         targets = to_pytorch_format(targets, self.axis_order, self.device)
         if self.data_norm['type'] == 'div':
             if len([x for x in list(self.data_norm.keys()) if not 'reduced' in x]) > 0:
@@ -80,6 +137,17 @@ class Super_resolution_Workflow(Base_Workflow):
         return targets
 
     def process_sample(self, filenames, norm): 
+        """
+        Function to process a sample in the inference phase. 
+
+        Parameters
+        ----------
+        filenames : List of str
+            Filenames fo the samples to process. 
+
+        norm : List of dicts
+            Normalization used during training. Required to denormalize the predictions of the model.
+        """
         original_data_shape = (self._X.shape[0], self._X.shape[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
                               self._X.shape[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, self._X.shape[3])
 
@@ -168,18 +236,59 @@ class Super_resolution_Workflow(Base_Workflow):
             self.stats['psnr_per_image'] += psnr_per_image
 
     def after_merge_patches(self, pred, filenames):
+        """
+        Steps need to be done after merging all predicted patches into the original image.
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model prediction.
+
+        filenames : List of str
+            Filenames of the predicted images.  
+        """
         pass
 
     def after_full_image(self, pred, filenames):
+        """
+        Steps that must be executed after generating the prediction by supplying the entire image to the model.
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model prediction.
+
+        filenames : List of str
+            Filenames of the predicted images.  
+        """
         pass
 
     def after_all_images(self):
+        """
+        Steps that must be done after predicting all images. 
+        """
         pass
 
     def normalize_stats(self, image_counter):
+        """
+        Normalize statistics.  
+
+        Parameters
+        ----------
+        image_counter : int
+            Number of images to average the metrics.
+        """
         self.stats['psnr_per_image'] = self.stats['psnr_per_image'] / image_counter
 
     def print_stats(self, image_counter):
+        """
+        Print statistics.  
+
+        Parameters
+        ----------
+        image_counter : int
+            Number of images to call ``normalize_stats``.
+        """
         self.normalize_stats(image_counter)
 
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:

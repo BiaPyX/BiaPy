@@ -14,8 +14,26 @@ from engine.metrics import jaccard_index, instance_segmentation_loss
 from engine.base_workflow import Base_Workflow
 
 class Instance_Segmentation_Workflow(Base_Workflow):
-    def __init__(self, cfg, job_identifier, device, rank, **kwargs):
-        super(Instance_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, rank, **kwargs)
+    """
+    Instance segmentation workflow where the goal is to assign an unique id, i.e. integer, to each object of the input image.
+    More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/instance_segmentation.html>`_.  
+
+    Parameters
+    ----------
+    cfg : YACS configuration
+        Running configuration.
+    
+    Job_identifier : str
+        Complete name of the running job.
+
+    device : Torch device
+        Device used. 
+
+    args : argpase class
+        Arguments used in BiaPy's call. 
+    """
+    def __init__(self, cfg, job_identifier, device, args, **kwargs):
+        super(Instance_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         self.original_test_path, self.original_test_mask_path = self.prepare_instance_data()
 
@@ -58,6 +76,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.post_processing['instance_post'] = False            
 
     def define_metrics(self):
+        """
+        Definition of self.metrics, self.metric_names and self.loss variables.
+        """
         self.metrics = []
         self.metric_names = []
         self.loss = instance_segmentation_loss(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
@@ -89,13 +110,32 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.metrics.append(torch.nn.L1Loss())
             self.metric_names.append("L1_distance_channel")
 
-    def metric_calculation(self, output, targets, device, metric_logger=None):
+    def metric_calculation(self, output, targets, metric_logger=None):
+        """
+        Execution of the metrics defined in :func:`~define_metrics` function. 
+
+        Parameters
+        ----------
+        output : Torch Tensor
+            Prediction of the model. 
+
+        targets : Torch Tensor
+            Ground truth to compare the prediction with. 
+
+        metric_logger : MetricLogger, optional
+            Class to be updated with the new metric(s) value(s) calculated. 
+        
+        Returns
+        -------
+        value : float
+            Value of the metric for the given prediction. 
+        """
         with torch.no_grad():
             train_iou = []
             train_dis = []
             for i in range(len(self.metric_names)):
                 if self.metric_names[i] == "jaccard_index":
-                    iou = self.metrics[i](output, targets, device, num_classes=1, 
+                    iou = self.metrics[i](output, targets, self.device, num_classes=1, 
                         first_not_binary_channel=self.first_not_binary_channel)
                     iou = iou.item() if not torch.isnan(iou) else 0
                     train_iou.append(iou)
@@ -111,6 +151,18 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 return train_iou
 
     def instance_seg_process(self, pred, filenames):
+        """
+        Instance segmentation workflow engine for test/inference. Process model's prediction to prepare 
+        instance segmentation output and calculate metrics. 
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model predictions.
+        
+        filenames : List of str
+            Predicted image's filenames.
+        """
         #############################
         ### INSTANCE SEGMENTATION ###
         #############################
@@ -292,13 +344,38 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.all_matching_stats_post_processing.append(results)
 
     def after_merge_patches(self, pred, filenames):
+        """
+        Steps need to be done after merging all predicted patches into the original image.
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model prediction.
+
+        filenames : List of str
+            Filenames of the predicted images.  
+        """
         if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
             self.instance_seg_process(pred, filenames)        
 
     def after_full_image(self, pred, filenames):
+        """
+        Steps that must be executed after generating the prediction by supplying the entire image to the model.
+
+        Parameters
+        ----------
+        pred : Torch Tensor
+            Model prediction.
+
+        filenames : List of str
+            Filenames of the predicted images.  
+        """
         pass
 
     def after_all_images(self):
+        """
+        Steps that must be done after predicting all images. 
+        """
         super().after_all_images()
         if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
             print("Analysing all images as a 3D stack . . .")    
@@ -308,6 +385,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.instance_seg_process(self.all_pred,  self.all_gt, ["3D_stack.tif"], [])
 
     def normalize_stats(self, image_counter): 
+        """
+        Normalize statistics.  
+
+        Parameters
+        ----------
+        image_counter : int
+            Number of images to average the metrics.
+        """
         super().normalize_stats(image_counter) 
 
         if (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
@@ -317,6 +402,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     self.stats['inst_stats_vor'] = wrapper_matching_dataset_lazy(self.all_matching_stats_post_processing, self.cfg.TEST.MATCHING_STATS_THS)
 
     def print_stats(self, image_counter):
+        """
+        Print statistics.  
+
+        Parameters
+        ----------
+        image_counter : int
+            Number of images to call ``normalize_stats``.
+        """
         super().print_stats(image_counter)
         super().print_post_processing_stats()
 
@@ -330,6 +423,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     print(self.stats['inst_stats_vor'][i])
 
     def prepare_instance_data(self):
+        """
+        Creates instance segmentation ground truth images to train the model based on the ground truth instances provided.
+        They will be saved in a separate folder in the root path of the ground truth. 
+        """
         print("###########################")
         print("#  PREPARE INSTANCE DATA  #")
         print("###########################")

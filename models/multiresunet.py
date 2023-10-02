@@ -4,33 +4,33 @@ import torch
 import torch.nn as nn
 
 class Conv_batchnorm(torch.nn.Module):
+    """
+    Convolutional layers. 
+
+    Parameters
+    ----------
+    conv : Torch conv layer
+        Convolutional layer to use.
+
+    batchnorm : Torch batch normalization layer
+        Convolutional layer to use.
+
+    num_in_filters : int
+        Number of input filters.
+
+    num_out_filters : int
+        Number of output filters.
+
+    kernel_size : Tuple of ints
+        Size of the convolving kernel.
+
+    stride : Tuple of ints, optional
+        Stride of the convolution.
+
+    activation : str, optional
+        Activation function.
+    """
     def __init__(self, conv, batchnorm, num_in_filters, num_out_filters, kernel_size, stride = 1, activation = 'relu'):
-        """
-        Convolutional layers
-
-        Parameters
-        ----------
-        conv : Torch conv layer
-            Convolutional layer to use.
-
-        batchnorm : Torch batch normalization layer
-            Convolutional layer to use.
-
-        num_in_filters : int
-            Number of input filters.
-
-        num_out_filters : int
-            Number of output filters.
-
-        kernel_size : Tuple of ints
-            Size of the convolving kernel.
-
-        stride : Tuple of ints, optional
-            Stride of the convolution.
-
-        activation : str, optional
-            Activation function.
-        """
         super().__init__()
         self.activation = activation
         self.conv1 = conv(in_channels=num_in_filters, out_channels=num_out_filters, kernel_size=kernel_size, stride=stride, padding = 'same')
@@ -46,27 +46,27 @@ class Conv_batchnorm(torch.nn.Module):
             return x
 
 class Multiresblock(torch.nn.Module):
+    """
+    MultiRes Block.
+
+    Parameters
+    ----------
+    conv : Torch conv layer
+        Convolutional layer to use.
+
+    batchnorm : Torch batch normalization layer
+        Convolutional layer to use.
+
+    num_in_channels : int
+        Number of channels coming into multires block
+
+    num_filters : int
+        Number of output filters.
+
+    alpha : str, optional
+        Alpha hyperparameter.
+    """
     def __init__(self, conv, batchnorm, num_in_channels, num_filters, alpha=1.67):
-        """
-        MultiRes Block.
-
-        Parameters
-        ----------
-        conv : Torch conv layer
-            Convolutional layer to use.
-
-        batchnorm : Torch batch normalization layer
-            Convolutional layer to use.
-
-        num_in_channels : int
-            Number of channels coming into multires block
-
-        num_filters : int
-            Number of output filters.
-
-        alpha : str, optional
-            Alpha hyperparameter.
-        """
         super().__init__()
         self.alpha = alpha
         self.W = num_filters * alpha
@@ -104,27 +104,27 @@ class Multiresblock(torch.nn.Module):
         return x
 
 class Respath(torch.nn.Module):
+    """
+    ResPath.
+    
+    Parameters
+    ----------
+    conv : Torch conv layer
+        Convolutional layer to use.
+
+    batchnorm : Torch batch normalization layer
+        Convolutional layer to use.
+
+    num_in_filters : int
+        Number of output filters.
+
+    num_out_filters : int
+        Number of filters going out the respath.
+
+    respath_length : str, optional
+        length of ResPath.
+    """
     def __init__(self, conv, batchnorm, num_in_filters, num_out_filters, respath_length):
-        """
-        ResPath.
-        
-        Parameters
-        ----------
-        conv : Torch conv layer
-            Convolutional layer to use.
-
-        batchnorm : Torch batch normalization layer
-            Convolutional layer to use.
-
-        num_in_filters : int
-            Number of output filters.
-
-        num_out_filters : int
-            Number of filters going out the respath.
-
-        respath_length : str, optional
-            length of ResPath.
-        """
         super().__init__()
 
         self.respath_length = respath_length
@@ -159,39 +159,42 @@ class Respath(torch.nn.Module):
         return x
 
 class MultiResUnet(torch.nn.Module):
+    """
+    Create 2D/3D MultiResUNet model. 
+
+    Reference: `MultiResUNet : Rethinking the U-Net Architecture for Multimodal Biomedical Image 
+    Segmentation <https://arxiv.org/abs/1902.04049>`_.
+    
+    Parameters
+    ----------
+    ndim : int
+        Number of dimensions of the input data.
+
+    input_channels: int
+        Number of channels in image.
+
+    alpha: float, optional
+        Alpha hyperparameter (default: 1.67)
+
+    n_classes: int, optional
+        Number of segmentation classes.
+
+    z_down : List of ints, optional
+        Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
+
+    output_channels : str, optional
+        Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
+        ``BDv2``, ``Dv2`` and ``BCM``.
+
+    upsampling_factor : int, optional
+        Factor of upsampling for super resolution workflow. 
+
+    upsampling_position : str, optional
+        Whether the upsampling is going to be made previously (``pre`` option) to the model 
+        or after the model (``post`` option).
+    """
     def __init__(self, ndim, input_channels, alpha=1.67, n_classes=1, z_down=[2,2,2,2], output_channels="BC", 
-        upsampling_factor=1, upsampling_position="pre"):
-        """
-        MultiResUNet
-        
-        Parameters
-        ----------
-        ndim : int
-            Number of dimensions of the input data.
-
-        input_channels: int
-            Number of channels in image.
-
-        alpha: float, optional
-            Alpha hyperparameter (default: 1.67)
-
-        n_classes: int, optional
-            Number of segmentation classes.
-
-        z_down : List of ints, optional
-            Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
-
-        output_channels : str, optional
-            Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
-            ``BDv2``, ``Dv2`` and ``BCM``.
-
-        upsampling_factor : int, optional
-            Factor of upsampling for super resolution workflow. 
-
-        upsampling_position : str, optional
-            Whether the upsampling is going to be made previously (``pre`` option) to the model 
-            or after the model (``post`` option).
-        """
+        upsampling_factor=1, upsampling_position="pre"): 
         super().__init__()
         self.ndim = ndim
         self.alpha = alpha

@@ -4,67 +4,67 @@ import torch.nn as nn
 from models.blocks import DoubleConvBlock, UpBlock
 
 class SE_U_Net(nn.Module):
+    """
+    Create 2D/3D U-Net with squeeze-excite blocks. 
+    
+    Reference: `Squeeze and Excitation Networks <https://arxiv.org/abs/1709.01507>`_.
+
+    Parameters
+    ----------
+    image_shape : 3D/4D tuple
+        Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+
+    activation : str, optional
+        Activation layer.
+
+    feature_maps : array of ints, optional
+        Feature maps to use on each level.
+
+    drop_values : float, optional
+        Dropout value to be fixed.
+
+    batch_norm : bool, optional
+        Make batch normalization.
+
+    k_size : int, optional
+        Kernel size.
+
+    upsample_layer : str, optional
+        Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
+
+    z_down : List of ints, optional
+        Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
+
+    n_classes: int, optional
+        Number of classes.
+
+    output_channels : str, optional
+        Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
+        ``BDv2``, ``Dv2`` and ``BCM``.
+
+    upsampling_factor : int, optional
+        Factor of upsampling for super resolution workflow. 
+
+    upsampling_position : str, optional
+        Whether the upsampling is going to be made previously (``pre`` option) to the model 
+        or after the model (``post`` option).
+
+    Returns
+    -------
+    model : Torch model
+        U-Net model.
+
+    Calling this function with its default parameters returns the following network:
+
+    .. image:: ../../img/models/unet.png
+        :width: 100%
+        :align: center
+
+    Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
+    """
     def __init__(self, image_shape=(256, 256, 1), activation="ELU", feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
         batch_norm=False, k_size=3, upsample_layer="convtranspose", z_down=[2,2,2,2], n_classes=1, 
         output_channels="BC", upsampling_factor=1, upsampling_position="pre"):
-        """
-        Create 2D/3D U-Net with squeeze-excite blocks. Reference `Squeeze and Excitation 
-        Networks <https://arxiv.org/abs/1709.01507>`_.
-
-        Parameters
-        ----------
-        image_shape : 3D/4D tuple
-            Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
-
-        activation : str, optional
-            Activation layer.
-
-        feature_maps : array of ints, optional
-            Feature maps to use on each level.
-
-        drop_values : float, optional
-            Dropout value to be fixed.
-
-        batch_norm : bool, optional
-            Make batch normalization.
-
-        k_size : int, optional
-            Kernel size.
-
-        upsample_layer : str, optional
-            Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling". 
-
-        z_down : List of ints, optional
-            Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
-
-        n_classes: int, optional
-            Number of classes.
-
-        output_channels : str, optional
-            Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
-            ``BDv2``, ``Dv2`` and ``BCM``.
-
-        upsampling_factor : int, optional
-            Factor of upsampling for super resolution workflow. 
-
-        upsampling_position : str, optional
-            Whether the upsampling is going to be made previously (``pre`` option) to the model 
-            or after the model (``post`` option).
-
-        Returns
-        -------
-        model : Torch model
-            U-Net model.
-
-        Calling this function with its default parameters returns the following network:
-
-        .. image:: ../../img/models/unet.png
-            :width: 100%
-            :align: center
-
-        Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
-        """
-        
         super(SE_U_Net, self).__init__()
 
         self.depth = len(feature_maps)-1

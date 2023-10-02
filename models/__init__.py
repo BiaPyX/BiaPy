@@ -3,8 +3,7 @@ import os
 import torch
 import numpy as np
 import torch.nn as nn
-# from torchsummary import summary
-from torchinfo import summary # New
+from torchinfo import summary 
 
 from utils.misc import is_main_process
 from engine import prepare_optimizer
@@ -47,7 +46,7 @@ def build_model(cfg, job_identifier, device):
         elif modelname == 'resunet':
             f_name = ResUNet
         elif modelname == 'resunet++':
-            f_name = ResUNetPlusPlus2
+            f_name = ResUNetPlusPlus
         elif modelname == 'attention_unet':
             f_name = Attention_U_Net
         elif modelname == 'seunet':
@@ -61,7 +60,6 @@ def build_model(cfg, job_identifier, device):
         else:
             args['n_classes'] = cfg.MODEL.N_CLASSES if cfg.PROBLEM.TYPE != 'DENOISING' else cfg.DATA.PATCH_SIZE[-1]
         model = f_name(**args)
-        # model = ResUNetPlusPlus()
     else:
         if modelname == 'simple_cnn':
             model = simple_CNN(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION.lower(), n_classes=cfg.MODEL.N_CLASSES)

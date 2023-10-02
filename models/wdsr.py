@@ -1,11 +1,16 @@
-# Adapted from https://github.com/yjn870/WDSR-pytorch/tree/master
-
 import math
 import torch
 import torch.nn as nn
 import torch.nn.init as init
 
 class wdsr(nn.Module):
+  """
+  WDSR model. 
+  
+  Reference: `Wide Activation for Efficient and Accurate Image Super-Resolution <https://arxiv.org/abs/1808.08718>`_. 
+
+  Adapted from `here <https://github.com/yjn870/WDSR-pytorch/tree/master>`_.
+  """
   def __init__(self, scale, num_filters=32, num_res_blocks=16, res_block_expansion=6, num_channels=1):
     super(wdsr, self).__init__()
     kernel_size = 3

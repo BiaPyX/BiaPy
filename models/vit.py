@@ -21,24 +21,25 @@ from typing import Union, Tuple
 from models.tr_layers import PatchEmbed
 
 class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
+    """
+    Mask autoenconder (MAE) with VisionTransformer (ViT) backbone. 
+    
+    Reference: `Masked Autoencoders Are Scalable Vision Learners <https://arxiv.org/abs/2111.06377>`_.
+    
+    Parameters
+    ----------
+    ndim : int, optional
+        Number of input dimensions.
+
+    global_pool : bool, optional
+        Whether to use global pooling or not. 
+
+    Returns
+    -------
+    model : Torch model
+        ViT model.
+    """
     def __init__(self, ndim=2, global_pool = False, **kwargs):
-        """
-        Mask autoenconder (MAE) with VisionTransformer (ViT) backbone. 
-        Reference: `Masked Autoencoders Are Scalable Vision Learners <https://arxiv.org/abs/2111.06377>`_.
-        
-        Parameters
-        ----------
-        ndim : int, optional
-            Number of input dimensions.
-
-        global_pool : bool, optional
-            Whether to use global pooling or not. 
-
-        Returns
-        -------
-        model : Torch model
-            ViT model.
-        """
         super(VisionTransformer, self).__init__( **kwargs)
         self.ndim = ndim
         self.global_pool = global_pool
