@@ -474,7 +474,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     fold = 1
                     test_index = None
                     self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TRAIN.PATH))[2])
-                    A, B = np.zeros(len(self.test_filenames))  
+                    A = B = np.zeros(len(self.test_filenames))  
                 
                     for _, te_index in skf.split(A, B):
                         if self.cfg.DATA.VAL.CROSS_VAL_FOLD == fold:
