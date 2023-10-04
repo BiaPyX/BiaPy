@@ -72,7 +72,7 @@ def init_devices(args, cfg):
         args.rank = int(os.environ["RANK"])
         args.world_size = int(os.environ['WORLD_SIZE'])
         args.gpu = int(os.environ['LOCAL_RANK'])
-    elif 'SLURM_PROCID' in os.environ:
+    elif 'SLURM_PROCID' in os.environ and len(np.unique(np.array(args.gpu.strip().split(',')))) > 1:
         args.rank = int(os.environ['SLURM_PROCID'])
         args.gpu = args.rank % torch.cuda.device_count()
     else:
