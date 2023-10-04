@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from skimage.io import imread
 from tqdm import tqdm
+from skimage.segmentation import clear_border
 
 from data.post_processing.post_processing import (watershed_by_channels, voronoi_on_mask, 
     remove_instance_by_circularity_central_slice, repare_large_blobs)
@@ -284,6 +285,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             w_pred = voronoi_on_mask(w_pred, pred, th=self.cfg.TEST.POST_PROCESSING.VORONOI_TH, verbose=self.cfg.TEST.VERBOSE)
+            del pred
+
+        if self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER:
+            print("Clearing borders . . .")
+            w_pred = clear_border(w_pred)
 
         if self.post_processing['instance_post']:
             save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,

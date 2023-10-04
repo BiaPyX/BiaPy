@@ -681,6 +681,8 @@ class Config:
         # This option is useful when PROBLEM.INSTANCE_SEG.DATA_CHANNELS is 'BP', as multiple central seeds may appear in big 
         # instances.
         _C.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE = -1
+        # Clear objects connected to the label image border
+        _C.TEST.POST_PROCESSING.CLEAR_BORDER = False
 
         ### Detection 
         # To remove close points to each other. This can also be set when using 'BP' channels for instance segmentation.
