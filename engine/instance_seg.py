@@ -38,8 +38,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         self.original_test_path, self.original_test_mask_path = self.prepare_instance_data()
 
-        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            self.original_test_mask_ids = sorted(next(os.walk(self.original_test_mask_path))[2])
         self.all_matching_stats = []
 
         self.instance_ths = {}
@@ -193,11 +191,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 del self.Y
                 _Y = np.zeros(w_pred.shape, dtype=w_pred.dtype)
-                for i in range(len(self.original_test_mask_ids)):
-                    test_file = os.path.join(self.original_test_mask_path, self.original_test_mask_ids[i])
+                for i in range(len(self.test_filenames)):
+                    test_file = os.path.join(self.original_test_mask_path, self.test_filenames[i])
                     _Y[i] = imread(test_file).squeeze()
             else:
-                test_file = os.path.join(self.original_test_mask_path, self.original_test_mask_ids[self.f_numbers[0]])
+                test_file = os.path.join(self.original_test_mask_path, self.test_filenames[self.f_numbers[0]])
                 _Y = imread(test_file).squeeze()
 
             if _Y.ndim == 2: _Y = np.expand_dims(_Y,0)
@@ -476,7 +474,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             print("DATA.VAL.GT_PATH changed from {} to {}".format(self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR))
             opts.extend(['DATA.VAL.PATH', self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR,
                         'DATA.VAL.GT_PATH', self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR])
-        if self.cfg.TEST.ENABLE:
+        if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             print("DATA.TEST.PATH changed from {} to {}".format(self.cfg.DATA.TEST.PATH, self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
             opts.extend(['DATA.TEST.PATH', self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR])
             original_test_path = self.cfg.DATA.TEST.PATH

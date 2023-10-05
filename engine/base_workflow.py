@@ -466,6 +466,7 @@ class Base_Workflow(metaclass=ABCMeta):
             else:
                 # The test is the validation, and as it is only available when validation is obtained from train and when 
                 # cross validation is enabled, the test set files reside in the train folder
+                self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TRAIN.PATH))[2])
                 self.X_test, self.Y_test = None, None
                 if self.cross_val_samples_ids is None:                      
                     # Split the test as it was the validation when train is not enabled 
@@ -473,7 +474,6 @@ class Base_Workflow(metaclass=ABCMeta):
                         random_state=self.cfg.SYSTEM.SEED)
                     fold = 1
                     test_index = None
-                    self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TRAIN.PATH))[2])
                     A = B = np.zeros(len(self.test_filenames))  
                 
                     for _, te_index in skf.split(A, B):
@@ -604,7 +604,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     self._Y = np.expand_dims(Y, 0) if self.cfg.DATA.TEST.LOAD_GT else None
 
                 # Process each image separately
-                self.f_numbers = list(range((i*l_X)+j,(i*l_X)+j+1)) if self.cross_val_samples_ids is None else self.cross_val_samples_ids[(i*l_X)+j:(i*l_X)+j+1]
+                self.f_numbers = list(range((i*l_X)+j,(i*l_X)+j+1)) 
                 self.process_sample(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], norm=(X_norm, Y_norm))
 
                 image_counter += 1
