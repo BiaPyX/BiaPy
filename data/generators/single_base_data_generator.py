@@ -203,31 +203,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         .format(n_classes, len(present_classes),present_classes))
 
             self.length = len(self.all_samples)
-
-            # X data analysis
-            self.X_norm = {}
-            if norm_custom_mean is not None and norm_custom_std is not None:
-                sam = []
-                for i in range(len(self.data_path)):
-                    img, _ = self.load_sample(i)
-                    sam.append(img)
-                    if resize_shape[-1] != img.shape[-1]:
-                        raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
-                                         "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
-                sam = np.array(sam)
-                self.X_norm['type'] = 'custom'
-                self.X_norm['mean'] = np.mean(sam)
-                self.X_norm['std'] = np.std(sam)
-                self.X_norm['orig_dtype'] = sam.dtype
-                del sam
-            else:                
-                self.X_norm['type'] = 'div'
-                img, _ = self.load_sample(0)
-                img, nsteps = norm_range01(img)
-                self.X_norm.update(nsteps)
-                if resize_shape[-1] != img.shape[-1]:
-                    raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
-                                    "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
         else:
             self.X = X
             if ptype == "classification":
@@ -239,35 +214,40 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         .format(n_classes, len(present_classes), present_classes))
 
             self.length = len(self.X)
-    
-            # X data analysis and normalization
-            self.X_norm = {}
-            if norm_custom_mean is not None and norm_custom_std is not None:
-                self.X_norm['type'] = 'custom'
+
+        # X data analysis
+        self.X_norm = {}
+        self.X_norm['type'] = 'not_set_yet'
+        if norm_custom_mean is not None and norm_custom_std is not None:
+            if not in_memory:
+                sam = []
+                for i in range(len(self.data_path)):
+                    img, _ = self.load_sample(i)
+                    sam.append(img)
+                    if resize_shape[-1] != img.shape[-1]:
+                        raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                            "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
+                sam = np.array(sam)
+                
+                self.X_norm['mean'] = np.mean(sam)
+                self.X_norm['std'] = np.std(sam)
+                self.X_norm['orig_dtype'] = sam.dtype
+                del sam
+            else:
                 self.X_norm['mean'] = np.mean(self.X)
-                self.X_norm['std'] = np.std(self.X)
+                self.X_norm['std'] = np.std(self.X)    
                 self.X_norm['orig_dtype'] = self.X.dtype
-
-                self.X = normalize(self.X, self.X_norm['mean'], self.X_norm['std'])
-            else:
-                self.X_norm['type'] = 'div'
-                if type(X) != list:
-                    self.X, normx = norm_range01(self.X)
-                else:
-                    self.X[0], normx = norm_range01(self.X[0])
-                    for i in range(1,len(self.X)):
-                        self.X[i], _ = norm_range01(self.X[i])
-                self.X_norm.update(normx)
-            
-            t = "Training" if not val else "Validation"
-            if type(X) != list:
-                print("{} data normalization - min: {} , max: {} , mean: {}"
-                    .format(t,np.min(self.X), np.max(self.X), np.mean(self.X)))
-            else:
-                print("{} data[0] normalization - min: {} , max: {} , mean: {}"
-                    .format(t,np.min(self.X[0]), np.max(self.X[0]), np.mean(self.X[0])))
-
+            self.X_norm['type'] = 'custom'
+        else:                
             img, _ = self.load_sample(0)
+            img, nsteps = norm_range01(img)
+            self.X_norm.update(nsteps)
+            if resize_shape[-1] != img.shape[-1]:
+                raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                    "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
+            self.X_norm['type'] = 'div'            
+
+        print("Normalization config used for X: {}".format(self.X_norm))
 
         self.shape = resize_shape if resize_shape is not None else img.shape
 
@@ -362,12 +342,12 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             img = np.load(f) if sample_id.endswith('.npy') else imread(f)
             img = np.squeeze(img)
             
-            # X normalization
-            if self.X_norm:
-                if self.X_norm['type'] == 'div':
-                    img, _ = norm_range01(img)
-                elif self.X_norm['type'] == 'custom':
-                    img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
+        # X normalization
+        if self.X_norm['type'] != "not_set_yet":
+            if self.X_norm['type'] == 'div':
+                img, _ = norm_range01(img)
+            elif self.X_norm['type'] == 'custom':
+                img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
 
         img = self.ensure_shape(img)
 
