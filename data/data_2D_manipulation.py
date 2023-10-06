@@ -458,9 +458,6 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
     if data_mask is not None:
         padded_data_mask = np.pad(data_mask,((0,0),(padding[1],padding[1]),(padding[0],padding[0]),(0,0)), 'reflect')
 
-    crop_shape = tuple(crop_shape[i] for i in [1, 0, 2])
-    padding = tuple(padding[i] for i in [1, 0])
-
     # Calculate overlapping variables
     overlap_x = 1 if overlap[0] == 0 else 1-overlap[0]
     overlap_y = 1 if overlap[1] == 0 else 1-overlap[1]
@@ -500,19 +497,19 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
     for z in range(data.shape[0]):
         for y in range(crops_per_y):
             for x in range(crops_per_x):
-                d_y = 0 if (y*step_y+crop_shape[1]) < padded_data.shape[1] else last_y
-                d_x = 0 if (x*step_x+crop_shape[0]) < padded_data.shape[2] else last_x
+                d_y = 0 if (y*step_y+crop_shape[0]) < padded_data.shape[1] else last_y
+                d_x = 0 if (x*step_x+crop_shape[1]) < padded_data.shape[2] else last_x
 
                 cropped_data[c] = \
                     padded_data[z,
-                                y*step_y-d_y:y*step_y+crop_shape[1]-d_y,
-                                x*step_x-d_x:x*step_x+crop_shape[0]-d_x]
+                                y*step_y-d_y:y*step_y+crop_shape[0]-d_y,
+                                x*step_x-d_x:x*step_x+crop_shape[1]-d_x]
 
                 if data_mask is not None:
                     cropped_data_mask[c] = \
                         padded_data_mask[z,
-                                         y*step_y-d_y:y*step_y+crop_shape[1]-d_y,
-                                         x*step_x-d_x:x*step_x+crop_shape[0]-d_x]
+                                         y*step_y-d_y:y*step_y+crop_shape[0]-d_y,
+                                         x*step_x-d_x:x*step_x+crop_shape[1]-d_x]
                 c += 1
 
     if verbose:
