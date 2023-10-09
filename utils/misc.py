@@ -124,28 +124,24 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
 
 def save_model(cfg, jobname, epoch, model, model_without_ddp, optimizer, loss_scaler):
     output_dir = Path(cfg.PATHS.CHECKPOINT)
-    epoch_name = str(epoch)
-    if loss_scaler is not None:
-        checkpoint_paths = [output_dir / "{}-checkpoint-{}.pth".format(jobname, epoch_name)]
-        for checkpoint_path in checkpoint_paths:
-            to_save = {
-                'model': model_without_ddp.state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'epoch': epoch,
-                'scaler': loss_scaler.state_dict(),
-                'cfg': cfg,
-            }
+    sc = loss_scaler.state_dict() if loss_scaler is not None else "NONE"
+    checkpoint_paths = [output_dir / "{}-checkpoint-{}.pth".format(jobname, str(epoch))]
+    for checkpoint_path in checkpoint_paths:
+        to_save = {
+            'model': model_without_ddp.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'epoch': epoch,
+            'scaler': sc,
+            'cfg': cfg,
+        }
 
-            save_on_master(to_save, checkpoint_path)
-    else:
-        client_state = {'epoch': epoch}
-        model.save_checkpoint(save_dir=output_dir, tag="{}-checkpoint-{}".format(jobname, epoch_name), client_state=client_state)
+        save_on_master(to_save, checkpoint_path)
 
 def save_on_master(*args, **kwargs):
     if is_main_process():
         torch.save(*args, **kwargs)
 
-def load_model_checkpoint(cfg, jobname, model_without_ddp, optimizer=None, loss_scaler=None):
+def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, loss_scaler=None):
     checkpoint_dir = Path(cfg.PATHS.CHECKPOINT)
     start_epoch = 0
 
@@ -175,9 +171,9 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, optimizer=None, loss_
 
     # Load checkpoint file
     if resume.startswith('https'):
-        checkpoint = torch.hub.load_state_dict_from_url(resume, map_location='cpu', check_hash=True)
+        checkpoint = torch.hub.load_state_dict_from_url(resume, map_location=device, check_hash=True)
     else:
-        checkpoint = torch.load(resume, map_location='cpu')
+        checkpoint = torch.load(resume, map_location=device)
 
     model_without_ddp.load_state_dict(checkpoint['model'], strict=False)
     print("Model weights loaded!")
