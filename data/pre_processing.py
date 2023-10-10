@@ -288,6 +288,7 @@ def create_detection_masks(cfg, data_type='train'):
         req_columns = ['axis-0', 'axis-1', 'axis-2']
         req_columns_class = ['axis-0', 'axis-1', 'axis-2', 'class']
 
+    classes = cfg.MODEL.N_CLASSES if cfg.MODEL.N_CLASSES > 2 else 1
     print("Creating {} detection masks . . .".format(data_type))
     for i in range(len(ids)):
         img_filename = os.path.splitext(ids[i])[0]+img_ext
@@ -351,16 +352,16 @@ def create_detection_masks(cfg, data_type='train'):
                 uniq = np.sort(np.unique(class_point))        
                 if uniq[0] != 1:
                     raise ValueError("Class number must start with 1")    
-                if not all(uniq == np.array(range(1,cfg.MODEL.N_CLASSES+1))):
+                if not all(uniq == np.array(range(1,classes+1))):
                     raise ValueError("Classes must be consecutive, e.g [1,2,3,4..]. Given {}".format(uniq))   
             else:
-                if cfg.MODEL.N_CLASSES > 1:
+                if classes > 1:
                     raise ValueError("MODEL.N_CLASSES > 1 but no class specified in CSV files (4th column must have class info)")
                 class_point = [1] * len(z_axis_point)
 
             # Create masks
             print("Creating all points . . .")
-            mask = np.zeros((img.shape[:-1]+(cfg.MODEL.N_CLASSES,)), dtype=np.uint8)
+            mask = np.zeros((img.shape[:-1]+(classes,)), dtype=np.uint8)
             for j in tqdm(range(len(z_axis_point)), total=len(z_axis_point), leave=False):
                 a0_coord = z_axis_point[j]
                 a1_coord = y_axis_point[j]
@@ -370,7 +371,7 @@ def create_detection_masks(cfg, data_type='train'):
 
                 if c_point+1 > mask.shape[-1]:
                     raise ValueError("Class {} detected while MODEL.N_CLASSES was set to {}. Please check it!"
-                        .format(c_point+1, cfg.MODEL.N_CLASSES))
+                        .format(c_point+1, classes))
 
                 # Paint the point
                 if cfg.PROBLEM.NDIM == '3D':
