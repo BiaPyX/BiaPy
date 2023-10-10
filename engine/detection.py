@@ -117,7 +117,7 @@ class Detection_Workflow(Base_Workflow):
             else:
                 return train_iou
 
-    def detection_process(self, pred, filenames, metric_names=[], f_numbers=0):
+    def detection_process(self, pred, filenames, metric_names=[]):
         """
         Detection workflow engine for test/inference. Process model's prediction to prepare detection output and 
         calculate metrics. 
@@ -132,12 +132,6 @@ class Detection_Workflow(Base_Workflow):
 
         metric_names : List of str
             Metrics names.
-
-        f_numbers : List of ints
-            Number of the processed images. If the images used for prediction and the ground truth files do not 
-            share the same names, this value can be helpful for loading ground truth files that correspond to 
-            the same position in the file list as the input images. A warning message will appear to alert the 
-            user, ensuring awareness in case the ground truth data does not truly match the input images.
         """
         ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
         pred_shape = pred.shape
@@ -295,7 +289,7 @@ class Detection_Workflow(Base_Workflow):
                     if not os.path.exists(csv_filename):
                         print("WARNING: The CSV file seems to have different name than iamge. Using the CSV file "
                               "with the same position as the CSV in the directory. Check if it is correct!")
-                        csv_filename = os.path.join(self.original_test_mask_path, self.csv_files[f_numbers[0]])
+                        csv_filename = os.path.join(self.original_test_mask_path, self.csv_files[self.f_numbers[0]])
                         print("Its respective CSV file seems to be: {}".format(csv_filename))
                     print("Reading GT data from: {}".format(csv_filename))
                     df = pd.read_csv(csv_filename, index_col=0)     
