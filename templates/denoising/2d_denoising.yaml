@@ -32,7 +32,6 @@ MODEL:
     ARCHITECTURE: unet
     FEATURE_MAPS: [32, 64, 96]
     KERNEL_SIZE: 3
-    KERNEL_INIT: "glorot_uniform"
     UPSAMPLE_LAYER: "upsampling"
     DROPOUT_VALUES: [0, 0, 0]
     ACTIVATION: 'relu'
