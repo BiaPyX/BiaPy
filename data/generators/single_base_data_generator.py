@@ -14,138 +14,142 @@ from data.pre_processing import normalize, norm_range01
 from data.generators.augmentors import random_crop_single, random_3D_crop_single, resize_img
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
-    """Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
-       and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
-       transformations.
+    """
+    Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
+    and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
+    transformations.
 
-       Based on `microDL <https://github.com/czbiohub/microDL>`_ and
-       `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
+    Based on `microDL <https://github.com/czbiohub/microDL>`_ and
+    `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
 
-       Parameters
-       ----------
-       ndim : int
-           Dimensions of the data (``2`` for 2D and ``3`` for 3D).
+    Parameters
+    ----------
+    ndim : int
+        Dimensions of the data (``2`` for 2D and ``3`` for 3D).
 
-       X : 4D/5D Numpy array
-           Data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
+    X : 4D/5D Numpy array
+        Data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
-       Y : 2D Numpy array
-           Image class. ``(num_of_images, class)``.
+    Y : 2D Numpy array
+        Image class. ``(num_of_images, class)``.
 
-       data_path : List of str, optional
-          If ``in_memory`` is ``True`` this should contain the path to load images.
+    data_path : List of str, optional
+        If ``in_memory`` is ``True`` this should contain the path to load images.
 
-       ptype : str
-           Problem type. Options ['mae','classification'].
+    ptype : str
+        Problem type. Options ['mae','classification'].
 
-       n_classes : int
-           Number of classes to predict.
+    n_classes : int
+        Number of classes to predict.
 
-       seed : int, optional
-           Seed for random functions.
+    seed : int, optional
+        Seed for random functions.
 
-       in_memory : bool, optional
-           If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will be loaded directly from disk using
-           ``data_path``.
+    in_memory : bool, optional
+        If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will be loaded directly from disk using
+        ``data_path``.
 
-       da : bool, optional
-           To activate the data augmentation.
+    da : bool, optional
+        To activate the data augmentation.
 
-       da_prob : float, optional
-               Probability of doing each transformation.
+    da_prob : float, optional
+            Probability of doing each transformation.
 
-       rotation90 : bool, optional
-           To make square (90, 180,270) degree rotations.
+    rotation90 : bool, optional
+        To make square (90, 180,270) degree rotations.
 
-       rand_rot : bool, optional
-           To make random degree range rotations.
+    rand_rot : bool, optional
+        To make random degree range rotations.
 
-       rnd_rot_range : tuple of float, optional
-           Range of random rotations. E. g. ``(-180, 180)``.
+    rnd_rot_range : tuple of float, optional
+        Range of random rotations. E. g. ``(-180, 180)``.
 
-       shear : bool, optional
-           To make shear transformations.
+    shear : bool, optional
+        To make shear transformations.
 
-       shear_range : tuple of int, optional
-           Degree range to make shear. E. g. ``(-20, 20)``.
+    shear_range : tuple of int, optional
+        Degree range to make shear. E. g. ``(-20, 20)``.
 
-       zoom : bool, optional
-           To make zoom on images.
+    zoom : bool, optional
+        To make zoom on images.
 
-       zoom_range : tuple of floats, optional
-           Zoom range to apply. E. g. ``(0.8, 1.2)``.
+    zoom_range : tuple of floats, optional
+        Zoom range to apply. E. g. ``(0.8, 1.2)``.
 
-       shift : float, optional
-           To make shifts.
+    shift : float, optional
+        To make shifts.
 
-       shift_range : tuple of float, optional
-           Range to make a shift. E. g. ``(0.1, 0.2)``.
+    shift_range : tuple of float, optional
+        Range to make a shift. E. g. ``(0.1, 0.2)``.
 
-       affine_mode: str, optional
-           Method to use when filling in newly created pixels. Same meaning as in `skimage` (and `numpy.pad()`).
-           E.g. ``constant``, ``reflect`` etc.
+    affine_mode: str, optional
+        Method to use when filling in newly created pixels. Same meaning as in `skimage` (and `numpy.pad()`).
+        E.g. ``constant``, ``reflect`` etc.
 
-       vflip : bool, optional
-           To activate vertical flips.
+    vflip : bool, optional
+        To activate vertical flips.
 
-       hflip : bool, optional
-           To activate horizontal flips.
+    hflip : bool, optional
+        To activate horizontal flips.
 
-       elastic : bool, optional
-           To make elastic deformations.
+    elastic : bool, optional
+        To make elastic deformations.
 
-       e_alpha : tuple of ints, optional
-            Strength of the distortion field. E. g. ``(240, 250)``.
+    e_alpha : tuple of ints, optional
+        Strength of the distortion field. E. g. ``(240, 250)``.
 
-       e_sigma : int, optional
-           Standard deviation of the gaussian kernel used to smooth the distortion fields.
+    e_sigma : int, optional
+        Standard deviation of the gaussian kernel used to smooth the distortion fields.
 
-       e_mode : str, optional
-           Parameter that defines the handling of newly created pixels with the elastic transformation.
+    e_mode : str, optional
+        Parameter that defines the handling of newly created pixels with the elastic transformation.
 
-       g_blur : bool, optional
-           To insert gaussian blur on the images.
+    g_blur : bool, optional
+        To insert gaussian blur on the images.
 
-       g_sigma : tuple of floats, optional
-           Standard deviation of the gaussian kernel. E. g. ``(1.0, 2.0)``.
+    g_sigma : tuple of floats, optional
+        Standard deviation of the gaussian kernel. E. g. ``(1.0, 2.0)``.
 
-       median_blur : bool, optional
-           To blur an image by computing median values over neighbourhoods.
+    median_blur : bool, optional
+        To blur an image by computing median values over neighbourhoods.
 
-       mb_kernel : tuple of ints, optional
-           Median blur kernel size. E. g. ``(3, 7)``.
+    mb_kernel : tuple of ints, optional
+        Median blur kernel size. E. g. ``(3, 7)``.
 
-       motion_blur : bool, optional
-           Blur images in a way that fakes camera or object movements.
+    motion_blur : bool, optional
+        Blur images in a way that fakes camera or object movements.
 
-       motb_k_range : int, optional
-           Kernel size to use in motion blur.
+    motb_k_range : int, optional
+        Kernel size to use in motion blur.
 
-       gamma_contrast : bool, optional
-           To insert gamma constrast changes on images.
+    gamma_contrast : bool, optional
+        To insert gamma constrast changes on images.
 
-       gc_gamma : tuple of floats, optional
-           Exponent for the contrast adjustment. Higher values darken the image. E. g. ``(1.25, 1.75)``.
+    gc_gamma : tuple of floats, optional
+        Exponent for the contrast adjustment. Higher values darken the image. E. g. ``(1.25, 1.75)``.
 
-       dropout : bool, optional
-           To set a certain fraction of pixels in images to zero.
+    dropout : bool, optional
+        To set a certain fraction of pixels in images to zero.
 
-       drop_range : tuple of floats, optional
-           Range to take a probability ``p`` to drop pixels. E.g. ``(0, 0.2)`` will take a ``p`` folowing ``0<=p<=0.2``
-           and then drop ``p`` percent of all pixels in the image (i.e. convert them to black pixels).
+    drop_range : tuple of floats, optional
+        Range to take a probability ``p`` to drop pixels. E.g. ``(0, 0.2)`` will take a ``p`` folowing ``0<=p<=0.2``
+        and then drop ``p`` percent of all pixels in the image (i.e. convert them to black pixels).
 
-       val : bool, optional
-           Advise the generator that the images will be to validate the model to not make random crops (as the val.
-           data must be the same on each epoch). Valid when ``random_crops_in_DA`` is set.
+    val : bool, optional
+        Advise the generator that the images will be to validate the model to not make random crops (as the val.
+        data must be the same on each epoch). Valid when ``random_crops_in_DA`` is set.
 
-       resize_shape : tuple of ints, optional
-           If defined the input samples will be scaled into that shape.
-    
-       norm_custom_mean : float, optional
-           Mean of the data used to normalize.
+    resize_shape : tuple of ints, optional
+        If defined the input samples will be scaled into that shape.
 
-       norm_custom_std : float, optional
-           Std of the data used to normalize.
+    norm_type : str, optional
+        Type of normalization to be made. Options available: ``div`` or ``custom``.
+
+    norm_custom_mean : float, optional
+        Mean of the data used to normalize.
+
+    norm_custom_std : float, optional
+        Std of the data used to normalize.
     """
 
     def __init__(self, ndim, X, Y, data_path, ptype, n_classes, seed=0, in_memory=False, da=True, da_prob=0.5, rotation90=False, 
@@ -153,7 +157,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                  shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), 
                  e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), 
                  motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, 
-                 drop_range=(0, 0.2), val=False, resize_shape=None, norm_custom_mean=None, norm_custom_std=None):
+                 drop_range=(0, 0.2), val=False, resize_shape=None, norm_type='div', norm_custom_mean=None, norm_custom_std=None):
 
         if in_memory:
             if X.ndim != (ndim+2):
@@ -218,25 +222,33 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # X data analysis
         self.X_norm = {}
         self.X_norm['type'] = 'not_set_yet'
-        if norm_custom_mean is not None and norm_custom_std is not None:
-            if not in_memory:
-                sam = []
-                for i in range(len(self.data_path)):
-                    img, _ = self.load_sample(i)
-                    sam.append(img)
-                    if resize_shape[-1] != img.shape[-1]:
-                        raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
-                            "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
-                sam = np.array(sam)
-                
-                self.X_norm['mean'] = np.mean(sam)
-                self.X_norm['std'] = np.std(sam)
-                self.X_norm['orig_dtype'] = sam.dtype
-                del sam
+        if norm_type == 'custom':
+            if norm_custom_mean is not None and norm_custom_std is not None:
+                img, _ = self.load_sample(0)
+                self.X_norm['mean'] = norm_custom_mean
+                self.X_norm['std'] = norm_custom_std  
+                self.X_norm['orig_dtype'] = img.dtype
             else:
-                self.X_norm['mean'] = np.mean(self.X)
-                self.X_norm['std'] = np.std(self.X)    
-                self.X_norm['orig_dtype'] = self.X.dtype
+                if not in_memory:
+                    sam = []
+                    for i in range(len(self.data_path)):
+                        img, _ = self.load_sample(i)
+                        sam.append(img)
+                        if resize_shape[-1] != img.shape[-1]:
+                            raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                                "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
+                    sam = np.array(sam)
+                    
+                    self.X_norm['mean'] = np.mean(sam)
+                    self.X_norm['std'] = np.std(sam)
+                    self.X_norm['orig_dtype'] = sam.dtype
+                    del sam
+                else:
+                    img, _ = self.load_sample(0)
+                    self.X_norm['mean'] = np.mean(self.X)
+                    self.X_norm['std'] = np.std(self.X)    
+                    self.X_norm['orig_dtype'] = img.dtype
+                    
             self.X_norm['type'] = 'custom'
         else:                
             img, _ = self.load_sample(0)
@@ -324,7 +336,22 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         return self.length
 
     def load_sample(self, idx):
-        """Load one data sample given its corresponding index."""
+        """
+        Load one data sample given its corresponding index.
+
+        Parameters
+        ----------
+        idx : int
+            Sample index counter.
+
+        Returns
+        -------
+        img : 3D/4D Numpy array
+            X element. E.g. ``(y, x, channels)`` in  ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+
+        class : int
+            Y element. 
+        """
         # Choose the data source
         if self.in_memory:
             img = self.X[idx]
@@ -354,23 +381,36 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         return img, img_class
         
     def getitem(self, index):
+        """
+        Generation of one pair of data.
+
+        Parameters
+        ----------
+        index : int
+            Index counter.
+
+        Returns
+        -------
+        item : tuple of 3D/4D Numpy arrays 
+            X and Y (if avail) elements. X is ``(z, y, x, channels)`` if ``3D`` or 
+            ``(y, x, channels)`` if ``2D``. Y is an integer. 
+        """
         return self.__getitem__(index)
 
     def __getitem__(self, index):
-        """Generation of one sample data.
+        """
+        Generation of one sample data.
 
-           Parameters
-           ----------
-           index : int
-               Sample index counter.
+        Parameters
+        ----------
+        index : int
+            Sample index counter.
 
-           Returns
-           -------
-           img : 3D Numpy array
-               X element, for instance, an image. E.g. ``(y, x, channels)``.
-
-           img_class : ints
-               Y element, for instance, a class number.
+        Returns
+        -------
+        img : 3D/4D Numpy array
+            X element, for instance, an image. E.g. ``(y, x, channels)`` in ``2D`` or 
+            ``(z, y, x, channels)`` in ``3D``.
         """
         img, img_class =  self.load_sample(index)
 
@@ -387,17 +427,18 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         return img, img_class
 
     def apply_transform(self, image):
-        """Transform the input image with one of the selected choices based on a probability.
+        """
+        Transform the input image with one of the selected choices based on a probability.
 
-           Parameters
-           ----------
-           image : 3D Numpy array
-               Image to transform. E.g. ``(y, x, channels)``.
+        Parameters
+        ----------
+        image : 3D/4D Numpy array
+            Image to transform. E.g. ``(y, x, channels)`` in ``2D`` or ``(z, y, x, channels)`` in ``3D``.
 
-           Returns
-           -------
-           trans_image : 3D Numpy array
-               Transformed image. E.g. ``(y, x, channels)``.
+        Returns
+        -------
+        image : 3D/4D Numpy array
+            Transformed image. E.g. ``(y, x, channels)`` in ``2D`` or ``(z, y, x, channels)`` in ``3D``.
         """
         # Save shape
         o_img_shape = image.shape
@@ -415,15 +456,16 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         return image
 
     def draw_grid(self, im, grid_width=50):
-        """Draw grid of the specified size on an image.
+        """
+        Draw grid of the specified size on an image.
 
-           Parameters
-           ----------
-           im : 3D Numpy array
-               Image to be modified. E. g. ``(y, x, channels)``
+        Parameters
+        ----------
+        im : 3D/4D Numpy array
+            Image to be modified. E.g. ``(y, x, channels)`` in ``2D`` or ``(z, y, x, channels)`` in ``3D``.
 
-           grid_width : int, optional
-               Grid's width.
+        grid_width : int, optional
+            Grid's width.
         """
         v = 1 if int(np.max(im)) == 0 else int(np.max(im))
 
@@ -436,35 +478,37 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     def get_transformed_samples(self, num_examples, random_images=True, save_to_dir=True, out_dir='aug', train=False,
                                 draw_grid=True):
-        """Apply selected transformations to a defined number of images from the dataset.
+        """
+        Apply selected transformations to a defined number of images from the dataset.
 
-           Parameters
-           ----------
-           num_examples : int
-               Number of examples to generate.
+        Parameters
+        ----------
+        num_examples : int
+            Number of examples to generate.
 
-           random_images : bool, optional
-               Randomly select images from the dataset. If ``False`` the examples will be generated from the start of
-               the dataset.
+        random_images : bool, optional
+            Randomly select images from the dataset. If ``False`` the examples will be generated from the start of
+            the dataset.
 
-           save_to_dir : bool, optional
-               Save the images generated. The purpose of this variable is to check the images generated by data
-               augmentation.
+        save_to_dir : bool, optional
+            Save the images generated. The purpose of this variable is to check the images generated by data
+            augmentation.
 
-           out_dir : str, optional
-               Name of the folder where the examples will be stored.
+        out_dir : str, optional
+            Name of the folder where the examples will be stored.
 
-           train : bool, optional
-               To avoid drawing a grid on the generated images. This should be set when the samples will be used for
-               training.
-               
-           draw_grid : bool, optional
-               Draw a grid in the generated samples. Useful to see some types of deformations.
+        train : bool, optional
+            To avoid drawing a grid on the generated images. This should be set when the samples will be used for
+            training.
+            
+        draw_grid : bool, optional
+            Draw a grid in the generated samples. Useful to see some types of deformations.
 
-           Returns
-           -------
-           sample_x : 4D Numpy array
-               Batch of data. E.g. ``(num_examples, y, x, channels)``.
+        Returns
+        -------
+        sample_x : 4D/5D Numpy array
+            Batch of data. E.g. ``(num_examples, y, x, channels)`` in ``2D`` or ``(num_examples, z, y, x, channels)`` 
+            in ``3D``.
         """
 
         if random_images == False and num_examples > self.length:

@@ -39,7 +39,10 @@ class test_pair_data_generator(Dataset):
 
     instance_problem : bool, optional
         To not divide the labels if being in an instance segmenation problem.
-        
+
+    norm_type : str, optional
+        Type of normalization to be made. Options available: ``div`` or ``custom``.
+
     norm_custom_mean : float, optional
         Mean of the data used to normalize.
 
@@ -51,7 +54,7 @@ class test_pair_data_generator(Dataset):
     
     """
     def __init__(self, ndim, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, seed=42,
-                 instance_problem=False, normalizeY='as_mask', norm_custom_mean=None, 
+                 instance_problem=False, normalizeY='as_mask', norm_type='div', norm_custom_mean=None, 
                  norm_custom_std=None, sample_ids=None):
 
         if X is None and d_path is None:
@@ -95,11 +98,14 @@ class test_pair_data_generator(Dataset):
             self.Y_norm['type'] = 'div'
         img, mask, xnorm = self.load_sample(0)
 
-        if norm_custom_mean is not None and norm_custom_std is not None:
+        if norm_type == 'custom':
+            if norm_custom_mean is not None and norm_custom_std is not None:
+                self.X_norm['mean'] = norm_custom_mean
+                self.X_norm['std'] = norm_custom_std
+                self.X_norm['orig_dtype'] = img.dtype
+            else:
+                raise NotImplementedError
             self.X_norm['type'] = 'custom'
-            self.X_norm['mean'] = norm_custom_mean
-            self.X_norm['std'] = norm_custom_std
-            self.X_norm['orig_dtype'] = img.dtype
         else:
             self.X_norm.update(xnorm)
 

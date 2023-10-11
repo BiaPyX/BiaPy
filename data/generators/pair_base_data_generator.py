@@ -18,341 +18,345 @@ from data.generators.augmentors import *
 from data.pre_processing import normalize, norm_range01
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
-    """Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
-       and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
-       transformations. 
+    """
+    Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
+    and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
+    transformations. 
 
-       Based on `microDL <https://github.com/czbiohub/microDL>`_ and
-       `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
+    Based on `microDL <https://github.com/czbiohub/microDL>`_ and
+    `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
 
-       Parameters
-       ----------
-       ndim : int
-           Dimensions of the data (``2`` for 2D and ``3`` for 3D).
+    Parameters
+    ----------
+    ndim : int
+        Dimensions of the data (``2`` for ``2D`` and ``3`` for 3D).
 
-       X : 4D/5D Numpy array
-           Data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
+    X : 4D/5D Numpy array
+        Data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
-       Y : 4D/5D Numpy array
-           Mask data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
+    Y : 4D/5D Numpy array
+        Mask data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
-       seed : int, optional
-           Seed for random functions.
+    seed : int, optional
+        Seed for random functions.
 
-       in_memory : bool, optional
-           If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will be loaded directly from disk using
-           ``data_paths``.
+    in_memory : bool, optional
+        If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will be loaded directly from disk using
+        ``data_paths``.
 
-       data_paths : List of str, optional
-          If ``in_memory`` is ``True`` this list should contain the paths to load data and masks. ``data_paths[0]``
-          should be data path and ``data_paths[1]`` masks path.
+    data_paths : List of str, optional
+        If ``in_memory`` is ``True`` this list should contain the paths to load data and masks. ``data_paths[0]``
+        should be data path and ``data_paths[1]`` masks path.
 
-       da : bool, optional
-           To activate the data augmentation.
+    da : bool, optional
+        To activate the data augmentation.
 
-       da_prob : float, optional
-               Probability of doing each transformation.
+    da_prob : float, optional
+            Probability of doing each transformation.
 
-       rotation90 : bool, optional
-           To make square (90, 180,270) degree rotations.
+    rotation90 : bool, optional
+        To make square (90, 180,270) degree rotations.
 
-       rand_rot : bool, optional
-           To make random degree range rotations.
+    rand_rot : bool, optional
+        To make random degree range rotations.
 
-       rnd_rot_range : tuple of float, optional
-           Range of random rotations. E. g. ``(-180, 180)``.
+    rnd_rot_range : tuple of float, optional
+        Range of random rotations. E. g. ``(-180, 180)``.
 
-       shear : bool, optional
-           To make shear transformations.
+    shear : bool, optional
+        To make shear transformations.
 
-       shear_range : tuple of int, optional
-           Degree range to make shear. E. g. ``(-20, 20)``.
+    shear_range : tuple of int, optional
+        Degree range to make shear. E. g. ``(-20, 20)``.
 
-       zoom : bool, optional
-           To make zoom on images.
+    zoom : bool, optional
+        To make zoom on images.
 
-       zoom_range : tuple of floats, optional
-           Zoom range to apply. E. g. ``(0.8, 1.2)``.
+    zoom_range : tuple of floats, optional
+        Zoom range to apply. E. g. ``(0.8, 1.2)``.
 
-       shift : float, optional
-           To make shifts.
+    shift : float, optional
+        To make shifts.
 
-       shift_range : tuple of float, optional
-           Range to make a shift. E. g. ``(0.1, 0.2)``.
+    shift_range : tuple of float, optional
+        Range to make a shift. E. g. ``(0.1, 0.2)``.
 
-       affine_mode: str, optional
-           Method to use when filling in newly created pixels. Same meaning as in `skimage` (and `numpy.pad()`).
-           E.g. ``constant``, ``reflect`` etc.
+    affine_mode: str, optional
+        Method to use when filling in newly created pixels. Same meaning as in `skimage` (and `numpy.pad()`).
+        E.g. ``constant``, ``reflect`` etc.
 
-       vflip : bool, optional
-           To activate vertical flips.
+    vflip : bool, optional
+        To activate vertical flips.
 
-       hflip : bool, optional
-           To activate horizontal flips.
+    hflip : bool, optional
+        To activate horizontal flips.
 
-       elastic : bool, optional
-           To make elastic deformations.
+    elastic : bool, optional
+        To make elastic deformations.
 
-       e_alpha : tuple of ints, optional
-            Strength of the distortion field. E. g. ``(240, 250)``.
+    e_alpha : tuple of ints, optional
+        Strength of the distortion field. E. g. ``(240, 250)``.
 
-       e_sigma : int, optional
-           Standard deviation of the gaussian kernel used to smooth the distortion fields.
+    e_sigma : int, optional
+        Standard deviation of the gaussian kernel used to smooth the distortion fields.
 
-       e_mode : str, optional
-           Parameter that defines the handling of newly created pixels with the elastic transformation.
+    e_mode : str, optional
+        Parameter that defines the handling of newly created pixels with the elastic transformation.
 
-       g_blur : bool, optional
-           To insert gaussian blur on the images.
+    g_blur : bool, optional
+        To insert gaussian blur on the images.
 
-       g_sigma : tuple of floats, optional
-           Standard deviation of the gaussian kernel. E. g. ``(1.0, 2.0)``.
+    g_sigma : tuple of floats, optional
+        Standard deviation of the gaussian kernel. E. g. ``(1.0, 2.0)``.
 
-       median_blur : bool, optional
-           To blur an image by computing median values over neighbourhoods.
+    median_blur : bool, optional
+        To blur an image by computing median values over neighbourhoods.
 
-       mb_kernel : tuple of ints, optional
-           Median blur kernel size. E. g. ``(3, 7)``.
+    mb_kernel : tuple of ints, optional
+        Median blur kernel size. E. g. ``(3, 7)``.
 
-       motion_blur : bool, optional
-           Blur images in a way that fakes camera or object movements.
+    motion_blur : bool, optional
+        Blur images in a way that fakes camera or object movements.
 
-       motb_k_range : int, optional
-           Kernel size to use in motion blur.
+    motb_k_range : int, optional
+        Kernel size to use in motion blur.
 
-       gamma_contrast : bool, optional
-           To insert gamma constrast changes on images.
+    gamma_contrast : bool, optional
+        To insert gamma constrast changes on images.
 
-       gc_gamma : tuple of floats, optional
-           Exponent for the contrast adjustment. Higher values darken the image. E. g. ``(1.25, 1.75)``.
+    gc_gamma : tuple of floats, optional
+        Exponent for the contrast adjustment. Higher values darken the image. E. g. ``(1.25, 1.75)``.
 
-       brightness : bool, optional
-           To aply brightness to the images as `PyTorch Connectomics
-           <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
+    brightness : bool, optional
+        To aply brightness to the images as `PyTorch Connectomics
+        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
 
-       brightness_factor : tuple of 2 floats, optional
-           Strength of the brightness range, with valid values being ``0 <= brightness_factor <= 1``. E.g. ``(0.1, 0.3)``.
+    brightness_factor : tuple of 2 floats, optional
+        Strength of the brightness range, with valid values being ``0 <= brightness_factor <= 1``. E.g. ``(0.1, 0.3)``.
 
-       brightness_mode : str, optional
-           Apply same brightness change to the whole image or diffent to slice by slice.
+    brightness_mode : str, optional
+        Apply same brightness change to the whole image or diffent to slice by slice.
 
-       contrast : boolen, optional
-           To apply contrast changes to the images as `PyTorch Connectomics
-           <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
+    contrast : boolen, optional
+        To apply contrast changes to the images as `PyTorch Connectomics
+        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
 
-       contrast_factor : tuple of 2 floats, optional
-           Strength of the contrast change range, with valid values being ``0 <= contrast_factor <= 1``.
-           E.g. ``(0.1, 0.3)``.
+    contrast_factor : tuple of 2 floats, optional
+        Strength of the contrast change range, with valid values being ``0 <= contrast_factor <= 1``.
+        E.g. ``(0.1, 0.3)``.
 
-       contrast_mode : str, optional
-           Apply same contrast change to the whole image or diffent to slice by slice.
+    contrast_mode : str, optional
+        Apply same contrast change to the whole image or diffent to slice by slice.
 
-       brightness_em : bool, optional
-           To aply brightness to the images as `PyTorch Connectomics
-           <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
+    brightness_em : bool, optional
+        To aply brightness to the images as `PyTorch Connectomics
+        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
 
-       brightness_em_factor : tuple of 2 floats, optional
-           Strength of the brightness range, with valid values being ``0 <= brightness_em_factor <= 1``. E.g. ``(0.1, 0.3)``.
+    brightness_em_factor : tuple of 2 floats, optional
+        Strength of the brightness range, with valid values being ``0 <= brightness_em_factor <= 1``. E.g. ``(0.1, 0.3)``.
 
-       brightness_em_mode : str, optional
-           Apply same brightness change to the whole image or diffent to slice by slice.
+    brightness_em_mode : str, optional
+        Apply same brightness change to the whole image or diffent to slice by slice.
 
-       contrast_em : boolen, optional
-           To apply contrast changes to the images as `PyTorch Connectomics
-           <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
+    contrast_em : boolen, optional
+        To apply contrast changes to the images as `PyTorch Connectomics
+        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
 
-       contrast_em_factor : tuple of 2 floats, optional
-           Strength of the contrast change range, with valid values being ``0 <= contrast_em_factor <= 1``.
-           E.g. ``(0.1, 0.3)``.
+    contrast_em_factor : tuple of 2 floats, optional
+        Strength of the contrast change range, with valid values being ``0 <= contrast_em_factor <= 1``.
+        E.g. ``(0.1, 0.3)``.
 
-       contrast_em_mode : str, optional
-           Apply same contrast change to the whole image or diffent to slice by slice.
+    contrast_em_mode : str, optional
+        Apply same contrast change to the whole image or diffent to slice by slice.
 
-       dropout : bool, optional
-           To set a certain fraction of pixels in images to zero.
+    dropout : bool, optional
+        To set a certain fraction of pixels in images to zero.
 
-       drop_range : tuple of floats, optional
-           Range to take a probability ``p`` to drop pixels. E.g. ``(0, 0.2)`` will take a ``p`` folowing ``0<=p<=0.2``
-           and then drop ``p`` percent of all pixels in the image (i.e. convert them to black pixels).
+    drop_range : tuple of floats, optional
+        Range to take a probability ``p`` to drop pixels. E.g. ``(0, 0.2)`` will take a ``p`` folowing ``0<=p<=0.2``
+        and then drop ``p`` percent of all pixels in the image (i.e. convert them to black pixels).
 
-       cutout : bool, optional
-           To fill one or more rectangular areas in an image using a fill mode.
+    cutout : bool, optional
+        To fill one or more rectangular areas in an image using a fill mode.
 
-       cout_nb_iterations : tuple of ints, optional
-           Range of number of areas to fill the image with. E. g. ``(1, 3)``.
+    cout_nb_iterations : tuple of ints, optional
+        Range of number of areas to fill the image with. E. g. ``(1, 3)``.
 
-       cout_size : tuple of floats, optional
-           Range to select the size of the areas in % of the corresponding image size. Values between ``0`` and ``1``.
-           E. g. ``(0.2, 0.4)``.
+    cout_size : tuple of floats, optional
+        Range to select the size of the areas in % of the corresponding image size. Values between ``0`` and ``1``.
+        E. g. ``(0.2, 0.4)``.
 
-       cout_cval : int, optional
-           Value to fill the area of cutout with.
+    cout_cval : int, optional
+        Value to fill the area of cutout with.
 
-       cout_apply_to_mask : boolen, optional
-           Whether to apply cutout to the mask.
+    cout_apply_to_mask : boolen, optional
+        Whether to apply cutout to the mask.
 
-       cutblur : boolean, optional
-           Blur a rectangular area of the image by downsampling and upsampling it again.
+    cutblur : boolean, optional
+        Blur a rectangular area of the image by downsampling and upsampling it again.
 
-       cblur_size : tuple of floats, optional
-           Range to select the size of the area to apply cutblur on. E. g. ``(0.2, 0.4)``.
+    cblur_size : tuple of floats, optional
+        Range to select the size of the area to apply cutblur on. E. g. ``(0.2, 0.4)``.
 
-       cblur_inside : boolean, optional
-           If ``True`` only the region inside will be modified (cut LR into HR image). If ``False`` the ``50%`` of the
-           times the region inside will be modified (cut LR into HR image) and the other ``50%`` the inverse will be
-           done (cut HR into LR image). See Figure 1 of the official `paper <https://arxiv.org/pdf/2004.00448.pdf>`__.
+    cblur_inside : boolean, optional
+        If ``True`` only the region inside will be modified (cut LR into HR image). If ``False`` the ``50%`` of the
+        times the region inside will be modified (cut LR into HR image) and the other ``50%`` the inverse will be
+        done (cut HR into LR image). See Figure 1 of the official `paper <https://arxiv.org/pdf/2004.00448.pdf>`__.
 
-       cutmix : boolean, optional
-           Combine two images pasting a region of one image to another.
+    cutmix : boolean, optional
+        Combine two images pasting a region of one image to another.
 
-       cmix_size : tuple of floats, optional
-           Range to select the size of the area to paste one image into another. E. g. ``(0.2, 0.4)``.
+    cmix_size : tuple of floats, optional
+        Range to select the size of the area to paste one image into another. E. g. ``(0.2, 0.4)``.
 
-       cnoise : boolean, optional
-           Randomly add noise to a cuboid region in the image.
+    cnoise : boolean, optional
+        Randomly add noise to a cuboid region in the image.
 
-       cnoise_scale : tuple of floats, optional
-           Range to choose a value that will represent the % of the maximum value of the image that will be used as the
-           std of the Gaussian Noise distribution. E.g. ``(0.1, 0.2)``.
+    cnoise_scale : tuple of floats, optional
+        Range to choose a value that will represent the % of the maximum value of the image that will be used as the
+        std of the Gaussian Noise distribution. E.g. ``(0.1, 0.2)``.
 
-       cnoise_nb_iterations : tuple of ints, optional
-           Number of areas with noise to create. E.g. ``(1, 3)``.
+    cnoise_nb_iterations : tuple of ints, optional
+        Number of areas with noise to create. E.g. ``(1, 3)``.
 
-       cnoise_size : tuple of floats, optional
-           Range to choose the size of the areas to transform. E.g. ``(0.2, 0.4)``.
+    cnoise_size : tuple of floats, optional
+        Range to choose the size of the areas to transform. E.g. ``(0.2, 0.4)``.
 
-       misalignment : boolean, optional
-           To add miss-aligment augmentation.
+    misalignment : boolean, optional
+        To add miss-aligment augmentation.
 
-       ms_displacement : int, optional
-           Maximum pixel displacement in `xy`-plane for misalignment.
+    ms_displacement : int, optional
+        Maximum pixel displacement in `xy`-plane for misalignment.
 
-       ms_rotate_ratio : float, optional
-           Ratio of rotation-based mis-alignment
+    ms_rotate_ratio : float, optional
+        Ratio of rotation-based mis-alignment
 
-       missing_sections : boolean, optional
-           Augment the image by creating a black line in a random position.
+    missing_sections : boolean, optional
+        Augment the image by creating a black line in a random position.
 
-       missp_iterations : tuple of 2 ints, optional
-           Iterations to dilate the missing line with. E.g. ``(30, 40)``.
+    missp_iterations : tuple of 2 ints, optional
+        Iterations to dilate the missing line with. E.g. ``(30, 40)``.
 
-       grayscale : bool, optional
-           Whether to augment images converting partially in grayscale.
+    grayscale : bool, optional
+        Whether to augment images converting partially in grayscale.
 
-       gridmask : bool, optional
-           Whether to apply gridmask to the image. See the official `paper <https://arxiv.org/abs/2001.04086v1>`__ for
-           more information about it and its parameters.
+    gridmask : bool, optional
+        Whether to apply gridmask to the image. See the official `paper <https://arxiv.org/abs/2001.04086v1>`__ for
+        more information about it and its parameters.
 
-       grid_ratio : float, optional
-           Determines the keep ratio of an input image (``r`` in the original paper).
+    grid_ratio : float, optional
+        Determines the keep ratio of an input image (``r`` in the original paper).
 
-       grid_d_range : tuple of floats, optional
-           Range to choose a ``d`` value. It represents the % of the image size. E.g. ``(0.4,1)``.
+    grid_d_range : tuple of floats, optional
+        Range to choose a ``d`` value. It represents the % of the image size. E.g. ``(0.4,1)``.
 
-       grid_rotate : float, optional
-           Rotation of the mask in GridMask. Needs to be between ``[0,1]`` where 1 is 360 degrees.
+    grid_rotate : float, optional
+        Rotation of the mask in GridMask. Needs to be between ``[0,1]`` where 1 is 360 degrees.
 
-       grid_invert : bool, optional
-           Whether to invert the mask of GridMask.
+    grid_invert : bool, optional
+        Whether to invert the mask of GridMask.
 
-       channel_shuffle : bool, optional
-           Whether to shuflle the channels of the images.
-       
-       gaussian_noise : bool, optional
-           To apply Gaussian noise to the images.
+    channel_shuffle : bool, optional
+        Whether to shuflle the channels of the images.
+    
+    gaussian_noise : bool, optional
+        To apply Gaussian noise to the images.
 
-       gaussian_noise_mean : tuple of ints, optional
-           Mean of the Gaussian noise.
+    gaussian_noise_mean : tuple of ints, optional
+        Mean of the Gaussian noise.
 
-       gaussian_noise_var : tuple of ints, optional
-           Variance of the Gaussian noise.
+    gaussian_noise_var : tuple of ints, optional
+        Variance of the Gaussian noise.
 
-       gaussian_noise_use_input_img_mean_and_var : bool, optional
-           Whether to use the mean and variance of the input image instead of ``gaussian_noise_mean``
-           and ``gaussian_noise_var``. 
+    gaussian_noise_use_input_img_mean_and_var : bool, optional
+        Whether to use the mean and variance of the input image instead of ``gaussian_noise_mean``
+        and ``gaussian_noise_var``. 
 
-       poisson_noise : bool, optional
-           To apply Poisson noise to the images.
+    poisson_noise : bool, optional
+        To apply Poisson noise to the images.
 
-       salt : tuple of ints, optional
-           Mean of the gaussian noise.
+    salt : tuple of ints, optional
+        Mean of the gaussian noise.
 
-       salt_amount : tuple of ints, optional
-           Variance of the gaussian noise.
+    salt_amount : tuple of ints, optional
+        Variance of the gaussian noise.
 
-       pepper : bool, optional
-           To apply poisson noise to the images.
+    pepper : bool, optional
+        To apply poisson noise to the images.
 
-       pepper_amount : tuple of ints, optional
-           Mean of the gaussian noise.
+    pepper_amount : tuple of ints, optional
+        Mean of the gaussian noise.
 
-       salt_and_pepper : bool, optional
-           To apply poisson noise to the images.
+    salt_and_pepper : bool, optional
+        To apply poisson noise to the images.
 
-       salt_pep_amount : tuple of ints, optional
-           Mean of the gaussian noise.
+    salt_pep_amount : tuple of ints, optional
+        Mean of the gaussian noise.
 
-       salt_pep_proportion : bool, optional
-           To apply poisson noise to the images.
+    salt_pep_proportion : bool, optional
+        To apply poisson noise to the images.
 
-       random_crops_in_DA : bool, optional
-           Decide to make random crops in DA (before transformations).
+    random_crops_in_DA : bool, optional
+        Decide to make random crops in DA (before transformations).
 
-       shape : 3D int tuple, optional
-           Shape of the desired images when using 'random_crops_in_DA'.
+    shape : 3D int tuple, optional
+        Shape of the desired images when using 'random_crops_in_DA'.
 
-       resolution : 2D tuple of floats, optional
-           Resolution of the given data ``(y,x)``. E.g. ``(8,8)``.
+    resolution : 2D tuple of floats, optional
+        Resolution of the given data ``(y,x)``. E.g. ``(8,8)``.
 
-       prob_map : 4D Numpy array or str, optional
-           If it is an array, it should represent the probability map used to make random crops when
-           ``random_crops_in_DA`` is set. If str given should be the path to read these maps from.
+    prob_map : 4D Numpy array or str, optional
+        If it is an array, it should represent the probability map used to make random crops when
+        ``random_crops_in_DA`` is set. If str given should be the path to read these maps from.
 
-       val : bool, optional
-           Advise the generator that the images will be to validate the model to not make random crops (as the val.
-           data must be the same on each epoch). Valid when ``random_crops_in_DA`` is set.
+    val : bool, optional
+        Advise the generator that the images will be to validate the model to not make random crops (as the val.
+        data must be the same on each epoch). Valid when ``random_crops_in_DA`` is set.
 
-       n_classes : int, optional
-           Number of classes. If ``> 1`` one-hot encoding will be done on the ground truth.
+    n_classes : int, optional
+        Number of classes. If ``> 1`` one-hot encoding will be done on the ground truth.
 
-       extra_data_factor : int, optional
-           Factor to multiply the batches yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated
-           ``extra_data_factor`` times.
+    extra_data_factor : int, optional
+        Factor to multiply the batches yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated
+        ``extra_data_factor`` times.
 
-       n2v : bool, optional
-           Whether to create `Noise2Void <https://openaccess.thecvf.com/content_CVPR_2019/papers/Krull_Noise2Void_-_Learning_Denoising_From_Single_Noisy_Images_CVPR_2019_paper.pdf>`__
-           mask. Used in DENOISING problem type. 
-        
-       n2v_perc_pix : float, optional
-           Input image pixels to be manipulated. 
+    n2v : bool, optional
+        Whether to create `Noise2Void <https://openaccess.thecvf.com/content_CVPR_2019/papers/Krull_Noise2Void_-_Learning_Denoising_From_Single_Noisy_Images_CVPR_2019_paper.pdf>`__
+        mask. Used in DENOISING problem type. 
+    
+    n2v_perc_pix : float, optional
+        Input image pixels to be manipulated. 
 
-       n2v_manipulator : str, optional
-           How to manipulate the input pixels. Most pixel manipulators will compute the replacement value based on a neighborhood.
-           Possible options: `normal_withoutCP`: samples the neighborhood according to a normal gaussian distribution, but without 
-           the center pixel; `normal_additive`: adds a random number to the original pixel value. The random number is sampled from 
-           a gaussian distribution with zero-mean and sigma = `n2v_neighborhood_radius` ; `normal_fitted`: uses a random value from 
-           a gaussian normal distribution with mean equal to the mean of the neighborhood and standard deviation equal to the 
-           standard deviation of the neighborhood ; `identity`: performs no pixel manipulation.
+    n2v_manipulator : str, optional
+        How to manipulate the input pixels. Most pixel manipulators will compute the replacement value based on a neighborhood.
+        Possible options: `normal_withoutCP`: samples the neighborhood according to a normal gaussian distribution, but without 
+        the center pixel; `normal_additive`: adds a random number to the original pixel value. The random number is sampled from 
+        a gaussian distribution with zero-mean and sigma = `n2v_neighborhood_radius` ; `normal_fitted`: uses a random value from 
+        a gaussian normal distribution with mean equal to the mean of the neighborhood and standard deviation equal to the 
+        standard deviation of the neighborhood ; `identity`: performs no pixel manipulation.
 
-       n2v_neighborhood_radius : int, optional
-           Neighborhood size to use when manipulating the values. 
+    n2v_neighborhood_radius : int, optional
+        Neighborhood size to use when manipulating the values. 
 
-       n2v_structMask : Array of ints, optional
-           Masking kernel for StructN2V to hide pixels adjacent to main blind spot. Value 1 = 'hidden', Value 0 = 'non hidden'. 
-           Nested lists equivalent to ndarray. Must have odd length in each dimension (center pixel is blind spot). ``None`` 
-           implies normal N2V masking.
+    n2v_structMask : Array of ints, optional
+        Masking kernel for StructN2V to hide pixels adjacent to main blind spot. Value 1 = 'hidden', Value 0 = 'non hidden'. 
+        Nested lists equivalent to ndarray. Must have odd length in each dimension (center pixel is blind spot). ``None`` 
+        implies normal N2V masking.
 
-       norm_custom_mean : float, optional
-           Mean of the data used to normalize.
+    norm_type : str, optional
+        Type of normalization to be made. Options available: ``div`` or ``custom``.
 
-       norm_custom_std : float, optional
-           Std of the data used to normalize.
-       
-       normalizeY : str, optional
-           Whether Y is going to be normalized or not. 
+    norm_custom_mean : float, optional
+        Mean of the data used to normalize.
 
-       instance_problem : bool, optional
-           Advice the class that the workflow is of instance segmentation to divide the labels by channels.
+    norm_custom_std : float, optional
+        Std of the data used to normalize.
+    
+    normalizeY : str, optional
+        Whether Y is going to be normalized or not. 
+
+    instance_problem : bool, optional
+        Advice the class that the workflow is of instance segmentation to divide the labels by channels.
     """
 
     def __init__(self, ndim, X, Y, seed=0, in_memory=True, data_paths=None, da=True, da_prob=0.5, rotation90=False, 
@@ -373,12 +377,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                  pepper=False, pepper_amount=0.05, salt_and_pepper=False, salt_pep_amount=0.05, salt_pep_proportion=0.5, 
                  random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,), prob_map=None, val=False, n_classes=1, 
                  extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', 
-                 n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), norm_custom_mean=None, 
-                 norm_custom_std=None, normalizeY='as_mask', instance_problem=False, random_crop_scale=1):
+                 n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), norm_type='div',
+                 norm_custom_mean=None, norm_custom_std=None, normalizeY='as_mask', instance_problem=False, random_crop_scale=1):
 
         self.ndim = ndim
         self.z_size = -1 
-        
+        self.val = val
         assert normalizeY in ['as_mask', 'as_image', 'none']
 
         if in_memory:
@@ -464,30 +468,38 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # X data analysis
         self.X_norm = {}
         self.X_norm['type'] = 'not_set_yet'
-        if norm_custom_mean is not None and norm_custom_std is not None:
-            if not in_memory:
-                sam = []
-                for i in range(len(self.data_paths)):
-                    img, _ = self.load_sample(i)
-                    sam.append(img)
-                    if shape[-1] != img.shape[-1]:
-                        raise ValueError("Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                            "Please, check the channels of the images!".format(shape[-1], img.shape[-1]))
-                    if not random_crops_in_DA and shape != img.shape:
-                        raise ValueError("Image shape {} does not match provided DATA.PATCH_SIZE {}. If you want to ensure "
-                        "that PATCH_SIZE you have two options: 1) Set IN_MEMORY = True (as the images will be cropped "
-                        "automatically to that DATA.PATCH_SIZE) ; 2) Set DATA.EXTRACT_RANDOM_PATCH = True to extract a patch "
-                        "(if possible) from loaded image".format(img.shape, shape))
-
-                sam = np.array(sam)
-                self.X_norm['mean'] = np.mean(sam)
-                self.X_norm['std'] = np.std(sam)
+        if norm_type == "custom":
+            if norm_custom_mean is not None and norm_custom_std is not None:
+                img, _ = self.load_sample(0)
+                self.X_norm['mean'] = norm_custom_mean
+                self.X_norm['std'] = norm_custom_std  
                 self.X_norm['orig_dtype'] = img.dtype
-                del sam
             else:
-                self.X_norm['mean'] = np.mean(self.X)
-                self.X_norm['std'] = np.std(self.X)    
-                self.X_norm['orig_dtype'] = self.X.dtype
+                if not in_memory:
+                    sam = []
+                    for i in range(len(self.data_paths)):
+                        img, _ = self.load_sample(i)
+                        sam.append(img)
+                        if shape[-1] != img.shape[-1]:
+                            raise ValueError("Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
+                                "Please, check the channels of the images!".format(shape[-1], img.shape[-1]))
+                        if not random_crops_in_DA and shape != img.shape:
+                            raise ValueError("Image shape {} does not match provided DATA.PATCH_SIZE {}. If you want to ensure "
+                            "that PATCH_SIZE you have two options: 1) Set IN_MEMORY = True (as the images will be cropped "
+                            "automatically to that DATA.PATCH_SIZE) ; 2) Set DATA.EXTRACT_RANDOM_PATCH = True to extract a patch "
+                            "(if possible) from loaded image".format(img.shape, shape))
+
+                    sam = np.array(sam)
+                    self.X_norm['mean'] = np.mean(sam)
+                    self.X_norm['std'] = np.std(sam)
+                    self.X_norm['orig_dtype'] = img.dtype
+                    del sam
+                else:
+                    img, _ = self.load_sample(0)
+                    self.X_norm['mean'] = np.mean(self.X)
+                    self.X_norm['std'] = np.std(self.X)    
+                    self.X_norm['orig_dtype'] = img.dtype
+
             self.X_norm['type'] = 'custom'
         else:       
             img, _ = self.load_sample(0)
@@ -504,6 +516,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.X_norm['type'] = 'div'    
 
         self.X_channels = img.shape[-1]
+        self.Y_channels = img.shape[-1]
         self.shape = shape if random_crops_in_DA else img.shape
         del img
 
@@ -533,8 +546,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                             if np.max(mask) > 30: self.div_Y_on_load_no_bin_channels = True 
                     else:
                         if np.max(mask) > 30: self.div_Y_on_load_bin_channels = True 
-            if not in_memory:
-                self.Y_channels = mask.shape[-1]
+            self.Y_channels = mask.shape[-1]
             self.Y_dtype = mask.dtype
             del mask
             
@@ -737,7 +749,22 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         return self.length
 
     def load_sample(self, _idx):
-        """Load one data sample given its corresponding index."""
+        """
+        Load one data sample given its corresponding index.
+
+        Parameters
+        ----------
+        _idx : int
+            Sample index counter.
+
+        Returns
+        -------
+        img : 3D/4D Numpy array
+            X element. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+
+        mask : 3D/4D Numpy array
+            Y element. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+        """
         # Choose the data source
         idx = _idx % self.length
         if self.in_memory:
@@ -760,13 +787,53 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if self.Y_provided:
                 mask = np.squeeze(mask)
         
+        img = self.norm_X(img)
+
+        if self.Y_provided:
+            mask = self.norm_X(mask)
+            img, mask = self.ensure_shape(img, mask)
+            return img, mask
+        else:
+            img = self.ensure_shape(img, None)
+            return img, np.zeros(img.shape, dtype=np.float32)
+
+    def norm_X(self, img):
+        """
+        X data normalization.
+
+        Parameters
+        ----------
+        img : 3D/4D Numpy array
+            X element, for instance, an image. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+
+        Returns
+        -------
+        img : 3D/4D Numpy array
+            X element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+        """
         # X normalization
         if self.X_norm['type'] != "not_set_yet":
             if self.X_norm['type'] == 'div':
                 img, _ = norm_range01(img)
             elif self.X_norm['type'] == 'custom':
                 img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
+        return img 
 
+    def norm_Y(self, mask):   
+        """
+        Y data normalization.
+
+        Parameters
+        ----------
+        mask : 3D/4D Numpy array
+            Y element, for instance, an image's mask. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in 
+            ``3D``.
+
+        Returns
+        -------
+        mask : 3D/4D Numpy array
+            Y element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+        """
         # Y normalization  
         if self.X_norm['type'] != "not_set_yet":
             if self.normalizeY == 'as_mask' and self.Y_provided:  
@@ -785,34 +852,41 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     mask, _ = norm_range01(mask)
                 elif self.X_norm['type'] == 'custom':
                     mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'])
- 
-        if self.Y_provided:
-            img, mask = self.ensure_shape(img, mask)
-            return img, mask
-        else:
-            img = self.ensure_shape(img, None)
-            return img, np.zeros(img.shape, dtype=np.float32)
+        return mask 
 
     def getitem(self, index):
+        """
+        Generation of one pair of data.
+
+        Parameters
+        ----------
+        index : int
+            Index counter.
+
+        Returns
+        -------
+        item : tuple of 3D/4D Numpy arrays 
+            X and Y (if avail) elements. Each one shape is ``(z, y, x, channels)`` if ``2D`` or ``(y, x, channels)`` 
+            if ``3D``. 
+        """
         return self.__getitem__(index)
 
     def __getitem__(self, index):
-        """Generation of one pair of data.
+        """
+        Generation of one pair of data.
 
-           Parameters
-           ----------
-           index : int
-               Index counter.
+        Parameters
+        ----------
+        index : int
+            Index counter.
 
-           Returns
-           -------
-           img : 3D/4D Numpy array
-               X element, for instance, an image. E.g. ``(z, y, x, channels)`` if ``2D`` or 
-               ``(y, x, channels)`` if ``3D``. 
-               
-           mask : 3D/4D Numpy array
-               Y element, for instance, a mask. E.g. ``(z, y, x, channels)`` if ``2D`` or 
-               ``(y, x, channels)`` if ``3D``.
+        Returns
+        -------
+        img : 3D/4D Numpy array
+            X element, for instance, an image. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+            
+        mask : 3D/4D Numpy array
+            Y element, for instance, a mask. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
         img, mask =  self.load_sample(index)
 
@@ -843,39 +917,40 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if not self.val or (self.val and not self.in_memory):
                 mask = np.repeat(mask, self.Y_channels*2, axis=-1).astype(np.float32)
                 self.prepare_n2v(img, mask)
+            mask = self.norm_X(mask)
 
         img = torch.from_numpy(img.copy())
         mask = torch.from_numpy(mask.copy().astype(np.float32))
         return img, mask
- 
 
     def apply_transform(self, image, mask, e_im=None, e_mask=None):
-        """Transform the input image and its mask at the same time with one of the selected choices based on a
-           probability.
+        """
+        Transform the input image and its mask at the same time with one of the selected choices based on a
+        probability.
 
-           Parameters
-           ----------
-           image : 3D/4D Numpy array
-               Image to transform. E.g. ``(y, x, channels)`` in 2D or ``(z, y, x, z, channels)`` in 3D.
+        Parameters
+        ----------
+        image : 3D/4D Numpy array
+            Image to transform. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
-           mask : 3D/4D Numpy array
-               Mask to transform. E.g. ``(y, x, channels)`` in 2D or ``(y, x, z, channels)`` in 3D.
+        mask : 3D/4D Numpy array
+            Mask to transform. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
-           e_img : 3D/4D Numpy array
-               Extra image to help transforming ``image``. E.g. ``(y, x, channels)`` in 2D or 
-               ``(z, y, x, channels)`` in 3D.
+        e_img : 3D/4D Numpy array
+            Extra image to help transforming ``image``. E.g. ``(y, x, channels)`` in ``2D`` or 
+            ``(z, y, x, channels)`` in ``3D``.
 
-           e_mask : 3D/4D Numpy array
-               Extra mask to help transforming ``mask``. E.g. ``(y, x, channels)`` in 2D or 
-               ``(z, y, x, channels)`` in 3D.
+        e_mask : 3D/4D Numpy array
+            Extra mask to help transforming ``mask``. E.g. ``(y, x, channels)`` in ``2D`` or 
+            ``(z, y, x, channels)`` in ``3D``.
 
-           Returns
-           -------
-           image : 3D/4D Numpy array
-               Transformed image. E.g. ``(y, x, channels)`` in 2D or ``(y, x, z, channels)`` in 3D.
+        Returns
+        -------
+        image : 3D/4D Numpy array
+            Transformed image. E.g. ``(y, x, channels)`` in ``2D`` or ``(y, x, z, channels)`` in ``3D``.
 
-           mask : 3D/4D Numpy array
-               Transformed image mask. E.g. ``(y, x, channels)`` in 2D or ``(y, x, z, channels)`` in 3D.
+        mask : 3D/4D Numpy array
+            Transformed image mask. E.g. ``(y, x, channels)`` in ``2D`` or ``(y, x, z, channels)`` in ``3D``.
         """
         # Split heatmaps from masks
         if self.first_no_bin_channel != -1:
@@ -1009,116 +1084,115 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     def get_transformed_samples(self, num_examples, random_images=True, save_to_dir=True, out_dir='aug', train=False,
                                 draw_grid=True):
-        """Apply selected transformations to a defined number of images from the dataset.
+        """
+        Apply selected transformations to a defined number of images from the dataset.
 
-           Parameters
-           ----------
-           num_examples : int
-               Number of examples to generate.
+        Parameters
+        ----------
+        num_examples : int
+            Number of examples to generate.
 
-           random_images : bool, optional
-               Randomly select images from the dataset. If ``False`` the examples will be generated from the start of
-               the dataset.
+        random_images : bool, optional
+            Randomly select images from the dataset. If ``False`` the examples will be generated from the start of
+            the dataset.
 
-           save_to_dir : bool, optional
-               Save the images generated. The purpose of this variable is to check the images generated by data
-               augmentation.
+        save_to_dir : bool, optional
+            Save the images generated. The purpose of this variable is to check the images generated by data
+            augmentation.
 
-           out_dir : str, optional
-               Name of the folder where the examples will be stored.
+        out_dir : str, optional
+            Name of the folder where the examples will be stored.
 
-           train : bool, optional
-               To avoid drawing a grid on the generated images. This should be set when the samples will be used for
-               training.
+        train : bool, optional
+            To avoid drawing a grid on the generated images. This should be set when the samples will be used for
+            training.
 
-           draw_grid : bool, optional
-               Draw a grid in the generated samples. Useful to see some types of deformations.
+        draw_grid : bool, optional
+            Draw a grid in the generated samples. Useful to see some types of deformations.
 
-           Returns
-           -------
-           sample_x : List of 3D/4D Numpy array
-               Transformed images. E.g. list of ``(y, x, channels)`` if 2D or 
-               ``(z, y, x, channels)`` of 3D.
+        Returns
+        -------
+        sample_x : List of 3D/4D Numpy array
+            Transformed images. E.g. list of ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
-           sample_y : List of 3D/4D Numpy array
-               Transformed image mask. E.g. list of ``(y, x, channels)`` if 2D or 
-               ``(z, y, x, channels)`` of 3D.
+        sample_y : List of 3D/4D Numpy array
+            Transformed image mask. E.g. list of ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
-           Examples
-           --------
-           ::
+        Examples
+        --------
+        ::
 
-               # EXAMPLE 1
-               # Generate 10 samples following with the example 1 of the class definition
-               X_train = np.ones((1776, 256, 256, 1))
-               Y_train = np.ones((1776, 256, 256, 1))
+            # EXAMPLE 1
+            # Generate 10 samples following with the example 1 of the class definition
+            X_train = np.ones((1776, 256, 256, 1))
+            Y_train = np.ones((1776, 256, 256, 1))
 
-               data_gen_args = dict(X=X_train, Y=Y_train, shape=(256, 256, 1), rotation_range=True, vflip=True, hflip=True)
+            data_gen_args = dict(X=X_train, Y=Y_train, shape=(256, 256, 1), rotation_range=True, vflip=True, hflip=True)
 
-               train_generator = BaseDataGenerator(**data_gen_args)
+            train_generator = BaseDataGenerator(**data_gen_args)
 
-               train_generator.get_transformed_samples(10, save_to_dir=True, train=False, out_dir='da_dir')
+            train_generator.get_transformed_samples(10, save_to_dir=True, train=False, out_dir='da_dir')
 
-               # EXAMPLE 2
-               # If random crop in DA-time is choosen, as the example 2 of the class definition, the call should be the
-               # same but two more images will be stored: img and mask representing the random crop extracted. There a
-               # red point is painted representing the pixel choosen to be the center of the random crop and a blue
-               # square which delimits crop boundaries
+            # EXAMPLE 2
+            # If random crop in DA-time is choosen, as the example 2 of the class definition, the call should be the
+            # same but two more images will be stored: img and mask representing the random crop extracted. There a
+            # red point is painted representing the pixel choosen to be the center of the random crop and a blue
+            # square which delimits crop boundaries
 
-               prob_map = calculate_2D_volume_prob_map(Y_train, 0.94, 0.06, save_file='prob_map.npy')
+            prob_map = calculate_2D_volume_prob_map(Y_train, 0.94, 0.06, save_file='prob_map.npy')
 
-               data_gen_args = dict(X=X_train, Y=Y_train, shape=(256, 256, 1), rotation_range=True, vflip=True, hflip=True, r
-                    random_crops_in_DA=True, prob_map=True, prob_map=prob_map)
-               train_generator = BaseDataGenerator(**data_gen_args)
+            data_gen_args = dict(X=X_train, Y=Y_train, shape=(256, 256, 1), rotation_range=True, vflip=True, hflip=True, r
+                random_crops_in_DA=True, prob_map=True, prob_map=prob_map)
+            train_generator = BaseDataGenerator(**data_gen_args)
 
-               train_generator.get_transformed_samples(10, save_to_dir=True, train=False, out_dir='da_dir')
+            train_generator.get_transformed_samples(10, save_to_dir=True, train=False, out_dir='da_dir')
 
 
-           Example 2 will store two additional images as the following:
+        Example 2 will store two additional images as the following:
 
-           +----------------------------------------------+----------------------------------------------+
-           | .. figure:: ../../../img/rd_crop_2d.png      | .. figure:: ../../../img/rd_crop_mask_2d.png |
-           |   :width: 80%                                |   :width: 80%                                |
-           |   :align: center                             |   :align: center                             |
-           |                                              |                                              |
-           |   Original crop                              |   Original crop mask                         |
-           +----------------------------------------------+----------------------------------------------+
+        +----------------------------------------------+----------------------------------------------+
+        | .. figure:: ../../../img/rd_crop_2d.png      | .. figure:: ../../../img/rd_crop_mask_2d.png |
+        |   :width: 80%                                |   :width: 80%                                |
+        |   :align: center                             |   :align: center                             |
+        |                                              |                                              |
+        |   Original crop                              |   Original crop mask                         |
+        +----------------------------------------------+----------------------------------------------+
 
-           Together with these images another pair of images will be stored: the crop made and a transformed version of
-           it, which is really the generator output.
+        Together with these images another pair of images will be stored: the crop made and a transformed version of
+        it, which is really the generator output.
 
-           For instance, setting ``elastic=True`` the above extracted crop should be transformed as follows:
+        For instance, setting ``elastic=True`` the above extracted crop should be transformed as follows:
 
-           +----------------------------------------------------+----------------------------------------------------+
-           | .. figure:: ../../../img/original_crop_2d.png      | .. figure:: ../../../img/original_crop_mask_2d.png |
-           |   :width: 80%                                      |   :width: 80%                                      |
-           |   :align: center                                   |   :align: center                                   |
-           |                                                    |                                                    |
-           |   Original crop                                    |   Original crop mask                               |
-           +----------------------------------------------------+----------------------------------------------------+
-           | .. figure:: ../../../img/elastic_crop_2d.png       | .. figure:: ../../../img/elastic_crop_mask_2d.png  |
-           |   :width: 80%                                      |   :width: 80%                                      |
-           |   :align: center                                   |   :align: center                                   |
-           |                                                    |                                                    |
-           |   Elastic transformation applied                   |   Elastic transformation applied                   |
-           +----------------------------------------------------+----------------------------------------------------+
+        +----------------------------------------------------+----------------------------------------------------+
+        | .. figure:: ../../../img/original_crop_2d.png      | .. figure:: ../../../img/original_crop_mask_2d.png |
+        |   :width: 80%                                      |   :width: 80%                                      |
+        |   :align: center                                   |   :align: center                                   |
+        |                                                    |                                                    |
+        |   Original crop                                    |   Original crop mask                               |
+        +----------------------------------------------------+----------------------------------------------------+
+        | .. figure:: ../../../img/elastic_crop_2d.png       | .. figure:: ../../../img/elastic_crop_mask_2d.png  |
+        |   :width: 80%                                      |   :width: 80%                                      |
+        |   :align: center                                   |   :align: center                                   |
+        |                                                    |                                                    |
+        |   Elastic transformation applied                   |   Elastic transformation applied                   |
+        +----------------------------------------------------+----------------------------------------------------+
 
-           The grid is only painted if ``train=False`` which should be used just to display transformations made.
-           Selecting random rotations between 0 and 180 degrees should generate the following:
+        The grid is only painted if ``train=False`` which should be used just to display transformations made.
+        Selecting random rotations between 0 and 180 degrees should generate the following:
 
-           +-----------------------------------------------------------+-----------------------------------------------------------+
-           | .. figure:: ../../../img/original_rd_rot_crop_2d.png      | .. figure:: ../../../img/original_rd_rot_crop_mask_2d.png |
-           |   :width: 80%                                             |   :width: 80%                                             |
-           |   :align: center                                          |   :align: center                                          |
-           |                                                           |                                                           |
-           |   Original crop                                           |   Original crop mask                                      |
-           +-----------------------------------------------------------+-----------------------------------------------------------+
-           | .. figure:: ../../../img/rd_rot_crop_2d.png               | .. figure:: ../../../img/rd_rot_crop_mask_2d.png          |
-           |   :width: 80%                                             |   :width: 80%                                             |
-           |   :align: center                                          |   :align: center                                          |
-           |                                                           |                                                           |
-           |   Random rotation [0, 180] applied                        |   Random rotation [0, 180] applied                        |
-           +-----------------------------------------------------------+-----------------------------------------------------------+
+        +-----------------------------------------------------------+-----------------------------------------------------------+
+        | .. figure:: ../../../img/original_rd_rot_crop_2d.png      | .. figure:: ../../../img/original_rd_rot_crop_mask_2d.png |
+        |   :width: 80%                                             |   :width: 80%                                             |
+        |   :align: center                                          |   :align: center                                          |
+        |                                                           |                                                           |
+        |   Original crop                                           |   Original crop mask                                      |
+        +-----------------------------------------------------------+-----------------------------------------------------------+
+        | .. figure:: ../../../img/rd_rot_crop_2d.png               | .. figure:: ../../../img/rd_rot_crop_mask_2d.png          |
+        |   :width: 80%                                             |   :width: 80%                                             |
+        |   :align: center                                          |   :align: center                                          |
+        |                                                           |                                                           |
+        |   Random rotation [0, 180] applied                        |   Random rotation [0, 180] applied                        |
+        +-----------------------------------------------------------+-----------------------------------------------------------+
         """
         if random_images == False and num_examples > self.length:
             num_examples = self.length
@@ -1204,15 +1278,16 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
 
     def draw_grid(self, im, grid_width=50):
-        """Draw grid of the specified size on an image.
+        """
+        Draw grid of the specified size on an image.
 
-           Parameters
-           ----------
-           im : 3D Numpy array
-               Image to be modified. E. g. ``(y, x, channels)``
+        Parameters
+        ----------
+        im : 3D/4D Numpy array
+            Image to draw the grid into. E.g. ``(y, x, channels)`` in ``2D`` or ``(z, y, x, channels)`` in ``3D``.
 
-           grid_width : int, optional
-               Grid's width.
+        grid_width : int, optional
+            Grid's width.
         """
         v = np.max(im)
 
@@ -1236,6 +1311,17 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         return im
         
     def prepare_n2v(self, img, mask):
+        """
+        Creates Noise2Void mask.
+
+        Parameters
+        ----------
+        img : 3D/4D Numpy array
+            Image to wipe some pixels from. E.g. ``(y, x, channels)`` in ``2D`` or ``(z, y, x, channels)`` in ``3D``.
+
+        mask : 3D/4D Numpy array
+            Noise2Void mask. E.g. ``(y, x, channels)`` in ``2D`` or ``(z, y, x, channels)`` in ``3D``.
+        """
         if self.val and not self.in_memory:
             np.random.seed(0) 
 
@@ -1254,4 +1340,5 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 self.apply_structN2Vmask_func(img[..., c], coords, self.n2v_structMask)
                    
     def get_data_normalization(self):
+        """Get data normalization."""
         return self.X_norm

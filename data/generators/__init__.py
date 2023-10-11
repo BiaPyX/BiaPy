@@ -71,8 +71,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
                 np.save(cfg.PATHS.MEAN_INFO_FILE, custom_mean)
                 np.save(cfg.PATHS.STD_INFO_FILE, custom_std)
             else:
-                custom_mean = np.load(cfg.PATHS.MEAN_INFO_FILE)
-                custom_std = np.load(cfg.PATHS.STD_INFO_FILE)
+                custom_mean = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
+                custom_std = float(np.load(cfg.PATHS.STD_INFO_FILE))
                 print("Train/Val normalization values loaded!")
         else:
             custom_mean = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
@@ -115,7 +115,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             median_blur=cfg.AUGMENTOR.MEDIAN_BLUR, mb_kernel=cfg.AUGMENTOR.MB_KERNEL, motion_blur=cfg.AUGMENTOR.MOTION_BLUR,
             motb_k_range=cfg.AUGMENTOR.MOTB_K_RANGE, gamma_contrast=cfg.AUGMENTOR.GAMMA_CONTRAST,
             gc_gamma=cfg.AUGMENTOR.GC_GAMMA, dropout=cfg.AUGMENTOR.DROPOUT, drop_range=cfg.AUGMENTOR.DROP_RANGE,
-            resize_shape=r_shape, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
+            resize_shape=r_shape, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
     else:
         dic = dict(ndim=ndim, X=X_train, Y=Y_train, seed=cfg.SYSTEM.SEED, in_memory=cfg.DATA.TRAIN.IN_MEMORY, 
             data_paths=data_paths, da=cfg.AUGMENTOR.ENABLE,
@@ -154,7 +154,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             salt_pep_amount=cfg.AUGMENTOR.SALT_AND_PEPPER_AMOUNT, salt_pep_proportion=cfg.AUGMENTOR.SALT_AND_PEPPER_PROP,
             shape=cfg.DATA.PATCH_SIZE, resolution=cfg.DATA.TRAIN.RESOLUTION, random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, 
             prob_map=prob_map, n_classes=cfg.MODEL.N_CLASSES, extra_data_factor=cfg.DATA.TRAIN.REPLICATE, 
-            norm_custom_mean=custom_mean, norm_custom_std=custom_std, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
+            norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, norm_custom_std=custom_std, 
+            random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
 
         if cfg.PROBLEM.NDIM == '3D':
             dic['zflip'] = cfg.AUGMENTOR.ZFLIP
@@ -191,8 +192,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
         dic = dict(ndim=ndim, X=X_val, Y=Y_val, in_memory=cfg.DATA.VAL.IN_MEMORY,
             data_paths=data_paths, da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
-            seed=cfg.SYSTEM.SEED, norm_custom_mean=custom_mean, norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION,
-            random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
+            seed=cfg.SYSTEM.SEED, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, norm_custom_std=custom_std, 
+            resolution=cfg.DATA.VAL.RESOLUTION, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG': 
             dic['instance_problem'] = True
         elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
@@ -215,7 +216,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             draw_grid=cfg.AUGMENTOR.DRAW_GRID)
 
     num_workers = max(cfg.SYSTEM.NUM_CPUS // cfg.SYSTEM.NUM_GPUS, 1) if dist else cfg.SYSTEM.NUM_CPUS
-
+    num_workers =1
     # Training dataset
     total_batch_size = cfg.TRAIN.BATCH_SIZE * world_size * cfg.TRAIN.ACCUM_ITER
     training_samples = len(train_generator)
@@ -278,8 +279,8 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
             if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
                 raise FileNotFoundError("Not mean/std files found in {} and {}"
                     .format(cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE))
-            custom_mean = np.load(cfg.PATHS.MEAN_INFO_FILE)
-            custom_std = np.load(cfg.PATHS.STD_INFO_FILE)
+            custom_mean = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
+            custom_std = float(np.load(cfg.PATHS.STD_INFO_FILE))
         else:
             custom_mean = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
             custom_std = cfg.DATA.NORMALIZATION.CUSTOM_STD
@@ -297,8 +298,8 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     dic = dict(ndim=ndim, X=X_test, d_path=cfg.DATA.TEST.PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.PATH, 
         provide_Y=provide_Y, Y=Y_test, dm_path=cfg.DATA.TEST.GT_PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.GT_PATH,
-        seed=cfg.SYSTEM.SEED, instance_problem=instance_problem, norm_custom_mean=custom_mean, norm_custom_std=custom_std,
-        sample_ids=cross_val_samples_ids)        
+        seed=cfg.SYSTEM.SEED, instance_problem=instance_problem, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, 
+        norm_custom_std=custom_std, sample_ids=cross_val_samples_ids)        
         
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
