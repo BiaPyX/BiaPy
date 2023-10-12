@@ -624,19 +624,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.value_manipulation = get_value_manipulation(n2v_manipulator, n2v_neighborhood_radius)
             self.n2v_structMask = n2v_structMask 
             self.apply_structN2Vmask_func = apply_structN2Vmask if self.ndim == 2 else apply_structN2Vmask3D
-
-            if val and self.in_memory:
-                self.Y = np.zeros(_X.shape[:-1] + (_X.shape[-1]*2,), dtype=np.float32)
-                for i in range(len(self.X)):
-                    self.prepare_n2v(self.X[i], self.Y[i])    
         if self.in_memory: 
             del _X
             if self.Y_provided:
                 del _Y
-
-        # Activate Y as in validation we have just created its static GT
-        if val:
-            self.Y_provided = True
 
         self.prob_map = None
         if random_crops_in_DA and prob_map is not None:
@@ -914,11 +905,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Prepare mask when denoising with Noise2Void
         if self.n2v:
-            if not self.val or (self.val and not self.in_memory):
-                mask = np.repeat(mask, self.Y_channels*2, axis=-1).astype(np.float32)
-                self.prepare_n2v(img, mask)
-            mask = self.norm_X(mask)
-
+            img, mask = self.prepare_n2v(img)
+            
         img = torch.from_numpy(img.copy())
         mask = torch.from_numpy(mask.copy().astype(np.float32))
         return img, mask
@@ -1269,8 +1257,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     sample_x[i], sample_y[i], e_im=e_img, e_mask=e_mask)
 
             if self.n2v and not self.val:
-                mask = np.repeat(sample_y[i], self.Y_channels*2, axis=-1).astype(np.float32)
-                self.prepare_n2v(img, mask)
+                img, mask = self.prepare_n2v(img)
                 sample_y[i] = mask
 
             if save_to_dir:
@@ -1310,19 +1297,27 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         im[k,j] = [v]*im.shape[-1]
         return im
         
-    def prepare_n2v(self, img, mask):
+    def prepare_n2v(self, _img):
         """
         Creates Noise2Void mask.
 
         Parameters
         ----------
-        img : 3D/4D Numpy array
+        _img : 3D/4D Numpy array
             Image to wipe some pixels from. E.g. ``(y, x, channels)`` in ``2D`` or ``(z, y, x, channels)`` in ``3D``.
 
+        Returns
+        -------
+        img : 3D/4D Numpy array
+            Input image modified removing some pixels. E.g. ``(y, x, channels)`` in ``2D`` or ``(y, x, z, channels)`` in ``3D``.
+
         mask : 3D/4D Numpy array
-            Noise2Void mask. E.g. ``(y, x, channels)`` in ``2D`` or ``(z, y, x, channels)`` in ``3D``.
+            Noise2Void mask created. E.g. ``(y, x, channels)`` in ``2D`` or ``(y, x, z, channels)`` in ``3D``.
         """
-        if self.val and not self.in_memory:
+        img = _img.copy()
+        mask = np.zeros(img.shape[:-1] + (img.shape[-1]*2,), dtype=np.float32)
+
+        if self.val:
             np.random.seed(0) 
 
         for c in range(self.Y_channels):
@@ -1338,7 +1333,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
             if self.n2v_structMask is not None:
                 self.apply_structN2Vmask_func(img[..., c], coords, self.n2v_structMask)
-                   
+        return img, mask 
+
     def get_data_normalization(self):
         """Get data normalization."""
         return self.X_norm
