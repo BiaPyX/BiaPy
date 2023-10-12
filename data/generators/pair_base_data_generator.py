@@ -781,7 +781,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         img = self.norm_X(img)
 
         if self.Y_provided:
-            mask = self.norm_X(mask)
+            mask = self.norm_Y(mask)
             img, mask = self.ensure_shape(img, mask)
             return img, mask
         else:
