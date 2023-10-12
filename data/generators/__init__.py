@@ -178,19 +178,19 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     data_norm = train_generator.get_data_normalization()
 
     print("Initializing val data generator . . .")
+    mem = cfg.DATA.VAL.IN_MEMORY if not cfg.DATA.VAL.FROM_TRAIN else True
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
         ptype = "classification" if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else "mae"
         val_generator = f_name(ndim=ndim, X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, ptype=ptype, n_classes=cfg.MODEL.N_CLASSES, 
-            in_memory=cfg.DATA.VAL.IN_MEMORY, seed=cfg.SYSTEM.SEED, da=False, resize_shape=r_shape, 
+            in_memory=mem, seed=cfg.SYSTEM.SEED, da=False, resize_shape=r_shape, 
             norm_custom_mean=custom_mean, norm_custom_std=custom_std)
     else:
         if cfg.PROBLEM.TYPE != 'DENOISING':
             data_paths = [cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.GT_PATH] 
         else:
             data_paths = [cfg.DATA.TRAIN.PATH] 
-        dic = dict(ndim=ndim, X=X_val, Y=Y_val, in_memory=cfg.DATA.VAL.IN_MEMORY,
-            data_paths=data_paths, da=False, shape=cfg.DATA.PATCH_SIZE,
+        dic = dict(ndim=ndim, X=X_val, Y=Y_val, in_memory=mem, data_paths=data_paths, da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
             seed=cfg.SYSTEM.SEED, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, norm_custom_std=custom_std, 
             resolution=cfg.DATA.VAL.RESOLUTION, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
@@ -216,7 +216,6 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             draw_grid=cfg.AUGMENTOR.DRAW_GRID)
 
     num_workers = max(cfg.SYSTEM.NUM_CPUS // cfg.SYSTEM.NUM_GPUS, 1) if dist else cfg.SYSTEM.NUM_CPUS
-    num_workers =1
     # Training dataset
     total_batch_size = cfg.TRAIN.BATCH_SIZE * world_size * cfg.TRAIN.ACCUM_ITER
     training_samples = len(train_generator)
