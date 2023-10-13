@@ -146,11 +146,11 @@ class UpBlock(nn.Module):
         super(UpBlock, self).__init__()
         self.ndim = ndim
         block = []
+        mpool = (z_down, 2, 2) if ndim == 3 else (2, 2)
         if up_mode == 'convtranspose':
-            mpool = (z_down, 2, 2) if ndim == 3 else (2, 2)
             block.append(convtranspose(in_size, out_size, kernel_size=mpool, stride=mpool))
         elif up_mode == 'upsampling':
-            block.append(nn.Upsample(mode='bilinear' if ndim==2 else 'trilinear', scale_factor=2))
+            block.append(nn.Upsample(mode='bilinear' if ndim==2 else 'trilinear', scale_factor=mpool))
             block.append(conv(in_size, out_size, kernel_size=1))
         if batch_norm is not None:
             block.append(batch_norm(out_size))
