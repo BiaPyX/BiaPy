@@ -1330,14 +1330,13 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
 def remove_by_properties(img, resolution, properties, prop_values, comp_signs, coords_list=None):
     """
     Checks the properties of input image's instances. it calculates each instance id, number of pixels, area/volume 
-    (2D/3D respec. and taking into account the resolution) and circularity properties. All instances
-    that satisfy the conditions composed by ``properties``, ``prop_values`` and ``comp_signs`` variables 
-    will be removed from ``img``. Apart from returning all properties this function will return also a list 
-    identifying those instances that satisfy and not satify the conditions. Those removed will be marked as 
-    'Strange' whereas the rest are 'Correct'. For 3D the circularity is only measured in the center 
-    slices of the instance (one slice before the central slice, the central slice, and one after it), which is decided 
-    by the given coordinates in ``coords_list`` or calculated taking the central slice in z of each instance,
-    which is computationally more expensive as the bboxes are calculated.   
+    (2D/3D respec. and taking into account the resolution) and circularity properties. All instances that satisfy 
+    the conditions composed by ``properties``, ``prop_values`` and ``comp_signs`` variables will be removed from 
+    ``img``. Apart from returning all properties this function will return also a list identifying those instances 
+    that satisfy and not satify the conditions. Those removed will be marked as 'Strange' whereas the rest are 'Correct'. 
+    For 3D the circularity is only measured in the center slices of the instance (one slice before the central slice, 
+    the central slice, and one after it), which is decided by the given coordinates in ``coords_list`` or calculated 
+    taking the central slice in z of each instance, which is computationally more expensive as the bboxes are calculated.   
     
     Parameters
     ----------
@@ -1385,6 +1384,9 @@ def remove_by_properties(img, resolution, properties, prop_values, comp_signs, c
     comment : List of str
         List containing 'Correct' string when the instance surpass the circularity 
         threshold and 'Strange' otherwise.
+    
+    all_conditions : List of str
+        List of conditions that each instance has satisfy or not. 
     """
     print("Checking the properties of instances . . .")
 

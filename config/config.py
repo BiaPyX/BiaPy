@@ -672,7 +672,9 @@ class Config:
         # must be satisfied. Available properties are: ['circularity', 'npixels', 'area', 'diameter']. When this post-processing step is 
         # selected two .csv files will be created, one with the properties of each instance from the original image (will be placed in 
         # PATHS.RESULT_DIR.PER_IMAGE_INSTANCES path), and another with only instances that remain once this post-processing has been 
-        # applied (will be placed in PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING path).
+        # applied (will be placed in PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING path). In those csv files two more information columns will 
+        # appear: a list of conditions that each instance has satisfy or not ('Satisfied', 'No satisfied' respectively), and a comment with two 
+        # possible values, 'Strange' and 'Correct', telling you if the instance has been removed or not, respectively. 
         # Each property descrition:
         #   * 'circularity' of an area instance indicates how compact or elongated the instance is. A value of 1 indicates that the instance 
         #     is a perfect circle (compact), and 0 indicates that it is a line (elongated). Calculated as: (4 * PI * area) / (perimeter^2).
