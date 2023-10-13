@@ -7,7 +7,7 @@ from tqdm import tqdm
 from skimage.segmentation import clear_border
 
 from data.post_processing.post_processing import (watershed_by_channels, voronoi_on_mask, 
-    remove_instance_by_circularity_central_slice, repare_large_blobs)
+    remove_by_properties, repare_large_blobs)
 from data.pre_processing import create_instance_channels, create_test_instance_channels
 from utils.util import save_tif
 from utils.matching import matching, wrapper_matching_dataset_lazy
@@ -67,7 +67,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.load_Y_val = True
 
         # Specific instance segmentation post-processing
-        if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK or self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1 or\
+        self.remove_by_prop = False 
+        for i in range(len(self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES)):
+            if len(self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) > 0:
+                self.remove_by_prop = True
+                break 
+        if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK or self.remove_by_prop or\
             self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
             self.post_processing['instance_post'] = True
             self.all_matching_stats_post_processing = []   
@@ -171,7 +176,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         
         w_pred = watershed_by_channels(pred, self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, ths=self.instance_ths, 
             remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, thres_small_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_BEFORE,
-            remove_after=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_AFTER_MW, thres_small_after=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_AFTER, 
             seed_morph_sequence=self.cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE, seed_morph_radius=self.cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS, 
             erode_and_dilate_foreground=self.cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND, fore_erosion_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_EROSION_RADIUS, 
             fore_dilation_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS, rmv_close_points=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS, 
@@ -265,14 +269,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
             w_pred = repare_large_blobs(w_pred, self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE)
 
-        if self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1:
-            w_pred, labels, npixels, areas, circularities, diameters, comment = remove_instance_by_circularity_central_slice(w_pred, self.cfg.DATA.TEST.RESOLUTION, 
-                circularity_th=self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY)
+        if self.remove_by_prop:
+            w_pred, labels, npixels, areas, circularities, diameters, comment, all_conds = remove_by_properties(w_pred, self.cfg.DATA.TEST.RESOLUTION, 
+                properties=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES, prop_values=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES,
+                comp_signs=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN)
 
             # Save all instance stats
             size_measure = 'area' if w_pred.ndim == 2 else 'volume'
-            df = pd.DataFrame(zip(np.array(labels, dtype=np.uint64), npixels, areas, circularities, diameters, comment),  
-                columns=['label','npixels', size_measure, 'circularity', 'diameter', 'comment'])
+            df = pd.DataFrame(zip(np.array(labels, dtype=np.uint64), npixels, areas, circularities, diameters, comment, all_conds),  
+                columns=['label','npixels', size_measure, 'circularity', 'diameter', 'comment', 'conditions'])
             df = df.sort_values(by=['label'])   
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, os.path.splitext(filenames[0])[0]+'_full_stats.csv'), index=False)
             # Save only remain instances stats

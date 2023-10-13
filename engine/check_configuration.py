@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import collections
 
 from utils.util import check_value
 
@@ -70,12 +71,41 @@ def check_configuration(cfg, check_data_paths=True):
             if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH) != dim_count:
                 raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH' need to be of dimension {} for {} problem".format(dim_count, cfg.PROBLEM.NDIM))
 
-    if cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1:
-        if not check_value(cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY):
-            raise ValueError("'TEST.POST_PROCESSING.WATERSHED_CIRCULARITY' not in [0, 1] range")
-    if cfg.PROBLEM.TYPE != 'INSTANCE_SEG':
-        if cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY != -1 and cfg.PROBLEM.TYPE != 'DETECTION':
-            raise ValueError("'TEST.POST_PROCESSING.WATERSHED_CIRCULARITY' can only be set in 'DETECTION' or 'INSTANCE_SEG' problems")    
+    if cfg.PROBLEM.TYPE == 'DETECTION':
+        for i in range(len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES)):
+            if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) > 1:
+                raise ValueError("In DETECTION 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' can only be used for filtering 'circularity'.")
+            if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) == 1 and cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i][0] != 'circularity':  
+                raise ValueError("In DETECTION 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' can only be used for filtering 'circularity'.")
+
+    for i in range(len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES)):
+        if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) == 0 or \
+           len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES[i]) == 0 or \
+           len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN[i]) == 0:
+           raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES', 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES' and "
+                "'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN' can not be defined as [[]]. Leave them as []")
+
+        if not (len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) == \
+            len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES[i]) == \
+            len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN[i])):
+            raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES', 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES' and "
+                "'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN' need to have same length")
+
+        if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) > 0 and cfg.PROBLEM.TYPE not in ['INSTANCE_SEG', 'DETECTION']:
+            raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' can only be used in INSTANCE_SEG and DETECTION workflows")
+
+        # Check for unique values 
+        if len([item for item, count in collections.Counter(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]).items() if count > 1]) > 0:
+            raise ValueError("Non repeated values are allowed in 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES'")
+        for j in range(len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i])):
+            if cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i][j] not in ['circularity', 'npixels', 'area', 'diameter']:
+                raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' can only be one among these: ['circularity', 'npixels', 'area', 'diameter']")
+            if cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN[i][j] not in ['gt', 'ge', 'lt', 'le']:
+                raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN' can only be one among these: ['gt', 'ge', 'lt', 'le']")
+            if cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i][j] == "circularity" and not check_value(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES[i][j]):
+                raise ValueError("Circularity can only have values in [0, 1] range (check  'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES' values)")
+                
+    if cfg.PROBLEM.TYPE != 'INSTANCE_SEG':  
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             raise ValueError("'TEST.POST_PROCESSING.VORONOI_ON_MASK' can only be enabled in a 'INSTANCE_SEG' problem")
     if cfg.TEST.POST_PROCESSING.DET_WATERSHED and cfg.PROBLEM.TYPE != 'DETECTION':
@@ -163,9 +193,11 @@ def check_configuration(cfg, check_data_paths=True):
             if any(len(x) != dim_count for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION):
                 raise ValueError("Each structure object defined in 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' "
                                  "need to be of {} dimension".format(dim_count))
-            if cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY == -1:
-                raise ValueError("'TEST.POST_PROCESSING.WATERSHED_CIRCULARITY' need to be set when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
-
+            if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[0]) != 0: 
+                raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' need to be set to 'circularity' filtering when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
+            if cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[0][0] != 'circularity': 
+                raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' need to be set to 'circularity' filtering when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
+    
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
         if cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING == 1:

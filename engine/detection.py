@@ -11,7 +11,7 @@ from skimage.morphology import disk, dilation
 from data.data_2D_manipulation import load_and_prepare_2D_train_data
 from data.data_3D_manipulation import load_and_prepare_3D_data
 from data.post_processing.post_processing import (remove_close_points, detection_watershed, 
-    remove_instance_by_circularity_central_slice)
+    remove_by_properties)
 from data.pre_processing import create_detection_masks
 from utils.util import save_tif
 from engine.metrics import detection_metrics, jaccard_index, weighted_bce_dice_loss
@@ -222,9 +222,10 @@ class Detection_Workflow(Base_Workflow):
                     donuts_patch=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH, 
                     donuts_nucleus_diameter=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER, save_dir=check_wa)
                 
-                # Advice user if instance     
-                points_pred, labels, npixels, areas, circularities, diameters, comment = remove_instance_by_circularity_central_slice(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
-                    np.concatenate(all_points, axis=0), circularity_th=self.cfg.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY)
+                # Instance filtering by properties     
+                points_pred, labels, npixels, areas, circularities, diameters, comment, all_conds = remove_by_properties(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
+                    properties=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES, prop_values=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES,
+                    comp_signs=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN, coords_list=np.concatenate(all_points, axis=0))
 
                 save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                     filenames, verbose=self.cfg.TEST.VERBOSE)
@@ -240,8 +241,8 @@ class Detection_Workflow(Base_Workflow):
                     if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
                         size_measure = 'area' if ndim == 2 else 'volume'
                         df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes),\
-                            npixels, areas, circularities, diameters, comment), columns =['pred_id', 'axis-0', 'axis-1', 'axis-2', 'probability', \
-                            'class', 'npixels', size_measure, 'circularity', 'diameters', 'comment'])
+                            npixels, areas, circularities, diameters, comment, all_conds), columns =['pred_id', 'axis-0', 'axis-1', 'axis-2', 'probability', \
+                            'class', 'npixels', size_measure, 'circularity', 'diameters', 'comment', 'conditions'])
                         df = df.sort_values(by=['pred_id'])   
                     else:
                         labels = []
@@ -260,8 +261,8 @@ class Detection_Workflow(Base_Workflow):
                     if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
                         size_measure = 'area' if ndim == 2 else 'volume'
                         df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(prob), list(all_classes),\
-                            npixels, areas, circularities, diameters, comment), columns =['pred_id', 'axis-0', 'axis-1', 'probability', \
-                            'class', 'npixels', size_measure, 'circularity', 'diameters', 'comment'])
+                            npixels, areas, circularities, diameters, comment, all_conds), columns =['pred_id', 'axis-0', 'axis-1', 'probability', \
+                            'class', 'npixels', size_measure, 'circularity', 'diameters', 'comment', 'conditions'])
                         df = df.sort_values(by=['pred_id'])   
                     else:
                         df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(prob), list(all_classes)), 
@@ -271,7 +272,7 @@ class Detection_Workflow(Base_Workflow):
 
                 df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_full_info.csv'))
                 if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-                    df = df.drop(columns=['class', 'pred_id', 'npixels', size_measure, 'circularity', 'comment'])
+                    df = df.drop(columns=['class', 'pred_id', 'npixels', size_measure, 'circularity', 'comment', 'conditions'])
                 else:
                     df = df.drop(columns=['class'])
                 df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_prob.csv'))

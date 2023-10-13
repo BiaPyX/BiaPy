@@ -90,10 +90,6 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_BEFORE = 10
         # Whether to remove objects before watershed 
         _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW = False
-        # Size of small objects to be removed after doing watershed
-        _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_AFTER = 100
-        # Whether to remove objects after watershed 
-        _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_AFTER_MW = False
         # Sequence of string to determine the morphological filters to apply to instance seeds. They will be done in that order.
         # Possible options 'dilate' and 'erode'. E.g. ['erode','dilate'] to erode first and dilate later.
         _C.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE = []
@@ -667,8 +663,49 @@ class Config:
         _C.TEST.POST_PROCESSING.Z_FILTERING_SIZE = 5
         # Apply a binary mask to remove possible segmentation outside it
         _C.TEST.POST_PROCESSING.APPLY_MASK = False
-        # Circularity that each instance need to be greater than to not be marked as 'Strange'. Need to be in [0,1] range.
-        _C.TEST.POST_PROCESSING.WATERSHED_CIRCULARITY = -1.
+
+        # Remove instances by the conditions based in each instance properties. The three variables, i.e. TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES,
+        # TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES and TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN will compose a list 
+        # of conditions to remove the instances. They are list of list of conditions. For instance, the conditions can be 
+        # like this: [['A'], ['B','C']]. Then, if the instance satisfy the first list of conditions, only 'A' in this first case 
+        # (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed from the image. In each sublist all the conditions
+        # must be satisfied. Available properties are: ['circularity', 'npixels', 'area', 'diameter']. When this post-processing step is 
+        # selected two .csv files will be created, one with the properties of each instance from the original image (will be placed in 
+        # PATHS.RESULT_DIR.PER_IMAGE_INSTANCES path), and another with only instances that remain once this post-processing has been 
+        # applied (will be placed in PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING path).
+        # Each property descrition:
+        #   * 'circularity' of an area instance indicates how compact or elongated the instance is. A value of 1 indicates that the instance 
+        #     is a perfect circle (compact), and 0 indicates that it is a line (elongated). Calculated as: (4 * PI * area) / (perimeter^2).
+        #     In 3D, circularity is only measured in the center slices of the instance (one slice before the central slice, the central 
+        #     slice, and one after it). 
+        #   * 'area' correspond to the number of pixels taking into account the image resolution (we call it 'area' also even in a 3D 
+        #     image for simplicity, but that will be the volume in that case). In the resulting statistics 'volume' will appear in that 
+        #     case too.
+        #   * 'npixels' corresponds to the sum of pixels that compose an instance.
+        #   * 'diameter' calculated with the bounding box and by taking the maximum value of the box in x and y axes. In 3D, z axis 
+        #      is also taken into account. Does not take into account the image resolution. 
+        _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES = []
+        # Values of the properties listed in TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES that the instances need to satisfy to
+        # not be droped. Values for each property:
+        # * 'circularity' must be a float in [0,1] range. 
+        # * 'area', 'npixels' and 'diameter' can be integer/float. 
+        _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES = []
+        # Sign to do the comparison. Options: ['gt', 'ge', 'lt', 'le'] that corresponds to "greather than", e.g. ">", 
+        # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
+        _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN = []
+        # A full example of this post-processing: 
+        # If you want to remove those instances that have less than 100 pixels and circularity less equal to 0.7 you should 
+        # declare the above three variables as follows:
+        # _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES = [['npixels', 'circularity']]
+        # _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES = [[100, 0.7]]
+        # _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN = [['lt', 'le']]
+        # You can also concatenate more restrictions and they will be applied in order. For instance, if you want to remove those 
+        # instances that are bigger than an specific area, and do that before the condition described above, you can define the 
+        # variables this way:
+        # _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES = [['area'], ['npixels', 'circularity']]
+        # _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES = [[500], [100, 0.7]]
+        # _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN = [['gt'], ['lt', 'le']]        
+        # This way, the instances will be removed by 'area' and then by 'npixels' and 'circularity'
 
         ### Instance segmentation
         # Whether to apply Voronoi using 'BC' or 'M' channels need to be present

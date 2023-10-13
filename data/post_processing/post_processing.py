@@ -190,8 +190,8 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
     return np.expand_dims(watershed_predictions, -1)
 
 
-def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_small_before=10, remove_after=False, thres_small_after=128,
-    seed_morph_sequence=[], seed_morph_radius=[], erode_and_dilate_foreground=False, fore_erosion_radius=5, fore_dilation_radius=5, 
+def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_small_before=10, seed_morph_sequence=[], 
+    seed_morph_radius=[], erode_and_dilate_foreground=False, fore_erosion_radius=5, fore_dilation_radius=5, 
     rmv_close_points=False, remove_close_points_radius=-1, resolution=[1,1,1], save_dir=None):
     """
     Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
@@ -220,12 +220,6 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
     thres_small_before : int, optional
         Theshold to remove small objects created by the watershed.
 
-    remove_after : bool, optional
-        To remove objects after watershed. 
-
-    thres_small_after : int, optional
-        Theshold to remove small objects created by the watershed.
-        
     seed_morph_sequence : List of str, optional
         List of strings to determine the morphological filters to apply to instance seeds. They will be done in that order.
         E.g. ``['dilate','erode']``.
@@ -405,9 +399,6 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         seed_map = remove_small_objects(seed_map, thres_small_before)
 
     segm = watershed(-semantic, seed_map, mask=foreground)
-
-    if remove_after:
-        segm = remove_small_objects(segm, thres_small_after)
 
     # Choose appropiate dtype
     max_value = np.max(segm)
@@ -1336,14 +1327,17 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
 
     return segm
 
-def remove_instance_by_circularity_central_slice(img, resolution, coords_list=None, circularity_th=0.7):
+def remove_by_properties(img, resolution, properties, prop_values, comp_signs, coords_list=None):
     """
-    Check the properties of input image instances. Apart from label id, number of pixels, area/volume 
-    (2D/3D respec. and taking into account the resolution) and circularity properties lists that are 
-    returned another one identifying those instances that do not satisfy the circularity threshold
-    are marked as 'Strange' whereas the rest are 'Correct'. For 3D the circularity is only measured in the center 
-    slice of the instance, which is decided by the given coordinates in ``coords_list`` or calculated taking
-    the central slice in z of each instance, which is computationally more expensive as the bboxes are calculated.   
+    Checks the properties of input image's instances. it calculates each instance id, number of pixels, area/volume 
+    (2D/3D respec. and taking into account the resolution) and circularity properties. All instances
+    that satisfy the conditions composed by ``properties``, ``prop_values`` and ``comp_signs`` variables 
+    will be removed from ``img``. Apart from returning all properties this function will return also a list 
+    identifying those instances that satisfy and not satify the conditions. Those removed will be marked as 
+    'Strange' whereas the rest are 'Correct'. For 3D the circularity is only measured in the center 
+    slices of the instance (one slice before the central slice, the central slice, and one after it), which is decided 
+    by the given coordinates in ``coords_list`` or calculated taking the central slice in z of each instance,
+    which is computationally more expensive as the bboxes are calculated.   
     
     Parameters
     ----------
@@ -1353,12 +1347,19 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
     resolution : str
         Path to load the image paired with seeds. 
 
-    coords_list : List of 3 ints, optional
-        Coordinates of all detected points. If 
+    properties : List of lists of str
+        List of lists of properties to remove the instances. Options available: ['circularity', 'npixels', 'area', 'diameter'].
+        E.g. [['size'], ['circularity', 'npixels']].
 
-    circularity_th : float, optional
-        Circularity threshold value. Those instances that are below that value will be marked as 'Strange'
-        in the returned comment list. 
+    prop_values : List of lists of floats/ints
+        List of lists of values for each property. E.g. [[70], [0.7, 2000]]. 
+
+    comp_signs : List of list of str    
+        List of lists of signs to compose the conditions, together ``properties`` ``prop_values``, that the instances must 
+        satify to be removed from the input ``img``. E.g. [['le'], ['lt', 'ge']]. 
+
+    coords_list : List of 3 ints, optional
+        Coordinates of all detected points.
 
     Returns
     ------- 
@@ -1385,7 +1386,7 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
         List containing 'Correct' string when the instance surpass the circularity 
         threshold and 'Strange' otherwise.
     """
-    print("Checking the circularity of instances . . .")
+    print("Checking the properties of instances . . .")
 
     image3d = True if img.ndim == 3 else False
     correct_str = "Correct"
@@ -1459,7 +1460,7 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
 
     circularities = np.zeros(total_labels, dtype=np.float32)
     circularities_count = np.zeros(total_labels, dtype=np.uint8)
-    print("{} instances found before circularity filtering".format(total_labels))
+    print("{} instances found before property filtering".format(total_labels))
 
     if not image3d:
         img = np.expand_dims(img,0)  
@@ -1487,14 +1488,13 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
                     if not diam_calc:
                         diam = max(props['bbox-2'][k]-props['bbox-0'][k],props['bbox-3'][k]-props['bbox-1'][k])
 
-                # If instances' center point matches the slice i save the circularity
+                # If instances' center point matches the slice i
                 if coord[0] == i: 
-                    if props['perimeter'][k] != 0:
-                        circularity = (4 * math.pi * props['area'][k]) / (props['perimeter'][k]*props['perimeter'][k])     
-                    else:
-                        circularity = 0         
-                    circularities[j] += circularity
-                    circularities_count[j] += 1
+                    # Save the circularity if the area is at least 10% of the instance (as tiny blobs have high circularity)
+                    if props['perimeter'][k] != 0 and props['area'][k] > npixels[j]*0.1:
+                        circularity = (4 * math.pi * props['area'][k]) / (props['perimeter'][k]*props['perimeter'][k])
+                        circularities[j] += circularity
+                        circularities_count[j] += 1     
 
                     if multiple_slices:
                         v = coords_list[j].pop(0)
@@ -1503,23 +1503,64 @@ def remove_instance_by_circularity_central_slice(img, resolution, coords_list=No
                 if not diam_calc:
                     diameters[j] = diam
 
-    # Remove those instances that do not pass the threshold        
+    # Remove those instances that do not satisfy the properties      
+    all_conditions = []
     for i in tqdm(range(len(circularities)), leave=False):
-        circularities[i] = circularities[i]/circularities_count[i] if circularities_count[i] != 0 else 0
-        if circularities[i] > circularity_th:
-            comment[i] = correct_str
-        else:
-            comment[i] = unsure_str
-            # Remove that label from the image
-            img[img==label_list_coords[i]] = 0
-            labels_removed += 1
+
+        all_conditions.append([])
+        for k, props in enumerate(properties):
+            comps = []
+
+            # Check each property
+            for j in range(len(props)):
+                if props[j] == "circularity":
+                    circularities[i] = circularities[i]/circularities_count[i] if circularities_count[i] != 0 else 0
+                    value_to_compare = circularities[i]
+                elif props[j] == "npixels":
+                    value_to_compare = npixels[i]
+                elif props[j] == "areas":
+                    value_to_compare = areas[i]
+                elif props[j] == "diameters":
+                    value_to_compare = diameters[i]
+
+                if comp_signs[k][j] == "gt":
+                    if value_to_compare > prop_values[k][j]:
+                        comps.append(True)
+                    else:
+                        comps.append(False)
+                elif comp_signs[k][j] == "ge":
+                    if value_to_compare >= prop_values[k][j]:
+                        comps.append(True)
+                    else:
+                        comps.append(False)
+                elif comp_signs[k][j] == "lt":
+                    if value_to_compare < prop_values[k][j]:
+                        comps.append(True)
+                    else:
+                        comps.append(False)
+                elif comp_signs[k][j] == "le":
+                    if value_to_compare <= prop_values[k][j]:
+                        comps.append(True)
+                    else:
+                        comps.append(False)
+
+            # if satisfy all conditions remove the instance 
+            if all(comps):
+                comment[i] = unsure_str
+                img[img==label_list_coords[i]] = 0
+                labels_removed += 1
+                all_conditions[-1].append("Satisfied")
+                break
+            else:
+                comment[i] = correct_str
+                all_conditions[-1].append("No satisfied")            
 
     if not image3d:
         img = img[0]
 
-    print("Removed {} instances by circularity, {} instances left".format(labels_removed, total_labels-labels_removed))
+    print("Removed {} instances by properties ({}), {} instances left".format(labels_removed, properties, total_labels-labels_removed))
 
-    return img, label_list_coords, npixels, areas, circularities, diameters, comment
+    return img, label_list_coords, npixels, areas, circularities, diameters, comment, all_conditions
     
 def find_neighbors(img, label, neighbors=1):
     """
