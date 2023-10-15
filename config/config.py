@@ -508,7 +508,7 @@ class Config:
         # Decide which checkpoint to load from job's dir if PATHS.CHECKPOINT_FILE is ''. 
         # Options: 'best_on_val' or 'last_on_train'
         _C.MODEL.LOAD_CHECKPOINT_EPOCH = 'best_on_val' 
-        # Epochs to save a checkpoint of the model apart from the ones that achieves best validation value. Set it to -1 to 
+        # Epochs to save a checkpoint of the model apart from the ones saved with LOAD_CHECKPOINT_ONLY_WEIGHTS. Set it to -1 to 
         # not do it.
         _C.MODEL.SAVE_CKPT_FREQ = -1
 
@@ -531,7 +531,7 @@ class Config:
 
         # Dimension of the embedding space for the MAE decoder 
         _C.MODEL.MAE_DEC_HIDDEN_SIZE = 512
-        # Number of transformer encoder layers
+        # Number of transformer decoder layers
         _C.MODEL.MAE_DEC_NUM_LAYERS = 8
         # Number of heads in the multi-head attention layer.
         _C.MODEL.MAE_DEC_NUM_HEADS = 16
@@ -572,9 +572,8 @@ class Config:
         _C.TRAIN.W_DECAY = 0.05
         # Batch size
         _C.TRAIN.BATCH_SIZE = 2
-        # Here the effective batch size is 64 (batch_size per gpu) * 8 (nodes) * 8 (gpus per node) = 4096. 
-        # If memory or # gpus is limited, use --accum_iter to maintain the effective batch size, which is 
-        # batch_size (per gpu) * nodes * 8 (gpus per node) * accum_iter.
+        # If memory or # gpus is limited, use this variable to maintain the effective batch size, which is 
+        # batch_size (per gpu) * nodes * (gpus per node) * accum_iter.
         _C.TRAIN.ACCUM_ITER = 1
         # Number of epochs to train the model
         _C.TRAIN.EPOCHS = 360
