@@ -231,6 +231,9 @@ class Super_resolution_Workflow(Base_Workflow):
             save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
     
         # Calculate PSNR
+        if pred.dtype == np.dtype('uint16'):
+            pred = pred.astype(np.float32)
+            self._Y = self._Y.astype(np.float32)
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             psnr_per_image = self.metrics[0](torch.from_numpy(pred), torch.from_numpy(self._Y))
             self.stats['psnr_per_image'] += psnr_per_image
