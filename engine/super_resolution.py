@@ -11,7 +11,7 @@ from utils.util import save_tif
 from utils.misc import to_pytorch_format, to_numpy_format
 from engine.base_workflow import Base_Workflow
 from engine.metrics import dfcan_loss
-from data.pre_processing import denormalize, undo_norm_range01
+from data.pre_processing import normalize, denormalize, undo_norm_range01
 
 class Super_resolution_Workflow(Base_Workflow):
     """
@@ -92,13 +92,13 @@ class Super_resolution_Workflow(Base_Workflow):
                 targets = torch.round(targets*65535) 
             output = torch.round(output)
         else:
-            output = (x * self.data_norm['std']) + self.data_norm['mean']
+            output = (output * self.data_norm['std']) + self.data_norm['mean']
             output = torch.round(output)                                                                 
-            output = output+abs(torch.mint(output))
+            output = output+abs(torch.min(output))
 
-            targets = (x * self.data_norm['std']) + self.data_norm['mean']
+            targets = (targets * self.data_norm['std']) + self.data_norm['mean']
             targets = torch.round(targets)                                                                 
-            targets = targets+abs(torch.mint(targets))
+            targets = targets+abs(torch.min(targets))
 
         with torch.no_grad():
             train_psnr = self.metrics[0](output, targets)
