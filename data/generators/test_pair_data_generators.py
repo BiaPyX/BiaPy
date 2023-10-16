@@ -51,7 +51,7 @@ class test_pair_data_generator(Dataset):
 
     reduce_mem : bool, optional
         To reduce the dtype from float32 to float16. 
-        
+
     sample_ids :  List of ints, optional
         When cross validation is used specific training samples are passed to the generator.
     
@@ -72,7 +72,12 @@ class test_pair_data_generator(Dataset):
         self.d_path = d_path
         self.dm_path = dm_path
         self.provide_Y = provide_Y
-        self.dtype = np.float32 if not reduce_mem else np.float16
+        if not reduce_mem:
+            self.dtype = np.float32  
+            self.dtype_str = "float32"
+        else:
+            self.dtype = np.float16
+            self.dtype_str = "float16"
         self.data_path = sorted(next(os.walk(d_path))[2]) if X is None else None
         if sample_ids is not None and self.data_path is not None:
             self.data_path = [x for i, x in enumerate(self.data_path) if i in sample_ids]
@@ -181,7 +186,7 @@ class test_pair_data_generator(Dataset):
         if self.X_norm['type'] == 'div':
             img, xnorm = norm_range01(img, dtype=self.dtype)
         elif self.X_norm['type'] == 'custom':
-            img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype)
+            img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
         if self.provide_Y:
             if self.normalizeY == 'as_mask':
                 if 'div' in self.Y_norm:
@@ -190,7 +195,7 @@ class test_pair_data_generator(Dataset):
                 if self.X_norm['type'] == 'div':
                     mask, xnorm = norm_range01(mask, dtype=self.dtype)
                 elif self.X_norm['type'] == 'custom':
-                    mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype)
+                    mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
            
         img = np.expand_dims(img, 0).astype(self.dtype)
         if self.provide_Y:
