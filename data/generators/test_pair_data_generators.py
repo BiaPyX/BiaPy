@@ -115,8 +115,7 @@ class test_pair_data_generator(Dataset):
             else:
                 raise NotImplementedError
             self.X_norm['type'] = 'custom'
-        else:
-            self.X_norm.update(xnorm)
+        self.X_norm.update(xnorm)
 
         if mask is not None:
             self.Y_norm = {}
