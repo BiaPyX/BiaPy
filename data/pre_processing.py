@@ -1,4 +1,5 @@
 import os
+import torch
 import scipy
 import numpy as np
 from tqdm import tqdm
@@ -817,7 +818,7 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
 ###########
 # GENERAL #
 ###########
-def norm_range01(x):
+def norm_range01(x, dtype=np.float32):
     norm_steps = {}
     norm_steps['orig_dtype'] = x.dtype
     if x.dtype == np.uint8:
@@ -826,12 +827,12 @@ def norm_range01(x):
     else:
         if np.max(x) > 255:
             norm_steps['reduced_{}'.format(x.dtype)] = 1
-            x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=np.float32)
+            x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=dtype)
         elif np.max(x) > 2:
             x = x/255
             norm_steps['div_255'] = 1
 
-    x = x.astype(np.float32)
+    x = x.astype(dtype)
     return x, norm_steps
 
 def undo_norm_range01(x, xnorm):
@@ -847,8 +848,40 @@ def undo_norm_range01(x, xnorm):
 def reduce_dtype(x, x_min, x_max, out_min=0, out_max=1, out_type=np.float32):
     return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)
 
-def normalize(data, means, stds, out_type=np.float32):
-    return ((data - means) / stds).astype(out_type)
+def normalize(data, means, stds, out_type="float32"):
+    numpy_torch_dtype_dict = {
+        "bool"       : [torch.bool, bool],
+        "uint8"      : [torch.uint8, np.uint8],
+        "int8"       : [torch.int8, np.int8],
+        "int16"      : [torch.int16, np.int16],
+        "int32"      : [torch.int32, np.int32],
+        "int64"      : [torch.int64, np.int64],
+        "float16"    : [torch.float16, np.float16],
+        "float32"    : [torch.float32, np.float32],
+        "float64"    : [torch.float64, np.float64],
+        "complex64"  : [torch.complex64, np.complex64],
+        "complex128" : [torch.complex128, np.complex128],
+    }
+    if torch.is_tensor(data):
+        return ((data - means) / stds).to(numpy_torch_dtype_dict[out_type][0])
+    else:
+        return ((data - means) / stds).astype(numpy_torch_dtype_dict[out_type][1])
 
-def denormalize(data, means, stds, out_type=np.float32):
-    return ((data * stds) + means).astype(out_type)
+def denormalize(data, means, stds, out_type="float32"):
+    numpy_torch_dtype_dict = {
+        "bool"       : [torch.bool, bool],
+        "uint8"      : [torch.uint8, np.uint8],
+        "int8"       : [torch.int8, np.int8],
+        "int16"      : [torch.int16, np.int16],
+        "int32"      : [torch.int32, np.int32],
+        "int64"      : [torch.int64, np.int64],
+        "float16"    : [torch.float16, np.float16],
+        "float32"    : [torch.float32, np.float32],
+        "float64"    : [torch.float64, np.float64],
+        "complex64"  : [torch.complex64, np.complex64],
+        "complex128" : [torch.complex128, np.complex128],
+    }
+    if torch.is_tensor(data):
+        return ((data * stds) + means).to(numpy_torch_dtype_dict[out_type][0])
+    else:
+        return ((data * stds) + means).astype(numpy_torch_dtype_dict[out_type][1])

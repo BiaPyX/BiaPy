@@ -49,13 +49,16 @@ class test_pair_data_generator(Dataset):
     norm_custom_std : float, optional
         Std of the data used to normalize.
 
+    reduce_mem : bool, optional
+        To reduce the dtype from float32 to float16. 
+        
     sample_ids :  List of ints, optional
         When cross validation is used specific training samples are passed to the generator.
     
     """
     def __init__(self, ndim, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, seed=42,
                  instance_problem=False, normalizeY='as_mask', norm_type='div', norm_custom_mean=None, 
-                 norm_custom_std=None, sample_ids=None):
+                 norm_custom_std=None, reduce_mem=False, sample_ids=None):
 
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
@@ -69,6 +72,7 @@ class test_pair_data_generator(Dataset):
         self.d_path = d_path
         self.dm_path = dm_path
         self.provide_Y = provide_Y
+        self.dtype = np.float32 if not reduce_mem else np.float16
         self.data_path = sorted(next(os.walk(d_path))[2]) if X is None else None
         if sample_ids is not None and self.data_path is not None:
             self.data_path = [x for i, x in enumerate(self.data_path) if i in sample_ids]
@@ -175,20 +179,20 @@ class test_pair_data_generator(Dataset):
         # Normalization
         xnorm = None
         if self.X_norm['type'] == 'div':
-            img, xnorm = norm_range01(img)
+            img, xnorm = norm_range01(img, dtype=self.dtype)
         elif self.X_norm['type'] == 'custom':
-            img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
+            img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype)
         if self.provide_Y:
             if self.normalizeY == 'as_mask':
                 if 'div' in self.Y_norm:
                     mask = mask/255
             elif self.normalizeY == 'as_image':
                 if self.X_norm['type'] == 'div':
-                    mask, xnorm = norm_range01(mask)
+                    mask, xnorm = norm_range01(mask, dtype=self.dtype)
                 elif self.X_norm['type'] == 'custom':
-                    mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'])
+                    mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype)
            
-        img = np.expand_dims(img, 0).astype(np.float32)
+        img = np.expand_dims(img, 0).astype(self.dtype)
         if self.provide_Y:
             mask = np.expand_dims(mask, 0)
             if self.normalizeY == 'as_mask':

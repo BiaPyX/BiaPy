@@ -57,6 +57,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.metrics = []
         self.data_norm = None
         self.model_prepared = False 
+        self.dtype = np.float32 if not self.cfg.TEST.REDUCE_MEMORY else np.float16 
 
         # Save paths in case we need them in a future
         self.orig_train_path = self.cfg.DATA.TRAIN.PATH
@@ -704,25 +705,20 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Evaluate each patch
             if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
-                self._X = to_pytorch_format(self._X, self.axis_order, self.device)
-                self._Y = to_pytorch_format(self._Y, self.axis_order, self.device)
                 l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
                 for k in tqdm(range(l), leave=False):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                     with torch.cuda.amp.autocast():
-                        output = self.apply_model_activations(self.model(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]))
+                        output = self.apply_model_activations(self.model(to_pytorch_format(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device)))
                         loss = self.loss(output, self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top])
 
                     # Calculate the metrics
-                    train_iou = self.metric_calculation(output, self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top])
+                    train_iou = self.metric_calculation(output, to_pytorch_format(self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device))
                     
                     self.stats['loss_per_crop'] += loss.item()
                     self.stats['iou_per_crop'] += train_iou
                     
                 del output    
-                # Restore array and axis order
-                self._Y = to_numpy_format(self._Y, self.axis_order_back)
-                self._X = to_numpy_format(self._X, self.axis_order_back)
 
             self.stats['patch_counter'] += self._X.shape[0]
 
@@ -754,22 +750,18 @@ class Base_Workflow(metaclass=ABCMeta):
                             )
                         )
                     if 'pred' not in locals():
-                        pred = np.zeros((self._X.shape[0],)+p.shape, dtype=np.float32)
+                        pred = np.zeros((self._X.shape[0],)+p.shape, dtype=self.dtype)
                     pred[k] = p
             else:
-                self._X = to_pytorch_format(self._X, self.axis_order, self.device)
                 l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
                 for k in tqdm(range(l), leave=False):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                     with torch.cuda.amp.autocast():
-                        p = self.model(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top])
+                        p = self.model(to_pytorch_format(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device))
                         p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
                     if 'pred' not in locals():
-                        pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=np.float32)
+                        pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
                     pred[k*self.cfg.TRAIN.BATCH_SIZE:top] = p
-
-                # Restore array and axis order
-                self._X = to_numpy_format(self._X, self.axis_order_back)
 
             # Delete self._X as in 3D there is no full image
             if self.cfg.PROBLEM.NDIM == '3D':
@@ -868,15 +860,13 @@ class Base_Workflow(metaclass=ABCMeta):
                 self._Y, _ = check_downsample_division(self._Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
 
             # Evaluate each img
-            self._X = to_pytorch_format(self._X, self.axis_order, self.device)
             if self.cfg.DATA.TEST.LOAD_GT:
-                self._Y = to_pytorch_format(self._Y, self.axis_order, self.device)
                 with torch.cuda.amp.autocast():
-                    output = self.model(self._X)
-                    loss = self.loss(output, self._Y)
+                    output = self.model(to_pytorch_format(self._X, self.axis_order, self.device))
+                    
+                    loss = self.loss(output, to_pytorch_format(self._Y, self.axis_order, self.device))
                 self.stats['loss'] += loss.item()
                 del output
-            self._X = to_numpy_format(self._X, self.axis_order_back)
 
             # Make the prediction
             if self.cfg.TEST.AUGMENTATION:
@@ -896,9 +886,6 @@ class Base_Workflow(metaclass=ABCMeta):
                     pred = self.model(self._X)
                 pred = to_numpy_format(self.apply_model_activations(pred), self.axis_order_back)    
             del self._X 
-
-            # Restore array and axis order
-            self._Y = to_numpy_format(self._Y, self.axis_order_back)
 
             # Recover original shape if padded with check_downsample_division
             pred = pred[:,:o_test_shape[1],:o_test_shape[2]]
