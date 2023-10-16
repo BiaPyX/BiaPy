@@ -12,68 +12,80 @@ from data.generators.augmentors import center_crop_single, resize_img
 
 
 class test_single_data_generator(Dataset):
-    """Image data generator without data augmentation. Used only for test data.
+    """
+    Image data generator without data augmentation. Used only for test data.
 
-       Parameters
-       ----------
-       ndim : int
-          Dimensions of the data (``2`` for 2D and ``3`` for 3D).
+    Parameters
+    ----------
+    ndim : int
+        Dimensions of the data (``2`` for 2D and ``3`` for 3D).
 
-       ptype : str
-           Problem type. Options ['mae','classification'].
+    ptype : str
+        Problem type. Options ['ssl','classification'].
 
-       X : Numpy 5D/4D array, optional
-           Data. E.g. ``(num_of_images, z, y, x, channels)``  for ``3D`` or ``(num_of_images, y, x, channels)`` for ``2D``.
+    X : Numpy 5D/4D array, optional
+        Data. E.g. ``(num_of_images, z, y, x, channels)``  for ``3D`` or ``(num_of_images, y, x, channels)`` for ``2D``.
 
-       d_path : Str, optional
-           Path to load the data from.
+    d_path : Str, optional
+        Path to load the data from.
 
-       provide_Y: bool, optional
-           Whether the ground truth has been provided or not.
+    provide_Y: bool, optional
+        Whether the ground truth has been provided or not.
 
-       Y : Numpy 2D array, optional
-           Image classes. E.g. ``(num_of_images, class)``.
+    Y : Numpy 2D array, optional
+        Image classes. E.g. ``(num_of_images, class)``.
 
-       dm_path : Str, optional
-           Not used here.
+    dm_path : Str, optional
+        Not used here.
 
-       dims: str, optional
-           Dimension of the data. Possible options: ``2D`` or ``3D``.
+    dims: str, optional
+        Dimension of the data. Possible options: ``2D`` or ``3D``.
 
-       seed : int, optional
-           Seed for random functions.
+    seed : int, optional
+        Seed for random functions.
 
-       instance_problem : bool, optional
-           Not used here.
-   
-       norm_custom_mean : float, optional
-           Mean of the data used to normalize.
+    instance_problem : bool, optional
+        Not used here.
 
-       norm_custom_std : float, optional
-           Std of the data used to normalize.
+    norm_type : str, optional
+        Type of normalization to be made. Options available: ``div`` or ``custom``.
 
-       crop_center : bool, optional
-           Whether to extract a
+    norm_custom_mean : float, optional
+        Mean of the data used to normalize.
 
-       sample_ids :  List of ints, optional
-           When cross validation is used specific training samples are passed to the generator. 
-           Not used in this generator. 
+    norm_custom_std : float, optional
+        Std of the data used to normalize.
+
+    reduce_mem : bool, optional
+        To reduce the dtype from float32 to float16. 
+
+    crop_center : bool, optional
+        Whether to extract a
+
+    sample_ids :  List of ints, optional
+        When cross validation is used specific training samples are passed to the generator. 
+        Not used in this generator. 
     """
     def __init__(self, ndim, ptype, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, seed=42,
-                 instance_problem=False, norm_custom_mean=None, norm_custom_std=None, crop_center=False, 
-                 resize_shape=None, sample_ids=None):
+                 instance_problem=False, norm_type='div', norm_custom_mean=None, norm_custom_std=None, 
+                 crop_center=False, reduce_mem=False, resize_shape=None, sample_ids=None):
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
         if crop_center and resize_shape is None:
             raise ValueError("'resize_shape' need to be provided if 'crop_center' is enabled")
-        assert ptype in ['mae', 'classification']
+        assert ptype in ['ssl', 'classification']
 
         self.ptype = ptype
         self.X = X
         self.Y = Y
         self.d_path = d_path
         self.provide_Y = provide_Y
-
+        if not reduce_mem:
+            self.dtype = np.float32  
+            self.dtype_str = "float32"
+        else:
+            self.dtype = np.float16
+            self.dtype_str = "float16"
         self.crop_center = crop_center
         self.resize_shape = resize_shape
 
@@ -108,14 +120,16 @@ class test_single_data_generator(Dataset):
         self.X_norm['type'] = 'div'
         img, _, xnorm = self.load_sample(0)
 
-        if norm_custom_mean is not None and norm_custom_std is not None:
-            self.X_norm['type'] = 'custom'
-            self.X_norm['mean'] = norm_custom_mean
-            self.X_norm['std'] = norm_custom_std
-            self.X_norm['orig_dtype'] = img.dtype
-            del img
-        else:
-            self.X_norm.update(xnorm)
+        if norm_type == 'custom':
+            if norm_custom_mean is not None and norm_custom_std is not None:
+                self.X_norm['type'] = 'custom'
+                self.X_norm['mean'] = norm_custom_mean
+                self.X_norm['std'] = norm_custom_std
+                self.X_norm['orig_dtype'] = img.dtype
+                del img
+            else:
+                raise NotImplementedError
+        self.X_norm.update(xnorm)
 
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
@@ -159,11 +173,11 @@ class test_single_data_generator(Dataset):
         # Normalization
         xnorm = None
         if self.X_norm['type'] == 'div':
-            img, xnorm = norm_range01(img)
+            img, xnorm = norm_range01(img, dtype=self.dtype)
         elif self.X_norm['type'] == 'custom':
-            img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
+            img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
            
-        img = np.expand_dims(img, 0).astype(np.float32)
+        img = np.expand_dims(img, 0).astype(self.dtype)
  
         return img, img_class, xnorm
 
