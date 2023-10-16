@@ -11,7 +11,7 @@ from data.post_processing.post_processing import ensemble8_2d_predictions, ensem
 from utils.util import save_tif
 from utils.misc import to_pytorch_format, to_numpy_format
 from engine.base_workflow import Base_Workflow
-from data.pre_processing import create_ssl_source_data_masks, denormalize
+from data.pre_processing import create_ssl_source_data_masks, denormalize, undo_norm_range01
 from engine.metrics import MaskedAutoencoderViT_loss
 
 class Self_supervised_Workflow(Base_Workflow):
@@ -38,8 +38,6 @@ class Self_supervised_Workflow(Base_Workflow):
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
         super(Self_supervised_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
         
-        self.stats['psnr_per_image'] = 0
-
         self.prepare_ssl_data()
 
         # From now on, no modification of the cfg will be allowed
@@ -97,9 +95,12 @@ class Self_supervised_Workflow(Base_Workflow):
         value : float
             Value of the metric for the given prediction. 
         """
-        # Calculate PSNR 
-        _, pred, _ = output
-        pred = self.model_without_ddp.unpatchify(pred).to(torch.float32).detach().cpu()
+        # Calculate PSNR
+        if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == 'masking':
+            _, pred, _ = output
+            pred = self.model_without_ddp.unpatchify(pred).to(torch.float32).detach().cpu()
+        else:
+            pred = output.to(torch.float32).detach().cpu()
         targets = targets.to(torch.float32).detach().cpu()
         with torch.no_grad():
             train_psnr = self.metrics[0](pred, targets)
@@ -147,24 +148,14 @@ class Self_supervised_Workflow(Base_Workflow):
         # Crop if necessary
         if self._X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == '2D':
-                self._X, self._Y = crop_data_with_overlap(self._X, self.cfg.DATA.PATCH_SIZE, data_mask=self._Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                self._X = crop_data_with_overlap(self._X, self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
                     padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
             else:
-                self._Y = self._Y[0]
-                if self.cfg.TEST.REDUCE_MEMORY:
-                    self._X = crop_3D_data_with_overlap(self._X[0], self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
-                        padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
-                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
-                    self._Y = crop_3D_data_with_overlap(self._Y, self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
-                        padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
-                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
-                else:
-                    self._X, self._Y = crop_3D_data_with_overlap(self._X[0], self.cfg.DATA.PATCH_SIZE, data_mask=self._Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
-                        padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
-                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                self._X = crop_3D_data_with_overlap(self._X[0], self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                    padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
+                    median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
 
         # Predict each patch
-        pred = []
         if self.cfg.TEST.AUGMENTATION:
             for k in tqdm(range(self._X.shape[0]), leave=False):
                 if self.cfg.PROBLEM.NDIM == '2D':
@@ -180,7 +171,7 @@ class Self_supervised_Workflow(Base_Workflow):
                             )
                         )
                 else:
-                    p = ensemble16_3d_predictions(self._X[k], batch_size_value=1,
+                    p = ensemble16_3d_predictions(self._X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                             pred_func=(
                                 lambda img_batch_subdiv: 
                                     to_numpy_format(
@@ -191,52 +182,50 @@ class Self_supervised_Workflow(Base_Workflow):
                                     )
                             )
                         )
-                pred.append(p)
+                if 'pred' not in locals():
+                    pred = np.zeros((self._X.shape[0],)+p.shape, dtype=self.dtype)
+                pred[k] = p
         else:
-            self._X = to_pytorch_format(self._X, self.axis_order, self.device)
             l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
             for k in tqdm(range(l), leave=False):
                 top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]                
                 with torch.cuda.amp.autocast():
-                    p = self.model(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top])
+                    p = self.model(to_pytorch_format(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device))
                     p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
-                pred.append(p)
-        del self._X, p
+                if 'pred' not in locals():
+                    pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
+                pred[k*self.cfg.TRAIN.BATCH_SIZE:top] = p
+
+        # Delete self._X as in 3D there is no full image
+        if self.cfg.PROBLEM.NDIM == '3D':
+            del self._X, p
 
         # Reconstruct the predictions
-        pred = np.concatenate(pred)
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
             f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
-
-            if self.cfg.TEST.REDUCE_MEMORY:
-                pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
-                    overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
-                self._Y = f_name(self._Y, original_data_shape[:-1]+(self._Y.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
-                    overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
-            else:
-                pred, self._Y = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=self._Y,
-                    padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
-                    verbose=self.cfg.TEST.VERBOSE)
+            pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
+                overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
         else:
             pred = pred[0]
 
         # Undo normalization
         x_norm = norm[0]
         if x_norm['type'] == 'div':
-            pred = pred*255
-            if 'reduced_uint16' in x_norm:
-                pred = (pred*65535).astype(np.uint16)
+            pred = undo_norm_range01(pred, x_norm)
         else:
             pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
+            
+            if x_norm['orig_dtype'] not in [np.dtype('float64'), np.dtype('float32'), np.dtype('float16')]:
+                pred = np.round(pred)
+                minpred = np.min(pred)                                                                                                
+                pred = pred+abs(minpred)
+
+            pred = pred.astype(x_norm['orig_dtype'])
             
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
             save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
-    
-        # Calculate PSNR
-        psnr_per_image = self.metrics[0](torch.from_numpy(pred), torch.from_numpy(self._Y))
-        self.stats['psnr_per_image'] += psnr_per_image
 
     def after_merge_patches(self, pred,filenames):
         """
@@ -281,7 +270,7 @@ class Self_supervised_Workflow(Base_Workflow):
         image_counter : int
             Number of images to average the metrics.
         """
-        self.stats['psnr_per_image'] = self.stats['psnr_per_image'] / image_counter
+        pass
 
     def print_stats(self, image_counter):
         """
@@ -293,10 +282,6 @@ class Self_supervised_Workflow(Base_Workflow):
             Number of images to call ``normalize_stats``.
         """
         self.normalize_stats(image_counter)
-
-        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            print("Test PSNR (merge patches): {}".format(self.stats['psnr_per_image']))
-            print(" ")
 
 
     def prepare_ssl_data(self):

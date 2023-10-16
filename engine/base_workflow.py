@@ -576,8 +576,7 @@ class Base_Workflow(metaclass=ABCMeta):
         print("Making predictions on test data . . .")
         # Process all the images
         for i, batch in tqdm(enumerate(self.test_generator), total=len(self.test_generator)):
-            if self.cfg.DATA.TEST.LOAD_GT or \
-                (self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK != 'masking'):
+            if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
                 X, X_norm, Y, Y_norm = batch
             else:
                 X, X_norm = batch
@@ -592,15 +591,13 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                     if type(X) is tuple:
                         self._X = X[j]
-                        if self.cfg.DATA.TEST.LOAD_GT or \
-                            (self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK != 'masking'):
+                        if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
                             self._Y = Y[j]  
                         else:
                             self._Y = None
                     else:
                         self._X = np.expand_dims(X[j],0)
-                        if self.cfg.DATA.TEST.LOAD_GT or \
-                            (self.cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK != 'masking'):
+                        if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
                             self._Y = np.expand_dims(Y[j],0)  
                         else:
                             self._Y = None

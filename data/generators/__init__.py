@@ -287,12 +287,12 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
 
     instance_problem = True if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else False
     normalizeY='as_mask'
-    provide_Y=cfg.DATA.TEST.LOAD_GT
+    if cfg.PROBLEM.TYPE in ['SELF_SUPERVISED']:
+        provide_Y=False
+    else:
+        provide_Y=cfg.DATA.TEST.LOAD_GT
     if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
         normalizeY = 'none'
-    elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
-        normalizeY = 'as_image'
-        provide_Y = True if cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "crappify" else False
     
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     dic = dict(ndim=ndim, X=X_test, d_path=cfg.DATA.TEST.PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.PATH, 
@@ -300,8 +300,7 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
         seed=cfg.SYSTEM.SEED, instance_problem=instance_problem, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, 
         norm_custom_std=custom_std, reduce_mem=cfg.TEST.REDUCE_MEMORY, sample_ids=cross_val_samples_ids)        
         
-    if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
-        (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
+    if cfg.PROBLEM.TYPE in ['CLASSIFICATION', 'SELF_SUPERVISED']:
         gen_name = test_single_data_generator 
         r_shape = cfg.DATA.PATCH_SIZE
         if cfg.MODEL.ARCHITECTURE == 'efficientnet_b0' and cfg.DATA.PATCH_SIZE[:-1] != (224,224):
@@ -311,8 +310,8 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
             dic['crop_center'] = True
             dic['resize_shape'] = r_shape
             dic['ptype'] = "classification"
-        else: # SSL
-            dic['ptype'] = "mae"
+        else: 
+            dic['ptype'] = "ssl"
     else:
         gen_name = test_pair_data_generator
         dic['normalizeY'] = normalizeY 
