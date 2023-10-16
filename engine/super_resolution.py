@@ -148,8 +148,13 @@ class Super_resolution_Workflow(Base_Workflow):
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
-        original_data_shape = (self._X.shape[0], self._X.shape[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
-                               self._X.shape[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, self._X.shape[3])
+        if self.cfg.PROBLEM.NDIM == '2D':
+            original_data_shape = (self._X.shape[0], self._X.shape[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+                                   self._X.shape[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, self._X.shape[3])
+        else:
+            original_data_shape = (self._X.shape[0], self._X.shape[1],
+                                   self._X.shape[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+                                   self._X.shape[3]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, self._X.shape[4])
 
         # Crop if necessary
         if self._X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
@@ -205,8 +210,16 @@ class Super_resolution_Workflow(Base_Workflow):
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
             f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
-            pad = tuple(p*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING for p in self.cfg.DATA.TEST.PADDING)
-            ov = tuple(o*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING for o in self.cfg.DATA.TEST.OVERLAP) 
+            if self.cfg.PROBLEM.NDIM == '2D':
+                pad = tuple(p*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING for p in self.cfg.DATA.TEST.PADDING)
+                ov = tuple(o*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING for o in self.cfg.DATA.TEST.OVERLAP)
+            else:
+                pad = (self.cfg.DATA.TEST.PADDING[0], 
+                       self.cfg.DATA.TEST.PADDING[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+                       self.cfg.DATA.TEST.PADDING[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
+                ov = (self.cfg.DATA.TEST.OVERLAP[0], 
+                      self.cfg.DATA.TEST.OVERLAP[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+                      self.cfg.DATA.TEST.OVERLAP[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
             pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=pad, 
                 overlap=ov, verbose=self.cfg.TEST.VERBOSE)
         else:
