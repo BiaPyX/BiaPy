@@ -250,7 +250,7 @@ class Classification_Workflow(Base_Workflow):
         """
         # Save predictions in a csv file
         df = pd.DataFrame(self.test_filenames, columns=['filename'])
-        df['class'] = np.array(self.all_pred)
+        df['class'] = np.array(self.all_pred).squeeze()
         f= os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, "predictions.csv")
         os.makedirs(self.cfg.PATHS.RESULT_DIR.PATH, exist_ok=True)
         df.to_csv(f, index=False, header=True)
