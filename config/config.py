@@ -787,8 +787,8 @@ class Config:
         _C.PATHS.WATERSHED_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'watershed')
         _C.PATHS.MEAN_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_mean_value.npy')
         _C.PATHS.STD_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_std_value.npy')
-        # mae CALLBACK PATH
-        _C.PATHS.MAE_CALLBACK_OUT_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'MAE_checks')
+        # Path where the images used in MAE will be saved suring inference
+        _C.PATHS.MAE_OUT_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'MAE_checks')
         
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Logging

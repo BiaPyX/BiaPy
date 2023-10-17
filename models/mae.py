@@ -10,9 +10,11 @@
 # --------------------------------------------------------
 
 from functools import partial
+import numpy as np
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Block
+from utils.util import save_tif
 
 from models.tr_layers import PatchEmbed
 
@@ -149,7 +151,7 @@ class MaskedAutoencoderViT(nn.Module):
         ----------
         imgs : Tensor
             Input images. In 2D: ``(N, C, H, W)``, in 3D: ``(N, C, Z, H, W)``. 
-            Where ``N`` is the batch size, ``C`` are the channels, ``Z`` imge depth,
+            Where ``N`` is the batch size, ``C`` are the channels, ``Z`` image depth,
             ``H`` image height and ``W`` image's width. 
 
         Returns
@@ -190,7 +192,7 @@ class MaskedAutoencoderViT(nn.Module):
         -------
         imgs : Torch tensor
             MAE model. in 2D: ``(N, C, H, W)`` in 3D: ``(N, C, Z, H, W)``. Where ``N`` is the batch size, 
-            ``C`` are the channels, ``Z`` imge depth, ``H`` image height and ``W`` image's width. 
+            ``C`` are the channels, ``Z`` image depth, ``H`` image height and ``W`` image's width. 
         """
         p = self.patch_embed.patch_size[0]
         if self.ndim == 2:
@@ -306,7 +308,7 @@ class MaskedAutoencoderViT(nn.Module):
         ----------
         imgs : Tensor
             Input images. In 2D: ``(N, C, H, W)``, in 3D: ``(N, C, Z, H, W)``. Where ``N`` is the batch size, 
-            ``C`` are the channels, ``Z`` imge depth, ``H`` image height and ``W`` image's width. 
+            ``C`` are the channels, ``Z`` image depth, ``H`` image height and ``W`` image's width. 
         
         pred : Tensor
             Predictions. In 2D: ``(N, L, patch_size**2 *C)``, in 3D: ``(N, L, patch_size**3 *C)``.
@@ -340,6 +342,79 @@ class MaskedAutoencoderViT(nn.Module):
         loss = self.forward_loss(imgs, pred, mask)
         return loss, pred, mask
 
+    def save_images(self, _x, _y, _mask, out_dir, filename, crop_numbers, dtype):
+        """
+        Save images from MAE. 
+
+        Parameters
+        ----------
+        _x : Torch tensor
+            Input images. In 2D: ``(N, C, H, W)``, in 3D: ``(N, C, Z, H, W)``. Where ``N`` is the batch size, 
+            ``C`` are the channels, ``Z`` image depth, ``H`` image height and ``W`` image's width. 
+
+        _y : Torch tensor
+            Input images. In 2D: ``(N, L, patch_size**2 *C)``, in 3D: ``(N, L, patch_size**3 *C)``.
+            Where ``N`` is the batch size, ``L`` is the multiplication of dimension (i.e. ``Z``, 
+            ``H`` and ``W``) and ``C`` are the channels.
+
+        mask : 2d array
+            Information of which patches will be retain and masked. Shape is: ``(N, L)`` where ``0`` is keep 
+            and ``1`` is remove.
+
+        out_dir : str
+            Path to store the images.
+        
+        filename : str
+            Filename to use when saving images.
+
+        crop_numbers : int 
+            Number of crop of to start with when saving image filenames. 
+
+        dtype : Numpy dtype
+            Dtype to save the images. 
+
+        Returns
+        -------
+        p : 4D/5D Numpy array
+            Predicted images converted to Numpy. In 2D: ``(N, H, W, C)``, in 3D: ``(N, Z, H, W, C)``. Where ``N`` is the batch size, 
+            ``C`` are the channels, ``Z`` image depth, ``H`` image height and ``W`` image's width. 
+
+        """
+        print("Saving MAE images . . .")
+
+        p = np.zeros(_x.shape, dtype=dtype)
+        for i in range(len(_x)):
+            y = self.unpatchify(_y[i].unsqueeze(dim=0))[0]
+            y = y.detach().cpu()
+
+            # visualize the mask
+            mask = _mask[i].unsqueeze(dim=0).detach()
+            mask = mask.unsqueeze(-1).repeat(1, 1, self.patch_embed.patch_size[0]**self.ndim *self.in_chans)  # (N, H*W, p*p*3)
+            mask = self.unpatchify(mask)[0]  # 1 is removing, 0 is keeping
+            mask = mask.detach().cpu()
+            x = _x[i].detach().cpu()
+            
+            # masked image
+            im_masked = x * (1 - mask)
+
+            # MAE reconstruction pasted with visible patches
+            im_paste = x * (1 - mask) + y * mask
+
+            save_tif(np.expand_dims(x.numpy().transpose((1,2,3,0)),0), out_dir, 
+                [filename.replace(".tif", str(crop_numbers+i).zfill(3)+"_original.tif")], verbose=False)
+            save_tif(np.expand_dims(im_masked.numpy().transpose((1,2,3,0)),0), out_dir, 
+                [filename.replace(".tif", str(crop_numbers+i).zfill(3)+"_masked.tif")], verbose=False)
+            save_tif(np.expand_dims(y.numpy().transpose((1,2,3,0)),0), out_dir, 
+                [filename.replace(".tif", str(crop_numbers+i).zfill(3)+"_reconstruction.tif")], verbose=False)
+            save_tif(np.expand_dims(im_paste.numpy().transpose((1,2,3,0)),0), out_dir, 
+                [filename.replace(".tif", str(crop_numbers+i).zfill(3)+"_reconstruction_and_visible.tif")], verbose=False)
+
+            p[i] = x.numpy()
+
+        if self.ndim == 2:
+            return c.transpose((0,2,3,1))
+        else:
+            return p.transpose((0,2,3,4,1))
 
 def mae_vit_base_patch16_dec512d8b(**kwargs):
     model = MaskedAutoencoderViT(

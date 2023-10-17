@@ -191,7 +191,15 @@ class Self_supervised_Workflow(Base_Workflow):
                 top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]                
                 with torch.cuda.amp.autocast():
                     p = self.model(to_pytorch_format(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device))
-                    p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
+                    if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+                        loss, p, mask = p
+                        p = self.apply_model_activations(p)
+                        p = self.model.save_images(to_pytorch_format(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device), 
+                            p, mask, self.cfg.PATHS.MAE_OUT_DIR, filenames[0], k*self.cfg.TRAIN.BATCH_SIZE, self.dtype)
+                    else:
+                        p = self.apply_model_activations(p)
+                        p = to_numpy_format(p, self.axis_order_back)
+                    
                 if 'pred' not in locals():
                     pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
                 pred[k*self.cfg.TRAIN.BATCH_SIZE:top] = p
