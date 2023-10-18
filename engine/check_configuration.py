@@ -389,10 +389,17 @@ def check_configuration(cfg, check_data_paths=True):
             if model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet']:
                 raise ValueError("Architectures available for 3D 'SUPER_RESOLUTION' are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet']")
             assert cfg.MODEL.UNET_SR_UPSAMPLE_POSITION in ["pre", "post"], "'MODEL.UNET_SR_UPSAMPLE_POSITION' not in ['pre', 'post']"
+    if cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+        if model_arch not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet',  
+            'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']:
+            raise ValueError("'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', " 
+                "'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']")
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' and model_arch not in ['simple_cnn', 'vit'] and \
         'efficientnet' not in model_arch:
         raise ValueError("Architectures available for 'CLASSIFICATION' are: ['simple_cnn', 'efficientnet_b[0-7]', 'vit']")
     if model_arch in ['unetr', 'vit', 'mae']:    
+        if model_arch == 'mae' and cfg.PROBLEM.TYPE != 'SELF_SUPERVISED':
+            raise ValueError("'mae' model can only be used in 'SELF_SUPERVISED' workflow")
         if cfg.MODEL.VIT_EMBED_DIM % cfg.MODEL.VIT_NUM_HEADS != 0:
             raise ValueError("'MODEL.VIT_EMBED_DIM' should be divisible by 'MODEL.VIT_NUM_HEADS'")
         if not all([i == cfg.DATA.PATCH_SIZE[0] for i in cfg.DATA.PATCH_SIZE[:-1]]):      
