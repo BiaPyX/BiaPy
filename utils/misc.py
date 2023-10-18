@@ -79,7 +79,7 @@ def init_devices(args, cfg):
         print('Not using distributed mode')
         setup_for_distributed(is_master=True)  # hack
         args.distributed = False
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cpu")
         return device
 
     args.distributed = True
@@ -91,7 +91,7 @@ def init_devices(args, cfg):
         world_size=args.world_size, rank=args.rank)
     dist.barrier()
     setup_for_distributed(args.rank == 0)
-    device = torch.device("cuda")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return device
 
 def set_seed(seed=42):

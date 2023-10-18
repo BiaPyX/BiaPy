@@ -44,7 +44,7 @@ if __name__ == '__main__':
                         default=os.getenv('HOME'))
     parser.add_argument("--name", help="Job name", default="unknown_job")
     parser.add_argument("--run_id", help="Run number of the same job", type=int, default=1)
-    parser.add_argument("--gpu", help="GPU number according to 'nvidia-smi' command", default="0", type=str)
+    parser.add_argument("--gpu", help="GPU number according to 'nvidia-smi' command", type=str)
 
     # Distributed training parameters
     parser.add_argument('--world_size', default=1, type=int,
@@ -92,10 +92,11 @@ if __name__ == '__main__':
 
     # GPU selection
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     opts = []
-    num_gpus = len(np.unique(np.array(args.gpu.strip().split(','))))
-    opts.extend(["SYSTEM.NUM_GPUS", num_gpus])
+    if args.gpu:
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+        num_gpus = len(np.unique(np.array(args.gpu.strip().split(','))))
+        opts.extend(["SYSTEM.NUM_GPUS", num_gpus])
 
     # GPU management
     device = init_devices(args, cfg.get_cfg_defaults())
