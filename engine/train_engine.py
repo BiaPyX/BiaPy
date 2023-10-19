@@ -48,7 +48,8 @@ def train_one_epoch(cfg, model, loss_function, activations, metric_function, pre
             if lr_scheduler is not None and cfg.TRAIN.LR_SCHEDULER.NAME == 'onecycle':
                 lr_scheduler.step() 
 
-        torch.cuda.synchronize()
+        if device.type != 'cpu':
+            torch.cuda.synchronize()
 
         # Update metrics 
         metric_logger.update(loss=loss_value)
