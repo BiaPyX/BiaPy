@@ -65,6 +65,9 @@ class MaskedAutoencoderViT(nn.Module):
     norm_pix_loss : bool, optional
         Use (per-patch) normalized pixels as targets for computing loss
 
+    mask_ratio : float, optional
+        Percentage of the input image to mask. Value between 0 and 1. 
+
     Returns
     -------
     model : Torch model
@@ -72,10 +75,11 @@ class MaskedAutoencoderViT(nn.Module):
     """
     def __init__(self, img_size=224, patch_size=16, in_chans=3, ndim=2, embed_dim=1024, depth=24, num_heads=16,
         mlp_ratio=4., decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16, norm_layer=nn.LayerNorm, 
-        norm_pix_loss=False):
+        norm_pix_loss=False, mask_ratio=0.5):
         super().__init__()
         self.ndim = ndim
         self.in_chans = in_chans
+        self.mask_ratio = mask_ratio
 
         # --------------------------------------------------------------------------
         # MAE encoder specifics
@@ -210,7 +214,7 @@ class MaskedAutoencoderViT(nn.Module):
         
         return imgs
 
-    def random_masking(self, x, mask_ratio):
+    def random_masking(self, x):
         """
         Perform per-sample random masking by per-sample shuffling.
         Per-sample shuffling is done by argsort random noise.
@@ -221,12 +225,9 @@ class MaskedAutoencoderViT(nn.Module):
             Input images. Is shape is ``(N, L, D)`` shape. Where ``N`` is the batch size, 
             ``L`` is the multiplication of dimension (i.e. ``Z``, ``H`` and ``W``) and 
             ``D`` is ``embed_dim``.
-        
-        mask_ratio : float
-            Percentage of the input image to mask. Value between 0 and 1. 
         """
         N, L, D = x.shape  # batch, length, dim
-        len_keep = int(L * (1 - mask_ratio))
+        len_keep = int(L * (1 - self.mask_ratio))
         
         noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
         
@@ -246,7 +247,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x_masked, mask, ids_restore
 
-    def forward_encoder(self, x, mask_ratio):
+    def forward_encoder(self, x):
         """
         Encoder forward pass. 
         """
@@ -257,7 +258,7 @@ class MaskedAutoencoderViT(nn.Module):
         x = x + self.pos_embed[:, 1:, :]
 
         # masking: length -> length * mask_ratio
-        x, mask, ids_restore = self.random_masking(x, mask_ratio)
+        x, mask, ids_restore = self.random_masking(x)
 
         # append cls token
         cls_token = self.cls_token + self.pos_embed[:, :1, :]
@@ -336,8 +337,8 @@ class MaskedAutoencoderViT(nn.Module):
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
-    def forward(self, imgs, mask_ratio=0.75):
-        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+    def forward(self, imgs):
+        latent, mask, ids_restore = self.forward_encoder(imgs)
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
         loss = self.forward_loss(imgs, pred, mask)
         return loss, pred, mask

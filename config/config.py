@@ -537,6 +537,8 @@ class Config:
         _C.MODEL.MAE_DEC_NUM_HEADS = 16
         # Size of the dense layers of the final classifier
         _C.MODEL.MAE_DEC_MLP_DIMS = 2048
+        # Percentage of the input image to mask. Value between 0 and 1. 
+        _C.MODEL.MAE_MASK_RATIO = 0.5
 
         # UNETR
         # Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted
@@ -548,7 +550,6 @@ class Config:
 
         # Specific for SR models based on U-Net architectures. Options are ["pre", "post"]
         _C.MODEL.UNET_SR_UPSAMPLE_POSITION = "pre"
-
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss
