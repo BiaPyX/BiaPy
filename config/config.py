@@ -579,7 +579,7 @@ class Config:
         # Number of epochs to train the model
         _C.TRAIN.EPOCHS = 360
         # Epochs to wait with no validation data improvement until the training is stopped
-        _C.TRAIN.PATIENCE = 50
+        _C.TRAIN.PATIENCE = -1
         
         # LR Scheduler
         _C.TRAIN.LR_SCHEDULER = CN()

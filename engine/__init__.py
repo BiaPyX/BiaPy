@@ -51,7 +51,9 @@ def build_callbacks(cfg):
            All callbacks to be applied to a model.
     """
     # Stop early and restore the best model weights when finished the training
-    earlystopper = EarlyStopping(patience=cfg.TRAIN.PATIENCE)
+    earlystopper = None
+    if cfg.TRAIN.PATIENCE != -1:
+        earlystopper = EarlyStopping(patience=cfg.TRAIN.PATIENCE)        
 
     # if cfg.TRAIN.PROFILER:
     #     tb_callback = tf.keras.callbacks.TensorBoard(log_dir=cfg.PATHS.PROFILER, profile_batch=cfg.TRAIN.PROFILER_BATCH_RANGE)
