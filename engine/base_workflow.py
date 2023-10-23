@@ -707,7 +707,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                     with torch.cuda.amp.autocast():
                         output = self.apply_model_activations(self.model(to_pytorch_format(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device)))
-                        loss = self.loss(output, self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top])
+                        loss = self.loss(output, to_pytorch_format(self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device))
 
                     # Calculate the metrics
                     train_iou = self.metric_calculation(output, to_pytorch_format(self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device))
