@@ -6,7 +6,7 @@
     <a href="https://www.python.org/">
       <img src="https://img.shields.io/badge/Python-3.8-yellow.svg" /></a>
     <a href= "https://pytorch.org/">
-      <img src="https://img.shields.io/badge/PyTorch-1.12-orange.svg" /></a>
+      <img src="https://img.shields.io/badge/PyTorch-2.1-orange.svg" /></a>
     <a href= "https://github.com/danifranco/BiaPy/blob/master/LICENSE">
       <img src="https://img.shields.io/badge/License-MIT-blue.svg" /></a>
     <a href= "https://biapy.readthedocs.io/en/latest/">
