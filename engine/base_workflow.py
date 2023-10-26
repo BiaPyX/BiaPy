@@ -351,10 +351,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 if (epoch + 1) % self.cfg.MODEL.SAVE_CKPT_FREQ == 0 or epoch + 1 == self.cfg.TRAIN.EPOCHS and is_main_process():
                     save_model(cfg=self.cfg, jobname=self.job_identifier, model=self.model, model_without_ddp=self.model_without_ddp, 
                         optimizer=self.optimizer, loss_scaler=self.loss_scaler, epoch=epoch+1)
-
-            # Apply warmup cosine decay scheduler
-            if epoch % self.cfg.TRAIN.ACCUM_ITER == 0 and self.cfg.TRAIN.LR_SCHEDULER.NAME == 'warmupcosine':
-                self.lr_scheduler.adjust_learning_rate(self.optimizer, epoch / len(self.train_generator) + epoch)
                 
             # Validation
             if self.val_generator is not None:
