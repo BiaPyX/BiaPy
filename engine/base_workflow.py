@@ -4,6 +4,7 @@ import datetime
 import time
 import json
 import torch
+import h5py
 import numpy as np
 from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
@@ -17,7 +18,8 @@ from utils.misc import (get_world_size, get_rank, is_main_process, save_model, t
 from utils.util import load_data_from_dir, load_3d_images_from_dir, create_plots, pad_and_reflect, save_tif, check_downsample_division
 from engine.train_engine import train_one_epoch, evaluate
 from data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap, load_and_prepare_2D_train_data
-from data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap, load_and_prepare_3D_data
+from data.data_3D_manipulation import (crop_3D_data_with_overlap, merge_3D_data_with_overlap, load_and_prepare_3D_data, 
+    extract_3D_patch_with_overlap_yield)
 from data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions, apply_binary_mask
 from engine.metrics import jaccard_index_numpy, voc_calculation
 from data.post_processing import apply_post_processing
@@ -58,6 +60,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.data_norm = None
         self.model_prepared = False 
         self.dtype = np.float32 if not self.cfg.TEST.REDUCE_MEMORY else np.float16 
+        self.dtype_str = "float32" if not self.cfg.TEST.REDUCE_MEMORY else "float16" 
 
         # Save paths in case we need them in a future
         self.orig_train_path = self.cfg.DATA.TRAIN.PATH
@@ -583,33 +586,41 @@ class Base_Workflow(metaclass=ABCMeta):
                 Y, Y_norm = None, None
             del batch
 
-            # Process all the images in the batch, sample by sample
-            l_X = len(X)
-            for j in tqdm(range(l_X), leave=False):
-                print("Processing image(s): {}".format(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]))
-
-                if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-                    if type(X) is tuple:
-                        self._X = X[j]
-                        if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
-                            self._Y = Y[j]  
-                        else:
-                            self._Y = None
-                    else:
-                        self._X = np.expand_dims(X[j],0)
-                        if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
-                            self._Y = np.expand_dims(Y[j],0)  
-                        else:
-                            self._Y = None
-                else:
-                    self._X = np.expand_dims(X[j], 0)                    
-                    self._Y = np.expand_dims(Y, 0) if self.cfg.DATA.TEST.LOAD_GT else None
+            if self.cfg.TEST.H5_BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
+                self._X = X
+                self._Y = Y if self.cfg.DATA.TEST.LOAD_GT else None
 
                 # Process each image separately
-                self.f_numbers = list(range((i*l_X)+j,(i*l_X)+j+1)) 
-                self.process_sample(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], norm=(X_norm, Y_norm))
+                self.f_numbers = [i]
+                self.process_sample_by_chunks(self.test_filenames[i])
+            else:
+                # Process all the images in the batch, sample by sample
+                l_X = len(X)
+                for j in tqdm(range(l_X), leave=False):
+                    print("Processing image(s): {}".format(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]))
+                    
+                    if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+                        if type(X) is tuple:
+                            self._X = X[j]
+                            if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
+                                self._Y = Y[j]  
+                            else:
+                                self._Y = None
+                        else:
+                            self._X = np.expand_dims(X[j],0)
+                            if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
+                                self._Y = np.expand_dims(Y[j],0)  
+                            else:
+                                self._Y = None
+                    else:
+                        self._X = np.expand_dims(X[j], 0)                    
+                        self._Y = np.expand_dims(Y, 0) if self.cfg.DATA.TEST.LOAD_GT else None
 
-                image_counter += 1
+                    # Process each image separately
+                    self.f_numbers = list(range((i*l_X)+j,(i*l_X)+j+1)) 
+                    self.process_sample(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], norm=(X_norm, Y_norm))
+
+            image_counter += 1
 
         self.destroy_test_data()
 
@@ -635,6 +646,95 @@ class Base_Workflow(metaclass=ABCMeta):
                 else:
                     print("Validation {}: {}".format(self.metric_names[i], np.max(self.plot_values['val_'+self.metric_names[i]])))
         self.print_stats(image_counter)
+
+    def process_sample_by_chunks(self, filenames):
+        """
+        Function to process a sample in the inference phase. 
+
+        Parameters
+        ----------
+        filenames : List of str
+            Filenames fo the samples to process. 
+        """
+        filename, file_extension = os.path.splitext(filenames)
+        if file_extension not in ['.hdf5', '.h5']:
+            print("WARNING: you could have saved more memory by converting input test images into H5 file format (.h5), "
+                  "as with 'TEST.H5_BY_CHUNKS.ENABLE' option enabled H5 files will be processed by chunks")
+
+        # Create H5 file to save the results
+        os.makedirs(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, exist_ok=True)
+        data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".h5")
+        fid = h5py.File(data_filename, "w")        
+        
+        for obj in tqdm(extract_3D_patch_with_overlap_yield(self._X, self.cfg.DATA.PATCH_SIZE, data_mask=self._Y, 
+            padding=self.cfg.DATA.TEST.PADDING, verbose=True)):
+            if self.cfg.DATA.TEST.LOAD_GT:
+                img, mask, patch_coords, pad_to_remove = obj
+                img = np.expand_dims(img,0)
+                mask = np.expand_dims(mask,0)
+                mask, ynorm = self.test_generator.norm_Y(mask)
+            else:
+                img, patch_coords, pad_to_remove = obj
+                img = np.expand_dims(img,0)
+            del obj
+            img, xnorm = self.test_generator.norm_X(img)
+            
+            output = None
+            if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
+                with torch.cuda.amp.autocast():
+                    output = self.apply_model_activations(self.model(to_pytorch_format(img, self.axis_order, self.device)))
+                    loss = self.loss(output, mask)
+
+                # Calculate the metrics
+                train_iou = self.metric_calculation(output, to_pytorch_format(mask, self.axis_order, self.device))
+
+                self.stats['loss_per_crop'] += loss.item()
+                self.stats['iou_per_crop'] += train_iou
+            del output 
+            self.stats['patch_counter'] += 1
+
+            # Predict each patch
+            if self.cfg.TEST.AUGMENTATION:
+                p = ensemble16_3d_predictions(img, batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                    pred_func=(
+                        lambda img_batch_subdiv: 
+                            to_numpy_format(
+                                self.apply_model_activations(
+                                    self.model(to_pytorch_format(img_batch_subdiv, self.axis_order, self.device)),
+                                    ), 
+                                self.axis_order_back
+                            )
+                    )
+                )
+            else:
+                with torch.cuda.amp.autocast():
+                    p = self.model(to_pytorch_format(img, self.axis_order, self.device))
+                    p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
+
+            if 'data' not in locals():
+                data = fid.create_dataset("data", self._X.shape+(p.shape[-1],), dtype=self.dtype_str, compression="gzip")
+            
+            # Insert the patch into its original 
+            data[patch_coords[0][0]:patch_coords[0][1],
+                 patch_coords[1][0]:patch_coords[1][1],
+                 patch_coords[2][0]:patch_coords[2][1]] = \
+                    p[0,pad_to_remove[0][0]:-pad_to_remove[0][1],
+                        pad_to_remove[1][0]:-pad_to_remove[1][1],
+                        pad_to_remove[2][0]:-pad_to_remove[2][1]]
+
+        # Save image
+        if self.cfg.TEST.H5_BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+            save_tif(np.expand_dims(np.array(data, dtype=self.dtype),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
+                [filename+".tif"], verbose=self.cfg.TEST.VERBOSE)
+
+        # Close H5 file and free memory
+        fid.close()
+        del data, p, img
+        if self.cfg.DATA.TEST.LOAD_GT:
+            del mask
+
+        if self.cfg.TEST.H5_BY_CHUNKS.WORKFLOW_PROCESS:
+            self.after_merge_patches_by_chunks(data_filename)            
 
     def process_sample(self, filenames, norm):
         """
@@ -989,6 +1089,36 @@ class Base_Workflow(metaclass=ABCMeta):
             Filenames of the predicted images.  
         """
         raise NotImplementedError
+
+    def after_merge_patches_by_chunks(self, filename):
+        """
+        Place any code that needs to be done after merging all predicted patches into the original image
+        but in the process made chunk by chunk.
+
+        Parameters
+        ----------
+        filename : List of str
+            Filename of the predicted image H5.  
+        """
+        # Load H5 and convert it into numpy array
+        pred = h5py.File(filename,'r')
+        pred = np.array(pred[list(pred)[0]], dtype=self.dtype)
+        pred = np.squeeze(pred)
+
+        # Adjust shape
+        if pred.ndim < 3:
+            raise ValueError("Read image seems to be 2D: {}. Path: {}".format(pred.shape, filename))
+        if pred.ndim == 3: 
+            pred = np.expand_dims(pred, -1)
+        else:
+            min_val = min(pred.shape)
+            channel_pos = pred.shape.index(min_val)
+            if channel_pos != 3 and pred.shape[channel_pos] <= 4:
+                new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
+                pred = pred.transpose(new_pos)
+
+        fname, file_extension = os.path.splitext(os.path.basename(filename))
+        self.after_merge_patches(pred, [fname+".tif"])
 
     @abstractmethod
     def after_full_image(self, pred, filenames):

@@ -2,6 +2,7 @@ import os
 import math
 import numpy as np
 import random
+import h5py
 import matplotlib
 import matplotlib.pyplot as plt
 import scipy.ndimage
@@ -234,10 +235,10 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
                 aux = np.expand_dims(X[i].transpose((0,3,1,2)), -1).astype(_dtype)
             else:
                 aux = np.expand_dims(X[i][0].transpose((0,3,1,2)), -1).astype(_dtype)
-        # try:
-        #     imsave(f, imagej=True, aux, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
-        # except:
-        imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
+        try:
+            imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False, compression=('zlib', 1))
+        except:
+            imsave(f, aux, imagej=True, metadata={'axes': 'ZCYXS'}, check_contrast=False)
 
 
 def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discard=True, verbose=True):
@@ -918,6 +919,9 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         if id_.endswith('.npy'):
             img = np.load(os.path.join(data_dir, id_))
+        elif id_.endswith('.hdf5') or id_.endswith('.h5'):
+            img = h5py.File(os.path.join(data_dir, id_),'r')
+            img = np.array(img[list(img)[0]])
         else:
             img = imread(os.path.join(data_dir, id_))
         img = np.squeeze(img)
@@ -1146,6 +1150,9 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         if id_.endswith('.npy'):
             img = np.load(os.path.join(data_dir, id_))
+        elif id_.endswith('.hdf5') or id_.endswith('.h5'):
+            img = h5py.File(os.path.join(data_dir, id_),'r')
+            img = np.array(img[list(img)[0]])
         else:
             img = imread(os.path.join(data_dir, id_))
         img = np.squeeze(img)

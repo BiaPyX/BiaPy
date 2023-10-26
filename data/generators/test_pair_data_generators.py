@@ -2,6 +2,7 @@ import random
 import torch
 from torch.utils.data import Dataset
 import os
+import h5py
 import numpy as np
 from skimage.io import imread
 from PIL import Image
@@ -21,6 +22,9 @@ class test_pair_data_generator(Dataset):
 
     d_path : Str, optional
         Path to load the data from.
+
+    test_by_chunks : bool, optional
+        If 
 
     provide_Y: bool, optional
         Whether to return ground truth, using ``Y`` or loading from ``dm_path``.
@@ -56,7 +60,7 @@ class test_pair_data_generator(Dataset):
         When cross validation is used specific training samples are passed to the generator.
     
     """
-    def __init__(self, ndim, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, seed=42,
+    def __init__(self, ndim, X=None, d_path=None, test_by_chunks=False, provide_Y=False, Y=None, dm_path=None, seed=42,
                  instance_problem=False, normalizeY='as_mask', norm_type='div', norm_custom_mean=None, 
                  norm_custom_std=None, reduce_mem=False, sample_ids=None):
 
@@ -71,6 +75,7 @@ class test_pair_data_generator(Dataset):
         self.Y = Y
         self.d_path = d_path
         self.dm_path = dm_path
+        self.test_by_chunks = test_by_chunks
         self.provide_Y = provide_Y
         if not reduce_mem:
             self.dtype = np.float32  
@@ -115,7 +120,8 @@ class test_pair_data_generator(Dataset):
             else:
                 raise NotImplementedError
             self.X_norm['type'] = 'custom'
-        self.X_norm.update(xnorm)
+        if xnorm:
+            self.X_norm.update(xnorm)
 
         if mask is not None:
             self.Y_norm = {}
@@ -126,6 +132,59 @@ class test_pair_data_generator(Dataset):
             elif normalizeY == 'as_image':
                 self.Y_norm.update(self.X_norm)
 
+    def norm_X(self, img):
+        """
+        X data normalization.
+
+        Parameters
+        ----------
+        img : 3D/4D Numpy array
+            X element, for instance, an image. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+
+        Returns
+        -------
+        img : 3D/4D Numpy array
+            X element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+        
+        xnorm : dict, optional
+            Normalization info. 
+        """
+        xnorm = None
+        if self.X_norm['type'] == 'div':
+            img, xnorm = norm_range01(img, dtype=self.dtype)
+        elif self.X_norm['type'] == 'custom':
+            img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
+        return img, xnorm
+
+    def norm_Y(self, mask):   
+        """
+        Y data normalization.
+
+        Parameters
+        ----------
+        mask : 3D/4D Numpy array
+            Y element, for instance, an image's mask. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in 
+            ``3D``.
+
+        Returns
+        -------
+        mask : 3D/4D Numpy array
+            Y element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+        
+        ynorm : dict, optional
+            Normalization info.
+        """
+        ynorm = None
+        if self.normalizeY == 'as_mask':
+            if 'div' in self.Y_norm:
+                mask = mask/255
+        elif self.normalizeY == 'as_image':
+            if self.X_norm['type'] == 'div':
+                mask, xnorm = norm_range01(mask, dtype=self.dtype)
+            elif self.X_norm['type'] == 'custom':
+                mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
+        return mask, ynorm
+
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
         mask = None
@@ -135,6 +194,12 @@ class test_pair_data_generator(Dataset):
                 img = np.load(os.path.join(self.d_path, self.data_path[idx]))
                 if self.provide_Y:
                     mask = np.load(os.path.join(self.dm_path, self.data_mask_path[idx]))
+            elif self.data_path[idx].endswith('.hdf5') or self.data_path[idx].endswith('.h5'):
+                img = h5py.File(os.path.join(self.d_path, self.data_path[idx]),'r')
+                img = img[list(img)[0]]
+                if self.provide_Y:
+                    mask = h5py.File(os.path.join(self.dm_path, self.data_mask_path[idx]),'r')
+                    mask = mask[list(mask)[0]]
             else:
                 img = imread(os.path.join(self.d_path, self.data_path[idx]))
                 img = np.squeeze(img)
@@ -150,57 +215,50 @@ class test_pair_data_generator(Dataset):
                 mask = np.squeeze(mask)
 
         # Correct dimensions 
-        if self.ndim == 3:
-            if img.ndim == 3: 
-                img = np.expand_dims(img, -1)
-            else:
-                min_val = min(img.shape)
-                channel_pos = img.shape.index(min_val)
-                if channel_pos != 3 and img.shape[channel_pos] <= 4:
-                    new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
-                    img = img.transpose(new_pos)
-        else:
-            if img.ndim == 2: 
-                img = np.expand_dims(img, -1) 
-            else:
-                if img.shape[0] <= 3: img = img.transpose((1,2,0))
-        if self.provide_Y:
+        if not self.test_by_chunks:
             if self.ndim == 3:
-                if mask.ndim == 3: 
-                    mask = np.expand_dims(mask, -1)
+                if img.ndim == 3: 
+                    img = np.expand_dims(img, -1)
                 else:
-                    min_val = min(mask.shape)
-                    channel_pos = mask.shape.index(min_val)
-                    if channel_pos != 3 and mask.shape[channel_pos] <= 4:
+                    min_val = min(img.shape)
+                    channel_pos = img.shape.index(min_val)
+                    if channel_pos != 3 and img.shape[channel_pos] <= 4:
                         new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
-                        mask = mask.transpose(new_pos)
+                        img = img.transpose(new_pos)
             else:
-                if mask.ndim == 2: 
-                    mask = np.expand_dims(mask, -1)
+                if img.ndim == 2: 
+                    img = np.expand_dims(img, -1) 
                 else:
-                    if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
+                    if img.shape[0] <= 3: img = img.transpose((1,2,0))
+            if self.provide_Y:
+                if self.ndim == 3:
+                    if mask.ndim == 3: 
+                        mask = np.expand_dims(mask, -1)
+                    else:
+                        min_val = min(mask.shape)
+                        channel_pos = mask.shape.index(min_val)
+                        if channel_pos != 3 and mask.shape[channel_pos] <= 4:
+                            new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
+                            mask = mask.transpose(new_pos)
+                else:
+                    if mask.ndim == 2: 
+                        mask = np.expand_dims(mask, -1)
+                    else:
+                        if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
 
-        # Normalization
-        xnorm = None
-        if self.X_norm['type'] == 'div':
-            img, xnorm = norm_range01(img, dtype=self.dtype)
-        elif self.X_norm['type'] == 'custom':
-            img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
-        if self.provide_Y:
-            if self.normalizeY == 'as_mask':
-                if 'div' in self.Y_norm:
-                    mask = mask/255
-            elif self.normalizeY == 'as_image':
-                if self.X_norm['type'] == 'div':
-                    mask, xnorm = norm_range01(mask, dtype=self.dtype)
-                elif self.X_norm['type'] == 'custom':
-                    mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
-           
-        img = np.expand_dims(img, 0).astype(self.dtype)
-        if self.provide_Y:
-            mask = np.expand_dims(mask, 0)
-            if self.normalizeY == 'as_mask':
-                mask = mask.astype(np.uint8)
+        xnorm = self.X_norm 
+        if not self.test_by_chunks:
+            # Normalization
+            img, xnorm = self.norm_X(img)
+            if self.provide_Y:
+                mask, xnorm = self.norm_Y(mask)
+
+            img = np.expand_dims(img, 0).astype(self.dtype)
+            if self.provide_Y:
+                mask = np.expand_dims(mask, 0)
+                if self.normalizeY == 'as_mask':
+                    mask = mask.astype(np.uint8)
+
         return img, mask, xnorm
 
 
