@@ -412,11 +412,14 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
     if len(vol_shape) != 4:
         raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
     if vol_shape[0] > data.shape[0]:
-        raise ValueError("'vol_shape[0]' {} greater than {}".format(vol_shape[0], data.shape[0]))
+        raise ValueError("'vol_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')"
+            .format(vol_shape[0], data.shape[0]))
     if vol_shape[1] > data.shape[1]:
-        raise ValueError("'vol_shape[1]' {} greater than {}".format(vol_shape[1], data.shape[1]))
+        raise ValueError("'vol_shape[1]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')"
+            .format(vol_shape[1], data.shape[1]))
     if vol_shape[2] > data.shape[2]:
-        raise ValueError("'vol_shape[2]' {} greater than {}".format(vol_shape[2], data.shape[2]))
+        raise ValueError("'vol_shape[2]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')"
+            .format(vol_shape[2], data.shape[2]))
     if (overlap[0] >= 1 or overlap[0] < 0) or (overlap[1] >= 1 or overlap[1] < 0) or (overlap[2] >= 1 or overlap[2] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
     for i,p in enumerate(padding):
@@ -681,9 +684,13 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
     else:
         return merged_data
 
-def extract_3D_patch_with_overlap_yield(data, vol_shape, data_mask=None, padding=(0,0,0), verbose=False):
+def extract_3D_patch_with_overlap_yield(data, vol_shape, padding=(0,0,0), total_ranks=1, 
+    rank=0, verbose=False):
     """
-    Extract 3D patches into smaller patches with a defined overlap. 
+    Extract 3D patches into smaller patches with a defined overlap. Is supports multi-GPU inference
+    by setting ``total_ranks`` and ``rank`` variables. Each GPU will process a evenly number of 
+    volumes in ``Z`` axis. If the number of volumes in ``Z`` to be yielded are not divisible by the 
+    number of GPUs the first GPUs will process one more volume. 
 
     Parameters
     ----------
@@ -693,14 +700,17 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, data_mask=None, padding
     vol_shape : 4D int tuple
         Shape of the patches to create. E.g. ``(z, y, x, channels)``.
 
-    data_mask : 4D Numpy array, optional
-        Data mask to extract patches from. E.g. ``(num_of_images, y, x, channels)``.
-
     padding : tuple of ints, optional
         Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
 
+    total_ranks : int, optional
+        Total number of GPUs.
+
+    rank : int, optional
+        Rank of the current GPU. 
+
     verbose : bool, optional
-        To print information about the crop to be made.
+        To print useful information for debugging. 
 
     Yields
     ------
@@ -721,31 +731,40 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, data_mask=None, padding
         patch that needs to be be used to fill the entire image prediction. E.g. 
         ``((10, 20), (20, 20), (60, 60))`` means that a in only patch[10:-20,20:-20,60:-60]
         should be used to reconstruct the predicted image. 
+
+    total_vol : int
+        Total number of crops to extract. 
+
+    z_vol_info : dict, optional
+        Information of how the volumes in ``Z`` are inserted into the original data size. 
+        E.g. ``{0: [0, 20], 1: [20, 40], 2: [40, 60], 3: [60, 80], 4: [80, 100]}`` means that 
+        the first volume will be place in ``[0:20]`` position, the second will be placed in 
+        ``[20:40]`` and so on. 
+
+    list_of_vols_in_z : list of list of int, optional
+        Volumes in ``Z`` axis that each GPU will process. E.g. ``[[0, 1, 2], [3, 4]]`` means that
+        the first GPU will process volumes ``0``, ``1`` and ``2`` (``3`` in total) whereas the second 
+        GPU will process volumes ``3`` and ``4``. 
     """
     if verbose:
-        print("### 3D-OV-CROP ###")
         print("Cropping {} images into {} with overlapping . . .".format(data.shape, vol_shape))
         print("Padding: {}".format(padding))
 
     data_shape = data.shape if data.ndim == 4 else data.shape + (1,)
-    if data_mask is not None:
-        data_mask_shape = data_mask.shape if data_mask.ndim == 4 else data_mask.shape + (1,)
-
+    
     if len(data_shape) != 4:
         raise ValueError("data expected to be 4 dimensional, given {}".format(data_shape))
-    if data_mask is not None:
-        if data_mask.ndim != 4:
-            raise ValueError("data_mask expected to be 4 dimensional, given {}".format(data_mask_shape))
-        if data_shape[:-1] != data_mask_shape[:-1]:
-            raise ValueError("data and data_mask shapes mismatch: {} vs {}".format(data_shape[:-1], data_mask_shape[:-1]))
     if len(vol_shape) != 4:
         raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
     if vol_shape[0] > data_shape[0]:
-        raise ValueError("'vol_shape[0]' {} greater than {}".format(vol_shape[0], data_shape[0]))
+        raise ValueError("'vol_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')"
+            .format(vol_shape[0], data_shape[0]))
     if vol_shape[1] > data_shape[1]:
-        raise ValueError("'vol_shape[1]' {} greater than {}".format(vol_shape[1], data_shape[1]))
+        raise ValueError("'vol_shape[1]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')"
+            .format(vol_shape[1], data_shape[1]))
     if vol_shape[2] > data_shape[2]:
-        raise ValueError("'vol_shape[2]' {} greater than {}".format(vol_shape[2], data_shape[2]))
+        raise ValueError("'vol_shape[2]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')"
+            .format(vol_shape[2], data_shape[2]))
     for i,p in enumerate(padding):
         if p >= vol_shape[i]//2:
             raise ValueError("'Padding' can not be greater than the half of 'vol_shape'. Max value for this {} input shape is {}"
@@ -767,7 +786,32 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, data_mask=None, padding
         print("{} patches per (z,y,x) axis".format((vols_per_z,vols_per_x,vols_per_y)))
         print(f"Total number of patches: {total_vol}")
 
-    for z in range(vols_per_z):
+    vols_in_z = vols_per_z//total_ranks
+    vols_per_z_per_rank = vols_in_z
+    if vols_per_z%total_ranks > rank: 
+        vols_per_z_per_rank += 1
+    total_vol = vols_per_z_per_rank*vols_per_y*vols_per_x
+
+    c = 0
+    list_of_vols_in_z = []
+    z_vol_info = {}
+    for i in range(total_ranks):
+        vols = (vols_per_z//total_ranks) + 1 if vols_per_z%total_ranks > i else vols_in_z
+        for j in range(vols):
+            z = c+j
+            real_start_z = z*step_z
+            real_finish_z = min(real_start_z+step_z, data_shape[0])
+            z_vol_info[z] = [real_start_z, real_finish_z]
+        list_of_vols_in_z.append(list(range(c,c+vols)))
+        c += vols
+    if verbose:
+        print(f"List of volume IDs to be processed by each GPU: {list_of_vols_in_z}")
+        print(f"Positions of each volume in Z axis: {z_vol_info}")
+        print("Rank {}: Total number of patches: {} - {} patches per (z,y,x) axis (per GPU)"
+            .format(rank, total_vol, (vols_per_z_per_rank,vols_per_x,vols_per_y)))
+
+    for _z in range(vols_per_z_per_rank):
+        z = list_of_vols_in_z[rank][0]+_z
         for y in range(vols_per_y):
             for x in range(vols_per_x):     
                 # Z pad calculation
@@ -810,17 +854,10 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, data_mask=None, padding
                     raise ValueError("Something happened generating patches. Yielded image patch do not satisfy the selected shape "
                         "of {}. Patch shape: {} ".format(vol_shape, img.shape))
 
-                if data_mask is not None:
-                    mask = data_mask[start_z:finish_z,start_y:finish_y,start_x:finish_x]
-                    if mask.ndim == 3: mask = np.expand_dims(mask, -1)
-                    mask = np.pad(mask,((pad_z_left,pad_z_right),(pad_y_left,pad_y_right),(pad_x_left,pad_x_right),(0,0)), 'reflect')
-                    
-                    if mask.shape != vol_shape: 
-                        raise ValueError("Something happened generating patches. Yielded mask patch do not satisfy the selected shape "
-                            "of {}. Patch shape: {} ".format(vol_shape, mask.shape))
-                    yield img, mask, real_patch_in_data, pad_to_remove
+                if rank == 0:
+                    yield img, real_patch_in_data, pad_to_remove, total_vol, z_vol_info, list_of_vols_in_z
                 else:
-                    yield img, real_patch_in_data, pad_to_remove
+                    yield img, real_patch_in_data, pad_to_remove, total_vol
 
 def load_3d_data_classification(data_dir, patch_shape, expected_classes=None, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
     val_split=0.1, seed=0, shuffle_val=True):

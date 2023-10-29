@@ -99,6 +99,8 @@ class test_pair_data_generator(Dataset):
         self.ndim = ndim
         if X is None:
             self.len = len(self.data_path)
+            if len(self.data_path) == 0:
+                raise ValueError("No test image found in {}".format(d_path))
         else:
             self.len = len(X)
         self.o_indexes = np.arange(self.len)
@@ -195,11 +197,16 @@ class test_pair_data_generator(Dataset):
                 if self.provide_Y:
                     mask = np.load(os.path.join(self.dm_path, self.data_mask_path[idx]))
             elif self.data_path[idx].endswith('.hdf5') or self.data_path[idx].endswith('.h5'):
-                img = h5py.File(os.path.join(self.d_path, self.data_path[idx]),'r')
-                img = img[list(img)[0]]
-                if self.provide_Y:
-                    mask = h5py.File(os.path.join(self.dm_path, self.data_mask_path[idx]),'r')
-                    mask = mask[list(mask)[0]]
+                if not self.test_by_chunks:
+                    img = h5py.File(os.path.join(self.d_path, self.data_path[idx]),'r')
+                    img = img[list(img)[0]]
+                    if self.provide_Y:
+                        mask = h5py.File(os.path.join(self.dm_path, self.data_mask_path[idx]),'r')
+                        mask = mask[list(mask)[0]]
+                else:
+                    img = os.path.join(self.d_path, self.data_path[idx])
+                    if self.provide_Y:
+                        mask = os.path.join(self.dm_path, self.data_mask_path[idx])
             else:
                 img = imread(os.path.join(self.d_path, self.data_path[idx]))
                 img = np.squeeze(img)
