@@ -207,6 +207,8 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         .format(n_classes, len(present_classes),present_classes))
 
             self.length = len(self.all_samples)
+            if self.length == 0:
+                raise ValueError("No image found in {}".format(data_path))
         else:
             self.X = X
             if ptype == "classification":

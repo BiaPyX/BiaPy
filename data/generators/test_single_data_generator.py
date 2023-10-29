@@ -109,6 +109,8 @@ class test_single_data_generator(Dataset):
                         self.classes[ids[i]] = folder
                         self.data_path.append(ids[i])
                 self.len = len(self.data_path)
+                if self.len == 0:
+                    raise ValueError("No image found in {}".format(d_path))
             else:
                 self.len = len(X)
         else:

@@ -438,9 +438,11 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
     if len(crop_shape) != 3:
         raise ValueError("crop_shape expected to be of length 3, given {}".format(crop_shape))
     if crop_shape[0] > data.shape[1]:
-        raise ValueError("'crop_shape[0]' {} greater than {}".format(crop_shape[0], data.shape[1]))
+        raise ValueError("'crop_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')"
+            .format(crop_shape[0], data.shape[1]))
     if crop_shape[1] > data.shape[2]:
-        raise ValueError("'crop_shape[1]' {} greater than {}".format(crop_shape[1], data.shape[2]))
+        raise ValueError("'crop_shape[1]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')"
+            .format(crop_shape[1], data.shape[2]))
     if (overlap[0] >= 1 or overlap[0] < 0) or (overlap[1] >= 1 or overlap[1] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 
