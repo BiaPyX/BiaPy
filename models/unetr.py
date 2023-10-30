@@ -90,7 +90,8 @@ class UNETR(nn.Module):
             self.reshape_shape = (
                 self.embed_dim,
                 self.input_shape[0]//self.patch_size, 
-                self.input_shape[1]//self.patch_size
+                self.input_shape[1]//self.patch_size,
+                self.input_shape[2]//self.patch_size
             )          
         else:
             conv = nn.Conv2d
