@@ -19,7 +19,7 @@ requirements = [
      'torchinfo>=1.8.0',
      'torchmetrics>=1.0.3',
      'tensorboardX>=2.6.2.2',
-     'timm>=0.9.5'
+     'timm>=0.9.5',
      'h5py>=3.10.0',
 ]
 
