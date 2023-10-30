@@ -80,7 +80,9 @@ class UNETR(nn.Module):
         self.embed_dim = embed_dim
         self.patch_size = patch_size
         self.ViT_hidd_mult = ViT_hidd_mult
-        self.ndim = 3 if len(input_shape) == 4 else 2 
+        self.ndim = 3 if len(input_shape) == 4 else 2
+        self.n_classes = 1 if n_classes <= 2 else n_classes
+
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -88,8 +90,7 @@ class UNETR(nn.Module):
             self.reshape_shape = (
                 self.embed_dim,
                 self.input_shape[0]//self.patch_size, 
-                self.input_shape[1]//self.patch_size, 
-                self.input_shape[2]//self.patch_size, 
+                self.input_shape[1]//self.patch_size
             )          
         else:
             conv = nn.Conv2d
@@ -98,8 +99,7 @@ class UNETR(nn.Module):
             self.reshape_shape = (
                 self.embed_dim,
                 self.input_shape[0]//self.patch_size, 
-                self.input_shape[1]//self.patch_size, 
-                self.input_shape[2]//self.patch_size, 
+                self.input_shape[1]//self.patch_size
             )    
 
         # ViT part
@@ -167,7 +167,7 @@ class UNETR(nn.Module):
                 self.last_block = conv(num_filters, 3, kernel_size=1, padding='same')
         # Other
         else:
-            self.last_block = conv(num_filters, n_classes, kernel_size=1, padding='same')
+            self.last_block = conv(num_filters, self.n_classes, kernel_size=1, padding='same')
 
         self.apply(self._init_weights)
         
@@ -184,7 +184,7 @@ class UNETR(nn.Module):
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
 
-        skip_connection_index = [3, 6, 9, 12]
+        skip_connection_index = [self.ViT_hidd_mult, 2*self.ViT_hidd_mult, 3*self.ViT_hidd_mult]
         skip_connections = []
         for i, blk in enumerate(self.blocks):
             x = blk(x)    
