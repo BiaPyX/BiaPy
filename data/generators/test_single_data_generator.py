@@ -29,6 +29,9 @@ class test_single_data_generator(Dataset):
     d_path : Str, optional
         Path to load the data from.
 
+    test_by_chunks : bool, optional
+        Not used in this generator yet but added for compatibility. 
+
     provide_Y: bool, optional
         Whether the ground truth has been provided or not.
 
@@ -66,9 +69,9 @@ class test_single_data_generator(Dataset):
         When cross validation is used specific training samples are passed to the generator. 
         Not used in this generator. 
     """
-    def __init__(self, ndim, ptype, X=None, d_path=None, provide_Y=False, Y=None, dm_path=None, seed=42,
-                 instance_problem=False, norm_type='div', norm_custom_mean=None, norm_custom_std=None, 
-                 crop_center=False, reduce_mem=False, resize_shape=None, sample_ids=None):
+    def __init__(self, ndim, ptype, X=None, d_path=None, test_by_chunks=False, provide_Y=False, Y=None, 
+        dm_path=None, seed=42, instance_problem=False, norm_type='div', norm_custom_mean=None, norm_custom_std=None, 
+        crop_center=False, reduce_mem=False, resize_shape=None, sample_ids=None):
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
         if crop_center and resize_shape is None:
@@ -106,6 +109,8 @@ class test_single_data_generator(Dataset):
                         self.classes[ids[i]] = folder
                         self.data_path.append(ids[i])
                 self.len = len(self.data_path)
+                if self.len == 0:
+                    raise ValueError("No image found in {}".format(d_path))
             else:
                 self.len = len(X)
         else:

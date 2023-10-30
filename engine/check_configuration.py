@@ -222,7 +222,12 @@ def check_configuration(cfg, check_data_paths=True):
             raise ValueError("Denoising is made in an unsupervised way so there is no ground truth required. Disable 'DATA.TEST.LOAD_GT'")
         if not check_value(cfg.PROBLEM.DENOISING.N2V_PERC_PIX):
             raise ValueError("PROBLEM.DENOISING.N2V_PERC_PIX not in [0, 1] range")
-           
+            
+    #### Classification ####
+    elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+        if cfg.TEST.H5_BY_CHUNKS.ENABLE:
+            raise ValueError("'TEST.H5_BY_CHUNKS.ENABLE' can not be activated for CLASSIFICATION workflow")
+
     ### Pre-processing ###
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND != 1:

@@ -263,10 +263,10 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
                 # X_train
                 data = []
                 for img_num in range(len(X_train)):
-                    if X_train[img_num].shape != crop_shape[:3]+(X_train[img_num].shape[-1],):
+                    if X_train[img_num].shape != crop_shape[:2]+(X_train[img_num].shape[-1],):
                         img = X_train[img_num]
-                        img = crop_3D_data_with_overlap(X_train[img_num][0] if isinstance(X_train, list) else X_train[img_num], 
-                            crop_shape[:3]+(X_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
+                        img = crop_2D_data_with_overlap(X_train[img_num][0] if isinstance(X_train, list) else X_train[img_num], 
+                            crop_shape[:2]+(X_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                     data.append(img)
                 X_train = np.concatenate(data)
                 del data
@@ -274,12 +274,12 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
                 # Y_train
                 if Y_train is not None:
                     data_mask = []
-                    scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
+                    scrop = (crop_shape[0]*y_upscaling, crop_shape[1]*y_upscaling, crop_shape[2])
                     for img_num in range(len(Y_train)):
-                        if Y_train[img_num].shape != scrop[:3]+(Y_train[img_num].shape[-1],):
+                        if Y_train[img_num].shape != scrop[:2]+(Y_train[img_num].shape[-1],):
                             img = Y_train[img_num]
-                            img = crop_3D_data_with_overlap(Y_train[img_num][0] if isinstance(Y_train, list) else Y_train[img_num],
-                                scrop[:3]+(Y_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
+                            img = crop_2D_data_with_overlap(Y_train[img_num][0] if isinstance(Y_train, list) else Y_train[img_num],
+                                scrop[:2]+(Y_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                         data_mask.append(img)
                     Y_train = np.concatenate(data_mask)
                     del data_mask
@@ -287,10 +287,10 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
                 # X_val
                 data = []
                 for img_num in range(len(X_val)):
-                    if X_val[img_num].shape != crop_shape[:3]+(X_val[img_num].shape[-1],):
+                    if X_val[img_num].shape != crop_shape[:2]+(X_val[img_num].shape[-1],):
                         img = X_val[img_num]
-                        img = crop_3D_data_with_overlap(X_val[img_num][0] if isinstance(X_val, list) else X_val[img_num], 
-                            crop_shape[:3]+(X_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
+                        img = crop_2D_data_with_overlap(X_val[img_num][0] if isinstance(X_val, list) else X_val[img_num], 
+                            crop_shape[:2]+(X_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                     data.append(img)
                 X_val = np.concatenate(data)
                 del data
@@ -298,12 +298,12 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
                 # Y_val
                 if Y_val is not None:
                     data_mask = []
-                    scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
+                    scrop = (crop_shape[0]*y_upscaling, crop_shape[1]*y_upscaling, crop_shape[2])
                     for img_num in range(len(Y_val)):
-                        if Y_val[img_num].shape != scrop[:3]+(Y_val[img_num].shape[-1],):
+                        if Y_val[img_num].shape != scrop[:2]+(Y_val[img_num].shape[-1],):
                             img = Y_val[img_num]
-                            img = crop_3D_data_with_overlap(Y_val[img_num][0] if isinstance(Y_val, list) else Y_val[img_num],
-                                scrop[:3]+(Y_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
+                            img = crop_2D_data_with_overlap(Y_val[img_num][0] if isinstance(Y_val, list) else Y_val[img_num],
+                                scrop[:2]+(Y_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                         data_mask.append(img)
                     Y_val = np.concatenate(data_mask)
                     del data_mask
@@ -438,9 +438,11 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
     if len(crop_shape) != 3:
         raise ValueError("crop_shape expected to be of length 3, given {}".format(crop_shape))
     if crop_shape[0] > data.shape[1]:
-        raise ValueError("'crop_shape[0]' {} greater than {}".format(crop_shape[0], data.shape[1]))
+        raise ValueError("'crop_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')"
+            .format(crop_shape[0], data.shape[1]))
     if crop_shape[1] > data.shape[2]:
-        raise ValueError("'crop_shape[1]' {} greater than {}".format(crop_shape[1], data.shape[2]))
+        raise ValueError("'crop_shape[1]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')"
+            .format(crop_shape[1], data.shape[2]))
     if (overlap[0] >= 1 or overlap[0] < 0) or (overlap[1] >= 1 or overlap[1] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 

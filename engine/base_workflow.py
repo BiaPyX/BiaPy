@@ -4,10 +4,13 @@ import datetime
 import time
 import json
 import torch
+import h5py
 import numpy as np
 from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
 from sklearn.model_selection import StratifiedKFold
+import torch.multiprocessing as mp
+import torch.distributed as dist
 
 from models import build_model
 from engine import prepare_optimizer, build_callbacks
@@ -17,7 +20,8 @@ from utils.misc import (get_world_size, get_rank, is_main_process, save_model, t
 from utils.util import load_data_from_dir, load_3d_images_from_dir, create_plots, pad_and_reflect, save_tif, check_downsample_division
 from engine.train_engine import train_one_epoch, evaluate
 from data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap, load_and_prepare_2D_train_data
-from data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap, load_and_prepare_3D_data
+from data.data_3D_manipulation import (crop_3D_data_with_overlap, merge_3D_data_with_overlap, load_and_prepare_3D_data, 
+    extract_3D_patch_with_overlap_yield)
 from data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions, apply_binary_mask
 from engine.metrics import jaccard_index_numpy, voc_calculation
 from data.post_processing import apply_post_processing
@@ -58,6 +62,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.data_norm = None
         self.model_prepared = False 
         self.dtype = np.float32 if not self.cfg.TEST.REDUCE_MEMORY else np.float16 
+        self.dtype_str = "float32" if not self.cfg.TEST.REDUCE_MEMORY else "float16" 
 
         # Save paths in case we need them in a future
         self.orig_train_path = self.cfg.DATA.TRAIN.PATH
@@ -90,7 +95,10 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.world_size = get_world_size()
         self.global_rank = get_rank()
-        
+        self.output_queue = mp.Queue()
+        self.input_queue = mp.Queue()
+        self.extract_info_queue = mp.Queue()
+
         # Test variables
         if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and self.cfg.PROBLEM.NDIM == "2D":
             if self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or self.cfg.TEST.POST_PROCESSING.Z_FILTERING:
@@ -579,58 +587,209 @@ class Base_Workflow(metaclass=ABCMeta):
                 Y, Y_norm = None, None
             del batch
 
-            # Process all the images in the batch, sample by sample
-            l_X = len(X)
-            for j in tqdm(range(l_X), leave=False):
-                print("Processing image(s): {}".format(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]))
-
-                if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-                    if type(X) is tuple:
-                        self._X = X[j]
-                        if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
-                            self._Y = Y[j]  
-                        else:
-                            self._Y = None
+            if self.cfg.TEST.H5_BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
+                if type(X) is tuple:
+                    self._X = X[0]
+                    if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
+                        self._Y = Y[0]  
                     else:
-                        self._X = np.expand_dims(X[j],0)
-                        if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
-                            self._Y = np.expand_dims(Y[j],0)  
-                        else:
-                            self._Y = None
+                        self._Y = None
                 else:
-                    self._X = np.expand_dims(X[j], 0)                    
-                    self._Y = np.expand_dims(Y, 0) if self.cfg.DATA.TEST.LOAD_GT else None
+                    self._X = X
+                    self._Y = Y if self.cfg.DATA.TEST.LOAD_GT else None    
+                print("Processing image: {}".format(self.test_filenames[i]))
 
                 # Process each image separately
-                self.f_numbers = list(range((i*l_X)+j,(i*l_X)+j+1)) 
-                self.process_sample(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], norm=(X_norm, Y_norm))
+                self.f_numbers = [i]
+                self.process_sample_by_chunks(self.test_filenames[i])
+            else:
+                # Process all the images in the batch, sample by sample
+                l_X = len(X)
+                for j in tqdm(range(l_X), leave=False):
+                    print("Processing image(s): {}".format(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]))
+                    
+                    if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+                        if type(X) is tuple:
+                            self._X = X[j]
+                            if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
+                                self._Y = Y[j]  
+                            else:
+                                self._Y = None
+                        else:
+                            self._X = np.expand_dims(X[j],0)
+                            if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
+                                self._Y = np.expand_dims(Y[j],0)  
+                            else:
+                                self._Y = None
+                    else:
+                        self._X = np.expand_dims(X[j], 0)                    
+                        self._Y = np.expand_dims(Y, 0) if self.cfg.DATA.TEST.LOAD_GT else None
 
-                image_counter += 1
+                    # Process each image separately
+                    self.f_numbers = list(range((i*l_X)+j,(i*l_X)+j+1)) 
+                    self.process_sample(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], norm=(X_norm, Y_norm))
+
+            image_counter += 1
 
         self.destroy_test_data()
 
-        self.after_all_images()
+        if is_main_process():
+            self.after_all_images()
 
-        print("#############")
-        print("#  RESULTS  #")
-        print("#############")
+            print("#############")
+            print("#  RESULTS  #")
+            print("#############")
 
-        if self.cfg.TRAIN.ENABLE:
-            print("Epoch number: {}".format(len(self.plot_values['val_loss'])))
-            print("Train time (s): {}".format(self.total_training_time_str))
-            print("Train loss: {}".format(np.min(self.plot_values['loss'])))
-            for i in range(len(self.metric_names)):
-                if self.metric_names[i] == "IoU":
-                    print("Train Foreground {}: {}".format(self.metric_names[i], np.max(self.plot_values[self.metric_names[i]])))
-                else:
-                    print("Train {}: {}".format(self.metric_names[i], np.max(self.plot_values[self.metric_names[i]])))
-            print("Validation loss: {}".format(np.min(self.plot_values['val_loss'])))
-            for i in range(len(self.metric_names)):
-                if self.metric_names[i] == "IoU":
-                    print("Validation Foreground {}: {}".format(self.metric_names[i], np.max(self.plot_values['val_'+self.metric_names[i]])))
-                else:
-                    print("Validation {}: {}".format(self.metric_names[i], np.max(self.plot_values['val_'+self.metric_names[i]])))
-        self.print_stats(image_counter)
+            if self.cfg.TRAIN.ENABLE:
+                print("Epoch number: {}".format(len(self.plot_values['val_loss'])))
+                print("Train time (s): {}".format(self.total_training_time_str))
+                print("Train loss: {}".format(np.min(self.plot_values['loss'])))
+                for i in range(len(self.metric_names)):
+                    if self.metric_names[i] == "IoU":
+                        print("Train Foreground {}: {}".format(self.metric_names[i], np.max(self.plot_values[self.metric_names[i]])))
+                    else:
+                        print("Train {}: {}".format(self.metric_names[i], np.max(self.plot_values[self.metric_names[i]])))
+                print("Validation loss: {}".format(np.min(self.plot_values['val_loss'])))
+                for i in range(len(self.metric_names)):
+                    if self.metric_names[i] == "IoU":
+                        print("Validation Foreground {}: {}".format(self.metric_names[i], np.max(self.plot_values['val_'+self.metric_names[i]])))
+                    else:
+                        print("Validation {}: {}".format(self.metric_names[i], np.max(self.plot_values['val_'+self.metric_names[i]])))
+            self.print_stats(image_counter)
+        
+    def process_sample_by_chunks(self, filenames):
+        """
+        Function to process a sample in the inference phase. 
+
+        Parameters
+        ----------
+        filenames : List of str
+            Filenames fo the samples to process. 
+        """
+        filename, file_extension = os.path.splitext(filenames)
+        if file_extension not in ['.hdf5', '.h5']:
+            print("WARNING: you could have saved more memory by converting input test images into H5 file format (.h5), "
+                  "as with 'TEST.H5_BY_CHUNKS.ENABLE' option enabled H5 files will be processed by chunks")
+
+        # Create H5 file to save the results
+        os.makedirs(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, exist_ok=True)
+        if self.cfg.SYSTEM.NUM_GPUS > 1:
+            out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_part"+str(get_rank())+".h5")
+        else:
+            out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".h5")
+        in_data_filename = self._X
+
+        # Load data if it is a H5 file
+        if isinstance(self._X, str):
+            self._X = h5py.File(self._X,'r')
+            self._X = self._X[list(self._X)[0]]
+
+        # Process in charge of processing one predicted patch
+        output_handle_proc = mp.Process(target=insert_patch_into_h5_dataset, args=(out_data_filename, self._X.shape,
+            self.output_queue, self.extract_info_queue, self.cfg, self.dtype_str, self.dtype))
+        output_handle_proc.daemon=True
+        output_handle_proc.start()
+        
+        # Process in charge of loading part of the data 
+        load_data_process = mp.Process(target=extract_patch_from_data, args=(in_data_filename, self.cfg, self.input_queue, 
+            self.extract_info_queue, self.cfg.TEST.VERBOSE))
+        load_data_process.daemon=True
+        load_data_process.start()
+        del self._X, in_data_filename
+ 
+        # Lock the thread inferring until no more patches 
+        if self.cfg.TEST.VERBOSE and self.cfg.SYSTEM.NUM_GPUS > 1:
+            print(f"[Rank {get_rank()} ({os.getpid()})] Doing inference ")
+        while True:
+            obj = self.input_queue.get(timeout=60)
+            if obj == None: break
+
+            img, patch_coords, pad_to_remove = obj
+            img, _ = self.test_generator.norm_X(img)
+            if self.cfg.TEST.AUGMENTATION:
+                p = ensemble16_3d_predictions(img[0], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                    pred_func=(
+                        lambda img_batch_subdiv: 
+                            to_numpy_format(
+                                self.apply_model_activations(
+                                    self.model(to_pytorch_format(img_batch_subdiv, self.axis_order, self.device)),
+                                    ), 
+                                self.axis_order_back
+                            )
+                    )
+                )
+            else:
+                with torch.cuda.amp.autocast():
+                    p = self.model(to_pytorch_format(img, self.axis_order, self.device))
+                    p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
+
+            # Send the exact part of the patch that will be inserted in the final H5 file
+            p = p[0,pad_to_remove[0][0]:p.shape[1]-pad_to_remove[0][1],
+                    pad_to_remove[1][0]:p.shape[2]-pad_to_remove[1][1],
+                    pad_to_remove[2][0]:p.shape[3]-pad_to_remove[2][1]]
+
+            # Put the prediction into queue
+            self.output_queue.put([p, patch_coords])
+
+        if self.cfg.TEST.VERBOSE and self.cfg.SYSTEM.NUM_GPUS > 1:
+            print(f"[Rank {get_rank()} ({os.getpid()})] Finish sample inference ")
+
+        # Get some auxiliar variables
+        self.stats['patch_counter'] = self.extract_info_queue.get(timeout=60)
+        if is_main_process():
+            z_vol_info = self.extract_info_queue.get(timeout=60)
+            list_of_vols_in_z  = self.extract_info_queue.get(timeout=60)
+        load_data_process.join()
+        output_handle_proc.join()
+
+        # Create the final H5 file that contains all the individual parts 
+        if is_main_process():
+            if self.cfg.SYSTEM.NUM_GPUS > 1:
+                # Obtain parts of the data created by all GPUs
+                data_parts_filenames = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[2])
+                parts = []
+                for x in data_parts_filenames:
+                    if filename+"_part" in x and x.endswith(".h5"):
+                        parts.append(x)
+                data_parts_filenames = parts 
+                del parts 
+
+                if self.cfg.SYSTEM.NUM_GPUS != len(data_parts_filenames) != len(list_of_vols_in_z):
+                    raise ValueError("Number of data parts is not the same as number of GPUs")
+
+                # Compose the large image 
+                for i, data_part_fname in enumerate(data_parts_filenames):
+                    data_part = h5py.File(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname),'r')
+                    print("Reading {}".format(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname)))
+                    data_part = data_part[list(data_part)[0]]
+
+                    if 'data' not in locals():
+                        all_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".h5")
+                        allfile = h5py.File(all_data_filename,'w')
+                        data = allfile.create_dataset("data", data_part.shape, dtype=self.dtype_str, compression="gzip")
+                    
+                    for k in list_of_vols_in_z[i]:
+                        if self.cfg.TEST.VERBOSE:
+                            print(f"Filling {k} [{z_vol_info[k][0]}:{z_vol_info[k][1]}]")
+                        data[z_vol_info[k][0]:z_vol_info[k][1]] = data_part[z_vol_info[k][0]:z_vol_info[k][1]]
+                
+                # Save image
+                if self.cfg.TEST.H5_BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+                    save_tif(np.expand_dims(np.array(data, dtype=self.dtype),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
+                        [filename+".tif"], verbose=self.cfg.TEST.VERBOSE)
+                allfile.close()      
+
+            if self.cfg.TEST.H5_BY_CHUNKS.WORKFLOW_PROCESS:
+                self.after_merge_patches_by_chunks(out_data_filename)            
+        
+        # Wait until the main thread is done to predit the next sample
+        if self.cfg.SYSTEM.NUM_GPUS > 1 :
+            if self.cfg.TEST.VERBOSE:
+                print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting . . . ")
+            if is_dist_avail_and_initialized():
+                dist.barrier()
+            if self.cfg.TEST.VERBOSE:
+                print(f"[Rank {get_rank()} ({os.getpid()})] Synched with main thread. Go for the next sample")
 
     def process_sample(self, filenames, norm):
         """
@@ -986,6 +1145,36 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
+    def after_merge_patches_by_chunks(self, filename):
+        """
+        Place any code that needs to be done after merging all predicted patches into the original image
+        but in the process made chunk by chunk.
+
+        Parameters
+        ----------
+        filename : List of str
+            Filename of the predicted image H5.  
+        """
+        # Load H5 and convert it into numpy array
+        pred = h5py.File(filename,'r')
+        pred = np.array(pred[list(pred)[0]], dtype=self.dtype)
+        pred = np.squeeze(pred)
+
+        # Adjust shape
+        if pred.ndim < 3:
+            raise ValueError("Read image seems to be 2D: {}. Path: {}".format(pred.shape, filename))
+        if pred.ndim == 3: 
+            pred = np.expand_dims(pred, -1)
+        else:
+            min_val = min(pred.shape)
+            channel_pos = pred.shape.index(min_val)
+            if channel_pos != 3 and pred.shape[channel_pos] <= 4:
+                new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
+                pred = pred.transpose(new_pos)
+
+        fname, file_extension = os.path.splitext(os.path.basename(filename))
+        self.after_merge_patches(pred, [fname+".tif"])
+
     @abstractmethod
     def after_full_image(self, pred, filenames):
         """
@@ -1016,3 +1205,131 @@ class Base_Workflow(metaclass=ABCMeta):
             self.all_pred, self.stats['iou_post'], self.stats['ov_iou_post'] = apply_post_processing(self.cfg, self.all_pred, self.all_gt)
             save_tif(np.expand_dims(self.all_pred,0), self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING, verbose=self.cfg.TEST.VERBOSE)
 
+def extract_patch_from_data(data, cfg, input_queue, extract_info_queue, verbose=False):
+    """
+    Extract patches from data and put them into a queue read by each GPU inference process.
+    This function will be run by a child process created for every test sample.  
+
+    Parameters
+    ----------
+    data : Str or Numpy array
+        If str it will be consider a path to load a H5 file. If not, it will be considered as the 
+        data to extract patches from. 
+
+    cfg : YACS configuration
+        Running configuration.
+
+    input_queue : Multiprocessing queue 
+        Queue to put each extracted patch into.
+
+    extract_info_queue : Multiprocessing queue 
+        Auxiliry queue to pass information between processes. 
+    
+    verbose : bool, optional
+        To print useful information for debugging.  
+    """
+    if verbose and cfg.SYSTEM.NUM_GPUS > 1:
+        if isinstance(data, str):
+            print(f"[Rank {get_rank()} ({os.getpid()})] In charge of extracting patch from data from {data}")
+        else:
+            print(f"[Rank {get_rank()} ({os.getpid()})] In charge of extracting patch from data from Numpy array {data.shape}")
+
+    # Load H5 in case we need it
+    if isinstance(data, str):
+        data = h5py.File(data,'r')
+        data = data[list(data)[0]]
+
+    # Process of extracting each patch
+    patch_counter = 0
+    for obj in extract_3D_patch_with_overlap_yield(data, cfg.DATA.PATCH_SIZE, 
+        padding=cfg.DATA.TEST.PADDING, total_ranks=cfg.SYSTEM.NUM_GPUS, rank=get_rank(), 
+        verbose=cfg.TEST.VERBOSE):
+        if is_main_process():
+            img, patch_coords, pad_to_remove, total_vol, z_vol_info, list_of_vols_in_z = obj
+        else: 
+            img, patch_coords, pad_to_remove, total_vol = obj
+        img = np.expand_dims(img,0)
+        input_queue.put([img, patch_coords, pad_to_remove])
+
+        if patch_counter == 0:
+           extract_info_queue.put(total_vol)
+        patch_counter += 1
+
+    # Send a sentinel so the main thread knows that there is no more data
+    input_queue.put(None)  
+
+    # Send to the main thread patch_counter
+    extract_info_queue.put(patch_counter)
+    if is_main_process():
+        extract_info_queue.put(z_vol_info)
+        extract_info_queue.put(list_of_vols_in_z)
+
+    if verbose and cfg.SYSTEM.NUM_GPUS > 1:
+        if isinstance(data, str):
+            print(f"[Rank {get_rank()} ({os.getpid()})] Finish extracting patches from data {data}")
+        else:
+            print(f"[Rank {get_rank()} ({os.getpid()})] Finish extracting patches from data {data.shape}")
+
+def insert_patch_into_h5_dataset(data_filename, data_shape, output_queue, extract_info_queue, cfg, dtype_str, dtype,
+    verbose=False):
+    """
+    Insert predicted patches (in ``output_queue``) in its original position in a H5 file. Each GPU will create
+    a file containing the part it has processed (as we can not write the same H5 file ar the same time). Then, 
+    the main rank will create the final image. This function will be run by a child process created for every 
+    test sample.  
+
+    Parameters
+    ----------
+    data_filename : Str or Numpy array
+        If str it will be consider a path to load a H5 file. If not, it will be considered as the 
+        data to extract patches from. 
+
+    data_shape : YACS configuration
+        Shape of the H5 file dataset to create. 
+
+    output_queue : Multiprocessing queue 
+        Queue to get each prediction from.
+
+    extract_info_queue : Multiprocessing queue 
+        Auxiliry queue to pass information between processes. 
+    
+    cfg : YACS configuration
+        Running configuration.
+
+    dtype_str : str
+        Type of the H5 dataset to create.
+
+    dtype : Numpy dtype
+        Type of the H5 dataset to create. Only used if a TIF file is created by selected to do so
+        with ``TEST.H5_BY_CHUNKS.SAVE_OUT_TIF`` variable. 
+
+    verbose : bool, optional
+        To print useful information for debugging. 
+    """
+    if verbose and cfg.SYSTEM.NUM_GPUS > 1:
+        print(f"[Rank {get_rank()} ({os.getpid()})] In charge of inserting patches into data . . .")
+    fid = h5py.File(data_filename, "w")  
+    filename, file_extension = os.path.splitext(os.path.basename(data_filename))
+
+    # Obtain the total patches so we can display it for the user
+    total_patches = extract_info_queue.get(timeout=60)
+
+    for _ in tqdm(range(total_patches), disable=not is_main_process()):
+        p, patch_coords = output_queue.get(timeout=60)
+
+        if 'data' not in locals():
+            data = fid.create_dataset("data", data_shape+(p.shape[-1],), dtype=dtype_str, compression="gzip")
+
+        # Insert the patch into its original 
+        data[patch_coords[0][0]:patch_coords[0][1],
+            patch_coords[1][0]:patch_coords[1][1],
+            patch_coords[2][0]:patch_coords[2][1]] = p
+
+    # Save image
+    if cfg.TEST.H5_BY_CHUNKS.SAVE_OUT_TIF and cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+        save_tif(np.expand_dims(np.array(data, dtype=dtype),0), cfg.PATHS.RESULT_DIR.PER_IMAGE, 
+            [filename+".tif"], verbose=cfg.TEST.VERBOSE)
+    fid.close()        
+
+    if verbose and cfg.SYSTEM.NUM_GPUS > 1:
+        print(f"[Rank {get_rank()} ({os.getpid()})] Finish inserting patches into data . . .")

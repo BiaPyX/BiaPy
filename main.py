@@ -140,6 +140,7 @@ if __name__ == '__main__':
         workflow.test()
 
     if is_dist_avail_and_initialized():
+        dist.barrier()
         dist.destroy_process_group()
 
     print("FINISHED JOB {} !!".format(job_identifier))

@@ -296,7 +296,7 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     dic = dict(ndim=ndim, X=X_test, d_path=cfg.DATA.TEST.PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.PATH, 
-        provide_Y=provide_Y, Y=Y_test, dm_path=cfg.DATA.TEST.GT_PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.GT_PATH,
+        test_by_chunks=cfg.TEST.H5_BY_CHUNKS.ENABLE, provide_Y=provide_Y, Y=Y_test, dm_path=cfg.DATA.TEST.GT_PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.GT_PATH,
         seed=cfg.SYSTEM.SEED, instance_problem=instance_problem, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, 
         norm_custom_std=custom_std, reduce_mem=cfg.TEST.REDUCE_MEMORY, sample_ids=cross_val_samples_ids)        
         

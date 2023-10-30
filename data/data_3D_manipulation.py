@@ -412,11 +412,14 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
     if len(vol_shape) != 4:
         raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
     if vol_shape[0] > data.shape[0]:
-        raise ValueError("'vol_shape[0]' {} greater than {}".format(vol_shape[0], data.shape[0]))
+        raise ValueError("'vol_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')"
+            .format(vol_shape[0], data.shape[0]))
     if vol_shape[1] > data.shape[1]:
-        raise ValueError("'vol_shape[1]' {} greater than {}".format(vol_shape[1], data.shape[1]))
+        raise ValueError("'vol_shape[1]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')"
+            .format(vol_shape[1], data.shape[1]))
     if vol_shape[2] > data.shape[2]:
-        raise ValueError("'vol_shape[2]' {} greater than {}".format(vol_shape[2], data.shape[2]))
+        raise ValueError("'vol_shape[2]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')"
+            .format(vol_shape[2], data.shape[2]))
     if (overlap[0] >= 1 or overlap[0] < 0) or (overlap[1] >= 1 or overlap[1] < 0) or (overlap[2] >= 1 or overlap[2] < 0):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
     for i,p in enumerate(padding):
@@ -681,6 +684,180 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
     else:
         return merged_data
 
+def extract_3D_patch_with_overlap_yield(data, vol_shape, padding=(0,0,0), total_ranks=1, 
+    rank=0, verbose=False):
+    """
+    Extract 3D patches into smaller patches with a defined overlap. Is supports multi-GPU inference
+    by setting ``total_ranks`` and ``rank`` variables. Each GPU will process a evenly number of 
+    volumes in ``Z`` axis. If the number of volumes in ``Z`` to be yielded are not divisible by the 
+    number of GPUs the first GPUs will process one more volume. 
+
+    Parameters
+    ----------
+    data : H5 dataset
+        Data to extract patches from. E.g. ``(num_of_images, y, x, channels)``.
+
+    vol_shape : 4D int tuple
+        Shape of the patches to create. E.g. ``(z, y, x, channels)``.
+
+    padding : tuple of ints, optional
+        Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
+
+    total_ranks : int, optional
+        Total number of GPUs.
+
+    rank : int, optional
+        Rank of the current GPU. 
+
+    verbose : bool, optional
+        To print useful information for debugging. 
+
+    Yields
+    ------
+    img : 4D Numpy array
+        Extracted patch from ``data``. E.g. ``(z, y, x, channels)``.
+
+    mask : 4D Numpy array, optional
+        Extracted patch from ``data_mask``. E.g. ``(z, y, x, channels)``.
+
+    real_patch_in_data : Tuple of tuples of ints
+        Coordinates of patch of each axis. Needed to reconstruct the entire image. 
+        E.g. ``((0, 20), (0, 8), (16, 24))`` means that the yielded patch should be
+        inserted in possition [0:20,0:8,16:24]. This calculate the padding made, so
+        only a portion of the real ``vol_shape`` is used. 
+
+    pad_to_remove : Tuple of tuples of ints
+        Padding added on each axis. Should be used to know the exact portion of the 
+        patch that needs to be be used to fill the entire image prediction. E.g. 
+        ``((10, 20), (20, 20), (60, 60))`` means that a in only patch[10:-20,20:-20,60:-60]
+        should be used to reconstruct the predicted image. 
+
+    total_vol : int
+        Total number of crops to extract. 
+
+    z_vol_info : dict, optional
+        Information of how the volumes in ``Z`` are inserted into the original data size. 
+        E.g. ``{0: [0, 20], 1: [20, 40], 2: [40, 60], 3: [60, 80], 4: [80, 100]}`` means that 
+        the first volume will be place in ``[0:20]`` position, the second will be placed in 
+        ``[20:40]`` and so on. 
+
+    list_of_vols_in_z : list of list of int, optional
+        Volumes in ``Z`` axis that each GPU will process. E.g. ``[[0, 1, 2], [3, 4]]`` means that
+        the first GPU will process volumes ``0``, ``1`` and ``2`` (``3`` in total) whereas the second 
+        GPU will process volumes ``3`` and ``4``. 
+    """
+    if verbose:
+        print("Cropping {} images into {} with overlapping . . .".format(data.shape, vol_shape))
+        print("Padding: {}".format(padding))
+
+    data_shape = data.shape if data.ndim == 4 else data.shape + (1,)
+    
+    if len(data_shape) != 4:
+        raise ValueError("data expected to be 4 dimensional, given {}".format(data_shape))
+    if len(vol_shape) != 4:
+        raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
+    if vol_shape[0] > data_shape[0]:
+        raise ValueError("'vol_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')"
+            .format(vol_shape[0], data_shape[0]))
+    if vol_shape[1] > data_shape[1]:
+        raise ValueError("'vol_shape[1]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')"
+            .format(vol_shape[1], data_shape[1]))
+    if vol_shape[2] > data_shape[2]:
+        raise ValueError("'vol_shape[2]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')"
+            .format(vol_shape[2], data_shape[2]))
+    for i,p in enumerate(padding):
+        if p >= vol_shape[i]//2:
+            raise ValueError("'Padding' can not be greater than the half of 'vol_shape'. Max value for this {} input shape is {}"
+                             .format(data_shape, [(vol_shape[0]//2)-1,(vol_shape[1]//2)-1,(vol_shape[2]//2)-1]))
+
+    # Z
+    step_z = vol_shape[0]-padding[0]*2
+    vols_per_z = math.ceil(data_shape[0]/step_z)
+    # Y
+    step_y = vol_shape[1]-padding[1]*2
+    vols_per_y = math.ceil(data_shape[1]/step_y)
+    # X
+    step_x = vol_shape[2]-padding[2]*2
+    vols_per_x = math.ceil(data_shape[2]/step_x)
+
+    # Real overlap calculation for printing
+    total_vol = vols_per_z*vols_per_y*vols_per_x
+    if verbose:
+        print("{} patches per (z,y,x) axis".format((vols_per_z,vols_per_x,vols_per_y)))
+        print(f"Total number of patches: {total_vol}")
+
+    vols_in_z = vols_per_z//total_ranks
+    vols_per_z_per_rank = vols_in_z
+    if vols_per_z%total_ranks > rank: 
+        vols_per_z_per_rank += 1
+    total_vol = vols_per_z_per_rank*vols_per_y*vols_per_x
+
+    c = 0
+    list_of_vols_in_z = []
+    z_vol_info = {}
+    for i in range(total_ranks):
+        vols = (vols_per_z//total_ranks) + 1 if vols_per_z%total_ranks > i else vols_in_z
+        for j in range(vols):
+            z = c+j
+            real_start_z = z*step_z
+            real_finish_z = min(real_start_z+step_z, data_shape[0])
+            z_vol_info[z] = [real_start_z, real_finish_z]
+        list_of_vols_in_z.append(list(range(c,c+vols)))
+        c += vols
+    if verbose:
+        print(f"List of volume IDs to be processed by each GPU: {list_of_vols_in_z}")
+        print(f"Positions of each volume in Z axis: {z_vol_info}")
+        print("Rank {}: Total number of patches: {} - {} patches per (z,y,x) axis (per GPU)"
+            .format(rank, total_vol, (vols_per_z_per_rank,vols_per_x,vols_per_y)))
+
+    for _z in range(vols_per_z_per_rank):
+        z = list_of_vols_in_z[rank][0]+_z
+        for y in range(vols_per_y):
+            for x in range(vols_per_x):     
+                # Z pad calculation
+                real_start_z = z*step_z
+                real_finish_z = min(real_start_z+step_z, data_shape[0])
+                start_z = z*step_z
+                finish_z = start_z+step_z+padding[0]
+                pad_z_left = abs(finish_z-vol_shape[0]) if finish_z-vol_shape[0] < 0 else 0
+                start_z = max(0,start_z-padding[0]-pad_z_left)
+                pad_z_right = finish_z-data_shape[0] if finish_z > data_shape[0] else 0
+
+                # Y pad calculation
+                real_start_y = y*step_y
+                real_finish_y = min(real_start_y+step_y, data_shape[1])
+                start_y = y*step_y
+                finish_y = start_y+step_y+padding[1]
+                pad_y_left = abs(finish_y-vol_shape[1]) if finish_y-vol_shape[1] < 0 else 0
+                start_y = max(0, start_y-padding[1]-pad_y_left)
+                pad_y_right = finish_y-data_shape[1] if finish_y > data_shape[1] else 0
+
+                # X pad calculation
+                real_start_x = x*step_x
+                real_finish_x = min(real_start_x+step_x, data_shape[2])
+                start_x = x*step_x
+                finish_x = start_x+step_x+padding[2]
+                pad_x_left = abs(finish_x-vol_shape[2]) if finish_x-vol_shape[2] < 0 else 0
+                start_x = max(0, start_x-padding[2]-pad_x_left)
+                pad_x_right = finish_x-data_shape[2] if finish_x > data_shape[2] else 0
+
+                real_patch_in_data = ((real_start_z,real_finish_z), (real_start_y,real_finish_y), (real_start_x,real_finish_x) )
+                pad_to_remove = (
+                    (max(pad_z_left,padding[0]), max(pad_z_right,padding[0])), 
+                    (max(pad_y_left,padding[1]), max(pad_y_right,padding[1])),
+                    (max(pad_x_left,padding[2]), max(pad_x_right,padding[2])))
+                img = data[start_z:finish_z,start_y:finish_y,start_x:finish_x]
+                if img.ndim == 3: img = np.expand_dims(img, -1)
+                img = np.pad(img,((pad_z_left,pad_z_right),(pad_y_left,pad_y_right),(pad_x_left,pad_x_right),(0,0)), 'reflect')
+
+                if img.shape != vol_shape: 
+                    raise ValueError("Something happened generating patches. Yielded image patch do not satisfy the selected shape "
+                        "of {}. Patch shape: {} ".format(vol_shape, img.shape))
+
+                if rank == 0:
+                    yield img, real_patch_in_data, pad_to_remove, total_vol, z_vol_info, list_of_vols_in_z
+                else:
+                    yield img, real_patch_in_data, pad_to_remove, total_vol
 
 def load_3d_data_classification(data_dir, patch_shape, expected_classes=None, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
     val_split=0.1, seed=0, shuffle_val=True):

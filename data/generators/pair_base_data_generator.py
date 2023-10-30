@@ -455,6 +455,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     raise ValueError("Different number of raw and ground truth images ({} vs {}). "
                         "Please check the data!".format(len(self.data_paths), len(self.data_mask_path)))
             self.length = len(self.data_paths)
+            if self.length == 0:
+                raise ValueError("No image found in {}".format(data_paths))
         else:
             self.X = X
             if self.Y_provided:
