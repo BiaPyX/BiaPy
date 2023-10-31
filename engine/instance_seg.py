@@ -482,11 +482,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.USE_VAL_AS_TEST and not self.cfg.TEST.H5_BY_CHUNKS:
             print("DATA.TEST.PATH changed from {} to {}".format(self.cfg.DATA.TEST.PATH, self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
             opts.extend(['DATA.TEST.PATH', self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR])
-            original_test_path = self.cfg.DATA.TEST.PATH
             if self.cfg.DATA.TEST.LOAD_GT:
                 print("DATA.TEST.GT_PATH changed from {} to {}".format(self.cfg.DATA.TEST.GT_PATH, self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
                 opts.extend(['DATA.TEST.GT_PATH', self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR])
-            original_test_mask_path = self.cfg.DATA.TEST.GT_PATH
+        original_test_path = self.cfg.DATA.TEST.PATH
+        original_test_mask_path = self.cfg.DATA.TEST.GT_PATH
         self.cfg.merge_from_list(opts)
 
         return original_test_path, original_test_mask_path
