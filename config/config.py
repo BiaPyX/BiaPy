@@ -635,6 +635,8 @@ class Config:
         # In the process of 'TEST.H5_BY_CHUNKS' you can enable this variable to save the reconstructed prediction as a TIF too. 
         # Be aware of this option and be sure that the prediction can fit in you memory entirely, as it is needed for saving as TIF.
         _C.TEST.H5_BY_CHUNKS.SAVE_OUT_TIF = False
+        # In how many iterations the H5 writer needs to flush the data
+        _C.TEST.H5_BY_CHUNKS.FLUSH_EACH = 100
         # Whether if after reconstructing the prediction the pipeline will continue each workflow specific steps. For this process
         # the prediction image needs to be loaded into memory so be sure that it can fit in you memory. E.g. in instance 
         # segmentation the instances will be created from the prediction.

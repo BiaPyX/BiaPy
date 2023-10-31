@@ -95,9 +95,10 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.world_size = get_world_size()
         self.global_rank = get_rank()
-        self.output_queue = mp.Queue()
-        self.input_queue = mp.Queue()
-        self.extract_info_queue = mp.Queue()
+        if self.cfg.TEST.H5_BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
+            self.output_queue = mp.Queue(maxsize=self.cfg.SYSTEM.NUM_GPUS*10)
+            self.input_queue = mp.Queue(maxsize=self.cfg.SYSTEM.NUM_GPUS*10)
+            self.extract_info_queue = mp.Queue()
 
         # Test variables
         if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and self.cfg.PROBLEM.NDIM == "2D":
@@ -1380,6 +1381,11 @@ def insert_patch_into_h5_dataset(data_filename, data_filename_mask, data_shape, 
         mask[patch_coords[0][0]:patch_coords[0][1],
             patch_coords[1][0]:patch_coords[1][1],
             patch_coords[2][0]:patch_coords[2][1]] += m
+
+        # Force flush after some iterations
+        if i % cfg.TEST.H5_BY_CHUNKS.FLUSH_EACH == 0:
+            fid.flush() 
+            fid_mask.flush() 
 
     # Save image
     if cfg.TEST.H5_BY_CHUNKS.SAVE_OUT_TIF and cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
