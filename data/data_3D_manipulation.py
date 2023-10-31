@@ -684,7 +684,7 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
     else:
         return merged_data
 
-def extract_3D_patch_with_overlap_yield(data, vol_shape, padding=(0,0,0), total_ranks=1, 
+def extract_3D_patch_with_overlap_yield(data, vol_shape, overlap=(0,0,0), padding=(0,0,0), total_ranks=1, 
     rank=0, verbose=False):
     """
     Extract 3D patches into smaller patches with a defined overlap. Is supports multi-GPU inference
@@ -700,6 +700,11 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, padding=(0,0,0), total_
     vol_shape : 4D int tuple
         Shape of the patches to create. E.g. ``(z, y, x, channels)``.
 
+    overlap : Tuple of 3 floats, optional
+        Amount of minimum overlap on x, y and z dimensions. Should be the same as used in
+        :func:`~crop_3D_data_with_overlap`. The values must be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of
+        overlap. E.g. ``(z, y, x)``.
+        
     padding : tuple of ints, optional
         Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
 
@@ -717,20 +722,11 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, padding=(0,0,0), total_
     img : 4D Numpy array
         Extracted patch from ``data``. E.g. ``(z, y, x, channels)``.
 
-    mask : 4D Numpy array, optional
-        Extracted patch from ``data_mask``. E.g. ``(z, y, x, channels)``.
-
     real_patch_in_data : Tuple of tuples of ints
         Coordinates of patch of each axis. Needed to reconstruct the entire image. 
         E.g. ``((0, 20), (0, 8), (16, 24))`` means that the yielded patch should be
         inserted in possition [0:20,0:8,16:24]. This calculate the padding made, so
         only a portion of the real ``vol_shape`` is used. 
-
-    pad_to_remove : Tuple of tuples of ints
-        Padding added on each axis. Should be used to know the exact portion of the 
-        patch that needs to be be used to fill the entire image prediction. E.g. 
-        ``((10, 20), (20, 20), (60, 60))`` means that a in only patch[10:-20,20:-20,60:-60]
-        should be used to reconstruct the predicted image. 
 
     total_vol : int
         Total number of crops to extract. 
@@ -747,11 +743,17 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, padding=(0,0,0), total_
         GPU will process volumes ``3`` and ``4``. 
     """
     if verbose:
+        print("### 3D-OV-CROP ###")
         print("Cropping {} images into {} with overlapping . . .".format(data.shape, vol_shape))
+        print("Minimum overlap selected: {}".format(overlap))
         print("Padding: {}".format(padding))
 
     data_shape = data.shape if data.ndim == 4 else data.shape + (1,)
     
+    
+    if len(data_shape) != 4:
+        raise ValueError("data expected to be 4 dimensional, given {}".format(data_shape))
+
     if len(data_shape) != 4:
         raise ValueError("data expected to be 4 dimensional, given {}".format(data_shape))
     if len(vol_shape) != 4:
@@ -765,27 +767,55 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, padding=(0,0,0), total_
     if vol_shape[2] > data_shape[2]:
         raise ValueError("'vol_shape[2]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')"
             .format(vol_shape[2], data_shape[2]))
+    if (overlap[0] >= 1 or overlap[0] < 0) or (overlap[1] >= 1 or overlap[1] < 0) or (overlap[2] >= 1 or overlap[2] < 0):
+        raise ValueError("'overlap' values must be floats between range [0, 1)")
     for i,p in enumerate(padding):
         if p >= vol_shape[i]//2:
             raise ValueError("'Padding' can not be greater than the half of 'vol_shape'. Max value for this {} input shape is {}"
                              .format(data_shape, [(vol_shape[0]//2)-1,(vol_shape[1]//2)-1,(vol_shape[2]//2)-1]))
 
+    padded_data_shape = [data_shape[0]+padding[0]*2,data_shape[1]+padding[1]*2,data_shape[2]+padding[2]*2,data_shape[3]]
+    padded_vol_shape = vol_shape
+
+    # Calculate overlapping variables
+    overlap_z = 1 if overlap[0] == 0 else 1-overlap[0]
+    overlap_y = 1 if overlap[1] == 0 else 1-overlap[1]
+    overlap_x = 1 if overlap[2] == 0 else 1-overlap[2]
+
     # Z
-    step_z = vol_shape[0]-padding[0]*2
+    step_z = int((vol_shape[0]-padding[0]*2)*overlap_z)
     vols_per_z = math.ceil(data_shape[0]/step_z)
+    last_z = 0 if vols_per_z == 1 else (((vols_per_z-1)*step_z)+vol_shape[0])-padded_data_shape[0]
+    ovz_per_block = last_z//(vols_per_z-1) if vols_per_z > 1 else 0
+    step_z -= ovz_per_block
+    last_z -= ovz_per_block*(vols_per_z-1)
+
     # Y
-    step_y = vol_shape[1]-padding[1]*2
+    step_y = int((vol_shape[1]-padding[1]*2)*overlap_y)
     vols_per_y = math.ceil(data_shape[1]/step_y)
+    last_y = 0 if vols_per_y == 1 else (((vols_per_y-1)*step_y)+vol_shape[1])-padded_data_shape[1]
+    ovy_per_block = last_y//(vols_per_y-1) if vols_per_y > 1 else 0
+    step_y -= ovy_per_block
+    last_y -= ovy_per_block*(vols_per_y-1)
+
     # X
-    step_x = vol_shape[2]-padding[2]*2
+    step_x = int((vol_shape[2]-padding[2]*2)*overlap_x)
     vols_per_x = math.ceil(data_shape[2]/step_x)
+    last_x = 0 if vols_per_x == 1 else (((vols_per_x-1)*step_x)+vol_shape[2])-padded_data_shape[2]
+    ovx_per_block = last_x//(vols_per_x-1) if vols_per_x > 1 else 0
+    step_x -= ovx_per_block
+    last_x -= ovx_per_block*(vols_per_x-1)
 
     # Real overlap calculation for printing
-    total_vol = vols_per_z*vols_per_y*vols_per_x
+    real_ov_z = ovz_per_block/(vol_shape[0]-padding[0]*2)
+    real_ov_y = ovy_per_block/(vol_shape[1]-padding[1]*2)
+    real_ov_x = ovx_per_block/(vol_shape[2]-padding[2]*2)
     if verbose:
+        print("Real overlapping (%): {}".format((real_ov_z,real_ov_y,real_ov_x)))
+        print("Real overlapping (pixels): {}".format(((vol_shape[0]-padding[0]*2)*real_ov_z,
+              (vol_shape[1]-padding[1]*2)*real_ov_y,(vol_shape[2]-padding[2]*2)*real_ov_x)))
         print("{} patches per (z,y,x) axis".format((vols_per_z,vols_per_x,vols_per_y)))
-        print(f"Total number of patches: {total_vol}")
-
+    
     vols_in_z = vols_per_z//total_ranks
     vols_per_z_per_rank = vols_in_z
     if vols_per_z%total_ranks > rank: 
@@ -813,51 +843,43 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, padding=(0,0,0), total_
     for _z in range(vols_per_z_per_rank):
         z = list_of_vols_in_z[rank][0]+_z
         for y in range(vols_per_y):
-            for x in range(vols_per_x):     
-                # Z pad calculation
-                real_start_z = z*step_z
-                real_finish_z = min(real_start_z+step_z, data_shape[0])
-                start_z = z*step_z
-                finish_z = start_z+step_z+padding[0]
-                pad_z_left = abs(finish_z-vol_shape[0]) if finish_z-vol_shape[0] < 0 else 0
-                start_z = max(0,start_z-padding[0]-pad_z_left)
-                pad_z_right = finish_z-data_shape[0] if finish_z > data_shape[0] else 0
+            for x in range(vols_per_x):
+                d_z = 0 if (z*step_z+vol_shape[0]) < padded_data_shape[0] else last_z
+                d_y = 0 if (y*step_y+vol_shape[1]) < padded_data_shape[1] else last_y
+                d_x = 0 if (x*step_x+vol_shape[2]) < padded_data_shape[2] else last_x
 
-                # Y pad calculation
-                real_start_y = y*step_y
-                real_finish_y = min(real_start_y+step_y, data_shape[1])
-                start_y = y*step_y
-                finish_y = start_y+step_y+padding[1]
-                pad_y_left = abs(finish_y-vol_shape[1]) if finish_y-vol_shape[1] < 0 else 0
-                start_y = max(0, start_y-padding[1]-pad_y_left)
-                pad_y_right = finish_y-data_shape[1] if finish_y > data_shape[1] else 0
+                start_z = max(0, z*step_z-d_z-padding[0])
+                finish_z = min(z*step_z+vol_shape[0]-d_z-padding[0], data_shape[0])
+                start_y = max(0, y*step_y-d_y-padding[1])
+                finish_y = min(y*step_y+vol_shape[1]-d_y-padding[1], data_shape[1])
+                start_x = max(0, x*step_x-d_x-padding[2])
+                finish_x = min(x*step_x+vol_shape[2]-d_x-padding[2], data_shape[2])
 
-                # X pad calculation
-                real_start_x = x*step_x
-                real_finish_x = min(real_start_x+step_x, data_shape[2])
-                start_x = x*step_x
-                finish_x = start_x+step_x+padding[2]
-                pad_x_left = abs(finish_x-vol_shape[2]) if finish_x-vol_shape[2] < 0 else 0
-                start_x = max(0, start_x-padding[2]-pad_x_left)
-                pad_x_right = finish_x-data_shape[2] if finish_x > data_shape[2] else 0
+                img = data[start_z:finish_z,
+                           start_y:finish_y,
+                           start_x:finish_x]
 
-                real_patch_in_data = ((real_start_z,real_finish_z), (real_start_y,real_finish_y), (real_start_x,real_finish_x) )
-                pad_to_remove = (
-                    (max(pad_z_left,padding[0]), max(pad_z_right,padding[0])), 
-                    (max(pad_y_left,padding[1]), max(pad_y_right,padding[1])),
-                    (max(pad_x_left,padding[2]), max(pad_x_right,padding[2])))
-                img = data[start_z:finish_z,start_y:finish_y,start_x:finish_x]
-                if img.ndim == 3: img = np.expand_dims(img, -1)
-                img = np.pad(img,((pad_z_left,pad_z_right),(pad_y_left,pad_y_right),(pad_x_left,pad_x_right),(0,0)), 'reflect')
+                pad_z_left = padding[0]-start_z if start_z < padding[0] else 0
+                pad_z_right = padding[0]-(data_shape[0]-finish_z) if data_shape[0]-finish_z < padding[0] else 0
+                pad_y_left = padding[1]-start_y if start_y < padding[1] else 0
+                pad_y_right = padding[1]-(data_shape[1]-finish_y) if data_shape[1]-finish_y < padding[1] else 0
+                pad_x_left = padding[2]-start_x if start_x < padding[2] else 0
+                pad_x_right = padding[2]-(data_shape[2]-finish_x) if data_shape[2]-finish_x < padding[2] else 0
 
-                if img.shape != vol_shape: 
-                    raise ValueError("Something happened generating patches. Yielded image patch do not satisfy the selected shape "
-                        "of {}. Patch shape: {} ".format(vol_shape, img.shape))
+                img = np.pad(img,((pad_z_left,pad_z_right),(pad_y_left,pad_y_right),(pad_x_left,pad_x_right)), 'reflect')
+
+                real_patch_in_data = [
+                    [z*step_z-d_z,(z*step_z)+vol_shape[0]-d_z-(padding[0]*2)],
+                    [y*step_y-d_y,(y*step_y)+vol_shape[1]-d_y-(padding[1]*2)],
+                    [x*step_x-d_x,(x*step_x)+vol_shape[2]-d_x-(padding[2]*2)]
+                ]
+                img = np.expand_dims(img, -1)
 
                 if rank == 0:
-                    yield img, real_patch_in_data, pad_to_remove, total_vol, z_vol_info, list_of_vols_in_z
+                    yield img, real_patch_in_data, total_vol, z_vol_info, list_of_vols_in_z
                 else:
-                    yield img, real_patch_in_data, pad_to_remove, total_vol
+                    yield img, real_patch_in_data, total_vol
+
 
 def load_3d_data_classification(data_dir, patch_shape, expected_classes=None, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
     val_split=0.1, seed=0, shuffle_val=True):
