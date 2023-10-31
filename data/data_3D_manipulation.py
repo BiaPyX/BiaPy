@@ -7,7 +7,6 @@ from sklearn.model_selection import train_test_split, StratifiedKFold
 
 from utils.util import load_3d_images_from_dir
 
-
 def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
     val_split=0.1, seed=0, shuffle_val=True, crop_shape=(80, 80, 80, 1), y_upscaling=1, random_crops_in_DA=False, 
     ov=(0,0,0), padding=(0,0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False):
@@ -742,7 +741,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, overlap=(0,0,0), paddin
         the first GPU will process volumes ``0``, ``1`` and ``2`` (``3`` in total) whereas the second 
         GPU will process volumes ``3`` and ``4``. 
     """
-    if verbose:
+    if verbose and rank == 0:
         print("### 3D-OV-CROP ###")
         print("Cropping {} images into {} with overlapping . . .".format(data.shape, vol_shape))
         print("Minimum overlap selected: {}".format(overlap))
@@ -809,7 +808,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, overlap=(0,0,0), paddin
     real_ov_z = ovz_per_block/(vol_shape[0]-padding[0]*2)
     real_ov_y = ovy_per_block/(vol_shape[1]-padding[1]*2)
     real_ov_x = ovx_per_block/(vol_shape[2]-padding[2]*2)
-    if verbose:
+    if verbose and rank == 0:
         print("Real overlapping (%): {}".format((real_ov_z,real_ov_y,real_ov_x)))
         print("Real overlapping (pixels): {}".format(((vol_shape[0]-padding[0]*2)*real_ov_z,
               (vol_shape[1]-padding[1]*2)*real_ov_y,(vol_shape[2]-padding[2]*2)*real_ov_x)))
@@ -833,7 +832,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, overlap=(0,0,0), paddin
             z_vol_info[z] = [real_start_z, real_finish_z]
         list_of_vols_in_z.append(list(range(c,c+vols)))
         c += vols
-    if verbose:
+    if verbose and rank == 0:
         print(f"List of volume IDs to be processed by each GPU: {list_of_vols_in_z}")
         print(f"Positions of each volume in Z axis: {z_vol_info}")
         print("Rank {}: Total number of patches: {} - {} patches per (z,y,x) axis (per GPU)"

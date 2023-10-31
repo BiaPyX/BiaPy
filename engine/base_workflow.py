@@ -16,7 +16,7 @@ from models import build_model
 from engine import prepare_optimizer, build_callbacks
 from data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
 from utils.misc import (get_world_size, get_rank, is_main_process, save_model, time_text, load_model_checkpoint, TensorboardLogger,
-    to_pytorch_format, to_numpy_format, is_dist_avail_and_initialized)
+    to_pytorch_format, to_numpy_format, is_dist_avail_and_initialized, setup_for_distributed)
 from utils.util import load_data_from_dir, load_3d_images_from_dir, create_plots, pad_and_reflect, save_tif, check_downsample_division
 from engine.train_engine import train_one_epoch, evaluate
 from data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap, load_and_prepare_2D_train_data
@@ -579,6 +579,11 @@ class Base_Workflow(metaclass=ABCMeta):
         print("#  INFERENCE  #")
         print("###############")
         print("Making predictions on test data . . .")
+
+        # Reactivate prints to see each rank progress
+        if self.cfg.TEST.H5_BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
+            setup_for_distributed(True)
+
         # Process all the images
         for i, batch in tqdm(enumerate(self.test_generator), total=len(self.test_generator)):
             if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
@@ -598,7 +603,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 else:
                     self._X = X
                     self._Y = Y if self.cfg.DATA.TEST.LOAD_GT else None    
-                print("Processing image: {}".format(self.test_filenames[i]))
+                if is_main_process():
+                    print("Processing image: {}".format(self.test_filenames[i]))
 
                 # Process each image separately
                 self.f_numbers = [i]
@@ -607,7 +613,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Process all the images in the batch, sample by sample
                 l_X = len(X)
                 for j in tqdm(range(l_X), leave=False):
-                    print("Processing image(s): {}".format(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]))
+                    if is_main_process():
+                        print("Processing image(s): {}".format(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]))
                     
                     if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                         if type(X) is tuple:
@@ -631,6 +638,10 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.process_sample(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], norm=(X_norm, Y_norm))
 
             image_counter += 1
+        
+        # Deactivate again the print function
+        if self.cfg.TEST.H5_BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
+            setup_for_distributed(is_main_process())
 
         self.destroy_test_data()
 
@@ -685,8 +696,8 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Load data if it is a H5 file
         if isinstance(self._X, str):
-            self._X = h5py.File(self._X,'r')
-            self._X = self._X[list(self._X)[0]]
+            self._X_file = h5py.File(self._X,'r')
+            self._X = self._X_file[list(self._X_file)[0]]
 
         # Process in charge of processing one predicted patch
         data_shape = self._X.shape
@@ -700,6 +711,8 @@ class Base_Workflow(metaclass=ABCMeta):
             self.extract_info_queue, self.cfg.TEST.VERBOSE))
         load_data_process.daemon=True
         load_data_process.start()
+        if '_X_file' in locals():
+            self._X_file.close()
         del self._X, in_data_filename
  
         # Lock the thread inferring until no more patches 
@@ -770,22 +783,26 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Compose the large image 
                 for i, data_part_fname in enumerate(data_parts_filenames):
                     print("Reading {}".format(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname)))
-                    data_part = h5py.File(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname),'r')
-                    data_part = data_part[list(data_part)[0]]
-                    data_mask_part = h5py.File(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_parts_mask_filenames[i]),'r')
-                    data_mask_part = data_mask_part[list(data_mask_part)[0]]
+                    data_part_file = h5py.File(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname),'r')
+                    data_part = data_part_file[list(data_part_file)[0]]
+                    data_mask_part_file = h5py.File(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_parts_mask_filenames[i]),'r')
+                    data_mask_part = data_mask_part_file[list(data_mask_part_file)[0]]
 
                     if 'data' not in locals():
                         all_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".h5")
                         allfile = h5py.File(all_data_filename,'w')
                         data = allfile.create_dataset("data", data_part.shape, dtype=self.dtype_str, compression="gzip")
                     
-                    for k in list_of_vols_in_z[i]:
+                    for j, k in enumerate(list_of_vols_in_z[i]):
                         if self.cfg.TEST.VERBOSE:
                             print(f"Filling {k} [{z_vol_info[k][0]}:{z_vol_info[k][1]}]")
                         data[z_vol_info[k][0]:z_vol_info[k][1]] = \
-                            data_part[z_vol_info[k][0]:z_vol_info[k][1]] / data_mask_part[z_vol_info[k][0]:z_vol_info[k][1]]
-                
+                            data_part[z_vol_info[k][0]:z_vol_info[k][1]] / data_mask_part[z_vol_info[k][0]:z_vol_info[k][1]]                      
+                        allfile.flush() 
+
+                    data_part_file.close()
+                    data_mask_part_file.close()
+
                 # Save image
                 if self.cfg.TEST.H5_BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
                     save_tif(np.expand_dims(np.array(data, dtype=self.dtype),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
@@ -795,10 +812,10 @@ class Base_Workflow(metaclass=ABCMeta):
             # Just make the division with the overlap
             else:
                 # Load predictions and overlapping mask
-                pred = h5py.File(out_data_filename,'r')
-                pred = pred[list(pred)[0]]
-                mask = h5py.File(out_data_mask_filename,'r')
-                mask = mask[list(mask)[0]]
+                pred_file = h5py.File(out_data_filename,'r')
+                pred = pred_file[list(pred_file)[0]]
+                mask_file = h5py.File(out_data_mask_filename,'r')
+                mask = mask_file[list(mask_file)[0]]
 
                 # Create new file
                 fid_div = h5py.File(out_data_div_filename,'w')
@@ -820,12 +837,15 @@ class Base_Workflow(metaclass=ABCMeta):
                                 mask[z*self.cfg.DATA.PATCH_SIZE[0]:min(data_shape[0],self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
                                     y*self.cfg.DATA.PATCH_SIZE[1]:min(data_shape[1],self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
                                     x*self.cfg.DATA.PATCH_SIZE[2]:min(data_shape[2],self.cfg.DATA.PATCH_SIZE[2]*(x+1))]
-                
+                    fid_div.flush()
+
                 # Save image
                 if self.cfg.TEST.H5_BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
                     save_tif(np.expand_dims(np.array(pred_div, dtype=self.dtype),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
                         [os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".tif")],
                         verbose=self.cfg.TEST.VERBOSE)
+                pred_file.close()
+                mask_file.close()
                 fid_div.close()
 
             if self.cfg.TEST.H5_BY_CHUNKS.WORKFLOW_PROCESS:
@@ -1205,9 +1225,10 @@ class Base_Workflow(metaclass=ABCMeta):
             Filename of the predicted image H5.  
         """
         # Load H5 and convert it into numpy array
-        pred = h5py.File(filename,'r')
-        pred = np.array(pred[list(pred)[0]], dtype=self.dtype)
+        pred_file = h5py.File(filename,'r')
+        pred = np.array(pred_file[list(pred_file)[0]], dtype=self.dtype)
         pred = np.squeeze(pred)
+        pred_file.close()
 
         # Adjust shape
         if pred.ndim < 3:
@@ -1285,8 +1306,8 @@ def extract_patch_from_data(data, cfg, input_queue, extract_info_queue, verbose=
 
     # Load H5 in case we need it
     if isinstance(data, str):
-        data = h5py.File(data,'r')
-        data = data[list(data)[0]]
+        data_file = h5py.File(data,'r')
+        data = data_file[list(data_file)[0]]
 
     # Process of extracting each patch
     patch_counter = 0
@@ -1320,6 +1341,9 @@ def extract_patch_from_data(data, cfg, input_queue, extract_info_queue, verbose=
             print(f"[Rank {get_rank()} ({os.getpid()})] Finish extracting patches from data {data}")
         else:
             print(f"[Rank {get_rank()} ({os.getpid()})] Finish extracting patches from data {data.shape}")
+
+    if 'data_file' in locals():
+        data_file.close()
 
 def insert_patch_into_h5_dataset(data_filename, data_filename_mask, data_shape, output_queue, extract_info_queue, cfg, 
     dtype_str, dtype, verbose=False):

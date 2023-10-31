@@ -14,11 +14,13 @@ from pathlib import Path
 # from torch._six import inf
 from torch import inf
 
+original_print = builtins.print
+
 def setup_for_distributed(is_master):
     """
     This function disables printing when not in master process
     """
-    builtin_print = builtins.print
+    builtin_print = original_print
 
     def print(*args, **kwargs):
         force = kwargs.pop('force', False)
