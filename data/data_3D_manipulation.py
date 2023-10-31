@@ -749,8 +749,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, overlap=(0,0,0), paddin
         print("Padding: {}".format(padding))
 
     data_shape = data.shape if data.ndim == 4 else data.shape + (1,)
-    
-    
+        
     if len(data_shape) != 4:
         raise ValueError("data expected to be 4 dimensional, given {}".format(data_shape))
 
@@ -859,15 +858,17 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, overlap=(0,0,0), paddin
                            start_y:finish_y,
                            start_x:finish_x]
 
-                pad_z_left = padding[0]-start_z if start_z < padding[0] else 0
-                pad_z_right = padding[0]-(data_shape[0]-finish_z) if data_shape[0]-finish_z < padding[0] else 0
-                pad_y_left = padding[1]-start_y if start_y < padding[1] else 0
-                pad_y_right = padding[1]-(data_shape[1]-finish_y) if data_shape[1]-finish_y < padding[1] else 0
-                pad_x_left = padding[2]-start_x if start_x < padding[2] else 0
-                pad_x_right = padding[2]-(data_shape[2]-finish_x) if data_shape[2]-finish_x < padding[2] else 0
+                pad_z_left = padding[0]-z*step_z-d_z if start_z <= 0 else 0
+                pad_z_right = (start_z+vol_shape[0])-data_shape[0] if start_z+vol_shape[0] > data_shape[0] else 0
+                pad_y_left = padding[1]-y*step_y-d_y if start_y <= 0 else 0
+                pad_y_right = (start_y+vol_shape[1])-data_shape[1] if start_y+vol_shape[1] > data_shape[1] else 0
+                pad_x_left = padding[2]-x*step_x-d_x if start_x <= 0 else 0
+                pad_x_right = (start_x+vol_shape[2])-data_shape[2] if start_x+vol_shape[2] > data_shape[2] else 0
 
                 img = np.pad(img,((pad_z_left,pad_z_right),(pad_y_left,pad_y_right),(pad_x_left,pad_x_right)), 'reflect')
 
+                assert img.shape == vol_shape[:-1], "Something went wrong suring the patch extraction!"
+                
                 real_patch_in_data = [
                     [z*step_z-d_z,(z*step_z)+vol_shape[0]-d_z-(padding[0]*2)],
                     [y*step_y-d_y,(y*step_y)+vol_shape[1]-d_y-(padding[1]*2)],
