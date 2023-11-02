@@ -225,8 +225,8 @@ def check_configuration(cfg, check_data_paths=True):
             
     #### Classification ####
     elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
-        if cfg.TEST.H5_BY_CHUNKS.ENABLE:
-            raise ValueError("'TEST.H5_BY_CHUNKS.ENABLE' can not be activated for CLASSIFICATION workflow")
+        if cfg.TEST.BY_CHUNKS.ENABLE:
+            raise ValueError("'TEST.BY_CHUNKS.ENABLE' can not be activated for CLASSIFICATION workflow")
 
     ### Pre-processing ###
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
@@ -249,6 +249,9 @@ def check_configuration(cfg, check_data_paths=True):
             raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
         if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.GT_PATH) and cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SELF_SUPERVISED"]:
             raise ValueError("Test data mask not found: {}".format(cfg.DATA.TEST.GT_PATH))
+    if cfg.TEST.BY_CHUNKS.ENABLE:
+        assert cfg.TEST.BY_CHUNKS.FORMAT.lower() in ["h5", "zarr"], "'TEST.BY_CHUNKS.FORMAT' needs to be one between ['H5', 'Zarr']"
+        opts.extend(['TEST.BY_CHUNKS.FORMAT', cfg.TEST.BY_CHUNKS.FORMAT.lower()])
 
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if not cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':

@@ -24,7 +24,7 @@ class test_pair_data_generator(Dataset):
         Path to load the data from.
 
     test_by_chunks : bool, optional
-        If 
+        Tell the generator that the data is going to be read by chunks and by H5/Zarr files. 
 
     provide_Y: bool, optional
         Whether to return ground truth, using ``Y`` or loading from ``dm_path``.
@@ -100,7 +100,15 @@ class test_pair_data_generator(Dataset):
         if X is None:
             self.len = len(self.data_path)
             if len(self.data_path) == 0:
-                raise ValueError("No test image found in {}".format(d_path))
+                if test_by_chunks:
+                    print("No image found in {} folder. Assumming that files are zarr directories.")
+                    self.data_path = sorted(next(os.walk(d_path))[1])
+                    if provide_Y:
+                        self.data_mask_path = sorted(next(os.walk(dm_path))[1])
+                    if len(self.data_path) == 0:
+                        raise ValueError("No zarr files found in {}".format(d_path))
+                else:
+                    raise ValueError("No test image found in {}".format(d_path))
         else:
             self.len = len(X)
         self.o_indexes = np.arange(self.len)
@@ -207,6 +215,13 @@ class test_pair_data_generator(Dataset):
                     img = os.path.join(self.d_path, self.data_path[idx])
                     if self.provide_Y:
                         mask = os.path.join(self.dm_path, self.data_mask_path[idx])
+            elif self.data_path[idx].endswith('.zarr'):
+                if self.test_by_chunks:
+                    img = os.path.join(self.d_path, self.data_path[idx])
+                    if self.provide_Y:
+                        mask = os.path.join(self.dm_path, self.data_mask_path[idx])
+                else:
+                   raise NotImplementedError
             else:
                 img = imread(os.path.join(self.d_path, self.data_path[idx]))
                 img = np.squeeze(img)

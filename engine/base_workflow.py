@@ -5,6 +5,7 @@ import time
 import json
 import torch
 import h5py
+import zarr
 import numpy as np
 from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
@@ -17,7 +18,8 @@ from engine import prepare_optimizer, build_callbacks
 from data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
 from utils.misc import (get_world_size, get_rank, is_main_process, save_model, time_text, load_model_checkpoint, TensorboardLogger,
     to_pytorch_format, to_numpy_format, is_dist_avail_and_initialized, setup_for_distributed)
-from utils.util import load_data_from_dir, load_3d_images_from_dir, create_plots, pad_and_reflect, save_tif, check_downsample_division
+from utils.util import (load_data_from_dir, load_3d_images_from_dir, create_plots, pad_and_reflect, save_tif, check_downsample_division,
+    read_chunked_data)
 from engine.train_engine import train_one_epoch, evaluate
 from data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap, load_and_prepare_2D_train_data
 from data.data_3D_manipulation import (crop_3D_data_with_overlap, merge_3D_data_with_overlap, load_and_prepare_3D_data, 
@@ -95,7 +97,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.world_size = get_world_size()
         self.global_rank = get_rank()
-        if self.cfg.TEST.H5_BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
+        if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
             self.output_queue = mp.Queue(maxsize=self.cfg.SYSTEM.NUM_GPUS*10)
             self.input_queue = mp.Queue(maxsize=self.cfg.SYSTEM.NUM_GPUS*10)
             self.extract_info_queue = mp.Queue()
@@ -581,7 +583,7 @@ class Base_Workflow(metaclass=ABCMeta):
         print("Making predictions on test data . . .")
 
         # Reactivate prints to see each rank progress
-        if self.cfg.TEST.H5_BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
+        if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
             setup_for_distributed(True)
 
         # Process all the images
@@ -593,7 +595,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 Y, Y_norm = None, None
             del batch
 
-            if self.cfg.TEST.H5_BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
+            if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
                 if type(X) is tuple:
                     self._X = X[0]
                     if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
@@ -602,7 +604,11 @@ class Base_Workflow(metaclass=ABCMeta):
                         self._Y = None
                 else:
                     self._X = X
-                    self._Y = Y if self.cfg.DATA.TEST.LOAD_GT else None    
+                    self._Y = Y if self.cfg.DATA.TEST.LOAD_GT else None  
+
+                if len(self.test_filenames) == 0:
+                    self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[1])  
+
                 if is_main_process():
                     print("Processing image: {}".format(self.test_filenames[i]))
 
@@ -640,7 +646,7 @@ class Base_Workflow(metaclass=ABCMeta):
             image_counter += 1
         
         # Deactivate again the print function
-        if self.cfg.TEST.H5_BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
+        if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
             setup_for_distributed(is_main_process())
 
         self.destroy_test_data()
@@ -679,39 +685,39 @@ class Base_Workflow(metaclass=ABCMeta):
             Filenames fo the samples to process. 
         """
         filename, file_extension = os.path.splitext(filenames)
-        if file_extension not in ['.hdf5', '.h5']:
-            print("WARNING: you could have saved more memory by converting input test images into H5 file format (.h5), "
-                  "as with 'TEST.H5_BY_CHUNKS.ENABLE' option enabled H5 files will be processed by chunks")
+        if file_extension not in ['.hdf5', '.h5', ".zarr"]:
+            print("WARNING: you could have saved more memory by converting input test images into H5 file format (.h5) "
+                  "or Zarr (.zarr) as with 'TEST.BY_CHUNKS.ENABLE' option enabled H5/Zarr files will be processed by chunks")
+        # Load data
+        self._X_file, self._X = read_chunked_data(self._X)
 
-        # Create H5 file to save the results
+        # Data paths
         os.makedirs(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, exist_ok=True)
+        ext = ".h5" if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5" else ".zarr"
         if self.cfg.SYSTEM.NUM_GPUS > 1:
-            out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_part"+str(get_rank())+".h5")
-            out_data_mask_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_part"+str(get_rank())+"_mask.h5")
+            out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_part"+str(get_rank())+ext)
+            out_data_mask_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_part"+str(get_rank())+"_mask"+ext)
         else:
-            out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_nodiv.h5")
-            out_data_mask_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_mask.h5")
-        out_data_div_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".h5")
+            out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_nodiv"+ext)
+            out_data_mask_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_mask"+ext)
+        out_data_div_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+ext)
         in_data_filename = self._X
-
-        # Load data if it is a H5 file
-        if isinstance(self._X, str):
-            self._X_file = h5py.File(self._X,'r')
-            self._X = self._X_file[list(self._X_file)[0]]
 
         # Process in charge of processing one predicted patch
         data_shape = self._X.shape
-        output_handle_proc = mp.Process(target=insert_patch_into_h5_dataset, args=(out_data_filename, out_data_mask_filename, 
-            data_shape, self.output_queue, self.extract_info_queue, self.cfg, self.dtype_str, self.dtype))
+        output_handle_proc = mp.Process(target=insert_patch_into_dataset, args=(out_data_filename, out_data_mask_filename, 
+            data_shape, self.output_queue, self.extract_info_queue, self.cfg, self.dtype_str, self.dtype, 
+            self.cfg.TEST.BY_CHUNKS.FORMAT, self.cfg.TEST.VERBOSE))
         output_handle_proc.daemon=True
         output_handle_proc.start()
         
         # Process in charge of loading part of the data 
-        load_data_process = mp.Process(target=extract_patch_from_data, args=(in_data_filename, self.cfg, self.input_queue, 
+        load_data_process = mp.Process(target=extract_patch_from_dataset, args=(in_data_filename, self.cfg, self.input_queue, 
             self.extract_info_queue, self.cfg.TEST.VERBOSE))
         load_data_process.daemon=True
         load_data_process.start()
-        if '_X_file' in locals():
+
+        if '_X_file' in locals() and isinstance(self._X_file, h5py.File):
             self._X_file.close()
         del self._X, in_data_filename
  
@@ -741,7 +747,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     p = self.model(to_pytorch_format(img, self.axis_order, self.device))
                     p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
 
-            # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the final H5 file
+            # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the 
+            # final H5/Zarr file
             p = p[0, self.cfg.DATA.TEST.PADDING[0]:p.shape[1]-self.cfg.DATA.TEST.PADDING[0],
                 self.cfg.DATA.TEST.PADDING[1]:p.shape[2]-self.cfg.DATA.TEST.PADDING[1],
                 self.cfg.DATA.TEST.PADDING[2]:p.shape[3]-self.cfg.DATA.TEST.PADDING[2]]
@@ -765,7 +772,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if is_dist_avail_and_initialized():
                 dist.barrier()
 
-        # Create the final H5 file that contains all the individual parts 
+        # Create the final H5/Zarr file that contains all the individual parts 
         if is_main_process():
             if self.cfg.SYSTEM.NUM_GPUS > 1:
                 # Obtain parts of the data created by all GPUs
@@ -773,9 +780,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 parts = []
                 mask_parts = []
                 for x in data_parts_filenames:
-                    if filename+"_part" in x and "_mask" not in x and x.endswith(".h5"):
+                    if filename+"_part" in x and "_mask" not in x and x.endswith(self.cfg.TEST.BY_CHUNKS.FORMAT):
                         parts.append(x)
-                    if filename+"_part" in x and "_mask" in x and x.endswith(".h5"):
+                    if filename+"_part" in x and "_mask" in x and x.endswith(self.cfg.TEST.BY_CHUNKS.FORMAT):
                         mask_parts.append(x)
                 data_parts_filenames = parts 
                 data_parts_mask_filenames = mask_parts
@@ -787,44 +794,51 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Compose the large image 
                 for i, data_part_fname in enumerate(data_parts_filenames):
                     print("Reading {}".format(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname)))
-                    data_part_file = h5py.File(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname),'r')
-                    data_part = data_part_file[list(data_part_file)[0]]
-                    data_mask_part_file = h5py.File(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_parts_mask_filenames[i]),'r')
-                    data_mask_part = data_mask_part_file[list(data_mask_part_file)[0]]
+                    data_part_file, data_part = read_chunked_data(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname))
+                    data_mask_part_file, data_mask_part = read_chunked_data(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_parts_mask_filenames[i]))
 
                     if 'data' not in locals():
-                        all_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".h5")
-                        allfile = h5py.File(all_data_filename,'w')
-                        data = allfile.create_dataset("data", data_part.shape, dtype=self.dtype_str, compression="gzip")
-                    
+                        all_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+ext)
+                        if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                            allfile = h5py.File(all_data_filename,'w')
+                            data = allfile.create_dataset("data", data_part.shape, dtype=self.dtype_str, compression="gzip")
+                        else:
+                            allfile = zarr.open_group(all_data_filename, mode="w")
+                            zarr_obj = allfile.create_dataset("data", shape=data_part.shape, dtype=self.dtype_str, compression="gzip")
+
                     for j, k in enumerate(list_of_vols_in_z[i]):
                         if self.cfg.TEST.VERBOSE:
                             print(f"Filling {k} [{z_vol_info[k][0]}:{z_vol_info[k][1]}]")
                         data[z_vol_info[k][0]:z_vol_info[k][1]] = \
                             data_part[z_vol_info[k][0]:z_vol_info[k][1]] / data_mask_part[z_vol_info[k][0]:z_vol_info[k][1]]                      
-                        allfile.flush() 
+                        if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                            allfile.flush() 
 
-                    data_part_file.close()
-                    data_mask_part_file.close()
+                    if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                        data_part_file.close()
+                        data_mask_part_file.close()
 
                 # Save image
-                if self.cfg.TEST.H5_BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+                if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
                     save_tif(np.expand_dims(np.array(data, dtype=self.dtype),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
                         [filename+".tif"], verbose=self.cfg.TEST.VERBOSE)
-                allfile.close()      
+                if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                    allfile.close()      
 
             # Just make the division with the overlap
             else:
                 # Load predictions and overlapping mask
-                pred_file = h5py.File(out_data_filename,'r')
-                pred = pred_file[list(pred_file)[0]]
-                mask_file = h5py.File(out_data_mask_filename,'r')
-                mask = mask_file[list(mask_file)[0]]
+                pred_file, pred = read_chunked_data(out_data_filename)
+                mask_file, mask = read_chunked_data(out_data_mask_filename)
 
                 # Create new file
-                fid_div = h5py.File(out_data_div_filename,'w')
-                pred_div = fid_div.create_dataset("data", pred.shape, dtype=pred.dtype, compression="gzip")
-
+                if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                    fid_div = h5py.File(out_data_div_filename,'w')
+                    pred_div = fid_div.create_dataset("data", pred.shape, dtype=pred.dtype, compression="gzip")
+                else:
+                    fid_div = zarr.open_group(out_data_div_filename, mode="w")
+                    pred_div = fid_div.create_dataset("data", shape=pred.shape, dtype=pred.dtype)
+                    
                 # Fill the new data
                 z_vols = math.ceil(data_shape[0]/self.cfg.DATA.PATCH_SIZE[0])
                 y_vols = math.ceil(data_shape[1]/self.cfg.DATA.PATCH_SIZE[1])
@@ -841,18 +855,20 @@ class Base_Workflow(metaclass=ABCMeta):
                                 mask[z*self.cfg.DATA.PATCH_SIZE[0]:min(data_shape[0],self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
                                     y*self.cfg.DATA.PATCH_SIZE[1]:min(data_shape[1],self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
                                     x*self.cfg.DATA.PATCH_SIZE[2]:min(data_shape[2],self.cfg.DATA.PATCH_SIZE[2]*(x+1))]
-                    fid_div.flush()
+                    if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                        fid_div.flush()
 
                 # Save image
-                if self.cfg.TEST.H5_BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+                if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
                     save_tif(np.expand_dims(np.array(pred_div, dtype=self.dtype),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
                         [os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".tif")],
                         verbose=self.cfg.TEST.VERBOSE)
-                pred_file.close()
-                mask_file.close()
-                fid_div.close()
+                if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                    pred_file.close()
+                    mask_file.close()
+                    fid_div.close()
 
-            if self.cfg.TEST.H5_BY_CHUNKS.WORKFLOW_PROCESS:
+            if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS:
                 self.after_merge_patches_by_chunks(out_data_div_filename)            
         
         # Wait until the main thread is done to predit the next sample
@@ -1226,13 +1242,13 @@ class Base_Workflow(metaclass=ABCMeta):
         Parameters
         ----------
         filename : List of str
-            Filename of the predicted image H5.  
+            Filename of the predicted image H5/Zarr.  
         """
-        # Load H5 and convert it into numpy array
-        pred_file = h5py.File(filename,'r')
-        pred = np.array(pred_file[list(pred_file)[0]], dtype=self.dtype)
-        pred = np.squeeze(pred)
-        pred_file.close()
+        # Load H5/Zarr and convert it into numpy array
+        pred_file, pred = read_chunked_data(filename)
+        pred = np.squeeze(np.array(pred, dtype=self.dtype))
+        if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+            pred_file.close()
 
         # Adjust shape
         if pred.ndim < 3:
@@ -1279,7 +1295,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.all_pred, self.stats['iou_post'], self.stats['ov_iou_post'] = apply_post_processing(self.cfg, self.all_pred, self.all_gt)
             save_tif(np.expand_dims(self.all_pred,0), self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING, verbose=self.cfg.TEST.VERBOSE)
 
-def extract_patch_from_data(data, cfg, input_queue, extract_info_queue, verbose=False):
+def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbose=False):
     """
     Extract patches from data and put them into a queue read by each GPU inference process.
     This function will be run by a child process created for every test sample.  
@@ -1287,7 +1303,7 @@ def extract_patch_from_data(data, cfg, input_queue, extract_info_queue, verbose=
     Parameters
     ----------
     data : Str or Numpy array
-        If str it will be consider a path to load a H5 file. If not, it will be considered as the 
+        If str it will be consider a path to load a H5/Zarr file. If not, it will be considered as the 
         data to extract patches from. 
 
     cfg : YACS configuration
@@ -1308,16 +1324,15 @@ def extract_patch_from_data(data, cfg, input_queue, extract_info_queue, verbose=
         else:
             print(f"[Rank {get_rank()} ({os.getpid()})] In charge of extracting patch from data from Numpy array {data.shape}")
 
-    # Load H5 in case we need it
+    # Load H5/Zarr in case we need it
     if isinstance(data, str):
-        data_file = h5py.File(data,'r')
-        data = data_file[list(data_file)[0]]
+        data_file, data = read_chunked_data(data)
 
     # Process of extracting each patch
     patch_counter = 0
     for obj in extract_3D_patch_with_overlap_yield(data, cfg.DATA.PATCH_SIZE, overlap=cfg.DATA.TEST.OVERLAP, 
         padding=cfg.DATA.TEST.PADDING, total_ranks=cfg.SYSTEM.NUM_GPUS, rank=get_rank(), 
-        verbose=cfg.TEST.VERBOSE):
+        verbose=verbose):
 
         if is_main_process():
             img, patch_coords, total_vol, z_vol_info, list_of_vols_in_z = obj
@@ -1328,7 +1343,7 @@ def extract_patch_from_data(data, cfg, input_queue, extract_info_queue, verbose=
         input_queue.put([img, patch_coords])
 
         if patch_counter == 0:
-            # This goes for the child process in charge of inserting data patches (insert_patch_into_h5_dataset function)
+            # This goes for the child process in charge of inserting data patches (insert_patch_into_dataset function)
             extract_info_queue.put(total_vol)
         patch_counter += 1
 
@@ -1347,25 +1362,25 @@ def extract_patch_from_data(data, cfg, input_queue, extract_info_queue, verbose=
         else:
             print(f"[Rank {get_rank()} ({os.getpid()})] Finish extracting patches from data {data.shape}")
 
-    if 'data_file' in locals():
+    if 'data_file' in locals() and cfg.TEST.BY_CHUNKS.FORMAT == "h5":
         data_file.close()
 
-def insert_patch_into_h5_dataset(data_filename, data_filename_mask, data_shape, output_queue, extract_info_queue, cfg, 
-    dtype_str, dtype, verbose=False):
+def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, output_queue, extract_info_queue, cfg, 
+    dtype_str, dtype, file_type, verbose=False):
     """
-    Insert predicted patches (in ``output_queue``) in its original position in a H5 file. Each GPU will create
-    a file containing the part it has processed (as we can not write the same H5 file ar the same time). Then, 
+    Insert predicted patches (in ``output_queue``) in its original position in a H5/Zarr file. Each GPU will create
+    a file containing the part it has processed (as we can not write the same H5/Zarr file ar the same time). Then, 
     the main rank will create the final image. This function will be run by a child process created for every 
     test sample.  
 
     Parameters
     ----------
     data_filename : Str or Numpy array
-        If str it will be consider a path to load a H5 file. If not, it will be considered as the 
+        If str it will be consider a path to load a H5/Zarr file. If not, it will be considered as the 
         data to extract patches from. 
 
     data_shape : YACS configuration
-        Shape of the H5 file dataset to create. 
+        Shape of the H5/Zarr file dataset to create. 
 
     output_queue : Multiprocessing queue 
         Queue to get each prediction from.
@@ -1377,19 +1392,25 @@ def insert_patch_into_h5_dataset(data_filename, data_filename_mask, data_shape, 
         Running configuration.
 
     dtype_str : str
-        Type of the H5 dataset to create.
+        Type of the H5/Zarr dataset to create.
 
     dtype : Numpy dtype
-        Type of the H5 dataset to create. Only used if a TIF file is created by selected to do so
-        with ``TEST.H5_BY_CHUNKS.SAVE_OUT_TIF`` variable. 
+        Type of the H5/Zarr dataset to create. Only used if a TIF file is created by selected to do so
+        with ``TEST.BY_CHUNKS.SAVE_OUT_TIF`` variable. 
 
     verbose : bool, optional
         To print useful information for debugging. 
     """
     if verbose and cfg.SYSTEM.NUM_GPUS > 1:
         print(f"[Rank {get_rank()} ({os.getpid()})] In charge of inserting patches into data . . .")
-    fid = h5py.File(data_filename, "w") 
-    fid_mask = h5py.File(data_filename_mask, "w")   
+    
+    if file_type == "h5":
+        fid = h5py.File(data_filename, "w") 
+        fid_mask = h5py.File(data_filename_mask, "w") 
+    else:
+        fid = zarr.open_group(data_filename, mode="w")
+        fid_mask = zarr.open_group(data_filename_mask, mode="w")
+      
     filename, file_extension = os.path.splitext(os.path.basename(data_filename))
     
     # Obtain the total patches so we can display it for the user
@@ -1399,8 +1420,12 @@ def insert_patch_into_h5_dataset(data_filename, data_filename_mask, data_shape, 
         p, m, patch_coords = output_queue.get(timeout=60)
 
         if 'data' not in locals():
-            data = fid.create_dataset("data", data_shape+(p.shape[-1],), dtype=dtype_str, compression="gzip")
-            mask = fid_mask.create_dataset("data", data_shape+(p.shape[-1],), dtype=dtype_str, compression="gzip")
+            if file_type == "h5":
+                data = fid.create_dataset("data", data_shape+(p.shape[-1],), dtype=dtype_str, compression="gzip")
+                mask = fid_mask.create_dataset("data", data_shape+(p.shape[-1],), dtype=dtype_str, compression="gzip")
+            else:
+                data = fid.create_dataset("data", shape=data_shape+(p.shape[-1],), dtype=dtype_str)
+                mask = fid_mask.create_dataset("data", shape=data_shape+(p.shape[-1],), dtype=dtype_str)
 
         # Insert the patch into its original 
         data[patch_coords[0][0]:patch_coords[0][1],
@@ -1412,18 +1437,19 @@ def insert_patch_into_h5_dataset(data_filename, data_filename_mask, data_shape, 
             patch_coords[2][0]:patch_coords[2][1]] += m
 
         # Force flush after some iterations
-        if i % cfg.TEST.H5_BY_CHUNKS.FLUSH_EACH == 0:
+        if i % cfg.TEST.BY_CHUNKS.FLUSH_EACH == 0 and file_type == "h5":
             fid.flush() 
             fid_mask.flush() 
 
     # Save image
-    if cfg.TEST.H5_BY_CHUNKS.SAVE_OUT_TIF and cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+    if cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
         save_tif(np.expand_dims(np.array(data, dtype=dtype),0), cfg.PATHS.RESULT_DIR.PER_IMAGE, 
-            [filename+".tif"], verbose=cfg.TEST.VERBOSE)
+            [filename+".tif"], verbose=verbose)
         save_tif(np.expand_dims(np.array(mask, dtype=np.uint8),0), cfg.PATHS.RESULT_DIR.PER_IMAGE, 
-            [filename+"_mask.tif"], verbose=cfg.TEST.VERBOSE)
-    fid.close()        
-    fid_mask.close()
+            [filename+"_mask.tif"], verbose=verbose)
+    if file_type == "h5":
+        fid.close()        
+        fid_mask.close()
 
     if verbose and cfg.SYSTEM.NUM_GPUS > 1:
         print(f"[Rank {get_rank()} ({os.getpid()})] Finish inserting patches into data . . .")

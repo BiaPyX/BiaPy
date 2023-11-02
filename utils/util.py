@@ -3,6 +3,7 @@ import math
 import numpy as np
 import random
 import h5py
+import zarr
 import matplotlib
 import matplotlib.pyplot as plt
 import scipy.ndimage
@@ -1369,3 +1370,16 @@ def data_range(x):
         return "uint16 range"
     else:
         return "none_range"
+
+def read_chunked_data(filename):
+    if isinstance(filename, str):
+        if filename.endswith('.hdf5') or filename.endswith('.h5'):
+            fid = h5py.File(filename,'r')
+            data = fid[list(fid)[0]]
+        elif filename.endswith('.zarr'):  
+            fid = zarr.open(filename,'r')
+            data = fid[list(fid.array_keys())[0]]
+        else:
+            raise ValueError(f"File extension {os.path.splitext(fid)[1]} not recognized")
+    
+    return fid, data

@@ -616,7 +616,7 @@ class Config:
         _C.TEST = CN()
         _C.TEST.ENABLE = False
         # Tries to reduce the memory footprint by separating crop/merge operations and by changing dtype of the predictions.
-        # It is slower and not as precise as the "normal" inference process but saves memory. In 'TEST.H5_BY_CHUNKS' it will
+        # It is slower and not as precise as the "normal" inference process but saves memory. In 'TEST.BY_CHUNKS' it will
         # only save memory with the datatype change.
         _C.TEST.REDUCE_MEMORY = False
         # In the processing of 3D images, the primary image is segmented into smaller patches. These patches are subsequently 
@@ -624,23 +624,25 @@ class Config:
         # dimensions of the original input. Notably, if the input image is sizable, this process can be memory-intensive. This 
         # is because the quantity of patches is contingent on both the dimensions of the input and the selected padding/overlap 
         # parameters (defined as 'DATA.TEST.PADDING' and 'DATA.TEST.OVERLAP').
-        # To alleviate potential memory constraints, we offer an alternative: producing an H5 file with the predicted patches. 
-        # This method ensures efficient memory usage, as patches are individually incorporated into the H5 file in their respective 
+        # To alleviate potential memory constraints, we offer an alternative: producing an H5/Zarr file with the predicted patches. 
+        # This method ensures efficient memory usage, as patches are individually incorporated into the H5/Zarr file in their respective 
         # positions. This negates the need to store all patches simultaneously for image reconstruction. Importantly, in this 
         # approach, only the 'DATA.TEST.PADDING' parameter is considered, excluding 'DATA.TEST.OVERLAP', which sufficiently 
-        # addresses border effect issues. If the source image is also an H5 file, it will be processed incrementally, further 
+        # addresses border effect issues. If the source image is also an H5/Zarr file, it will be processed incrementally, further 
         # optimizing memory usage.
-        _C.TEST.H5_BY_CHUNKS = CN()
-        _C.TEST.H5_BY_CHUNKS.ENABLE = False
-        # In the process of 'TEST.H5_BY_CHUNKS' you can enable this variable to save the reconstructed prediction as a TIF too. 
+        _C.TEST.BY_CHUNKS = CN()
+        _C.TEST.BY_CHUNKS.ENABLE = False
+        # Type of format used to write data. Options available: ["H5", "Zarr"]
+        _C.TEST.BY_CHUNKS.FORMAT = 'H5' 
+        # In the process of 'TEST.BY_CHUNKS' you can enable this variable to save the reconstructed prediction as a TIF too. 
         # Be aware of this option and be sure that the prediction can fit in you memory entirely, as it is needed for saving as TIF.
-        _C.TEST.H5_BY_CHUNKS.SAVE_OUT_TIF = False
-        # In how many iterations the H5 writer needs to flush the data
-        _C.TEST.H5_BY_CHUNKS.FLUSH_EACH = 100
+        _C.TEST.BY_CHUNKS.SAVE_OUT_TIF = False
+        # In how many iterations the H5 writer needs to flush the data. No need to do so with Zarr files.
+        _C.TEST.BY_CHUNKS.FLUSH_EACH = 100
         # Whether if after reconstructing the prediction the pipeline will continue each workflow specific steps. For this process
         # the prediction image needs to be loaded into memory so be sure that it can fit in you memory. E.g. in instance 
         # segmentation the instances will be created from the prediction.
-        _C.TEST.H5_BY_CHUNKS.WORKFLOW_PROCESS = True
+        _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS = True
         # Enable verbosity
         _C.TEST.VERBOSE = True
         # Make test-time augmentation. Infer over 8 possible rotations for 2D img and 16 when 3D
