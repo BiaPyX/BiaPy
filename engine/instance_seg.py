@@ -367,6 +367,19 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
             self.instance_seg_process(pred, filenames)        
 
+    def after_merge_patches_by_chunks_proccess_patch(self, filename):
+        """
+        Place any code that needs to be done after merging all predicted patches into the original image
+        but in the process made chunk by chunk. This function will operate patch by patch defined by 
+        ``DATA.PATCH_SIZE``.
+
+        Parameters
+        ----------
+        filename : List of str
+            Filename of the predicted image H5/Zarr.  
+        """
+        pass
+
     def after_full_image(self, pred, filenames):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.

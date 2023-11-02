@@ -1382,4 +1382,42 @@ def read_chunked_data(filename):
         else:
             raise ValueError(f"File extension {os.path.splitext(fid)[1]} not recognized")
     
-    return fid, data
+        return fid, data
+
+def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=True):
+    """
+    Save images in the given directory.
+
+    Parameters
+    ----------
+    X : 4D numpy array
+        Data to save. E.g. ``(z, y, x, channels)``.
+
+    data_dir : str
+        Path to store X images.
+
+    filename : str
+        Filename of the data to use.
+
+    dtype_str : str, optional
+        Data type to use when saving. 
+
+    verbose : bool, optional
+        To print saving information.
+    """
+    if data.ndim != 4:
+        raise ValueError(f"Expected data needs to have 4 dimensions. Given data shape: {data.shape}")
+
+    ext = os.path.splitext(filename)[1]
+    if verbose:
+        print("Saving {} data as {} in folder: {}".format(data.shape, ext, data_dir))
+
+    os.makedirs(data_dir, exist_ok=True)
+
+    if ext in ['.hdf5', '.h5']:
+        fid = h5py.File(os.path.join(data_dir, filename), "w") 
+        data = fid.create_dataset("data", data.shape, dtype=dtype_str, compression="gzip")
+    # Zarr
+    else:
+        fid = zarr.open_group(os.path.join(data_dir, filename), mode="w")
+        data = fid.create_dataset("data", shape=data.shape, dtype=dtype_str)

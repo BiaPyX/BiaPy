@@ -864,16 +864,19 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, overlap=(0,0,0), paddin
                 pad_x_left = padding[2]-x*step_x-d_x if start_x <= 0 else 0
                 pad_x_right = (start_x+vol_shape[2])-data_shape[2] if start_x+vol_shape[2] > data_shape[2] else 0
 
-                img = np.pad(img,((pad_z_left,pad_z_right),(pad_y_left,pad_y_right),(pad_x_left,pad_x_right)), 'reflect')
+                if img.ndim == 3:
+                    img = np.pad(img,((pad_z_left,pad_z_right),(pad_y_left,pad_y_right),(pad_x_left,pad_x_right)), 'reflect')
+                    img = np.expand_dims(img, -1)
+                else:
+                    img = np.pad(img,((pad_z_left,pad_z_right),(pad_y_left,pad_y_right),(pad_x_left,pad_x_right),(0,0)), 'reflect')
 
-                assert img.shape == vol_shape[:-1], "Something went wrong suring the patch extraction!"
+                assert img.shape == vol_shape, "Something went wrong suring the patch extraction!"
                 
                 real_patch_in_data = [
                     [z*step_z-d_z,(z*step_z)+vol_shape[0]-d_z-(padding[0]*2)],
                     [y*step_y-d_y,(y*step_y)+vol_shape[1]-d_y-(padding[1]*2)],
                     [x*step_x-d_x,(x*step_x)+vol_shape[2]-d_x-(padding[2]*2)]
                 ]
-                img = np.expand_dims(img, -1)
 
                 if rank == 0:
                     yield img, real_patch_in_data, total_vol, z_vol_info, list_of_vols_in_z

@@ -122,6 +122,19 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             save_tif((pred>0.5).astype(np.uint8), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN, filenames,
                         verbose=self.cfg.TEST.VERBOSE)
 
+    def after_merge_patches_by_chunks_proccess_patch(self, filename):
+        """
+        Place any code that needs to be done after merging all predicted patches into the original image
+        but in the process made chunk by chunk. This function will operate patch by patch defined by 
+        ``DATA.PATCH_SIZE``.
+
+        Parameters
+        ----------
+        filename : List of str
+            Filename of the predicted image H5/Zarr.  
+        """
+        pass
+
     def after_full_image(self, pred, filenames):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.

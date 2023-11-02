@@ -689,7 +689,8 @@ class Base_Workflow(metaclass=ABCMeta):
             print("WARNING: you could have saved more memory by converting input test images into H5 file format (.h5) "
                   "or Zarr (.zarr) as with 'TEST.BY_CHUNKS.ENABLE' option enabled H5/Zarr files will be processed by chunks")
         # Load data
-        self._X_file, self._X = read_chunked_data(self._X)
+        if file_extension in ['.hdf5', '.h5', ".zarr"]:
+            self._X_file, self._X = read_chunked_data(self._X)
 
         # Data paths
         os.makedirs(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, exist_ok=True)
@@ -701,7 +702,7 @@ class Base_Workflow(metaclass=ABCMeta):
             out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_nodiv"+ext)
             out_data_mask_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_mask"+ext)
         out_data_div_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+ext)
-        in_data_filename = self._X
+        in_data = self._X
 
         # Process in charge of processing one predicted patch
         data_shape = self._X.shape
@@ -712,14 +713,14 @@ class Base_Workflow(metaclass=ABCMeta):
         output_handle_proc.start()
         
         # Process in charge of loading part of the data 
-        load_data_process = mp.Process(target=extract_patch_from_dataset, args=(in_data_filename, self.cfg, self.input_queue, 
+        load_data_process = mp.Process(target=extract_patch_from_dataset, args=(in_data, self.cfg, self.input_queue, 
             self.extract_info_queue, self.cfg.TEST.VERBOSE))
         load_data_process.daemon=True
         load_data_process.start()
 
         if '_X_file' in locals() and isinstance(self._X_file, h5py.File):
             self._X_file.close()
-        del self._X, in_data_filename
+        del self._X, in_data
  
         # Lock the thread inferring until no more patches 
         if self.cfg.TEST.VERBOSE and self.cfg.SYSTEM.NUM_GPUS > 1:
@@ -776,14 +777,18 @@ class Base_Workflow(metaclass=ABCMeta):
         if is_main_process():
             if self.cfg.SYSTEM.NUM_GPUS > 1:
                 # Obtain parts of the data created by all GPUs
-                data_parts_filenames = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[2])
+                if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                    data_parts_filenames = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[2])
+                else: 
+                    data_parts_filenames = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[1])
                 parts = []
                 mask_parts = []
                 for x in data_parts_filenames:
-                    if filename+"_part" in x and "_mask" not in x and x.endswith(self.cfg.TEST.BY_CHUNKS.FORMAT):
-                        parts.append(x)
-                    if filename+"_part" in x and "_mask" in x and x.endswith(self.cfg.TEST.BY_CHUNKS.FORMAT):
-                        mask_parts.append(x)
+                    if filename+"_part" in x and x.endswith(self.cfg.TEST.BY_CHUNKS.FORMAT):
+                        if "_mask" not in x:
+                            parts.append(x)
+                        else:
+                            mask_parts.append(x)
                 data_parts_filenames = parts 
                 data_parts_mask_filenames = mask_parts
                 del parts, mask_parts
@@ -804,7 +809,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             data = allfile.create_dataset("data", data_part.shape, dtype=self.dtype_str, compression="gzip")
                         else:
                             allfile = zarr.open_group(all_data_filename, mode="w")
-                            zarr_obj = allfile.create_dataset("data", shape=data_part.shape, dtype=self.dtype_str, compression="gzip")
+                            data = allfile.create_dataset("data", shape=data_part.shape, dtype=self.dtype_str, compression="gzip")
 
                     for j, k in enumerate(list_of_vols_in_z[i]):
                         if self.cfg.TEST.VERBOSE:
@@ -869,8 +874,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     fid_div.close()
 
             if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS:
-                self.after_merge_patches_by_chunks(out_data_div_filename)            
-        
+                if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
+                    self.after_merge_patches_by_chunks_proccess_patch(out_data_div_filename) 
+                else:            
+                    self.after_merge_patches_by_chunks_proccess_entire_pred(out_data_div_filename) 
+                    
         # Wait until the main thread is done to predit the next sample
         if self.cfg.SYSTEM.NUM_GPUS > 1 :
             if self.cfg.TEST.VERBOSE:
@@ -1234,10 +1242,11 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def after_merge_patches_by_chunks(self, filename):
+    def after_merge_patches_by_chunks_proccess_entire_pred(self, filename):
         """
         Place any code that needs to be done after merging all predicted patches into the original image
-        but in the process made chunk by chunk.
+        but in the process made chunk by chunk. This function will operate over the entire predicted
+        image.
 
         Parameters
         ----------
@@ -1264,6 +1273,20 @@ class Base_Workflow(metaclass=ABCMeta):
 
         fname, file_extension = os.path.splitext(os.path.basename(filename))
         self.after_merge_patches(pred, [fname+".tif"])
+
+    @abstractmethod
+    def after_merge_patches_by_chunks_proccess_patch(self, filename):
+        """
+        Place any code that needs to be done after merging all predicted patches into the original image
+        but in the process made chunk by chunk. This function will operate patch by patch defined by 
+        ``DATA.PATCH_SIZE``.
+
+        Parameters
+        ----------
+        filename : List of str
+            Filename of the predicted image H5/Zarr.  
+        """
+        raise NotImplementedError
 
     @abstractmethod
     def after_full_image(self, pred, filenames):
@@ -1420,12 +1443,13 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
         p, m, patch_coords = output_queue.get(timeout=60)
 
         if 'data' not in locals():
-            if file_type == "h5":
-                data = fid.create_dataset("data", data_shape+(p.shape[-1],), dtype=dtype_str, compression="gzip")
-                mask = fid_mask.create_dataset("data", data_shape+(p.shape[-1],), dtype=dtype_str, compression="gzip")
+            s = data_shape+(p.shape[-1],) if len(data_shape) == 3 else data_shape[:-1]+(p.shape[-1],)
+            if file_type == "h5": 
+                data = fid.create_dataset("data", s, dtype=dtype_str, compression="gzip")
+                mask = fid_mask.create_dataset("data", s, dtype=dtype_str, compression="gzip")
             else:
-                data = fid.create_dataset("data", shape=data_shape+(p.shape[-1],), dtype=dtype_str)
-                mask = fid_mask.create_dataset("data", shape=data_shape+(p.shape[-1],), dtype=dtype_str)
+                data = fid.create_dataset("data", shape=s, dtype=dtype_str)
+                mask = fid_mask.create_dataset("data", shape=s, dtype=dtype_str)
 
         # Insert the patch into its original 
         data[patch_coords[0][0]:patch_coords[0][1],

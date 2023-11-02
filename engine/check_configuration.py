@@ -250,8 +250,13 @@ def check_configuration(cfg, check_data_paths=True):
         if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.GT_PATH) and cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SELF_SUPERVISED"]:
             raise ValueError("Test data mask not found: {}".format(cfg.DATA.TEST.GT_PATH))
     if cfg.TEST.BY_CHUNKS.ENABLE:
+        if cfg.PROBLEM.NDIM == '2D':
+            raise ValueError("'TEST.BY_CHUNKS' can not be activated when 'PROBLEM.NDIM' is 2D")
         assert cfg.TEST.BY_CHUNKS.FORMAT.lower() in ["h5", "zarr"], "'TEST.BY_CHUNKS.FORMAT' needs to be one between ['H5', 'Zarr']"
         opts.extend(['TEST.BY_CHUNKS.FORMAT', cfg.TEST.BY_CHUNKS.FORMAT.lower()])
+        if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:     
+            assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in ["chunk_by_chunk", "entire_pred"], \
+                "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be one between ['chunk_by_chunk', 'entire_pred']"
 
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if not cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
@@ -323,7 +328,7 @@ def check_configuration(cfg, check_data_paths=True):
             if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
                 if not cfg.DATA.TRAIN.IN_MEMORY:
                     raise ValueError("If no 'DATA.NORMALIZATION.CUSTOM_MEAN' and 'DATA.NORMALIZATION.CUSTOM_STD' were provided "
-                        "when DATA.NORMALIZATION.TYPE == 'custom', DATA.TRAIN.IN_MEMORY need to be True")
+                        "when DATA.NORMALIZATION.TYPE == 'custom', DATA.TRAIN.IN_MEMORY needs to be True")
 
     ### Model ###
     assert model_arch in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b0', 
@@ -364,7 +369,7 @@ def check_configuration(cfg, check_data_paths=True):
         any(x != 1 for x in cfg.MODEL.Z_DOWN):
         raise ValueError("'MODEL.Z_DOWN' != 1 not allowed in super-resolution workflow")
     elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
-        raise ValueError("'MODEL.Z_DOWN' need to be 1 or 2")
+        raise ValueError("'MODEL.Z_DOWN' needs to be 1 or 2")
     else:
         if model_arch == 'multiresunet' and len(cfg.MODEL.Z_DOWN) != 4:
             raise ValueError("'MODEL.Z_DOWN' length must be 4 when using 'multiresunet'")
@@ -378,7 +383,7 @@ def check_configuration(cfg, check_data_paths=True):
         "Get unknown activation key {}".format(activation)
  
     if cfg.MODEL.UPSAMPLE_LAYER.lower() not in ["upsampling", "convtranspose"]:
-        raise ValueError("cfg.MODEL.UPSAMPLE_LAYER' need to be one between ['upsampling', 'convtranspose']. Provided {}"
+        raise ValueError("cfg.MODEL.UPSAMPLE_LAYER' needs to be one between ['upsampling', 'convtranspose']. Provided {}"
                           .format(cfg.MODEL.UPSAMPLE_LAYER))
     if cfg.PROBLEM.TYPE == "SEMANTIC_SEG" and model_arch not in ['unet', 'resunet', 'resunet++', 'attention_unet', \
         'multiresunet', 'seunet', 'unetr']:
@@ -431,17 +436,17 @@ def check_configuration(cfg, check_data_paths=True):
         if cfg.TRAIN.LR_SCHEDULER.NAME not in ['reduceonplateau', 'warmupcosine', 'onecycle']:
             raise ValueError("'TRAIN.LR_SCHEDULER.NAME' must be one between ['reduceonplateau', 'warmupcosine', 'onecycle']")
         if cfg.TRAIN.LR_SCHEDULER.MIN_LR == -1. and cfg.TRAIN.LR_SCHEDULER.NAME != 'onecycle':
-            raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is between ['reduceonplateau', 'warmupcosine']")
+            raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is between ['reduceonplateau', 'warmupcosine']")
 
         if cfg.TRAIN.LR_SCHEDULER.NAME == 'reduceonplateau':
             if cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE == -1:
-                raise ValueError("'TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'reduceonplateau'")
+                raise ValueError("'TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'reduceonplateau'")
             if cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE >= cfg.TRAIN.PATIENCE:
-                raise ValueError("'TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE' need to be less than 'TRAIN.PATIENCE' ")
+                raise ValueError("'TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE' needs to be less than 'TRAIN.PATIENCE' ")
       
         if cfg.TRAIN.LR_SCHEDULER.NAME == 'warmupcosine':
             if cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS == -1:
-                raise ValueError("'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS' need to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'warmupcosine'")
+                raise ValueError("'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'warmupcosine'")
              
     #### Augmentation ####
     if cfg.AUGMENTOR.ENABLE:
@@ -449,10 +454,10 @@ def check_configuration(cfg, check_data_paths=True):
             raise ValueError("AUGMENTOR.DA_PROB not in [0, 1] range")
         if cfg.AUGMENTOR.RANDOM_ROT:
             if not check_value(cfg.AUGMENTOR.RANDOM_ROT_RANGE, (-360,360)):
-                raise ValueError("AUGMENTOR.RANDOM_ROT_RANGE values need to be between [-360,360]")
+                raise ValueError("AUGMENTOR.RANDOM_ROT_RANGE values needs to be between [-360,360]")
         if cfg.AUGMENTOR.SHEAR:
             if not check_value(cfg.AUGMENTOR.SHEAR_RANGE, (-360,360)):
-                raise ValueError("AUGMENTOR.SHEAR_RANGE values need to be between [-360,360]")
+                raise ValueError("AUGMENTOR.SHEAR_RANGE values needs to be between [-360,360]")
         if cfg.AUGMENTOR.ELASTIC:
             if cfg.AUGMENTOR.E_MODE not in ['constant', 'nearest', 'reflect', 'wrap']:
                 raise ValueError("AUGMENTOR.E_MODE not in ['constant', 'nearest', 'reflect', 'wrap']")
@@ -506,4 +511,4 @@ def check_configuration(cfg, check_data_paths=True):
             raise ValueError("'DATA.TEST.RESOLUTION' must match in length to {}, which is the number of "
                              "dimensions".format(dim_count))
         if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0] == -1:
-            raise ValueError("'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' need to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True")   
+            raise ValueError("'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' needs to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True")   

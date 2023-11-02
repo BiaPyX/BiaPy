@@ -642,7 +642,13 @@ class Config:
         # Whether if after reconstructing the prediction the pipeline will continue each workflow specific steps. For this process
         # the prediction image needs to be loaded into memory so be sure that it can fit in you memory. E.g. in instance 
         # segmentation the instances will be created from the prediction.
-        _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS = True
+        _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS = CN() 
+        _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE = True
+        # How the workflow process is going to be done. There are two options:
+        #    * 'chunk_by_chunk' : each chunk will be considered as an individual file. Select this operation if you have not enough
+        #      memory to process the entire prediction image with 'entire_pred'.
+        #    * 'entire_pred': the predicted image will be loaded in memory and processed entirely (be aware of your  memory budget)     
+        _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE = "chunk_by_chunk"
         # Enable verbosity
         _C.TEST.VERBOSE = True
         # Make test-time augmentation. Infer over 8 possible rotations for 2D img and 16 when 3D
@@ -669,8 +675,6 @@ class Config:
         _C.TEST.MATCHING_SEGCOMPARE = False
 
         ### Detection
-        # Whether to return local maximum coords
-        _C.TEST.DET_LOCAL_MAX_COORDS = False
         # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
         # 'peak_local_max' of skimage.feature
         _C.TEST.DET_MIN_TH_TO_BE_PEAK = [0.2]        

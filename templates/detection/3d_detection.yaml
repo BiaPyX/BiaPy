@@ -48,7 +48,6 @@ TEST:
     ENABLE: True
     VERBOSE: True
     AUGMENTATION: False
-    DET_LOCAL_MAX_COORDS: True
     DET_TOLERANCE: [5]
     DET_MIN_TH_TO_BE_PEAK: [0.50]
     STATS:
