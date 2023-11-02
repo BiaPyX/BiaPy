@@ -748,10 +748,7 @@ class Base_Workflow(metaclass=ABCMeta):
             m = np.ones(p.shape, dtype=np.uint8)
 
             # Put the prediction into queue
-            self.output_queue.put([p, m, patch_coords])
-
-        if self.cfg.TEST.VERBOSE and self.cfg.SYSTEM.NUM_GPUS > 1:
-            print(f"[Rank {get_rank()} ({os.getpid()})] Finish sample inference ")
+            self.output_queue.put([p, m, patch_coords])         
 
         # Get some auxiliar variables
         self.stats['patch_counter'] = self.extract_info_queue.get(timeout=60)
@@ -760,6 +757,13 @@ class Base_Workflow(metaclass=ABCMeta):
             list_of_vols_in_z  = self.extract_info_queue.get(timeout=60)
         load_data_process.join()
         output_handle_proc.join()
+
+        # Wait until all threads are done so the main thread can create the full size image 
+        if self.cfg.SYSTEM.NUM_GPUS > 1 :
+            if self.cfg.TEST.VERBOSE:
+                print(f"[Rank {get_rank()} ({os.getpid()})] Finish sample inference ")
+            if is_dist_avail_and_initialized():
+                dist.barrier()
 
         # Create the final H5 file that contains all the individual parts 
         if is_main_process():
@@ -1293,7 +1297,7 @@ def extract_patch_from_data(data, cfg, input_queue, extract_info_queue, verbose=
         Queue to put each extracted patch into.
 
     extract_info_queue : Multiprocessing queue 
-        Auxiliry queue to pass information between processes. 
+        Auxiliary queue to pass information between processes. 
     
     verbose : bool, optional
         To print useful information for debugging.  
@@ -1324,7 +1328,8 @@ def extract_patch_from_data(data, cfg, input_queue, extract_info_queue, verbose=
         input_queue.put([img, patch_coords])
 
         if patch_counter == 0:
-           extract_info_queue.put(total_vol)
+            # This goes for the child process in charge of inserting data patches (insert_patch_into_h5_dataset function)
+            extract_info_queue.put(total_vol)
         patch_counter += 1
 
     # Send a sentinel so the main thread knows that there is no more data
@@ -1366,7 +1371,7 @@ def insert_patch_into_h5_dataset(data_filename, data_filename_mask, data_shape, 
         Queue to get each prediction from.
 
     extract_info_queue : Multiprocessing queue 
-        Auxiliry queue to pass information between processes. 
+        Auxiliary queue to pass information between processes. 
     
     cfg : YACS configuration
         Running configuration.
