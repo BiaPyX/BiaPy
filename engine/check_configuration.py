@@ -197,7 +197,9 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' need to be set to 'circularity' filtering when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
             if cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[0][0] != 'circularity': 
                 raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' need to be set to 'circularity' filtering when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
-    
+        if cfg.TEST.DET_POINT_CREATION_FUNCTION not in ['peak_local_max', 'blob_log']:
+            raise ValueError("'TEST.DET_POINT_CREATION_FUNCTION' must be one between: ['peak_local_max', 'blob_log']")
+
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
         if cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING == 1:

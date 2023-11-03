@@ -675,9 +675,24 @@ class Config:
         _C.TEST.MATCHING_SEGCOMPARE = False
 
         ### Detection
+        # To decide which function is going to be used to create point from probabilities. Options: ['peak_local_max', 'blob_log']
+        # 'peak_local_max': https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.peak_local_max 
+        # 'blob_log': https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.blob_log
+        _C.TEST.DET_POINT_CREATION_FUNCTION = 'peak_local_max'
         # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
         # 'peak_local_max' of skimage.feature
-        _C.TEST.DET_MIN_TH_TO_BE_PEAK = [0.2]        
+        _C.TEST.DET_MIN_TH_TO_BE_PEAK = [0.2]  
+        # Corresponds to 'min_sigma' argument of 'blob_log' function. It is the minimum standard deviation for Gaussian kernel. 
+        # Keep this low to detect smaller blobs. The standard deviations of the Gaussian filter are given for each axis as a 
+        # sequence, or as a single number, in which case it is equal for all axes.
+        _C.TEST.DET_BLOB_LOG_MIN_SIGMA = 5
+        # Corresponds to 'max_sigma' argument of 'blob_log' function. It is the maximum standard deviation for Gaussian kernel. 
+        # Keep this high to detect larger blobs. The standard deviations of the Gaussian filter are given for each axis as a 
+        # sequence, or as a single number, in which case it is equal for all axes.
+        _C.TEST.DET_BLOB_LOG_MAX_SIGMA = 10
+        # Corresponds to 'num_sigma' argument of 'blob_log' function. The number of intermediate values of standard deviations 
+        # to consider between min_sigma and max_sigma.
+        _C.TEST.DET_BLOB_LOG_NUM_SIGMA = 2
         # Maximum distance far away from a GT point to consider a point as a true positive
         _C.TEST.DET_TOLERANCE = [10]
 

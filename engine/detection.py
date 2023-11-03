@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import pandas as pd
-from skimage.feature import peak_local_max
+from skimage.feature import peak_local_max, blob_log
 from skimage.measure import label, regionprops_table
 from skimage.morphology import disk, dilation        
 from tqdm import tqdm
@@ -78,10 +78,10 @@ class Detection_Workflow(Base_Workflow):
         self.load_Y_val = True
 
         # Workflow specific test variables
-        self.postpone_remove_close_points = False
+        self.postpone_postproc = False
         if cfg.TEST.BY_CHUNKS.ENABLE and cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE and \
             cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
-            self.postpone_remove_close_points = True
+            self.postpone_postproc = True
 
         if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED or self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
             self.post_processing['detection_post'] = True
@@ -157,10 +157,18 @@ class Detection_Workflow(Base_Workflow):
                 min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[0]
             else:
                 min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[channel]
-            pred_coordinates = peak_local_max(pred[...,channel].astype(np.float32), threshold_abs=min_th_peak, exclude_border=False)
+            
+            # Find points
+            if self.cfg.TEST.DET_POINT_CREATION_FUNCTION == "peak_local_max":
+                pred_coordinates = peak_local_max(pred[...,channel].astype(np.float32), threshold_abs=min_th_peak, exclude_border=False)
+            else:
+                pred_coordinates = blob_log(pred[...,channel]*255, min_sigma=self.cfg.TEST.DET_BLOB_LOG_MIN_SIGMA, 
+                    max_sigma=self.cfg.TEST.DET_BLOB_LOG_MAX_SIGMA, num_sigma=self.cfg.TEST.DET_BLOB_LOG_NUM_SIGMA, 
+                    threshold=min_th_peak, exclude_border=False)
+                pred_coordinates = pred_coordinates[:,:3].astype(int) # Remove sigma
 
             # Remove close points per class as post-processing method
-            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and not self.postpone_remove_close_points:
+            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and not self.postpone_postproc:
                 if len(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS) == 1:
                     radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0]
                 else:
@@ -176,7 +184,7 @@ class Detection_Workflow(Base_Workflow):
         # Remove close points again seeing all classes together, as it can be that a point is detected in both classes
         # if there is not clear distinction between them
         classes = 1 if self.cfg.MODEL.N_CLASSES <= 2 else self.cfg.MODEL.N_CLASSES
-        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and classes > 1 and not self.postpone_remove_close_points:
+        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and classes > 1 and not self.postpone_postproc:
             print("All classes together")
             radius = np.min(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS)
 
@@ -503,7 +511,7 @@ class Detection_Workflow(Base_Workflow):
                             df = pd.concat([df, df_patch], ignore_index=True)
 
         # Apply post-processing of removing points         
-        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.postpone_remove_close_points:
+        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.postpone_postproc:
             # Take point coords 
             pred_coordinates = []
             coordz = df['axis-0'].tolist()
@@ -555,7 +563,7 @@ class Detection_Workflow(Base_Workflow):
             Number of images to call ``normalize_stats``.
         """
         if not self.use_gt: return 
-        
+
         super().print_stats(image_counter)
         super().print_post_processing_stats()
 
