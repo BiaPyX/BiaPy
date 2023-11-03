@@ -928,30 +928,34 @@ def voronoi_on_mask(data, mask, th=0, verbose=False):
     return voronoiCyst
 
 
-def remove_close_points(points, radius, resolution, classes=None, ndim=3):
-    """Remove all points from ``point_list`` that are at a ``radius``
-       or less distance from each other.
+def remove_close_points(points, radius, resolution, classes=None, ndim=3, return_drops=False):
+    """
+    Remove all points from ``point_list`` that are at a ``radius``
+    or less distance from each other.
 
-       Parameters
-       ----------
-       points : ndarray of floats
-           List of 3D points. E.g. ``((0,0,0), (1,1,1)``.
+    Parameters
+    ----------
+    points : ndarray of floats
+        List of 3D points. E.g. ``((0,0,0), (1,1,1)``.
 
-       radius : float
-           Radius from each point to decide what points to keep. E.g. ``10.0``.
+    radius : float
+        Radius from each point to decide what points to keep. E.g. ``10.0``.
 
-       resolution : ndarray of floats
-           Resolution of the data, in ``(z,y,x)`` to calibrate coordinates.
-           E.g. ``[30,8,8]``.    
+    resolution : ndarray of floats
+        Resolution of the data, in ``(z,y,x)`` to calibrate coordinates.
+        E.g. ``[30,8,8]``.    
 
-       ndim : int, optional
-           Number of dimension of the data.
+    ndim : int, optional
+        Number of dimension of the data.
 
-       Returns
-       -------
-       new_point_list : List of floats
-           New list of points after removing those at a distance of ``radius``
-           or less from each other.
+    return_drops : bool, optional
+        Whether to return or not a list containing the positions of the points removed. 
+        
+    Returns
+    -------
+    new_point_list : List of floats
+        New list of points after removing those at a distance of ``radius``
+        or less from each other.
     """
     print("Removing close points . . .")
     print('Initial number of points: ' + str( len( points ) ) )
@@ -1000,12 +1004,18 @@ def remove_close_points(points, radius, resolution, classes=None, ndim=3):
     # points to keep
     new_point_list = [points[i] for i in keep]
     print( 'Final number of points: ' + str( len( new_point_list ) ) )
-    
+
     if classes is not None:
         new_class_list = [classes[i] for i in keep]
-        return new_point_list, new_class_list
+        if return_drops:
+            return new_point_list, new_class_list, list(discard)
+        else:
+            return new_point_list, new_class_list
     else:
-        return new_point_list
+        if return_drops:
+            return new_point_list, list(discard)
+        else:
+            return new_point_list
     
 
 def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1, ndim=3, donuts_classes=[-1], donuts_patch=[13,120,120],

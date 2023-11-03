@@ -78,6 +78,11 @@ class Detection_Workflow(Base_Workflow):
         self.load_Y_val = True
 
         # Workflow specific test variables
+        self.postpone_remove_close_points = False
+        if cfg.TEST.BY_CHUNKS.ENABLE and cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE and \
+            cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
+            self.postpone_remove_close_points = True
+
         if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED or self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
             self.post_processing['detection_post'] = True
         else:
@@ -155,7 +160,7 @@ class Detection_Workflow(Base_Workflow):
             pred_coordinates = peak_local_max(pred[...,channel].astype(np.float32), threshold_abs=min_th_peak, exclude_border=False)
 
             # Remove close points per class as post-processing method
-            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and not self.postpone_remove_close_points:
                 if len(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS) == 1:
                     radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0]
                 else:
@@ -171,7 +176,7 @@ class Detection_Workflow(Base_Workflow):
         # Remove close points again seeing all classes together, as it can be that a point is detected in both classes
         # if there is not clear distinction between them
         classes = 1 if self.cfg.MODEL.N_CLASSES <= 2 else self.cfg.MODEL.N_CLASSES
-        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and classes > 1:
+        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and classes > 1 and not self.postpone_remove_close_points:
             print("All classes together")
             radius = np.min(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS)
 
@@ -410,7 +415,7 @@ class Detection_Workflow(Base_Workflow):
                 save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
                     filenames, verbose=self.cfg.TEST.VERBOSE)    
                             
-            return df 
+        return df 
 
     def normalize_stats(self, image_counter):
         """
@@ -482,13 +487,41 @@ class Detection_Workflow(Base_Workflow):
                 for x in range(x_vols):
                     print("Processing patch {}/{} of image".format(c, total_patches))
                     fname = _filename+"_patch"+str(c).zfill(d)+file_ext
-                    self.detection_process(
+                    df_patch = self.detection_process(
                         pred[z*self.cfg.DATA.PATCH_SIZE[0]:min(pred.shape[0],self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
                              y*self.cfg.DATA.PATCH_SIZE[1]:min(pred.shape[1],self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
                              x*self.cfg.DATA.PATCH_SIZE[2]:min(pred.shape[2],self.cfg.DATA.PATCH_SIZE[2]*(x+1))], 
                         [fname])
                     c+=1
-        
+
+                    if 'df' not in locals():
+                        df = df_patch.copy()
+                        df['file'] = fname
+                    else:
+                        if df_patch is not None:
+                            df_patch['file'] = fname
+                            df = pd.concat([df, df_patch], ignore_index=True)
+
+        # Apply post-processing of removing points         
+        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.postpone_remove_close_points:
+            # Take point coords 
+            pred_coordinates = []
+            coordz = df['axis-0'].tolist()
+            coordy = df['axis-1'].tolist()
+            coordx = df['axis-2'].tolist()
+            for z,y,x in zip(coordz,coordy,coordx):
+                pred_coordinates.append([z,y,x])
+            radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0]
+            pred_coordinates, droped_pos = remove_close_points(pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION,
+                ndim=3, return_drops=True)
+
+            # Remove points from dataframe 
+            df = df.drop(droped_pos)
+
+        # Save large csv with all point of all patches
+        df = df.sort_values(by=['file'])
+        df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, _filename+'_all_points.csv'))
+
         if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
             pred_file.close()
 
@@ -521,6 +554,8 @@ class Detection_Workflow(Base_Workflow):
         image_counter : int
             Number of images to call ``normalize_stats``.
         """
+        if not self.use_gt: return 
+        
         super().print_stats(image_counter)
         super().print_post_processing_stats()
 
