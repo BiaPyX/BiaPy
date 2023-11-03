@@ -3,3 +3,4 @@ cell_cha_eval/testing_dataset
 other_projects
 docs/build/
 biapy.egg-info/
+dist/

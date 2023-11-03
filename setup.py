@@ -2,7 +2,7 @@ import os
 import sys
 import numpy as np
 from distutils.sysconfig import get_python_inc
-from setuptools import setup, Extension, find_packages
+from setuptools import setup, Extension, find_namespace_packages
 
 requirements = [
      'imgaug>=0.4.0',
@@ -41,7 +41,8 @@ def setup_package():
           author='BiaPy Contributors',
           install_requires=requirements,
           include_dirs=getInclude(),
-          packages=find_packages(),
+          packages=find_namespace_packages(),
+          include_package_data=True,
           )
 
 
