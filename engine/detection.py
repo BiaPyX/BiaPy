@@ -251,7 +251,7 @@ class Detection_Workflow(Base_Workflow):
                 donuts_nucleus_diameter=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER, save_dir=check_wa)
             
             # Instance filtering by properties     
-            points_pred, labels, npixels, areas, circularities, diameters, comment, all_conds = remove_by_properties(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
+            points_pred, labels, _, npixels, areas, circularities, diameters, comment, all_conds = remove_by_properties(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
                 properties=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES, prop_values=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES,
                 comp_signs=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN, coords_list=np.concatenate(all_points, axis=0))
 

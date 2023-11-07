@@ -270,14 +270,17 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             w_pred = repare_large_blobs(w_pred, self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE)
 
         if self.remove_by_prop:
-            w_pred, labels, npixels, areas, circularities, diameters, comment, all_conds = remove_by_properties(w_pred, self.cfg.DATA.TEST.RESOLUTION, 
+            w_pred, labels, centers, npixels, areas, circularities, diameters, comment, all_conds = remove_by_properties(w_pred, self.cfg.DATA.TEST.RESOLUTION, 
                 properties=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES, prop_values=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES,
                 comp_signs=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN)
 
-            # Save all instance stats
-            size_measure = 'area' if w_pred.ndim == 2 else 'volume'
-            df = pd.DataFrame(zip(np.array(labels, dtype=np.uint64), npixels, areas, circularities, diameters, comment, all_conds),  
-                columns=['label','npixels', size_measure, 'circularity', 'diameter', 'comment', 'conditions'])
+            # Save all instance stats            
+            if w_pred.ndim == 2:
+                df = pd.DataFrame(zip(np.array(labels, dtype=np.uint64), list(centers[:,0]), list(centers[:,1]), npixels, areas, circularities, 
+                    diameters, comment, all_conds), columns=['label', 'axis-0', 'axis-1', 'npixels', 'area' , 'circularity', 'diameter', 'comment', 'conditions'])
+            else:
+                df = pd.DataFrame(zip(np.array(labels, dtype=np.uint64), list(centers[:,0]), list(centers[:,1]), list(centers[:,2]), npixels, areas, circularities, 
+                    diameters, comment, all_conds), columns=['label', 'axis-0', 'axis-1', 'axis-2', 'npixels', 'volume' , 'circularity', 'diameter', 'comment', 'conditions'])
             df = df.sort_values(by=['label'])   
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, os.path.splitext(filenames[0])[0]+'_full_stats.csv'), index=False)
             # Save only remain instances stats

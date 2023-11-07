@@ -1379,6 +1379,9 @@ def remove_by_properties(img, resolution, properties, prop_values, comp_signs, c
     labels : Array of ints
         Instance label list. 
     
+    centers : Array of ints 
+        Coordinates of the centers of each instance. 
+
     npixels : Array of ints
         Number of pixels of each instance. 
         
@@ -1434,6 +1437,8 @@ def remove_by_properties(img, resolution, properties, prop_values, comp_signs, c
                 vol = pixels*(resolution[0]+resolution[1])
             areas[label_index] = vol
 
+        centers = np.array(coords_list, dtype=np.uint16)
+
     # If no coords_list is given it is calculated by each instance central slice in z
     else:
         label_list_coords = list(label_list_unique).copy()
@@ -1442,6 +1447,7 @@ def remove_by_properties(img, resolution, properties, prop_values, comp_signs, c
         comment = ['none' for i in range(total_labels)]
         areas = np.zeros(total_labels, dtype=np.uint32)
         diameters = np.zeros(total_labels, dtype=np.uint32)
+        centers = np.zeros((total_labels, 3 if image3d else 2), dtype=np.uint16)
         diam_calc = True
 
         props = regionprops_table(img, properties=('label', 'bbox')) 
@@ -1457,11 +1463,12 @@ def remove_by_properties(img, resolution, properties, prop_values, comp_signs, c
                 vol = pixels*(resolution[0]+resolution[1]+resolution[2])
 
                 diam = max(props['bbox-3'][k]-props['bbox-0'][k],props['bbox-4'][k]-props['bbox-1'][k],props['bbox-5'][k]-props['bbox-2'][k])
+                center = [(props['bbox-3'][k]-props['bbox-0'][k])//2, (props['bbox-4'][k]-props['bbox-1'][k])//2, (props['bbox-5'][k]-props['bbox-2'][k])//2]
             else:
                 central_slice = 0
                 vol = pixels*(resolution[0]+resolution[1])
                 diam = max(props['bbox-2'][k]-props['bbox-0'][k],props['bbox-3'][k]-props['bbox-1'][k])
-
+                center = [(props['bbox-2'][k]-props['bbox-0'][k])//2, (props['bbox-3'][k]-props['bbox-1'][k])//2]
             slices = []
             if central_slice-1 >= z_coord_start: slices.append(central_slice-1)
             slices.append(central_slice)
@@ -1469,6 +1476,7 @@ def remove_by_properties(img, resolution, properties, prop_values, comp_signs, c
             coords_list[label_index] = slices.copy()
             areas[label_index] = vol
             diameters[label_index] = diam
+            centers[label_index] = center
 
     circularities = np.zeros(total_labels, dtype=np.float32)
     circularities_count = np.zeros(total_labels, dtype=np.uint8)
@@ -1479,7 +1487,6 @@ def remove_by_properties(img, resolution, properties, prop_values, comp_signs, c
 
     # Circularity calculation in the slice where the central point was considerer by the model
     # which is marked by coords_list
-    labels_removed = 0
     for i in tqdm(range(img.shape[0]), leave=False):
         props = regionprops_table(img[i], properties=('label','area', 'perimeter', 'bbox'))             
         if len(props['label'])>0:                           
@@ -1517,6 +1524,7 @@ def remove_by_properties(img, resolution, properties, prop_values, comp_signs, c
 
     # Remove those instances that do not satisfy the properties      
     all_conditions = []
+    labels_removed = 0
     for i in tqdm(range(len(circularities)), leave=False):
 
         all_conditions.append([])
@@ -1572,7 +1580,7 @@ def remove_by_properties(img, resolution, properties, prop_values, comp_signs, c
 
     print("Removed {} instances by properties ({}), {} instances left".format(labels_removed, properties, total_labels-labels_removed))
 
-    return img, label_list_coords, npixels, areas, circularities, diameters, comment, all_conditions
+    return img, label_list_coords, centers, npixels, areas, circularities, diameters, comment, all_conditions
     
 def find_neighbors(img, label, neighbors=1):
     """
