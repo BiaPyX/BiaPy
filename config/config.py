@@ -38,7 +38,7 @@ class Config:
         # Possible options: '2D' and '3D'
         _C.PROBLEM.NDIM = '2D'
 
-        ### INSTANCE_SEG
+        ### SEMANTIC_SEG
         _C.PROBLEM.SEMANTIC_SEG = CN()
         # Class id to ignore when MODEL.N_CLASSES > 2 
         _C.PROBLEM.SEMANTIC_SEG.IGNORE_CLASS_ID = 0
