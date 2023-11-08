@@ -98,8 +98,9 @@ class Base_Workflow(metaclass=ABCMeta):
         self.world_size = get_world_size()
         self.global_rank = get_rank()
         if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
-            self.output_queue = mp.Queue(maxsize=self.cfg.SYSTEM.NUM_GPUS*10)
-            self.input_queue = mp.Queue(maxsize=self.cfg.SYSTEM.NUM_GPUS*10)
+            maxsize = min(10,self.cfg.SYSTEM.NUM_GPUS*10)
+            self.output_queue = mp.Queue(maxsize=maxsize)
+            self.input_queue = mp.Queue(maxsize=maxsize)
             self.extract_info_queue = mp.Queue()
 
         # Test variables
@@ -793,7 +794,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 data_parts_mask_filenames = mask_parts
                 del parts, mask_parts
 
-                if self.cfg.SYSTEM.NUM_GPUS != len(data_parts_filenames) != len(list_of_vols_in_z):
+                if max(1,self.cfg.SYSTEM.NUM_GPUS) != len(data_parts_filenames) != len(list_of_vols_in_z):
                     raise ValueError("Number of data parts is not the same as number of GPUs")
 
                 # Compose the large image 
@@ -1354,7 +1355,7 @@ def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbo
     # Process of extracting each patch
     patch_counter = 0
     for obj in extract_3D_patch_with_overlap_yield(data, cfg.DATA.PATCH_SIZE, overlap=cfg.DATA.TEST.OVERLAP, 
-        padding=cfg.DATA.TEST.PADDING, total_ranks=cfg.SYSTEM.NUM_GPUS, rank=get_rank(), 
+        padding=cfg.DATA.TEST.PADDING, total_ranks=max(1,cfg.SYSTEM.NUM_GPUS), rank=get_rank(), 
         verbose=verbose):
 
         if is_main_process():
