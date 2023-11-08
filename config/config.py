@@ -103,7 +103,7 @@ class Config:
         # Radius to dilate the foreground mask
         _C.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS = 5
         # Whether to save watershed check files
-        _C.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW = True
+        _C.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW = False
         
         ### DETECTION
         _C.PROBLEM.DETECTION = CN()
@@ -111,7 +111,7 @@ class Config:
         _C.PROBLEM.DETECTION.CENTRAL_POINT_DILATION = 3
         _C.PROBLEM.DETECTION.CHECK_POINTS_CREATED = True
         # Whether to save watershed check files
-        _C.PROBLEM.DETECTION.DATA_CHECK_MW = True
+        _C.PROBLEM.DETECTION.DATA_CHECK_MW = False
 
         ### DENOISING
         # Based Noise2Void paper: https://arxiv.org/abs/1811.10980 
@@ -262,7 +262,7 @@ class Config:
         # Number of the fold to choose as validation. Used when _C.DATA.VAL.CROSS_VAL == True
         _C.DATA.VAL.CROSS_VAL_FOLD = 1
         # Percentage of the training data used as validation. Used when _C.DATA.VAL.FROM_TRAIN = True and _C.DATA.VAL.CROSS_VAL == False
-        _C.DATA.VAL.SPLIT_TRAIN = 0.0
+        _C.DATA.VAL.SPLIT_TRAIN = 0.1
         # Create the validation data with random images of the training data. Used when _C.DATA.VAL.FROM_TRAIN = True
         _C.DATA.VAL.RANDOM = True
         # Used when _C.DATA.VAL.FROM_TRAIN = False, as DATA.VAL.FROM_TRAIN = True always implies DATA.VAL.IN_MEMORY = True
