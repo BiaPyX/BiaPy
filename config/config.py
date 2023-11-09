@@ -131,7 +131,8 @@ class Config:
 
         ### SUPER_RESOLUTION
         _C.PROBLEM.SUPER_RESOLUTION = CN()
-        _C.PROBLEM.SUPER_RESOLUTION.UPSCALING = 1
+        # Upscaling to be done to the input images. Options: [2, 4]
+        _C.PROBLEM.SUPER_RESOLUTION.UPSCALING = 2
 
         ### SELF_SUPERVISED
         _C.PROBLEM.SELF_SUPERVISED = CN()
@@ -601,7 +602,7 @@ class Config:
         _C.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS = -1
 
         # Callbacks
-        # To determine which value monitor to consider which epoch consider the best to save
+        # To determine which value monitor to consider which epoch consider the best to save. Currently not used.
         _C.TRAIN.CHECKPOINT_MONITOR = 'val_loss'
         # Add profiler callback to the training
         # _C.TRAIN.PROFILER = False
@@ -672,7 +673,6 @@ class Config:
         _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
         # Decide in which thresholds to create a colored image of the TPs, FNs and FPs
         _C.TEST.MATCHING_STATS_THS_COLORED_IMG = [0.3]
-        _C.TEST.MATCHING_SEGCOMPARE = False
 
         ### Detection
         # To decide which function is going to be used to create point from probabilities. Options: ['peak_local_max', 'blob_log']
