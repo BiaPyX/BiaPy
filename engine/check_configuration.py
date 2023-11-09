@@ -202,6 +202,8 @@ def check_configuration(cfg, check_data_paths=True):
 
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+        if cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING == 1:
+            raise ValueError("Resolution scale must be provided with 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable")
         assert cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING in [2, 4], "PROBLEM.SUPER_RESOLUTION.UPSCALING not in [2, 4]"
 
     #### Self-supervision ####
