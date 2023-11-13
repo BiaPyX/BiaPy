@@ -1120,15 +1120,17 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Make the prediction
             if self.cfg.TEST.AUGMENTATION:
-                pred = ensemble8_2d_predictions(
-                    self._X[0],  
+                pred = ensemble8_2d_predictions(self._X[0], n_classes=self.cfg.MODEL.N_CLASSES,
                     pred_func=(
-                            lambda img_batch_subdiv: 
-                            self.model(
-                                to_numpy_format(self.apply_model_activations(img_batch_subdiv), self.axis_order_back)
+                        lambda img_batch_subdiv: 
+                            to_numpy_format(
+                                self.apply_model_activations(
+                                    self.model(to_pytorch_format(img_batch_subdiv, self.axis_order, self.device)),
+                                    ), 
+                                self.axis_order_back
                             )
-                        ),
-                    n_classes=self.cfg.MODEL.N_CLASSES)
+                    )
+                )
                 pred = np.expand_dims(pred, 0)
             else:
                 self._X = to_pytorch_format(self._X, self.axis_order, self.device)
