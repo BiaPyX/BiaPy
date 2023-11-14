@@ -22,6 +22,8 @@
 The library provides an easy way to create image processing pipelines that are typically used in the analysis of biology microscopy images in 2D and 3D. Namely, BiaPy contains ready-to-use solutions for the tasks of [semantic segmentation](https://biapy.readthedocs.io/en/latest/workflows/semantic_segmentation.html), [instance segmentation](https://biapy.readthedocs.io/en/latest/workflows/instance_segmentation.html), [object detection](https://biapy.readthedocs.io/en/latest/workflows/detection.html), [image denoising](https://biapy.readthedocs.io/en/latest/workflows/denoising.html), [single image super-resolution](https://biapy.readthedocs.io/en/latest/workflows/super_resolution.html), [self-supervised learning](https://biapy.readthedocs.io/en/latest/workflows/self_supervision.html) and [image classification](https://biapy.readthedocs.io/en/latest/workflows/classification.html). The source code is based on Pytorch as backend. Given BiaPy’s deep learning based core, a machine with a graphics processing unit (GPU) is recommended for fast training and execution.                                                                                                                                
 ![BiaPy workflows](https://raw.githubusercontent.com/danifranco/BiaPy/master/img/BiaPy-workflow-readme.svg)
 
+Find a gentle introduction to BiaPy [in this video](https://www.youtube.com/watch?v=t5cqpjWQS9Q) presented by Ignacio Arganda-Carreras in (the Virtual Pub of Euro-BioImaging)[https://www.eurobioimaging.eu/about-us/virtual-pub]. 
+
 ## User interface
 
 You can also use BiaPy through our graphical user interface (GUI).
