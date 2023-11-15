@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Block
 
-from models.blocks import DoubleConvBlock, ConvBlock, get_activation
+from models.blocks import DoubleConvBlock, ConvBlock
 from models.tr_layers import PatchEmbed
 
 class UNETR(nn.Module):
@@ -27,9 +27,6 @@ class UNETR(nn.Module):
         Dimension of the embedding space.
 
     depth : int
-        Number of layer of ViT backbone. 
-
-    transformer_layers : int
         Number of transformer encoder layers.
 
     num_heads : int
@@ -71,7 +68,7 @@ class UNETR(nn.Module):
     model : Torch model
         UNETR model.
     """
-    def __init__(self, input_shape, patch_size, embed_dim, depth, transformer_layers, num_heads, mlp_ratio=4., num_filters = 16, 
+    def __init__(self, input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio=4., num_filters = 16, 
         norm_layer=nn.LayerNorm, n_classes = 1, decoder_activation = 'relu', ViT_hidd_mult = 3, batch_norm = True, 
         dropout = 0.0, output_channels="BC"):
         super().__init__()
@@ -88,20 +85,22 @@ class UNETR(nn.Module):
             convtranspose = nn.ConvTranspose3d
             batchnorm_layer = nn.BatchNorm3d if batch_norm else None
             self.reshape_shape = (
-                self.embed_dim,
                 self.input_shape[0]//self.patch_size, 
                 self.input_shape[1]//self.patch_size,
-                self.input_shape[2]//self.patch_size
-            )          
+                self.input_shape[2]//self.patch_size,
+                self.embed_dim,
+            )
+            self.permutation = (0, 4, 1, 2, 3)
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
             batchnorm_layer = nn.BatchNorm2d if batch_norm else None
             self.reshape_shape = (
-                self.embed_dim,
                 self.input_shape[0]//self.patch_size, 
-                self.input_shape[1]//self.patch_size
-            )    
+                self.input_shape[1]//self.patch_size,
+                self.embed_dim,
+            )
+            self.permutation = (0, 3, 1, 2)
 
         # ViT part
         self.patch_embed = PatchEmbed(img_size=input_shape[0], patch_size=patch_size, in_chans=input_shape[-1],
@@ -149,12 +148,12 @@ class UNETR(nn.Module):
         # Last two yellow block for the first skip connection 
         self.two_yellow_layers.append(
             DoubleConvBlock(conv, input_shape[-1], num_filters, k_size=3, act=decoder_activation, batch_norm=batchnorm_layer,
-                dropout=dropout[layer]))
+                dropout=dropout[0]))
 
         # Last convolutions 
         self.two_yellow_layers.append(
             DoubleConvBlock(conv, num_filters*2, num_filters, k_size=3, act=decoder_activation, batch_norm=batchnorm_layer,
-                dropout=dropout[layer]))
+                dropout=dropout[0]))
 
         # Instance segmentation
         if output_channels is not None:
@@ -174,6 +173,7 @@ class UNETR(nn.Module):
         
     def proj_feat(self, x):
         x = x.view((x.size(0),) + self.reshape_shape)
+        x = x.permute(self.permutation).contiguous()
         return x
 
     def forward(self, input):
@@ -185,7 +185,7 @@ class UNETR(nn.Module):
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
 
-        skip_connection_index = [self.ViT_hidd_mult, 2*self.ViT_hidd_mult, 3*self.ViT_hidd_mult]
+        skip_connection_index = [self.ViT_hidd_mult * layer for layer in range(1, self.total_upscale_factor)]
         skip_connections = []
         for i, blk in enumerate(self.blocks):
             x = blk(x)    
@@ -193,7 +193,7 @@ class UNETR(nn.Module):
                 skip_connections.append(x[:, 1:, :])
 
         # CNN Decoder 
-        x = self.bottleneck(self.proj_feat(skip_connections[-1]))
+        x = self.bottleneck(self.proj_feat(x[:, 1:, :]))
 
         for i in range(self.total_upscale_factor-1):
             z = self.proj_feat(skip_connections[i])
