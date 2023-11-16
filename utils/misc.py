@@ -169,8 +169,7 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
             NotImplementedError
 
     if not os.path.exists(resume):
-        print("Checkpoint file not found: {}".format(resume))
-        return -1
+        raise FileNotFoundError(f"Checkpoint file {resume} not found")
     else:
         print("Loading checkpoint from file {}".format(resume))
 
