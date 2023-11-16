@@ -22,6 +22,7 @@ requirements = [
      'timm>=0.9.5',
      'h5py>=3.10.0',
      "zarr==2.16.1",
+     "bioimageio.core==0.5.9",
 ]
 
 
