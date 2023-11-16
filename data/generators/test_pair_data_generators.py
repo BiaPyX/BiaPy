@@ -47,6 +47,9 @@ class test_pair_data_generator(Dataset):
     norm_type : str, optional
         Type of normalization to be made. Options available: ``div`` or ``custom``.
 
+    not_normalize : bool, optional
+        Whether to normalize the data or not. Useful in BMZ model as the normalization is made during the inference. 
+
     norm_custom_mean : float, optional
         Mean of the data used to normalize.
 
@@ -58,11 +61,10 @@ class test_pair_data_generator(Dataset):
 
     sample_ids :  List of ints, optional
         When cross validation is used specific training samples are passed to the generator.
-    
     """
     def __init__(self, ndim, X=None, d_path=None, test_by_chunks=False, provide_Y=False, Y=None, dm_path=None, seed=42,
-                 instance_problem=False, normalizeY='as_mask', norm_type='div', norm_custom_mean=None, 
-                 norm_custom_std=None, reduce_mem=False, sample_ids=None):
+                 instance_problem=False, normalizeY='as_mask', norm_type='div', not_normalize=False,
+                 norm_custom_mean=None, norm_custom_std=None, reduce_mem=False, sample_ids=None):
 
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
@@ -114,6 +116,7 @@ class test_pair_data_generator(Dataset):
         self.o_indexes = np.arange(self.len)
         self.normalizeY = normalizeY
         
+        self.not_normalize = not_normalize
         # Check if a division is required
         self.X_norm = {}
         self.X_norm['type'] = 'div'
@@ -122,13 +125,11 @@ class test_pair_data_generator(Dataset):
             self.Y_norm['type'] = 'div'
         img, mask, xnorm = self.load_sample(0)
 
-        if norm_type == 'custom':
+        if norm_type == 'custom' and not not_normalize:
             if norm_custom_mean is not None and norm_custom_std is not None:
                 self.X_norm['mean'] = norm_custom_mean
                 self.X_norm['std'] = norm_custom_std
-                self.X_norm['orig_dtype'] = img.dtype
-            else:
-                raise NotImplementedError
+            self.X_norm['orig_dtype'] = img.dtype
             self.X_norm['type'] = 'custom'
         if xnorm:
             self.X_norm.update(xnorm)
@@ -160,10 +161,11 @@ class test_pair_data_generator(Dataset):
             Normalization info. 
         """
         xnorm = None
-        if self.X_norm['type'] == 'div':
-            img, xnorm = norm_range01(img, dtype=self.dtype)
-        elif self.X_norm['type'] == 'custom':
-            img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
+        if not self.not_normalize:
+            if self.X_norm['type'] == 'div':
+                img, xnorm = norm_range01(img, dtype=self.dtype)
+            elif self.X_norm['type'] == 'custom':
+                img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
         return img, xnorm
 
     def norm_Y(self, mask):   

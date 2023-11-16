@@ -53,6 +53,9 @@ class test_single_data_generator(Dataset):
     norm_type : str, optional
         Type of normalization to be made. Options available: ``div`` or ``custom``.
 
+    not_normalize : bool, optional
+        Whether to normalize the data or not. Useful in BMZ model as the normalization is made during the inference. 
+        
     norm_custom_mean : float, optional
         Mean of the data used to normalize.
 
@@ -70,8 +73,8 @@ class test_single_data_generator(Dataset):
         Not used in this generator. 
     """
     def __init__(self, ndim, ptype, X=None, d_path=None, test_by_chunks=False, provide_Y=False, Y=None, 
-        dm_path=None, seed=42, instance_problem=False, norm_type='div', norm_custom_mean=None, norm_custom_std=None, 
-        crop_center=False, reduce_mem=False, resize_shape=None, sample_ids=None):
+        dm_path=None, seed=42, instance_problem=False, norm_type='div', not_normalize=False, norm_custom_mean=None, 
+        norm_custom_std=None, crop_center=False, reduce_mem=False, resize_shape=None, sample_ids=None):
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
         if crop_center and resize_shape is None:
@@ -120,20 +123,19 @@ class test_single_data_generator(Dataset):
         self.ndim = ndim
         self.o_indexes = np.arange(self.len)
         
+        self.not_normalize = not_normalize
         # Check if a division is required
         self.X_norm = {}
         self.X_norm['type'] = 'div'
         img, _, xnorm = self.load_sample(0)
 
-        if norm_type == 'custom':
+        if norm_type == 'custom' and not not_normalize:
             if norm_custom_mean is not None and norm_custom_std is not None:
-                self.X_norm['type'] = 'custom'
                 self.X_norm['mean'] = norm_custom_mean
                 self.X_norm['std'] = norm_custom_std
-                self.X_norm['orig_dtype'] = img.dtype
                 del img
-            else:
-                raise NotImplementedError
+            self.X_norm['type'] = 'custom'
+            self.X_norm['orig_dtype'] = img.dtype
         self.X_norm.update(xnorm)
 
     def load_sample(self, idx):
@@ -177,11 +179,12 @@ class test_single_data_generator(Dataset):
 
         # Normalization
         xnorm = None
-        if self.X_norm['type'] == 'div':
-            img, xnorm = norm_range01(img, dtype=self.dtype)
-        elif self.X_norm['type'] == 'custom':
-            img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
-           
+        if not self.not_normalize:
+            if self.X_norm['type'] == 'div':
+                img, xnorm = norm_range01(img, dtype=self.dtype)
+            elif self.X_norm['type'] == 'custom':
+                img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
+            
         img = np.expand_dims(img, 0).astype(self.dtype)
  
         return img, img_class, xnorm

@@ -12,6 +12,8 @@ from abc import ABCMeta, abstractmethod
 from sklearn.model_selection import StratifiedKFold
 import torch.multiprocessing as mp
 import torch.distributed as dist
+import bioimageio.core
+import xarray as xr
 
 from models import build_model
 from engine import prepare_optimizer, build_callbacks
@@ -118,6 +120,19 @@ class Base_Workflow(metaclass=ABCMeta):
         # Define metrics
         self.define_metrics()
 
+        # Load Bioimage model Zoo pretrained model information
+        if self.cfg.MODEL.SOURCE == "bmz":
+            print("Loading Bioimage Model Zoo pretrained model . . .")
+            self.bmz_model_resource = bioimageio.core.load_resource_description(self.cfg.MODEL.BMZ_DOI)
+        
+            # Change PATCH_SIZE with the one stored in the RDF
+            input_image = np.load(self.bmz_model_resource.test_inputs[0])
+            opts = ["DATA.PATCH_SIZE", input_image.shape[2:]+(input_image.shape[1],)]
+            print("[BMZ] Changed 'DATA.PATCH_SIZE' from {} to {} as defined in the RDF"
+                  .format(self.cfg.DATA.PATCH_SIZE,opts[1]))
+            self.cfg.merge_from_list(opts)
+            
+            
     @abstractmethod
     def define_metrics(self):
         """
@@ -274,7 +289,101 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.train_generator, self.cfg.PATHS.GEN_CHECKS+"_train", self.cfg.PATHS.GEN_MASK_CHECKS+"_train")
                 check_generator_consistence(
                     self.val_generator, self.cfg.PATHS.GEN_CHECKS+"_val", self.cfg.PATHS.GEN_MASK_CHECKS+"_val")
-                    
+
+    def bmz_model_call(self, in_img, to_pytorch=False):
+        """
+        Call Bioimage model zoo model.
+
+        Parameters
+        ----------
+        in_img : Tensor
+            Input image to pass through the model.
+
+        to_pytorch : bool, optional
+            Not used here. Just added to be compatible with ``model_call`` function. 
+        
+        Returns
+        -------
+        prediction : Tensor 
+            Image prediction. 
+        """
+
+        # Convert Tensor to xarray
+        if self.cfg.PROBLEM.NDIM == '2D': 
+            in_img = in_img.transpose((0,3,1,2))
+        else:
+            in_img = in_img.transpose((0,4,1,2,3))
+        in_img = {'input0': xr.DataArray(in_img, dims=tuple(self.bmz_axes,))}
+        
+        # Predict
+        prediction_tensors = self.model.predict(*list(in_img.values()))
+
+        # Apply post-processing
+        prediction = dict(zip([out.name for out in self.model.output_specs], prediction_tensors))
+        self.model.apply_postprocessing(prediction, self.bmz_computed_measures)
+
+        # Convert back to Tensor 
+        prediction = torch.from_numpy(prediction['output0'].to_numpy())
+        return prediction 
+
+    def prepare_bmz_input(self, img):
+        """
+        Apply Bioimage Model Zoo pre-processing step as determined by its RDF. 
+
+        Parameters
+        ----------
+        img : Tensor
+            Input image to apply pre-processing to.
+
+        Returns
+        -------
+        img : Tensor 
+            Pre-processed image. 
+        """
+        # Convert from Numpy to xarray.DataArray
+        if self.cfg.PROBLEM.NDIM == '2D': 
+            img = img.transpose((0,3,1,2))
+            self.bmz_axes = ('b', 'c', 'y', 'x')
+        else:
+            img = img.transpose((0,4,1,2,3))
+            self.bmz_axes = ('b', 'c', 'z', 'y', 'x')
+        img = xr.DataArray(img, dims=tuple(self.bmz_axes))
+
+        # Apply pre-processing
+        img = dict(zip([ipt.name for ipt in self.model.input_specs], (img,)))
+        self.bmz_computed_measures = {}
+        self.model.apply_preprocessing(img, self.bmz_computed_measures)
+
+        # Convert into Tensor
+        img = img['input0'].to_numpy()
+        if self.cfg.PROBLEM.NDIM == '2D': 
+            img = img.transpose((0,2,3,1))
+        else:
+            img = img.transpose((0,2,3,4,1))
+        
+        return img
+
+    def model_call(self, in_img, to_pytorch=True):
+        """
+        Call a regular Pytorch model.
+
+        Parameters
+        ----------
+        in_img : Tensor
+            Input image to pass through the model.
+
+        to_pytorch : bool, optional
+            Whether if the input image needs to be converted into pytorch format or not.
+        
+        Returns
+        -------
+        prediction : Tensor 
+            Image prediction. 
+        """
+        if to_pytorch:
+            in_img = to_pytorch_format(in_img, self.axis_order, self.device)
+        return self.model(in_img)
+
     def prepare_model(self):
         """
         Build the model.
@@ -282,8 +391,29 @@ class Base_Workflow(metaclass=ABCMeta):
         print("###############")
         print("# Build model #")
         print("###############")
-        self.model = build_model(self.cfg, self.job_identifier, self.device)
-        self.model_without_ddp = self.model
+        if self.cfg.MODEL.SOURCE != "bmz":
+            self.model = build_model(self.cfg, self.job_identifier, self.device)
+            self.model_without_ddp = self.model
+            self.model_call_func = self.model_call
+
+        # Bioimage Model Zoo pretrained models
+        else:
+            # Create a bioimage pipeline to create predictions
+            try:
+                self.model = bioimageio.core.create_prediction_pipeline(
+                    self.bmz_model_resource, devices=None, 
+                    weight_format="torchscript",
+                )
+            except Exception as e:
+                print(f"The error thrown during the BMZ model load was:\n{e}")
+                raise ValueError("An error ocurred when creating the BMZ model (see above). "
+                    "BiaPy only supports models prepared with Torchscript.")
+
+            self.model_without_ddp = self.model
+            if self.args.distributed:
+                raise ValueError("DDP can not be activated when loading a BMZ pretrained model")
+
+            self.model_call_func = self.bmz_model_call
 
         if self.args.distributed:
             self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids=[self.args.gpu], 
@@ -568,13 +698,14 @@ class Base_Workflow(metaclass=ABCMeta):
             self.prepare_model()
 
         # Switch to evaluation mode
-        self.model_without_ddp.eval()    
+        if self.cfg.MODEL.SOURCE != "bmz":
+            self.model_without_ddp.eval()    
 
-        # Load checkpoint
-        self.start_epoch = load_model_checkpoint(cfg=self.cfg, jobname=self.job_identifier, model_without_ddp=self.model_without_ddp,
-            device=self.device)
-        if self.start_epoch == -1:
-            raise ValueError("There was a problem loading the checkpoint. Test phase aborted!")
+            # Load checkpoint
+            self.start_epoch = load_model_checkpoint(cfg=self.cfg, jobname=self.job_identifier, model_without_ddp=self.model_without_ddp,
+                device=self.device)
+            if self.start_epoch == -1:
+                raise ValueError("There was a problem loading the checkpoint. Test phase aborted!")
 
         image_counter = 0
         
@@ -738,7 +869,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         lambda img_batch_subdiv: 
                             to_numpy_format(
                                 self.apply_model_activations(
-                                    self.model(to_pytorch_format(img_batch_subdiv, self.axis_order, self.device)),
+                                    self.model_call_func(img_batch_subdiv),
                                     ), 
                                 self.axis_order_back
                             )
@@ -746,7 +877,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 )
             else:
                 with torch.cuda.amp.autocast():
-                    p = self.model(to_pytorch_format(img, self.axis_order, self.device))
+                    p = self.model_call_func(img)
                     p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
 
             # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the 
@@ -901,10 +1032,19 @@ class Base_Workflow(metaclass=ABCMeta):
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
+        # Data channel check
+        if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
+            raise ValueError("Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
+                "Please, check the channels of the images!".format(self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1]))
+                
         #################
         ### PER PATCH ###
         #################
         if self.cfg.TEST.STATS.PER_PATCH:
+            # Apply BMZ pre-processing 
+            if self.cfg.MODEL.SOURCE == "bmz":
+                self._X = self.prepare_bmz_input(self._X)
+
             # Reflect data to complete the needed shape
             if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
                 reflected_orig_shape = self._X.shape
@@ -959,7 +1099,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 for k in tqdm(range(l), leave=False):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                     with torch.cuda.amp.autocast():
-                        output = self.apply_model_activations(self.model(to_pytorch_format(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device)))
+                        output = self.apply_model_activations(self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]))
                         loss = self.loss(output, to_pytorch_format(self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device))
 
                     # Calculate the metrics
@@ -981,7 +1121,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 lambda img_batch_subdiv: 
                                     to_numpy_format(
                                         self.apply_model_activations(
-                                            self.model(to_pytorch_format(img_batch_subdiv, self.axis_order, self.device)),
+                                            self.model_call_func(img_batch_subdiv),
                                             ), 
                                         self.axis_order_back
                                     )
@@ -993,7 +1133,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 lambda img_batch_subdiv: 
                                     to_numpy_format(
                                         self.apply_model_activations(
-                                            self.model(to_pytorch_format(img_batch_subdiv, self.axis_order, self.device)),
+                                            self.model_call_func(img_batch_subdiv),
                                             ), 
                                         self.axis_order_back
                                     )
@@ -1007,7 +1147,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 for k in tqdm(range(l), leave=False):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                     with torch.cuda.amp.autocast():
-                        p = self.model(to_pytorch_format(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device))
+                        p = self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top])
                         p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
                     if 'pred' not in locals():
                         pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
@@ -1105,6 +1245,10 @@ class Base_Workflow(metaclass=ABCMeta):
         ### FULL IMAGE ###
         ##################
         if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D':
+            # Apply BMZ pre-processing 
+            if self.cfg.MODEL.SOURCE == "bmz":
+                self._X = self.prepare_bmz_input(self._X)
+
             self._X, o_test_shape = check_downsample_division(self._X, len(self.cfg.MODEL.FEATURE_MAPS)-1)
             if self.cfg.DATA.TEST.LOAD_GT:
                 self._Y, _ = check_downsample_division(self._Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
@@ -1112,7 +1256,7 @@ class Base_Workflow(metaclass=ABCMeta):
             # Evaluate each img
             if self.cfg.DATA.TEST.LOAD_GT:
                 with torch.cuda.amp.autocast():
-                    output = self.model(to_pytorch_format(self._X, self.axis_order, self.device))
+                    output = self.model_call_func(self._X)
                     
                     loss = self.loss(output, to_pytorch_format(self._Y, self.axis_order, self.device))
                 self.stats['loss'] += loss.item()
@@ -1125,7 +1269,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         lambda img_batch_subdiv: 
                             to_numpy_format(
                                 self.apply_model_activations(
-                                    self.model(to_pytorch_format(img_batch_subdiv, self.axis_order, self.device)),
+                                    self.model_call_func(img_batch_subdiv),
                                     ), 
                                 self.axis_order_back
                             )
@@ -1135,7 +1279,7 @@ class Base_Workflow(metaclass=ABCMeta):
             else:
                 self._X = to_pytorch_format(self._X, self.axis_order, self.device)
                 with torch.cuda.amp.autocast():
-                    pred = self.model(self._X)
+                    pred = self.model_call_func(self._X, to_pytorch=False)
                 pred = to_numpy_format(self.apply_model_activations(pred), self.axis_order_back)    
             del self._X 
 

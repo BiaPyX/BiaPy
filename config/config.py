@@ -478,6 +478,12 @@ class Config:
         # Model definition
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.MODEL = CN()
+        # Whether to define manually the model or load a pretrained one from Bioimage Model Zoo. 
+        # Options: ["manual", "bmz"]
+        _C.MODEL.SOURCE = "manual"
+        # DOI of the model from BMZ to load. It can not be empty if MODEL.SOURCE = "bmz".
+        _C.MODEL.BMZ_DOI = ""
+
         # Architecture of the network. Possible values are: 'unet', 'resunet', 'resunet++', 'attention_unet', 'nnunet',  
         # 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'ViT'
         # 'mae'
