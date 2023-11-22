@@ -194,15 +194,21 @@ class Self_supervised_Workflow(Base_Workflow):
                     if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
                         loss, p, mask = p
                         p = self.apply_model_activations(p)
-                        p = self.model.save_images(to_pytorch_format(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device), 
-                            p, mask, self.cfg.PATHS.MAE_OUT_DIR, filenames[0], k*self.cfg.TRAIN.BATCH_SIZE, self.dtype)
+                        p, m, pv = self.model.save_images(to_pytorch_format(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device), 
+                            p, mask, self.dtype)
                     else:
                         p = self.apply_model_activations(p)
                         p = to_numpy_format(p, self.axis_order_back)
                     
                 if 'pred' not in locals():
                     pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
+                    if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+                        pred_mask = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
+                        pred_visi = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
                 pred[k*self.cfg.TRAIN.BATCH_SIZE:top] = p
+                if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+                    pred_mask[k*self.cfg.TRAIN.BATCH_SIZE:top] = m
+                    pred_visi[k*self.cfg.TRAIN.BATCH_SIZE:top] = pv
 
         # Delete self._X as in 3D there is no full image
         if self.cfg.PROBLEM.NDIM == '3D':
@@ -214,8 +220,16 @@ class Self_supervised_Workflow(Base_Workflow):
             f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
             pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
                 overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
+            if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+                pred_mask = f_name(pred_mask, original_data_shape[:-1]+(pred_mask.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
+                    overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
+                pred_visi = f_name(pred_visi, original_data_shape[:-1]+(pred_visi.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
+                    overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
         else:
             pred = pred[0]
+            if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+                pred_mask = pred_mask[0]
+                pred_visi = pred_visi[0]
 
         # Undo normalization
         x_norm = norm[0]
@@ -233,7 +247,12 @@ class Self_supervised_Workflow(Base_Workflow):
             
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+            fname, fext = os.path.splitext(filenames[0])
             save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
+            if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+                save_tif(np.expand_dims(pred_mask,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [fname+"_masked.tif"], verbose=self.cfg.TEST.VERBOSE)
+                save_tif(np.expand_dims(pred_visi,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [fname+"_reconstruction_and_visible.tif"], verbose=self.cfg.TEST.VERBOSE)    
+            import pdb; pdb.set_trace()
 
     def after_merge_patches(self, pred,filenames):
         """

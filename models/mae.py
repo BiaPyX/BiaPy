@@ -343,7 +343,7 @@ class MaskedAutoencoderViT(nn.Module):
         loss = self.forward_loss(imgs, pred, mask)
         return loss, pred, mask
 
-    def save_images(self, _x, _y, _mask, out_dir, filename, crop_numbers, dtype):
+    def save_images(self, _x, _y, _mask, dtype):
         """
         Save images from MAE. 
 
@@ -358,32 +358,32 @@ class MaskedAutoencoderViT(nn.Module):
             Where ``N`` is the batch size, ``L`` is the multiplication of dimension (i.e. ``Z``, 
             ``H`` and ``W``) and ``C`` are the channels.
 
-        mask : 2d array
+        _mask : 2d array
             Information of which patches will be retain and masked. Shape is: ``(N, L)`` where ``0`` is keep 
             and ``1`` is remove.
-
-        out_dir : str
-            Path to store the images.
-        
-        filename : str
-            Filename to use when saving images.
-
-        crop_numbers : int 
-            Number of crop of to start with when saving image filenames. 
 
         dtype : Numpy dtype
             Dtype to save the images. 
 
         Returns
         -------
-        p : 4D/5D Numpy array
+        pred : 4D/5D Numpy array
             Predicted images converted to Numpy. In 2D: ``(N, H, W, C)``, in 3D: ``(N, Z, H, W, C)``. Where ``N`` is the batch size, 
             ``C`` are the channels, ``Z`` image depth, ``H`` image height and ``W`` image's width. 
 
+        p_mask : 4D/5D Numpy array
+            Predicted images's mask. In 2D: ``(N, H, W, C)``, in 3D: ``(N, Z, H, W, C)``. Where ``N`` is the batch size, 
+            ``C`` are the channels, ``Z`` image depth, ``H`` image height and ``W`` image's width. 
+        
+        pred_visi : 4D/5D Numpy array
+            Predicted image with visible patches. In 2D: ``(N, H, W, C)``, in 3D: ``(N, Z, H, W, C)``. Where ``N`` is the batch size, 
+            ``C`` are the channels, ``Z`` image depth, ``H`` image height and ``W`` image's width. 
         """
         print("Saving MAE images . . .")
 
-        p = np.zeros(_x.shape, dtype=dtype)
+        pred = np.zeros(_x.shape, dtype=dtype)
+        p_mask = np.zeros(_x.shape, dtype=dtype)
+        pred_visi = np.zeros(_x.shape, dtype=dtype)
         for i in range(len(_x)):
             y = self.unpatchify(_y[i].unsqueeze(dim=0))[0]
             y = y.detach().cpu()
@@ -401,21 +401,14 @@ class MaskedAutoencoderViT(nn.Module):
             # MAE reconstruction pasted with visible patches
             im_paste = x * (1 - mask) + y * mask
 
-            save_tif(np.expand_dims(x.numpy().transpose((1,2,3,0)),0), out_dir, 
-                [filename.replace(".tif", str(crop_numbers+i).zfill(3)+"_original.tif")], verbose=False)
-            save_tif(np.expand_dims(im_masked.numpy().transpose((1,2,3,0)),0), out_dir, 
-                [filename.replace(".tif", str(crop_numbers+i).zfill(3)+"_masked.tif")], verbose=False)
-            save_tif(np.expand_dims(y.numpy().transpose((1,2,3,0)),0), out_dir, 
-                [filename.replace(".tif", str(crop_numbers+i).zfill(3)+"_reconstruction.tif")], verbose=False)
-            save_tif(np.expand_dims(im_paste.numpy().transpose((1,2,3,0)),0), out_dir, 
-                [filename.replace(".tif", str(crop_numbers+i).zfill(3)+"_reconstruction_and_visible.tif")], verbose=False)
-
-            p[i] = x.numpy()
+            pred[i] = y.numpy()
+            p_mask[i] = im_masked.numpy()
+            pred_visi[i] = im_paste.numpy()
 
         if self.ndim == 2:
-            return c.transpose((0,2,3,1))
+            return pred.transpose((0,2,3,1)), p_mask.transpose((0,2,3,1)), pred_visi.transpose((0,2,3,1))
         else:
-            return p.transpose((0,2,3,4,1))
+            return pred.transpose((0,2,3,4,1)), p_mask.transpose((0,2,3,4,1)), pred_visi.transpose((0,2,3,4,1))
 
 def mae_vit_base_patch16_dec512d8b(**kwargs):
     model = MaskedAutoencoderViT(
