@@ -451,8 +451,12 @@ def check_configuration(cfg, check_data_paths=True):
                 else:
                     sizes = cfg.DATA.PATCH_SIZE[:-1]
                 if not all([False for x in sizes if x%(np.power(2,(i+1))) != 0 or x == 0]):
-                    raise ValueError("The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the U-Net's levels. You can reduce the number "
-                    "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length) or increase the 'DATA.PATCH_SIZE'")
+                    m = "The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the U-Net's levels. You can:\n 1) Reduce the number " + \
+                            "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length)\n 2) Increase 'DATA.PATCH_SIZE'"
+                    if cfg.PROBLEM.NDIM == '3D':
+                        m += "\n 3) If the Z axis is the problem, as the patch size is normally less than in other axis due to resolution, you " + \
+                            "can tune 'MODEL.Z_DOWN' variable to not downsample the image in all U-Net levels"
+                    raise ValueError(m)
 
     ### Train ###
     assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM', 'ADAMW'], "TRAIN.OPTIMIZER not in ['SGD', 'ADAM', 'ADAMW']"

@@ -222,21 +222,16 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
             fold = 1
             train_index, test_index = None, None
 
-            if Y_train is not None:
-                for t_index, te_index in skf.split(np.zeros(len(X_train)), np.zeros(len(Y_train))):
-                    if cross_val_fold == fold:
-                        X_train, X_val = X_train[t_index], X_train[te_index]
+            y_len = len(Y_train) if Y_train is not None else len(X_train)
+            for t_index, te_index in skf.split(np.zeros(len(X_train)), np.zeros(y_len)):
+                if cross_val_fold == fold:
+                    X_train, X_val = X_train[t_index], X_train[te_index]
+                    if Y_train is not None:
                         Y_train, Y_val = Y_train[t_index], Y_train[te_index]
-                        train_index, test_index = t_index.copy(), te_index.copy()
-                        break
-                    fold+= 1
-            else:
-                for t_index, te_index in skf.split(np.zeros(len(X_train))):
-                    if cross_val_fold == fold:
-                        X_train, X_val = X_train[t_index], X_train[te_index]
-                        train_index, test_index = t_index.copy(), te_index.copy()
-                        break
-                    fold+= 1
+                    train_index, test_index = t_index.copy(), te_index.copy()
+                    break
+                fold+= 1
+
             if len(test_index) > 5:
                 print("Fold number {}. Printing the first 5 ids: {}".format(fold, test_index[:5]))
             else:
