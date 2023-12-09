@@ -211,11 +211,11 @@ def all_reduce_mean(x):
     else:
         return x
 
-def to_pytorch_format(x, axis_order, device):
+def to_pytorch_format(x, axis_order, device, dtype=torch.float32):
     if torch.is_tensor(x):
-        return x.to(torch.float32).permute(axis_order).to(device, non_blocking=True)
+        return x.to(dtype).permute(axis_order).to(device, non_blocking=True)
     else:
-        return torch.from_numpy(x).to(torch.float32).permute(axis_order).to(device, non_blocking=True)
+        return torch.from_numpy(x).to(dtype).permute(axis_order).to(device, non_blocking=True)
 
 def to_numpy_format(x, axis_order_back):
         return x.permute(axis_order_back).cpu().numpy()

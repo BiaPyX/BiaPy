@@ -105,9 +105,32 @@ def jaccard_index(y_pred, y_true, device, t=0.5, num_classes=2, first_not_binary
     jac : Tensor
         Jaccard index value
     """
-    task = "multiclass" if num_classes > 2 else "binary"
-    jaccard = JaccardIndex(task=task, threshold=t, num_classes=num_classes).to(device, non_blocking=True)
-    return jaccard(y_pred[:,:first_not_binary_channel], y_true[:,:first_not_binary_channel])
+    if num_classes > 2:
+        jaccard = JaccardIndex(task="multiclass", threshold=t, num_classes=num_classes).to(device, non_blocking=True)
+        return jaccard(y_pred, y_true.squeeze())
+    else:
+        jaccard = JaccardIndex(task="binary", threshold=t, num_classes=num_classes).to(device, non_blocking=True)
+        return jaccard(y_pred[:,:first_not_binary_channel], y_true[:,:first_not_binary_channel])
+
+def CrossEntropyLoss_wrapper(y_pred, y_true):
+    """
+    CrossEntropyLoss of Torch.
+
+    Parameters
+    ----------
+    y_true : Tensor
+        Ground truth masks.
+
+    y_pred : Tensor
+        Predicted masks.
+
+    Returns
+    -------
+    loss : Tensor
+        Loss value.
+    """
+    loss = torch.nn.CrossEntropyLoss()
+    return loss(y_pred, y_true.squeeze())
 
 def dice_loss(y_true, y_pred):
     """Dice loss.

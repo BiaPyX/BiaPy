@@ -67,6 +67,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.model_prepared = False 
         self.dtype = np.float32 if not self.cfg.TEST.REDUCE_MEMORY else np.float16 
         self.dtype_str = "float32" if not self.cfg.TEST.REDUCE_MEMORY else "float16" 
+        self.loss_dtype = torch.float32 
 
         # Save paths in case we need them in a future
         self.orig_train_path = self.cfg.DATA.TRAIN.PATH
@@ -1100,10 +1101,10 @@ class Base_Workflow(metaclass=ABCMeta):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                     with torch.cuda.amp.autocast():
                         output = self.apply_model_activations(self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]))
-                        loss = self.loss(output, to_pytorch_format(self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device))
+                        loss = self.loss(output, to_pytorch_format(self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device, dtype=self.loss_dtype))
 
                     # Calculate the metrics
-                    train_iou = self.metric_calculation(output, to_pytorch_format(self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device))
+                    train_iou = self.metric_calculation(output, to_pytorch_format(self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device, dtype=self.loss_dtype))
                     
                     self.stats['loss_per_crop'] += loss.item()
                     self.stats['iou_per_crop'] += train_iou
@@ -1258,7 +1259,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 with torch.cuda.amp.autocast():
                     output = self.model_call_func(self._X)
                     
-                    loss = self.loss(output, to_pytorch_format(self._Y, self.axis_order, self.device))
+                    loss = self.loss(output, to_pytorch_format(self._Y, self.axis_order, self.device, dtype=self.loss_dtype))
                 self.stats['loss'] += loss.item()
                 del output
 

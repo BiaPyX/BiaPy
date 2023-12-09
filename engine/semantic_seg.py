@@ -4,7 +4,7 @@ import numpy as np
 from engine.base_workflow import Base_Workflow
 from utils.util import save_tif, check_masks
 from utils.misc import to_pytorch_format
-from engine.metrics import jaccard_index, weighted_bce_dice_loss
+from engine.metrics import jaccard_index, CrossEntropyLoss_wrapper, weighted_bce_dice_loss
 
 class Semantic_Segmentation_Workflow(Base_Workflow):
     """
@@ -57,21 +57,20 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.load_Y_val = True
-
+        self.loss_dtype = torch.int64
+        
     def define_metrics(self):
         """
         Definition of self.metrics, self.metric_names and self.loss variables.
         """
-        if self.cfg.LOSS.TYPE == "CE": 
-            self.metrics = [jaccard_index]
-            self.metric_names = ["jaccard_index"]
+        self.metrics = [jaccard_index]
+        self.metric_names = ["jaccard_index"]
+        if self.cfg.LOSS.TYPE == "CE":    
             if self.cfg.MODEL.N_CLASSES <= 2:
                 self.loss = torch.nn.BCEWithLogitsLoss()
             else:
-                self.loss = torch.nn.CrossEntropyLoss()
+                self.loss = CrossEntropyLoss_wrapper
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
-            self.metrics = [jaccard_index]
-            self.metric_names = ["jaccard_index"]
             self.loss = weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33)
 
     def metric_calculation(self, output, targets, metric_logger=None):
@@ -95,12 +94,34 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             Value of the metric for the given prediction. 
         """
         with torch.no_grad():
-            train_iou = self.metrics[0](output, targets, self.device, num_classes=self.cfg.MODEL.N_CLASSES)
+            train_iou = self.metrics[0](output, targets, self.device, num_classes=self.cfg.MODEL.N_CLASSES, 
+                first_not_binary_channel=self.cfg.MODEL.N_CLASSES)
             train_iou = train_iou.item() if not torch.isnan(train_iou) else 0
             if metric_logger is not None:
                 metric_logger.meters[self.metric_names[0]].update(train_iou)
             else:
                 return train_iou
+
+    def prepare_targets(self, targets, batch):
+        """
+        Location to perform any necessary data transformations to ``targets``
+        before inputting it into the model.
+
+        Parameters
+        ----------
+        targets : Torch Tensor
+            Ground truth to compare the prediction with.
+
+        batch : Torch Tensor
+            Prediction of the model. Only used in SSL workflow. 
+
+        Returns
+        -------
+        targets : Torch tensor
+            Resulting targets. 
+        """
+        # We do not use 'batch' input but in SSL workflow
+        return to_pytorch_format(targets, self.axis_order, self.device, dtype=self.loss_dtype)
 
     def after_merge_patches(self, pred, filenames):
         """
@@ -115,12 +136,13 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             Filenames of the predicted images.  
         """
         # Save simple binarization of predictions
-        if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
-            save_tif(np.expand_dims((pred>0.5).astype(np.uint8),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,
-                     filenames, verbose=self.cfg.TEST.VERBOSE)
+        if self.cfg.MODEL.N_CLASSES > 2:
+            pred = np.expand_dims(np.argmax(pred, axis=-1),-1).astype(np.uint8)        
         else:
-            save_tif((pred>0.5).astype(np.uint8), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN, filenames,
-                        verbose=self.cfg.TEST.VERBOSE)
+            pred = (pred>0.5).astype(np.uint8)        
+        if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
+            pred = np.expand_dims(pred,0)
+        save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN, filenames, verbose=self.cfg.TEST.VERBOSE)
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
