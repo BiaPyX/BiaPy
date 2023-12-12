@@ -13,6 +13,7 @@ from tensorboardX import SummaryWriter
 from pathlib import Path
 # from torch._six import inf
 from torch import inf
+from datetime import timedelta
 
 original_print = builtins.print
 
@@ -92,8 +93,14 @@ def init_devices(args, cfg):
     torch.cuda.set_device(args.gpu)
     print('| distributed init (rank {}): {}, gpu {}'.format(
         args.rank, args.dist_url, args.gpu), flush=True)
+    if cfg.TEST.BY_CHUNKS.ENABLE and cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
+        os.environ['NCCL_BLOCKING_WAIT'] = '0'  # not to enforce timeout in nccl backend
+        timeout_ms = 36000000
+    else:
+        timeout_ms = 1800000
+
     dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-        world_size=args.world_size, rank=args.rank)
+        world_size=args.world_size, rank=args.rank, timeout=timedelta(seconds=timeout_ms))
     dist.barrier()
     setup_for_distributed(args.rank == 0)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
