@@ -821,32 +821,49 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
 def norm_range01(x, dtype=np.float32):
     norm_steps = {}
     norm_steps['orig_dtype'] = x.dtype
-    if x.dtype == np.uint8:
+
+    if x.dtype == np.uint8 or x.dtype == torch.uint8:
         x = x/255
         norm_steps['div_255'] = 1
     else:
-        if np.max(x) > 255:
+        if (isinstance(x, np.ndarray) and np.max(x) > 255) or \
+            (torch.is_tensor(x) and torch.max(x) > 255):
             norm_steps['reduced_{}'.format(x.dtype)] = 1
             x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=dtype)
-        elif np.max(x) > 2:
+        elif (isinstance(x, np.ndarray) and np.max(x) > 2) or \
+            (torch.is_tensor(x) and torch.max(x) > 2):
             x = x/255
             norm_steps['div_255'] = 1
 
-    x = x.astype(dtype)
+    if torch.is_tensor(x):
+        x = x.to(dtype)
+    else:
+        x = x.astype(dtype)
     return x, norm_steps
 
 def undo_norm_range01(x, xnorm):
     if 'div_255' in xnorm:
-        x = (x*255).astype(np.uint8)
+        x = (x*255)
+        if isinstance(x, np.ndarray): 
+            x = x.astype(np.uint8)
+        else:
+            x = x.to(torch.uint8)
     reductions = [key for key, value in xnorm.items() if 'reduced' in key.lower()]
     if len(reductions)>0:
         reductions = reductions[0]
         reductions = reductions.replace('reduced_','')
-        x = (x*65535).astype(eval("np.{}".format(reductions) ))
+        x = (x*65535)
+        if isinstance(x, np.ndarray): 
+            x = x.astype(eval("np.{}".format(reductions) ))
+        else:
+            x = x.to(eval("torch.{}".format(reductions) ))
     return x
 
 def reduce_dtype(x, x_min, x_max, out_min=0, out_max=1, out_type=np.float32):
-    return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)
+    if isinstance(x, np.ndarray):
+        return ((np.array((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).astype(out_type)
+    else: # Tensor considered
+        return ((((x-x_min)/(x_max-x_min))*(out_max-out_min))+out_min).to(out_type)
 
 def normalize(data, means, stds, out_type="float32"):
     numpy_torch_dtype_dict = {
