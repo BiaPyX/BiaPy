@@ -169,6 +169,12 @@ def check_configuration(cfg, check_data_paths=True):
     elif cfg.MODEL.SOURCE == "torchvision":
         if cfg.MODEL.TORCHVISION_MODEL_NAME == "":
             raise ValueError("'MODEL.TORCHVISION_MODEL_NAME' needs to be configured when 'MODEL.SOURCE' is 'torchvision'")
+        if cfg.TEST.AUGMENTATION:
+            print("WARNING: 'TEST.AUGMENTATION' is not available using TorchVision models")
+
+    if cfg.TEST.AUGMENTATION and cfg.TEST.REDUCE_MEMORY:
+        raise ValueError("'TEST.AUGMENTATION' and 'TEST.REDUCE_MEMORY' are incompatible as the function used to make the rotation "
+            "does not support float16 data type.") 
 
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
     #### Semantic segmentation ####
@@ -195,8 +201,6 @@ def check_configuration(cfg, check_data_paths=True):
             if cfg.TEST.STATS.PER_PATCH or cfg.TEST.STATS.MERGE_PATCHES:
                 raise ValueError("With TorchVision models for semantic segmentation workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
                     "please enable it and disable 'TEST.STATS.PER_PATCH' and 'TEST.STATS.MERGE_PATCHES'")
-            if cfg.TEST.AUGMENTATION:
-                print("WARNING: 'TEST.AUGMENTATION' is not available semantic segmentation workflow using TorchVision models")
             if cfg.LOSS.TYPE != "CE":
                 raise ValueError("Only 'LOSS.TYPE' = 'CE' is available in semantic segmentation workflow using TorchVision models")
 
@@ -277,7 +281,7 @@ def check_configuration(cfg, check_data_paths=True):
             if cfg.TEST.STATS.PER_PATCH or cfg.TEST.STATS.MERGE_PATCHES:
                 raise ValueError("With TorchVision models for detection workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
                     "please enable it and disable 'TEST.STATS.PER_PATCH' and 'TEST.STATS.MERGE_PATCHES'")
-                    
+
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
         if cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING == 1:
